@@ -468,14 +468,23 @@ function buildTesseract() {
 /* ============ WORLD III — RIDGE : endless alien terrain ============ */
 function buildTerrain() {
   const group = new THREE.Group();
-  const geo = new THREE.PlaneGeometry(420, 420, isMobile?90:150, isMobile?90:150);
+
+  // ---------- terrain: sharp ridged crests, lit by the moons ----------
+  const SEG = isMobile ? 96 : 160;
+  const geo = new THREE.PlaneGeometry(460, 460, SEG, SEG);
   geo.rotateX(-Math.PI/2);
   const mat = new THREE.ShaderMaterial({
-    uniforms: { uOffset:{value:new THREE.Vector2(0,0)}, uTime:{value:0},
-                uFogColor:{value:new THREE.Color(0x0a0618)}, uFogDensity:{value:0.0042} },
+    uniforms: {
+      uOffset:{value:new THREE.Vector2(0,0)}, uTime:{value:0},
+      uFogColor:{value:new THREE.Color(0x140b20)}, uFogDensity:{value:0.0038},
+      uMoonDir:{value:new THREE.Vector3(-0.3,0.33,-0.9).normalize()},
+      uMoonCol:{value:new THREE.Color(0xffb066)},
+      uMoon2Dir:{value:new THREE.Vector3(0.32,0.24,-0.91).normalize()},
+      uMoon2Col:{value:new THREE.Color(0x7fc4ff)},
+    },
     vertexShader: `
       uniform vec2 uOffset; uniform float uTime;
-      varying float vH; varying float vFogDepth;
+      varying float vH; varying float vGlow; varying vec3 vN; varying vec3 vW; varying float vFogDepth;
       float hash(vec3 p){ p=fract(p*0.3183099+vec3(0.1,0.2,0.3)); p*=17.0;
         return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
       float vnoise(vec3 x){ vec3 i=floor(x); vec3 f=fract(x); f=f*f*(3.0-2.0*f);
@@ -483,68 +492,201 @@ function buildTerrain() {
                        mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
                    mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),
                        mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z); }
-      float fbm(vec3 p){ float v=0.0,a=0.5; for(int i=0;i<4;i++){ v+=a*vnoise(p); p*=2.03; a*=0.5; } return v; }
+      float ridge(vec2 q){
+        float v=0.0, a=0.55, w=1.0;
+        for(int i=0;i<5;i++){
+          float n = vnoise(vec3(q, uTime*0.02));
+          n = 1.0 - abs(2.0*n - 1.0);
+          n = n*n;
+          v += n*a*w; w = clamp(n*1.6, 0.0, 1.0);
+          q *= 2.13; a *= 0.5;
+        }
+        return v;
+      }
+      float terrainH(vec2 wxz){ return pow(ridge(wxz*0.014), 1.4) * 54.0; }
       void main(){
         vec3 p = position;
         vec2 wxz = p.xz + uOffset;
-        float h = fbm(vec3(wxz*0.016, uTime*0.015));
-        h = pow(h, 1.6) * 46.0;
-        p.y += h - 14.0;
-        vH = clamp(h/46.0, 0.0, 1.0);
-        vec4 mv = modelViewMatrix * vec4(p,1.0);
+        float h = terrainH(wxz);
+        float e = 1.6;
+        float hx = terrainH(wxz + vec2(e,0.0));
+        float hz = terrainH(wxz + vec2(0.0,e));
+        p.y += h - 15.0;
+        vH = clamp(h/54.0, 0.0, 1.0);
+        vN = normalize(vec3(h-hx, e, h-hz));
+        float c = ridge(wxz*0.05 + 7.3);
+        vGlow = smoothstep(0.75, 0.95, c) * (1.0 - smoothstep(0.05, 0.4, vH));
+        vec4 wp = modelMatrix * vec4(p,1.0);
+        vW = wp.xyz;
+        vec4 mv = viewMatrix * wp;
         vFogDepth = -mv.z;
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: `
-      varying float vH; varying float vFogDepth;
-      uniform vec3 uFogColor; uniform float uFogDensity;
+      varying float vH; varying float vGlow; varying vec3 vN; varying vec3 vW; varying float vFogDepth;
+      uniform vec3 uFogColor; uniform float uFogDensity; uniform float uTime;
+      uniform vec3 uMoonDir; uniform vec3 uMoonCol;
+      uniform vec3 uMoon2Dir; uniform vec3 uMoon2Col;
       void main(){
-        vec3 deep = vec3(0.05,0.03,0.14);
-        vec3 mid  = vec3(0.35,0.10,0.45);
-        vec3 peak = vec3(1.00,0.42,0.18);
-        vec3 col = mix(deep, mid, smoothstep(0.05,0.45,vH));
-        col = mix(col, peak, smoothstep(0.55,0.95,vH));
-        // ridge highlight lines
-        float ridge = smoothstep(0.48,0.5,abs(fract(vH*9.0)-0.5));
-        col += vec3(0.9,0.5,0.25) * pow(1.0-ridge, 6.0) * 0.35 * smoothstep(0.3,0.7,vH);
+        vec3 N = normalize(vN);
+        vec3 V = normalize(cameraPosition - vW);
+        vec3 deep = vec3(0.055,0.035,0.13);
+        vec3 mid  = vec3(0.30,0.10,0.42);
+        vec3 crest= vec3(0.85,0.38,0.20);
+        vec3 col = mix(deep, mid, smoothstep(0.04,0.42,vH));
+        col = mix(col, crest, smoothstep(0.55,0.92,vH));
+        float d1 = max(dot(N, uMoonDir), 0.0);
+        float d2 = max(dot(N, uMoon2Dir), 0.0);
+        vec3 H1 = normalize(uMoonDir + V);
+        float spec = pow(max(dot(N,H1),0.0), 60.0) * smoothstep(0.4,0.9,vH);
+        vec3 lit = col * (0.32 + uMoonCol*d1*0.85 + uMoon2Col*d2*0.5)
+                 + uMoonCol * spec * 0.7;
+        lit += vec3(1.0,0.36,0.10) * vGlow * (1.6 + 0.5*sin(uTime*2.0+vH*20.0));
         float f = 1.0 - exp(-uFogDensity*uFogDensity*vFogDepth*vFogDepth);
-        col = mix(col, uFogColor, clamp(f,0.0,1.0));
-        gl_FragColor = vec4(col, 1.0);
+        lit = mix(lit, uFogColor, clamp(f,0.0,1.0));
+        gl_FragColor = vec4(lit, 1.0);
       }`
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.frustumCulled = false;
   group.add(mesh);
 
-  // twin moons
-  const moonMat = new THREE.MeshBasicMaterial({ color:0xffe6c4, fog:false });
-  const moon1 = new THREE.Mesh(new THREE.SphereGeometry(9, 24, 24), moonMat);
-  const moon2 = new THREE.Mesh(new THREE.SphereGeometry(4.5, 24, 24),
-    new THREE.MeshBasicMaterial({ color:0x9fd8ff, fog:false }));
-  group.add(moon1, moon2);
+  // ---------- sky dome: gradient + warm moon glow + stars ----------
+  const skyMat = new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite:false,
+    uniforms:{ uTime:{value:0}, uMoonDir:{value:new THREE.Vector3(-0.3,0.33,-0.9).normalize()} },
+    vertexShader:`varying vec3 vDir; void main(){ vDir = position;
+      gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+    fragmentShader:`
+      varying vec3 vDir; uniform float uTime; uniform vec3 uMoonDir;
+      float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+      void main(){
+        vec3 d = normalize(vDir);
+        float y = clamp(d.y, -1.0, 1.0);
+        vec3 col = mix(vec3(0.10,0.045,0.13), vec3(0.02,0.012,0.05), smoothstep(-0.05,0.65,y));
+        float m = max(dot(d, normalize(uMoonDir)), 0.0);
+        col += vec3(0.55,0.20,0.08) * pow(m, 18.0) * 0.9;
+        col += vec3(0.35,0.12,0.20) * pow(m, 4.0) * 0.35;
+        if (d.y > 0.02){
+          vec2 sp = d.xz/(d.y+0.35);
+          vec2 cell = floor(sp*90.0);
+          vec2 f = fract(sp*90.0)-0.5;
+          float h = hash(cell);
+          float star = smoothstep(0.10,0.0,length(f)) * step(0.985,h);
+          float tw = 0.6+0.4*sin(uTime*3.0+h*40.0);
+          col += vec3(0.8,0.85,1.0)*star*tw*smoothstep(0.02,0.25,d.y);
+        }
+        col = mix(col, vec3(0.078,0.043,0.125), smoothstep(0.0,-0.25,y));
+        gl_FragColor = vec4(col,1.0);
+      }`
+  });
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(820, 32, 20), skyMat);
+  sky.frustumCulled = false;
+  group.add(sky);
 
-  let dist = 0;
+  // ---------- moons: shaded discs with halo ----------
+  const glowTex = (()=>{ const c=document.createElement('canvas'); c.width=c.height=128;
+    const g=c.getContext('2d');
+    const gr=g.createRadialGradient(64,64,0,64,64,64);
+    gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(0.25,'rgba(255,255,255,0.5)');
+    gr.addColorStop(1,'rgba(255,255,255,0)');
+    g.fillStyle=gr; g.fillRect(0,0,128,128);
+    return new THREE.CanvasTexture(c); })();
+  function makeMoon(radius, baseColor, glowColor, glowScale){
+    const m = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 32),
+      new THREE.ShaderMaterial({
+        uniforms:{ uBase:{value:new THREE.Color(baseColor)} },
+        vertexShader:`varying vec3 vN; varying vec3 vP;
+          void main(){ vN = normalize(normalMatrix*normal);
+            vec4 mv = modelViewMatrix*vec4(position,1.0); vP = mv.xyz;
+            gl_Position = projectionMatrix*mv; }`,
+        fragmentShader:`
+          varying vec3 vN; varying vec3 vP; uniform vec3 uBase;
+          float hash(vec3 p){ p=fract(p*0.3183099+vec3(0.1,0.2,0.3)); p*=17.0;
+            return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
+          void main(){
+            vec3 N = normalize(vN);
+            vec3 V = normalize(-vP);
+            float dif = clamp(dot(N, normalize(vec3(0.35,0.45,0.8)))*0.5+0.5, 0.0, 1.0);
+            float cr = hash(floor(N*26.0));
+            vec3 col = uBase * (0.35 + 0.75*dif) * (0.90+0.10*cr);
+            float limb = pow(1.0-abs(dot(N,V)), 2.5);
+            col += uBase * limb * 0.55;
+            gl_FragColor = vec4(col,1.0);
+          }`
+      }));
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map:glowTex, color:glowColor, transparent:true, opacity:0.55,
+      blending:THREE.AdditiveBlending, depthWrite:false, fog:false }));
+    glow.scale.set(glowScale, glowScale, 1);
+    group.add(m, glow);
+    return { m, glow };
+  }
+  const moon1 = makeMoon(17, 0xffd9a8, 0xff9a4d, 110);
+  const moon2 = makeMoon(8, 0x9fd8ff, 0x5fa8ff, 52);
+
+  // ---------- drifting embers ----------
+  const EMB = isMobile ? 220 : 420;
+  const eGeo = new THREE.BufferGeometry();
+  const ePos = new Float32Array(EMB*3), eSeed = new Float32Array(EMB);
+  for (let i=0;i<EMB;i++){
+    ePos[i*3] = (Math.random()*2-1)*130;
+    ePos[i*3+1] = Math.random()*50;
+    ePos[i*3+2] = (Math.random()*2-1)*150;
+    eSeed[i] = Math.random();
+  }
+  eGeo.setAttribute('position', new THREE.BufferAttribute(ePos, 3));
+  const embers = new THREE.Points(eGeo, new THREE.PointsMaterial({
+    color:0xffa050, size:1.7, transparent:true, opacity:0.75,
+    blending:THREE.AdditiveBlending, depthWrite:false, sizeAttenuation:true }));
+  embers.frustumCulled = false;
+  group.add(embers);
+
+  let dist = 0, prevPx = 0, rollSm = 0;
   const SPEED = 26;
   return {
     name:'RIDGE', roman:'III',
     group,
     enter(){ scene.background = new THREE.Color(0x0a0618);
              scene.fog = null; // shader does its own fog
-             dist = 0;
-             camera.position.set(0, 16, 0); },
+             dist = 0; prevPx = 0; rollSm = 0;
+             camera.position.set(0, 24, 0); },
     update(t, dt){
       dist += SPEED*dt;
-      mat.uniforms.uOffset.value.set(Math.sin(t*0.05)*40, dist);
+      const px = Math.sin(t*0.05)*60 + Math.sin(t*0.13)*22;
+      const py = 24 + Math.sin(t*0.09)*8 + Math.sin(t*0.021)*4;
+      const vx = (px - prevPx)/Math.max(dt, 1e-4); prevPx = px;
+      camera.position.z -= SPEED*dt;
+      camera.position.x = px;
+      camera.position.y = py;
+      mat.uniforms.uOffset.value.set(0, dist);
       mat.uniforms.uTime.value = t;
       mesh.position.set(camera.position.x, 0, camera.position.z - 120);
-      // moons hang ahead, drifting
-      moon1.position.set(camera.position.x - 120 + Math.sin(t*0.03)*20, 150, camera.position.z - 380);
-      moon2.position.set(camera.position.x + 150, 110 + Math.sin(t*0.05)*8, camera.position.z - 420);
-      camera.position.z -= SPEED*dt;
-      camera.position.x = Math.sin(t*0.06)*36;
-      camera.position.y = 17 + Math.sin(t*0.11)*3.5;
-      camera.lookAt(camera.position.x*0.4, 6, camera.position.z - 120);
-      orbitAround(camera.position.x*0.4, 6, camera.position.z - 120);
+      sky.position.copy(camera.position);
+      skyMat.uniforms.uTime.value = t;
+      moon1.m.position.set(camera.position.x - 130, 130, camera.position.z - 400);
+      moon1.glow.position.copy(moon1.m.position);
+      moon2.m.position.set(camera.position.x + 170, 190, camera.position.z - 460);
+      moon2.glow.position.copy(moon2.m.position);
+      mat.uniforms.uMoonDir.value.copy(moon1.m.position).sub(camera.position).normalize();
+      mat.uniforms.uMoon2Dir.value.copy(moon2.m.position).sub(camera.position).normalize();
+      skyMat.uniforms.uMoonDir.value.copy(mat.uniforms.uMoonDir.value);
+      // embers rise and wrap around the camera
+      const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
+      for (let i=0;i<EMB;i++){
+        const i3 = i*3;
+        ePos[i3+1] += dt*(2.0 + eSeed[i]*4.0);
+        if (ePos[i3+1] > cy+45) ePos[i3+1] -= 60;
+        ePos[i3] += Math.sin(t*0.7 + eSeed[i]*20.0)*dt*2.0;
+        if (ePos[i3] < cx-130) ePos[i3] += 260; else if (ePos[i3] > cx+130) ePos[i3] -= 260;
+        if (ePos[i3+2] < cz-170) ePos[i3+2] += 320; else if (ePos[i3+2] > cz+150) ePos[i3+2] -= 320;
+      }
+      eGeo.attributes.position.needsUpdate = true;
+      camera.lookAt(camera.position.x*0.5, 2, camera.position.z - 140);
+      orbitAround(camera.position.x*0.5, 2, camera.position.z - 140);
+      // bank into the turns
+      rollSm += (THREE.MathUtils.clamp(-vx*0.012, -0.35, 0.35) - rollSm) * (1-Math.exp(-3*dt));
+      camera.rotateZ(rollSm);
     }
   };
 }
@@ -693,8 +835,8 @@ addEventListener('pointermove', e => {
     if (pinchD0 > 0 && d > 0) zoomT = THREE.MathUtils.clamp(zoomT * (pinchD0/d), 0.4, 2.2);
     pinchD0 = d;
   } else if (drag.down){
-    yawT -= (e.clientX - drag.x) * 0.0045;
-    pitchT = THREE.MathUtils.clamp(pitchT - (e.clientY - drag.y) * 0.0045, -1.1, 1.1);
+    yawT = THREE.MathUtils.clamp(yawT - (e.clientX - drag.x) * 0.0045, -1.0, 1.0);
+    pitchT = THREE.MathUtils.clamp(pitchT - (e.clientY - drag.y) * 0.0045, -0.85, 0.85);
     drag.x = e.clientX; drag.y = e.clientY;
   }
 }, { passive: true });

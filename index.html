@@ -227,7 +227,7 @@
   </svg>
 </div>
 
-<div id="badge">v2026.09.30-12.00</div>
+<div id="badge">v2026.09.30-12.10</div>
 
 <script>
 (function () {
@@ -274,8 +274,7 @@
       var d = Math.hypot(px - c.x, py - c.y);
       var now = performance.now();
       if (d < c.w * 0.62 && now - lastBat > 1100) {
-        lastBat = now;
-        bat(px < c.x ? pawL : pawR, px - c.x, py - c.y);
+        bat(px < c.x ? pawL : pawR, px - c.x, py - c.y, true);
       }
     }
     requestAnimationFrame(tick);
@@ -300,15 +299,17 @@
   pawL.addEventListener('animationend', endSwat);
   pawR.addEventListener('animationend', endSwat);
 
-  function bat(paw, dx, dy) {
+  function bat(paw, dx, dy, hop) {
+    if (batting) return;
     batting = true;
+    lastBat = performance.now();
     var ang = clamp(Math.atan2(dy, dx) * 180 / Math.PI - 90, -75, 75);
     paw.style.setProperty('--aim', (ang * 0.55).toFixed(1) + 'deg');
     paw.style.setProperty('--aim2', ang.toFixed(1) + 'deg');
     paw.classList.remove('swat');
     void paw.getBoundingClientRect();   // restart the keyframes
     paw.classList.add('swat');
-    pulseCat('hop');
+    if (hop !== false) pulseCat('hop');
     setTimeout(function () { if (batting) endSwat(); }, 900);  // safety: never get stuck mid-swat
   }
 
@@ -351,6 +352,8 @@
     px = e.clientX; py = e.clientY; hasPointer = true;
     var c = catCenter();
     if (Math.hypot(px - c.x, py - c.y) < c.w * 0.75) {
+      // the nearer paw swats toward the tap point (on touch, the finger IS the cursor)
+      bat(px < c.x ? pawL : pawR, px - c.x, py - c.y, false);
       pulseCat('squash');
       say();
       hearts(3);

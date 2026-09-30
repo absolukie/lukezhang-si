@@ -3,7 +3,7 @@
 A single full-screen page: one cute chibi cat on a warm dark background.
 No text content, no navigation. The cat is the whole site.
 
-## The cat (redrawn 2026-09-30, v2026.09.30-12.00)
+## The cat (redrawn 2026-09-30, v2026.09.30-12.10)
 
 Baby-schema / kawaii proportions, drawn from Mofusand-style references:
 - Head ~70% of the figure — one big round cream circle.
@@ -21,7 +21,8 @@ Baby-schema / kawaii proportions, drawn from Mofusand-style references:
   the nearer paw lifts and swipes toward the pointer direction (CSS keyframes
   on `.paw.swat`, aim via `--aim`/`--aim2` custom props), plus a happy hop.
   Cooldown 1.1s; a safety timeout clears the swat state so it can never stick.
-- **Tap / click** — squash-and-stretch pounce, a speech bubble
+- **Tap / click** — the nearer paw swats toward the tap point (on touch the
+  finger *is* the cursor), squash-and-stretch pounce, a speech bubble
   (mew!/mrrp!/prrp?/mew mew!/mrow!), three floating hearts.
 - **Idle life** — breathing, blinking (whole eye, so pupils blink too),
   tail sway, ear twitches, occasional idle mew bubble.

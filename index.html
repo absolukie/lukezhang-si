@@ -33,6 +33,9 @@
   #dots span { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,.22);
     transition:all .6s ease; }
   #dots span.on { background:#fff; box-shadow:0 0 12px rgba(160,200,255,.9); transform:scale(1.35); }
+  /* build version */
+  #ver { position:fixed; left:14px; bottom:12px; z-index:7; pointer-events:none;
+    font-size:10px; letter-spacing:.22em; color:rgba(255,255,255,.35); }
   /* intro */
   #intro { position:fixed; inset:0; z-index:20; background:#000; display:flex;
     flex-direction:column; align-items:center; justify-content:center; gap:18px;
@@ -54,6 +57,7 @@
 <div id="label"><div class="idx"></div><div class="name"></div></div>
 <div id="hint">DRAG TO LOOK &nbsp;·&nbsp; HOLD TO HASTEN &nbsp;·&nbsp; TAP TO SKIP &nbsp;·&nbsp; PINCH TO ZOOM</div>
 <div id="dots"><span></span><span></span><span></span><span></span></div>
+<div id="ver"></div>
 <div id="intro"><h1>ELSEWHERE</h1><p>A VOYAGE IN FOUR ACTS</p></div>
 <div id="nogl">THIS VOYAGE NEEDS WEBGL</div>
 
@@ -88,7 +92,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(62, innerWidth/innerHeight, 0.1, 900);
+const camera = new THREE.PerspectiveCamera(62, innerWidth/innerHeight, 0.1, 6000);
 scene.add(camera); // camera-attached warp streaks need this
 
 // ---- drag-to-look rig (every world) ----
@@ -379,7 +383,7 @@ function buildNebula() {
   }, { passive: true });
 
   return {
-    name:'ASCENSION', roman:'I',
+    name:'ASCEND', roman:'I',
     group,
     enter(){},
     update(t, dt, actT, pk){
@@ -425,134 +429,116 @@ function buildNebula() {
 }
 
 
-/* ============ WORLD II — TESSERACT : the fourth dimension ============ */
-function buildTesseract() {
+/* ============ WORLD II — TEMPEST : the march ============
+   The tesseract is gone. This act belongs to the colossus: it strides
+   beside you through an ember storm, and every footstep is the beat —
+   shockwaves rolling through the fog, the ground shuddering under you. */
+function buildTempest() {
   const group = new THREE.Group();
-  // 16 vertices of a 4D hypercube
-  const V = [];
-  for (let i=0;i<16;i++)
-    V.push(new THREE.Vector4(i&1?1:-1, i&2?1:-1, i&4?1:-1, i&8?1:-1));
-  // 32 edges: pairs differing in exactly one coordinate
-  const edges = [];
-  for (let i=0;i<16;i++) for (let j=i+1;j<16;j++) {
-    let diff = 0;
-    for (let k=0;k<4;k++) if ((i>>k&1)!==(j>>k&1)) diff++;
-    if (diff===1) edges.push([i,j]);
+
+  // ---- ember storm: sparks streaming past ----
+  const N = isMobile ? 900 : 2200;
+  const pos = new Float32Array(N*3), seed = new Float32Array(N);
+  for (let i=0;i<N;i++){
+    pos[i*3] = rnd(-170,170); pos[i*3+1] = rnd(-8,130); pos[i*3+2] = rnd(-300,40);
+    seed[i] = Math.random();
   }
-  const E = edges.length;
-  const linePos = new Float32Array(E*2*3);
-  const lineGeo = new THREE.BufferGeometry();
-  lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos, 3));
-  const lineMat = new THREE.LineBasicMaterial({
-    color:0x9fdcff, transparent:true, opacity:0.95, blending:THREE.AdditiveBlending, depthWrite:false });
-  const lines = new THREE.LineSegments(lineGeo, lineMat);
-  lines.scale.setScalar(5.2);
-  group.add(lines);
+  const eGeo = new THREE.BufferGeometry();
+  eGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const sparkTex = (()=>{
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const gr = g.createRadialGradient(32,32,0,32,32,32);
+    gr.addColorStop(0,'rgba(255,255,255,1)');
+    gr.addColorStop(0.35,'rgba(255,220,170,0.7)');
+    gr.addColorStop(1,'rgba(255,150,60,0)');
+    g.fillStyle = gr; g.fillRect(0,0,64,64);
+    return new THREE.CanvasTexture(c);
+  })();
+  const eMat = new THREE.PointsMaterial({ color:0xff8033, size:2.4, map:sparkTex,
+    transparent:true, opacity:0.8, blending:THREE.AdditiveBlending, depthWrite:false });
+  const embers = new THREE.Points(eGeo, eMat);
+  embers.frustumCulled = false;
+  group.add(embers);
 
-  // glowing vertices
-  const vGeo = new THREE.BufferGeometry();
-  vGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(16*3), 3));
-  const vMat = new THREE.PointsMaterial({ color:0xd8f4ff, size:0.55, transparent:true,
-    opacity:0.95, blending:THREE.AdditiveBlending, depthWrite:false, sizeAttenuation:true });
-  const vPts = new THREE.Points(vGeo, vMat);
-  vPts.scale.setScalar(5.2);
-  group.add(vPts);
+  // ---- dark ground for the march ----
+  const gnd = new THREE.Mesh(new THREE.PlaneGeometry(1500, 1500),
+    new THREE.MeshBasicMaterial({ color:0x070304 }));
+  gnd.rotation.x = -Math.PI/2;
+  gnd.position.y = -2;
+  group.add(gnd);
 
-  // faint nested echo, counter-rotating (own geometry — cloned lines share buffers)
-  const echoGeo = new THREE.BufferGeometry();
-  echoGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(E*2*3), 3));
-  const echo = new THREE.LineSegments(echoGeo, new THREE.LineBasicMaterial({
-    color:0x6a5cff, transparent:true, opacity:0.22, blending:THREE.AdditiveBlending, depthWrite:false }));
-  echo.scale.setScalar(8.2);
-  group.add(echo);
-
-  // starfield backdrop
-  const starGeo = new THREE.BufferGeometry();
-  const SN = isMobile ? 500 : 1200, sp = new Float32Array(SN*3);
-  for (let i=0;i<SN;i++){ sp[i*3]=rnd(-300,300); sp[i*3+1]=rnd(-300,300); sp[i*3+2]=rnd(-300,300); }
-  starGeo.setAttribute('position', new THREE.BufferAttribute(sp,3));
-  group.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color:0x8ea2ff, size:0.7,
-    transparent:true, opacity:0.7, sizeAttenuation:true })));
-
-  const proj = new THREE.Vector3();
-  function project4(v, out, angA, angB){
-    // rotate in XW plane, then YW plane
-    const cA=Math.cos(angA), sA=Math.sin(angA), cB=Math.cos(angB), sB=Math.sin(angB);
-    let x = v.x*cA - v.w*sA, w = v.x*sA + v.w*cA;
-    let y = v.y*cB - w*sB;      w = v.y*sB + w*cB;
-    const s = 2.6 / (2.6 - w*0.85);   // 4D -> 3D perspective divide
-    out.set(x*s, y*s, v.z*s);
-  }
-  const tmp = new THREE.Vector3();
-
-  // ---- shockwave rings, fired on every footstep-beat ----
+  // ---- footstep shockwaves: flat rings rolling outward ----
   const rings = [];
-  const ringGeo = new THREE.RingGeometry(0.96, 1.0, 72);
-  for (let i=0;i<5;i++){
-    const rm = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
-      color:0x9fdcff, transparent:true, opacity:0,
+  const ringGeo = new THREE.RingGeometry(0.86, 1, 64);
+  for (let i=0;i<8;i++){
+    const m = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
+      color:0xff9040, transparent:true, opacity:0,
       blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide }));
-    rm.frustumCulled = false;
-    group.add(rm);
-    rings.push({ m:rm, age:9 });
+    m.rotation.x = -Math.PI/2;
+    m.visible = false;
+    group.add(m);
+    rings.push({ m, age:9, maxR:150 });
   }
+
   let lastBeat = -1;
   return {
-    name:'PULSE', roman:'II',
+    name:'TEMPEST', roman:'II',
     group,
-    enter(){},
+    flash:0,                       // lightning, decaying — the director lifts the sky with it
     beatInfo:{ beat:-1, pulse:0 }, // shared with the giant's footsteps
+    enter(){},
+    fireRing(x, y, z, maxR){
+      const r = rings.find(r=>r.age>1.5) || rings[0];
+      r.age = 0; r.maxR = maxR;
+      r.m.position.set(x, y, z);
+      r.m.visible = true;
+    },
     update(t, dt, actT, pk){
-      group.position.set(camera.position.x, camera.position.y, camera.position.z - 70);
-      const a = t*0.24, b = t*0.17;
-      // 120bpm heartbeat — every beat is one of the giant's footsteps
-      const beat = Math.floor(t*2);
+      const cx = camera.position.x, cz = camera.position.z;
+      // the tread: one vast footstep every ~1.15 s — every beat is the giant's step
+      const beat = Math.floor(t*0.87);
       if (beat !== lastBeat){
         lastBeat = beat;
         this.beatInfo.beat = beat; this.beatInfo.pulse = 1;
-        const r = rings.find(r=>r.age>1.6) || rings[0];
-        r.age = 0;
-        r.m.position.set((Math.random()*2-1)*30, (Math.random()*2-1)*20, -40-Math.random()*60);
-        r.m.rotation.set(Math.random()*0.6-0.3, Math.random()*0.6-0.3, 0);
+        this.fireRing(giant.bx + (beat % 2 ? 105 : -105), 4, giant.bz - 10, 150);
       }
-      this.beatInfo.pulse *= Math.exp(-6*dt);
-      const pulse = this.beatInfo.pulse;
-      const lp = lineGeo.attributes.position.array;
-      for (let e=0;e<E;e++){
-        const [i,j] = edges[e];
-        project4(V[i], tmp, a, b);   lp[e*6]=tmp.x;   lp[e*6+1]=tmp.y;   lp[e*6+2]=tmp.z;
-        project4(V[j], tmp, a, b);   lp[e*6+3]=tmp.x; lp[e*6+4]=tmp.y; lp[e*6+5]=tmp.z;
+      this.beatInfo.pulse *= Math.exp(-4*dt);
+      // lightning somewhere deep in the storm
+      if (Math.random() < dt*0.22) this.flash = 1;
+      this.flash *= Math.exp(-5*dt);
+
+      // embers stream past; gusts shove them sideways
+      const wind = Math.sin(t*0.6)*36 + Math.sin(t*1.7)*14;
+      for (let i=0;i<N;i++){
+        const i3 = i*3, sd = seed[i];
+        pos[i3+2] += dt*(54 + sd*70);
+        pos[i3]   += dt*wind*(0.4 + sd*0.8);
+        pos[i3+1] += dt*(5 + sd*11);
+        if (pos[i3+2] > cz+40){ pos[i3+2] -= 340; pos[i3] = cx + rnd(-170,170); pos[i3+1] = rnd(-8,130); }
+        else if (pos[i3+2] < cz-320){ pos[i3+2] += 340; }
+        if (pos[i3+1] > 135) pos[i3+1] = -8;
       }
-      lineGeo.attributes.position.needsUpdate = true;
-      const vp = vGeo.attributes.position.array;
-      for (let i=0;i<16;i++){ project4(V[i], tmp, a, b); vp[i*3]=tmp.x; vp[i*3+1]=tmp.y; vp[i*3+2]=tmp.z; }
-      vGeo.attributes.position.needsUpdate = true;
-      const ep = echo.geometry.attributes.position.array;
-      for (let e=0;e<E;e++){
-        const [i,j] = edges[e];
-        project4(V[i], tmp, -a*0.6, -b*0.6); ep[e*6]=tmp.x; ep[e*6+1]=tmp.y; ep[e*6+2]=tmp.z;
-        project4(V[j], tmp, -a*0.6, -b*0.6); ep[e*6+3]=tmp.x; ep[e*6+4]=tmp.y; ep[e*6+5]=tmp.z;
-      }
-      echo.geometry.attributes.position.needsUpdate = true;
-      const bs = 1 + pulse*0.16 + pk*1.6; // the comedown blows it apart
-      lines.scale.setScalar(5.2*bs);
-      vPts.scale.setScalar(5.2*bs);
-      echo.scale.setScalar(8.2*bs);
-      lineMat.opacity = 0.95*(1-pk*0.85);
-      vMat.opacity = 0.95*(1-pk*0.85);
-      // rings expand and fade
+      eGeo.attributes.position.needsUpdate = true;
+      eMat.opacity = 0.8*(1 - pk*0.75);
+
       for (const r of rings){
+        if (r.age > 1.5){ r.m.visible = false; continue; }
         r.age += dt;
-        const rr = 6 + r.age*46;
+        const rr = 14 + (r.age/1.5)*r.maxR;
         r.m.scale.set(rr, rr, 1);
-        r.m.material.opacity = Math.max(0, 0.75*(1 - r.age/1.6)) * (1-pk);
+        r.m.material.opacity = Math.max(0, 0.6*(1 - r.age/1.5)) * (1-pk);
       }
-      const wx = Math.sin(t*0.3)*9, wy = 4 + Math.sin(t*0.23)*3.5;
-      camera.position.x += (wx - camera.position.x) * (1-Math.exp(-2*dt));
-      camera.position.y += (wy - camera.position.y) * (1-Math.exp(-2*dt));
-      const lz = camera.position.z - 70;
-      camera.lookAt(camera.position.x*0.4, camera.position.y*0.6, lz);
-      orbitAround(camera.position.x*0.4, camera.position.y*0.6, lz);
+
+      gnd.position.set(cx, -2, cz - 180);
+
+      // glide low beside the march, gaze tipped up at the colossus
+      const k = 1 - Math.exp(-2*dt);
+      camera.position.x += (Math.sin(t*0.11)*26 - camera.position.x)*k;
+      camera.position.y += ((12 + Math.sin(t*0.4)*2) - camera.position.y)*k;
+      const lx = giant.bx*0.9, ly = 230, lz = giant.bz;
+      camera.lookAt(lx, ly, lz);
+      orbitAround(lx, ly, lz);
     }
   };
 }
@@ -765,7 +751,8 @@ function buildTerrain() {
   });
   saturn.add(new THREE.Mesh(new THREE.SphereGeometry(55, 48, 32), satMat));
   saturn.add(new THREE.Mesh(new THREE.RingGeometry(68, 120, 128, 1), ringMat));
-  saturn.rotation.x = -0.38; saturn.rotation.z = 0.10;
+  saturn.rotation.x = -0.50; saturn.rotation.z = 0.10;
+  saturn.scale.setScalar(1.35);
   group.add(saturn);
 
   // ---------- drifting embers ----------
@@ -795,7 +782,7 @@ function buildTerrain() {
   let dist = 0, prevPx = 0, rollSm = 0;
   const SPEED = 26;
   return {
-    name:'TITAN', roman:'III',
+    name:'BEHOLD', roman:'III',
     group,
     enter(){},
     update(t, dt, actT, pk){
@@ -813,9 +800,9 @@ function buildTerrain() {
       moon1.glow.position.copy(moon1.m.position);
       moon2.m.position.set(camera.position.x + 170, 190, camera.position.z - 460);
       moon2.glow.position.copy(moon2.m.position);
-      saturn.position.set(camera.position.x + 190,
-        -130 + THREE.MathUtils.smoothstep(actT, 0, 0.18)*345 - pk*300, // rises, then the dimming takes it
-        camera.position.z - 580);
+      saturn.position.set(camera.position.x + 620,
+        -60 + THREE.MathUtils.smoothstep(actT, 0, 0.18)*345 - pk*300, // rises far off to the side, then the dimming takes it
+        camera.position.z - 700);
       satMat.uniforms.uSunDir.value.copy(moon1.m.position).sub(camera.position).normalize();
       mat.uniforms.uMoonDir.value.copy(moon1.m.position).sub(camera.position).normalize();
       mat.uniforms.uMoon2Dir.value.copy(moon2.m.position).sub(camera.position).normalize();
@@ -926,14 +913,41 @@ function buildMonolith() {
   motes.frustumCulled = false;
   group.add(motes);
 
+  // ---- rain: cold and slanted, endless ----
+  const RN = isMobile ? 350 : 800;
+  const rPos = new Float32Array(RN*3);
+  for (let i=0;i<RN;i++){
+    rPos[i*3] = rnd(-190,190); rPos[i*3+1] = rnd(-10,130); rPos[i*3+2] = rnd(-340,40);
+  }
+  const rGeo = new THREE.BufferGeometry();
+  rGeo.setAttribute('position', new THREE.BufferAttribute(rPos, 3));
+  const rain = new THREE.Points(rGeo, new THREE.PointsMaterial({
+    color:0x93a9d6, size:1.7, transparent:true, opacity:0.5,
+    blending:THREE.AdditiveBlending, depthWrite:false }));
+  rain.frustumCulled = false;
+  group.add(rain);
+
+  // ---- the fallen: monoliths that didn't survive ----
+  const fallen = [];
+  for (let i=0;i<9;i++){
+    const m = new THREE.Mesh(boxGeo, darkMat);
+    m.scale.set(rnd(6,14), rnd(3,6), rnd(20,60));
+    m.position.set(rnd(-150,150), rnd(-4,2), rnd(-420,20));
+    m.rotation.set(rnd(-0.15,0.15), rnd(0,Math.PI), rnd(1.35,1.75));
+    group.add(m); fallen.push(m);
+  }
+
   return {
-    name:'SAUDADE', roman:'IV',
+    name:'LAMENT', roman:'IV',
     group,
     farLight, farGlow,
     enter(){
       // redistribute the city around the camera each loop
       for (const m of boxes){
         m.position.set(rnd(-130,130), m.userData.baseY, camera.position.z + rnd(-420, 20));
+      }
+      for (const m of fallen){
+        m.position.z = camera.position.z + rnd(-420, 20);
       }
     },
     update(t, dt, actT, pk){
@@ -970,93 +984,232 @@ function buildMonolith() {
         m.rotation.y += m.userData.rs*dt;
         if (m.position.z > camera.position.z + 30) m.position.z -= 460;
       }
+      // the fallen lie where they dropped
+      for (const m of fallen){
+        if (m.position.z > camera.position.z + 30) m.position.z -= 460;
+      }
+      // rain falls, slanted by the wind
+      const rz = camera.position.z;
+      for (let i=0;i<RN;i++){
+        const i3 = i*3;
+        rPos[i3+1] -= dt*(95 + (i%7)*9);
+        rPos[i3] += dt*22;
+        if (rPos[i3+1] < -12){
+          rPos[i3+1] += 142;
+          rPos[i3] = camera.position.x + rnd(-190,190);
+          rPos[i3+2] = rz + rnd(-340,40);
+        }
+        if (rPos[i3+2] > rz+40) rPos[i3+2] -= 380;
+        else if (rPos[i3+2] < rz-340) rPos[i3+2] += 380;
+      }
+      rGeo.attributes.position.needsUpdate = true;
     }
   };
 }
 
 /* ============ THE GIANT : the central character ============
-   A vast humanoid silhouette — dark, rim-lit, never fully seen until Act III.
-   Suggestion beats detail; that is what makes it awesome instead of just big. */
+   A robed colossus — realistic human anatomy under a heavy draped cloak,
+   rim-lit, mostly silhouette. ~1150 units tall: the camera is an insect.
+   Suggestion still beats detail; that is what keeps it awesome, not just big. */
 function buildGiant(){
   const group = new THREE.Group();
-  const rimMat = new THREE.ShaderMaterial({
-    uniforms:{
-      uRim:{value:new THREE.Color(0x8fb8ff)},
-      uRimK:{value:1.0},
-      uFogColor:{value:new THREE.Color(0x030109)},
-      uFogDensity:{value:0.0035},
-    },
-    vertexShader:`
-      varying vec3 vN; varying vec3 vV; varying float vFogDepth;
-      void main(){
-        vN = normalize(normalMatrix * normal);
-        vec4 mv = modelViewMatrix * vec4(position, 1.0);
-        vV = -mv.xyz;
-        vFogDepth = -mv.z;
-        gl_Position = projectionMatrix * mv;
-      }`,
-    fragmentShader:`
-      varying vec3 vN; varying vec3 vV; varying float vFogDepth;
-      uniform vec3 uRim; uniform float uRimK;
-      uniform vec3 uFogColor; uniform float uFogDensity;
-      void main(){
-        float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.5);
-        vec3 col = vec3(0.006, 0.008, 0.016) + uRim * f * uRimK;
-        float fog = 1.0 - exp(-uFogDensity*uFogDensity*vFogDepth*vFogDepth);
-        col = mix(col, uFogColor, clamp(fog, 0.0, 1.0));
-        gl_FragColor = vec4(col, 1.0);
-      }`
-  });
-  const torso = new THREE.Mesh(new THREE.CylinderGeometry(52, 74, 150, 12), rimMat);
-  torso.position.y = 225; group.add(torso);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(30, 16, 12), rimMat);
-  head.position.y = 328; group.add(head);
-  const armGeo = new THREE.CylinderGeometry(17, 23, 150, 10);
-  const armL = new THREE.Mesh(armGeo, rimMat);
-  armL.position.set(-80, 208, 0); armL.rotation.z = 0.16; group.add(armL);
-  const armR = new THREE.Mesh(armGeo, rimMat);
-  armR.position.set(80, 208, 0); armR.rotation.z = -0.16; group.add(armR);
-  const legGeo = new THREE.CylinderGeometry(24, 31, 170, 10);
-  legGeo.translate(0, -85, 0); // pivot at the hip
-  const legL = new THREE.Mesh(legGeo, rimMat);
-  legL.position.set(-34, 158, 0); group.add(legL);
-  const legR = new THREE.Mesh(legGeo, rimMat);
-  legR.position.set(34, 158, 0); group.add(legR);
+  function rimMaterial(base, rim){
+    return new THREE.ShaderMaterial({
+      uniforms:{
+        uBase:{value:new THREE.Color(base)},
+        uRim:{value:new THREE.Color(rim)},
+        uRimK:{value:1.0},
+        uFogColor:{value:new THREE.Color(0x030109)},
+        uFogDensity:{value:0.0035},
+      },
+      vertexShader:`
+        varying vec3 vN; varying vec3 vV; varying float vFogDepth;
+        void main(){
+          vN = normalize(normalMatrix * normal);
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          vV = -mv.xyz;
+          vFogDepth = -mv.z;
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader:`
+        varying vec3 vN; varying vec3 vV; varying float vFogDepth;
+        uniform vec3 uBase; uniform vec3 uRim; uniform float uRimK;
+        uniform vec3 uFogColor; uniform float uFogDensity;
+        void main(){
+          vec3 Nn = normalize(vN); vec3 Vv = normalize(vV);
+          float rim = pow(1.0 - abs(dot(Nn, Vv)), 2.2);
+          float top = clamp(Nn.y*0.5 + 0.5, 0.0, 1.0);
+          vec3 col = uBase*(0.35 + 0.65*top) + uRim*rim*uRimK;
+          float fog = 1.0 - exp(-uFogDensity*uFogDensity*vFogDepth*vFogDepth);
+          col = mix(col, uFogColor, clamp(fog, 0.0, 1.0));
+          gl_FragColor = vec4(col, 1.0);
+        }`
+    });
+  }
+  const cloakMat = rimMaterial(0x05060c, 0x8fb8ff);
+  const skinMat  = rimMaterial(0x0d0a09, 0xffb37a);
+
+  // ---- torso: lathe-turned, hips to shoulders ----
+  const torsoPts = [[150,0],[138,60],[118,150],[128,240],[165,330],[192,400],[182,445]]
+    .map(([r,y])=>new THREE.Vector2(r,y));
+  const torso = new THREE.Mesh(new THREE.LatheGeometry(torsoPts, 24), skinMat);
+  torso.position.y = 480;
+  group.add(torso);
+
+  // ---- cloak: heavy drape from the shoulders, flaring down, folded ----
+  const cloakPts = [[205,0],[218,60],[238,160],[268,300],[312,440],[348,560]]
+    .map(([r,y])=>new THREE.Vector2(r,y));
+  const cloakGeo = new THREE.LatheGeometry(cloakPts, 28);
+  const cp = cloakGeo.attributes.position;
+  for (let i=0;i<cp.count;i++){
+    const x = cp.getX(i), y = cp.getY(i), z = cp.getZ(i);
+    const a = Math.atan2(z, x);
+    const n = Math.sin(a*9 + y*0.012)*10 + Math.sin(a*17 + 1.7)*5;
+    const s = 1 + n/Math.max(1, Math.hypot(x, z));
+    cp.setX(i, x*s); cp.setZ(i, z*s);
+  }
+  cloakGeo.computeVertexNormals();
+  const cloak = new THREE.Mesh(cloakGeo, cloakMat);
+  cloak.position.y = 330;
+  group.add(cloak);
+
+  // ---- head + hood, face in shadow ----
+  const headG = new THREE.Group();
+  headG.position.y = 985;
+  group.add(headG);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(58, 24, 18), skinMat);
+  head.scale.set(0.92, 1.08, 0.98);
+  headG.add(head);
+  const hood = new THREE.Mesh(new THREE.LatheGeometry(
+    [[82,0],[74,40],[54,95],[22,132]].map(([r,y])=>new THREE.Vector2(r,y)), 20), cloakMat);
+  hood.position.y = -20;
+  headG.add(hood);
+  // eyes: two embers in the dark of the hood (the Look)
+  const eyeTex = (()=>{
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const gr = g.createRadialGradient(32,32,0,32,32,32);
+    gr.addColorStop(0,'rgba(255,255,255,1)');
+    gr.addColorStop(0.4,'rgba(255,255,255,0.55)');
+    gr.addColorStop(1,'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(0,0,64,64);
+    return new THREE.CanvasTexture(c);
+  })();
+  const eyeL = new THREE.Sprite(new THREE.SpriteMaterial({ map:eyeTex, color:0xb48cff,
+    transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthWrite:false }));
+  eyeL.scale.set(30, 30, 1); eyeL.position.set(-24, 6, 46);
+  const eyeR = new THREE.Sprite(eyeL.material.clone());
+  eyeR.scale.set(30, 30, 1); eyeR.position.set(24, 6, 46);
+  headG.add(eyeL, eyeR);
+
+  // ---- limbs: capsule segments on pivots ----
+  function segment(r, len, mat){
+    const m = new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 6, 12), mat);
+    m.position.y = -len/2;
+    const pivot = new THREE.Group();
+    pivot.add(m);
+    return pivot;
+  }
+  function makeArm(side){
+    const sh = new THREE.Group();
+    sh.position.set(side*208, 890, 0);
+    group.add(sh);
+    const upper = segment(58, 210, skinMat); sh.add(upper);
+    const el = new THREE.Group(); el.position.y = -218; upper.add(el);
+    const fore = segment(46, 190, skinMat); el.add(fore);
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(52, 16, 12), skinMat);
+    hand.position.y = -205; fore.add(hand);
+    const sleeve = new THREE.Mesh(new THREE.LatheGeometry(
+      [[72,0],[88,60],[106,125]].map(([r,y])=>new THREE.Vector2(r,y)), 14), cloakMat);
+    sleeve.position.y = -8; sh.add(sleeve);
+    sh.rotation.z = side*0.12;
+    return { sh, el };
+  }
+  const armL = makeArm(-1), armR = makeArm(1);
+
+  function makeLeg(side){
+    const hip = new THREE.Group();
+    hip.position.set(side*98, 500, 0);
+    group.add(hip);
+    const thigh = segment(78, 250, skinMat); hip.add(thigh);
+    const knee = new THREE.Group(); knee.position.y = -262; thigh.add(knee);
+    const shin = segment(62, 240, skinMat); knee.add(shin);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(95, 55, 150), skinMat);
+    foot.position.set(0, -256, 34); shin.add(foot);
+    return { hip, knee };
+  }
+  const legL = makeLeg(-1), legR = makeLeg(1);
+
   group.traverse(o=>{ o.frustumCulled = false; });
   scene.add(group);
+
   return {
-    group, mat:rimMat, walkPhase:0, bob:0, kneel:0,
-    bx:0, by:0, bz:0,
+    group, walkPhase:0, bob:0, kneel:0, gazeUp:0, stepPulse:0,
+    bx:0, by:0, bz:0, _ps:0, _sb:-1,
     place(x, y, z, ry){
       this.bx = x; this.by = y; this.bz = z;
       group.rotation.y = ry || 0;
     },
     tick(dt){
       this.bob *= Math.exp(-4*dt);
-      group.position.set(this.bx, this.by + this.bob*10 - this.kneel*110, this.bz);
-      group.rotation.x = this.kneel*0.28;
+      this.stepPulse *= Math.exp(-5*dt);
+      this.gazeUp += ((this.gazeUpT || 0) - this.gazeUp)*(1 - Math.exp(-3*dt));
+      group.position.set(this.bx, this.by + this.bob*26 - this.kneel*330, this.bz);
+      group.rotation.x = this.kneel*0.30;
+      headG.rotation.x = this.kneel*(this.gazeUp > 0.5 ? -0.18 : 0.5); // bowed, or lifted to look
+      // the kneel pose: thighs forward, knees deeply bent, arms resting
+      const kn = this.kneel;
+      if (kn > 0.01){
+        legL.hip.rotation.x = legR.hip.rotation.x = kn*0.95;
+        legL.knee.rotation.x = legR.knee.rotation.x = kn*2.05;
+        armL.sh.rotation.x = armR.sh.rotation.x = kn*0.55;
+      }
     },
-    setRim(k){ rimMat.uniforms.uRimK.value = k; },
+    setRim(k){ cloakMat.uniforms.uRimK.value = k; skinMat.uniforms.uRimK.value = k*0.9; },
+    setRimColor(hex){
+      cloakMat.uniforms.uRim.value.setHex(hex);
+      skinMat.uniforms.uRim.value.setHex(hex);
+    },
     setFog(color, density){
-      rimMat.uniforms.uFogColor.value.copy(color);
-      rimMat.uniforms.uFogDensity.value = density;
+      // the colossus looms through fog that would swallow anything smaller
+      for (const m of [cloakMat, skinMat]){
+        m.uniforms.uFogColor.value.copy(color);
+        m.uniforms.uFogDensity.value = density*0.45;
+      }
     },
-    walk(dt, stepsPerSec){ // free ambling cycle
-      this.walkPhase += dt*stepsPerSec*Math.PI;
+    setEyeGlow(k){ eyeL.material.opacity = k; eyeR.material.opacity = k; },
+    walk(dt, stepsPerSec){ // free ambling cycle, two footfalls per cycle
+      this.walkPhase += dt*stepsPerSec*Math.PI*2;
       const s = Math.sin(this.walkPhase);
-      legL.rotation.x = s*0.5; legR.rotation.x = -s*0.5;
-      this.bob = Math.max(this.bob, Math.abs(Math.cos(this.walkPhase))*0.45);
+      if ((this._ps > 0 && s <= 0) || (this._ps < 0 && s >= 0)) this.stepPulse = 1;
+      this._ps = s;
+      legL.hip.rotation.x = s*0.42;  legR.hip.rotation.x = -s*0.42;
+      legL.knee.rotation.x = Math.max(0, -s)*0.7 + 0.08;
+      legR.knee.rotation.x = Math.max(0,  s)*0.7 + 0.08;
+      armL.sh.rotation.x = -s*0.30;  armR.sh.rotation.x = s*0.30;
+      armL.el.rotation.x = armR.el.rotation.x = -0.25;
+      group.rotation.z = Math.sin(this.walkPhase)*0.018;
+      this.bob = Math.max(this.bob, Math.abs(Math.cos(this.walkPhase))*0.5);
     },
-    stride(beat, dt){ // locked to the pulse — every beat is a footstep
+    stride(beat, dt){ // locked to the tempest — every beat is a footstep
       const s = (beat % 2 === 0) ? 1 : -1;
-      const k = 1 - Math.exp(-10*dt);
-      legL.rotation.x += (s*0.55 - legL.rotation.x)*k;
-      legR.rotation.x += (-s*0.55 - legR.rotation.x)*k;
+      if (this._sb !== beat){ this._sb = beat; this.stepPulse = 1; }
+      const k = 1 - Math.exp(-8*dt);
+      legL.hip.rotation.x += ( s*0.50 - legL.hip.rotation.x)*k;
+      legR.hip.rotation.x += (-s*0.50 - legR.hip.rotation.x)*k;
+      legL.knee.rotation.x += ((s > 0 ? 0.12 : 0.60) - legL.knee.rotation.x)*k;
+      legR.knee.rotation.x += ((s < 0 ? 0.12 : 0.60) - legR.knee.rotation.x)*k;
+      armL.sh.rotation.x += (-s*0.34 - armL.sh.rotation.x)*k;
+      armR.sh.rotation.x += ( s*0.34 - armR.sh.rotation.x)*k;
+      group.rotation.z += (s*0.02 - group.rotation.z)*k;
       this.bob = 1;
     },
     rest(dt){
       const k = 1 - Math.exp(-3*dt);
-      legL.rotation.x *= (1-k); legR.rotation.x *= (1-k);
+      for (const j of [legL.hip, legR.hip, legL.knee, legR.knee, armL.sh, armR.sh])
+        j.rotation.x *= (1-k);
+      group.rotation.z *= (1-k);
+      this.bob *= (1-k);
     }
   };
 }
@@ -1111,12 +1264,13 @@ function buildChoice(){
    The camera never cuts. Four acts are regions of one universe; the flight
    loops every ~2 minutes. Tap skips ahead, holding hastens, and in Act IV's
    final passage the traveler chooses the ending with their gaze. */
-const CRUISE = 26, ACT_LEN = 780, LOOP = ACT_LEN*4, ACT_SECS = 30, PASSAGE_SECS = 4;
+const CRUISE = 26, ACT_LEN = 780, LOOP = ACT_LEN*4, ACT_SECS = 30, PASSAGE_SECS = 7;
+const BUILD = 'v2026.09.30-00.08';
 let voyageZ = 0;                       // ever-increasing distance traveled
 const echoColor = new THREE.Color(0x000000); // the last ending, tinting the next loop
 let choiceK = 0;                       // 0..1 how present the three lights are
 
-const worlds = [buildNebula(), buildTesseract(), buildTerrain(), buildMonolith()];
+const worlds = [buildNebula(), buildTempest(), buildTerrain(), buildMonolith()];
 for (const w of worlds){ w.group.visible = false; scene.add(w.group); }
 const giant = buildGiant();
 const choice = buildChoice();
@@ -1124,10 +1278,10 @@ choice.group.visible = false;
 
 // per-act atmosphere; crossfaded during passages
 const ACT_STYLE = [
-  { bg:new THREE.Color(0x030109), fog:new THREE.Color(0x030109), fd:0.0035 }, // I ascension
-  { bg:new THREE.Color(0x01020a), fog:new THREE.Color(0x01020a), fd:0.0022 }, // II pulse
-  { bg:new THREE.Color(0x0a0618), fog:new THREE.Color(0x0a0618), fd:0.0020 }, // III titan
-  { bg:new THREE.Color(0x01030c), fog:new THREE.Color(0x01030c), fd:0.0050 }, // IV saudade
+  { bg:new THREE.Color(0x030109), fog:new THREE.Color(0x030109), fd:0.0035 }, // I ascend
+  { bg:new THREE.Color(0x0b0406), fog:new THREE.Color(0x0b0406), fd:0.0042 }, // II tempest — ember dark
+  { bg:new THREE.Color(0x0a0618), fog:new THREE.Color(0x0a0618), fd:0.0020 }, // III behold
+  { bg:new THREE.Color(0x04060c), fog:new THREE.Color(0x04060c), fd:0.0042 }, // IV lament — cold and thick
 ];
 scene.background = ACT_STYLE[0].bg.clone();
 scene.fog = new THREE.FogExp2(0x030109, 0.0035);
@@ -1160,28 +1314,30 @@ function enterAct(i){
 
 // ---- the giant's direction, per act ----
 function directGiant(t, dt, act, actT){
-  const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
+  const cx = camera.position.x, cz = camera.position.z;
   giant.setFog(scene.fog.color, scene.fog.density);
+  giant.setEyeGlow(0);
   if (act === 0){
     // a vast shape breathing in the cloud — felt more than seen
-    giant.setRim(0.45);
-    giant.place(cx - 260, -50, cz - 620, 0.4);
-    giant.walk(dt, 0.25);
+    giant.setRim(0.4); giant.setRimColor(0x8fb8ff);
+    giant.place(cx - 280, -40, cz - 650, 0.35);
+    giant.walk(dt, 0.22);
   } else if (act === 1){
-    // striding beside you — every footstep is the beat
-    giant.setRim(0.9);
-    giant.place(cx + 150, -70, cz - 130, -0.5);
+    // the march: striding beside you — every footstep is the beat
+    giant.setRim(1.0); giant.setRimColor(0xff9a5a);
+    giant.place(cx + 250, 0, cz - 250, Math.PI*0.97);
     giant.stride(worlds[1].beatInfo.beat, dt);
+    camera.position.y += giant.stepPulse*5; // the ground shudders under you
   } else if (act === 2){
     // the reveal: standing on the ridge, watching you pass
-    giant.setRim(1.25);
-    giant.place(cx + 170, 0, cz - 520, Math.atan2(-170, 520));
+    giant.setRim(1.3); giant.setRimColor(0xbfa8ff);
+    giant.place(cx + 300, 30, cz - 650, Math.atan2(-300, 650));
     giant.rest(dt);
   } else if (!choiceOn){
     // walking away into the dark — legs in the fog of the collapse
-    giant.setRim(0.7);
-    giant.place(cx - 30, -30, cz - 430 - actT*80, Math.PI);
-    giant.walk(dt, 0.5);
+    giant.setRim(0.65); giant.setRimColor(0x8fb8ff);
+    giant.place(cx - 50, 0, cz - 560 - actT*220, Math.PI);
+    giant.walk(dt, 0.4);
   }
   giant.tick(dt);
 }
@@ -1190,6 +1346,7 @@ function directGiant(t, dt, act, actT){
 let choiceOn = false, ending = null;
 const gazeT = [0, 0, 0];
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
+const _flashC = new THREE.Color(0xbfd4ff); // tempest lightning lifts the sky
 const END_COLS = ['#ffdf9e', '#9a7fff', '#ffffff'];       // flash color per ending
 const END_ECHO = [0xffd9a0, 0x8f7bff, 0xf4f6ff];          // tint carried into the next loop
 
@@ -1211,10 +1368,11 @@ function updateChoice(t, dt, act, actT){
   if (choiceOn && !ending){
     const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
     // the giant stops, and kneels
-    giant.setRim(1.0);
-    giant.place(cx, -20, cz - 380, 0);
+    giant.setRim(1.0); giant.setRimColor(0xffd9a0);
+    giant.setEyeGlow(0);
+    giant.place(cx, 0, cz - 480, 0);
     giant.rest(dt);
-    giant.kneel = Math.min(1, giant.kneel + dt*0.45);
+    giant.kneel = Math.min(1, giant.kneel + dt*0.4);
     // the distant light yields to the three
     choice.hand.position.set(cx - 70, cy - 80, cz - 250);
     choice.eyeL.position.set(cx - 16, cy + 118, cz - 320);
@@ -1237,6 +1395,11 @@ function updateChoice(t, dt, act, actT){
 
   if (ending){
     ending.t += dt;
+    // the Look: the giant lifts its head, and its eyes are nebulae
+    if (ending.i === 1){
+      giant.gazeUpT = 1;
+      giant.setEyeGlow(Math.min(1, ending.t*1.1));
+    }
     const L = choice.targets()[ending.i].position;
     camera.getWorldDirection(_v1);
     // the chosen light draws near; your gaze is drawn to it
@@ -1249,7 +1412,7 @@ function updateChoice(t, dt, act, actT){
     if (ending.t > 3.4){
       ending = null;
       choice.hide();
-      giant.kneel = 0;
+      giant.kneel = 0; giant.gazeUpT = 0; giant.setEyeGlow(0);
       flashEl.style.transition = 'opacity 1.4s ease';
       flashEl.style.opacity = 0;
     }
@@ -1376,16 +1539,17 @@ function loop(){
   zoom += (zoomT - zoom) * lk;
 
   // ---- the voyage advances ----
+  const lp = ((voyageZ % LOOP) + LOOP) % LOOP;
+  const act = Math.floor(lp / ACT_LEN);
+  const actT = (lp % ACT_LEN) / ACT_LEN;
   let speedTarget = 1;
+  if (act === 3 && !choiceOn && !ending) speedTarget = 0.55; // lament drifts, heavy with rain
   if (holding) speedTarget = 3.2;                 // press-and-hold hastens
   if (choiceOn || ending) speedTarget = 0.35;     // the choice dilates time
   speedMul += (speedTarget - speedMul) * (1 - Math.exp(-3*dt));
   voyageZ += CRUISE * speedMul * dt;
   camera.position.z = -voyageZ;
 
-  const lp = ((voyageZ % LOOP) + LOOP) % LOOP;
-  const act = Math.floor(lp / ACT_LEN);
-  const actT = (lp % ACT_LEN) / ACT_LEN;
   const pk = THREE.MathUtils.clamp(
     (actT - (1 - PASSAGE_SECS/ACT_SECS)) / (PASSAGE_SECS/ACT_SECS), 0, 1);
 
@@ -1403,8 +1567,11 @@ function loop(){
   scene.fog.color.lerpColors(A.fog, B.fog, pk);
   if (act === 0) scene.fog.color.lerp(echoColor, 0.10);
   scene.fog.density = A.fd + (B.fd - A.fd)*pk;
+  const tflash = worlds[1].flash || 0;   // tempest lightning lifts the sky
+  if (tflash > 0.01) scene.background.lerp(_flashC, tflash*0.12);
 
   // ---- the act, the giant, the choice ----
+  if (pk > 0.01) worlds[next].update(t, dt, 0, pk); // the incoming act is already alive
   worlds[act].update(t, dt, actT, pk);
   if (act === 3 || ending) updateChoice(t, dt, act, actT);
   else directGiant(t, dt, act, actT);
@@ -1431,12 +1598,11 @@ function loop(){
   const haste = Math.max(0, speedMul - 1)/2.2;
   camera.fov = 62 + haste*14 + skipPunch*22;
   camera.updateProjectionMatrix();
-  const showStreaks = holding || skipPunch > 0.05;
-  streaks.visible = showStreaks;
-  if (showStreaks){
-    sMat.opacity = Math.min(0.85, 0.18 + haste*0.4 + skipPunch*0.6);
+  { // streaks always breathe a little — the voyage never feels parked
+    streaks.visible = true;
+    sMat.opacity = Math.min(0.8, 0.07 + haste*0.45 + skipPunch*0.55);
     const sp = sGeo.attributes.position;
-    const flow = dt * (60 + haste*160 + skipPunch*320);
+    const flow = dt * (60 + haste*170 + skipPunch*320);
     for (let i=0;i<STREAKS;i++){
       sZ[i] += flow;
       if (sZ[i] > 8) sZ[i] = -135;
@@ -1458,6 +1624,7 @@ window.__elsewhere = {
 
 // boot
 camera.position.set(0, 0, 0);
+document.getElementById('ver').textContent = BUILD;
 enterAct(0);
 loop();
 setTimeout(()=> document.getElementById('intro').classList.add('gone'), 1400);

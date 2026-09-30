@@ -322,3 +322,12 @@ mid-act — there, then gone.
 arriving, but by giving in. The camera drifts *into* the light; whiteout; and
 you open your eyes inside the cloud. The unreachable light was rapture's heart
 all along. The loop closes.
+
+## Cat companion (added 2026-09-30)
+
+A tiny cream-colored cat sits in the bottom-left corner and watches the voyage
+with you. Pure CSS/SVG animation, pointer-events:none (never blocks touch):
+breathes, blinks, swishes its tail, twitches an ear, looks around, and hops
+once on every act change. Moods follow the acts — alert in TEMPEST (ears
+flatten, tail swishes fast, eyes widen), awe-struck in BEHOLD, sleepy in
+LAMENT (eyes close, head nods, floating "z"s). Fades in after the intro.

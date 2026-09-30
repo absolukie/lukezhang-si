@@ -110,21 +110,37 @@ function orbitAround(tx, ty, tz){
 }
 
 // ---- hyperspace streaks riding on the camera ----
-const STREAKS = 220;
+const STREAKS = 340;
 const sGeo = new THREE.BufferGeometry();
 const sXZ = new Float32Array(STREAKS*6);
 const sX = new Float32Array(STREAKS), sY = new Float32Array(STREAKS),
       sZ = new Float32Array(STREAKS), sLen = new Float32Array(STREAKS);
 for (let i=0;i<STREAKS;i++){
-  const r = 6 + Math.random()*42, a = Math.random()*Math.PI*2;
+  const r = 5 + Math.random()*44, a = Math.random()*Math.PI*2;
   sX[i] = Math.cos(a)*r; sY[i] = Math.sin(a)*r;
-  sZ[i] = -Math.random()*130 - 5; sLen[i] = 2 + Math.random()*7;
+  sZ[i] = -Math.random()*130 - 5; sLen[i] = 3 + Math.random()*9;
 }
 sGeo.setAttribute('position', new THREE.BufferAttribute(sXZ, 3));
 const sMat = new THREE.LineBasicMaterial({ color:0xcfe8ff, transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthWrite:false });
 const streaks = new THREE.LineSegments(sGeo, sMat);
 streaks.visible = false; streaks.frustumCulled = false;
 camera.add(streaks);
+
+// ---- rush motes: near-field dust streaming past in every act — the speed you feel ----
+const MOTES = isMobile ? 130 : 260;
+const mGeo = new THREE.BufferGeometry();
+const mPos = new Float32Array(MOTES*3);
+for (let i=0;i<MOTES;i++){
+  mPos[i*3] = (Math.random()*2-1)*38;
+  mPos[i*3+1] = (Math.random()*2-1)*28;
+  mPos[i*3+2] = -Math.random()*70 - 4;
+}
+mGeo.setAttribute('position', new THREE.BufferAttribute(mPos, 3));
+const moteMat = new THREE.PointsMaterial({ color:0x9fc8ff, size:0.55,
+  transparent:true, opacity:0.35, blending:THREE.AdditiveBlending, depthWrite:false });
+const motes = new THREE.Points(mGeo, moteMat);
+motes.frustumCulled = false;
+camera.add(motes);
 
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
@@ -461,24 +477,82 @@ function buildTempest() {
   embers.frustumCulled = false;
   group.add(embers);
 
-  // ---- dark ground for the march ----
+  // ---- dark ground for the march: ember-flecked, scrolling with the voyage ----
+  const gndTex = (()=>{
+    const c = document.createElement('canvas'); c.width = c.height = 256;
+    const g = c.getContext('2d');
+    g.fillStyle = '#070304'; g.fillRect(0,0,256,256);
+    for (let i=0;i<420;i++){
+      const x = Math.random()*256, y = Math.random()*256, r = Math.random()*2.2+0.4;
+      const a = 0.05+Math.random()*0.30;
+      g.fillStyle = Math.random() < 0.75
+        ? `rgba(255,${110+((Math.random()*60)|0)},40,${a})`
+        : `rgba(255,235,200,${a*0.8})`;
+      g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(10, 10);
+    return t;
+  })();
   const gnd = new THREE.Mesh(new THREE.PlaneGeometry(1500, 1500),
-    new THREE.MeshBasicMaterial({ color:0x070304 }));
+    new THREE.MeshBasicMaterial({ map:gndTex }));
   gnd.rotation.x = -Math.PI/2;
   gnd.position.y = -2;
   group.add(gnd);
 
-  // ---- footstep shockwaves: flat rings rolling outward ----
+  // ---- footstep shockwaves: camera-facing rings rolling outward ----
   const rings = [];
   const ringGeo = new THREE.RingGeometry(0.86, 1, 64);
   for (let i=0;i<8;i++){
     const m = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
       color:0xff9040, transparent:true, opacity:0,
       blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide }));
-    m.rotation.x = -Math.PI/2;
     m.visible = false;
     group.add(m);
-    rings.push({ m, age:9, maxR:150 });
+    rings.push({ m, age:9, maxR:260 });
+  }
+
+  // ---- footstep dust: burst puffs that bloom and settle ----
+  const DUST = 90;
+  const dGeo = new THREE.BufferGeometry();
+  const dPos = new Float32Array(DUST*3), dVel = new Float32Array(DUST*3), dAge = new Float32Array(DUST).fill(9);
+  for (let i=0;i<DUST;i++){ dPos[i*3+1] = -100; }
+  dGeo.setAttribute('position', new THREE.BufferAttribute(dPos, 3));
+  const dMat = new THREE.PointsMaterial({ color:0xff9a50, size:9, map:emberTex,
+    transparent:true, opacity:0.55, blending:THREE.AdditiveBlending, depthWrite:false, sizeAttenuation:true });
+  const dust = new THREE.Points(dGeo, dMat);
+  dust.frustumCulled = false;
+  group.add(dust);
+  let dustCur = 0;
+  function puff(x, y, z){
+    for (let n=0;n<12;n++){
+      const i = dustCur; dustCur = (dustCur+1)%DUST;
+      const i3 = i*3, a = Math.random()*Math.PI*2, r = 20+Math.random()*40;
+      dPos[i3] = x + Math.cos(a)*30; dPos[i3+1] = y + Math.random()*20; dPos[i3+2] = z + Math.sin(a)*30;
+      dVel[i3] = Math.cos(a)*r; dVel[i3+1] = 30+Math.random()*60; dVel[i3+2] = Math.sin(a)*r;
+      dAge[i] = 0;
+    }
+  }
+
+  // ---- lightning: bolts that tear the sky open for a quarter second ----
+  const boltTex = (()=>{
+    const c = document.createElement('canvas'); c.width = 128; c.height = 256;
+    const g = c.getContext('2d');
+    g.strokeStyle = 'rgba(255,255,255,1)'; g.lineWidth = 5; g.shadowColor = '#cfe8ff'; g.shadowBlur = 18;
+    let x = 64, y = 8;
+    g.beginPath(); g.moveTo(x, y);
+    while (y < 248){ x += (Math.random()*2-1)*36; y += 18+Math.random()*22; g.lineTo(x, y); }
+    g.stroke();
+    g.strokeStyle = 'rgba(160,200,255,0.8)'; g.lineWidth = 12; g.stroke();
+    return new THREE.CanvasTexture(c);
+  })();
+  const bolts = [];
+  for (let i=0;i<3;i++){
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map:boltTex, color:0xdfeaff,
+      transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthWrite:false }));
+    sp.scale.set(120, 340, 1);
+    group.add(sp);
+    bolts.push({ sp, age:9 });
   }
 
   let lastBeat = -1;
@@ -501,12 +575,28 @@ function buildTempest() {
       if (beat !== lastBeat){
         lastBeat = beat;
         this.beatInfo.beat = beat; this.beatInfo.pulse = 1;
-        this.fireRing(giant.bx + (beat % 2 ? 105 : -105), 4, giant.bz - 10, 150);
+        // the foot plants beside the stride: ring, dust, and the camera feels it
+        const fx = giant.bx + (beat % 2 ? 105 : -105);
+        this.fireRing(fx, 26, giant.bz - 10, 260);
+        puff(fx, 8, giant.bz - 10);
+        this.thump = 1;
       }
       this.beatInfo.pulse *= Math.exp(-4*dt);
-      // lightning somewhere deep in the storm
-      if (Math.random() < dt*0.22) this.flash = 1;
+      this.thump = (this.thump || 0) * Math.exp(-6*dt);
+      // lightning somewhere deep in the storm — a bolt tears the sky, the sky answers
+      if (Math.random() < dt*0.30){
+        this.flash = 1;
+        const b = bolts[(Math.random()*bolts.length)|0];
+        b.sp.position.set(cx + rnd(-500, 700), rnd(220, 520), cz - rnd(350, 750));
+        b.sp.material.opacity = 1;
+        b.age = 0;
+      }
       this.flash *= Math.exp(-5*dt);
+      for (const b of bolts){
+        if (b.age > 0.3){ b.sp.material.opacity = 0; continue; }
+        b.age += dt;
+        b.sp.material.opacity = Math.max(0, 1 - b.age/0.3);
+      }
 
       // embers stream past; gusts shove them sideways
       const wind = Math.sin(t*0.6)*36 + Math.sin(t*1.7)*14;
@@ -527,18 +617,32 @@ function buildTempest() {
         r.age += dt;
         const rr = 14 + (r.age/1.5)*r.maxR;
         r.m.scale.set(rr, rr, 1);
-        r.m.material.opacity = Math.max(0, 0.6*(1 - r.age/1.5)) * (1-pk);
+        r.m.quaternion.copy(camera.quaternion);   // the shock front faces you
+        r.m.material.opacity = Math.max(0, 0.65*(1 - r.age/1.5)) * (1-pk);
       }
+      // dust puffs bloom, climb, and settle
+      for (let i=0;i<DUST;i++){
+        if (dAge[i] > 1.4) continue;
+        dAge[i] += dt;
+        const i3 = i*3;
+        dPos[i3] += dVel[i3]*dt; dPos[i3+1] += dVel[i3+1]*dt; dPos[i3+2] += dVel[i3+2]*dt;
+        dVel[i3+1] -= 60*dt;
+      }
+      dGeo.attributes.position.needsUpdate = true;
+      dMat.opacity = 0.55*(1 - pk*0.75);
 
       gnd.position.set(cx, -2, cz - 180);
+      gndTex.offset.y = voyageZ*0.0011;   // the earth streams beneath the march
 
       // glide low beside the march, gaze tipped up at the colossus
       const k = 1 - Math.exp(-2*dt);
       camera.position.x += (Math.sin(t*0.11)*26 - camera.position.x)*k;
       camera.position.y += ((12 + Math.sin(t*0.4)*2) - camera.position.y)*k;
-      const lx = giant.bx*0.9, ly = 320, lz = giant.bz;
+      const lx = giant.bx*0.9, ly = 520, lz = giant.bz;
       camera.lookAt(lx, ly, lz);
       orbitAround(lx, ly, lz);
+      camera.position.y -= (this.thump || 0)*3.0;  // each footstep lands in your chest
+      camera.rotateZ((this.thump || 0)*0.006);
     }
   };
 }
@@ -752,7 +856,7 @@ function buildTerrain() {
   saturn.add(new THREE.Mesh(new THREE.SphereGeometry(55, 48, 32), satMat));
   saturn.add(new THREE.Mesh(new THREE.RingGeometry(68, 120, 128, 1), ringMat));
   saturn.rotation.x = -0.50; saturn.rotation.z = 0.10;
-  saturn.scale.setScalar(1.35);
+  saturn.scale.setScalar(1.0);   // a distant ringed world, not a ceiling lamp
   group.add(saturn);
 
   // ---------- drifting embers ----------
@@ -800,9 +904,9 @@ function buildTerrain() {
       moon1.glow.position.copy(moon1.m.position);
       moon2.m.position.set(camera.position.x + 170, 190, camera.position.z - 460);
       moon2.glow.position.copy(moon2.m.position);
-      saturn.position.set(camera.position.x + 340,
+      saturn.position.set(camera.position.x + 380,
         -40 + THREE.MathUtils.smoothstep(actT, 0, 0.18)*300 - pk*300, // rises far off to the side, then the dimming takes it
-        camera.position.z - 950);
+        camera.position.z - 1150);
       satMat.uniforms.uSunDir.value.copy(moon1.m.position).sub(camera.position).normalize();
       mat.uniforms.uMoonDir.value.copy(moon1.m.position).sub(camera.position).normalize();
       mat.uniforms.uMoon2Dir.value.copy(moon2.m.position).sub(camera.position).normalize();
@@ -914,16 +1018,17 @@ function buildMonolith() {
   motes.frustumCulled = false;
   group.add(motes);
 
-  // ---- rain: cold and slanted, endless ----
+  // ---- rain: cold slanted streaks, endless ----
   const RN = isMobile ? 350 : 800;
-  const rPos = new Float32Array(RN*3);
+  const rPos = new Float32Array(RN*6);
+  const rX = new Float32Array(RN), rY = new Float32Array(RN), rZ = new Float32Array(RN);
   for (let i=0;i<RN;i++){
-    rPos[i*3] = rnd(-190,190); rPos[i*3+1] = rnd(-10,130); rPos[i*3+2] = rnd(-340,40);
+    rX[i] = rnd(-190,190); rY[i] = rnd(-10,130); rZ[i] = rnd(-340,40);
   }
   const rGeo = new THREE.BufferGeometry();
   rGeo.setAttribute('position', new THREE.BufferAttribute(rPos, 3));
-  const rain = new THREE.Points(rGeo, new THREE.PointsMaterial({
-    color:0x93a9d6, size:1.7, transparent:true, opacity:0.5,
+  const rain = new THREE.LineSegments(rGeo, new THREE.LineBasicMaterial({
+    color:0x8fa8d8, transparent:true, opacity:0.42,
     blending:THREE.AdditiveBlending, depthWrite:false }));
   rain.frustumCulled = false;
   group.add(rain);
@@ -956,9 +1061,9 @@ function buildMonolith() {
       camera.position.x = Math.sin(t*0.09)*34;
       camera.position.y = 8 + Math.sin(t*0.13)*2.5;
       if (choiceOn){
-        // the kneel: rise to behold the bowed colossus and the three lights
+        // the kneel: rise to behold the bowed colossus — head, shoulders, all three lights
         camera.position.y = 40;
-        orbitAround(camera.position.x - 30, 330, camera.position.z - 420);
+        orbitAround(camera.position.x - 30, 300, camera.position.z - 500);
       } else {
         camera.lookAt(camera.position.x*0.3, 10, camera.position.z - 90);
         orbitAround(camera.position.x*0.3, 10, camera.position.z - 90);
@@ -995,21 +1100,24 @@ function buildMonolith() {
       for (const m of fallen){
         if (m.position.z > camera.position.z + 30) m.position.z -= 460;
       }
-      // rain falls, slanted by the wind
+      // rain falls, slanted by the wind — each drop a short streak along its fall
       const rz = camera.position.z;
+      const rp = rGeo.attributes.position;
       for (let i=0;i<RN;i++){
-        const i3 = i*3;
-        rPos[i3+1] -= dt*(95 + (i%7)*9);
-        rPos[i3] += dt*22;
-        if (rPos[i3+1] < -12){
-          rPos[i3+1] += 142;
-          rPos[i3] = camera.position.x + rnd(-190,190);
-          rPos[i3+2] = rz + rnd(-340,40);
+        rY[i] -= dt*(95 + (i%7)*9);
+        rX[i] += dt*22;
+        if (rY[i] < -12){
+          rY[i] += 142;
+          rX[i] = camera.position.x + rnd(-190,190);
+          rZ[i] = rz + rnd(-340,40);
         }
-        if (rPos[i3+2] > rz+40) rPos[i3+2] -= 380;
-        else if (rPos[i3+2] < rz-340) rPos[i3+2] += 380;
+        if (rZ[i] > rz+40) rZ[i] -= 380;
+        else if (rZ[i] < rz-340) rZ[i] += 380;
+        const i6 = i*6, L = 5.5;
+        rp.setXYZ(i6,   rX[i], rY[i], rZ[i]);
+        rp.setXYZ(i6+1, rX[i]-L*0.22, rY[i]+L, rZ[i]-L*0.06);
       }
-      rGeo.attributes.position.needsUpdate = true;
+      rp.needsUpdate = true;
     }
   };
 }
@@ -1027,27 +1135,41 @@ function buildGiant(){
         uBase:{value:new THREE.Color(base)},
         uRim:{value:new THREE.Color(rim)},
         uRimK:{value:1.0},
+        uUnder:{value:new THREE.Color(0x000000)},
+        uUnderK:{value:0.0},
+        uFoldK:{value:1.0},
         uFogColor:{value:new THREE.Color(0x030109)},
         uFogDensity:{value:0.0035},
       },
       vertexShader:`
         varying vec3 vN; varying vec3 vV; varying float vFogDepth;
+        varying float vObjY;
         void main(){
           vN = normalize(normalMatrix * normal);
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           vV = -mv.xyz;
           vFogDepth = -mv.z;
+          vObjY = position.y;
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader:`
         varying vec3 vN; varying vec3 vV; varying float vFogDepth;
+        varying float vObjY;
         uniform vec3 uBase; uniform vec3 uRim; uniform float uRimK;
+        uniform vec3 uUnder; uniform float uUnderK; uniform float uFoldK;
         uniform vec3 uFogColor; uniform float uFogDensity;
         void main(){
           vec3 Nn = normalize(vN); vec3 Vv = normalize(vV);
           float rim = pow(1.0 - abs(dot(Nn, Vv)), 2.2);
           float top = clamp(Nn.y*0.5 + 0.5, 0.0, 1.0);
-          vec3 col = uBase*(0.35 + 0.65*top) + uRim*rim*uRimK;
+          // cloth ribbing: fine vertical fold-banding so the surface isn't flat
+          float fold = 0.5 + 0.5*sin(vObjY*0.11 + sin(vObjY*0.031)*2.0);
+          float foldShade = mix(1.0, 0.72 + 0.28*fold, uFoldK);
+          // height gradient: weight settles darker toward the ground
+          float hgrad = 0.55 + 0.45*clamp(vObjY/900.0 + 0.35, 0.0, 1.0);
+          vec3 col = uBase*(0.30 + 0.70*top)*foldShade*hgrad + uRim*rim*uRimK;
+          // underlight: the world below kisses upward-facing shadow (ember glow, cold fog)
+          col += uUnder * uUnderK * clamp(-Nn.y, 0.0, 1.0) * foldShade;
           float fog = 1.0 - exp(-uFogDensity*uFogDensity*vFogDepth*vFogDepth);
           col = mix(col, uFogColor, clamp(fog, 0.0, 1.0));
           gl_FragColor = vec4(col, 1.0);
@@ -1080,6 +1202,14 @@ function buildGiant(){
   const cloak = new THREE.Mesh(cloakGeo, cloakMat);
   cloak.position.y = 330;
   group.add(cloak);
+
+  // ---- regalia: a heavy sash at the waist, pauldrons on the shoulders ----
+  const sash = new THREE.Mesh(new THREE.TorusGeometry(152, 30, 10, 28), cloakMat);
+  sash.position.y = 505; sash.rotation.x = Math.PI/2 - 0.12;
+  group.add(sash);
+  const sashKnot = new THREE.Mesh(new THREE.SphereGeometry(34, 12, 10), cloakMat);
+  sashKnot.position.set(120, 470, 60); sashKnot.scale.set(1, 1.4, 1);
+  group.add(sashKnot);
 
   // ---- head + hood, face in shadow ----
   const headG = new THREE.Group();
@@ -1134,6 +1264,17 @@ function buildGiant(){
     return { sh, el };
   }
   const armL = makeArm(-1), armR = makeArm(1);
+  // pauldrons ride over the shoulder joints; bronze bands ring the forearms
+  for (const s of [-1, 1]){
+    const p = new THREE.Mesh(new THREE.SphereGeometry(78, 16, 12), cloakMat);
+    p.position.set(s*208, 918, 0); p.scale.set(1.15, 0.72, 1.05);
+    group.add(p);
+  }
+  for (const arm of [armL, armR]){
+    const band = new THREE.Mesh(new THREE.TorusGeometry(50, 11, 8, 18), skinMat);
+    band.position.y = -120; band.rotation.x = Math.PI/2;
+    arm.sh.add(band);
+  }
 
   function makeLeg(side){
     const hip = new THREE.Group();
@@ -1165,6 +1306,11 @@ function buildGiant(){
       group.position.set(this.bx, this.by + this.bob*26 - this.kneel*330, this.bz);
       group.rotation.x = this.kneel*0.30;
       headG.rotation.x = this.kneel*(this.gazeUp > 0.5 ? -0.18 : 0.5); // bowed, or lifted to look
+      // the cloak trails every motion a half-beat late — heavy cloth, not a shell
+      const sw = this.sway || 0;
+      cloak.rotation.z = sw*0.05;
+      cloak.rotation.x = Math.abs(sw)*0.02;
+      sash.rotation.z = sw*0.03;
       // the kneel pose: thighs forward, knees deeply bent, arms resting
       const kn = this.kneel;
       if (kn > 0.01){
@@ -1177,6 +1323,13 @@ function buildGiant(){
     setRimColor(hex){
       cloakMat.uniforms.uRim.value.setHex(hex);
       skinMat.uniforms.uRim.value.setHex(hex);
+    },
+    setUnder(hex, k){
+      // the world below kisses the colossus: ember glow, moonlight, cold fog
+      for (const m of [cloakMat, skinMat]){
+        m.uniforms.uUnder.value.setHex(hex);
+        m.uniforms.uUnderK.value = k;
+      }
     },
     setFog(color, density){
       // the colossus looms through fog that would swallow anything smaller
@@ -1191,25 +1344,38 @@ function buildGiant(){
       const s = Math.sin(this.walkPhase);
       if ((this._ps > 0 && s <= 0) || (this._ps < 0 && s >= 0)) this.stepPulse = 1;
       this._ps = s;
-      legL.hip.rotation.x = s*0.42;  legR.hip.rotation.x = -s*0.42;
-      legL.knee.rotation.x = Math.max(0, -s)*0.7 + 0.08;
-      legR.knee.rotation.x = Math.max(0,  s)*0.7 + 0.08;
-      armL.sh.rotation.x = -s*0.30;  armR.sh.rotation.x = s*0.30;
-      armL.el.rotation.x = armR.el.rotation.x = -0.25;
-      group.rotation.z = Math.sin(this.walkPhase)*0.018;
+      legL.hip.rotation.x = s*0.46;  legR.hip.rotation.x = -s*0.46;
+      legL.knee.rotation.x = Math.max(0, -s)*0.75 + 0.08;
+      legR.knee.rotation.x = Math.max(0,  s)*0.75 + 0.08;
+      armL.sh.rotation.x = -s*0.34;  armR.sh.rotation.x = s*0.34;
+      armL.el.rotation.x = armR.el.rotation.x = -0.30;
+      group.rotation.z = Math.sin(this.walkPhase)*0.022;
+      group.rotation.y = -s*0.05;
+      headG.position.y = 985 - Math.abs(Math.cos(this.walkPhase))*14;
+      headG.rotation.y = s*0.07;
+      this.sway = s;
       this.bob = Math.max(this.bob, Math.abs(Math.cos(this.walkPhase))*0.5);
     },
-    stride(beat, dt){ // locked to the tempest — every beat is a footstep
-      const s = (beat % 2 === 0) ? 1 : -1;
+    stride(beat, dt, t){ // locked to the tempest — every beat is a footstep
+      // smooth weight transfer: each step swells and releases instead of snapping
+      const fr = (t*0.87) % 1;
+      const s = Math.sin(fr*Math.PI) * (beat % 2 === 0 ? 1 : -1);
       if (this._sb !== beat){ this._sb = beat; this.stepPulse = 1; }
-      const k = 1 - Math.exp(-8*dt);
-      legL.hip.rotation.x += ( s*0.50 - legL.hip.rotation.x)*k;
-      legR.hip.rotation.x += (-s*0.50 - legR.hip.rotation.x)*k;
-      legL.knee.rotation.x += ((s > 0 ? 0.12 : 0.60) - legL.knee.rotation.x)*k;
-      legR.knee.rotation.x += ((s < 0 ? 0.12 : 0.60) - legR.knee.rotation.x)*k;
-      armL.sh.rotation.x += (-s*0.34 - armL.sh.rotation.x)*k;
-      armR.sh.rotation.x += ( s*0.34 - armR.sh.rotation.x)*k;
-      group.rotation.z += (s*0.02 - group.rotation.z)*k;
+      const k = 1 - Math.exp(-10*dt);
+      legL.hip.rotation.x += ( s*0.58 - legL.hip.rotation.x)*k;
+      legR.hip.rotation.x += (-s*0.58 - legR.hip.rotation.x)*k;
+      legL.knee.rotation.x += ((s > 0 ? 0.10 : 0.72) - legL.knee.rotation.x)*k;
+      legR.knee.rotation.x += ((s < 0 ? 0.10 : 0.72) - legR.knee.rotation.x)*k;
+      armL.sh.rotation.x += (-s*0.40 - armL.sh.rotation.x)*k;
+      armR.sh.rotation.x += ( s*0.40 - armR.sh.rotation.x)*k;
+      armL.el.rotation.x += (-0.35 - armL.el.rotation.x)*k;
+      armR.el.rotation.x += (-0.35 - armR.el.rotation.x)*k;
+      // the mass answers the step: torso counter-turns, shoulders roll, head rides it
+      group.rotation.y += (-s*0.07 - group.rotation.y)*k;
+      group.rotation.z += (s*0.028 - group.rotation.z)*k;
+      headG.position.y += ((985 - Math.abs(s)*26) - headG.position.y)*k;
+      headG.rotation.y += (s*0.10 - headG.rotation.y)*k;
+      this.sway = s;
       this.bob = 1;
     },
     rest(dt){
@@ -1217,6 +1383,9 @@ function buildGiant(){
       for (const j of [legL.hip, legR.hip, legL.knee, legR.knee, armL.sh, armR.sh])
         j.rotation.x *= (1-k);
       group.rotation.z *= (1-k);
+      group.rotation.y *= (1-k);
+      headG.rotation.y *= (1-k);
+      this.sway *= (1-k);
       this.bob *= (1-k);
     }
   };
@@ -1273,7 +1442,7 @@ function buildChoice(){
    loops every ~2 minutes. Tap skips ahead, holding hastens, and in Act IV's
    final passage the traveler chooses the ending with their gaze. */
 const CRUISE = 26, ACT_LEN = 780, LOOP = ACT_LEN*4, ACT_SECS = 30, PASSAGE_SECS = 7;
-const BUILD = 'v2026.09.30-00.15';
+const BUILD = 'v2026.09.30-01.05';
 let voyageZ = 0;                       // ever-increasing distance traveled
 const echoColor = new THREE.Color(0x000000); // the last ending, tinting the next loop
 let choiceK = 0;                       // 0..1 how present the three lights are
@@ -1327,23 +1496,25 @@ function directGiant(t, dt, act, actT){
   giant.setEyeGlow(0);
   if (act === 0){
     // a vast shape breathing in the cloud — felt more than seen (far ahead, dim)
-    giant.setRim(0.4); giant.setRimColor(0x8fb8ff);
-    giant.place(cx + 200, -60, cz - 1350, 0.35);
+    giant.setRim(0.55); giant.setRimColor(0x8fb8ff); giant.setUnder(0x4a5aa8, 0.2);
+    giant._march = 0;
+    giant.place(cx + 180, -60, cz - 1230, 0.35);
     giant.walk(dt, 0.22);
   } else if (act === 1){
-    // the march: striding beside you — every footstep is the beat (far enough to see whole)
-    giant.setRim(1.0); giant.setRimColor(0xff9a5a);
-    giant.place(cx + 720, 0, cz - 720, Math.PI*0.97);
-    giant.stride(worlds[1].beatInfo.beat, dt);
+    // the march: striding beside you — every footstep is the beat (framed whole)
+    giant.setRim(1.0); giant.setRimColor(0xff9a5a); giant.setUnder(0xff5a1e, 0.5);
+    giant._march = (giant._march || 0) + dt*5;   // it travels, slowly pulling ahead
+    giant.place(cx + 1050, 0, cz - 1050 - giant._march, Math.PI*0.97);
+    giant.stride(worlds[1].beatInfo.beat, dt, t);
     camera.position.y += giant.stepPulse*5; // the ground shudders under you
   } else if (act === 2){
     // the reveal: standing on the ridge, watching you pass (whole figure in frame)
-    giant.setRim(1.3); giant.setRimColor(0xbfa8ff);
-    giant.place(cx - 420, 20, cz - 780, Math.atan2(420, 780));
+    giant.setRim(1.3); giant.setRimColor(0xbfa8ff); giant.setUnder(0x6a5aa8, 0.3);
+    giant.place(cx - 380, 20, cz - 1250, Math.atan2(380, 1250));
     giant.rest(dt);
   } else if (!choiceOn){
     // walking away into the dark — legs in the fog of the collapse
-    giant.setRim(0.65); giant.setRimColor(0x8fb8ff);
+    giant.setRim(0.65); giant.setRimColor(0x8fb8ff); giant.setUnder(0x3a5a8a, 0.35);
     giant.place(cx + 130, 0, cz - 640 - actT*120, Math.PI);
     giant.walk(dt, 0.4);
   }
@@ -1378,7 +1549,12 @@ function updateChoice(t, dt, act, actT){
     // the giant stops, and kneels
     giant.setRim(1.0); giant.setRimColor(0xffd9a0);
     giant.setEyeGlow(0);
-    giant.place(cx - 30, 0, cz - 420, 0);
+    // the kneel: glide into place before the bowed colossus and the three lights
+    giant.setUnder(0x5a6aaa, 0.3);
+    const gk = 1 - Math.exp(-1.5*dt);
+    giant.bx += ((cx - 30) - giant.bx)*gk;
+    giant.bz += ((cz - 500) - giant.bz)*gk;
+    giant.place(giant.bx, 0, giant.bz, 0);
     giant.rest(dt);
     giant.kneel = Math.min(1, giant.kneel + dt*0.4);
     // the distant light yields to the three
@@ -1576,7 +1752,7 @@ function loop(){
   if (act === 0) scene.fog.color.lerp(echoColor, 0.10);
   scene.fog.density = A.fd + (B.fd - A.fd)*pk;
   const tflash = worlds[1].flash || 0;   // tempest lightning lifts the sky
-  if (tflash > 0.01) scene.background.lerp(_flashC, tflash*0.12);
+  if (tflash > 0.01) scene.background.lerp(_flashC, tflash*0.30);
 
   // ---- the act, the giant, the choice ----
   if (pk > 0.01) worlds[next].update(t, dt, 0, pk); // the incoming act is already alive
@@ -1584,33 +1760,34 @@ function loop(){
   if (act === 3 || ending) updateChoice(t, dt, act, actT);
   else directGiant(t, dt, act, actT);
 
-  // ---- ignition: flying into the heart is a whiteout ----
+  // ---- ignition: a brief whiteout as the passage ignites, then the new world resolves ----
   if (!ending){
-    if (act === 0 && pk > 0){
+    let ig = 0;
+    if (act === 0 && pk > 0 && pk < 0.45) ig = Math.sin((pk/0.45)*Math.PI)*0.9;
+    if (ig > 0.01){
       flashEl.style.transition = 'none';
       flashEl.style.background = '#fff3dd';
-      flashEl.style.opacity = (pk*0.92).toFixed(3);
-    } else if (act === 1 && actT < 2/ACT_SECS){
-      const k = 1 - actT/(2/ACT_SECS);
-      flashEl.style.transition = 'none';
-      flashEl.style.background = '#fff3dd';
-      flashEl.style.opacity = (k*0.92).toFixed(3);
+      flashEl.style.opacity = ig.toFixed(3);
     } else if (flashEl.style.opacity !== '0' && !choiceOn){
-      flashEl.style.transition = 'opacity 1.2s ease';
+      flashEl.style.transition = 'opacity 0.9s ease';
       flashEl.style.opacity = 0;
     }
   }
+
+  // ---- the voyage breathes: a living camera, never parked ----
+  camera.position.y += Math.sin(t*0.9)*1.1;
+  camera.position.x += Math.sin(t*0.63 + 1.7)*0.9;
 
   // ---- speed feel: fov breathes, streaks answer haste ----
   skipPunch *= Math.exp(-3.5*dt);
   const haste = Math.max(0, speedMul - 1)/2.2;
   camera.fov = 62 + haste*14 + skipPunch*22;
   camera.updateProjectionMatrix();
-  { // streaks always breathe a little — the voyage never feels parked
+  { // streaks always breathe — the voyage never feels parked
     streaks.visible = true;
-    sMat.opacity = Math.min(0.8, 0.07 + haste*0.45 + skipPunch*0.55);
+    sMat.opacity = Math.min(0.85, 0.16 + haste*0.45 + skipPunch*0.5);
     const sp = sGeo.attributes.position;
-    const flow = dt * (60 + haste*170 + skipPunch*320);
+    const flow = dt * (120 + haste*220 + skipPunch*380);
     for (let i=0;i<STREAKS;i++){
       sZ[i] += flow;
       if (sZ[i] > 8) sZ[i] = -135;
@@ -1618,6 +1795,17 @@ function loop(){
       sp.setXYZ(i*2+1, sX[i], sY[i], sZ[i] - sLen[i]*(1+haste*2+skipPunch*3));
     }
     sp.needsUpdate = true;
+  }
+  { // rush motes: near-field dust streaming past — the speed you feel in your face
+    const mp = mGeo.attributes.position;
+    const mflow = dt * (150 + haste*320 + skipPunch*450);
+    for (let i=0;i<MOTES;i++){
+      let z = mPos[i*3+2] + mflow;
+      if (z > 6){ z = -74; mPos[i*3] = (Math.random()*2-1)*38; mPos[i*3+1] = (Math.random()*2-1)*28; }
+      mPos[i*3+2] = z;
+    }
+    mp.needsUpdate = true;
+    moteMat.opacity = 0.22 + haste*0.25 + skipPunch*0.3;
   }
 
   composer.render();

@@ -172,6 +172,7 @@ function buildNebula() {
   let gpu = null, posVar = null, velVar = null;
   try {
     gpu = new GPUComputationRenderer(SIZE, SIZE, renderer);
+    gpu.setDataType(THREE.HalfFloatType); // iOS can't render to 32-bit float targets
     const dtPos = gpu.createTexture();
     const dtVel = gpu.createTexture();
     const pa = dtPos.image.data, va = dtVel.image.data;
@@ -213,7 +214,7 @@ function buildNebula() {
         float dist = length(toP);
         vec3 dir = toP / max(dist, 0.001);
         vec3 swirl = cross(dir, vec3(0.0, 1.0, 0.0));
-        float fall = uTouchStr * 900.0 / (dist*dist + 20.0);
+        float fall = uTouchStr * 1400.0 / (dist*dist + 30.0);
         acc += (normalize(swirl + vec3(0.0001)) * 0.9 + dir * 0.5) * fall;
         v += acc * uDt;
         v *= exp(-1.6 * uDt);
@@ -645,15 +646,16 @@ function warp(){
 
 let pDown = null;
 addEventListener('pointerdown', e => {
-  pDown = { x: e.clientX, y: e.clientY, t: performance.now() };
   hintEl.style.opacity = 0;
+  if (idx !== 0) { warp(); return; }   // only the nebula needs tap-vs-drag disambiguation
+  pDown = { x: e.clientX, y: e.clientY, t: performance.now() };
 }, { passive: true });
 addEventListener('pointerup', e => {
   if (!pDown) return;
   const moved = Math.hypot(e.clientX - pDown.x, e.clientY - pDown.y);
   const held = performance.now() - pDown.t;
   pDown = null;
-  if (moved < 14 && held < 450) warp();   // a tap warps; a drag stirs
+  if (moved < 14 && held < 450) warp();   // in the nebula: a tap warps, a drag stirs
 }, { passive: true });
 addEventListener('keydown', e=>{ if (e.key==='ArrowRight'||e.key===' '){ warp(); hintEl.style.opacity = 0; } });
 addEventListener('resize', ()=>{

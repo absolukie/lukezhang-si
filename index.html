@@ -1,1938 +1,363 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>ELSEWHERE</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>lukezhang.si</title>
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { width:100%; height:100%; overflow:hidden; background:#000; }
-  body { touch-action:manipulation; -webkit-user-select:none; user-select:none;
-  canvas { position:fixed; inset:0; touch-action:none; }
-         font-family:"Avenir Next","Helvetica Neue",Helvetica,Arial,sans-serif; }
-  #scene { position:fixed; inset:0; display:block; }
-  /* cinematic vignette */
-  #vignette { position:fixed; inset:0; pointer-events:none; z-index:5;
-    background:radial-gradient(ellipse at center, transparent 52%, rgba(0,0,0,.55) 100%); }
-  /* warp flash */
-  #flash { position:fixed; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:6; }
-  /* world label */
-  #label { position:fixed; left:0; right:0; bottom:9%; text-align:center; z-index:7;
-    pointer-events:none; opacity:0; transition:opacity 1.2s ease; }
-  #label .idx { font-size:11px; letter-spacing:.55em; color:rgba(255,255,255,.55);
-    text-indent:.55em; margin-bottom:10px; }
-  #label .name { font-size:clamp(26px,5vw,44px); font-weight:200; letter-spacing:.42em;
-    text-indent:.42em; color:#fff; text-shadow:0 0 30px rgba(140,180,255,.6); }
-  /* chrome */
-  #brand { position:fixed; top:22px; left:26px; z-index:7; pointer-events:none;
-    font-size:12px; letter-spacing:.5em; color:rgba(255,255,255,.6); }
-  #hint { position:fixed; bottom:26px; left:0; right:0; text-align:center; z-index:7;
-    pointer-events:none; font-size:11px; letter-spacing:.35em; text-indent:.35em;
-    color:rgba(255,255,255,.42); transition:opacity 1.5s ease; }
-  #dots { position:fixed; bottom:30px; right:30px; z-index:7; display:flex; gap:10px; }
-  #dots span { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,.22);
-    transition:all .6s ease; }
-  #dots span.on { background:#fff; box-shadow:0 0 12px rgba(160,200,255,.9); transform:scale(1.35); }
-  /* build version */
-  #ver { position:fixed; left:14px; bottom:12px; z-index:7; pointer-events:none;
-    font-size:10px; letter-spacing:.22em; color:rgba(255,255,255,.35); }
-  /* intro */
-  #intro { position:fixed; inset:0; z-index:20; background:#000; display:flex;
-    flex-direction:column; align-items:center; justify-content:center; gap:18px;
-    transition:opacity 1.6s ease; }
-  #intro h1 { font-weight:100; font-size:clamp(34px,8vw,72px); letter-spacing:.5em;
-    text-indent:.5em; color:#fff; animation:breathe 3.2s ease-in-out infinite; }
-  #intro p { font-size:11px; letter-spacing:.45em; text-indent:.45em; color:rgba(255,255,255,.45); }
-  @keyframes breathe { 0%,100%{opacity:.55} 50%{opacity:1} }
-  #intro.gone { opacity:0; pointer-events:none; }
-  #nogl { position:fixed; inset:0; z-index:30; display:none; align-items:center;
-    justify-content:center; color:#fff; background:#000; font-size:14px; letter-spacing:.2em; padding:40px; text-align:center;}
-  /* cat companion — a tiny watcher in the corner, reacts to each act */
-  #cat { position:fixed; left:14px; bottom:30px; width:78px; z-index:7;
-    pointer-events:none; opacity:0; transition:opacity 2s ease;
-    filter:drop-shadow(0 2px 10px rgba(0,0,0,.55)); }
-  #cat.show { opacity:.96; }
-  @media (max-width:600px){ #cat{ width:60px; left:10px; bottom:26px; } }
-  #cat svg { width:100%; height:auto; display:block; overflow:visible;
-    animation:catbreathe 3.6s ease-in-out infinite; transform-origin:50% 92%; }
-  @keyframes catbreathe { 0%,100%{transform:scale(1,1)} 50%{transform:scale(1.015,1.04)} }
-  #cat.hop { animation:cathop .55s ease; }
-  @keyframes cathop { 0%{transform:translateY(0) scale(1,1)}
-    35%{transform:translateY(-13px) scale(.96,1.06)} 70%{transform:translateY(0) scale(1.05,.93)}
-    100%{transform:translateY(0) scale(1,1)} }
-  #cat .tail { transform-box:fill-box; transform-origin:12% 88%;
-    animation:tailswish 3s ease-in-out infinite; }
-  @keyframes tailswish { 0%,100%{transform:rotate(-10deg)} 50%{transform:rotate(17deg)} }
-  #cat.alert .tail { animation-duration:.85s; }
-  #cat .head { transform-box:fill-box; transform-origin:50% 82%;
-    animation:headlook 12s ease-in-out infinite; }
-  @keyframes headlook { 0%,100%{transform:rotate(0deg)} 22%{transform:rotate(-7deg)}
-    48%{transform:rotate(5deg)} 74%{transform:rotate(-3deg)} }
-  #cat.sleepy .head { animation:headnod 5.4s ease-in-out infinite; }
-  @keyframes headnod { 0%,100%{transform:rotate(0deg)} 50%{transform:rotate(9deg) translateY(3px)} }
-  #cat .eyes { transform-box:fill-box; transform-origin:center; animation:blink 4.8s infinite; }
-  @keyframes blink { 0%,92.5%,100%{transform:scaleY(1)} 95%{transform:scaleY(.08)} 97.5%{transform:scaleY(1)} }
-  #cat .eyeswrap { transform-box:fill-box; transform-origin:center; transition:transform .8s ease; }
-  #cat.alert .eyeswrap { transform:scale(1.1,1.24); }
-  #cat.awe .eyeswrap { transform:scale(1.16); }
-  #cat.sleepy .eyes { animation:none; transform:scaleY(.08); }
-  #cat.sleepy svg { animation-duration:5.4s; }
-  #cat .earL { transform-box:fill-box; transform-origin:82% 88%; transition:transform .5s ease; }
-  #cat .earR { transform-box:fill-box; transform-origin:18% 88%; transition:transform .5s ease;
-    animation:eartwitch 7.5s infinite; }
-  @keyframes eartwitch { 0%,87%,100%{transform:rotate(0deg)} 90%{transform:rotate(-14deg)}
-    93%{transform:rotate(6deg)} 96%{transform:rotate(0deg)} }
-  #cat.alert .earL { transform:rotate(-30deg); }
-  #cat.alert .earR { animation:none; transform:rotate(30deg); }
-  #cat .zzz { opacity:0; transform-box:fill-box; transform-origin:center;
-    font-weight:600; font-size:15px; font-family:"Avenir Next","Helvetica Neue",Arial,sans-serif;
-    fill:rgba(255,255,255,.75); }
-  #cat.sleepy .zzz { animation:zfloat 3.4s ease-in infinite; }
-  #cat.sleepy .zzz.z2 { animation-delay:1.7s; }
-  @keyframes zfloat { 0%{opacity:0; transform:translate(0,0) scale(.7)}
-    25%{opacity:.9} 100%{opacity:0; transform:translate(15px,-32px) scale(1.3)} }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  body {
+    background: radial-gradient(120vmin 90vmin at 50% 62%, #3d2b23 0%, #241a16 55%, #141013 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: ui-rounded, "SF Pro Rounded", "Hiragino Maru Gothic ProN", system-ui, sans-serif;
+    cursor: pointer;
+  }
+  /* soft warm glow behind the cat */
+  #glow {
+    position: absolute;
+    width: 92vmin; height: 92vmin;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,196,140,.14) 0%, rgba(255,196,140,0) 62%);
+    pointer-events: none;
+  }
+  #stage {
+    position: relative;
+    width: min(78vmin, 480px);
+    aspect-ratio: 400 / 440;
+  }
+  #cat { width: 100%; height: 100%; display: block; overflow: visible; }
+
+  /* ---- idle animations ---- */
+  #breathe { animation: breathe 3.2s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+  @keyframes breathe { 0%,100% { transform: scale(1,1); } 50% { transform: scale(1.012,1.028); } }
+
+  #tail { animation: tailsway 4.5s ease-in-out infinite; transform-box: fill-box; transform-origin: 12% 88%; }
+  @keyframes tailsway { 0%,100% { transform: rotate(-7deg); } 50% { transform: rotate(9deg); } }
+
+  .eye-white { transition: transform .12s ease; transform-box: fill-box; transform-origin: 50% 50%; }
+  .eye-white.blink { transform: scaleY(.08); }
+
+  #earL { animation: eartwitch 7s ease-in-out infinite; transform-box: fill-box; transform-origin: 80% 90%; }
+  #earR { animation: eartwitch 9.5s ease-in-out infinite; transform-box: fill-box; transform-origin: 20% 90%; }
+  @keyframes eartwitch { 0%, 93%, 100% { transform: rotate(0); } 95% { transform: rotate(-9deg); } 97% { transform: rotate(4deg); } }
+
+  .paw { transform-box: fill-box; transform-origin: 50% 12%; }
+
+  /* ---- speech bubble ---- */
+  #mew {
+    position: absolute;
+    top: 2%; left: 50%;
+    transform: translateX(-50%) scale(0);
+    background: #fff8ef;
+    color: #6b4a35;
+    font-weight: 700;
+    font-size: clamp(15px, 3.4vmin, 24px);
+    padding: .45em .9em;
+    border-radius: 999px;
+    box-shadow: 0 6px 18px rgba(0,0,0,.28);
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  #mew::after {
+    content: "";
+    position: absolute;
+    left: 50%; bottom: -7px;
+    width: 14px; height: 14px;
+    background: #fff8ef;
+    transform: translateX(-50%) rotate(45deg);
+    border-radius: 3px;
+  }
+  #mew.pop { animation: mewpop 1.4s ease forwards; }
+  @keyframes mewpop {
+    0% { transform: translateX(-50%) scale(0); opacity: 0; }
+    18% { transform: translateX(-50%) scale(1.12); opacity: 1; }
+    30% { transform: translateX(-50%) scale(1); }
+    75% { transform: translateX(-50%) scale(1); opacity: 1; }
+    100% { transform: translateX(-50%) translateY(-14px) scale(.9); opacity: 0; }
+  }
+
+  /* ---- floating hearts ---- */
+  .heart {
+    position: absolute;
+    color: #ff9db1;
+    font-size: clamp(16px, 3.6vmin, 26px);
+    pointer-events: none;
+    animation: floatheart 1.3s ease-out forwards;
+  }
+  @keyframes floatheart {
+    0% { transform: translateY(0) scale(.4); opacity: 0; }
+    25% { opacity: 1; transform: translateY(-14px) scale(1.15); }
+    100% { transform: translateY(-70px) scale(.8) rotate(12deg); opacity: 0; }
+  }
+
+  #badge {
+    position: fixed;
+    left: 14px; bottom: 12px;
+    color: rgba(255,235,210,.34);
+    font: 11px/1.4 ui-monospace, monospace;
+    letter-spacing: .04em;
+    pointer-events: none;
+  }
 </style>
 </head>
 <body>
-<canvas id="scene"></canvas>
-<div id="vignette"></div>
-<div id="flash"></div>
-<div id="brand">ELSEWHERE</div>
-<div id="label"><div class="idx"></div><div class="name"></div></div>
-<div id="hint">DRAG TO LOOK &nbsp;·&nbsp; HOLD TO HASTEN &nbsp;·&nbsp; TAP TO SKIP &nbsp;·&nbsp; PINCH TO ZOOM</div>
-<div id="dots"><span></span><span></span><span></span><span></span></div>
-<div id="ver"></div>
-<div id="cat" aria-hidden="true">
-<svg viewBox="0 0 120 120">
-  <path class="tail" d="M94 98 C112 94 114 72 102 62" stroke="#f2e7d5" stroke-width="11" fill="none" stroke-linecap="round"/>
-  <ellipse cx="60" cy="86" rx="33" ry="27" fill="#f2e7d5"/>
-  <ellipse cx="60" cy="93" rx="20" ry="15" fill="#faf3e6"/>
-  <ellipse cx="47" cy="109" rx="10" ry="7" fill="#e9dabf"/>
-  <ellipse cx="73" cy="109" rx="10" ry="7" fill="#e9dabf"/>
-  <g class="head">
-    <path class="earL" d="M42 32 L35 8 L58 22 Z" fill="#f2e7d5"/>
-    <path class="earR" d="M78 32 L85 8 L62 22 Z" fill="#f2e7d5"/>
-    <path d="M43 26 L39 14 L51 21 Z" fill="#f0b3b3"/>
-    <path d="M77 26 L81 14 L69 21 Z" fill="#f0b3b3"/>
-    <circle cx="60" cy="46" r="25" fill="#f2e7d5"/>
-    <g stroke="#e0cba4" stroke-width="2.5" stroke-linecap="round">
-      <line x1="53" y1="23" x2="53" y2="30"/><line x1="60" y1="22" x2="60" y2="29"/><line x1="67" y1="23" x2="67" y2="30"/>
+<div id="glow"></div>
+
+<div id="stage">
+  <div id="mew">mew!</div>
+  <svg id="cat" viewBox="0 0 400 440" aria-label="a cute cat">
+    <defs>
+      <radialGradient id="fur" cx="42%" cy="34%" r="80%">
+        <stop offset="0%" stop-color="#fdf3e3"/>
+        <stop offset="70%" stop-color="#f6e3c6"/>
+        <stop offset="100%" stop-color="#ecd0a8"/>
+      </radialGradient>
+      <radialGradient id="belly" cx="50%" cy="40%" r="70%">
+        <stop offset="0%" stop-color="#fffaf1"/>
+        <stop offset="100%" stop-color="#f7e7cd"/>
+      </radialGradient>
+    </defs>
+
+    <ellipse cx="200" cy="414" rx="112" ry="17" fill="#000" opacity=".28"/>
+
+    <g id="catAll">
+      <!-- tail (behind body) -->
+      <g id="tail">
+        <path d="M292 372 C 352 366, 366 300, 330 268 C 312 250, 288 258, 288 280 C 288 300, 312 306, 318 326 C 322 342, 308 356, 290 358 Z"
+              fill="url(#fur)" stroke="#d9b98c" stroke-width="3" stroke-linejoin="round"/>
+        <path d="M306 292 q 14 -6 22 6" stroke="#e0a56a" stroke-width="7" stroke-linecap="round" fill="none" opacity=".8"/>
+        <path d="M312 318 q 12 -4 18 8" stroke="#e0a56a" stroke-width="7" stroke-linecap="round" fill="none" opacity=".8"/>
+      </g>
+
+      <g id="breathe">
+        <!-- body -->
+        <ellipse cx="200" cy="330" rx="88" ry="76" fill="url(#fur)" stroke="#d9b98c" stroke-width="3"/>
+        <ellipse cx="200" cy="348" rx="52" ry="52" fill="url(#belly)" opacity=".9"/>
+        <!-- back feet -->
+        <ellipse cx="132" cy="398" rx="30" ry="17" fill="url(#fur)" stroke="#d9b98c" stroke-width="3"/>
+        <ellipse cx="268" cy="398" rx="30" ry="17" fill="url(#fur)" stroke="#d9b98c" stroke-width="3"/>
+        <g stroke="#d9b98c" stroke-width="2.5" opacity=".8">
+          <line x1="124" y1="392" x2="124" y2="404"/><line x1="140" y1="390" x2="140" y2="403"/>
+          <line x1="260" y1="390" x2="260" y2="403"/><line x1="276" y1="392" x2="276" y2="404"/>
+        </g>
+
+        <!-- front paws (these do the batting) -->
+        <g id="pawL" class="paw">
+          <rect x="138" y="318" width="44" height="72" rx="22" fill="url(#fur)" stroke="#d9b98c" stroke-width="3"/>
+          <g stroke="#d9b98c" stroke-width="2.5" opacity=".8">
+            <line x1="152" y1="378" x2="152" y2="388"/><line x1="164" y1="380" x2="164" y2="390"/>
+          </g>
+          <ellipse cx="160" cy="368" rx="13" ry="10" fill="#f9d9c4" opacity=".9"/>
+        </g>
+        <g id="pawR" class="paw">
+          <rect x="218" y="318" width="44" height="72" rx="22" fill="url(#fur)" stroke="#d9b98c" stroke-width="3"/>
+          <g stroke="#d9b98c" stroke-width="2.5" opacity=".8">
+            <line x1="236" y1="380" x2="236" y2="390"/><line x1="248" y1="378" x2="248" y2="388"/>
+          </g>
+          <ellipse cx="240" cy="368" rx="13" ry="10" fill="#f9d9c4" opacity=".9"/>
+        </g>
+
+        <!-- head -->
+        <g id="headG">
+          <g id="earL">
+            <path d="M112 108 L96 34 L168 74 Z" fill="url(#fur)" stroke="#d9b98c" stroke-width="3" stroke-linejoin="round"/>
+            <path d="M114 92 L106 52 L146 76 Z" fill="#f7b8c4"/>
+          </g>
+          <g id="earR">
+            <path d="M288 108 L304 34 L232 74 Z" fill="url(#fur)" stroke="#d9b98c" stroke-width="3" stroke-linejoin="round"/>
+            <path d="M286 92 L294 52 L254 76 Z" fill="#f7b8c4"/>
+          </g>
+          <circle cx="200" cy="170" r="98" fill="url(#fur)" stroke="#d9b98c" stroke-width="3"/>
+          <!-- forehead stripes -->
+          <g stroke="#e0a56a" stroke-width="9" stroke-linecap="round" opacity=".75">
+            <line x1="178" y1="88" x2="174" y2="112"/>
+            <line x1="200" y1="84" x2="200" y2="110"/>
+            <line x1="222" y1="88" x2="226" y2="112"/>
+          </g>
+
+          <!-- eyes -->
+          <g id="eyeL">
+            <ellipse class="eye-white" cx="152" cy="168" rx="27" ry="33" fill="#fff"/>
+            <g class="pupil" id="pupilL">
+              <ellipse cx="152" cy="172" rx="14.5" ry="19" fill="#3a2c22"/>
+              <circle cx="157" cy="164" r="5.5" fill="#fff"/>
+              <circle cx="147" cy="178" r="2.6" fill="#fff" opacity=".85"/>
+            </g>
+          </g>
+          <g id="eyeR">
+            <ellipse class="eye-white" cx="248" cy="168" rx="27" ry="33" fill="#fff"/>
+            <g class="pupil" id="pupilR">
+              <ellipse cx="248" cy="172" rx="14.5" ry="19" fill="#3a2c22"/>
+              <circle cx="253" cy="164" r="5.5" fill="#fff"/>
+              <circle cx="243" cy="178" r="2.6" fill="#fff" opacity=".85"/>
+            </g>
+          </g>
+
+          <!-- blush -->
+          <ellipse cx="112" cy="212" rx="17" ry="11" fill="#f5a3b5" opacity=".55"/>
+          <ellipse cx="288" cy="212" rx="17" ry="11" fill="#f5a3b5" opacity=".55"/>
+
+          <!-- nose + mouth -->
+          <path d="M191 202 Q200 197 209 202 Q205 211 200 211 Q195 211 191 202 Z" fill="#e87f96"/>
+          <path d="M200 211 Q200 220 190 221 M200 211 Q200 220 210 221" stroke="#8a6a52" stroke-width="3.5"
+                fill="none" stroke-linecap="round"/>
+
+          <!-- whiskers -->
+          <g stroke="#cbb59a" stroke-width="2.5" stroke-linecap="round" opacity=".9">
+            <line x1="104" y1="200" x2="66" y2="192"/><line x1="104" y1="212" x2="68" y2="214"/>
+            <line x1="296" y1="200" x2="334" y2="192"/><line x1="296" y1="212" x2="332" y2="214"/>
+          </g>
+        </g>
+      </g>
     </g>
-    <g class="eyeswrap"><g class="eyes" fill="#33313d">
-      <ellipse cx="50" cy="46" rx="4.2" ry="5.6"/><ellipse cx="70" cy="46" rx="4.2" ry="5.6"/>
-      <circle cx="51.6" cy="44" r="1.4" fill="#fff" opacity=".9"/><circle cx="71.6" cy="44" r="1.4" fill="#fff" opacity=".9"/>
-    </g></g>
-    <ellipse cx="42" cy="56" rx="4.5" ry="2.8" fill="#f2a8a8" opacity=".55"/>
-    <ellipse cx="78" cy="56" rx="4.5" ry="2.8" fill="#f2a8a8" opacity=".55"/>
-    <path d="M60 56 l-3 -2.6 h6 Z" fill="#e08f8f"/>
-    <path d="M60 58.6 c0 2.4 -2 3.8 -5 3.4 M60 58.6 c0 2.4 2 3.8 5 3.4" stroke="#b08d6a" stroke-width="1.4" fill="none" stroke-linecap="round"/>
-    <g stroke="#d9c8a6" stroke-width="1.1" opacity=".8">
-      <line x1="34" y1="50" x2="20" y2="47"/><line x1="34" y1="54" x2="21" y2="56"/>
-      <line x1="86" y1="50" x2="100" y2="47"/><line x1="86" y1="54" x2="99" y2="56"/>
-    </g>
-  </g>
-  <text class="zzz" x="88" y="26">z</text>
-  <text class="zzz z2" x="97" y="20">z</text>
-</svg>
+  </svg>
 </div>
-<div id="intro"><h1>ELSEWHERE</h1><p>A VOYAGE IN FOUR ACTS</p></div>
-<div id="nogl">THIS VOYAGE NEEDS WEBGL</div>
+
+<div id="badge">v2026.09.30-11.00</div>
 
 <script>
-// boot tracer: if the module below ever fails, the reason becomes visible text
-// instead of a silent black screen. Hidden unless something goes wrong.
-window.__bootLog = ['tracer armed'];
-window.__booted = false;
-function __bl(m){
-  window.__bootLog.push(m);
-  var el = document.getElementById('bootlog');
-  if (el){ el.style.display = 'block'; el.textContent = window.__bootLog.slice(-12).join('\n'); }
-}
-window.addEventListener('error', function(e){
-  __bl('ERROR: ' + (e.message || e.type) + ' @ ' + (e.filename || '?').split('/').pop() + ':' + (e.lineno || '?'));
-}, true);
-window.addEventListener('unhandledrejection', function(e){
-  var r = e.reason;
-  __bl('REJECTION: ' + (r && (r.stack || r.message)) || String(r));
-});
-setTimeout(function(){
-  if (!window.__booted) __bl('WATCHDOG: module did not signal boot within 12s');
-}, 12000);
-</script>
-<div id="bootlog" style="display:none;position:fixed;top:8px;left:8px;z-index:99;max-width:82vw;max-height:40vh;overflow:auto;background:rgba(10,0,0,.85);color:#ff9a9a;font:11px/1.5 monospace;padding:10px 12px;border:1px solid #a33;white-space:pre-wrap;pointer-events:none"></div>
-<script type="importmap">
-{ "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-} }
-</script>
+(function () {
+  "use strict";
+  var stage = document.getElementById('stage');
+  var catAll = document.getElementById('catAll');
+  var headG = document.getElementById('headG');
+  var pupils = [document.getElementById('pupilL'), document.getElementById('pupilR')];
+  var eyeWhites = Array.prototype.slice.call(document.querySelectorAll('.eye-white'));
+  var pawL = document.getElementById('pawL');
+  var pawR = document.getElementById('pawR');
+  var mew = document.getElementById('mew');
 
-<script type="module">
-import * as THREE from 'three';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { GPUComputationRenderer } from 'three/addons/misc/GPUComputationRenderer.js';
+  var px = innerWidth / 2, py = innerHeight * 0.42;   // pointer pos
+  var hasPointer = false;
+  var lastBat = 0, batting = false;
 
-const isMobile = matchMedia('(pointer: coarse)').matches || innerWidth < 768;
-const canvas = document.getElementById('scene');
-
-let renderer;
-try {
-  renderer = new THREE.WebGLRenderer({ canvas, antialias:true, powerPreference:'high-performance' });
-} catch(e) {
-  document.getElementById('nogl').style.display = 'flex';
-  throw e;
-}
-renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
-renderer.setSize(innerWidth, innerHeight);
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
-
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(62, innerWidth/innerHeight, 0.1, 6000);
-scene.add(camera); // camera-attached warp streaks need this
-
-// ---- drag-to-look rig (every world) ----
-let yawT = 0, pitchT = 0, yaw = 0, pitch = 0;
-let zoomT = 1, zoom = 1;
-const _orbT = new THREE.Vector3(), _orbO = new THREE.Vector3(), _orbS = new THREE.Spherical();
-function orbitAround(tx, ty, tz){
-  _orbT.set(tx, ty, tz);
-  _orbO.copy(camera.position).sub(_orbT);
-  _orbS.setFromVector3(_orbO);
-  _orbS.theta += yaw;
-  _orbS.phi = THREE.MathUtils.clamp(_orbS.phi + pitch, 0.12, Math.PI - 0.12);
-  camera.position.copy(_orbT).addScaledVector(_orbO.setFromSpherical(_orbS), zoom);
-  camera.lookAt(_orbT);
-}
-
-// ---- hyperspace streaks riding on the camera ----
-const STREAKS = 340;
-const sGeo = new THREE.BufferGeometry();
-const sXZ = new Float32Array(STREAKS*6);
-const sX = new Float32Array(STREAKS), sY = new Float32Array(STREAKS),
-      sZ = new Float32Array(STREAKS), sLen = new Float32Array(STREAKS);
-for (let i=0;i<STREAKS;i++){
-  const r = 5 + Math.random()*44, a = Math.random()*Math.PI*2;
-  sX[i] = Math.cos(a)*r; sY[i] = Math.sin(a)*r;
-  sZ[i] = -Math.random()*130 - 5; sLen[i] = 3 + Math.random()*9;
-}
-sGeo.setAttribute('position', new THREE.BufferAttribute(sXZ, 3));
-const sMat = new THREE.LineBasicMaterial({ color:0xcfe8ff, transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthWrite:false });
-const streaks = new THREE.LineSegments(sGeo, sMat);
-streaks.visible = false; streaks.frustumCulled = false;
-camera.add(streaks);
-
-// ---- rush motes: near-field dust streaming past in every act — the speed you feel ----
-const MOTES = isMobile ? 130 : 260;
-const mGeo = new THREE.BufferGeometry();
-const mPos = new Float32Array(MOTES*3);
-for (let i=0;i<MOTES;i++){
-  mPos[i*3] = (Math.random()*2-1)*38;
-  mPos[i*3+1] = (Math.random()*2-1)*28;
-  mPos[i*3+2] = -Math.random()*70 - 4;
-}
-mGeo.setAttribute('position', new THREE.BufferAttribute(mPos, 3));
-const moteMat = new THREE.PointsMaterial({ color:0x9fc8ff, size:0.55,
-  transparent:true, opacity:0.35, blending:THREE.AdditiveBlending, depthWrite:false });
-const motes = new THREE.Points(mGeo, moteMat);
-motes.frustumCulled = false;
-camera.add(motes);
-
-const composer = new EffectComposer(renderer);
-composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.85, 0.65, 0.5);
-composer.addPass(bloom);
-composer.addPass(new OutputPass());
-
-const rnd = (a,b) => a + Math.random()*(b-a);
-
-/* ============ WORLD I — NEBULA : GPU-physics particles, touch reactive ============
-   Every particle carries real position + velocity, simulated on the GPU
-   (ping-pong float textures). Your touch becomes a vortex in the flow. */
-function addNebulaStars(group){
-  const NS = isMobile ? 350 : 700;
-  const sp = new Float32Array(NS*3), sc = new Float32Array(NS*3);
-  const tints = [[1,1,1],[0.75,0.85,1],[1,0.9,0.75],[0.65,0.75,1]];
-  for (let i=0;i<NS;i++){
-    sp[i*3] = (Math.random()*2-1)*220;
-    sp[i*3+1] = (Math.random()*2-1)*140;
-    sp[i*3+2] = -30 - Math.random()*250;
-    const t = tints[(Math.random()*tints.length)|0], b = 0.5+Math.random()*0.5;
-    sc[i*3]=t[0]*b; sc[i*3+1]=t[1]*b; sc[i*3+2]=t[2]*b;
+  function catCenter() {
+    var r = stage.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height * 0.52, w: r.width };
   }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(sp,3));
-  g.setAttribute('color', new THREE.BufferAttribute(sc,3));
-  const stars = new THREE.Points(g, new THREE.PointsMaterial({
-    size:2, sizeAttenuation:false, vertexColors:true, transparent:true,
-    opacity:0.85, depthWrite:false }));
-  stars.frustumCulled = false;
-  group.add(stars);
-}
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
-function buildNebulaClassic() {
-  // Fallback if float render targets are unavailable: the original closed-form drift.
-  const group = new THREE.Group();
-  const COUNT = isMobile ? 3500 : 8000;
-  const W = 260, H = 160, D = 260;
-  const pos = new Float32Array(COUNT*3), seed = new Float32Array(COUNT);
-  for (let i=0;i<COUNT;i++) {
-    pos[i*3] = rnd(-W/2, W/2); pos[i*3+1] = rnd(-H/2, H/2); pos[i*3+2] = rnd(-D/2, D/2);
-    seed[i] = Math.random();
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  geo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
-  const mat = new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    uniforms: { uTime:{value:0}, uW:{value:W}, uH:{value:H}, uD:{value:D} },
-    vertexShader: `
-      attribute float aSeed;
-      uniform float uTime, uW, uH, uD;
-      varying vec3 vColor; varying float vFade;
-      vec3 pal(float t){
-        vec3 c1 = vec3(0.36,0.12,0.72);
-        vec3 c2 = vec3(0.05,0.55,0.95);
-        vec3 c3 = vec3(0.95,0.25,0.55);
-        return mix(mix(c1,c2,smoothstep(0.,.5,t)), mix(c2,c3,smoothstep(.5,1.,t)), smoothstep(.25,.75,t));
-      }
-      void main(){
-        vec3 p = position;
-        float s = aSeed;
-        p.z = mod(p.z + uTime*(4.0+s*9.0) + uD*0.5, uD) - uD*0.5;
-        p.x += sin(uTime*0.12 + s*6.2831)*7.0;
-        p.y += cos(uTime*0.09 + s*6.2831*1.7)*5.0;
-        vec4 mv = modelViewMatrix * vec4(p,1.0);
-        gl_Position = projectionMatrix * mv;
-        float dist = -mv.z;
-        gl_PointSize = (1.0 + s*2.4) * (160.0 / max(dist,1.0));
-        vColor = pal(fract(s + uTime*0.008));
-        vFade = smoothstep(uD*0.5, uD*0.18, dist) * smoothstep(2.0, 14.0, dist);
-      }`,
-    fragmentShader: `
-      varying vec3 vColor; varying float vFade;
-      void main(){
-        vec2 uv = gl_PointCoord - 0.5;
-        float d = length(uv);
-        float core = smoothstep(0.16, 0.0, d);
-        float halo = smoothstep(0.5, 0.06, d) * 0.28;
-        gl_FragColor = vec4(vColor*(1.1 + core*2.0), (core+halo) * vFade * 0.9);
-      }`
-  });
-  group.add(new THREE.Points(geo, mat));
-  addNebulaStars(group);
-  return {
-    name:'NEBULA', roman:'I', group,
-    enter(){ scene.background = new THREE.Color(0x030109);
-             scene.fog = new THREE.FogExp2(0x030109, 0.0035);
-             camera.position.set(0, 0, 0); },
-    update(t, dt){ mat.uniforms.uTime.value = t;
-             camera.position.x = Math.sin(t*0.05)*10;
-             camera.position.y = Math.cos(t*0.04)*6;
-             camera.lookAt(camera.position.x*1.6, camera.position.y*1.4, -60);
-             orbitAround(camera.position.x*1.6, camera.position.y*1.4, -60); }
-  };
-}
-
-function buildNebula() {
-  const SIZE = isMobile ? 176 : 256;   // 31k / 65k physics particles
-  const COUNT = SIZE * SIZE;
-  const group = new THREE.Group();
-
-  // ---- GPGPU setup (before any listeners, so we can bail cleanly) ----
-  let gpu = null, posVar = null, velVar = null;
-  try {
-    gpu = new GPUComputationRenderer(SIZE, SIZE, renderer);
-    gpu.setDataType(THREE.HalfFloatType); // iOS can't render to 32-bit float targets
-    const dtPos = gpu.createTexture();
-    const dtVel = gpu.createTexture();
-    const pa = dtPos.image.data, va = dtVel.image.data;
-    for (let i = 0; i < COUNT; i++) {
-      pa[i*4]   = rnd(-130, 130);
-      pa[i*4+1] = rnd(-80, 80);
-      pa[i*4+2] = rnd(-130, 130);
-      pa[i*4+3] = Math.random();          // seed rides in w
-      va[i*4] = rnd(-2,2); va[i*4+1] = rnd(-2,2); va[i*4+2] = rnd(-2,2); va[i*4+3] = 0;
-    }
-    posVar = gpu.addVariable('texturePosition', `
-      uniform float uDt;
-      void main(){
-        vec2 uv = gl_FragCoord.xy / resolution.xy;
-        vec4 pr = texture2D(texturePosition, uv);
-        vec4 vr = texture2D(textureVelocity, uv);
-        vec3 p = pr.xyz + vr.xyz * uDt;
-        p.x = mod(p.x + 130.0, 260.0) - 130.0;
-        p.y = mod(p.y + 80.0, 160.0) - 80.0;
-        p.z = mod(p.z + 130.0, 260.0) - 130.0;
-        gl_FragColor = vec4(p, pr.w);
-      }`, dtPos);
-    velVar = gpu.addVariable('textureVelocity', `
-      uniform float uTime; uniform float uDt;
-      uniform vec3 uTouch; uniform float uTouchStr;
-      void main(){
-        vec2 uv = gl_FragCoord.xy / resolution.xy;
-        vec3 p = texture2D(texturePosition, uv).xyz;
-        vec3 v = texture2D(textureVelocity, uv).xyz;
-        float t = uTime;
-        // ambient nebula currents
-        vec3 flow = vec3(
-          sin(p.y*0.045 + t*0.35) + sin(p.z*0.038 - t*0.22),
-          sin(p.z*0.042 + t*0.28) + sin(p.x*0.040 + t*0.24),
-          sin(p.x*0.044 - t*0.30) + sin(p.y*0.036 + t*0.20));
-        vec3 acc = flow * 7.0 + vec3(0.0, 0.0, 5.0);
-        // touch vortex: swirl + push, inverse-square falloff
-        vec3 toP = p - uTouch;
-        float dist = length(toP);
-        vec3 dir = toP / max(dist, 0.001);
-        vec3 swirl = cross(dir, vec3(0.0, 1.0, 0.0));
-        float fall = uTouchStr * 2600.0 / (dist*dist + 60.0);
-        acc += (normalize(swirl + vec3(0.0001)) * 0.9 + dir * 0.5) * fall;
-        v += acc * uDt;
-        v *= exp(-1.6 * uDt);
-        float sp = length(v);
-        if (sp > 34.0) v *= 34.0 / sp;
-        gl_FragColor = vec4(v, 0.0);
-      }`, dtVel);
-    gpu.setVariableDependencies(posVar, [posVar, velVar]);
-    gpu.setVariableDependencies(velVar, [posVar, velVar]);
-    posVar.material.uniforms.uDt = { value: 0 };
-    velVar.material.uniforms.uTime = { value: 0 };
-    velVar.material.uniforms.uDt = { value: 0 };
-    velVar.material.uniforms.uTouch = { value: new THREE.Vector3(0, 0, -30) };
-    velVar.material.uniforms.uTouchStr = { value: 0 };
-    const err = gpu.init();
-    if (err !== null && err !== undefined) return buildNebulaClassic();
-  } catch(e) { return buildNebulaClassic(); }
-
-  // ---- render points: position.xy = texel uv ----
-  const ref = new Float32Array(COUNT * 3);
-  for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
-    const i = y * SIZE + x;
-    ref[i*3] = (x + 0.5) / SIZE; ref[i*3+1] = (y + 0.5) / SIZE; ref[i*3+2] = 0;
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(ref, 3));
-  const renderMat = new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    uniforms: { uPosTex:{value:null}, uTime:{value:0}, uPR:{value: renderer.getPixelRatio()},
-                uEcho:{value:new THREE.Color(0x000000)} },
-    vertexShader: `
-      uniform sampler2D uPosTex;
-      uniform float uTime, uPR;
-      uniform vec3 uEcho;
-      varying vec3 vColor; varying float vFade;
-      vec3 pal(float t){
-        vec3 c1 = vec3(0.36,0.12,0.72);
-        vec3 c2 = vec3(0.05,0.55,0.95);
-        vec3 c3 = vec3(0.95,0.25,0.55);
-        return mix(mix(c1,c2,smoothstep(0.,.5,t)), mix(c2,c3,smoothstep(.5,1.,t)), smoothstep(.25,.75,t));
-      }
-      void main(){
-        vec4 data = texture2D(uPosTex, position.xy);
-        vec3 p = data.xyz; float seed = data.w;
-        vec4 mv = modelViewMatrix * vec4(p, 1.0);
-        gl_Position = projectionMatrix * mv;
-        float dist = max(-mv.z, 0.1);
-        gl_PointSize = (1.0 + fract(seed*7.13)*2.4) * (150.0/dist) * uPR;
-        vec3 base = pal(fract(seed + uTime*0.008));
-        vColor = mix(base, uEcho, 0.35 * step(0.001, dot(uEcho,uEcho)));
-        vFade = smoothstep(130.0, 40.0, dist) * smoothstep(1.5, 10.0, dist);
-      }`,
-    fragmentShader: `
-      varying vec3 vColor; varying float vFade;
-      void main(){
-        vec2 uv = gl_PointCoord - 0.5;
-        float d = length(uv);
-        float core = smoothstep(0.16, 0.0, d);
-        float halo = smoothstep(0.5, 0.06, d) * 0.28;
-        gl_FragColor = vec4(vColor*(1.1 + core*2.0), (core+halo) * vFade * 0.9);
-      }`
-  });
-  const points = new THREE.Points(geo, renderMat);
-  points.frustumCulled = false;
-  group.add(points);
-  addNebulaStars(group);
-
-  // ---- the heart: the bright core you rise toward, and fly into ----
-  const heartTex = (()=>{ const c=document.createElement('canvas'); c.width=c.height=128;
-    const g=c.getContext('2d');
-    const gr=g.createRadialGradient(64,64,0,64,64,64);
-    gr.addColorStop(0,'rgba(255,246,230,1)'); gr.addColorStop(0.3,'rgba(255,220,170,0.55)');
-    gr.addColorStop(1,'rgba(255,200,150,0)');
-    g.fillStyle=gr; g.fillRect(0,0,128,128);
-    return new THREE.CanvasTexture(c); })();
-  const heart = new THREE.Sprite(new THREE.SpriteMaterial({
-    map:heartTex, color:0xffe9c8, transparent:true, opacity:0.0,
-    blending:THREE.AdditiveBlending, depthWrite:false }));
-  heart.frustumCulled = false;
-  group.add(heart);
-
-  // ---- touch becomes a vortex ----
-  const raycaster = new THREE.Raycaster();
-  const ndc = new THREE.Vector2();
-  const touchTarget = new THREE.Vector3(0, 0, -30);
-  const touchPos = new THREE.Vector3(0, 0, -30);
-  let touchStr = 0, touchStrTarget = 0.12, lastTouchT = -10, nowT = 0;
-
-  function pointerToWorld(cx, cy) {
-    ndc.set((cx/innerWidth)*2 - 1, -(cy/innerHeight)*2 + 1);
-    raycaster.setFromCamera(ndc, camera);
-    const o = raycaster.ray.origin, d = raycaster.ray.direction;
-    const planeZ = camera.position.z - 30;   // touch plane rides with the camera
-    const t = (planeZ - o.z) / d.z;
-    if (isFinite(t) && t > 0){
-      touchTarget.copy(o).addScaledVector(d, t);
-      touchTarget.z = -30; // sim-local frame (group rides at camera z)
-    }
-  }
-  addEventListener('pointermove', e => {
-    pointerToWorld(e.clientX, e.clientY);
-    touchStrTarget = 0.55; lastTouchT = nowT;
-  }, { passive: true });
-  addEventListener('pointerdown', e => {
-    pointerToWorld(e.clientX, e.clientY);
-    touchStrTarget = 1.0; lastTouchT = nowT;
+  addEventListener('pointermove', function (e) {
+    px = e.clientX; py = e.clientY; hasPointer = true;
   }, { passive: true });
 
-  return {
-    name:'ASCEND', roman:'I',
-    group,
-    enter(){},
-    update(t, dt, actT, pk){
-      nowT = t;
-      group.position.z = camera.position.z; // the cloud travels with you
-      renderMat.uniforms.uEcho.value.copy(echoColor);
-      const sdt = Math.min(dt, 0.05);
-      // idle ghost stirs the nebula so it never sits still
-      if (t - lastTouchT > 6) {
-        touchTarget.set(Math.sin(t*0.23)*60, Math.sin(t*0.31)*32, -30 + Math.sin(t*0.19)*25);
-        touchStrTarget = 0.3;
-      } else if (touchStrTarget > 0.5 && t - lastTouchT > 1.2) {
-        touchStrTarget = 0.12;
-      }
-      const k = 1 - Math.exp(-6*dt);
-      touchPos.lerp(touchTarget, k);
-      touchStr += (touchStrTarget - touchStr) * k;
-
-      velVar.material.uniforms.uTime.value = t;
-      velVar.material.uniforms.uDt.value = sdt;
-      posVar.material.uniforms.uDt.value = sdt;
-      velVar.material.uniforms.uTouch.value.copy(touchPos);
-      velVar.material.uniforms.uTouchStr.value = touchStr;
-      gpu.compute();
-      renderMat.uniforms.uPosTex.value = gpu.getCurrentRenderTarget(posVar).texture;
-      renderMat.uniforms.uTime.value = t;
-
-      // the heart gathers ahead and swells as ignition nears
-      const hx = Math.sin(t*0.11)*14, hy = 12 + Math.sin(t*0.07)*6;
-      const hz = camera.position.z - 210 + actT*40;
-      heart.position.set(hx, hy, hz);
-      const hs = 60 + actT*170 + pk*260;
-      heart.scale.set(hs, hs, 1);
-      heart.material.opacity = Math.min(1, 0.12 + actT*0.75 + pk*0.6);
-
-      camera.position.x = Math.sin(t*0.05)*10;
-      camera.position.y = Math.cos(t*0.04)*6 + actT*10; // rising through the cloud
-      const lz = camera.position.z - 60;
-      camera.lookAt(camera.position.x*1.6, camera.position.y*1.4 + actT*6, lz);
-      orbitAround(camera.position.x*1.6, camera.position.y*1.4 + actT*6, lz);
+  // ---- per-frame: eyes + head follow the pointer ----
+  function tick() {
+    var c = catCenter();
+    var dx = (px - c.x) / Math.max(c.w, 1);
+    var dy = (py - c.y) / Math.max(c.w, 1);
+    var ex = clamp(dx * 26, -11, 11);
+    var ey = clamp(dy * 26, -9, 11);
+    for (var i = 0; i < pupils.length; i++) {
+      pupils[i].setAttribute('transform', 'translate(' + ex + ',' + ey + ')');
     }
-  };
-}
+    headG.setAttribute('transform',
+      'rotate(' + clamp(dx * 14, -8, 8).toFixed(2) + ' 200 170)' +
+      ' translate(' + clamp(dx * 8, -5, 5).toFixed(2) + ',' + clamp(dy * 6, -4, 4).toFixed(2) + ')');
 
-
-/* ============ WORLD II — TEMPEST : the march ============
-   The tesseract is gone. This act belongs to the colossus: it strides
-   beside you through an ember storm, and every footstep is the beat —
-   shockwaves rolling through the fog, the ground shuddering under you. */
-function buildTempest() {
-  const group = new THREE.Group();
-
-  // ---- ember storm: sparks streaming past, reaching the colossus ----
-  const N = isMobile ? 2600 : 6000;
-  const pos = new Float32Array(N*3), seed = new Float32Array(N);
-  for (let i=0;i<N;i++){
-    pos[i*3] = rnd(-170,500); pos[i*3+1] = rnd(-8,130); pos[i*3+2] = rnd(-780,40);
-    seed[i] = Math.random();
+    // paw at the cursor when it gets close
+    if (hasPointer && !batting) {
+      var d = Math.hypot(px - c.x, py - c.y);
+      var now = performance.now();
+      if (d < c.w * 0.62 && now - lastBat > 1100) {
+        lastBat = now;
+        bat(px < c.x ? pawL : pawR, px - c.x, py - c.y);
+      }
+    }
+    requestAnimationFrame(tick);
   }
-  const eGeo = new THREE.BufferGeometry();
-  eGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  const sparkTex = (()=>{
-    const c = document.createElement('canvas'); c.width = c.height = 64;
-    const g = c.getContext('2d');
-    const gr = g.createRadialGradient(32,32,0,32,32,32);
-    gr.addColorStop(0,'rgba(255,255,255,1)');
-    gr.addColorStop(0.35,'rgba(255,220,170,0.7)');
-    gr.addColorStop(1,'rgba(255,150,60,0)');
-    g.fillStyle = gr; g.fillRect(0,0,64,64);
-    return new THREE.CanvasTexture(c);
+
+  // ---- the swat ----
+  function bat(paw, dx, dy) {
+    batting = true;
+    var ang = clamp(Math.atan2(dy, dx) * 180 / Math.PI - 90, -75, 75);
+    var lift = 'rotate(' + (ang * 0.55).toFixed(1) + 'deg) translateY(-34px)';
+    var swipe = 'rotate(' + ang.toFixed(1) + 'deg) translateY(-30px)';
+    var a = paw.animate(
+      [{ transform: 'rotate(0deg)' },
+       { transform: lift, offset: 0.35 },
+       { transform: swipe, offset: 0.62 },
+       { transform: 'rotate(0deg)' }],
+      { duration: 620, easing: 'cubic-bezier(.3,.9,.4,1)' });
+    // happy little hop with the swat
+    catAll.animate(
+      [{ transform: 'translateY(0)' },
+       { transform: 'translateY(-10px)', offset: 0.4 },
+       { transform: 'translateY(0)' }],
+      { duration: 620, easing: 'ease-out' });
+    a.onfinish = function () { batting = false; };
+  }
+
+  // ---- blinking ----
+  (function blinkLoop() {
+    setTimeout(function () {
+      eyeWhites.forEach(function (e) { e.classList.add('blink'); });
+      setTimeout(function () {
+        eyeWhites.forEach(function (e) { e.classList.remove('blink'); });
+        blinkLoop();
+      }, 160);
+    }, 2200 + Math.random() * 3400);
   })();
-  const eMat = new THREE.PointsMaterial({ color:0xff8033, size:2.4, map:sparkTex,
-    transparent:true, opacity:0.8, blending:THREE.AdditiveBlending, depthWrite:false });
-  const embers = new THREE.Points(eGeo, eMat);
-  embers.frustumCulled = false;
-  group.add(embers);
 
-  // ---- dark ground for the march: ember-flecked, scrolling with the voyage ----
-  const gndTex = (()=>{
-    const c = document.createElement('canvas'); c.width = c.height = 256;
-    const g = c.getContext('2d');
-    g.fillStyle = '#070304'; g.fillRect(0,0,256,256);
-    for (let i=0;i<420;i++){
-      const x = Math.random()*256, y = Math.random()*256, r = Math.random()*2.2+0.4;
-      const a = 0.05+Math.random()*0.30;
-      g.fillStyle = Math.random() < 0.75
-        ? `rgba(255,${110+((Math.random()*60)|0)},40,${a})`
-        : `rgba(255,235,200,${a*0.8})`;
-      g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+  // ---- speech ----
+  var words = ['mew!', 'mrrp!', 'prrp?', 'mew mew!', 'mrow!'];
+  function say(t) {
+    mew.textContent = t || words[(Math.random() * words.length) | 0];
+    mew.classList.remove('pop');
+    void mew.offsetWidth;
+    mew.classList.add('pop');
+  }
+
+  // ---- hearts ----
+  function hearts(n) {
+    for (var i = 0; i < n; i++) {
+      var h = document.createElement('div');
+      h.className = 'heart';
+      h.textContent = '\u2665';
+      h.style.left = (30 + Math.random() * 40) + '%';
+      h.style.top = (18 + Math.random() * 22) + '%';
+      h.style.animationDelay = (i * 0.12) + 's';
+      stage.appendChild(h);
+      (function (el) { setTimeout(function () { el.remove(); }, 1800); })(h);
     }
-    const t = new THREE.CanvasTexture(c);
-    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(10, 10);
-    return t;
+  }
+
+  // ---- tap / click: pounce + love ----
+  addEventListener('pointerdown', function (e) {
+    px = e.clientX; py = e.clientY; hasPointer = true;
+    var c = catCenter();
+    if (Math.hypot(px - c.x, py - c.y) < c.w * 0.75) {
+      catAll.animate(
+        [{ transform: 'scale(1,1)' },
+         { transform: 'scale(1.1,.86)', offset: 0.35 },
+         { transform: 'scale(.96,1.06)', offset: 0.65 },
+         { transform: 'scale(1,1)' }],
+        { duration: 480, easing: 'ease-out' });
+      say();
+      hearts(3);
+    }
+  }, { passive: true });
+
+  // ---- idle chatter: occasional soft mew ----
+  (function idleChatter() {
+    setTimeout(function () {
+      if (Math.random() < 0.5) say();
+      idleChatter();
+    }, 14000 + Math.random() * 12000);
   })();
-  const gnd = new THREE.Mesh(new THREE.PlaneGeometry(1500, 1500),
-    new THREE.MeshBasicMaterial({ map:gndTex }));
-  gnd.rotation.x = -Math.PI/2;
-  gnd.position.y = -2;
-  group.add(gnd);
 
-  // ---- footstep shockwaves: camera-facing rings rolling outward ----
-  const rings = [];
-  const ringGeo = new THREE.RingGeometry(0.86, 1, 64);
-  for (let i=0;i<8;i++){
-    const m = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
-      color:0xff9040, transparent:true, opacity:0,
-      blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide }));
-    m.visible = false;
-    group.add(m);
-    rings.push({ m, age:9, maxR:260 });
-  }
-
-  // ---- footstep dust: burst puffs that bloom and settle ----
-  const DUST = 90;
-  const dGeo = new THREE.BufferGeometry();
-  const dPos = new Float32Array(DUST*3), dVel = new Float32Array(DUST*3), dAge = new Float32Array(DUST).fill(9);
-  for (let i=0;i<DUST;i++){ dPos[i*3+1] = -100; }
-  dGeo.setAttribute('position', new THREE.BufferAttribute(dPos, 3));
-  const dMat = new THREE.PointsMaterial({ color:0xff9a50, size:9, map:sparkTex,
-    transparent:true, opacity:0.55, blending:THREE.AdditiveBlending, depthWrite:false, sizeAttenuation:true });
-  const dust = new THREE.Points(dGeo, dMat);
-  dust.frustumCulled = false;
-  group.add(dust);
-  let dustCur = 0;
-  function puff(x, y, z){
-    for (let n=0;n<12;n++){
-      const i = dustCur; dustCur = (dustCur+1)%DUST;
-      const i3 = i*3, a = Math.random()*Math.PI*2, r = 20+Math.random()*40;
-      dPos[i3] = x + Math.cos(a)*30; dPos[i3+1] = y + Math.random()*20; dPos[i3+2] = z + Math.sin(a)*30;
-      dVel[i3] = Math.cos(a)*r; dVel[i3+1] = 30+Math.random()*60; dVel[i3+2] = Math.sin(a)*r;
-      dAge[i] = 0;
-    }
-  }
-
-  // ---- lightning: bolts that tear the sky open for a quarter second ----
-  const boltTex = (()=>{
-    const c = document.createElement('canvas'); c.width = 128; c.height = 256;
-    const g = c.getContext('2d');
-    g.strokeStyle = 'rgba(255,255,255,1)'; g.lineWidth = 5; g.shadowColor = '#cfe8ff'; g.shadowBlur = 18;
-    let x = 64, y = 8;
-    g.beginPath(); g.moveTo(x, y);
-    while (y < 248){ x += (Math.random()*2-1)*36; y += 18+Math.random()*22; g.lineTo(x, y); }
-    g.stroke();
-    g.strokeStyle = 'rgba(160,200,255,0.8)'; g.lineWidth = 12; g.stroke();
-    return new THREE.CanvasTexture(c);
-  })();
-  const bolts = [];
-  for (let i=0;i<3;i++){
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map:boltTex, color:0xdfeaff,
-      transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthWrite:false }));
-    sp.scale.set(120, 340, 1);
-    group.add(sp);
-    bolts.push({ sp, age:9 });
-  }
-
-  let lastBeat = -1;
-  return {
-    name:'TEMPEST', roman:'II',
-    group,
-    flash:0,                       // lightning, decaying — the director lifts the sky with it
-    beatInfo:{ beat:-1, pulse:0 }, // shared with the giant's footsteps
-    enter(){},
-    fireRing(x, y, z, maxR){
-      const r = rings.find(r=>r.age>1.5) || rings[0];
-      r.age = 0; r.maxR = maxR;
-      r.m.position.set(x, y, z);
-      r.m.visible = true;
-    },
-    update(t, dt, actT, pk){
-      const cx = camera.position.x, cz = camera.position.z;
-      // the tread: one vast footstep every ~1.15 s — every beat is the giant's step
-      const beat = Math.floor(t*0.87);
-      if (beat !== lastBeat){
-        lastBeat = beat;
-        this.beatInfo.beat = beat; this.beatInfo.pulse = 1;
-        // the foot plants beside the stride: ring, dust, and the camera feels it
-        const fx = giant.bx + (beat % 2 ? 105 : -105);
-        this.fireRing(fx, 26, giant.bz - 10, 260);
-        puff(fx, 8, giant.bz - 10);
-        this.thump = 1;
-      }
-      this.beatInfo.pulse *= Math.exp(-4*dt);
-      this.thump = (this.thump || 0) * Math.exp(-6*dt);
-      // lightning somewhere deep in the storm — a bolt tears the sky, the sky answers
-      if (Math.random() < dt*0.30){
-        this.flash = 1;
-        const b = bolts[(Math.random()*bolts.length)|0];
-        b.sp.position.set(cx + rnd(-500, 700), rnd(220, 520), cz - rnd(350, 750));
-        b.sp.material.opacity = 1;
-        b.age = 0;
-      }
-      this.flash *= Math.exp(-5*dt);
-      for (const b of bolts){
-        if (b.age > 0.3){ b.sp.material.opacity = 0; continue; }
-        b.age += dt;
-        b.sp.material.opacity = Math.max(0, 1 - b.age/0.3);
-      }
-
-      // embers stream past; gusts shove them sideways
-      const wind = Math.sin(t*0.6)*36 + Math.sin(t*1.7)*14;
-      for (let i=0;i<N;i++){
-        const i3 = i*3, sd = seed[i];
-        pos[i3+2] += dt*(54 + sd*70);
-        pos[i3]   += dt*wind*(0.4 + sd*0.8);
-        pos[i3+1] += dt*(5 + sd*11);
-        if (pos[i3+2] > cz+40){ pos[i3+2] -= 820; pos[i3] = cx + rnd(-170,500); pos[i3+1] = rnd(-8,130); }
-        else if (pos[i3+2] < cz-780){ pos[i3+2] += 820; }
-        if (pos[i3+1] > 135) pos[i3+1] = -8;
-      }
-      eGeo.attributes.position.needsUpdate = true;
-      eMat.opacity = 0.8*(1 - pk*0.75);
-
-      for (const r of rings){
-        if (r.age > 1.5){ r.m.visible = false; continue; }
-        r.age += dt;
-        const rr = 14 + (r.age/1.5)*r.maxR;
-        r.m.scale.set(rr, rr, 1);
-        r.m.quaternion.copy(camera.quaternion);   // the shock front faces you
-        r.m.material.opacity = Math.max(0, 0.65*(1 - r.age/1.5)) * (1-pk);
-      }
-      // dust puffs bloom, climb, and settle
-      for (let i=0;i<DUST;i++){
-        if (dAge[i] > 1.4) continue;
-        dAge[i] += dt;
-        const i3 = i*3;
-        dPos[i3] += dVel[i3]*dt; dPos[i3+1] += dVel[i3+1]*dt; dPos[i3+2] += dVel[i3+2]*dt;
-        dVel[i3+1] -= 60*dt;
-      }
-      dGeo.attributes.position.needsUpdate = true;
-      dMat.opacity = 0.55*(1 - pk*0.75);
-
-      gnd.position.set(cx, -2, cz - 180);
-      gndTex.offset.y = voyageZ*0.0011;   // the earth streams beneath the march
-
-      // glide low beside the march, gaze tipped up at the colossus
-      const k = 1 - Math.exp(-2*dt);
-      camera.position.x += (Math.sin(t*0.11)*26 - camera.position.x)*k;
-      camera.position.y += ((12 + Math.sin(t*0.4)*2) - camera.position.y)*k;
-      const lx = giant.bx*0.9, ly = 520, lz = giant.bz;
-      camera.lookAt(lx, ly, lz);
-      orbitAround(lx, ly, lz);
-      camera.position.y -= (this.thump || 0)*3.0;  // each footstep lands in your chest
-      camera.rotateZ((this.thump || 0)*0.006);
-    }
-  };
-}
-
-/* ============ WORLD III — RIDGE : endless alien terrain ============ */
-function buildTerrain() {
-  const group = new THREE.Group();
-
-  // ---------- terrain: sharp ridged crests, lit by the moons ----------
-  const SEG = isMobile ? 96 : 160;
-  const geo = new THREE.PlaneGeometry(460, 460, SEG, SEG);
-  geo.rotateX(-Math.PI/2);
-  const mat = new THREE.ShaderMaterial({
-    uniforms: {
-      uOffset:{value:new THREE.Vector2(0,0)}, uTime:{value:0},
-      uFogColor:{value:new THREE.Color(0x140b20)}, uFogDensity:{value:0.0038},
-      uMoonDir:{value:new THREE.Vector3(-0.3,0.33,-0.9).normalize()},
-      uMoonCol:{value:new THREE.Color(0xffb066)},
-      uMoon2Dir:{value:new THREE.Vector3(0.32,0.24,-0.91).normalize()},
-      uMoon2Col:{value:new THREE.Color(0x7fc4ff)},
-    },
-    vertexShader: `
-      uniform vec2 uOffset; uniform float uTime;
-      varying float vH; varying float vGlow; varying vec3 vN; varying vec3 vW; varying float vFogDepth;
-      float hash(vec3 p){ p=fract(p*0.3183099+vec3(0.1,0.2,0.3)); p*=17.0;
-        return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
-      float vnoise(vec3 x){ vec3 i=floor(x); vec3 f=fract(x); f=f*f*(3.0-2.0*f);
-        return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),
-                       mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
-                   mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),
-                       mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z); }
-      float ridge(vec2 q){
-        float v=0.0, a=0.55, w=1.0;
-        for(int i=0;i<5;i++){
-          float n = vnoise(vec3(q, uTime*0.02));
-          n = 1.0 - abs(2.0*n - 1.0);
-          n = n*n;
-          v += n*a*w; w = clamp(n*1.6, 0.0, 1.0);
-          q *= 2.13; a *= 0.5;
-        }
-        return v;
-      }
-      float terrainH(vec2 wxz){ return pow(ridge(wxz*0.014), 1.4) * 54.0; }
-      void main(){
-        vec3 p = position;
-        vec2 wxz = p.xz + uOffset;
-        float h = terrainH(wxz);
-        float e = 1.6;
-        float hx = terrainH(wxz + vec2(e,0.0));
-        float hz = terrainH(wxz + vec2(0.0,e));
-        p.y += h - 15.0;
-        vH = clamp(h/54.0, 0.0, 1.0);
-        vN = normalize(vec3(h-hx, e, h-hz));
-        float c = ridge(wxz*0.05 + 7.3);
-        vGlow = smoothstep(0.75, 0.95, c) * (1.0 - smoothstep(0.05, 0.4, vH));
-        vec4 wp = modelMatrix * vec4(p,1.0);
-        vW = wp.xyz;
-        vec4 mv = viewMatrix * wp;
-        vFogDepth = -mv.z;
-        gl_Position = projectionMatrix * mv;
-      }`,
-    fragmentShader: `
-      varying float vH; varying float vGlow; varying vec3 vN; varying vec3 vW; varying float vFogDepth;
-      uniform vec3 uFogColor; uniform float uFogDensity; uniform float uTime;
-      uniform vec3 uMoonDir; uniform vec3 uMoonCol;
-      uniform vec3 uMoon2Dir; uniform vec3 uMoon2Col;
-      void main(){
-        vec3 N = normalize(vN);
-        vec3 V = normalize(cameraPosition - vW);
-        vec3 deep = vec3(0.055,0.035,0.13);
-        vec3 mid  = vec3(0.30,0.10,0.42);
-        vec3 crest= vec3(0.85,0.38,0.20);
-        vec3 col = mix(deep, mid, smoothstep(0.04,0.42,vH));
-        col = mix(col, crest, smoothstep(0.55,0.92,vH));
-        float d1 = max(dot(N, uMoonDir), 0.0);
-        float d2 = max(dot(N, uMoon2Dir), 0.0);
-        vec3 H1 = normalize(uMoonDir + V);
-        float spec = pow(max(dot(N,H1),0.0), 60.0) * smoothstep(0.4,0.9,vH);
-        vec3 lit = col * (0.32 + uMoonCol*d1*0.85 + uMoon2Col*d2*0.5)
-                 + uMoonCol * spec * 0.7;
-        lit += vec3(1.0,0.36,0.10) * vGlow * (1.6 + 0.5*sin(uTime*2.0+vH*20.0));
-        float f = 1.0 - exp(-uFogDensity*uFogDensity*vFogDepth*vFogDepth);
-        lit = mix(lit, uFogColor, clamp(f,0.0,1.0));
-        gl_FragColor = vec4(lit, 1.0);
-      }`
-  });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.frustumCulled = false;
-  group.add(mesh);
-
-  // ---------- sky dome: gradient + warm moon glow + stars ----------
-  const skyMat = new THREE.ShaderMaterial({
-    side: THREE.BackSide, depthWrite:false,
-    uniforms:{ uTime:{value:0}, uMoonDir:{value:new THREE.Vector3(-0.3,0.33,-0.9).normalize()} },
-    vertexShader:`varying vec3 vDir; void main(){ vDir = position;
-      gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
-    fragmentShader:`
-      varying vec3 vDir; uniform float uTime; uniform vec3 uMoonDir;
-      float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
-      void main(){
-        vec3 d = normalize(vDir);
-        float y = clamp(d.y, -1.0, 1.0);
-        vec3 col = mix(vec3(0.10,0.045,0.13), vec3(0.02,0.012,0.05), smoothstep(-0.05,0.65,y));
-        float m = max(dot(d, normalize(uMoonDir)), 0.0);
-        col += vec3(0.55,0.20,0.08) * pow(m, 18.0) * 0.55;
-        col += vec3(0.35,0.12,0.20) * pow(m, 4.0) * 0.22;
-        if (d.y > 0.02){
-          vec2 sp = d.xz/(d.y+0.35);
-          vec2 cell = floor(sp*90.0);
-          vec2 f = fract(sp*90.0)-0.5;
-          float h = hash(cell);
-          float star = smoothstep(0.10,0.0,length(f)) * step(0.985,h);
-          float tw = 0.6+0.4*sin(uTime*3.0+h*40.0);
-          col += vec3(0.8,0.85,1.0)*star*tw*smoothstep(0.02,0.25,d.y);
-        }
-        col = mix(col, vec3(0.078,0.043,0.125), smoothstep(0.0,-0.25,y));
-        gl_FragColor = vec4(col,1.0);
-      }`
-  });
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(820, 32, 20), skyMat);
-  sky.frustumCulled = false;
-  group.add(sky);
-
-  // ---------- moons: shaded discs with halo ----------
-  const glowTex = (()=>{ const c=document.createElement('canvas'); c.width=c.height=128;
-    const g=c.getContext('2d');
-    const gr=g.createRadialGradient(64,64,0,64,64,64);
-    gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(0.25,'rgba(255,255,255,0.5)');
-    gr.addColorStop(1,'rgba(255,255,255,0)');
-    g.fillStyle=gr; g.fillRect(0,0,128,128);
-    return new THREE.CanvasTexture(c); })();
-  function makeMoon(radius, baseColor, glowColor, glowScale){
-    const m = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 32),
-      new THREE.ShaderMaterial({
-        uniforms:{ uBase:{value:new THREE.Color(baseColor)} },
-        vertexShader:`varying vec3 vN; varying vec3 vP;
-          void main(){ vN = normalize(normalMatrix*normal);
-            vec4 mv = modelViewMatrix*vec4(position,1.0); vP = mv.xyz;
-            gl_Position = projectionMatrix*mv; }`,
-        fragmentShader:`
-          varying vec3 vN; varying vec3 vP; uniform vec3 uBase;
-          float hash(vec3 p){ p=fract(p*0.3183099+vec3(0.1,0.2,0.3)); p*=17.0;
-            return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
-          void main(){
-            vec3 N = normalize(vN);
-            vec3 V = normalize(-vP);
-            float dif = clamp(dot(N, normalize(vec3(0.35,0.45,0.8)))*0.5+0.5, 0.0, 1.0);
-            float cr = hash(floor(N*26.0));
-            vec3 col = uBase * (0.35 + 0.75*dif) * (0.90+0.10*cr);
-            float limb = pow(1.0-abs(dot(N,V)), 2.5);
-            col += uBase * limb * 0.55;
-            gl_FragColor = vec4(col,1.0);
-          }`
-      }));
-    const glow = new THREE.Sprite(new THREE.SpriteMaterial({
-      map:glowTex, color:glowColor, transparent:true, opacity:0.38,
-      blending:THREE.AdditiveBlending, depthWrite:false, fog:false }));
-    glow.scale.set(glowScale, glowScale, 1);
-    group.add(m, glow);
-    return { m, glow };
-  }
-  const moon1 = makeMoon(20, 0xffe2b0, 0xff9a4d, 95); // the sun
-  const moon2 = makeMoon(8, 0x9fd8ff, 0x5fa8ff, 52);
-
-  // ---------- Saturn, looming close ----------
-  const saturn = new THREE.Group();
-  const satMat = new THREE.ShaderMaterial({
-    uniforms:{ uSunDir:{value:new THREE.Vector3(-0.3,0.33,-0.9).normalize()} },
-    vertexShader:`varying vec3 vN; varying vec3 vObj; varying vec3 vP;
-      void main(){ vN = normalize(normalMatrix*normal); vObj = position;
-        vec4 mv = modelViewMatrix*vec4(position,1.0); vP = mv.xyz;
-        gl_Position = projectionMatrix*mv; }`,
-    fragmentShader:`
-      varying vec3 vN; varying vec3 vObj; varying vec3 vP;
-      uniform vec3 uSunDir;
-      void main(){
-        vec3 N = normalize(vN);
-        float band = clamp(vObj.y / 55.0, -1.0, 1.0);
-        float b = sin(band*14.0 + sin(band*5.0)*1.5)*0.5+0.5;
-        vec3 cream = vec3(0.93,0.82,0.62);
-        vec3 gold  = vec3(0.85,0.66,0.38);
-        vec3 rust  = vec3(0.72,0.48,0.30);
-        vec3 col = mix(cream, gold, smoothstep(0.2,0.8,b));
-        col = mix(col, rust, smoothstep(0.6,1.0, sin(band*7.0+1.3)*0.5+0.5)*0.5);
-        vec3 sunV = normalize((viewMatrix * vec4(uSunDir,0.0)).xyz);
-        float day = clamp(dot(N, sunV)*0.5+0.5, 0.0, 1.0);
-        col *= 0.22 + 0.98*day;
-        vec3 V = normalize(-vP);
-        float limb = smoothstep(0.0, 0.4, abs(dot(N,V)));
-        col *= mix(0.35, 1.0, limb) * 0.85;
-        gl_FragColor = vec4(col, 1.0);
-      }`
-  });
-  const ringMat = new THREE.ShaderMaterial({
-    transparent: true, side: THREE.DoubleSide, depthWrite:false,
-    vertexShader:`varying vec2 vP; void main(){ vP = position.xy;
-      gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
-    fragmentShader:`
-      varying vec2 vP;
-      void main(){
-        float r = length(vP);
-        float rn = (r - 68.0) / 52.0;
-        float bands = 0.55 + 0.45*sin(r*0.9 + sin(r*0.21)*4.0);
-        float fine = 0.8 + 0.2*sin(r*4.7);
-        float a = smoothstep(0.0,0.06,rn) * (1.0-smoothstep(0.94,1.0,rn));
-        a *= smoothstep(0.03, 0.055, abs(rn-0.62));   // Cassini division
-        vec3 col = vec3(0.82,0.70,0.52) * (0.45+0.55*bands) * fine;
-        gl_FragColor = vec4(col, a*0.85);
-      }`
-  });
-  saturn.add(new THREE.Mesh(new THREE.SphereGeometry(55, 48, 32), satMat));
-  saturn.add(new THREE.Mesh(new THREE.RingGeometry(68, 120, 128, 1), ringMat));
-  saturn.rotation.x = -0.50; saturn.rotation.z = 0.10;
-  saturn.scale.setScalar(1.0);   // a distant ringed world, not a ceiling lamp
-  group.add(saturn);
-
-  // ---------- drifting embers ----------
-  const EMB = isMobile ? 220 : 420;
-  const eGeo = new THREE.BufferGeometry();
-  const ePos = new Float32Array(EMB*3), eSeed = new Float32Array(EMB);
-  for (let i=0;i<EMB;i++){
-    ePos[i*3] = (Math.random()*2-1)*130;
-    ePos[i*3+1] = Math.random()*50;
-    ePos[i*3+2] = (Math.random()*2-1)*150;
-    eSeed[i] = Math.random();
-  }
-  eGeo.setAttribute('position', new THREE.BufferAttribute(ePos, 3));
-  const emberTex = (()=>{ const c=document.createElement('canvas'); c.width=c.height=64;
-    const g=c.getContext('2d');
-    const gr=g.createRadialGradient(32,32,0,32,32,32);
-    gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(0.4,'rgba(255,255,255,0.6)');
-    gr.addColorStop(1,'rgba(255,255,255,0)');
-    g.fillStyle=gr; g.fillRect(0,0,64,64);
-    return new THREE.CanvasTexture(c); })();
-  const embers = new THREE.Points(eGeo, new THREE.PointsMaterial({
-    color:0xffa050, size:1.3, map:emberTex, transparent:true, opacity:0.6,
-    blending:THREE.AdditiveBlending, depthWrite:false, sizeAttenuation:true }));
-  embers.frustumCulled = false;
-  group.add(embers);
-
-  let dist = 0, prevPx = 0, rollSm = 0;
-  const SPEED = 26;
-  return {
-    name:'BEHOLD', roman:'III',
-    group,
-    enter(){},
-    update(t, dt, actT, pk){
-      mat.uniforms.uOffset.value.set(0, voyageZ); // terrain streams from the voyage itself
-      const px = Math.sin(t*0.05)*60 + Math.sin(t*0.13)*22;
-      const py = 24 + Math.sin(t*0.09)*8 + Math.sin(t*0.021)*4;
-      const vx = (px - prevPx)/Math.max(dt, 1e-4); prevPx = px;
-      camera.position.x = px;
-      camera.position.y = py;
-      mat.uniforms.uTime.value = t;
-      mesh.position.set(camera.position.x, 0, camera.position.z - 120);
-      sky.position.copy(camera.position);
-      skyMat.uniforms.uTime.value = t;
-      moon1.m.position.set(camera.position.x - 150, 110, camera.position.z - 420);
-      moon1.glow.position.copy(moon1.m.position);
-      moon2.m.position.set(camera.position.x + 170, 190, camera.position.z - 460);
-      moon2.glow.position.copy(moon2.m.position);
-      saturn.position.set(camera.position.x + 380,
-        -40 + THREE.MathUtils.smoothstep(actT, 0, 0.18)*300 - pk*300, // rises far off to the side, then the dimming takes it
-        camera.position.z - 1150);
-      satMat.uniforms.uSunDir.value.copy(moon1.m.position).sub(camera.position).normalize();
-      mat.uniforms.uMoonDir.value.copy(moon1.m.position).sub(camera.position).normalize();
-      mat.uniforms.uMoon2Dir.value.copy(moon2.m.position).sub(camera.position).normalize();
-      skyMat.uniforms.uMoonDir.value.copy(mat.uniforms.uMoonDir.value);
-      // embers rise and wrap around the camera
-      const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
-      for (let i=0;i<EMB;i++){
-        const i3 = i*3;
-        ePos[i3+1] += dt*(2.0 + eSeed[i]*4.0);
-        if (ePos[i3+1] > cy+45) ePos[i3+1] -= 60;
-        ePos[i3] += Math.sin(t*0.7 + eSeed[i]*20.0)*dt*2.0;
-        if (ePos[i3] < cx-130) ePos[i3] += 260; else if (ePos[i3] > cx+130) ePos[i3] -= 260;
-        if (ePos[i3+2] < cz-170) ePos[i3+2] += 320; else if (ePos[i3+2] > cz+150) ePos[i3+2] -= 320;
-      }
-      eGeo.attributes.position.needsUpdate = true;
-      // tip the gaze up: the colossus towers over the ridge, Saturn hangs off to the side
-      orbitAround(camera.position.x*0.5, 2, camera.position.z - 140);
-      camera.rotateX(0.35);
-      // bank into the turns
-      rollSm += (THREE.MathUtils.clamp(-vx*0.012, -0.35, 0.35) - rollSm) * (1-Math.exp(-3*dt));
-      camera.rotateZ(rollSm);
-    }
-  };
-}
-
-/* ============ WORLD IV — MONOLITH : the silent void ============ */
-function buildMonolith() {
-  const group = new THREE.Group();
-  // endless grid floor
-  const floorGeo = new THREE.PlaneGeometry(900, 900);
-  floorGeo.rotateX(-Math.PI/2);
-  const floorMat = new THREE.ShaderMaterial({
-    uniforms:{ uTime:{value:0}, uCamZ:{value:0} },
-    vertexShader:`varying vec3 vW; void main(){ vec4 w = modelMatrix*vec4(position,1.0);
-      vW = w.xyz; gl_Position = projectionMatrix*viewMatrix*w; }`,
-    fragmentShader:`
-      varying vec3 vW; uniform float uTime, uCamZ;
-      void main(){
-        vec2 g = abs(fract(vW.xz/30.0)-0.5);
-        float line = 1.0 - smoothstep(0.0, 0.03, min(g.x,g.y));
-        float dist = length(vW.xz - vec2(0.0, uCamZ));
-        float fade = exp(-dist*0.02);
-        float pulse = 0.85 + 0.15*sin(uTime*0.5 - dist*0.05);
-        vec3 col = vec3(0.16,0.45,0.72) * line * fade * pulse;
-        gl_FragColor = vec4(col, 1.0);
-      }`
-  });
-  const floor = new THREE.Mesh(floorGeo, floorMat);
-  floor.position.y = -6;
-  floor.frustumCulled = false;
-  group.add(floor);
-
-  // floating monoliths
-  const boxes = [];
-  const boxGeo = new THREE.BoxGeometry(1,1,1);
-  const darkMat = new THREE.MeshStandardMaterial({ color:0x0b0e1a, roughness:0.35, metalness:0.85 });
-  const edgeMat = new THREE.LineBasicMaterial({ color:0x66d9ff, transparent:true, opacity:0.85,
-    blending:THREE.AdditiveBlending });
-  const N = isMobile ? 22 : 38;
-  for (let i=0;i<N;i++){
-    const m = new THREE.Mesh(boxGeo, darkMat);
-    const w = rnd(4,10), h = rnd(14,52), d = rnd(4,10);
-    m.scale.set(w,h,d);
-    m.position.set(rnd(-130,130), rnd(-2,26), rnd(-420, 20));
-    m.rotation.y = rnd(0, Math.PI);
-    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(boxGeo), edgeMat);
-    edges.scale.copy(m.scale);
-    m.add(edges);
-    m.userData = { baseY:m.position.y, ph:rnd(0,6.28), rs:rnd(-0.12,0.12) };
-    group.add(m); boxes.push(m);
-  }
-  group.add(new THREE.AmbientLight(0x334466, 1.4));
-  const key = new THREE.DirectionalLight(0x88bbff, 1.6);
-  key.position.set(60, 120, 40);
-  group.add(key);
-  const under = new THREE.PointLight(0x2266ff, 800, 260, 1.8);
-  under.position.set(0, -2, -60);
-  group.add(under);
-
-  // ---- the distant light: warm, unreachable, always the same distance ----
-  const farTex = (()=>{ const c=document.createElement('canvas'); c.width=c.height=128;
-    const g=c.getContext('2d');
-    const gr=g.createRadialGradient(64,64,0,64,64,64);
-    gr.addColorStop(0,'rgba(255,240,220,1)'); gr.addColorStop(0.25,'rgba(255,200,140,0.5)');
-    gr.addColorStop(1,'rgba(255,180,120,0)');
-    g.fillStyle=gr; g.fillRect(0,0,128,128);
-    return new THREE.CanvasTexture(c); })();
-  const farLight = new THREE.Sprite(new THREE.SpriteMaterial({
-    map:farTex, color:0xffe2b8, transparent:true, opacity:0,
-    blending:THREE.AdditiveBlending, depthWrite:false }));
-  farLight.scale.set(46, 46, 1);
-  farLight.frustumCulled = false;
-  group.add(farLight);
-  const farGlow = new THREE.PointLight(0xffc890, 1500, 420, 1.8);
-  group.add(farGlow);
-
-  // ---- drifting motes: dust in the dark ----
-  const MN = isMobile ? 160 : 320;
-  const mPos = new Float32Array(MN*3), mSeed = new Float32Array(MN);
-  for (let i=0;i<MN;i++){
-    mPos[i*3] = rnd(-160,160); mPos[i*3+1] = rnd(-20,70); mPos[i*3+2] = rnd(-380,20);
-    mSeed[i] = Math.random()*10;
-  }
-  const mGeo = new THREE.BufferGeometry();
-  mGeo.setAttribute('position', new THREE.BufferAttribute(mPos, 3));
-  const motes = new THREE.Points(mGeo, new THREE.PointsMaterial({
-    color:0x8fa8d8, size:1.6, transparent:true, opacity:0.55,
-    blending:THREE.AdditiveBlending, depthWrite:false }));
-  motes.frustumCulled = false;
-  group.add(motes);
-
-  // ---- rain: cold slanted streaks, endless ----
-  const RN = isMobile ? 350 : 800;
-  const rPos = new Float32Array(RN*6);
-  const rX = new Float32Array(RN), rY = new Float32Array(RN), rZ = new Float32Array(RN);
-  for (let i=0;i<RN;i++){
-    rX[i] = rnd(-190,190); rY[i] = rnd(-10,130); rZ[i] = rnd(-340,40);
-  }
-  const rGeo = new THREE.BufferGeometry();
-  rGeo.setAttribute('position', new THREE.BufferAttribute(rPos, 3));
-  const rain = new THREE.LineSegments(rGeo, new THREE.LineBasicMaterial({
-    color:0x8fa8d8, transparent:true, opacity:0.42,
-    blending:THREE.AdditiveBlending, depthWrite:false }));
-  rain.frustumCulled = false;
-  group.add(rain);
-
-  // ---- the fallen: monoliths that didn't survive ----
-  const fallen = [];
-  for (let i=0;i<9;i++){
-    const m = new THREE.Mesh(boxGeo, darkMat);
-    m.scale.set(rnd(6,14), rnd(3,6), rnd(20,60));
-    m.position.set(rnd(-150,150), rnd(-4,2), rnd(-420,20));
-    m.rotation.set(rnd(-0.15,0.15), rnd(0,Math.PI), rnd(1.35,1.75));
-    group.add(m); fallen.push(m);
-  }
-
-  return {
-    name:'LAMENT', roman:'IV',
-    group,
-    farLight, farGlow,
-    enter(){
-      // redistribute the city around the camera each loop
-      for (const m of boxes){
-        m.position.set(rnd(-130,130), m.userData.baseY, camera.position.z + rnd(-420, 20));
-      }
-      for (const m of fallen){
-        m.position.z = camera.position.z + rnd(-420, 20);
-      }
-    },
-    update(t, dt, actT, pk){
-      floorMat.uniforms.uTime.value = t;
-      camera.position.x = Math.sin(t*0.09)*34;
-      camera.position.y = 8 + Math.sin(t*0.13)*2.5;
-      if (choiceOn){
-        // the kneel: rise to behold the bowed colossus — head, shoulders, all three lights
-        camera.position.y = 40;
-        orbitAround(camera.position.x - 30, 300, camera.position.z - 500);
-      } else {
-        camera.lookAt(camera.position.x*0.3, 10, camera.position.z - 90);
-        orbitAround(camera.position.x*0.3, 10, camera.position.z - 90);
-      }
-      floorMat.uniforms.uCamZ.value = camera.position.z;
-      floor.position.z = camera.position.z - 160;
-      under.position.z = camera.position.z - 60;
-      under.position.x = camera.position.x;
-      // the light waits ahead — never nearer, never farther (yields to the three)
-      const fadeIn = THREE.MathUtils.smoothstep(actT, 0, 0.12) * (1 - choiceK);
-      farLight.position.set(camera.position.x*0.4, 14 + Math.sin(t*0.4)*2, camera.position.z - 300);
-      farLight.material.opacity = fadeIn * (0.85 + Math.sin(t*1.7)*0.1);
-      const fls = 40 + Math.sin(t*1.7)*6;
-      farLight.scale.set(fls, fls, 1);
-      farGlow.position.copy(farLight.position);
-      farGlow.intensity = fadeIn * 1500;
-      // motes drift and recycle around the camera
-      const cz = camera.position.z;
-      for (let i=0;i<MN;i++){
-        const i3 = i*3;
-        mPos[i3+1] += dt*(0.6 + mSeed[i]*0.25);
-        mPos[i3] += Math.sin(t*0.5 + mSeed[i]*9.0)*dt*1.4;
-        if (mPos[i3+1] > 75) mPos[i3+1] -= 95;
-        if (mPos[i3+2] > cz+20) mPos[i3+2] -= 400; else if (mPos[i3+2] < cz-380) mPos[i3+2] += 400;
-      }
-      mGeo.attributes.position.needsUpdate = true;
-      // recycle monoliths endlessly
-      for (const m of boxes){
-        m.position.y = m.userData.baseY + Math.sin(t*0.5 + m.userData.ph)*2.2;
-        m.rotation.y += m.userData.rs*dt;
-        if (m.position.z > camera.position.z + 30) m.position.z -= 460;
-      }
-      // the fallen lie where they dropped
-      for (const m of fallen){
-        if (m.position.z > camera.position.z + 30) m.position.z -= 460;
-      }
-      // rain falls, slanted by the wind — each drop a short streak along its fall
-      const rz = camera.position.z;
-      const rp = rGeo.attributes.position;
-      for (let i=0;i<RN;i++){
-        rY[i] -= dt*(95 + (i%7)*9);
-        rX[i] += dt*22;
-        if (rY[i] < -12){
-          rY[i] += 142;
-          rX[i] = camera.position.x + rnd(-190,190);
-          rZ[i] = rz + rnd(-340,40);
-        }
-        if (rZ[i] > rz+40) rZ[i] -= 380;
-        else if (rZ[i] < rz-340) rZ[i] += 380;
-        const i6 = i*2, L = 5.5;
-        rp.setXYZ(i6,   rX[i], rY[i], rZ[i]);
-        rp.setXYZ(i6+1, rX[i]-L*0.22, rY[i]+L, rZ[i]-L*0.06);
-      }
-      rp.needsUpdate = true;
-    }
-  };
-}
-
-/* ============ THE GIANT : the central character ============
-   A robed colossus — realistic human anatomy under a heavy draped cloak,
-   rim-lit, mostly silhouette. ~1150 units tall: the camera is an insect.
-   Suggestion still beats detail; that is what keeps it awesome, not just big. */
-function buildGiant(){
-  const group = new THREE.Group();
-  function rimMaterial(base, rim){
-    return new THREE.ShaderMaterial({
-      side: THREE.DoubleSide,
-      uniforms:{
-        uBase:{value:new THREE.Color(base)},
-        uRim:{value:new THREE.Color(rim)},
-        uRimK:{value:1.0},
-        uUnder:{value:new THREE.Color(0x000000)},
-        uUnderK:{value:0.0},
-        uFoldK:{value:1.0},
-        uFogColor:{value:new THREE.Color(0x030109)},
-        uFogDensity:{value:0.0035},
-      },
-      vertexShader:`
-        varying vec3 vN; varying vec3 vV; varying float vFogDepth;
-        varying float vObjY;
-        void main(){
-          vN = normalize(normalMatrix * normal);
-          vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          vV = -mv.xyz;
-          vFogDepth = -mv.z;
-          vObjY = position.y;
-          gl_Position = projectionMatrix * mv;
-        }`,
-      fragmentShader:`
-        varying vec3 vN; varying vec3 vV; varying float vFogDepth;
-        varying float vObjY;
-        uniform vec3 uBase; uniform vec3 uRim; uniform float uRimK;
-        uniform vec3 uUnder; uniform float uUnderK; uniform float uFoldK;
-        uniform vec3 uFogColor; uniform float uFogDensity;
-        void main(){
-          vec3 Nn = normalize(vN); vec3 Vv = normalize(vV);
-          float rim = pow(1.0 - abs(dot(Nn, Vv)), 2.2);
-          float top = clamp(Nn.y*0.5 + 0.5, 0.0, 1.0);
-          // cloth ribbing: fine vertical fold-banding so the surface isn't flat
-          float fold = 0.5 + 0.5*sin(vObjY*0.11 + sin(vObjY*0.031)*2.0);
-          float foldShade = mix(1.0, 0.72 + 0.28*fold, uFoldK);
-          // height gradient: weight settles darker toward the ground
-          float hgrad = 0.55 + 0.45*clamp(vObjY/900.0 + 0.35, 0.0, 1.0);
-          vec3 col = uBase*(0.30 + 0.70*top)*foldShade*hgrad + uRim*rim*uRimK;
-          // underlight: the world below kisses upward-facing shadow (ember glow, cold fog)
-          col += uUnder * uUnderK * clamp(-Nn.y, 0.0, 1.0) * foldShade;
-          float fog = 1.0 - exp(-uFogDensity*uFogDensity*vFogDepth*vFogDepth);
-          col = mix(col, uFogColor, clamp(fog, 0.0, 1.0));
-          gl_FragColor = vec4(col, 1.0);
-        }`
-    });
-  }
-  const cloakMat = rimMaterial(0x05060c, 0x8fb8ff);
-  const skinMat  = rimMaterial(0x0d0a09, 0xffb37a);
-
-  // ---- torso: lathe-turned, hips to shoulders ----
-  const torsoPts = [[150,0],[138,60],[118,150],[128,240],[165,330],[192,400],[182,445]]
-    .map(([r,y])=>new THREE.Vector2(r,y));
-  const torso = new THREE.Mesh(new THREE.LatheGeometry(torsoPts, 24), skinMat);
-  torso.position.y = 480;
-  group.add(torso);
-
-  // ---- cloak: heavy drape from the shoulders, flaring down, folded ----
-  const cloakPts = [[205,0],[218,60],[238,160],[268,300],[312,440],[348,560]]
-    .map(([r,y])=>new THREE.Vector2(r,y));
-  const cloakGeo = new THREE.LatheGeometry(cloakPts, 28);
-  const cp = cloakGeo.attributes.position;
-  for (let i=0;i<cp.count;i++){
-    const x = cp.getX(i), y = cp.getY(i), z = cp.getZ(i);
-    const a = Math.atan2(z, x);
-    const n = Math.sin(a*9 + y*0.012)*10 + Math.sin(a*17 + 1.7)*5;
-    const s = 1 + n/Math.max(1, Math.hypot(x, z));
-    cp.setX(i, x*s); cp.setZ(i, z*s);
-  }
-  cloakGeo.computeVertexNormals();
-  const cloak = new THREE.Mesh(cloakGeo, cloakMat);
-  cloak.position.y = 330;
-  group.add(cloak);
-
-  // ---- regalia: a heavy sash at the waist, pauldrons on the shoulders ----
-  const sash = new THREE.Mesh(new THREE.TorusGeometry(152, 30, 10, 28), cloakMat);
-  sash.position.y = 505; sash.rotation.x = Math.PI/2 - 0.12;
-  group.add(sash);
-  const sashKnot = new THREE.Mesh(new THREE.SphereGeometry(34, 12, 10), cloakMat);
-  sashKnot.position.set(120, 470, 60); sashKnot.scale.set(1, 1.4, 1);
-  group.add(sashKnot);
-
-  // ---- head + hood, face in shadow ----
-  const headG = new THREE.Group();
-  headG.position.y = 985;
-  group.add(headG);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(58, 24, 18), skinMat);
-  head.scale.set(0.92, 1.08, 0.98);
-  headG.add(head);
-  const hood = new THREE.Mesh(new THREE.LatheGeometry(
-    [[82,0],[74,40],[54,95],[22,132]].map(([r,y])=>new THREE.Vector2(r,y)), 20), cloakMat);
-  hood.position.y = -20;
-  headG.add(hood);
-  // eyes: two embers in the dark of the hood (the Look)
-  const eyeTex = (()=>{
-    const c = document.createElement('canvas'); c.width = c.height = 64;
-    const g = c.getContext('2d');
-    const gr = g.createRadialGradient(32,32,0,32,32,32);
-    gr.addColorStop(0,'rgba(255,255,255,1)');
-    gr.addColorStop(0.4,'rgba(255,255,255,0.55)');
-    gr.addColorStop(1,'rgba(255,255,255,0)');
-    g.fillStyle = gr; g.fillRect(0,0,64,64);
-    return new THREE.CanvasTexture(c);
-  })();
-  const eyeL = new THREE.Sprite(new THREE.SpriteMaterial({ map:eyeTex, color:0xb48cff,
-    transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthWrite:false }));
-  eyeL.scale.set(30, 30, 1); eyeL.position.set(-24, 6, 46);
-  const eyeR = new THREE.Sprite(eyeL.material.clone());
-  eyeR.scale.set(30, 30, 1); eyeR.position.set(24, 6, 46);
-  headG.add(eyeL, eyeR);
-
-  // ---- limbs: capsule segments on pivots ----
-  function segment(r, len, mat){
-    const m = new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 6, 12), mat);
-    m.position.y = -len/2;
-    const pivot = new THREE.Group();
-    pivot.add(m);
-    return pivot;
-  }
-  function makeArm(side){
-    const sh = new THREE.Group();
-    sh.position.set(side*208, 890, 0);
-    group.add(sh);
-    const upper = segment(58, 210, skinMat); sh.add(upper);
-    const el = new THREE.Group(); el.position.y = -218; upper.add(el);
-    const fore = segment(46, 190, skinMat); el.add(fore);
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(52, 16, 12), skinMat);
-    hand.position.y = -205; fore.add(hand);
-    const sleeve = new THREE.Mesh(new THREE.LatheGeometry(
-      [[72,0],[88,60],[106,125]].map(([r,y])=>new THREE.Vector2(r,y)), 14), cloakMat);
-    sleeve.position.y = -8; sh.add(sleeve);
-    sh.rotation.z = side*0.12;
-    return { sh, el };
-  }
-  const armL = makeArm(-1), armR = makeArm(1);
-  // pauldrons ride over the shoulder joints; bronze bands ring the forearms
-  for (const s of [-1, 1]){
-    const p = new THREE.Mesh(new THREE.SphereGeometry(78, 16, 12), cloakMat);
-    p.position.set(s*208, 918, 0); p.scale.set(1.15, 0.72, 1.05);
-    group.add(p);
-  }
-  for (const arm of [armL, armR]){
-    const band = new THREE.Mesh(new THREE.TorusGeometry(50, 11, 8, 18), skinMat);
-    band.position.y = -120; band.rotation.x = Math.PI/2;
-    arm.sh.add(band);
-  }
-
-  function makeLeg(side){
-    const hip = new THREE.Group();
-    hip.position.set(side*98, 500, 0);
-    group.add(hip);
-    const thigh = segment(78, 250, skinMat); hip.add(thigh);
-    const knee = new THREE.Group(); knee.position.y = -262; thigh.add(knee);
-    const shin = segment(62, 240, skinMat); knee.add(shin);
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(95, 55, 150), skinMat);
-    foot.position.set(0, -256, 34); shin.add(foot);
-    return { hip, knee };
-  }
-  const legL = makeLeg(-1), legR = makeLeg(1);
-
-  group.traverse(o=>{ o.frustumCulled = false; });
-  scene.add(group);
-
-  return {
-    group, walkPhase:0, bob:0, kneel:0, gazeUp:0, stepPulse:0,
-    bx:0, by:0, bz:0, _ps:0, _sb:-1,
-    place(x, y, z, ry){
-      this.bx = x; this.by = y; this.bz = z;
-      group.rotation.y = ry || 0;
-    },
-    tick(dt){
-      this.bob *= Math.exp(-4*dt);
-      this.stepPulse *= Math.exp(-5*dt);
-      this.gazeUp += ((this.gazeUpT || 0) - this.gazeUp)*(1 - Math.exp(-3*dt));
-      group.position.set(this.bx, this.by + this.bob*26 - this.kneel*330, this.bz);
-      group.rotation.x = this.kneel*0.30;
-      headG.rotation.x = this.kneel*(this.gazeUp > 0.5 ? -0.18 : 0.5); // bowed, or lifted to look
-      // the cloak trails every motion a half-beat late — heavy cloth, not a shell
-      const sw = this.sway || 0;
-      cloak.rotation.z = sw*0.05;
-      cloak.rotation.x = Math.abs(sw)*0.02;
-      sash.rotation.z = sw*0.03;
-      // the kneel pose: thighs forward, knees deeply bent, arms resting
-      const kn = this.kneel;
-      if (kn > 0.01){
-        legL.hip.rotation.x = legR.hip.rotation.x = kn*0.95;
-        legL.knee.rotation.x = legR.knee.rotation.x = kn*2.05;
-        armL.sh.rotation.x = armR.sh.rotation.x = kn*0.55;
-      }
-    },
-    setRim(k){ cloakMat.uniforms.uRimK.value = k; skinMat.uniforms.uRimK.value = k*0.9; },
-    setRimColor(hex){
-      cloakMat.uniforms.uRim.value.setHex(hex);
-      skinMat.uniforms.uRim.value.setHex(hex);
-    },
-    setUnder(hex, k){
-      // the world below kisses the colossus: ember glow, moonlight, cold fog
-      for (const m of [cloakMat, skinMat]){
-        m.uniforms.uUnder.value.setHex(hex);
-        m.uniforms.uUnderK.value = k;
-      }
-    },
-    setFog(color, density){
-      // the colossus looms through fog that would swallow anything smaller
-      for (const m of [cloakMat, skinMat]){
-        m.uniforms.uFogColor.value.copy(color);
-        m.uniforms.uFogDensity.value = density*0.45;
-      }
-    },
-    setEyeGlow(k){ eyeL.material.opacity = k; eyeR.material.opacity = k; },
-    walk(dt, stepsPerSec){ // free ambling cycle, two footfalls per cycle
-      this.walkPhase += dt*stepsPerSec*Math.PI*2;
-      const s = Math.sin(this.walkPhase);
-      if ((this._ps > 0 && s <= 0) || (this._ps < 0 && s >= 0)) this.stepPulse = 1;
-      this._ps = s;
-      legL.hip.rotation.x = s*0.46;  legR.hip.rotation.x = -s*0.46;
-      legL.knee.rotation.x = Math.max(0, -s)*0.75 + 0.08;
-      legR.knee.rotation.x = Math.max(0,  s)*0.75 + 0.08;
-      armL.sh.rotation.x = -s*0.34;  armR.sh.rotation.x = s*0.34;
-      armL.el.rotation.x = armR.el.rotation.x = -0.30;
-      group.rotation.z = Math.sin(this.walkPhase)*0.022;
-      group.rotation.y = -s*0.05;
-      headG.position.y = 985 - Math.abs(Math.cos(this.walkPhase))*14;
-      headG.rotation.y = s*0.07;
-      this.sway = s;
-      this.bob = Math.max(this.bob, Math.abs(Math.cos(this.walkPhase))*0.5);
-    },
-    stride(beat, dt, t){ // locked to the tempest — every beat is a footstep
-      // smooth weight transfer: each step swells and releases instead of snapping
-      const fr = (t*0.87) % 1;
-      const s = Math.sin(fr*Math.PI) * (beat % 2 === 0 ? 1 : -1);
-      if (this._sb !== beat){ this._sb = beat; this.stepPulse = 1; }
-      const k = 1 - Math.exp(-10*dt);
-      legL.hip.rotation.x += ( s*0.58 - legL.hip.rotation.x)*k;
-      legR.hip.rotation.x += (-s*0.58 - legR.hip.rotation.x)*k;
-      legL.knee.rotation.x += ((s > 0 ? 0.10 : 0.72) - legL.knee.rotation.x)*k;
-      legR.knee.rotation.x += ((s < 0 ? 0.10 : 0.72) - legR.knee.rotation.x)*k;
-      armL.sh.rotation.x += (-s*0.40 - armL.sh.rotation.x)*k;
-      armR.sh.rotation.x += ( s*0.40 - armR.sh.rotation.x)*k;
-      armL.el.rotation.x += (-0.35 - armL.el.rotation.x)*k;
-      armR.el.rotation.x += (-0.35 - armR.el.rotation.x)*k;
-      // the mass answers the step: torso counter-turns, shoulders roll, head rides it
-      group.rotation.y += (-s*0.07 - group.rotation.y)*k;
-      group.rotation.z += (s*0.028 - group.rotation.z)*k;
-      headG.position.y += ((985 - Math.abs(s)*26) - headG.position.y)*k;
-      headG.rotation.y += (s*0.10 - headG.rotation.y)*k;
-      this.sway = s;
-      this.bob = 1;
-    },
-    rest(dt){
-      const k = 1 - Math.exp(-3*dt);
-      for (const j of [legL.hip, legR.hip, legL.knee, legR.knee, armL.sh, armR.sh])
-        j.rotation.x *= (1-k);
-      group.rotation.z *= (1-k);
-      group.rotation.y *= (1-k);
-      headG.rotation.y *= (1-k);
-      this.sway *= (1-k);
-      this.bob *= (1-k);
-    }
-  };
-}
-
-/* ============ THE CHOICE : three lights, no buttons ============
-   In Act IV's final passage time dilates and three lights resolve:
-   the open hand (the Offering), the eyes (the Look), the pure light
-   (the Becoming). You choose by looking — you go where you look —
-   or by reaching out and touching one. Not choosing is also a choice. */
-function buildChoice(){
-  const group = new THREE.Group();
-  function makeLight(color, size, opacity){
-    const c = document.createElement('canvas'); c.width = c.height = 128;
-    const g = c.getContext('2d');
-    const gr = g.createRadialGradient(64,64,0,64,64,64);
-    gr.addColorStop(0,'rgba(255,255,255,1)');
-    gr.addColorStop(0.3,'rgba(255,255,255,0.5)');
-    gr.addColorStop(1,'rgba(255,255,255,0)');
-    g.fillStyle = gr; g.fillRect(0,0,128,128);
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({
-      map:new THREE.CanvasTexture(c), color, transparent:true, opacity:0,
-      blending:THREE.AdditiveBlending, depthWrite:false }));
-    s.scale.set(size, size, 1);
-    s.frustumCulled = false;
-    group.add(s);
-    return s;
-  }
-  const hand = makeLight(0xffd9a0, 64);            // the Offering — below
-  const eyeL = makeLight(0x9a7fff, 26);           // the Look — above
-  const eyeR = makeLight(0x9a7fff, 26);
-  const eyeMid = new THREE.Object3D(); group.add(eyeMid);
-  const pure = makeLight(0xffffff, 72);            // the Becoming — ahead
-  const lights = [hand, eyeL, eyeR, pure];
-  scene.add(group);
-  return {
-    group, hand, eyeL, eyeR, eyeMid, pure,
-    k:0,
-    targets(){ return [this.hand, this.eyeMid, this.pure]; },
-    show(){ group.visible = true; },
-    hide(){ group.visible = false; this.k = 0;
-      for (const l of lights) l.material.opacity = 0; },
-    fadeIn(dt){
-      this.k = Math.min(1, this.k + dt*0.7);
-      hand.material.opacity = this.k*0.95;
-      eyeL.material.opacity = eyeR.material.opacity = this.k*0.9;
-      pure.material.opacity = this.k*0.95;
-    }
-  };
-}
-
-/* ============ THE VOYAGE : one continuous flight in four acts ============
-   The camera never cuts. Four acts are regions of one universe; the flight
-   loops every ~2 minutes. Tap skips ahead, holding hastens, and in Act IV's
-   final passage the traveler chooses the ending with their gaze. */
-const CRUISE = 26, ACT_LEN = 780, LOOP = ACT_LEN*4, ACT_SECS = 30, PASSAGE_SECS = 7;
-const BUILD = 'v2026.09.30-02.30';
-let voyageZ = 0;                       // ever-increasing distance traveled
-const echoColor = new THREE.Color(0x000000); // the last ending, tinting the next loop
-let choiceK = 0;                       // 0..1 how present the three lights are
-
-const worlds = [buildNebula(), buildTempest(), buildTerrain(), buildMonolith()];
-for (const w of worlds){ w.group.visible = false; scene.add(w.group); }
-const giant = buildGiant();
-const choice = buildChoice();
-choice.group.visible = false;
-
-// per-act atmosphere; crossfaded during passages
-const ACT_STYLE = [
-  { bg:new THREE.Color(0x030109), fog:new THREE.Color(0x030109), fd:0.0035 }, // I ascend
-  { bg:new THREE.Color(0x0b0406), fog:new THREE.Color(0x0b0406), fd:0.0042 }, // II tempest — ember dark
-  { bg:new THREE.Color(0x0a0618), fog:new THREE.Color(0x0a0618), fd:0.0020 }, // III behold
-  { bg:new THREE.Color(0x04060c), fog:new THREE.Color(0x04060c), fd:0.0042 }, // IV lament — cold and thick
-];
-scene.background = ACT_STYLE[0].bg.clone();
-scene.fog = new THREE.FogExp2(0x030109, 0.0035);
-
-const labelEl = document.getElementById('label');
-const labelIdx = labelEl.querySelector('.idx');
-const labelName = labelEl.querySelector('.name');
-const dots = [...document.querySelectorAll('#dots span')];
-const hintEl = document.getElementById('hint');
-const flashEl = document.getElementById('flash');
-let labelTimer = 0;
-
-function showLabel(w){
-  labelIdx.textContent = 'ACT ' + w.roman;
-  labelName.textContent = w.name;
-  labelEl.style.opacity = 1;
-  clearTimeout(labelTimer);
-  labelTimer = setTimeout(()=> labelEl.style.opacity = 0, 3600);
-}
-
-let curAct = -1;
-const catEl = document.getElementById('cat');
-const CAT_MOODS = ['', 'alert', 'awe', 'sleepy']; // ascend, tempest, behold, lament
-function enterAct(i){
-  curAct = i;
-  for (let k=0;k<4;k++) worlds[k].group.visible = false;
-  worlds[i].group.visible = true;
-  worlds[i].enter();
-  dots.forEach((d,k)=> d.classList.toggle('on', k===i));
-  showLabel(worlds[i]);
-  catEl.classList.remove('alert','awe','sleepy','hop');
-  if (CAT_MOODS[i]) catEl.classList.add(CAT_MOODS[i]);
-  void catEl.offsetWidth; // restart the hop
-  catEl.classList.add('hop');
-}
-
-// ---- the giant's direction, per act ----
-function directGiant(t, dt, act, actT){
-  const cx = camera.position.x, cz = camera.position.z;
-  giant.setFog(scene.fog.color, scene.fog.density);
-  giant.setEyeGlow(0);
-  if (act === 0){
-    // a vast shape breathing in the cloud — felt more than seen (far ahead, dim)
-    giant.setRim(0.55); giant.setRimColor(0x8fb8ff); giant.setUnder(0x4a5aa8, 0.2);
-    giant._march = 0;
-    giant.place(cx + 180, -60, cz - 1230, 0.35);
-    giant.walk(dt, 0.22);
-  } else if (act === 1){
-    // the march: striding beside you — every footstep is the beat (framed whole)
-    giant.setRim(1.0); giant.setRimColor(0xff9a5a); giant.setUnder(0xff5a1e, 0.5);
-    giant._march = (giant._march || 0) + dt*5;   // it travels, slowly pulling ahead
-    giant.place(cx + 1050, 0, cz - 1050 - giant._march, Math.PI*0.97);
-    giant.stride(worlds[1].beatInfo.beat, dt, t);
-    camera.position.y += giant.stepPulse*5; // the ground shudders under you
-  } else if (act === 2){
-    // the reveal: standing on the ridge, watching you pass (whole figure in frame)
-    giant.setRim(1.3); giant.setRimColor(0xbfa8ff); giant.setUnder(0x6a5aa8, 0.3);
-    giant.place(cx - 380, 20, cz - 1250, Math.atan2(380, 1250));
-    giant.rest(dt);
-  } else if (!choiceOn){
-    // walking away into the dark — legs in the fog of the collapse
-    giant.setRim(0.65); giant.setRimColor(0x8fb8ff); giant.setUnder(0x3a5a8a, 0.35);
-    giant.place(cx + 130, 0, cz - 640 - actT*120, Math.PI);
-    giant.walk(dt, 0.4);
-  }
-  giant.tick(dt);
-}
-
-// ---- the choice: three lights, chosen by gaze or touch ----
-let choiceOn = false, ending = null;
-const gazeT = [0, 0, 0];
-const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
-const _flashC = new THREE.Color(0xbfd4ff); // tempest lightning lifts the sky
-const END_COLS = ['#ffdf9e', '#9a7fff', '#ffffff'];       // flash color per ending
-const END_ECHO = [0xffd9a0, 0x8f7bff, 0xf4f6ff];          // tint carried into the next loop
-
-function startEnding(i){
-  ending = { t:0, i };
-  echoColor.setHex(END_ECHO[i]);
-  choiceOn = false;
-  hintEl.style.opacity = 0;
-}
-
-function updateChoice(t, dt, act, actT){
-  const wantChoice = (act === 3 && actT > 0.66 && !ending);
-  if (wantChoice && !choiceOn){
-    choiceOn = true; choice.show(); gazeT[0] = gazeT[1] = gazeT[2] = 0;
-  }
-  if (!wantChoice && choiceOn && !ending){ choiceOn = false; choice.hide(); }
-  choiceK += ((choiceOn ? 1 : 0) - choiceK) * (1 - Math.exp(-3*dt));
-
-  if (choiceOn && !ending){
-    const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
-    // the giant stops, and kneels
-    giant.setRim(1.0); giant.setRimColor(0xffd9a0);
-    giant.setEyeGlow(0);
-    // the kneel: glide into place before the bowed colossus and the three lights
-    giant.setUnder(0x5a6aaa, 0.3);
-    const gk = 1 - Math.exp(-1.5*dt);
-    giant.bx += ((cx - 30) - giant.bx)*gk;
-    giant.bz += ((cz - 500) - giant.bz)*gk;
-    giant.place(giant.bx, 0, giant.bz, 0);
-    giant.rest(dt);
-    giant.kneel = Math.min(1, giant.kneel + dt*0.4);
-    // the distant light yields to the three
-    choice.hand.position.set(cx - 70, cy - 80, cz - 250);
-    choice.eyeL.position.set(cx - 16, cy + 118, cz - 320);
-    choice.eyeR.position.set(cx + 16, cy + 118, cz - 320);
-    choice.eyeMid.position.set(cx, cy + 118, cz - 320);
-    choice.pure.position.set(cx + 50, cy + 10, cz - 330);
-    choice.fadeIn(dt);
-    // read the traveler's gaze — you go where you look
-    camera.getWorldDirection(_v1);
-    const tgts = choice.targets();
-    for (let i=0;i<3;i++){
-      _v2.copy(tgts[i].position).sub(camera.position).normalize();
-      if (_v2.angleTo(_v1) < 0.24) gazeT[i] += dt;
-      else gazeT[i] = Math.max(0, gazeT[i] - dt*2);
-      if (gazeT[i] > 2){ startEnding(i); break; }
-    }
-    // the world decides for the one who only drifts: the Offering
-    if (!ending && actT >= 0.995) startEnding(0);
-  }
-
-  if (ending){
-    ending.t += dt;
-    // the Look: the giant lifts its head, and its eyes are nebulae
-    if (ending.i === 1){
-      giant.gazeUpT = 1;
-      giant.setEyeGlow(Math.min(1, ending.t*1.1));
-    }
-    const L = choice.targets()[ending.i].position;
-    camera.getWorldDirection(_v1);
-    // the chosen light draws near; your gaze is drawn to it
-    L.lerp(_v3.copy(camera.position).addScaledVector(_v1, 42), 1 - Math.exp(-2.2*dt));
-    camera.lookAt(L);
-    const ek = Math.min(1, ending.t/2.6);
-    flashEl.style.transition = 'none';
-    flashEl.style.background = END_COLS[ending.i];
-    flashEl.style.opacity = ek.toFixed(3);
-    if (ending.t > 3.4){
-      ending = null;
-      choice.hide();
-      giant.kneel = 0; giant.gazeUpT = 0; giant.setEyeGlow(0);
-      flashEl.style.transition = 'opacity 1.4s ease';
-      flashEl.style.opacity = 0;
-    }
-  }
-  giant.tick(dt);
-}
-
-function tryTapChoice(px, py){
-  if (!choiceOn || ending) return false;
-  const tgts = choice.targets();
-  let best = -1, bestD = 130;
-  for (let i=0;i<3;i++){
-    _v1.copy(tgts[i].position).project(camera);
-    const sx = (_v1.x*0.5 + 0.5)*innerWidth, sy = (-_v1.y*0.5 + 0.5)*innerHeight;
-    const d = Math.hypot(sx - px, sy - py);
-    if (d < bestD){ bestD = d; best = i; }
-  }
-  if (best >= 0){ startEnding(best); return true; }
-  return false;
-}
-
-let pDown = null;
-const drag = { down:false, x:0, y:0 };
-const pointers = new Map();
-let pinchD0 = 0;
-let holding = false, holdTimer = 0, skipPunch = 0;
-
-function onTap(px, py){
-  hintEl.style.opacity = 0;
-  if (choiceOn){
-    // during the choice a tap reaches for a light; a tap at nothing is surrender
-    if (!tryTapChoice(px, py)) startEnding(0);
-    return;
-  }
-  if (ending) return;
-  voyageZ += 110;              // skip ahead a few seconds of flight
-  skipPunch = 1;
-}
-
-addEventListener('pointerdown', e => {
-  hintEl.style.opacity = 0;
-  pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
-  if (pointers.size === 2){
-    // second finger lands: begin pinch, cancel tap / drag-look / hold
-    const p = [...pointers.values()];
-    pinchD0 = Math.hypot(p[0].x-p[1].x, p[0].y-p[1].y);
-    pDown = null; drag.down = false;
-    clearTimeout(holdTimer); holding = false;
-  } else if (pointers.size === 1){
-    drag.down = true; drag.x = e.clientX; drag.y = e.clientY;
-    pDown = { x: e.clientX, y: e.clientY, t: performance.now(), moved:false };
-    clearTimeout(holdTimer);
-    // press and hold still: the voyage hastens
-    holdTimer = setTimeout(()=>{ if (pDown && !pDown.moved) holding = true; }, 350);
-  }
-}, { passive: true });
-addEventListener('pointermove', e => {
-  if (!pointers.has(e.pointerId)) return;
-  pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
-  if (pointers.size === 2){
-    const p = [...pointers.values()];
-    const d = Math.hypot(p[0].x-p[1].x, p[0].y-p[1].y);
-    if (pinchD0 > 0 && d > 0) zoomT = THREE.MathUtils.clamp(zoomT * (pinchD0/d), 0.4, 2.2);
-    pinchD0 = d;
-  } else if (drag.down){
-    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-    if (pDown && Math.hypot(e.clientX - pDown.x, e.clientY - pDown.y) > 12){
-      pDown.moved = true;           // it's a look-drag, not a hold
-      clearTimeout(holdTimer);
-    }
-    yawT = THREE.MathUtils.clamp(yawT - dx * 0.0045, -1.0, 1.0);
-    pitchT = THREE.MathUtils.clamp(pitchT - dy * 0.0045, -0.85, 0.85);
-    drag.x = e.clientX; drag.y = e.clientY;
-  }
-}, { passive: true });
-function endPointer(e){
-  pointers.delete(e.pointerId);
-  if (pointers.size < 2) pinchD0 = 0;
-  if (pointers.size === 0){
-    drag.down = false;
-    clearTimeout(holdTimer);
-    const wasHolding = holding;
-    holding = false;
-    if (pDown && !wasHolding){
-      const moved = Math.hypot(e.clientX - pDown.x, e.clientY - pDown.y);
-      const held = performance.now() - pDown.t;
-      const px = e.clientX, py = e.clientY;
-      pDown = null;
-      if (moved < 14 && held < 450) onTap(px, py);  // tap: skip (or choose)
-    } else {
-      pDown = null;
-    }
-  } else if (pointers.size === 1){
-    // back to one finger: re-anchor so the view doesn't jump
-    const p = [...pointers.values()][0];
-    drag.down = true; drag.x = p.x; drag.y = p.y;
-  }
-}
-addEventListener('pointerup', endPointer, { passive: true });
-addEventListener('pointercancel', endPointer, { passive: true });
-addEventListener('keydown', e=>{
-  if (e.key==='ArrowRight'||e.key===' '){ onTap(innerWidth/2, innerHeight/2); }
-});
-addEventListener('resize', ()=>{
-  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
-  renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
-});
-document.addEventListener('visibilitychange', ()=>{ last = performance.now(); });
-
-const clockStart = performance.now();
-let last = clockStart;
-let speedMul = 1;
-
-function loop(){
-  requestAnimationFrame(loop);
-  const now = performance.now();
-  let dt = Math.min((now-last)/1000, 0.1); last = now;
-  const t = (now-clockStart)/1000;
-  // buttery drag-look
-  const lk = 1 - Math.exp(-10*dt);
-  yaw += (yawT - yaw) * lk;
-  pitch += (pitchT - pitch) * lk;
-  zoom += (zoomT - zoom) * lk;
-
-  // ---- the voyage advances ----
-  const lp = ((voyageZ % LOOP) + LOOP) % LOOP;
-  const act = Math.floor(lp / ACT_LEN);
-  const actT = (lp % ACT_LEN) / ACT_LEN;
-  let speedTarget = 1;
-  if (act === 3 && !choiceOn && !ending) speedTarget = 0.55; // lament drifts, heavy with rain
-  if (holding) speedTarget = 3.2;                 // press-and-hold hastens
-  if (choiceOn || ending) speedTarget = 0.35;     // the choice dilates time
-  speedMul += (speedTarget - speedMul) * (1 - Math.exp(-3*dt));
-  voyageZ += CRUISE * speedMul * dt;
-  camera.position.z = -voyageZ;
-
-  const pk = THREE.MathUtils.clamp(
-    (actT - (1 - PASSAGE_SECS/ACT_SECS)) / (PASSAGE_SECS/ACT_SECS), 0, 1);
-
-  if (act !== curAct) enterAct(act);
-  // during a passage the next act fades in alongside
-  const next = (act+1) % 4;
-  worlds[next].group.visible = pk > 0.01;
-
-  // ---- atmosphere crossfades between acts ----
-  const A = ACT_STYLE[act], B = ACT_STYLE[next];
-  scene.background.lerpColors(A.bg, B.bg, pk);
-  if (act === 0){ // the last ending tints the cloud you wake in
-    scene.background.lerp(echoColor, 0.10);
-  }
-  scene.fog.color.lerpColors(A.fog, B.fog, pk);
-  if (act === 0) scene.fog.color.lerp(echoColor, 0.10);
-  scene.fog.density = A.fd + (B.fd - A.fd)*pk;
-  const tflash = worlds[1].flash || 0;   // tempest lightning lifts the sky
-  if (tflash > 0.01) scene.background.lerp(_flashC, tflash*0.30);
-
-  // ---- the act, the giant, the choice ----
-  if (pk > 0.01) worlds[next].update(t, dt, 0, pk); // the incoming act is already alive
-  worlds[act].update(t, dt, actT, pk);
-  if (act === 3 || ending) updateChoice(t, dt, act, actT);
-  else directGiant(t, dt, act, actT);
-
-  // ---- ignition: a brief whiteout as the passage ignites, then the new world resolves ----
-  if (!ending){
-    let ig = 0;
-    if (act === 0 && pk > 0 && pk < 0.45) ig = Math.sin((pk/0.45)*Math.PI)*0.9;
-    if (ig > 0.01){
-      flashEl.style.transition = 'none';
-      flashEl.style.background = '#fff3dd';
-      flashEl.style.opacity = ig.toFixed(3);
-    } else if (flashEl.style.opacity !== '0' && !choiceOn){
-      flashEl.style.transition = 'opacity 0.9s ease';
-      flashEl.style.opacity = 0;
-    }
-  }
-
-  // ---- the voyage breathes: a living camera, never parked ----
-  camera.position.y += Math.sin(t*0.9)*1.1;
-  camera.position.x += Math.sin(t*0.63 + 1.7)*0.9;
-
-  // ---- speed feel: fov breathes, streaks answer haste ----
-  skipPunch *= Math.exp(-3.5*dt);
-  const haste = Math.max(0, speedMul - 1)/2.2;
-  camera.fov = 62 + haste*14 + skipPunch*22;
-  camera.updateProjectionMatrix();
-  { // streaks always breathe — the voyage never feels parked
-    streaks.visible = true;
-    sMat.opacity = Math.min(0.85, 0.16 + haste*0.45 + skipPunch*0.5);
-    const sp = sGeo.attributes.position;
-    const flow = dt * (120 + haste*220 + skipPunch*380);
-    for (let i=0;i<STREAKS;i++){
-      sZ[i] += flow;
-      if (sZ[i] > 8) sZ[i] = -135;
-      sp.setXYZ(i*2, sX[i], sY[i], sZ[i]);
-      sp.setXYZ(i*2+1, sX[i], sY[i], sZ[i] - sLen[i]*(1+haste*2+skipPunch*3));
-    }
-    sp.needsUpdate = true;
-  }
-  { // rush motes: near-field dust streaming past — the speed you feel in your face
-    const mp = mGeo.attributes.position;
-    const mflow = dt * (150 + haste*320 + skipPunch*450);
-    for (let i=0;i<MOTES;i++){
-      let z = mPos[i*3+2] + mflow;
-      if (z > 6){ z = -74; mPos[i*3] = (Math.random()*2-1)*38; mPos[i*3+1] = (Math.random()*2-1)*28; }
-      mPos[i*3+2] = z;
-    }
-    mp.needsUpdate = true;
-    moteMat.opacity = 0.22 + haste*0.25 + skipPunch*0.3;
-  }
-
-  composer.render();
-}
-
-// console hook for tuning / QA: __elsewhere.skip(900) jumps the voyage
-window.__elsewhere = {
-  skip:(s)=>{ voyageZ += s; },
-  state:()=>({ act:curAct, actT:((((voyageZ%LOOP)+LOOP)%LOOP)%ACT_LEN)/ACT_LEN,
-               voyageZ, holding, choiceOn, ending:!!ending }),
-};
-
-// boot
-window.__booted = true;
-camera.position.set(0, 0, 0);
-document.getElementById('ver').textContent = BUILD;
-enterAct(0);
-loop();
-setTimeout(()=> document.getElementById('intro').classList.add('gone'), 1400);
-setTimeout(()=> document.getElementById('cat').classList.add('show'), 2600);
-setTimeout(()=>{ hintEl.style.opacity = 0; }, 12000);
-
+  requestAnimationFrame(tick);
+})();
 </script>
 </body>
 </html>

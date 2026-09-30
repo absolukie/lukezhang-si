@@ -52,7 +52,7 @@
 <div id="flash"></div>
 <div id="brand">ELSEWHERE</div>
 <div id="label"><div class="idx"></div><div class="name"></div></div>
-<div id="hint">DRAG TO LOOK &nbsp;·&nbsp; TAP TO WARP</div>
+<div id="hint">DRAG TO LOOK &nbsp;·&nbsp; PINCH TO ZOOM &nbsp;·&nbsp; TAP TO WARP</div>
 <div id="dots"><span></span><span></span><span></span><span></span></div>
 <div id="intro"><h1>ELSEWHERE</h1><p>A VOYAGE IN FOUR WORLDS</p></div>
 <div id="nogl">THIS VOYAGE NEEDS WEBGL</div>
@@ -82,7 +82,7 @@ try {
   document.getElementById('nogl').style.display = 'flex';
   throw e;
 }
-renderer.setPixelRatio(Math.min(devicePixelRatio || 1, isMobile ? 1.5 : 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
@@ -93,6 +93,7 @@ scene.add(camera); // camera-attached warp streaks need this
 
 // ---- drag-to-look rig (every world) ----
 let yawT = 0, pitchT = 0, yaw = 0, pitch = 0;
+let zoomT = 1, zoom = 1;
 const _orbT = new THREE.Vector3(), _orbO = new THREE.Vector3(), _orbS = new THREE.Spherical();
 function orbitAround(tx, ty, tz){
   _orbT.set(tx, ty, tz);
@@ -100,7 +101,7 @@ function orbitAround(tx, ty, tz){
   _orbS.setFromVector3(_orbO);
   _orbS.theta += yaw;
   _orbS.phi = THREE.MathUtils.clamp(_orbS.phi + pitch, 0.12, Math.PI - 0.12);
-  camera.position.copy(_orbT).add(_orbO.setFromSpherical(_orbS));
+  camera.position.copy(_orbT).addScaledVector(_orbO.setFromSpherical(_orbS), zoom);
   camera.lookAt(_orbT);
 }
 
@@ -668,30 +669,57 @@ function warp(){
 
 let pDown = null;
 const drag = { down:false, x:0, y:0 };
+const pointers = new Map();
+let pinchD0 = 0;
 addEventListener('pointerdown', e => {
   hintEl.style.opacity = 0;
-  drag.down = true; drag.x = e.clientX; drag.y = e.clientY;
-  pDown = { x: e.clientX, y: e.clientY, t: performance.now() };
+  pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+  if (pointers.size === 2){
+    // second finger lands: begin pinch, cancel any tap / drag-look
+    const p = [...pointers.values()];
+    pinchD0 = Math.hypot(p[0].x-p[1].x, p[0].y-p[1].y);
+    pDown = null; drag.down = false;
+  } else if (pointers.size === 1){
+    drag.down = true; drag.x = e.clientX; drag.y = e.clientY;
+    pDown = { x: e.clientX, y: e.clientY, t: performance.now() };
+  }
 }, { passive: true });
 addEventListener('pointermove', e => {
-  if (drag.down){
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+  if (pointers.size === 2){
+    const p = [...pointers.values()];
+    const d = Math.hypot(p[0].x-p[1].x, p[0].y-p[1].y);
+    if (pinchD0 > 0 && d > 0) zoomT = THREE.MathUtils.clamp(zoomT * (pinchD0/d), 0.4, 2.2);
+    pinchD0 = d;
+  } else if (drag.down){
     yawT -= (e.clientX - drag.x) * 0.0045;
     pitchT = THREE.MathUtils.clamp(pitchT - (e.clientY - drag.y) * 0.0045, -1.1, 1.1);
     drag.x = e.clientX; drag.y = e.clientY;
   }
 }, { passive: true });
-addEventListener('pointerup', e => {
-  drag.down = false;
-  if (!pDown) return;
-  const moved = Math.hypot(e.clientX - pDown.x, e.clientY - pDown.y);
-  const held = performance.now() - pDown.t;
-  pDown = null;
-  if (moved < 14 && held < 450) warp();   // a tap warps; a drag turns the view
-}, { passive: true });
-addEventListener('pointercancel', ()=>{ drag.down = false; pDown = null; }, { passive: true });
+function endPointer(e){
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) pinchD0 = 0;
+  if (pointers.size === 0){
+    drag.down = false;
+    if (!pDown) return;
+    const moved = Math.hypot(e.clientX - pDown.x, e.clientY - pDown.y);
+    const held = performance.now() - pDown.t;
+    pDown = null;
+    if (moved < 14 && held < 450) warp();   // a tap warps; a drag turns; a pinch zooms
+  } else if (pointers.size === 1){
+    // back to one finger: re-anchor so the view doesn't jump
+    const p = [...pointers.values()][0];
+    drag.down = true; drag.x = p.x; drag.y = p.y;
+  }
+}
+addEventListener('pointerup', endPointer, { passive: true });
+addEventListener('pointercancel', endPointer, { passive: true });
 addEventListener('keydown', e=>{ if (e.key==='ArrowRight'||e.key===' '){ warp(); hintEl.style.opacity = 0; } });
 addEventListener('resize', ()=>{
   camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
   renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
 });
 document.addEventListener('visibilitychange', ()=>{ last = performance.now(); });
@@ -707,6 +735,7 @@ function loop(){
   const lk = 1 - Math.exp(-10*dt);
   yaw += (yawT - yaw) * lk;
   pitch += (pitchT - pitch) * lk;
+  zoom += (zoomT - zoom) * lk;
 
   if (current >= 0){
     if (warpT >= 0){

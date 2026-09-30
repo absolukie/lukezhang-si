@@ -52,9 +52,9 @@
 <div id="flash"></div>
 <div id="brand">ELSEWHERE</div>
 <div id="label"><div class="idx"></div><div class="name"></div></div>
-<div id="hint">DRAG TO LOOK &nbsp;·&nbsp; PINCH TO ZOOM &nbsp;·&nbsp; TAP TO WARP</div>
+<div id="hint">DRAG TO LOOK &nbsp;·&nbsp; HOLD TO HASTEN &nbsp;·&nbsp; TAP TO SKIP &nbsp;·&nbsp; PINCH TO ZOOM</div>
 <div id="dots"><span></span><span></span><span></span><span></span></div>
-<div id="intro"><h1>ELSEWHERE</h1><p>A VOYAGE IN FOUR WORLDS</p></div>
+<div id="intro"><h1>ELSEWHERE</h1><p>A VOYAGE IN FOUR ACTS</p></div>
 <div id="nogl">THIS VOYAGE NEEDS WEBGL</div>
 
 <script type="importmap">
@@ -129,7 +129,6 @@ composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
 const rnd = (a,b) => a + Math.random()*(b-a);
-const WORLD_TIME = 24; // seconds per world before auto-warp
 
 /* ============ WORLD I — NEBULA : GPU-physics particles, touch reactive ============
    Every particle carries real position + velocity, simulated on the GPU
@@ -299,10 +298,12 @@ function buildNebula() {
   geo.setAttribute('position', new THREE.BufferAttribute(ref, 3));
   const renderMat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    uniforms: { uPosTex:{value:null}, uTime:{value:0}, uPR:{value: renderer.getPixelRatio()} },
+    uniforms: { uPosTex:{value:null}, uTime:{value:0}, uPR:{value: renderer.getPixelRatio()},
+                uEcho:{value:new THREE.Color(0x000000)} },
     vertexShader: `
       uniform sampler2D uPosTex;
       uniform float uTime, uPR;
+      uniform vec3 uEcho;
       varying vec3 vColor; varying float vFade;
       vec3 pal(float t){
         vec3 c1 = vec3(0.36,0.12,0.72);
@@ -317,7 +318,8 @@ function buildNebula() {
         gl_Position = projectionMatrix * mv;
         float dist = max(-mv.z, 0.1);
         gl_PointSize = (1.0 + fract(seed*7.13)*2.4) * (150.0/dist) * uPR;
-        vColor = pal(fract(seed + uTime*0.008));
+        vec3 base = pal(fract(seed + uTime*0.008));
+        vColor = mix(base, uEcho, 0.35 * step(0.001, dot(uEcho,uEcho)));
         vFade = smoothstep(130.0, 40.0, dist) * smoothstep(1.5, 10.0, dist);
       }`,
     fragmentShader: `
@@ -335,6 +337,20 @@ function buildNebula() {
   group.add(points);
   addNebulaStars(group);
 
+  // ---- the heart: the bright core you rise toward, and fly into ----
+  const heartTex = (()=>{ const c=document.createElement('canvas'); c.width=c.height=128;
+    const g=c.getContext('2d');
+    const gr=g.createRadialGradient(64,64,0,64,64,64);
+    gr.addColorStop(0,'rgba(255,246,230,1)'); gr.addColorStop(0.3,'rgba(255,220,170,0.55)');
+    gr.addColorStop(1,'rgba(255,200,150,0)');
+    g.fillStyle=gr; g.fillRect(0,0,128,128);
+    return new THREE.CanvasTexture(c); })();
+  const heart = new THREE.Sprite(new THREE.SpriteMaterial({
+    map:heartTex, color:0xffe9c8, transparent:true, opacity:0.0,
+    blending:THREE.AdditiveBlending, depthWrite:false }));
+  heart.frustumCulled = false;
+  group.add(heart);
+
   // ---- touch becomes a vortex ----
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
@@ -346,8 +362,12 @@ function buildNebula() {
     ndc.set((cx/innerWidth)*2 - 1, -(cy/innerHeight)*2 + 1);
     raycaster.setFromCamera(ndc, camera);
     const o = raycaster.ray.origin, d = raycaster.ray.direction;
-    const t = (-30 - o.z) / d.z;
-    if (isFinite(t) && t > 0) touchTarget.copy(o).addScaledVector(d, t);
+    const planeZ = camera.position.z - 30;   // touch plane rides with the camera
+    const t = (planeZ - o.z) / d.z;
+    if (isFinite(t) && t > 0){
+      touchTarget.copy(o).addScaledVector(d, t);
+      touchTarget.z = -30; // sim-local frame (group rides at camera z)
+    }
   }
   addEventListener('pointermove', e => {
     pointerToWorld(e.clientX, e.clientY);
@@ -359,13 +379,13 @@ function buildNebula() {
   }, { passive: true });
 
   return {
-    name:'NEBULA', roman:'I',
+    name:'ASCENSION', roman:'I',
     group,
-    enter(){ scene.background = new THREE.Color(0x030109);
-             scene.fog = new THREE.FogExp2(0x030109, 0.0035);
-             camera.position.set(0, 0, 0); },
-    update(t, dt){
+    enter(){},
+    update(t, dt, actT, pk){
       nowT = t;
+      group.position.z = camera.position.z; // the cloud travels with you
+      renderMat.uniforms.uEcho.value.copy(echoColor);
       const sdt = Math.min(dt, 0.05);
       // idle ghost stirs the nebula so it never sits still
       if (t - lastTouchT > 6) {
@@ -387,10 +407,19 @@ function buildNebula() {
       renderMat.uniforms.uPosTex.value = gpu.getCurrentRenderTarget(posVar).texture;
       renderMat.uniforms.uTime.value = t;
 
+      // the heart gathers ahead and swells as ignition nears
+      const hx = Math.sin(t*0.11)*14, hy = 12 + Math.sin(t*0.07)*6;
+      const hz = camera.position.z - 210 + actT*40;
+      heart.position.set(hx, hy, hz);
+      const hs = 60 + actT*170 + pk*260;
+      heart.scale.set(hs, hs, 1);
+      heart.material.opacity = Math.min(1, 0.12 + actT*0.75 + pk*0.6);
+
       camera.position.x = Math.sin(t*0.05)*10;
-      camera.position.y = Math.cos(t*0.04)*6;
-      camera.lookAt(camera.position.x*1.6, camera.position.y*1.4, -60);
-      orbitAround(camera.position.x*1.6, camera.position.y*1.4, -60);
+      camera.position.y = Math.cos(t*0.04)*6 + actT*10; // rising through the cloud
+      const lz = camera.position.z - 60;
+      camera.lookAt(camera.position.x*1.6, camera.position.y*1.4 + actT*6, lz);
+      orbitAround(camera.position.x*1.6, camera.position.y*1.4 + actT*6, lz);
     }
   };
 }
@@ -455,14 +484,39 @@ function buildTesseract() {
     out.set(x*s, y*s, v.z*s);
   }
   const tmp = new THREE.Vector3();
+
+  // ---- shockwave rings, fired on every footstep-beat ----
+  const rings = [];
+  const ringGeo = new THREE.RingGeometry(0.96, 1.0, 72);
+  for (let i=0;i<5;i++){
+    const rm = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
+      color:0x9fdcff, transparent:true, opacity:0,
+      blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide }));
+    rm.frustumCulled = false;
+    group.add(rm);
+    rings.push({ m:rm, age:9 });
+  }
+  let lastBeat = -1;
   return {
-    name:'TESSERACT', roman:'II',
+    name:'PULSE', roman:'II',
     group,
-    enter(){ scene.background = new THREE.Color(0x01020a);
-             scene.fog = new THREE.FogExp2(0x01020a, 0.0022);
-             camera.position.set(0, 2, 24); },
-    update(t, dt){
+    enter(){},
+    beatInfo:{ beat:-1, pulse:0 }, // shared with the giant's footsteps
+    update(t, dt, actT, pk){
+      group.position.set(camera.position.x, camera.position.y, camera.position.z - 70);
       const a = t*0.24, b = t*0.17;
+      // 120bpm heartbeat — every beat is one of the giant's footsteps
+      const beat = Math.floor(t*2);
+      if (beat !== lastBeat){
+        lastBeat = beat;
+        this.beatInfo.beat = beat; this.beatInfo.pulse = 1;
+        const r = rings.find(r=>r.age>1.6) || rings[0];
+        r.age = 0;
+        r.m.position.set((Math.random()*2-1)*30, (Math.random()*2-1)*20, -40-Math.random()*60);
+        r.m.rotation.set(Math.random()*0.6-0.3, Math.random()*0.6-0.3, 0);
+      }
+      this.beatInfo.pulse *= Math.exp(-6*dt);
+      const pulse = this.beatInfo.pulse;
       const lp = lineGeo.attributes.position.array;
       for (let e=0;e<E;e++){
         const [i,j] = edges[e];
@@ -473,7 +527,6 @@ function buildTesseract() {
       const vp = vGeo.attributes.position.array;
       for (let i=0;i<16;i++){ project4(V[i], tmp, a, b); vp[i*3]=tmp.x; vp[i*3+1]=tmp.y; vp[i*3+2]=tmp.z; }
       vGeo.attributes.position.needsUpdate = true;
-      // echo counter-rotates (recompute cheaply with negated angles)
       const ep = echo.geometry.attributes.position.array;
       for (let e=0;e<E;e++){
         const [i,j] = edges[e];
@@ -481,10 +534,25 @@ function buildTesseract() {
         project4(V[j], tmp, -a*0.6, -b*0.6); ep[e*6+3]=tmp.x; ep[e*6+4]=tmp.y; ep[e*6+5]=tmp.z;
       }
       echo.geometry.attributes.position.needsUpdate = true;
-      const r = 23, sp2 = t*0.11;
-      camera.position.set(Math.sin(sp2)*r, 3.5+Math.sin(t*0.07)*2.5, Math.cos(sp2)*r);
-      camera.lookAt(0,0,0);
-      orbitAround(0,0,0);
+      const bs = 1 + pulse*0.16 + pk*1.6; // the comedown blows it apart
+      lines.scale.setScalar(5.2*bs);
+      vPts.scale.setScalar(5.2*bs);
+      echo.scale.setScalar(8.2*bs);
+      lineMat.opacity = 0.95*(1-pk*0.85);
+      vMat.opacity = 0.95*(1-pk*0.85);
+      // rings expand and fade
+      for (const r of rings){
+        r.age += dt;
+        const rr = 6 + r.age*46;
+        r.m.scale.set(rr, rr, 1);
+        r.m.material.opacity = Math.max(0, 0.75*(1 - r.age/1.6)) * (1-pk);
+      }
+      const wx = Math.sin(t*0.3)*9, wy = 4 + Math.sin(t*0.23)*3.5;
+      camera.position.x += (wx - camera.position.x) * (1-Math.exp(-2*dt));
+      camera.position.y += (wy - camera.position.y) * (1-Math.exp(-2*dt));
+      const lz = camera.position.z - 70;
+      camera.lookAt(camera.position.x*0.4, camera.position.y*0.6, lz);
+      orbitAround(camera.position.x*0.4, camera.position.y*0.6, lz);
     }
   };
 }
@@ -727,21 +795,16 @@ function buildTerrain() {
   let dist = 0, prevPx = 0, rollSm = 0;
   const SPEED = 26;
   return {
-    name:'RIDGE', roman:'III',
+    name:'TITAN', roman:'III',
     group,
-    enter(){ scene.background = new THREE.Color(0x0a0618);
-             scene.fog = null; // shader does its own fog
-             dist = 0; prevPx = 0; rollSm = 0;
-             camera.position.set(0, 24, 0); },
-    update(t, dt){
-      dist += SPEED*dt;
+    enter(){},
+    update(t, dt, actT, pk){
+      mat.uniforms.uOffset.value.set(0, voyageZ); // terrain streams from the voyage itself
       const px = Math.sin(t*0.05)*60 + Math.sin(t*0.13)*22;
       const py = 24 + Math.sin(t*0.09)*8 + Math.sin(t*0.021)*4;
       const vx = (px - prevPx)/Math.max(dt, 1e-4); prevPx = px;
-      camera.position.z -= SPEED*dt;
       camera.position.x = px;
       camera.position.y = py;
-      mat.uniforms.uOffset.value.set(0, dist);
       mat.uniforms.uTime.value = t;
       mesh.position.set(camera.position.x, 0, camera.position.z - 120);
       sky.position.copy(camera.position);
@@ -750,7 +813,9 @@ function buildTerrain() {
       moon1.glow.position.copy(moon1.m.position);
       moon2.m.position.set(camera.position.x + 170, 190, camera.position.z - 460);
       moon2.glow.position.copy(moon2.m.position);
-      saturn.position.set(camera.position.x + 190, 215, camera.position.z - 580);
+      saturn.position.set(camera.position.x + 190,
+        -130 + THREE.MathUtils.smoothstep(actT, 0, 0.18)*345 - pk*300, // rises, then the dimming takes it
+        camera.position.z - 580);
       satMat.uniforms.uSunDir.value.copy(moon1.m.position).sub(camera.position).normalize();
       mat.uniforms.uMoonDir.value.copy(moon1.m.position).sub(camera.position).normalize();
       mat.uniforms.uMoon2Dir.value.copy(moon2.m.position).sub(camera.position).normalize();
@@ -829,16 +894,50 @@ function buildMonolith() {
   under.position.set(0, -2, -60);
   group.add(under);
 
-  const SPEED = 20;
+  // ---- the distant light: warm, unreachable, always the same distance ----
+  const farTex = (()=>{ const c=document.createElement('canvas'); c.width=c.height=128;
+    const g=c.getContext('2d');
+    const gr=g.createRadialGradient(64,64,0,64,64,64);
+    gr.addColorStop(0,'rgba(255,240,220,1)'); gr.addColorStop(0.25,'rgba(255,200,140,0.5)');
+    gr.addColorStop(1,'rgba(255,180,120,0)');
+    g.fillStyle=gr; g.fillRect(0,0,128,128);
+    return new THREE.CanvasTexture(c); })();
+  const farLight = new THREE.Sprite(new THREE.SpriteMaterial({
+    map:farTex, color:0xffe2b8, transparent:true, opacity:0,
+    blending:THREE.AdditiveBlending, depthWrite:false }));
+  farLight.scale.set(46, 46, 1);
+  farLight.frustumCulled = false;
+  group.add(farLight);
+  const farGlow = new THREE.PointLight(0xffc890, 1500, 420, 1.8);
+  group.add(farGlow);
+
+  // ---- drifting motes: dust in the dark ----
+  const MN = isMobile ? 160 : 320;
+  const mPos = new Float32Array(MN*3), mSeed = new Float32Array(MN);
+  for (let i=0;i<MN;i++){
+    mPos[i*3] = rnd(-160,160); mPos[i*3+1] = rnd(-20,70); mPos[i*3+2] = rnd(-380,20);
+    mSeed[i] = Math.random()*10;
+  }
+  const mGeo = new THREE.BufferGeometry();
+  mGeo.setAttribute('position', new THREE.BufferAttribute(mPos, 3));
+  const motes = new THREE.Points(mGeo, new THREE.PointsMaterial({
+    color:0x8fa8d8, size:1.6, transparent:true, opacity:0.55,
+    blending:THREE.AdditiveBlending, depthWrite:false }));
+  motes.frustumCulled = false;
+  group.add(motes);
+
   return {
-    name:'MONOLITH', roman:'IV',
+    name:'SAUDADE', roman:'IV',
     group,
-    enter(){ scene.background = new THREE.Color(0x01030c);
-             scene.fog = new THREE.FogExp2(0x01030c, 0.005);
-             camera.position.set(0, 8, 30); },
-    update(t, dt){
+    farLight, farGlow,
+    enter(){
+      // redistribute the city around the camera each loop
+      for (const m of boxes){
+        m.position.set(rnd(-130,130), m.userData.baseY, camera.position.z + rnd(-420, 20));
+      }
+    },
+    update(t, dt, actT, pk){
       floorMat.uniforms.uTime.value = t;
-      camera.position.z -= SPEED*dt;
       camera.position.x = Math.sin(t*0.09)*34;
       camera.position.y = 8 + Math.sin(t*0.13)*2.5;
       camera.lookAt(camera.position.x*0.3, 10, camera.position.z - 90);
@@ -847,6 +946,24 @@ function buildMonolith() {
       floor.position.z = camera.position.z - 160;
       under.position.z = camera.position.z - 60;
       under.position.x = camera.position.x;
+      // the light waits ahead — never nearer, never farther (yields to the three)
+      const fadeIn = THREE.MathUtils.smoothstep(actT, 0, 0.12) * (1 - choiceK);
+      farLight.position.set(camera.position.x*0.4, 14 + Math.sin(t*0.4)*2, camera.position.z - 300);
+      farLight.material.opacity = fadeIn * (0.85 + Math.sin(t*1.7)*0.1);
+      const fls = 40 + Math.sin(t*1.7)*6;
+      farLight.scale.set(fls, fls, 1);
+      farGlow.position.copy(farLight.position);
+      farGlow.intensity = fadeIn * 1500;
+      // motes drift and recycle around the camera
+      const cz = camera.position.z;
+      for (let i=0;i<MN;i++){
+        const i3 = i*3;
+        mPos[i3+1] += dt*(0.6 + mSeed[i]*0.25);
+        mPos[i3] += Math.sin(t*0.5 + mSeed[i]*9.0)*dt*1.4;
+        if (mPos[i3+1] > 75) mPos[i3+1] -= 95;
+        if (mPos[i3+2] > cz+20) mPos[i3+2] -= 400; else if (mPos[i3+2] < cz-380) mPos[i3+2] += 400;
+      }
+      mGeo.attributes.position.needsUpdate = true;
       // recycle monoliths endlessly
       for (const m of boxes){
         m.position.y = m.userData.baseY + Math.sin(t*0.5 + m.userData.ph)*2.2;
@@ -857,9 +974,163 @@ function buildMonolith() {
   };
 }
 
-/* ============ THE VOYAGE : direction, warp, labels ============ */
+/* ============ THE GIANT : the central character ============
+   A vast humanoid silhouette — dark, rim-lit, never fully seen until Act III.
+   Suggestion beats detail; that is what makes it awesome instead of just big. */
+function buildGiant(){
+  const group = new THREE.Group();
+  const rimMat = new THREE.ShaderMaterial({
+    uniforms:{
+      uRim:{value:new THREE.Color(0x8fb8ff)},
+      uRimK:{value:1.0},
+      uFogColor:{value:new THREE.Color(0x030109)},
+      uFogDensity:{value:0.0035},
+    },
+    vertexShader:`
+      varying vec3 vN; varying vec3 vV; varying float vFogDepth;
+      void main(){
+        vN = normalize(normalMatrix * normal);
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vV = -mv.xyz;
+        vFogDepth = -mv.z;
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader:`
+      varying vec3 vN; varying vec3 vV; varying float vFogDepth;
+      uniform vec3 uRim; uniform float uRimK;
+      uniform vec3 uFogColor; uniform float uFogDensity;
+      void main(){
+        float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.5);
+        vec3 col = vec3(0.006, 0.008, 0.016) + uRim * f * uRimK;
+        float fog = 1.0 - exp(-uFogDensity*uFogDensity*vFogDepth*vFogDepth);
+        col = mix(col, uFogColor, clamp(fog, 0.0, 1.0));
+        gl_FragColor = vec4(col, 1.0);
+      }`
+  });
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(52, 74, 150, 12), rimMat);
+  torso.position.y = 225; group.add(torso);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(30, 16, 12), rimMat);
+  head.position.y = 328; group.add(head);
+  const armGeo = new THREE.CylinderGeometry(17, 23, 150, 10);
+  const armL = new THREE.Mesh(armGeo, rimMat);
+  armL.position.set(-80, 208, 0); armL.rotation.z = 0.16; group.add(armL);
+  const armR = new THREE.Mesh(armGeo, rimMat);
+  armR.position.set(80, 208, 0); armR.rotation.z = -0.16; group.add(armR);
+  const legGeo = new THREE.CylinderGeometry(24, 31, 170, 10);
+  legGeo.translate(0, -85, 0); // pivot at the hip
+  const legL = new THREE.Mesh(legGeo, rimMat);
+  legL.position.set(-34, 158, 0); group.add(legL);
+  const legR = new THREE.Mesh(legGeo, rimMat);
+  legR.position.set(34, 158, 0); group.add(legR);
+  group.traverse(o=>{ o.frustumCulled = false; });
+  scene.add(group);
+  return {
+    group, mat:rimMat, walkPhase:0, bob:0, kneel:0,
+    bx:0, by:0, bz:0,
+    place(x, y, z, ry){
+      this.bx = x; this.by = y; this.bz = z;
+      group.rotation.y = ry || 0;
+    },
+    tick(dt){
+      this.bob *= Math.exp(-4*dt);
+      group.position.set(this.bx, this.by + this.bob*10 - this.kneel*110, this.bz);
+      group.rotation.x = this.kneel*0.28;
+    },
+    setRim(k){ rimMat.uniforms.uRimK.value = k; },
+    setFog(color, density){
+      rimMat.uniforms.uFogColor.value.copy(color);
+      rimMat.uniforms.uFogDensity.value = density;
+    },
+    walk(dt, stepsPerSec){ // free ambling cycle
+      this.walkPhase += dt*stepsPerSec*Math.PI;
+      const s = Math.sin(this.walkPhase);
+      legL.rotation.x = s*0.5; legR.rotation.x = -s*0.5;
+      this.bob = Math.max(this.bob, Math.abs(Math.cos(this.walkPhase))*0.45);
+    },
+    stride(beat, dt){ // locked to the pulse — every beat is a footstep
+      const s = (beat % 2 === 0) ? 1 : -1;
+      const k = 1 - Math.exp(-10*dt);
+      legL.rotation.x += (s*0.55 - legL.rotation.x)*k;
+      legR.rotation.x += (-s*0.55 - legR.rotation.x)*k;
+      this.bob = 1;
+    },
+    rest(dt){
+      const k = 1 - Math.exp(-3*dt);
+      legL.rotation.x *= (1-k); legR.rotation.x *= (1-k);
+    }
+  };
+}
+
+/* ============ THE CHOICE : three lights, no buttons ============
+   In Act IV's final passage time dilates and three lights resolve:
+   the open hand (the Offering), the eyes (the Look), the pure light
+   (the Becoming). You choose by looking — you go where you look —
+   or by reaching out and touching one. Not choosing is also a choice. */
+function buildChoice(){
+  const group = new THREE.Group();
+  function makeLight(color, size, opacity){
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const g = c.getContext('2d');
+    const gr = g.createRadialGradient(64,64,0,64,64,64);
+    gr.addColorStop(0,'rgba(255,255,255,1)');
+    gr.addColorStop(0.3,'rgba(255,255,255,0.5)');
+    gr.addColorStop(1,'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(0,0,128,128);
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({
+      map:new THREE.CanvasTexture(c), color, transparent:true, opacity:0,
+      blending:THREE.AdditiveBlending, depthWrite:false }));
+    s.scale.set(size, size, 1);
+    s.frustumCulled = false;
+    group.add(s);
+    return s;
+  }
+  const hand = makeLight(0xffd9a0, 64);            // the Offering — below
+  const eyeL = makeLight(0x9a7fff, 26);           // the Look — above
+  const eyeR = makeLight(0x9a7fff, 26);
+  const eyeMid = new THREE.Object3D(); group.add(eyeMid);
+  const pure = makeLight(0xffffff, 72);            // the Becoming — ahead
+  const lights = [hand, eyeL, eyeR, pure];
+  scene.add(group);
+  return {
+    group, hand, eyeL, eyeR, eyeMid, pure,
+    k:0,
+    targets(){ return [this.hand, this.eyeMid, this.pure]; },
+    show(){ group.visible = true; },
+    hide(){ group.visible = false; this.k = 0;
+      for (const l of lights) l.material.opacity = 0; },
+    fadeIn(dt){
+      this.k = Math.min(1, this.k + dt*0.7);
+      hand.material.opacity = this.k*0.95;
+      eyeL.material.opacity = eyeR.material.opacity = this.k*0.9;
+      pure.material.opacity = this.k*0.95;
+    }
+  };
+}
+
+/* ============ THE VOYAGE : one continuous flight in four acts ============
+   The camera never cuts. Four acts are regions of one universe; the flight
+   loops every ~2 minutes. Tap skips ahead, holding hastens, and in Act IV's
+   final passage the traveler chooses the ending with their gaze. */
+const CRUISE = 26, ACT_LEN = 780, LOOP = ACT_LEN*4, ACT_SECS = 30, PASSAGE_SECS = 4;
+let voyageZ = 0;                       // ever-increasing distance traveled
+const echoColor = new THREE.Color(0x000000); // the last ending, tinting the next loop
+let choiceK = 0;                       // 0..1 how present the three lights are
+
 const worlds = [buildNebula(), buildTesseract(), buildTerrain(), buildMonolith()];
 for (const w of worlds){ w.group.visible = false; scene.add(w.group); }
+const giant = buildGiant();
+const choice = buildChoice();
+choice.group.visible = false;
+
+// per-act atmosphere; crossfaded during passages
+const ACT_STYLE = [
+  { bg:new THREE.Color(0x030109), fog:new THREE.Color(0x030109), fd:0.0035 }, // I ascension
+  { bg:new THREE.Color(0x01020a), fog:new THREE.Color(0x01020a), fd:0.0022 }, // II pulse
+  { bg:new THREE.Color(0x0a0618), fog:new THREE.Color(0x0a0618), fd:0.0020 }, // III titan
+  { bg:new THREE.Color(0x01030c), fog:new THREE.Color(0x01030c), fd:0.0050 }, // IV saudade
+];
+scene.background = ACT_STYLE[0].bg.clone();
+scene.fog = new THREE.FogExp2(0x030109, 0.0035);
 
 const labelEl = document.getElementById('label');
 const labelIdx = labelEl.querySelector('.idx');
@@ -870,44 +1141,169 @@ const flashEl = document.getElementById('flash');
 let labelTimer = 0;
 
 function showLabel(w){
-  labelIdx.textContent = 'WORLD ' + w.roman;
+  labelIdx.textContent = 'ACT ' + w.roman;
   labelName.textContent = w.name;
   labelEl.style.opacity = 1;
   clearTimeout(labelTimer);
   labelTimer = setTimeout(()=> labelEl.style.opacity = 0, 3600);
 }
 
-let current = -1, worldClock = 0;
-function enter(i){
-  if (current >= 0) worlds[current].group.visible = false;
-  current = i; worldClock = 0;
+let curAct = -1;
+function enterAct(i){
+  curAct = i;
+  for (let k=0;k<4;k++) worlds[k].group.visible = false;
   worlds[i].group.visible = true;
   worlds[i].enter();
   dots.forEach((d,k)=> d.classList.toggle('on', k===i));
   showLabel(worlds[i]);
 }
-let warpT = -1, warpSwapped = false;
-function warp(){
-  if (warpT >= 0) return;   // already mid-jump
-  warpT = 0; warpSwapped = false;
+
+// ---- the giant's direction, per act ----
+function directGiant(t, dt, act, actT){
+  const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
+  giant.setFog(scene.fog.color, scene.fog.density);
+  if (act === 0){
+    // a vast shape breathing in the cloud — felt more than seen
+    giant.setRim(0.45);
+    giant.place(cx - 260, -50, cz - 620, 0.4);
+    giant.walk(dt, 0.25);
+  } else if (act === 1){
+    // striding beside you — every footstep is the beat
+    giant.setRim(0.9);
+    giant.place(cx + 150, -70, cz - 130, -0.5);
+    giant.stride(worlds[1].beatInfo.beat, dt);
+  } else if (act === 2){
+    // the reveal: standing on the ridge, watching you pass
+    giant.setRim(1.25);
+    giant.place(cx + 170, 0, cz - 520, Math.atan2(-170, 520));
+    giant.rest(dt);
+  } else if (!choiceOn){
+    // walking away into the dark — legs in the fog of the collapse
+    giant.setRim(0.7);
+    giant.place(cx - 30, -30, cz - 430 - actT*80, Math.PI);
+    giant.walk(dt, 0.5);
+  }
+  giant.tick(dt);
+}
+
+// ---- the choice: three lights, chosen by gaze or touch ----
+let choiceOn = false, ending = null;
+const gazeT = [0, 0, 0];
+const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
+const END_COLS = ['#ffdf9e', '#9a7fff', '#ffffff'];       // flash color per ending
+const END_ECHO = [0xffd9a0, 0x8f7bff, 0xf4f6ff];          // tint carried into the next loop
+
+function startEnding(i){
+  ending = { t:0, i };
+  echoColor.setHex(END_ECHO[i]);
+  choiceOn = false;
   hintEl.style.opacity = 0;
+}
+
+function updateChoice(t, dt, act, actT){
+  const wantChoice = (act === 3 && actT > 0.66 && !ending);
+  if (wantChoice && !choiceOn){
+    choiceOn = true; choice.show(); gazeT[0] = gazeT[1] = gazeT[2] = 0;
+  }
+  if (!wantChoice && choiceOn && !ending){ choiceOn = false; choice.hide(); }
+  choiceK += ((choiceOn ? 1 : 0) - choiceK) * (1 - Math.exp(-3*dt));
+
+  if (choiceOn && !ending){
+    const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
+    // the giant stops, and kneels
+    giant.setRim(1.0);
+    giant.place(cx, -20, cz - 380, 0);
+    giant.rest(dt);
+    giant.kneel = Math.min(1, giant.kneel + dt*0.45);
+    // the distant light yields to the three
+    choice.hand.position.set(cx - 70, cy - 80, cz - 250);
+    choice.eyeL.position.set(cx - 16, cy + 118, cz - 320);
+    choice.eyeR.position.set(cx + 16, cy + 118, cz - 320);
+    choice.eyeMid.position.set(cx, cy + 118, cz - 320);
+    choice.pure.position.set(cx + 50, cy + 10, cz - 330);
+    choice.fadeIn(dt);
+    // read the traveler's gaze — you go where you look
+    camera.getWorldDirection(_v1);
+    const tgts = choice.targets();
+    for (let i=0;i<3;i++){
+      _v2.copy(tgts[i].position).sub(camera.position).normalize();
+      if (_v2.angleTo(_v1) < 0.24) gazeT[i] += dt;
+      else gazeT[i] = Math.max(0, gazeT[i] - dt*2);
+      if (gazeT[i] > 2){ startEnding(i); break; }
+    }
+    // the world decides for the one who only drifts: the Offering
+    if (!ending && actT >= 0.995) startEnding(0);
+  }
+
+  if (ending){
+    ending.t += dt;
+    const L = choice.targets()[ending.i].position;
+    camera.getWorldDirection(_v1);
+    // the chosen light draws near; your gaze is drawn to it
+    L.lerp(_v3.copy(camera.position).addScaledVector(_v1, 42), 1 - Math.exp(-2.2*dt));
+    camera.lookAt(L);
+    const ek = Math.min(1, ending.t/2.6);
+    flashEl.style.transition = 'none';
+    flashEl.style.background = END_COLS[ending.i];
+    flashEl.style.opacity = ek.toFixed(3);
+    if (ending.t > 3.4){
+      ending = null;
+      choice.hide();
+      giant.kneel = 0;
+      flashEl.style.transition = 'opacity 1.4s ease';
+      flashEl.style.opacity = 0;
+    }
+  }
+  giant.tick(dt);
+}
+
+function tryTapChoice(px, py){
+  if (!choiceOn || ending) return false;
+  const tgts = choice.targets();
+  let best = -1, bestD = 130;
+  for (let i=0;i<3;i++){
+    _v1.copy(tgts[i].position).project(camera);
+    const sx = (_v1.x*0.5 + 0.5)*innerWidth, sy = (-_v1.y*0.5 + 0.5)*innerHeight;
+    const d = Math.hypot(sx - px, sy - py);
+    if (d < bestD){ bestD = d; best = i; }
+  }
+  if (best >= 0){ startEnding(best); return true; }
+  return false;
 }
 
 let pDown = null;
 const drag = { down:false, x:0, y:0 };
 const pointers = new Map();
 let pinchD0 = 0;
+let holding = false, holdTimer = 0, skipPunch = 0;
+
+function onTap(px, py){
+  hintEl.style.opacity = 0;
+  if (choiceOn){
+    // during the choice a tap reaches for a light; a tap at nothing is surrender
+    if (!tryTapChoice(px, py)) startEnding(0);
+    return;
+  }
+  if (ending) return;
+  voyageZ += 110;              // skip ahead a few seconds of flight
+  skipPunch = 1;
+}
+
 addEventListener('pointerdown', e => {
   hintEl.style.opacity = 0;
   pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
   if (pointers.size === 2){
-    // second finger lands: begin pinch, cancel any tap / drag-look
+    // second finger lands: begin pinch, cancel tap / drag-look / hold
     const p = [...pointers.values()];
     pinchD0 = Math.hypot(p[0].x-p[1].x, p[0].y-p[1].y);
     pDown = null; drag.down = false;
+    clearTimeout(holdTimer); holding = false;
   } else if (pointers.size === 1){
     drag.down = true; drag.x = e.clientX; drag.y = e.clientY;
-    pDown = { x: e.clientX, y: e.clientY, t: performance.now() };
+    pDown = { x: e.clientX, y: e.clientY, t: performance.now(), moved:false };
+    clearTimeout(holdTimer);
+    // press and hold still: the voyage hastens
+    holdTimer = setTimeout(()=>{ if (pDown && !pDown.moved) holding = true; }, 350);
   }
 }, { passive: true });
 addEventListener('pointermove', e => {
@@ -919,8 +1315,13 @@ addEventListener('pointermove', e => {
     if (pinchD0 > 0 && d > 0) zoomT = THREE.MathUtils.clamp(zoomT * (pinchD0/d), 0.4, 2.2);
     pinchD0 = d;
   } else if (drag.down){
-    yawT = THREE.MathUtils.clamp(yawT - (e.clientX - drag.x) * 0.0045, -1.0, 1.0);
-    pitchT = THREE.MathUtils.clamp(pitchT - (e.clientY - drag.y) * 0.0045, -0.85, 0.85);
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (pDown && Math.hypot(e.clientX - pDown.x, e.clientY - pDown.y) > 12){
+      pDown.moved = true;           // it's a look-drag, not a hold
+      clearTimeout(holdTimer);
+    }
+    yawT = THREE.MathUtils.clamp(yawT - dx * 0.0045, -1.0, 1.0);
+    pitchT = THREE.MathUtils.clamp(pitchT - dy * 0.0045, -0.85, 0.85);
     drag.x = e.clientX; drag.y = e.clientY;
   }
 }, { passive: true });
@@ -929,11 +1330,18 @@ function endPointer(e){
   if (pointers.size < 2) pinchD0 = 0;
   if (pointers.size === 0){
     drag.down = false;
-    if (!pDown) return;
-    const moved = Math.hypot(e.clientX - pDown.x, e.clientY - pDown.y);
-    const held = performance.now() - pDown.t;
-    pDown = null;
-    if (moved < 14 && held < 450) warp();   // a tap warps; a drag turns; a pinch zooms
+    clearTimeout(holdTimer);
+    const wasHolding = holding;
+    holding = false;
+    if (pDown && !wasHolding){
+      const moved = Math.hypot(e.clientX - pDown.x, e.clientY - pDown.y);
+      const held = performance.now() - pDown.t;
+      const px = e.clientX, py = e.clientY;
+      pDown = null;
+      if (moved < 14 && held < 450) onTap(px, py);  // tap: skip (or choose)
+    } else {
+      pDown = null;
+    }
   } else if (pointers.size === 1){
     // back to one finger: re-anchor so the view doesn't jump
     const p = [...pointers.values()][0];
@@ -942,7 +1350,9 @@ function endPointer(e){
 }
 addEventListener('pointerup', endPointer, { passive: true });
 addEventListener('pointercancel', endPointer, { passive: true });
-addEventListener('keydown', e=>{ if (e.key==='ArrowRight'||e.key===' '){ warp(); hintEl.style.opacity = 0; } });
+addEventListener('keydown', e=>{
+  if (e.key==='ArrowRight'||e.key===' '){ onTap(innerWidth/2, innerHeight/2); }
+});
 addEventListener('resize', ()=>{
   camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
@@ -952,6 +1362,8 @@ document.addEventListener('visibilitychange', ()=>{ last = performance.now(); })
 
 const clockStart = performance.now();
 let last = clockStart;
+let speedMul = 1;
+
 function loop(){
   requestAnimationFrame(loop);
   const now = performance.now();
@@ -963,42 +1375,90 @@ function loop(){
   pitch += (pitchT - pitch) * lk;
   zoom += (zoomT - zoom) * lk;
 
-  if (current >= 0){
-    if (warpT >= 0){
-      // ---- hyperspace: stretch, flash, swap mid-flight, arrive ----
-      warpT += dt / 1.5;
-      const k = Math.min(warpT, 1), punch = Math.sin(k * Math.PI);
-      if (k >= 0.5 && !warpSwapped){ warpSwapped = true; enter((current+1) % worlds.length); }
-      worlds[current].update(t, dt);
-      camera.fov = 62 + punch * 44; camera.updateProjectionMatrix();
+  // ---- the voyage advances ----
+  let speedTarget = 1;
+  if (holding) speedTarget = 3.2;                 // press-and-hold hastens
+  if (choiceOn || ending) speedTarget = 0.35;     // the choice dilates time
+  speedMul += (speedTarget - speedMul) * (1 - Math.exp(-3*dt));
+  voyageZ += CRUISE * speedMul * dt;
+  camera.position.z = -voyageZ;
+
+  const lp = ((voyageZ % LOOP) + LOOP) % LOOP;
+  const act = Math.floor(lp / ACT_LEN);
+  const actT = (lp % ACT_LEN) / ACT_LEN;
+  const pk = THREE.MathUtils.clamp(
+    (actT - (1 - PASSAGE_SECS/ACT_SECS)) / (PASSAGE_SECS/ACT_SECS), 0, 1);
+
+  if (act !== curAct) enterAct(act);
+  // during a passage the next act fades in alongside
+  const next = (act+1) % 4;
+  worlds[next].group.visible = pk > 0.01;
+
+  // ---- atmosphere crossfades between acts ----
+  const A = ACT_STYLE[act], B = ACT_STYLE[next];
+  scene.background.lerpColors(A.bg, B.bg, pk);
+  if (act === 0){ // the last ending tints the cloud you wake in
+    scene.background.lerp(echoColor, 0.10);
+  }
+  scene.fog.color.lerpColors(A.fog, B.fog, pk);
+  if (act === 0) scene.fog.color.lerp(echoColor, 0.10);
+  scene.fog.density = A.fd + (B.fd - A.fd)*pk;
+
+  // ---- the act, the giant, the choice ----
+  worlds[act].update(t, dt, actT, pk);
+  if (act === 3 || ending) updateChoice(t, dt, act, actT);
+  else directGiant(t, dt, act, actT);
+
+  // ---- ignition: flying into the heart is a whiteout ----
+  if (!ending){
+    if (act === 0 && pk > 0){
       flashEl.style.transition = 'none';
-      flashEl.style.opacity = (0.12 + punch * 0.75).toFixed(3);
-      streaks.visible = true; sMat.opacity = punch * 0.9;
-      const sp = sGeo.attributes.position;
-      for (let i=0;i<STREAKS;i++){
-        sZ[i] += dt * (40 + punch * 220);
-        if (sZ[i] > 8) sZ[i] = -135;
-        sp.setXYZ(i*2, sX[i], sY[i], sZ[i]);
-        sp.setXYZ(i*2+1, sX[i], sY[i], sZ[i] - sLen[i]);
-      }
-      sp.needsUpdate = true;
-      if (warpT >= 1){
-        warpT = -1;
-        streaks.visible = false; sMat.opacity = 0;
-        flashEl.style.transition = 'opacity .9s ease'; flashEl.style.opacity = 0;
-        camera.fov = 62; camera.updateProjectionMatrix();
-      }
-    } else {
-      worlds[current].update(t, dt);
-      worldClock += dt;
-      if (worldClock > WORLD_TIME) warp();
+      flashEl.style.background = '#fff3dd';
+      flashEl.style.opacity = (pk*0.92).toFixed(3);
+    } else if (act === 1 && actT < 2/ACT_SECS){
+      const k = 1 - actT/(2/ACT_SECS);
+      flashEl.style.transition = 'none';
+      flashEl.style.background = '#fff3dd';
+      flashEl.style.opacity = (k*0.92).toFixed(3);
+    } else if (flashEl.style.opacity !== '0' && !choiceOn){
+      flashEl.style.transition = 'opacity 1.2s ease';
+      flashEl.style.opacity = 0;
     }
   }
+
+  // ---- speed feel: fov breathes, streaks answer haste ----
+  skipPunch *= Math.exp(-3.5*dt);
+  const haste = Math.max(0, speedMul - 1)/2.2;
+  camera.fov = 62 + haste*14 + skipPunch*22;
+  camera.updateProjectionMatrix();
+  const showStreaks = holding || skipPunch > 0.05;
+  streaks.visible = showStreaks;
+  if (showStreaks){
+    sMat.opacity = Math.min(0.85, 0.18 + haste*0.4 + skipPunch*0.6);
+    const sp = sGeo.attributes.position;
+    const flow = dt * (60 + haste*160 + skipPunch*320);
+    for (let i=0;i<STREAKS;i++){
+      sZ[i] += flow;
+      if (sZ[i] > 8) sZ[i] = -135;
+      sp.setXYZ(i*2, sX[i], sY[i], sZ[i]);
+      sp.setXYZ(i*2+1, sX[i], sY[i], sZ[i] - sLen[i]*(1+haste*2+skipPunch*3));
+    }
+    sp.needsUpdate = true;
+  }
+
   composer.render();
 }
 
+// console hook for tuning / QA: __elsewhere.skip(900) jumps the voyage
+window.__elsewhere = {
+  skip:(s)=>{ voyageZ += s; },
+  state:()=>({ act:curAct, actT:((((voyageZ%LOOP)+LOOP)%LOOP)%ACT_LEN)/ACT_LEN,
+               voyageZ, holding, choiceOn, ending:!!ending }),
+};
+
 // boot
-enter(0);
+camera.position.set(0, 0, 0);
+enterAct(0);
 loop();
 setTimeout(()=> document.getElementById('intro').classList.add('gone'), 1400);
 setTimeout(()=>{ hintEl.style.opacity = 0; }, 12000);

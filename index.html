@@ -45,32 +45,15 @@
   @keyframes tailsway { 0%,100% { transform: rotate(-7deg); } 50% { transform: rotate(9deg); } }
 
   .eye { transform-box: fill-box; transform-origin: 50% 50%; }
-  .eye.blink { animation: eyeblink .16s ease-in-out; }
-  @keyframes eyeblink { 0%,100% { transform: scaleY(1); } 50% { transform: scaleY(.08); } }
 
   #earL { animation: eartwitch 7s ease-in-out infinite; transform-box: fill-box; transform-origin: 80% 90%; }
   #earR { animation: eartwitch 9.5s ease-in-out infinite; transform-box: fill-box; transform-origin: 20% 90%; }
   @keyframes eartwitch { 0%, 93%, 100% { transform: rotate(0); } 95% { transform: rotate(-9deg); } 97% { transform: rotate(4deg); } }
 
   .paw { transform-box: fill-box; transform-origin: 50% 12%; }
-  .paw.swat { animation: swat .62s cubic-bezier(.3,.9,.4,1); }
-  @keyframes swat {
-    0% { transform: rotate(0deg); }
-    35% { transform: rotate(var(--aim, 0deg)) translateY(-34px); }
-    62% { transform: rotate(var(--aim2, 0deg)) translateY(-30px); }
-    100% { transform: rotate(0deg); }
-  }
 
+  #stage { transform-origin: 50% 100%; }
   #catAll { transform-box: fill-box; transform-origin: 50% 100%; }
-  #catAll.hop { animation: hop .62s ease-out; }
-  @keyframes hop { 0% { transform: translateY(0); } 40% { transform: translateY(-10px); } 100% { transform: translateY(0); } }
-  #catAll.squash { animation: squash .48s ease-out; }
-  @keyframes squash {
-    0% { transform: scale(1,1); }
-    35% { transform: scale(1.1,.86); }
-    65% { transform: scale(.96,1.06); }
-    100% { transform: scale(1,1); }
-  }
 
   /* ---- speech bubble ---- */
   #mew {
@@ -227,7 +210,7 @@
   </svg>
 </div>
 
-<div id="badge">v2026.09.30-12.30</div>
+<div id="badge">v2026.09.30-11.39</div>
 
 <script>
 (function () {
@@ -269,58 +252,76 @@
       'rotate(' + clamp(dx * 14, -8, 8).toFixed(2) + ' 200 188)' +
       ' translate(' + clamp(dx * 8, -5, 5).toFixed(2) + ',' + clamp(dy * 6, -4, 4).toFixed(2) + ')');
 
+    runTweens(performance.now());  // swat / hop / squash
+
     // paw at the cursor when it gets close
     if (hasPointer && !batting) {
       var d = Math.hypot(px - c.x, py - c.y);
       var now = performance.now();
       if (d < c.w * 0.62 && now - lastBat > 1100) {
-        bat(px < c.x ? pawL : pawR, px - c.x, py - c.y, true);
+        bat(px < c.x ? pawL : pawR, px - c.x, py - c.y);
       }
     }
     requestAnimationFrame(tick);
   }
 
-  // ---- whole-cat pulse (hop on swat, squash on tap) ----
-  function pulseCat(cls) {
-    catAll.classList.remove('hop', 'squash');
-    void catAll.getBoundingClientRect();
-    catAll.classList.add(cls);
+  // ---- tiny rAF tween engine -------------------------------------------
+  // Drives the swat / hop / squash. (JS-triggered CSS keyframe animations
+  // on SVG elements proved unreliable in some Chromium builds, so motion
+  // that matters runs here — the same per-frame machinery as the pupils,
+  // which visibly track.)
+  var tweens = [];
+  function addTween(dur, fn, done) {
+    tweens.push({ t0: performance.now(), dur: dur, fn: fn, done: done });
   }
-  catAll.addEventListener('animationend', function () {
-    catAll.classList.remove('hop', 'squash');
-  });
-
-  // ---- the swat (CSS keyframes: same machinery as the working tail/ears/blink) ----
-  function endSwat() {
-    pawL.classList.remove('swat');
-    pawR.classList.remove('swat');
-    batting = false;
+  function runTweens(nowMs) {
+    for (var i = tweens.length - 1; i >= 0; i--) {
+      var tw = tweens[i], t = (nowMs - tw.t0) / tw.dur;
+      if (t >= 1) { tweens.splice(i, 1); tw.fn(1); if (tw.done) tw.done(); }
+      else tw.fn(t);
+    }
   }
-  pawL.addEventListener('animationend', endSwat);
-  pawR.addEventListener('animationend', endSwat);
 
-  function bat(paw, dx, dy, hop) {
+  // Whole-body pulse, applied to the svg element itself so it composes
+  // with the inner breathe animation instead of fighting it.
+  function bodyPulse(kind) {
+    var dur = kind === 'hop' ? 500 : 460;
+    addTween(dur, function (t) {
+      var k = Math.sin(Math.PI * t);  // 0 → 1 → 0
+      stage.style.transform = kind === 'hop'
+        ? 'translateY(' + (-12 * k).toFixed(2) + 'px)'
+        : 'scale(' + (1 + 0.08 * k).toFixed(3) + ',' + (1 - 0.12 * k).toFixed(3) + ')';
+    }, function () { stage.style.transform = ''; });
+  }
+
+  // ---- the swat: nearer paw lifts and swipes toward the pointer ----
+  function bat(paw, dx, dy) {
     if (batting) return;
     batting = true;
     lastBat = performance.now();
     var ang = clamp(Math.atan2(dy, dx) * 180 / Math.PI - 90, -75, 75);
-    paw.style.setProperty('--aim', (ang * 0.55).toFixed(1) + 'deg');
-    paw.style.setProperty('--aim2', ang.toFixed(1) + 'deg');
-    paw.classList.remove('swat');
-    void paw.getBoundingClientRect();   // restart the keyframes
-    paw.classList.add('swat');
-    if (hop !== false) pulseCat('hop');
-    setTimeout(function () { if (batting) endSwat(); }, 900);  // safety: never get stuck mid-swat
+    var dur = /[?&]diag=swatslow/.test(location.search) ? 3000 : 620;
+    addTween(dur, function (t) {
+      var k = Math.sin(Math.PI * t);  // 0 → 1 → 0
+      paw.style.transform =
+        'rotate(' + (ang * k).toFixed(2) + 'deg)' +
+        ' translateY(' + (-34 * k).toFixed(2) + 'px)';
+    }, function () { paw.style.transform = ''; batting = false; });
+    bodyPulse('hop');
   }
 
   // ---- blinking (whole eye, so the pupil blinks too) ----
   (function blinkLoop() {
     setTimeout(function () {
-      eyes.forEach(function (e) { e.classList.add('blink'); });
-      setTimeout(function () {
-        eyes.forEach(function (e) { e.classList.remove('blink'); });
-        blinkLoop();
-      }, 180);
+      addTween(170, function (t) {
+        var k = Math.sin(Math.PI * t);  // 0 → 1 → 0
+        eyes.forEach(function (e) {
+          e.style.transform = 'scale(1,' + (1 - 0.93 * k).toFixed(3) + ')';
+        });
+      }, function () {
+        eyes.forEach(function (e) { e.style.transform = ''; });
+      });
+      blinkLoop();
     }, 2200 + Math.random() * 3400);
   })();
 
@@ -353,8 +354,8 @@
     var c = catCenter();
     if (Math.hypot(px - c.x, py - c.y) < c.w * 0.75) {
       // the nearer paw swats toward the tap point (on touch, the finger IS the cursor)
-      bat(px < c.x ? pawL : pawR, px - c.x, py - c.y, false);
-      pulseCat('squash');
+      bat(px < c.x ? pawL : pawR, px - c.x, py - c.y);
+      bodyPulse('squash');
       say();
       hearts(3);
     }
@@ -371,22 +372,21 @@
   // ---- temporary diagnostic: ?diag=swat auto-fires the swat on a timer ----
   if (/[?&]diag=swat/.test(location.search)) {
     setInterval(function () {
-      if (!batting) bat(pawL, -120, -40, true);
+      if (!batting) bat(pawL, -120, -40);
     }, 1500);
     setInterval(function () {
       document.title = 'DIAG batting=' + batting +
-        ' swat=' + !!document.querySelector('.paw.swat');
+        ' tweens=' + tweens.length +
+        ' pawT=' + (pawL.style.transform || 'none');
     }, 400);
   }
-  // ---- temporary diagnostic: ?diag=swatslow stretches the swat to 6s so a
+  // ---- temporary diagnostic: ?diag=swatslow stretches the swat to 3s so a
   // screenshot can catch the raised paw; the HOVER trigger must fire it ----
   if (/[?&]diag=swatslow/.test(location.search)) {
-    var dst = document.createElement('style');
-    dst.textContent = '.paw.swat{animation-duration:6s !important;}';
-    document.head.appendChild(dst);
     setInterval(function () {
       document.title = 'DIAG batting=' + batting +
-        ' swat=' + !!document.querySelector('.paw.swat');
+        ' tweens=' + tweens.length +
+        ' pawT=' + ((batting ? pawL.style.transform : '') || 'none');
     }, 400);
   }
 

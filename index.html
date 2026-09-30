@@ -52,7 +52,7 @@
 <div id="flash"></div>
 <div id="brand">ELSEWHERE</div>
 <div id="label"><div class="idx"></div><div class="name"></div></div>
-<div id="hint">DRAG TO STIR &nbsp;·&nbsp; TAP TO WARP</div>
+<div id="hint">DRAG TO LOOK &nbsp;·&nbsp; TAP TO WARP</div>
 <div id="dots"><span></span><span></span><span></span><span></span></div>
 <div id="intro"><h1>ELSEWHERE</h1><p>A VOYAGE IN FOUR WORLDS</p></div>
 <div id="nogl">THIS VOYAGE NEEDS WEBGL</div>
@@ -89,6 +89,37 @@ renderer.toneMappingExposure = 1.05;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(62, innerWidth/innerHeight, 0.1, 900);
+scene.add(camera); // camera-attached warp streaks need this
+
+// ---- drag-to-look rig (every world) ----
+let yawT = 0, pitchT = 0, yaw = 0, pitch = 0;
+const _orbT = new THREE.Vector3(), _orbO = new THREE.Vector3(), _orbS = new THREE.Spherical();
+function orbitAround(tx, ty, tz){
+  _orbT.set(tx, ty, tz);
+  _orbO.copy(camera.position).sub(_orbT);
+  _orbS.setFromVector3(_orbO);
+  _orbS.theta += yaw;
+  _orbS.phi = THREE.MathUtils.clamp(_orbS.phi + pitch, 0.12, Math.PI - 0.12);
+  camera.position.copy(_orbT).add(_orbO.setFromSpherical(_orbS));
+  camera.lookAt(_orbT);
+}
+
+// ---- hyperspace streaks riding on the camera ----
+const STREAKS = 220;
+const sGeo = new THREE.BufferGeometry();
+const sXZ = new Float32Array(STREAKS*6);
+const sX = new Float32Array(STREAKS), sY = new Float32Array(STREAKS),
+      sZ = new Float32Array(STREAKS), sLen = new Float32Array(STREAKS);
+for (let i=0;i<STREAKS;i++){
+  const r = 6 + Math.random()*42, a = Math.random()*Math.PI*2;
+  sX[i] = Math.cos(a)*r; sY[i] = Math.sin(a)*r;
+  sZ[i] = -Math.random()*130 - 5; sLen[i] = 2 + Math.random()*7;
+}
+sGeo.setAttribute('position', new THREE.BufferAttribute(sXZ, 3));
+const sMat = new THREE.LineBasicMaterial({ color:0xcfe8ff, transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthWrite:false });
+const streaks = new THREE.LineSegments(sGeo, sMat);
+streaks.visible = false; streaks.frustumCulled = false;
+camera.add(streaks);
 
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
@@ -160,7 +191,8 @@ function buildNebulaClassic() {
     update(t, dt){ mat.uniforms.uTime.value = t;
              camera.position.x = Math.sin(t*0.05)*10;
              camera.position.y = Math.cos(t*0.04)*6;
-             camera.lookAt(camera.position.x*1.6, camera.position.y*1.4, -60); }
+             camera.lookAt(camera.position.x*1.6, camera.position.y*1.4, -60);
+             orbitAround(camera.position.x*1.6, camera.position.y*1.4, -60); }
   };
 }
 
@@ -215,7 +247,7 @@ function buildNebula() {
         float dist = length(toP);
         vec3 dir = toP / max(dist, 0.001);
         vec3 swirl = cross(dir, vec3(0.0, 1.0, 0.0));
-        float fall = uTouchStr * 1400.0 / (dist*dist + 30.0);
+        float fall = uTouchStr * 2600.0 / (dist*dist + 60.0);
         acc += (normalize(swirl + vec3(0.0001)) * 0.9 + dir * 0.5) * fall;
         v += acc * uDt;
         v *= exp(-1.6 * uDt);
@@ -333,6 +365,7 @@ function buildNebula() {
       camera.position.x = Math.sin(t*0.05)*10;
       camera.position.y = Math.cos(t*0.04)*6;
       camera.lookAt(camera.position.x*1.6, camera.position.y*1.4, -60);
+      orbitAround(camera.position.x*1.6, camera.position.y*1.4, -60);
     }
   };
 }
@@ -426,6 +459,7 @@ function buildTesseract() {
       const r = 23, sp2 = t*0.11;
       camera.position.set(Math.sin(sp2)*r, 3.5+Math.sin(t*0.07)*2.5, Math.cos(sp2)*r);
       camera.lookAt(0,0,0);
+      orbitAround(0,0,0);
     }
   };
 }
@@ -509,6 +543,7 @@ function buildTerrain() {
       camera.position.x = Math.sin(t*0.06)*36;
       camera.position.y = 17 + Math.sin(t*0.11)*3.5;
       camera.lookAt(camera.position.x*0.4, 6, camera.position.z - 120);
+      orbitAround(camera.position.x*0.4, 6, camera.position.z - 120);
     }
   };
 }
@@ -580,6 +615,7 @@ function buildMonolith() {
       camera.position.x = Math.sin(t*0.09)*34;
       camera.position.y = 8 + Math.sin(t*0.13)*2.5;
       camera.lookAt(camera.position.x*0.3, 10, camera.position.z - 90);
+      orbitAround(camera.position.x*0.3, 10, camera.position.z - 90);
       floorMat.uniforms.uCamZ.value = camera.position.z;
       floor.position.z = camera.position.z - 160;
       under.position.z = camera.position.z - 60;
@@ -614,7 +650,7 @@ function showLabel(w){
   labelTimer = setTimeout(()=> labelEl.style.opacity = 0, 3600);
 }
 
-let current = -1, warping = false, worldClock = 0;
+let current = -1, worldClock = 0;
 function enter(i){
   if (current >= 0) worlds[current].group.visible = false;
   current = i; worldClock = 0;
@@ -623,42 +659,36 @@ function enter(i){
   dots.forEach((d,k)=> d.classList.toggle('on', k===i));
   showLabel(worlds[i]);
 }
+let warpT = -1, warpSwapped = false;
 function warp(){
-  if (warping) return;
-  warping = true;
-  // warp punch: flash + fov kick
-  const fov0 = camera.fov;
-  flashEl.style.transition = 'none'; flashEl.style.opacity = 0.9;
-  requestAnimationFrame(()=>{
-    flashEl.style.transition = 'opacity .7s ease'; flashEl.style.opacity = 0;
-  });
-  camera.fov = fov0 + 26; camera.updateProjectionMatrix();
-  setTimeout(()=>{
-    enter((current+1) % worlds.length);
-    const t0 = performance.now();
-    (function ease(){
-      const k = Math.min((performance.now()-t0)/650, 1);
-      camera.fov = (fov0+26) + (fov0-(fov0+26)) * (1-Math.pow(1-k,3));
-      camera.updateProjectionMatrix();
-      if (k<1) requestAnimationFrame(ease); else warping = false;
-    })();
-  }, 240);
+  if (warpT >= 0) return;   // already mid-jump
+  warpT = 0; warpSwapped = false;
+  hintEl.style.opacity = 0;
 }
 
 let pDown = null;
+const drag = { down:false, x:0, y:0 };
 addEventListener('pointerdown', e => {
   hintEl.style.opacity = 0;
-  if (current !== 0) { warp(); return; }   // only the nebula needs tap-vs-drag disambiguation
+  drag.down = true; drag.x = e.clientX; drag.y = e.clientY;
   pDown = { x: e.clientX, y: e.clientY, t: performance.now() };
 }, { passive: true });
+addEventListener('pointermove', e => {
+  if (drag.down){
+    yawT -= (e.clientX - drag.x) * 0.0045;
+    pitchT = THREE.MathUtils.clamp(pitchT - (e.clientY - drag.y) * 0.0045, -1.1, 1.1);
+    drag.x = e.clientX; drag.y = e.clientY;
+  }
+}, { passive: true });
 addEventListener('pointerup', e => {
+  drag.down = false;
   if (!pDown) return;
   const moved = Math.hypot(e.clientX - pDown.x, e.clientY - pDown.y);
   const held = performance.now() - pDown.t;
   pDown = null;
-  if (moved < 14 && held < 450) warp();   // in the nebula: a tap warps, a drag stirs
+  if (moved < 14 && held < 450) warp();   // a tap warps; a drag turns the view
 }, { passive: true });
-addEventListener('pointercancel', ()=>{ pDown = null; }, { passive: true });
+addEventListener('pointercancel', ()=>{ drag.down = false; pDown = null; }, { passive: true });
 addEventListener('keydown', e=>{ if (e.key==='ArrowRight'||e.key===' '){ warp(); hintEl.style.opacity = 0; } });
 addEventListener('resize', ()=>{
   camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
@@ -673,10 +703,41 @@ function loop(){
   const now = performance.now();
   let dt = Math.min((now-last)/1000, 0.1); last = now;
   const t = (now-clockStart)/1000;
-  if (current >= 0 && !warping){
-    worlds[current].update(t, dt);
-    worldClock += dt;
-    if (worldClock > WORLD_TIME) warp();
+  // buttery drag-look
+  const lk = 1 - Math.exp(-10*dt);
+  yaw += (yawT - yaw) * lk;
+  pitch += (pitchT - pitch) * lk;
+
+  if (current >= 0){
+    if (warpT >= 0){
+      // ---- hyperspace: stretch, flash, swap mid-flight, arrive ----
+      warpT += dt / 1.5;
+      const k = Math.min(warpT, 1), punch = Math.sin(k * Math.PI);
+      if (k >= 0.5 && !warpSwapped){ warpSwapped = true; enter((current+1) % worlds.length); }
+      worlds[current].update(t, dt);
+      camera.fov = 62 + punch * 44; camera.updateProjectionMatrix();
+      flashEl.style.transition = 'none';
+      flashEl.style.opacity = (0.12 + punch * 0.75).toFixed(3);
+      streaks.visible = true; sMat.opacity = punch * 0.9;
+      const sp = sGeo.attributes.position;
+      for (let i=0;i<STREAKS;i++){
+        sZ[i] += dt * (40 + punch * 220);
+        if (sZ[i] > 8) sZ[i] = -135;
+        sp.setXYZ(i*2, sX[i], sY[i], sZ[i]);
+        sp.setXYZ(i*2+1, sX[i], sY[i], sZ[i] - sLen[i]);
+      }
+      sp.needsUpdate = true;
+      if (warpT >= 1){
+        warpT = -1;
+        streaks.visible = false; sMat.opacity = 0;
+        flashEl.style.transition = 'opacity .9s ease'; flashEl.style.opacity = 0;
+        camera.fov = 62; camera.updateProjectionMatrix();
+      }
+    } else {
+      worlds[current].update(t, dt);
+      worldClock += dt;
+      if (worldClock > WORLD_TIME) warp();
+    }
   }
   composer.render();
 }

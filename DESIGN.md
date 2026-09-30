@@ -3,7 +3,7 @@
 A single full-screen page: one cute chibi cat on a warm dark background.
 No text content, no navigation. The cat is the whole site.
 
-## The cat (redrawn 2026-09-30, v2026.09.30-12.10)
+## The cat (redrawn 2026-09-30, v2026.09.30-11.55)
 
 Baby-schema / kawaii proportions, drawn from Mofusand-style references:
 - Head ~70% of the figure — one big round cream circle.
@@ -18,9 +18,9 @@ Baby-schema / kawaii proportions, drawn from Mofusand-style references:
 
 - **Eye + head tracking** — pupils and head tilt follow the pointer (rAF loop).
 - **Paw at the cursor** — when the pointer comes within ~62% of stage width,
-  the nearer paw lifts and swipes toward the pointer direction (CSS keyframes
-  on `.paw.swat`, aim via `--aim`/`--aim2` custom props), plus a happy hop.
-  Cooldown 1.1s; a safety timeout clears the swat state so it can never stick.
+  the nearer paw lifts and swipes toward the pointer direction (rAF-driven
+  inline transform, aim from the pointer angle), plus a happy hop.
+  Cooldown 1.1s; the tween always completes so the state can never stick.
 - **Tap / click** — the nearer paw swats toward the tap point (on touch the
   finger *is* the cursor), squash-and-stretch pounce, a speech bubble
   (mew!/mrrp!/prrp?/mew mew!/mrow!), three floating hearts.
@@ -31,7 +31,11 @@ Baby-schema / kawaii proportions, drawn from Mofusand-style references:
 ## Implementation notes
 
 - Single `index.html`, inline SVG + CSS + JS. No frameworks, no assets.
-- Swat/hop/squash use CSS keyframe classes (not WAAPI): the same machinery
-  as the tail/ears/blink, which is proven to render on these SVG nodes.
+- Swat / hop / squash / blink run on a tiny rAF tween engine (same per-frame
+  machinery as the pupils, which visibly track) — NOT JS-triggered CSS
+  keyframe animations, which proved unreliable on SVG nodes in some Chromium
+  builds (class toggles fired, `animationend` fired, but nothing rendered).
+  Pure-CSS *infinite* animations (tail sway, breathing, ear twitch) work fine
+  and stay in CSS. HTML class toggles (mew bubble, hearts) also work fine.
 - `transform-box: fill-box` on all animated SVG groups.
 - Visible build badge bottom-left (`vYYYY.MM.DD-HH.MM`).

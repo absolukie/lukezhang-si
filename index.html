@@ -51,7 +51,7 @@
 <div id="flash"></div>
 <div id="brand">ELSEWHERE</div>
 <div id="label"><div class="idx"></div><div class="name"></div></div>
-<div id="hint">TAP TO WARP</div>
+<div id="hint">DRAG TO STIR &nbsp;·&nbsp; TAP TO WARP</div>
 <div id="dots"><span></span><span></span><span></span><span></span></div>
 <div id="intro"><h1>ELSEWHERE</h1><p>A VOYAGE IN FOUR WORLDS</p></div>
 <div id="nogl">THIS VOYAGE NEEDS WEBGL</div>
@@ -69,6 +69,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GPUComputationRenderer } from 'three/addons/misc/GPUComputationRenderer.js';
 
 const isMobile = matchMedia('(pointer: coarse)').matches || innerWidth < 768;
 const canvas = document.getElementById('scene');
@@ -97,8 +98,11 @@ composer.addPass(new OutputPass());
 const rnd = (a,b) => a + Math.random()*(b-a);
 const WORLD_TIME = 24; // seconds per world before auto-warp
 
-/* ============ WORLD I — NEBULA : endless particle drift ============ */
-function buildNebula() {
+/* ============ WORLD I — NEBULA : GPU-physics particles, touch reactive ============
+   Every particle carries real position + velocity, simulated on the GPU
+   (ping-pong float textures). Your touch becomes a vortex in the flow. */
+function buildNebulaClassic() {
+  // Fallback if float render targets are unavailable: the original closed-form drift.
   const group = new THREE.Group();
   const COUNT = isMobile ? 3500 : 8000;
   const W = 260, H = 160, D = 260;
@@ -118,15 +122,14 @@ function buildNebula() {
       uniform float uTime, uW, uH, uD;
       varying vec3 vColor; varying float vFade;
       vec3 pal(float t){
-        vec3 c1 = vec3(0.36,0.12,0.72);  // violet
-        vec3 c2 = vec3(0.05,0.55,0.95);  // cyan
-        vec3 c3 = vec3(0.95,0.25,0.55);  // magenta
+        vec3 c1 = vec3(0.36,0.12,0.72);
+        vec3 c2 = vec3(0.05,0.55,0.95);
+        vec3 c3 = vec3(0.95,0.25,0.55);
         return mix(mix(c1,c2,smoothstep(0.,.5,t)), mix(c2,c3,smoothstep(.5,1.,t)), smoothstep(.25,.75,t));
       }
       void main(){
         vec3 p = position;
         float s = aSeed;
-        // drift toward camera + lateral sway, wrap endlessly
         p.z = mod(p.z + uTime*(4.0+s*9.0) + uD*0.5, uD) - uD*0.5;
         p.x += sin(uTime*0.12 + s*6.2831)*7.0;
         p.y += cos(uTime*0.09 + s*6.2831*1.7)*5.0;
@@ -147,11 +150,9 @@ function buildNebula() {
         gl_FragColor = vec4(vColor*1.6, a * vFade * 0.85);
       }`
   });
-  const pts = new THREE.Points(geo, mat);
-  group.add(pts);
+  group.add(new THREE.Points(geo, mat));
   return {
-    name:'NEBULA', roman:'I',
-    group,
+    name:'NEBULA', roman:'I', group,
     enter(){ scene.background = new THREE.Color(0x030109);
              scene.fog = new THREE.FogExp2(0x030109, 0.0035);
              camera.position.set(0, 0, 0); },
@@ -161,6 +162,179 @@ function buildNebula() {
              camera.lookAt(camera.position.x*1.6, camera.position.y*1.4, -60); }
   };
 }
+
+function buildNebula() {
+  const SIZE = isMobile ? 176 : 256;   // 31k / 65k physics particles
+  const COUNT = SIZE * SIZE;
+  const group = new THREE.Group();
+
+  // ---- GPGPU setup (before any listeners, so we can bail cleanly) ----
+  let gpu = null, posVar = null, velVar = null;
+  try {
+    gpu = new GPUComputationRenderer(SIZE, SIZE, renderer);
+    const dtPos = gpu.createTexture();
+    const dtVel = gpu.createTexture();
+    const pa = dtPos.image.data, va = dtVel.image.data;
+    for (let i = 0; i < COUNT; i++) {
+      pa[i*4]   = rnd(-130, 130);
+      pa[i*4+1] = rnd(-80, 80);
+      pa[i*4+2] = rnd(-130, 130);
+      pa[i*4+3] = Math.random();          // seed rides in w
+      va[i*4] = rnd(-2,2); va[i*4+1] = rnd(-2,2); va[i*4+2] = rnd(-2,2); va[i*4+3] = 0;
+    }
+    posVar = gpu.addVariable('texturePosition', `
+      uniform float uDt;
+      void main(){
+        vec2 uv = gl_FragCoord.xy / resolution.xy;
+        vec4 pr = texture2D(texturePosition, uv);
+        vec4 vr = texture2D(textureVelocity, uv);
+        vec3 p = pr.xyz + vr.xyz * uDt;
+        p.x = mod(p.x + 130.0, 260.0) - 130.0;
+        p.y = mod(p.y + 80.0, 160.0) - 80.0;
+        p.z = mod(p.z + 130.0, 260.0) - 130.0;
+        gl_FragColor = vec4(p, pr.w);
+      }`, dtPos);
+    velVar = gpu.addVariable('textureVelocity', `
+      uniform float uTime; uniform float uDt;
+      uniform vec3 uTouch; uniform float uTouchStr;
+      void main(){
+        vec2 uv = gl_FragCoord.xy / resolution.xy;
+        vec3 p = texture2D(texturePosition, uv).xyz;
+        vec3 v = texture2D(textureVelocity, uv).xyz;
+        float t = uTime;
+        // ambient nebula currents
+        vec3 flow = vec3(
+          sin(p.y*0.045 + t*0.35) + sin(p.z*0.038 - t*0.22),
+          sin(p.z*0.042 + t*0.28) + sin(p.x*0.040 + t*0.24),
+          sin(p.x*0.044 - t*0.30) + sin(p.y*0.036 + t*0.20));
+        vec3 acc = flow * 7.0 + vec3(0.0, 0.0, 5.0);
+        // touch vortex: swirl + push, inverse-square falloff
+        vec3 toP = p - uTouch;
+        float dist = length(toP);
+        vec3 dir = toP / max(dist, 0.001);
+        vec3 swirl = cross(dir, vec3(0.0, 1.0, 0.0));
+        float fall = uTouchStr * 900.0 / (dist*dist + 20.0);
+        acc += (normalize(swirl + vec3(0.0001)) * 0.9 + dir * 0.5) * fall;
+        v += acc * uDt;
+        v *= exp(-1.6 * uDt);
+        float sp = length(v);
+        if (sp > 34.0) v *= 34.0 / sp;
+        gl_FragColor = vec4(v, 0.0);
+      }`, dtVel);
+    gpu.setVariableDependencies(posVar, [posVar, velVar]);
+    gpu.setVariableDependencies(velVar, [posVar, velVar]);
+    posVar.material.uniforms.uDt = { value: 0 };
+    velVar.material.uniforms.uTime = { value: 0 };
+    velVar.material.uniforms.uDt = { value: 0 };
+    velVar.material.uniforms.uTouch = { value: new THREE.Vector3(0, 0, -30) };
+    velVar.material.uniforms.uTouchStr = { value: 0 };
+    const err = gpu.init();
+    if (err !== null && err !== undefined) return buildNebulaClassic();
+  } catch(e) { return buildNebulaClassic(); }
+
+  // ---- render points: position.xy = texel uv ----
+  const ref = new Float32Array(COUNT * 3);
+  for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
+    const i = y * SIZE + x;
+    ref[i*3] = (x + 0.5) / SIZE; ref[i*3+1] = (y + 0.5) / SIZE; ref[i*3+2] = 0;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(ref, 3));
+  const renderMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { uPosTex:{value:null}, uTime:{value:0}, uPR:{value: renderer.getPixelRatio()} },
+    vertexShader: `
+      uniform sampler2D uPosTex;
+      uniform float uTime, uPR;
+      varying vec3 vColor; varying float vFade;
+      vec3 pal(float t){
+        vec3 c1 = vec3(0.36,0.12,0.72);
+        vec3 c2 = vec3(0.05,0.55,0.95);
+        vec3 c3 = vec3(0.95,0.25,0.55);
+        return mix(mix(c1,c2,smoothstep(0.,.5,t)), mix(c2,c3,smoothstep(.5,1.,t)), smoothstep(.25,.75,t));
+      }
+      void main(){
+        vec4 data = texture2D(uPosTex, position.xy);
+        vec3 p = data.xyz; float seed = data.w;
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_Position = projectionMatrix * mv;
+        float dist = max(-mv.z, 0.1);
+        gl_PointSize = (1.6 + fract(seed*7.13)*4.2) * (150.0/dist) * uPR;
+        vColor = pal(fract(seed + uTime*0.008));
+        vFade = smoothstep(130.0, 40.0, dist) * smoothstep(1.5, 10.0, dist);
+      }`,
+    fragmentShader: `
+      varying vec3 vColor; varying float vFade;
+      void main(){
+        vec2 uv = gl_PointCoord - 0.5;
+        float d = length(uv);
+        float a = smoothstep(0.5, 0.04, d); a *= a;
+        gl_FragColor = vec4(vColor*1.6, a * vFade * 0.85);
+      }`
+  });
+  const points = new THREE.Points(geo, renderMat);
+  points.frustumCulled = false;
+  group.add(points);
+
+  // ---- touch becomes a vortex ----
+  const raycaster = new THREE.Raycaster();
+  const ndc = new THREE.Vector2();
+  const touchTarget = new THREE.Vector3(0, 0, -30);
+  const touchPos = new THREE.Vector3(0, 0, -30);
+  let touchStr = 0, touchStrTarget = 0.12, lastTouchT = -10, nowT = 0;
+
+  function pointerToWorld(cx, cy) {
+    ndc.set((cx/innerWidth)*2 - 1, -(cy/innerHeight)*2 + 1);
+    raycaster.setFromCamera(ndc, camera);
+    const o = raycaster.ray.origin, d = raycaster.ray.direction;
+    const t = (-30 - o.z) / d.z;
+    if (isFinite(t) && t > 0) touchTarget.copy(o).addScaledVector(d, t);
+  }
+  addEventListener('pointermove', e => {
+    pointerToWorld(e.clientX, e.clientY);
+    touchStrTarget = 0.55; lastTouchT = nowT;
+  }, { passive: true });
+  addEventListener('pointerdown', e => {
+    pointerToWorld(e.clientX, e.clientY);
+    touchStrTarget = 1.0; lastTouchT = nowT;
+  }, { passive: true });
+
+  return {
+    name:'NEBULA', roman:'I',
+    group,
+    enter(){ scene.background = new THREE.Color(0x030109);
+             scene.fog = new THREE.FogExp2(0x030109, 0.0035);
+             camera.position.set(0, 0, 0); },
+    update(t, dt){
+      nowT = t;
+      const sdt = Math.min(dt, 0.05);
+      // idle ghost stirs the nebula so it never sits still
+      if (t - lastTouchT > 6) {
+        touchTarget.set(Math.sin(t*0.23)*60, Math.sin(t*0.31)*32, -30 + Math.sin(t*0.19)*25);
+        touchStrTarget = 0.3;
+      } else if (touchStrTarget > 0.5 && t - lastTouchT > 1.2) {
+        touchStrTarget = 0.12;
+      }
+      const k = 1 - Math.exp(-6*dt);
+      touchPos.lerp(touchTarget, k);
+      touchStr += (touchStrTarget - touchStr) * k;
+
+      velVar.material.uniforms.uTime.value = t;
+      velVar.material.uniforms.uDt.value = sdt;
+      posVar.material.uniforms.uDt.value = sdt;
+      velVar.material.uniforms.uTouch.value.copy(touchPos);
+      velVar.material.uniforms.uTouchStr.value = touchStr;
+      gpu.compute();
+      renderMat.uniforms.uPosTex.value = gpu.getCurrentRenderTarget(posVar).texture;
+      renderMat.uniforms.uTime.value = t;
+
+      camera.position.x = Math.sin(t*0.05)*10;
+      camera.position.y = Math.cos(t*0.04)*6;
+      camera.lookAt(camera.position.x*1.6, camera.position.y*1.4, -60);
+    }
+  };
+}
+
 
 /* ============ WORLD II — TESSERACT : the fourth dimension ============ */
 function buildTesseract() {
@@ -469,7 +643,18 @@ function warp(){
   }, 240);
 }
 
-addEventListener('pointerdown', ()=>{ warp(); hintEl.style.opacity = 0; }, { passive:true });
+let pDown = null;
+addEventListener('pointerdown', e => {
+  pDown = { x: e.clientX, y: e.clientY, t: performance.now() };
+  hintEl.style.opacity = 0;
+}, { passive: true });
+addEventListener('pointerup', e => {
+  if (!pDown) return;
+  const moved = Math.hypot(e.clientX - pDown.x, e.clientY - pDown.y);
+  const held = performance.now() - pDown.t;
+  pDown = null;
+  if (moved < 14 && held < 450) warp();   // a tap warps; a drag stirs
+}, { passive: true });
 addEventListener('keydown', e=>{ if (e.key==='ArrowRight'||e.key===' '){ warp(); hintEl.style.opacity = 0; } });
 addEventListener('resize', ()=>{
   camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();

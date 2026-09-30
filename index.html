@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>ELSEWHERE</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#000; }
+  body { touch-action:manipulation; -webkit-user-select:none; user-select:none;
+         font-family:"Avenir Next","Helvetica Neue",Helvetica,Arial,sans-serif; }
+  #scene { position:fixed; inset:0; display:block; }
+  /* cinematic vignette */
+  #vignette { position:fixed; inset:0; pointer-events:none; z-index:5;
+    background:radial-gradient(ellipse at center, transparent 52%, rgba(0,0,0,.55) 100%); }
+  /* warp flash */
+  #flash { position:fixed; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:6; }
+  /* world label */
+  #label { position:fixed; left:0; right:0; bottom:9%; text-align:center; z-index:7;
+    pointer-events:none; opacity:0; transition:opacity 1.2s ease; }
+  #label .idx { font-size:11px; letter-spacing:.55em; color:rgba(255,255,255,.55);
+    text-indent:.55em; margin-bottom:10px; }
+  #label .name { font-size:clamp(26px,5vw,44px); font-weight:200; letter-spacing:.42em;
+    text-indent:.42em; color:#fff; text-shadow:0 0 30px rgba(140,180,255,.6); }
+  /* chrome */
+  #brand { position:fixed; top:22px; left:26px; z-index:7; pointer-events:none;
+    font-size:12px; letter-spacing:.5em; color:rgba(255,255,255,.6); }
+  #hint { position:fixed; bottom:26px; left:0; right:0; text-align:center; z-index:7;
+    pointer-events:none; font-size:11px; letter-spacing:.35em; text-indent:.35em;
+    color:rgba(255,255,255,.42); transition:opacity 1.5s ease; }
+  #dots { position:fixed; bottom:30px; right:30px; z-index:7; display:flex; gap:10px; }
+  #dots span { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,.22);
+    transition:all .6s ease; }
+  #dots span.on { background:#fff; box-shadow:0 0 12px rgba(160,200,255,.9); transform:scale(1.35); }
+  /* intro */
+  #intro { position:fixed; inset:0; z-index:20; background:#000; display:flex;
+    flex-direction:column; align-items:center; justify-content:center; gap:18px;
+    transition:opacity 1.6s ease; }
+  #intro h1 { font-weight:100; font-size:clamp(34px,8vw,72px); letter-spacing:.5em;
+    text-indent:.5em; color:#fff; animation:breathe 3.2s ease-in-out infinite; }
+  #intro p { font-size:11px; letter-spacing:.45em; text-indent:.45em; color:rgba(255,255,255,.45); }
+  @keyframes breathe { 0%,100%{opacity:.55} 50%{opacity:1} }
+  #intro.gone { opacity:0; pointer-events:none; }
+  #nogl { position:fixed; inset:0; z-index:30; display:none; align-items:center;
+    justify-content:center; color:#fff; background:#000; font-size:14px; letter-spacing:.2em; padding:40px; text-align:center;}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div id="vignette"></div>
+<div id="flash"></div>
+<div id="brand">ELSEWHERE</div>
+<div id="label"><div class="idx"></div><div class="name"></div></div>
+<div id="hint">TAP TO WARP</div>
+<div id="dots"><span></span><span></span><span></span><span></span></div>
+<div id="intro"><h1>ELSEWHERE</h1><p>A VOYAGE IN FOUR WORLDS</p></div>
+<div id="nogl">THIS VOYAGE NEEDS WEBGL</div>
+
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const isMobile = matchMedia('(pointer: coarse)').matches || innerWidth < 768;
+const canvas = document.getElementById('scene');
+
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias:true, powerPreference:'high-performance' });
+} catch(e) {
+  document.getElementById('nogl').style.display = 'flex';
+  throw e;
+}
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, isMobile ? 1.5 : 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(62, innerWidth/innerHeight, 0.1, 900);
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.85, 0.65, 0.12);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+const rnd = (a,b) => a + Math.random()*(b-a);
+const WORLD_TIME = 24; // seconds per world before auto-warp
+
+/* ============ WORLD I — NEBULA : endless particle drift ============ */
+function buildNebula() {
+  const group = new THREE.Group();
+  const COUNT = isMobile ? 3500 : 8000;
+  const W = 260, H = 160, D = 260;
+  const pos = new Float32Array(COUNT*3), seed = new Float32Array(COUNT);
+  for (let i=0;i<COUNT;i++) {
+    pos[i*3] = rnd(-W/2, W/2); pos[i*3+1] = rnd(-H/2, H/2); pos[i*3+2] = rnd(-D/2, D/2);
+    seed[i] = Math.random();
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { uTime:{value:0}, uW:{value:W}, uH:{value:H}, uD:{value:D} },
+    vertexShader: `
+      attribute float aSeed;
+      uniform float uTime, uW, uH, uD;
+      varying vec3 vColor; varying float vFade;
+      vec3 pal(float t){
+        vec3 c1 = vec3(0.36,0.12,0.72);  // violet
+        vec3 c2 = vec3(0.05,0.55,0.95);  // cyan
+        vec3 c3 = vec3(0.95,0.25,0.55);  // magenta
+        return mix(mix(c1,c2,smoothstep(0.,.5,t)), mix(c2,c3,smoothstep(.5,1.,t)), smoothstep(.25,.75,t));
+      }
+      void main(){
+        vec3 p = position;
+        float s = aSeed;
+        // drift toward camera + lateral sway, wrap endlessly
+        p.z = mod(p.z + uTime*(4.0+s*9.0) + uD*0.5, uD) - uD*0.5;
+        p.x += sin(uTime*0.12 + s*6.2831)*7.0;
+        p.y += cos(uTime*0.09 + s*6.2831*1.7)*5.0;
+        vec4 mv = modelViewMatrix * vec4(p,1.0);
+        gl_Position = projectionMatrix * mv;
+        float dist = -mv.z;
+        gl_PointSize = (1.4 + s*4.2) * (160.0 / max(dist,1.0));
+        vColor = pal(fract(s + uTime*0.008));
+        vFade = smoothstep(uD*0.5, uD*0.18, dist) * smoothstep(2.0, 14.0, dist);
+      }`,
+    fragmentShader: `
+      varying vec3 vColor; varying float vFade;
+      void main(){
+        vec2 uv = gl_PointCoord - 0.5;
+        float d = length(uv);
+        float a = smoothstep(0.5, 0.04, d);
+        a *= a;
+        gl_FragColor = vec4(vColor*1.6, a * vFade * 0.85);
+      }`
+  });
+  const pts = new THREE.Points(geo, mat);
+  group.add(pts);
+  return {
+    name:'NEBULA', roman:'I',
+    group,
+    enter(){ scene.background = new THREE.Color(0x030109);
+             scene.fog = new THREE.FogExp2(0x030109, 0.0035);
+             camera.position.set(0, 0, 0); },
+    update(t, dt){ mat.uniforms.uTime.value = t;
+             camera.position.x = Math.sin(t*0.05)*10;
+             camera.position.y = Math.cos(t*0.04)*6;
+             camera.lookAt(camera.position.x*1.6, camera.position.y*1.4, -60); }
+  };
+}
+
+/* ============ WORLD II — TESSERACT : the fourth dimension ============ */
+function buildTesseract() {
+  const group = new THREE.Group();
+  // 16 vertices of a 4D hypercube
+  const V = [];
+  for (let i=0;i<16;i++)
+    V.push(new THREE.Vector4(i&1?1:-1, i&2?1:-1, i&4?1:-1, i&8?1:-1));
+  // 32 edges: pairs differing in exactly one coordinate
+  const edges = [];
+  for (let i=0;i<16;i++) for (let j=i+1;j<16;j++) {
+    let diff = 0;
+    for (let k=0;k<4;k++) if ((i>>k&1)!==(j>>k&1)) diff++;
+    if (diff===1) edges.push([i,j]);
+  }
+  const E = edges.length;
+  const linePos = new Float32Array(E*2*3);
+  const lineGeo = new THREE.BufferGeometry();
+  lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos, 3));
+  const lineMat = new THREE.LineBasicMaterial({
+    color:0x9fdcff, transparent:true, opacity:0.95, blending:THREE.AdditiveBlending, depthWrite:false });
+  const lines = new THREE.LineSegments(lineGeo, lineMat);
+  lines.scale.setScalar(5.2);
+  group.add(lines);
+
+  // glowing vertices
+  const vGeo = new THREE.BufferGeometry();
+  vGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(16*3), 3));
+  const vMat = new THREE.PointsMaterial({ color:0xd8f4ff, size:0.55, transparent:true,
+    opacity:0.95, blending:THREE.AdditiveBlending, depthWrite:false, sizeAttenuation:true });
+  const vPts = new THREE.Points(vGeo, vMat);
+  vPts.scale.setScalar(5.2);
+  group.add(vPts);
+
+  // faint nested echo, counter-rotating (own geometry — cloned lines share buffers)
+  const echoGeo = new THREE.BufferGeometry();
+  echoGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(E*2*3), 3));
+  const echo = new THREE.LineSegments(echoGeo, new THREE.LineBasicMaterial({
+    color:0x6a5cff, transparent:true, opacity:0.22, blending:THREE.AdditiveBlending, depthWrite:false }));
+  echo.scale.setScalar(8.2);
+  group.add(echo);
+
+  // starfield backdrop
+  const starGeo = new THREE.BufferGeometry();
+  const SN = isMobile ? 500 : 1200, sp = new Float32Array(SN*3);
+  for (let i=0;i<SN;i++){ sp[i*3]=rnd(-300,300); sp[i*3+1]=rnd(-300,300); sp[i*3+2]=rnd(-300,300); }
+  starGeo.setAttribute('position', new THREE.BufferAttribute(sp,3));
+  group.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color:0x8ea2ff, size:0.7,
+    transparent:true, opacity:0.7, sizeAttenuation:true })));
+
+  const proj = new THREE.Vector3();
+  function project4(v, out, angA, angB){
+    // rotate in XW plane, then YW plane
+    const cA=Math.cos(angA), sA=Math.sin(angA), cB=Math.cos(angB), sB=Math.sin(angB);
+    let x = v.x*cA - v.w*sA, w = v.x*sA + v.w*cA;
+    let y = v.y*cB - w*sB;      w = v.y*sB + w*cB;
+    const s = 2.6 / (2.6 - w*0.85);   // 4D -> 3D perspective divide
+    out.set(x*s, y*s, v.z*s);
+  }
+  const tmp = new THREE.Vector3();
+  return {
+    name:'TESSERACT', roman:'II',
+    group,
+    enter(){ scene.background = new THREE.Color(0x01020a);
+             scene.fog = new THREE.FogExp2(0x01020a, 0.0022);
+             camera.position.set(0, 2, 24); },
+    update(t, dt){
+      const a = t*0.24, b = t*0.17;
+      const lp = lineGeo.attributes.position.array;
+      for (let e=0;e<E;e++){
+        const [i,j] = edges[e];
+        project4(V[i], tmp, a, b);   lp[e*6]=tmp.x;   lp[e*6+1]=tmp.y;   lp[e*6+2]=tmp.z;
+        project4(V[j], tmp, a, b);   lp[e*6+3]=tmp.x; lp[e*6+4]=tmp.y; lp[e*6+5]=tmp.z;
+      }
+      lineGeo.attributes.position.needsUpdate = true;
+      const vp = vGeo.attributes.position.array;
+      for (let i=0;i<16;i++){ project4(V[i], tmp, a, b); vp[i*3]=tmp.x; vp[i*3+1]=tmp.y; vp[i*3+2]=tmp.z; }
+      vGeo.attributes.position.needsUpdate = true;
+      // echo counter-rotates (recompute cheaply with negated angles)
+      const ep = echo.geometry.attributes.position.array;
+      for (let e=0;e<E;e++){
+        const [i,j] = edges[e];
+        project4(V[i], tmp, -a*0.6, -b*0.6); ep[e*6]=tmp.x; ep[e*6+1]=tmp.y; ep[e*6+2]=tmp.z;
+        project4(V[j], tmp, -a*0.6, -b*0.6); ep[e*6+3]=tmp.x; ep[e*6+4]=tmp.y; ep[e*6+5]=tmp.z;
+      }
+      echo.geometry.attributes.position.needsUpdate = true;
+      const r = 23, sp2 = t*0.11;
+      camera.position.set(Math.sin(sp2)*r, 3.5+Math.sin(t*0.07)*2.5, Math.cos(sp2)*r);
+      camera.lookAt(0,0,0);
+    }
+  };
+}
+
+/* ============ WORLD III — RIDGE : endless alien terrain ============ */
+function buildTerrain() {
+  const group = new THREE.Group();
+  const geo = new THREE.PlaneGeometry(420, 420, isMobile?90:150, isMobile?90:150);
+  geo.rotateX(-Math.PI/2);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uOffset:{value:new THREE.Vector2(0,0)}, uTime:{value:0},
+                uFogColor:{value:new THREE.Color(0x0a0618)}, uFogDensity:{value:0.0042} },
+    vertexShader: `
+      uniform vec2 uOffset; uniform float uTime;
+      varying float vH; varying float vFogDepth;
+      float hash(vec3 p){ p=fract(p*0.3183099+vec3(0.1,0.2,0.3)); p*=17.0;
+        return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
+      float vnoise(vec3 x){ vec3 i=floor(x); vec3 f=fract(x); f=f*f*(3.0-2.0*f);
+        return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),
+                       mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
+                   mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),
+                       mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z); }
+      float fbm(vec3 p){ float v=0.0,a=0.5; for(int i=0;i<4;i++){ v+=a*vnoise(p); p*=2.03; a*=0.5; } return v; }
+      void main(){
+        vec3 p = position;
+        vec2 wxz = p.xz + uOffset;
+        float h = fbm(vec3(wxz*0.016, uTime*0.015));
+        h = pow(h, 1.6) * 46.0;
+        p.y += h - 14.0;
+        vH = clamp(h/46.0, 0.0, 1.0);
+        vec4 mv = modelViewMatrix * vec4(p,1.0);
+        vFogDepth = -mv.z;
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      varying float vH; varying float vFogDepth;
+      uniform vec3 uFogColor; uniform float uFogDensity;
+      void main(){
+        vec3 deep = vec3(0.05,0.03,0.14);
+        vec3 mid  = vec3(0.35,0.10,0.45);
+        vec3 peak = vec3(1.00,0.42,0.18);
+        vec3 col = mix(deep, mid, smoothstep(0.05,0.45,vH));
+        col = mix(col, peak, smoothstep(0.55,0.95,vH));
+        // ridge highlight lines
+        float ridge = smoothstep(0.48,0.5,abs(fract(vH*9.0)-0.5));
+        col += vec3(0.9,0.5,0.25) * pow(1.0-ridge, 6.0) * 0.35 * smoothstep(0.3,0.7,vH);
+        float f = 1.0 - exp(-uFogDensity*uFogDensity*vFogDepth*vFogDepth);
+        col = mix(col, uFogColor, clamp(f,0.0,1.0));
+        gl_FragColor = vec4(col, 1.0);
+      }`
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.frustumCulled = false;
+  group.add(mesh);
+
+  // twin moons
+  const moonMat = new THREE.MeshBasicMaterial({ color:0xffe6c4, fog:false });
+  const moon1 = new THREE.Mesh(new THREE.SphereGeometry(9, 24, 24), moonMat);
+  const moon2 = new THREE.Mesh(new THREE.SphereGeometry(4.5, 24, 24),
+    new THREE.MeshBasicMaterial({ color:0x9fd8ff, fog:false }));
+  group.add(moon1, moon2);
+
+  let dist = 0;
+  const SPEED = 26;
+  return {
+    name:'RIDGE', roman:'III',
+    group,
+    enter(){ scene.background = new THREE.Color(0x0a0618);
+             scene.fog = null; // shader does its own fog
+             dist = 0;
+             camera.position.set(0, 16, 0); },
+    update(t, dt){
+      dist += SPEED*dt;
+      mat.uniforms.uOffset.value.set(Math.sin(t*0.05)*40, dist);
+      mat.uniforms.uTime.value = t;
+      mesh.position.set(camera.position.x, 0, camera.position.z - 120);
+      // moons hang ahead, drifting
+      moon1.position.set(camera.position.x - 120 + Math.sin(t*0.03)*20, 150, camera.position.z - 380);
+      moon2.position.set(camera.position.x + 150, 110 + Math.sin(t*0.05)*8, camera.position.z - 420);
+      camera.position.z -= SPEED*dt;
+      camera.position.x = Math.sin(t*0.06)*36;
+      camera.position.y = 17 + Math.sin(t*0.11)*3.5;
+      camera.lookAt(camera.position.x*0.4, 6, camera.position.z - 120);
+    }
+  };
+}
+
+/* ============ WORLD IV — MONOLITH : the silent void ============ */
+function buildMonolith() {
+  const group = new THREE.Group();
+  // endless grid floor
+  const floorGeo = new THREE.PlaneGeometry(900, 900);
+  floorGeo.rotateX(-Math.PI/2);
+  const floorMat = new THREE.ShaderMaterial({
+    uniforms:{ uTime:{value:0}, uCamZ:{value:0} },
+    vertexShader:`varying vec3 vW; void main(){ vec4 w = modelMatrix*vec4(position,1.0);
+      vW = w.xyz; gl_Position = projectionMatrix*viewMatrix*w; }`,
+    fragmentShader:`
+      varying vec3 vW; uniform float uTime, uCamZ;
+      void main(){
+        vec2 g = abs(fract(vW.xz/14.0)-0.5);
+        float line = 1.0 - smoothstep(0.0, 0.045, min(g.x,g.y));
+        float dist = length(vW.xz - vec2(0.0, uCamZ));
+        float fade = exp(-dist*0.012);
+        float pulse = 0.75 + 0.25*sin(uTime*0.8 - dist*0.05);
+        vec3 col = vec3(0.25,0.75,1.0) * line * fade * pulse;
+        gl_FragColor = vec4(col, 1.0);
+      }`
+  });
+  const floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.position.y = -6;
+  floor.frustumCulled = false;
+  group.add(floor);
+
+  // floating monoliths
+  const boxes = [];
+  const boxGeo = new THREE.BoxGeometry(1,1,1);
+  const darkMat = new THREE.MeshStandardMaterial({ color:0x0b0e1a, roughness:0.35, metalness:0.85 });
+  const edgeMat = new THREE.LineBasicMaterial({ color:0x66d9ff, transparent:true, opacity:0.85,
+    blending:THREE.AdditiveBlending });
+  const N = isMobile ? 22 : 38;
+  for (let i=0;i<N;i++){
+    const m = new THREE.Mesh(boxGeo, darkMat);
+    const w = rnd(4,10), h = rnd(14,52), d = rnd(4,10);
+    m.scale.set(w,h,d);
+    m.position.set(rnd(-130,130), rnd(-2,26), rnd(-420, 20));
+    m.rotation.y = rnd(0, Math.PI);
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(boxGeo), edgeMat);
+    edges.scale.copy(m.scale);
+    m.add(edges);
+    m.userData = { baseY:m.position.y, ph:rnd(0,6.28), rs:rnd(-0.12,0.12) };
+    group.add(m); boxes.push(m);
+  }
+  group.add(new THREE.AmbientLight(0x334466, 1.4));
+  const key = new THREE.DirectionalLight(0x88bbff, 1.6);
+  key.position.set(60, 120, 40);
+  group.add(key);
+  const under = new THREE.PointLight(0x2266ff, 800, 260, 1.8);
+  under.position.set(0, -2, -60);
+  group.add(under);
+
+  const SPEED = 20;
+  return {
+    name:'MONOLITH', roman:'IV',
+    group,
+    enter(){ scene.background = new THREE.Color(0x01030c);
+             scene.fog = new THREE.FogExp2(0x01030c, 0.005);
+             camera.position.set(0, 8, 30); },
+    update(t, dt){
+      floorMat.uniforms.uTime.value = t;
+      camera.position.z -= SPEED*dt;
+      camera.position.x = Math.sin(t*0.09)*34;
+      camera.position.y = 8 + Math.sin(t*0.13)*2.5;
+      camera.lookAt(camera.position.x*0.3, 10, camera.position.z - 90);
+      floorMat.uniforms.uCamZ.value = camera.position.z;
+      floor.position.z = camera.position.z - 160;
+      under.position.z = camera.position.z - 60;
+      under.position.x = camera.position.x;
+      // recycle monoliths endlessly
+      for (const m of boxes){
+        m.position.y = m.userData.baseY + Math.sin(t*0.5 + m.userData.ph)*2.2;
+        m.rotation.y += m.userData.rs*dt;
+        if (m.position.z > camera.position.z + 30) m.position.z -= 460;
+      }
+    }
+  };
+}
+
+/* ============ THE VOYAGE : direction, warp, labels ============ */
+const worlds = [buildNebula(), buildTesseract(), buildTerrain(), buildMonolith()];
+for (const w of worlds){ w.group.visible = false; scene.add(w.group); }
+
+const labelEl = document.getElementById('label');
+const labelIdx = labelEl.querySelector('.idx');
+const labelName = labelEl.querySelector('.name');
+const dots = [...document.querySelectorAll('#dots span')];
+const hintEl = document.getElementById('hint');
+const flashEl = document.getElementById('flash');
+let labelTimer = 0;
+
+function showLabel(w){
+  labelIdx.textContent = 'WORLD ' + w.roman;
+  labelName.textContent = w.name;
+  labelEl.style.opacity = 1;
+  clearTimeout(labelTimer);
+  labelTimer = setTimeout(()=> labelEl.style.opacity = 0, 3600);
+}
+
+let current = -1, warping = false, worldClock = 0;
+function enter(i){
+  if (current >= 0) worlds[current].group.visible = false;
+  current = i; worldClock = 0;
+  worlds[i].group.visible = true;
+  worlds[i].enter();
+  dots.forEach((d,k)=> d.classList.toggle('on', k===i));
+  showLabel(worlds[i]);
+}
+function warp(){
+  if (warping) return;
+  warping = true;
+  // warp punch: flash + fov kick
+  const fov0 = camera.fov;
+  flashEl.style.transition = 'none'; flashEl.style.opacity = 0.9;
+  requestAnimationFrame(()=>{
+    flashEl.style.transition = 'opacity .7s ease'; flashEl.style.opacity = 0;
+  });
+  camera.fov = fov0 + 26; camera.updateProjectionMatrix();
+  setTimeout(()=>{
+    enter((current+1) % worlds.length);
+    const t0 = performance.now();
+    (function ease(){
+      const k = Math.min((performance.now()-t0)/650, 1);
+      camera.fov = (fov0+26) + (fov0-(fov0+26)) * (1-Math.pow(1-k,3));
+      camera.updateProjectionMatrix();
+      if (k<1) requestAnimationFrame(ease); else warping = false;
+    })();
+  }, 240);
+}
+
+addEventListener('pointerdown', ()=>{ warp(); hintEl.style.opacity = 0; }, { passive:true });
+addEventListener('keydown', e=>{ if (e.key==='ArrowRight'||e.key===' '){ warp(); hintEl.style.opacity = 0; } });
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
+});
+document.addEventListener('visibilitychange', ()=>{ last = performance.now(); });
+
+const clockStart = performance.now();
+let last = clockStart;
+function loop(){
+  requestAnimationFrame(loop);
+  const now = performance.now();
+  let dt = Math.min((now-last)/1000, 0.1); last = now;
+  const t = (now-clockStart)/1000;
+  if (current >= 0 && !warping){
+    worlds[current].update(t, dt);
+    worldClock += dt;
+    if (worldClock > WORLD_TIME) warp();
+  }
+  composer.render();
+}
+
+// boot
+enter(0);
+loop();
+setTimeout(()=> document.getElementById('intro').classList.add('gone'), 1400);
+setTimeout(()=>{ hintEl.style.opacity = 0; }, 12000);
+
+</script>
+</body>
+</html>

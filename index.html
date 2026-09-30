@@ -61,6 +61,28 @@
 <div id="intro"><h1>ELSEWHERE</h1><p>A VOYAGE IN FOUR ACTS</p></div>
 <div id="nogl">THIS VOYAGE NEEDS WEBGL</div>
 
+<script>
+// boot tracer: if the module below ever fails, the reason becomes visible text
+// instead of a silent black screen. Hidden unless something goes wrong.
+window.__bootLog = ['tracer armed'];
+window.__booted = false;
+function __bl(m){
+  window.__bootLog.push(m);
+  var el = document.getElementById('bootlog');
+  if (el){ el.style.display = 'block'; el.textContent = window.__bootLog.slice(-12).join('\n'); }
+}
+window.addEventListener('error', function(e){
+  __bl('ERROR: ' + (e.message || e.type) + ' @ ' + (e.filename || '?').split('/').pop() + ':' + (e.lineno || '?'));
+}, true);
+window.addEventListener('unhandledrejection', function(e){
+  var r = e.reason;
+  __bl('REJECTION: ' + (r && (r.stack || r.message)) || String(r));
+});
+setTimeout(function(){
+  if (!window.__booted) __bl('WATCHDOG: module did not signal boot within 12s');
+}, 12000);
+</script>
+<div id="bootlog" style="display:none;position:fixed;top:8px;left:8px;z-index:99;max-width:82vw;max-height:40vh;overflow:auto;background:rgba(10,0,0,.85);color:#ff9a9a;font:11px/1.5 monospace;padding:10px 12px;border:1px solid #a33;white-space:pre-wrap;pointer-events:none"></div>
 <script type="importmap">
 { "imports": {
     "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -1442,7 +1464,7 @@ function buildChoice(){
    loops every ~2 minutes. Tap skips ahead, holding hastens, and in Act IV's
    final passage the traveler chooses the ending with their gaze. */
 const CRUISE = 26, ACT_LEN = 780, LOOP = ACT_LEN*4, ACT_SECS = 30, PASSAGE_SECS = 7;
-const BUILD = 'v2026.09.30-01.12';
+const BUILD = 'v2026.09.30-01.18';
 let voyageZ = 0;                       // ever-increasing distance traveled
 const echoColor = new THREE.Color(0x000000); // the last ending, tinting the next loop
 let choiceK = 0;                       // 0..1 how present the three lights are
@@ -1819,6 +1841,7 @@ window.__elsewhere = {
 };
 
 // boot
+window.__booted = true;
 camera.position.set(0, 0, 0);
 document.getElementById('ver').textContent = BUILD;
 enterAct(0);

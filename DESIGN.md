@@ -84,3 +84,16 @@ bottom-left, mirroring the version badge bottom-right.
   `participant Loop` is a reserved keyword in Mermaid sequence diagrams
   (`loop...end` blocks). Renamed to `Srv`. Lesson: validate every Mermaid
   block with `mermaid.parse` (node) before shipping.
+- `blog/fastapi/index.html` (2026-10-01) — "FastAPI, explained": type hints in,
+  validated API out; Starlette + Pydantic; what it's for (ML serving,
+  microservices, app backends, webhooks) and not for. One Mermaid sequence
+  diagram of a request lifecycle (validated with mermaid.parse before ship).
+- `blog/green-line-meme/index.html` (2026-10-01) — "The green line meme,
+  explained": Autism Capital's "He knows about the green lines" quote-tweet of
+  the Elon/Karoline Leavitt clip; the video artifact as the joke; three layers
+  of why it's funny; artifact-spotting as a meme genre. Text-only, no diagram.
+- `polish/index.html` (2026-10-01) — interactive essay "No purple gradients"
+  after Des Traynor's anti-vibe-coding tweet: vibe-coded↔polished toggle lab,
+  01 Sound (Web Audio synth engine, Cuelume-style), 02 Motion
+  (Transitions.dev-style demos), 03 UI (shadcn-style gallery). All sounds
+  synthesized live; no audio files.

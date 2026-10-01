@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FastAPI, explained — luke's blog</title>
+<meta name="description" content="FastAPI is the fastest way to turn Python functions into a production API. Type hints in, validated JSON API out — with free documentation.">
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:680px;margin:0 auto;padding:24px;line-height:1.7;color:#222}
+  a{color:#0b5fff}
+  h1{font-size:1.9em;line-height:1.25;margin:0 0 8px}
+  .meta{color:#666;font-size:.9em;margin-bottom:28px}
+  pre{background:#f6f6f6;padding:16px;border-radius:8px;overflow-x:auto;font-size:.85em}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  p code{background:#f0f0f0;padding:2px 5px;border-radius:4px;font-size:.9em}
+  .diagram{background:#fafafa;border:1px solid #eee;border-radius:8px;padding:8px;margin:24px 0;overflow-x:auto}
+  .diagram .caption{font-size:.85em;color:#666;text-align:center;margin-top:4px}
+  .verdict{background:#f0f7ff;border-left:4px solid #0b5fff;padding:12px 16px;margin:28px 0;border-radius:0 8px 8px 0}
+  nav{margin-top:48px;padding-top:16px;border-top:1px solid #eee;font-size:.9em}
+</style>
+</head>
+<body>
+<h1>FastAPI, explained</h1>
+<div class="meta">October 1, 2026 · python · apis</div>
+
+<p><strong>Verdict:</strong> FastAPI is the fastest way to turn a Python function into a production-grade API. You write a normal function with type hints, and you get request validation, JSON serialization, and interactive documentation for free. The "fast" refers to your development speed — but it's genuinely quick at runtime too.</p>
+
+<h2>The 30-second demo</h2>
+
+<p>This is a complete, working API:</p>
+
+<pre><code>from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/items/{item_id}")
+def read_item(item_id: int, q: str | None = None):
+    return {"item_id": item_id, "q": q}</code></pre>
+
+<p>Run it, and you get:</p>
+
+<ul>
+  <li><strong>Validation.</strong> <code>item_id: int</code> means FastAPI rejects <code>/items/abc</code> with a <code>422</code> error explaining exactly what went wrong. You wrote zero validation code.</li>
+  <li><strong>Docs.</strong> Visit <code>/docs</code> and there's a full interactive Swagger UI — try every endpoint from the browser, auto-generated from your type hints.</li>
+  <li><strong>Serialization.</strong> Return a dict, a Pydantic model, a list — it becomes JSON with the right content type, automatically.</li>
+</ul>
+
+<p>That loop — <em>type hints in, validated API out</em> — is the whole pitch. The framework reads the annotations you were probably writing anyway and does the boring plumbing for you.</p>
+
+<h2>What it actually is</h2>
+
+<p>FastAPI (by Sebastián Ramírez, first released 2018) is a Python <strong>web framework for building APIs</strong> — not websites with pages, but the JSON-speaking backends behind apps, SPAs, and services. It stands on two shoulders:</p>
+
+<ul>
+  <li><strong>Starlette</strong> — handles the HTTP plumbing (routing, requests, websockets) on ASGI, Python's async server interface.</li>
+  <li><strong>Pydantic</strong> — handles data validation using type hints. Its v2 rewrite (2023) moved the hot path to Rust, making validation dramatically faster.</li>
+</ul>
+
+<p>Because it's ASGI-native, your endpoints can be <code>async def</code>, so one process can juggle thousands of concurrent connections — waiting on a database or another API doesn't block everyone else. That's a big part of why it benchmarks near Node and Go on TechEmpower-style tests despite being Python.</p>
+
+<div class="diagram">
+<pre class="mermaid">
+sequenceDiagram
+    participant Client
+    participant API as FastAPI app
+    participant Func as your function
+    Client->>API: GET /items/42?q=shoes
+    API->>API: validate: item_id must be int,<br/>q is optional
+    alt input is valid
+        API->>Func: read_item(item_id=42, q="shoes")
+        Func-->>API: {"item_id": 42, ...}
+        API->>API: serialize to JSON
+        API-->>Client: 200 + JSON body
+    else input is invalid
+        API-->>Client: 422 + exact error<br/>(which field, why)
+    end
+    Note over API: /docs is generated from<br/>the same type hints
+</pre>
+<div class="caption">Diagram — a request's life in FastAPI. Validation happens before your function ever runs.</div>
+</div>
+
+<h2>What it's useful for</h2>
+
+<ul>
+  <li><strong>Serving ML models.</strong> This is arguably its killer app. Train a model in Python, wrap inference in a FastAPI endpoint, deploy. Half the model-serving endpoints on the internet look like this.</li>
+  <li><strong>Microservices and internal APIs.</strong> Small services that do one thing, speak JSON, and need to exist by Friday.</li>
+  <li><strong>Backends for apps and SPAs.</strong> Your React/Flutter/iOS app needs <code>/api/...</code> — FastAPI is the shortest path from "idea" to "the app talks to a server."</li>
+  <li><strong>Webhooks and glue code.</strong> Receive a POST from Stripe/GitHub/Slack, validate the payload, do a thing. Fifteen lines.</li>
+  <li><strong>Prototypes that survive.</strong> Because validation and docs come free, the prototype you hack together in an afternoon is uncomfortably close to production-ready.</li>
+</ul>
+
+<h2>When not to reach for it</h2>
+
+<ul>
+  <li><strong>Server-rendered websites.</strong> If you want HTML pages with logins and templates, Django or Rails give you the whole kitchen. FastAPI <em>can</em> serve HTML, but that's not its home turf.</li>
+  <li><strong>CPU-bound work.</strong> It's still Python — heavy computation blocks the event loop. Offload to background workers and keep the API thin.</li>
+  <li><strong>When you don't know Python.</strong> Obvious, but: the magic is Python type hints all the way down.</li>
+</ul>
+
+<div class="verdict">
+  <strong>The one-liner:</strong> FastAPI turns Python type hints into a validated, documented, production-ready API with almost no boilerplate — which is why it went from side project to the default choice for Python APIs in a few years.
+</div>
+
+<nav><a href="/blog/">← all posts</a> · <a href="/">home</a></nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
+</body>
+</html>

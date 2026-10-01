@@ -76,3 +76,11 @@ bottom-left, mirroring the version badge bottom-right.
 - Routing note: the Worker serves `/blog/` only if it resolves directory index
   files — verified live after deploy (falls back to explicit `/blog/index.html`
   links if not).
+- `blog/two-brains/index.html` (2026-10-01) — "Your brain is two organs": the
+  enteric nervous system as the "second brain" (~500M neurons, autonomous
+  digestion, vagus nerve mostly gut→brain, gut serotonin/dopamine, hedged
+  microbiome note). One Mermaid flowchart of the gut-brain axis.
+- 2026-10-01 fix: Diagram 1 in kill-localhost-oauth failed to render —
+  `participant Loop` is a reserved keyword in Mermaid sequence diagrams
+  (`loop...end` blocks). Renamed to `Srv`. Lesson: validate every Mermaid
+  block with `mermaid.parse` (node) before shipping.

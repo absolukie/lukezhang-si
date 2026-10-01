@@ -97,3 +97,10 @@ bottom-left, mirroring the version badge bottom-right.
   01 Sound (Web Audio synth engine, Cuelume-style), 02 Motion
   (Transitions.dev-style demos), 03 UI (shadcn-style gallery). All sounds
   synthesized live; no audio files.
+- `atlas/index.html` (2026-10-01) — "Atlas": infinite zoomable canvas of the
+  Liverpool Rummy architecture (after Robin Ebers' zoom-canvas tweet).
+  SVG pan/zoom (drag, wheel-to-cursor, pinch, dblclick, keyboard) with 4
+  semantic-zoom levels: titles → one-liners → bullets → mono fine print
+  (real details: Room DO, TURN_MS=90000, {t:...} frames, /ws, deploy flow).
+  Side index flies to nodes; click a card to dive to L4. Dark canvas,
+  light cards, blue hot-path connectors. Build badge v2026.10.01.

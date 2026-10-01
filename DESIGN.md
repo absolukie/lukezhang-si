@@ -104,3 +104,10 @@ bottom-left, mirroring the version badge bottom-right.
   (real details: Room DO, TURN_MS=90000, {t:...} frames, /ws, deploy flow).
   Side index flies to nodes; click a card to dive to L4. Dark canvas,
   light cards, blue hot-path connectors. Build badge v2026.10.01.
+- `atlas/index.html` v2 (2026-10-01) — rebuilt as a true hierarchical graph:
+  1,885 generated nodes (12 subsystems → 144 modules → 1728 leaves) on a
+  canvas renderer. Zoomed out only ~12 nodes show; zooming into a node
+  unfolds its 12 children + new cross-link edges. Node positions are a pure
+  function of path (deterministic seeded layout), so the tree is never fully
+  built. Breadcrumb, live visible/total counter, subsystem jump index.
+  Honest label: generated demo graph. Build badge v2026.10.01b.

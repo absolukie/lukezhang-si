@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tailscale, explained — lukezhang.si</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    min-height: 100%;
+    background: radial-gradient(circle at 50% 0%, #3a2718 0%, #1c130e 45%, #0d0a09 100%);
+    background-attachment: fixed;
+    color: #f3e2cd;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.75;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 56px 22px 80px; }
+  nav.top { margin-bottom: 36px; font-size: 14px; display: flex; gap: 18px; }
+  nav.top a { color: rgba(243,226,205,0.55); text-decoration: none; }
+  nav.top a:hover { color: #e8a15c; }
+  h1 { font-size: 36px; letter-spacing: -0.01em; line-height: 1.2; margin-bottom: 8px; }
+  .meta { font-size: 13px; color: rgba(243,226,205,0.5); margin-bottom: 32px; }
+  .meta .tag { display: inline-block; border: 1px solid rgba(232,161,92,0.35); color: #e8a15c;
+    border-radius: 999px; padding: 1px 10px; margin-right: 6px; font-size: 12px; }
+  article p { margin-bottom: 18px; font-size: 16.5px; color: rgba(243,226,205,0.92); }
+  article h2 { font-size: 24px; margin: 40px 0 14px; color: #ffd9a8; }
+  article ol, article ul { margin: 0 0 18px 24px; font-size: 16.5px; color: rgba(243,226,205,0.92); }
+  article li { margin-bottom: 10px; }
+  article li::marker { color: #e8a15c; }
+  article strong { color: #ffe9d2; }
+  article code { background: rgba(232,161,92,0.12); color: #ffcf96; padding: 1px 7px;
+    border-radius: 6px; font-size: 0.88em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .diagram { background: rgba(0,0,0,0.28); border: 1px solid rgba(232,161,92,0.18);
+    border-radius: 14px; padding: 18px 8px; margin: 26px 0 30px; overflow-x: auto; }
+  .diagram .mermaid { min-width: 560px; }
+  .caption { text-align: center; font-size: 13.5px; color: rgba(243,226,205,0.5);
+    margin: -20px 0 30px; }
+  .verdict { border: 1px solid rgba(232,161,92,0.4); border-radius: 14px;
+    padding: 20px 24px; margin: 36px 0; background: rgba(232,161,92,0.06); }
+  .verdict p { margin: 0; }
+  footer { margin-top: 40px; font-size: 13px; color: rgba(243,226,205,0.35); }
+  a { color: #e8a15c; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="top"><a href="/">← lukezhang.si</a><a href="/blog/">blog</a></nav>
+  <h1>Tailscale, explained</h1>
+  <div class="meta">October 1, 2026 &nbsp;·&nbsp; <span class="tag">networking</span><span class="tag">vpn</span></div>
+
+<article>
+<p><strong>Tailscale is the tool that makes "localhost on which machine?" a non-question.</strong> It's a mesh VPN: install it on your devices and they join a private network — your <em>tailnet</em> — where every device can reach every other device directly and encrypted, no matter where in the world they happen to be.</p>
+
+<h2>The problem it kills</h2>
+
+<p>You've got a laptop, a home server, maybe a VPS. You want them to talk to each other securely.</p>
+
+<p>The old way: static IPs or dynamic DNS, port forwarding on your router, firewall rules, SSH tunnels you set up at 1am and forgot about, or a VPN server you now have to maintain and patch. Every new device is another round of configuration.</p>
+
+<p>And here's the tie-in to my <a href="/blog/kill-localhost-oauth/">localhost OAuth post</a>: over plain SSH, "localhost" is ambiguous — <em>which</em> machine's loopback do you mean? Tailscale hands every machine a stable name and address, so there's no ambiguity at all. <code>ssh homeserver</code> just works, from a café in another country, exactly like you're on the couch next to it.</p>
+
+<h2>How it actually works</h2>
+
+<p>Three ideas:</p>
+
+<ol>
+<li><strong>WireGuard under the hood.</strong> Every device generates a keypair and gets a stable <code>100.x.y.z</code> address. Traffic between devices travels in encrypted WireGuard tunnels — a modern, tiny, fast VPN protocol, and the crypto means nobody in the middle can read it.</li>
+<li><strong>A control plane that never sees your traffic.</strong> Tailscale runs a coordination server that handles the hard-but-boring parts: proving who you are (sign in with Google, GitHub, etc.), keeping track of your devices, swapping public keys between them, and enforcing access rules. It <em>coordinates</em> the network; your data flows peer-to-peer and never passes through it. This distinction is the whole security story.</li>
+<li><strong>NAT traversal, with a relay fallback.</strong> Most devices hide behind NAT. Tailscale punches direct UDP connections through it (hole punching). When a NAT is too stubborn, traffic falls back to <strong>DERP</strong> — Tailscale's relay servers. Still end-to-end encrypted (the relay can't read anything), just a bit slower.</li>
+</ol>
+
+<p>Plus <strong>MagicDNS</strong>: every device gets a name like <code>laptop.tail8f3a2.ts.net</code>. No more memorizing IPs.</p>
+
+<div class="diagram"><pre class="mermaid">
+flowchart LR
+    L[💻 Your laptop<br/>100.64.0.1] <-->|WireGuard tunnel<br/>direct, encrypted| S[🖥️ Home server<br/>100.64.0.2]
+    L -.->|NAT too stubborn?| D[📡 DERP relay<br/>encrypted — relay can't<br/>read your traffic]
+    D -.-> S
+    C[☁️ Tailscale control plane<br/>identity · keys · ACLs] -.->|coordinates only<br/>never sees traffic| L
+    C -.-> S
+    style L fill:#3a2a20,stroke:#c98a4b,color:#ffe9d2
+    style S fill:#3a2a20,stroke:#c98a4b,color:#ffe9d2
+    style D fill:#2a1d18,stroke:#8a6a45,color:#ffd9a8
+    style C fill:#2a1d18,stroke:#8a6a45,color:#ffd9a8
+</pre></div>
+<div class="caption">How two devices connect: direct WireGuard when possible, DERP relay when NAT won't cooperate, control plane coordinating throughout.</div>
+
+<h2>The greatest hits</h2>
+
+<ul>
+<li><strong>Tailscale SSH</strong> — SSH without managing keys. Access follows your identity, not a pile of <code>authorized_keys</code> files.</li>
+<li><strong>Subnet routers</strong> — expose a whole LAN (printer, NAS, that one weird IoT thing) to your tailnet.</li>
+<li><strong>Exit nodes</strong> — route all your traffic out through another device. Coffee-shop Wi-Fi, solved.</li>
+<li><strong>ACLs</strong> — <em>"my phone can reach my home server, but not my work laptop,"</em> written as policy instead of firewall archaeology.</li>
+<li><strong>Serve &amp; Funnel</strong> — share something running on your localhost with your tailnet (Serve) or the public internet (Funnel). The legitimate answer to "how do I show this local thing to someone."</li>
+</ul>
+
+<div class="verdict">
+<p><strong>Verdict:</strong> install, log in, ping your server by name — it genuinely just works, and the free personal tier is generous. It's the closest thing to all your computers simply being <em>here</em>, wherever "here" is.</p>
+</div>
+</article>
+
+  <footer>© lukezhang.si · <a href="/blog/">more posts</a></footer>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({ startOnLoad: true, theme: 'dark', themeVariables: {
+  background: '#141010', primaryColor: '#3a2a20', primaryTextColor: '#ffe9d2',
+  primaryBorderColor: '#c98a4b', lineColor: '#c98a4b', secondaryColor: '#2a1d18',
+  tertiaryColor: '#1c1410', textColor: '#ffe9d2', mainBkg: '#2a1d18',
+  actorBkg: '#3a2a20', actorBorder: '#c98a4b', actorTextColor: '#ffe9d2',
+  signalColor: '#e8a15c', signalTextColor: '#ffe9d2',
+  noteBkgColor: '#2e2015', noteTextColor: '#ffd9a8', noteBorderColor: '#c98a4b',
+  activationBkgColor: '#4a3226', labelBoxBkgColor: '#2a1d18'
+}});
+</script>
+</body>
+</html>

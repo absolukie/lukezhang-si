@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kill the localhost redirect — lukezhang.si</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    min-height: 100%;
+    background: radial-gradient(circle at 50% 0%, #3a2718 0%, #1c130e 45%, #0d0a09 100%);
+    background-attachment: fixed;
+    color: #f3e2cd;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.75;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 56px 22px 80px; }
+  nav.top { margin-bottom: 36px; font-size: 14px; display: flex; gap: 18px; }
+  nav.top a { color: rgba(243,226,205,0.55); text-decoration: none; }
+  nav.top a:hover { color: #e8a15c; }
+  h1 { font-size: 36px; letter-spacing: -0.01em; line-height: 1.2; margin-bottom: 8px; }
+  .meta { font-size: 13px; color: rgba(243,226,205,0.5); margin-bottom: 32px; }
+  .meta .tag { display: inline-block; border: 1px solid rgba(232,161,92,0.35); color: #e8a15c;
+    border-radius: 999px; padding: 1px 10px; margin-right: 6px; font-size: 12px; }
+  article p { margin-bottom: 18px; font-size: 16.5px; color: rgba(243,226,205,0.92); }
+  article h2 { font-size: 24px; margin: 40px 0 14px; color: #ffd9a8; }
+  article ol, article ul { margin: 0 0 18px 24px; font-size: 16.5px; color: rgba(243,226,205,0.92); }
+  article li { margin-bottom: 8px; }
+  article li::marker { color: #e8a15c; }
+  article strong { color: #ffe9d2; }
+  article code { background: rgba(232,161,92,0.12); color: #ffcf96; padding: 1px 7px;
+    border-radius: 6px; font-size: 0.88em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  blockquote { border-left: 3px solid #e8a15c; padding: 4px 0 4px 18px; margin: 0 0 22px;
+    font-style: italic; color: rgba(243,226,205,0.85); font-size: 16.5px; }
+  blockquote a { color: #e8a15c; }
+  .diagram { background: rgba(0,0,0,0.28); border: 1px solid rgba(232,161,92,0.18);
+    border-radius: 14px; padding: 18px 8px; margin: 26px 0 30px; overflow-x: auto; }
+  .diagram .mermaid { min-width: 560px; }
+  .caption { text-align: center; font-size: 13.5px; color: rgba(243,226,205,0.5);
+    margin: -20px 0 30px; }
+  .verdict { border: 1px solid rgba(232,161,92,0.4); border-radius: 14px;
+    padding: 20px 24px; margin: 36px 0; background: rgba(232,161,92,0.06); }
+  .verdict p { margin: 0; }
+  .ps { font-size: 14.5px; color: rgba(243,226,205,0.65); border-top: 1px solid rgba(232,161,92,0.18);
+    padding-top: 22px; margin-top: 40px; }
+  footer { margin-top: 40px; font-size: 13px; color: rgba(243,226,205,0.35); }
+  a { color: #e8a15c; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="top"><a href="/">← lukezhang.si</a><a href="/blog/">blog</a></nav>
+  <h1>Kill the localhost redirect</h1>
+  <div class="meta">October 1, 2026 &nbsp;·&nbsp; <span class="tag">oauth</span><span class="tag">cli</span></div>
+
+<article>
+<blockquote>
+"i'm begging you once again can we please kill the redirect to localhost oauth flow<br>
+it's so bad, such bad ux so brittle in so many situations<br>
+the client can poll for a code please please please"<br>
+— <a href="https://x.com/thdxr/status/2105350537860305104">Dax (@thdxr)</a>, building the opencode agent
+</blockquote>
+
+<p>127K views and 2.3K likes in a day. He's not wrong. Here's the full story: what the flow is, why it's terrible, and the better flow that's been sitting there since 2019.</p>
+
+<h2>The flow everyone's copy-pasting</h2>
+
+<p>You build a CLI. It needs the user to sign in with some OAuth provider. The standard recipe, straight out of <strong>RFC 8252</strong> ("OAuth 2.0 for Native Apps"), goes like this:</p>
+
+<ol>
+<li>Your CLI starts a tiny throwaway web server on <code>127.0.0.1</code>, on whatever port happens to be free.</li>
+<li>It opens the user's browser at the provider's login page, with <code>redirect_uri=http://127.0.0.1:PORT/callback</code>.</li>
+<li>The user logs in and hits "Authorize".</li>
+<li>The provider redirects the browser to <code>http://127.0.0.1:PORT/callback?code=...</code> — which lands on your little server.</li>
+<li>You grab the code from the query string, trade it for tokens, and kill the server.</li>
+</ol>
+
+<p>The browser is just a courier, ferrying the authorization code from the provider back to an HTTP server running inside your terminal app. Cute trick. It works fine on a laptop.</p>
+
+<div class="diagram"><pre class="mermaid">
+sequenceDiagram
+    participant CLI as CLI app
+    participant Loop as 127.0.0.1:54321<br/>(temp server)
+    participant Browser as Browser
+    participant IdP as OAuth provider
+    CLI->>Loop: start temp HTTP server on a free port
+    CLI->>Browser: open login page<br/>redirect_uri=http://127.0.0.1:54321/callback
+    Browser->>IdP: GET /authorize
+    IdP-->>Browser: login page
+    Browser->>IdP: user logs in + approves
+    IdP-->>Browser: 302 → http://127.0.0.1:54321/callback?code=abc
+    Browser->>Loop: GET /callback?code=abc
+    Loop-->>CLI: hand over the code
+    CLI->>IdP: POST /token (code → tokens)
+    IdP-->>CLI: access + refresh token
+    CLI->>Loop: shut down temp server
+    Note over Browser,Loop: Over SSH this breaks: the redirect targets<br/>the remote machine's loopback, which your<br/>local browser cannot reach.
+</pre></div>
+<div class="caption">Diagram 1 — the redirect-to-localhost flow. Five moving parts and a temp web server, just to sign in.</div>
+
+<h2>Why Dax wants it dead</h2>
+
+<ul>
+<li><strong>"localhost on which machine?"</strong> — SSH into a remote box, run the CLI there, and the redirect targets the <em>remote</em> machine's loopback. Your laptop's browser can't reach it. Dead on arrival for remote dev, containers, and headless servers. This was literally one of the top replies to the post.</li>
+<li><strong>Port roulette.</strong> You have to grab a free port at runtime and hope the provider accepts it in the redirect URI.</li>
+<li><strong>Firewalls and sandboxed browsers</strong> can block the loopback listener entirely.</li>
+<li><strong>Browsers are getting stricter</strong> about public HTTPS pages bouncing down to <code>http://localhost</code> (Private Network Access protections).</li>
+<li><strong>Race conditions.</strong> The temp server must stay alive until the exact moment the redirect lands. Quit a beat early and the user gets "this site can't be reached."</li>
+<li><strong>Cargo-culting.</strong> As another reply put it: <em>"it was in the pretrain so every llm just copies it."</em> Every new CLI agent reimplements the same dance because it's what all the sample code shows.</li>
+</ul>
+
+<h2>The fix: let the client poll</h2>
+
+<p>Dax's plea — <em>"the client can poll for a code"</em> — is the <strong>Device Authorization Grant</strong>, RFC 8628. It's from 2019. It's not new, just underused:</p>
+
+<ol>
+<li>Your CLI asks the provider for a device code. Back comes a user code (<code>WDJB-MJHT</code>), a verification URL, and a polling interval.</li>
+<li>The CLI prints: <em>"Go to provider.com/device and enter WDJB-MJHT."</em></li>
+<li>The user does that on <strong>any</strong> device — phone, tablet, laptop. Log in, approve.</li>
+<li>Meanwhile the CLI polls the token endpoint every few seconds: <em>approved yet? approved yet?</em></li>
+<li>The moment you approve, the next poll returns real tokens. Done.</li>
+</ol>
+
+<div class="diagram"><pre class="mermaid">
+sequenceDiagram
+    participant CLI as CLI app
+    participant IdP as OAuth provider
+    participant Phone as Your phone<br/>(any browser)
+    CLI->>IdP: POST /device/authorize
+    IdP-->>CLI: device_code, user_code WDJB-MJHT,<br/>verification_uri, interval = 5s
+    Note over CLI: print "go to provider.com/device<br/>and enter WDJB-MJHT"
+    loop every 5 seconds
+        CLI->>IdP: POST /token (device_code)
+        IdP-->>CLI: authorization_pending…
+    end
+    Phone->>IdP: open verification_uri, enter code
+    IdP-->>Phone: login + approve screen
+    Phone->>IdP: approve ✅
+    CLI->>IdP: POST /token (device_code)
+    IdP-->>CLI: access + refresh token 🎉
+    Note over CLI,Phone: No localhost server. No ports.<br/>Works over SSH and on headless boxes —<br/>approval can happen on your phone.
+</pre></div>
+<div class="caption">Diagram 2 — the device code flow. The CLI polls; the human approves wherever it's convenient.</div>
+
+<div class="verdict">
+<p><strong>Verdict:</strong> Dax is right. The localhost redirect was designed for desktop apps in 2017; for CLIs and coding agents, device-code polling is strictly better UX. The only reason the redirect persists is sample code. Kill it.</p>
+</div>
+
+<p class="ps">P.S. — this is exactly how <code>codex login --device-auth</code> signed in my own assistant's Codex CLI: a code on screen, a tap on the phone, tokens in the terminal. Zero localhost involved.</p>
+</article>
+
+  <footer>© lukezhang.si · <a href="/blog/">more posts</a></footer>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({ startOnLoad: true, theme: 'dark', themeVariables: {
+  background: '#141010', primaryColor: '#3a2a20', primaryTextColor: '#ffe9d2',
+  primaryBorderColor: '#c98a4b', lineColor: '#c98a4b', secondaryColor: '#2a1d18',
+  tertiaryColor: '#1c1410', textColor: '#ffe9d2', mainBkg: '#2a1d18',
+  actorBkg: '#3a2a20', actorBorder: '#c98a4b', actorTextColor: '#ffe9d2',
+  signalColor: '#e8a15c', signalTextColor: '#ffe9d2',
+  noteBkgColor: '#2e2015', noteTextColor: '#ffd9a8', noteBorderColor: '#c98a4b',
+  activationBkgColor: '#4a3226', labelBoxBkgColor: '#2a1d18'
+}});
+</script>
+</body>
+</html>

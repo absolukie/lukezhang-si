@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>design space · lukezhang.si</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    min-height: 100%;
+    background: radial-gradient(circle at 50% 30%, #4a3226 0%, #2a1d18 45%, #100d0e 100%);
+    background-attachment: fixed;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    color: #ffe9d2;
+  }
+  body { padding: 28px 18px 70px; }
+  header { text-align: center; margin-bottom: 26px; position: relative; }
+  .back {
+    position: absolute; left: 0; top: 2px;
+    color: rgba(255,233,210,.5); text-decoration: none; font-size: 14px;
+  }
+  h1 { font-size: 30px; font-weight: 800; letter-spacing: .02em; }
+  header p { color: rgba(255,233,210,.55); font-size: 14px; margin-top: 6px; }
+  section { max-width: 760px; margin: 0 auto 34px; }
+  h2 { font-size: 15px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+       color: rgba(255,233,210,.6); margin-bottom: 4px; }
+  .hint { font-size: 13px; color: rgba(255,233,210,.45); margin-bottom: 14px; }
+  .hint b { color: #f5a259; font-weight: 700; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 12px; }
+  .tile {
+    appearance: none; border: 1px solid rgba(255,233,210,.10);
+    background: rgba(255,233,210,.05); border-radius: 20px;
+    aspect-ratio: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 8px;
+    cursor: pointer; touch-action: manipulation; position: relative; overflow: hidden;
+    transition: transform .15s ease, border-color .2s ease, background .2s ease;
+    color: inherit; font: inherit; padding: 8px;
+  }
+  .tile:active { transform: scale(.93); }
+  .tile svg.icon { width: 46%; height: 46%; overflow: visible; }
+  .grid.hearts .tile svg.icon { width: 58%; height: 58%; }
+  .tile .label { font-size: 11px; color: rgba(255,233,210,.55); text-align: center; line-height: 1.25; }
+  .tile .letter {
+    position: absolute; top: 8px; left: 10px; font-size: 12px; font-weight: 800;
+    color: rgba(255,233,210,.4);
+  }
+  .tile.picked { border-color: #f5a259; background: rgba(245,162,89,.12); }
+  .tile.picked .letter { color: #f5a259; }
+  .tile.picked::after {
+    content: "✓"; position: absolute; top: 6px; right: 10px;
+    color: #f5a259; font-weight: 800; font-size: 14px;
+  }
+  /* burst particles */
+  .burst {
+    position: absolute; bottom: 38%; pointer-events: none;
+    animation: floatUp 1s ease-out forwards;
+  }
+  .burst svg { width: 30px; height: 30px; display: block; }
+  @keyframes floatUp {
+    0%   { transform: translateY(0) scale(.5); opacity: 0; }
+    20%  { opacity: 1; }
+    100% { transform: translateY(-90px) scale(1.1) rotate(16deg); opacity: 0; }
+  }
+  #badge {
+    position: fixed; right: 10px; bottom: 8px;
+    color: rgba(255,233,210,.35); font-size: 11px; letter-spacing: .04em;
+    pointer-events: none;
+  }
+  /* ---------- icon animation primitives ---------- */
+  svg.icon .a, svg.icon .b { transition: transform .38s cubic-bezier(.34,1.56,.64,1), opacity .25s ease;
+    transform-box: fill-box; transform-origin: center; }
+  svg.icon .b { opacity: 0; transform: scale(.4); }
+  .tile.on svg.icon .a { opacity: 0; transform: scale(.4); }
+  .tile.on svg.icon .b { opacity: 1; transform: scale(1); }
+  svg.icon .spin { transform-box: fill-box; transform-origin: 50% 0%; }
+  .tile.on svg.icon .spin { animation: swing .7s ease; }
+  @keyframes swing {
+    0%,100% { transform: rotate(0); } 20% { transform: rotate(18deg); }
+    40% { transform: rotate(-14deg); } 60% { transform: rotate(9deg); } 80% { transform: rotate(-5deg); }
+  }
+  svg.icon .fadeable { transition: opacity .3s ease; }
+  .tile.on svg.icon .fadeable.off { opacity: 0; }
+  svg.icon .fadeable.on2 { opacity: 0; }
+  .tile.on svg.icon .fadeable.on2 { opacity: 1; }
+  svg.icon .draw { stroke-dasharray: 40; stroke-dashoffset: 40; transition: stroke-dashoffset .4s ease .1s; }
+  .tile.on svg.icon .draw { stroke-dashoffset: 0; }
+  svg.icon .hinge { transform-box: fill-box; transform-origin: 0% 100%;
+    transition: transform .35s cubic-bezier(.34,1.56,.64,1); }
+  .tile.on svg.icon .hinge { transform: rotate(-42deg); }
+  svg.icon .fly { transition: transform .5s ease-in, opacity .5s ease-in;
+    transform-box: fill-box; transform-origin: center; }
+  .tile.on svg.icon .fly { transform: translate(26px,-26px) scale(.7); opacity: 0; }
+  svg.icon .ring { transform-box: fill-box; transform-origin: center; opacity: 0; }
+  svg.icon .ring.go { animation: ringGo .55s ease-out; }
+  @keyframes ringGo {
+    0% { opacity: .9; transform: scale(.4); } 100% { opacity: 0; transform: scale(1.7); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <a class="back" href="/">← the cat</a>
+  <h1>design space</h1>
+  <p>tiny interactions, handmade. tap everything.</p>
+</header>
+
+<section>
+  <h2>Morphs</h2>
+  <p class="hint">Twelve little state changes. Tap to flip each one.</p>
+  <div class="grid" id="morphGrid">
+
+    <button class="tile">
+      <svg class="icon" viewBox="0 0 64 64">
+        <g class="a"><path d="M27 20 L46 32 L27 44 Z" fill="#ffe9d2" stroke="#ffe9d2" stroke-width="5" stroke-linejoin="round"/></g>
+        <g class="b"><rect x="21" y="20" width="9" height="24" rx="4.5" fill="#ffe9d2"/><rect x="36" y="20" width="9" height="24" rx="4.5" fill="#ffe9d2"/></g>
+      </svg>
+      <span class="label">Play / Pause</span>
+    </button>
+
+    <button class="tile">
+      <svg class="icon" viewBox="0 0 64 64" fill="none" stroke="#ffe9d2" stroke-width="5" stroke-linecap="round">
+        <g class="a">
+          <line x1="18" y1="22" x2="46" y2="22"/>
+          <line x1="18" y1="32" x2="46" y2="32"/>
+          <line x1="18" y1="42" x2="46" y2="42"/>
+        </g>
+        <g class="b">
+          <line x1="18" y1="22" x2="46" y2="22" style="transform: translateY(10px) rotate(45deg);"/>
+          <line x1="18" y1="42" x2="46" y2="42" style="transform: translateY(-10px) rotate(-45deg);"/>
+        </g>
+      </svg>
+      <span class="label">Menu / Close</span>
+    </button>
+
+    <button class="tile">
+      <svg class="icon" viewBox="0 0 64 64" fill="none" stroke="#ffe9d2" stroke-width="5" stroke-linecap="round">
+        <line x1="18" y1="32" x2="46" y2="32"/>
+        <g class="a"><line x1="32" y1="18" x2="32" y2="46"/></g>
+      </svg>
+      <span class="label">Plus / Minus</span>
+    </button>
+
+    <button class="tile" data-ring="1">
+      <svg class="icon" viewBox="0 0 64 64">
+        <circle class="ring" cx="32" cy="32" r="14" fill="none" stroke="#ff7d9c" stroke-width="4"/>
+        <g class="a"><path d="M32 54 C20 44 10 36 10 24 C10 15 16 10 23 10 C28 10 31 13 32 17 C33 13 36 10 41 10 C48 10 54 15 54 24 C54 36 44 44 32 54 Z" fill="none" stroke="#ffe9d2" stroke-width="5" stroke-linejoin="round"/></g>
+        <g class="b"><path d="M32 54 C20 44 10 36 10 24 C10 15 16 10 23 10 C28 10 31 13 32 17 C33 13 36 10 41 10 C48 10 54 15 54 24 C54 36 44 44 32 54 Z" fill="#ff5d7e" stroke="#ff5d7e" stroke-width="4" stroke-linejoin="round"/></g>
+      </svg>
+      <span class="label">Like</span>
+    </button>
+
+    <button class="tile">
+      <svg class="icon" viewBox="0 0 64 64" fill="none" stroke="#ffe9d2" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+        <g class="spin">
+          <path d="M32 12 C26 12 20 19 20 29 L20 39 L15 45 L49 45 L44 39 L44 29 C44 19 38 12 32 12 Z"/>
+          <circle cx="32" cy="50" r="2.6" fill="#ffe9d2" stroke="none"/>
+        </g>
+        <g class="b" style="transition-delay:.15s">
+          <path d="M12 26 c-3.5 4.5 -3.5 11.5 0 16" stroke-width="3.5"/>
+          <path d="M52 26 c3.5 4.5 3.5 11.5 0 16" stroke-width="3.5"/>
+        </g>
+      </svg>
+      <span class="label">Bell / Ring</span>
+    </button>
+
+    <button class="tile">
+      <svg class="icon" viewBox="0 0 64 64" fill="none" stroke="#ffe9d2" stroke-width="4.5" stroke-linecap="round">
+        <g class="a">
+          <circle cx="32" cy="32" r="9" fill="#f5c25e" stroke="none"/>
+          <line x1="32" y1="13" x2="32" y2="19"/><line x1="32" y1="45" x2="32" y2="51"/>
+          <line x1="13" y1="32" x2="19" y2="32"/><line x1="45" y1="32" x2="51" y2="32"/>
+          <line x1="18.9" y1="18.9" x2="23.1" y2="23.1"/><line x1="40.9" y1="40.9" x2="45.1" y2="45.1"/>
+          <line x1="45.1" y1="18.9" x2="40.9" y2="23.1"/><line x1="23.1" y1="40.9" x2="18.9" y2="45.1"/>
+        </g>
+        <g class="b"><path d="M45 35 A16 16 0 1 1 26 14 A12.5 12.5 0 1 0 45 35 Z" fill="#ffe9d2" stroke="none"/></g>
+      </svg>
+      <span class="label">Day / Night</span>
+    </button>
+
+    <button class="tile">
+      <svg class="icon" viewBox="0 0 64 64" fill="none" stroke="#ffe9d2" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 25 h9 l9 -8 v30 l-9 -8 h-9 Z" fill="#ffe9d2" stroke="none"/>
+        <g class="a"><path d="M39 26 a9 9 0 0 1 0 12"/><path d="M43.5 21 a16 16 0 0 1 0 22" stroke-width="4"/></g>
+        <g class="b"><line x1="39" y1="26" x2="51" y2="38"/><line x1="51" y1="26" x2="39" y2="38"/></g>
+      </svg>
+      <span class="label">Sound / Mute</span>
+    </button>
+
+    <button class="tile">
+      <svg class="icon" viewBox="0 0 64 64" fill="none" stroke="#ffe9d2" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M16 40 v9 h32 v-9"/>
+        <g class="a"><line x1="32" y1="14" x2="32" y2="34"/><path d="M24 27 L32 35 L40 27"/></g>
+        <g class="b"><path class="draw" d="M24 31 L30 37 L42 23"/></g>
+      </svg>
+      <span class="label">Download / Done</span>
+    </button>
+
+    <button class="tile" data-reset="1">
+      <svg class="icon" viewBox="0 0 64 64" fill="none" stroke="#ffe9d2" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+        <g class="fly"><path d="M12 32 L52 12 L34 52 L27 40 Z"/><path d="M27 40 L52 12" stroke-width="3"/></g>
+        <g class="b"><path d="M24 32 L30 38 L42 24" stroke-width="5"/></g>
+      </svg>
+      <span class="label">Send</span>
+    </button>
+
+    <button class="tile">
+      <svg class="icon" viewBox="0 0 64 64">
+        <g class="a"><path d="M22 12 h20 v40 l-10 -7.5 l-10 7.5 Z" fill="none" stroke="#ffe9d2" stroke-width="5" stroke-linejoin="round"/></g>
+        <g class="b"><path d="M22 12 h20 v40 l-10 -7.5 l-10 7.5 Z" fill="#f5a259" stroke="#f5a259" stroke-width="4" stroke-linejoin="round"/></g>
+      </svg>
+      <span class="label">Bookmark</span>
+    </button>
+
+    <button class="tile">
+      <svg class="icon" viewBox="0 0 64 64" fill="none" stroke="#ffe9d2" stroke-width="5" stroke-linecap="round">
+        <rect x="21" y="29" width="22" height="17" rx="5"/>
+        <circle cx="32" cy="37.5" r="2.4" fill="#ffe9d2" stroke="none"/>
+        <path class="hinge" d="M26 29 v-4 a6 6 0 0 1 12 0 v4"/>
+      </svg>
+      <span class="label">Lock / Unlock</span>
+    </button>
+
+    <button class="tile">
+      <svg class="icon" viewBox="0 0 64 64">
+        <g class="a"><polygon points="32,13 37.6,26.4 52,26.9 41,36.4 44.6,50.6 32,42.8 19.4,50.6 23,36.4 12,26.9 26.4,26.4" fill="none" stroke="#ffe9d2" stroke-width="4" stroke-linejoin="round"/></g>
+        <g class="b">
+          <polygon points="32,13 37.6,26.4 52,26.9 41,36.4 44.6,50.6 32,42.8 19.4,50.6 23,36.4 12,26.9 26.4,26.4" fill="#f5c25e" stroke="#f5c25e" stroke-width="3" stroke-linejoin="round"/>
+          <g stroke="#f5c25e" stroke-width="3.5" stroke-linecap="round">
+            <line x1="32" y1="4" x2="32" y2="9"/><line x1="32" y1="55" x2="32" y2="60"/>
+            <line x1="4" y1="32" x2="9" y2="32"/><line x1="55" y1="32" x2="60" y2="32"/>
+          </g>
+        </g>
+      </svg>
+      <span class="label">Star</span>
+    </button>
+
+  </div>
+</section>
+
+<section>
+  <h2>Tap burst</h2>
+  <p class="hint" id="pickHint">These are the candidates to replace the emoji hearts on the cat. Tap one to preview its burst — then tell me its letter in chat.</p>
+  <div class="grid hearts" id="heartGrid">
+
+    <button class="tile" data-letter="A">
+      <span class="letter">A</span>
+      <svg class="icon" viewBox="0 0 64 64">
+        <defs><linearGradient id="gA" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#ff7d9c"/><stop offset="1" stop-color="#e6395f"/>
+        </linearGradient></defs>
+        <path d="M32 56 C19 45 8 36 8 23 C8 13 15 7 23 7 C28.5 7 31.5 10.5 32 14.5 C32.5 10.5 35.5 7 41 7 C49 7 56 13 56 23 C56 36 45 45 32 56 Z" fill="url(#gA)"/>
+        <ellipse cx="23" cy="21" rx="7" ry="4.5" fill="#fff" opacity=".5" transform="rotate(-24 23 21)"/>
+      </svg>
+      <span class="label">Glossy</span>
+    </button>
+
+    <button class="tile" data-letter="B">
+      <span class="letter">B</span>
+      <svg class="icon" viewBox="0 0 64 64">
+        <defs><clipPath id="clipB"><path d="M32 56 C19 45 8 36 8 23 C8 13 15 7 23 7 C28.5 7 31.5 10.5 32 14.5 C32.5 10.5 35.5 7 41 7 C49 7 56 13 56 23 C56 36 45 45 32 56 Z"/></clipPath></defs>
+        <g clip-path="url(#clipB)">
+          <rect x="0" y="0" width="32" height="64" fill="#f5a259"/>
+          <rect x="32" y="0" width="32" height="64" fill="#fff3e2"/>
+        </g>
+        <path d="M32 56 C19 45 8 36 8 23 C8 13 15 7 23 7 C28.5 7 31.5 10.5 32 14.5 C32.5 10.5 35.5 7 41 7 C49 7 56 13 56 23 C56 36 45 45 32 56 Z" fill="none" stroke="#3a241a" stroke-width="3.5" stroke-linejoin="round"/>
+        <ellipse cx="22" cy="20" rx="5" ry="3.4" fill="#fff" opacity=".55" transform="rotate(-24 22 20)"/>
+      </svg>
+      <span class="label">Bicolor · matches the cat</span>
+    </button>
+
+    <button class="tile" data-letter="C">
+      <span class="letter">C</span>
+      <svg class="icon" viewBox="0 0 64 64">
+        <g fill="#f472a0" stroke="#a63d5f" stroke-width="2.5">
+          <ellipse cx="32" cy="42" rx="11" ry="8.5"/>
+          <ellipse cx="16" cy="27" rx="4.6" ry="5.6"/>
+          <ellipse cx="25.5" cy="20.5" rx="4.6" ry="5.6"/>
+          <ellipse cx="38.5" cy="20.5" rx="4.6" ry="5.6"/>
+          <ellipse cx="48" cy="27" rx="4.6" ry="5.6"/>
+        </g>
+      </svg>
+      <span class="label">Paw print</span>
+    </button>
+
+    <button class="tile" data-letter="D">
+      <span class="letter">D</span>
+      <svg class="icon" viewBox="0 0 64 64">
+        <path d="M20 18 L14 4 L30 11 Z" fill="#f5a259" stroke="#3a241a" stroke-width="3" stroke-linejoin="round"/>
+        <path d="M44 18 L50 4 L34 11 Z" fill="#f5a259" stroke="#3a241a" stroke-width="3" stroke-linejoin="round"/>
+        <path d="M32 58 C20 47 10 38 10 25 C10 16 16 11 23 11 C28 11 31 14 32 17.5 C33 14 36 11 41 11 C48 11 54 16 54 25 C54 38 44 47 32 58 Z" fill="#f5a259" stroke="#3a241a" stroke-width="3.5" stroke-linejoin="round"/>
+        <path d="M20 13.5 L17.5 8.5 L23.5 11.5 Z" fill="#ff8fb3"/>
+        <path d="M44 13.5 L46.5 8.5 L40.5 11.5 Z" fill="#ff8fb3"/>
+      </svg>
+      <span class="label">Cat-ear heart</span>
+    </button>
+
+    <button class="tile" data-letter="E">
+      <span class="letter">E</span>
+      <svg class="icon" viewBox="0 0 64 64">
+        <path d="M32 56 C19 45 8 36 8 23 C8 13 15 7 23 7 C28.5 7 31.5 10.5 32 14.5 C32.5 10.5 35.5 7 41 7 C49 7 56 13 56 23 C56 36 45 45 32 56 Z" fill="none" stroke="#ffe9d2" stroke-width="4" stroke-linejoin="round"/>
+      </svg>
+      <span class="label">Line heart</span>
+    </button>
+
+    <button class="tile" data-letter="F">
+      <span class="letter">F</span>
+      <svg class="icon" viewBox="0 0 64 64">
+        <g fill="#ff5d7e">
+          <rect x="22" y="12" width="8" height="8"/><rect x="34" y="12" width="8" height="8"/>
+          <rect x="14" y="20" width="8" height="8"/><rect x="22" y="20" width="8" height="8"/><rect x="30" y="20" width="8" height="8"/><rect x="38" y="20" width="8" height="8"/><rect x="46" y="20" width="8" height="8"/>
+          <rect x="14" y="28" width="8" height="8"/><rect x="22" y="28" width="8" height="8"/><rect x="30" y="28" width="8" height="8"/><rect x="38" y="28" width="8" height="8"/><rect x="46" y="28" width="8" height="8"/>
+          <rect x="22" y="36" width="8" height="8"/><rect x="30" y="36" width="8" height="8"/><rect x="38" y="36" width="8" height="8"/>
+          <rect x="26" y="44" width="12" height="8"/>
+        </g>
+      </svg>
+      <span class="label">Pixel heart</span>
+    </button>
+
+    <button class="tile" data-letter="G">
+      <span class="letter">G</span>
+      <svg class="icon" viewBox="0 0 64 64">
+        <path d="M50 4 l2.2 5.8 5.8 2.2 -5.8 2.2 -2.2 5.8 -2.2 -5.8 -5.8 -2.2 5.8 -2.2 Z" fill="#fff3d6"/>
+        <path d="M12 42 l1.8 4.7 4.7 1.8 -4.7 1.8 -1.8 4.7 -1.8 -4.7 -4.7 -1.8 4.7 -1.8 Z" fill="#fff3d6"/>
+        <path d="M30 52 C21 44 14 37 14 28 C14 21 19 17 24.5 17 C28.5 17 30.5 19.5 31 22.5 C31.5 19.5 33.5 17 37.5 17 C43 17 48 21 48 28 C48 37 41 44 30 52 Z" fill="#ff8fb3"/>
+      </svg>
+      <span class="label">Sparkle heart</span>
+    </button>
+
+    <button class="tile" data-letter="H">
+      <span class="letter">H</span>
+      <svg class="icon" viewBox="0 0 64 64">
+        <g fill="#ff8fb3" stroke="#a63d5f" stroke-width="2.5">
+          <ellipse cx="14" cy="34" rx="7" ry="8.5"/>
+          <ellipse cx="27" cy="24" rx="7" ry="8.5"/>
+          <ellipse cx="41" cy="24" rx="7" ry="8.5"/>
+          <ellipse cx="53" cy="35" rx="6.5" ry="8"/>
+        </g>
+      </svg>
+      <span class="label">Toe beans</span>
+    </button>
+
+  </div>
+</section>
+
+<div id="badge">v2026.10.01-00.08</div>
+
+<script>
+(function () {
+  // ---- morph tiles: tap toggles state ----
+  document.querySelectorAll('#morphGrid .tile').forEach(function (t) {
+    t.addEventListener('click', function () {
+      if (t.hasAttribute('data-reset')) {
+        t.classList.add('on');
+        setTimeout(function () { t.classList.remove('on'); }, 1300);
+      } else {
+        t.classList.toggle('on');
+      }
+      if (t.hasAttribute('data-ring')) {
+        var r = t.querySelector('.ring');
+        r.classList.remove('go');
+        void r.getBoundingClientRect();
+        r.classList.add('go');
+      }
+    });
+  });
+
+  // ---- heart tiles: tap previews burst + marks pick ----
+  var hint = document.getElementById('pickHint');
+  var hintBase = hint.innerHTML;
+  function burst(tile) {
+    var svg = tile.querySelector('svg.icon');
+    for (var i = 0; i < 6; i++) {
+      var s = document.createElement('span');
+      s.className = 'burst';
+      s.style.left = (18 + Math.random() * 56) + '%';
+      s.style.animationDelay = (Math.random() * 0.2) + 's';
+      s.appendChild(svg.cloneNode(true));
+      tile.appendChild(s);
+      (function (el) { setTimeout(function () { el.remove(); }, 1400); })(s);
+    }
+  }
+  document.querySelectorAll('#heartGrid .tile').forEach(function (t) {
+    t.addEventListener('click', function () {
+      document.querySelectorAll('#heartGrid .tile').forEach(function (x) { x.classList.remove('picked'); });
+      t.classList.add('picked');
+      burst(t);
+      var L = t.getAttribute('data-letter');
+      hint.innerHTML = 'Picked <b>' + L + '</b> — tell me "<b>' + L + '</b>" in chat and I\'ll put it on the cat.';
+    });
+  });
+})();
+</script>
+</body>
+</html>

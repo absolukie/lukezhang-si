@@ -67,7 +67,7 @@
 <nav id="index" aria-label="Jump to a department"><div class="cap">Departments</div></nav>
 <div id="hint"><b>Click a card</b> to unfold its team &nbsp;·&nbsp; <b>scroll / pinch</b> to zoom &nbsp;·&nbsp; <b>drag</b> to pan</div>
 <div id="count">– visible</div>
-<div id="ver">v2026.10.01d</div>
+<div id="ver">v2026.10.01e</div>
 
 <script>
 "use strict";
@@ -218,9 +218,20 @@ const S={x:0,y:0,z:0.4};
 let drawQueued=false;
 function requestDraw(){if(drawQueued)return;drawQueued=true;requestAnimationFrame(()=>{drawQueued=false;draw();});}
 function zoomAt(cx,cy,f){
+  const anchor=nodeAt(cx,cy); // card under the cursor before anything moves
+  const akey=anchor?anchor.path.join("/"):"";
+  const nz=Math.min(6,Math.max(0.05,S.z*f));
   const wx=(cx-S.x)/S.z,wy=(cy-S.y)/S.z;
-  S.z=Math.min(6,Math.max(0.05,S.z*f));
-  S.x=cx-wx*S.z;S.y=cy-wy*S.z;requestDraw();
+  S.z=nz;S.x=cx-wx*nz;S.y=cy-wy*nz;
+  ensureLayout();
+  // layout may have reshaped (auto unfold/collapse): keep the anchor glued to the cursor
+  if(anchor){
+    let n=anchor,k=akey;
+    while(n&&!POS.has(k)){k=k.split("/").slice(0,-1).join("/");n=n.parent;}
+    const p=POS.get(k);
+    if(p){S.x=cx-p.x*S.z;S.y=cy-p.y*S.z;}
+  }
+  requestDraw();
 }
 // fly to a node; target re-resolved every frame so mid-flight layout changes track it
 function flyToNode(n,z,dur){
@@ -395,15 +406,20 @@ function endPtr(e){
     if(n){
       n._focused=true;
       const key=n.path.join("/");
-      if(n.level<3){
-        if(pinned.has(key))pinned.delete(key);else pinned.add(key);
+      let z=S.z;
+      if(n.level===1||n.level===2){
+        if(isExpanded(n)){
+          // collapse: unpin AND ease just below this level's auto-unfold
+          // threshold, otherwise auto-unfold would instantly re-open it
+          pinned.delete(key);
+          z=n.level===1?Math.min(S.z,0.75):Math.min(S.z,1.35);
+        }else{
+          // unfold: pin open and dive in
+          pinned.add(key);
+          z=n.level===1?Math.max(S.z,0.9):Math.max(S.z,1.7);
+        }
         ensureLayout();
       }
-      // fly so the node's subtree (or the node) fits nicely
-      let z=S.z;
-      if(n.level===0)z=S.z;
-      else if(n.level===1)z=Math.min(6,Math.max(S.z,0.9));
-      else if(n.level===2)z=Math.min(6,Math.max(S.z,1.7));
       flyToNode(n,z);hideHint();
     }
     requestDraw();

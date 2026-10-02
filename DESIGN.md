@@ -125,3 +125,8 @@ bottom-left, mirroring the version badge bottom-right.
   Click a card to unfold/collapse its subtree (pinned); deep zoom
   auto-unfolds too. Elbow reporting lines, dept color accents, breadcrumb,
   live counter, department jump index. v2026.10.01d.
+- `atlas/index.html` v5 (2026-10-02) — bugfixes: tap-to-collapse now eases the
+  camera just below the level's auto-unfold threshold so auto-unfold can't
+  instantly re-open it; zooming now anchors the card under the cursor when
+  the layout reshapes, so you never get stranded on a blank canvas.
+  v2026.10.01e.

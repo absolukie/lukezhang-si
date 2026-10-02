@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Atlas — an org chart you can fall into</title>
-<meta name="description" content="A ~2,000-person org chart. Zoomed out you see 12 VPs. Zoom into anyone and their team unfolds.">
+<title>Atlas — Meridian org chart</title>
+<meta name="description" content="The org chart of Meridian, a fictional fintech. Zoomed out: departments. Zoom in: teams unfold, then people.">
 <style>
   :root{ --bg:#08080a; --ink:#fafafa; --dim:#a1a1aa; }
   *{box-sizing:border-box}
@@ -16,11 +16,11 @@
   header{position:fixed;top:0;left:0;right:0;display:flex;align-items:flex-start;justify-content:space-between;
     padding:14px 18px;pointer-events:none;z-index:5;gap:10px}
   .brand{pointer-events:auto;background:rgba(8,8,10,.72);backdrop-filter:blur(8px);
-    border:1px solid #27272a;border-radius:12px;padding:8px 14px;font-size:14px;max-width:60vw}
+    border:1px solid #27272a;border-radius:12px;padding:8px 14px;font-size:14px;max-width:62vw}
   .brand b{font-size:15px}
   .brand span{color:var(--dim);font-size:12.5px}
   #crumb{margin-top:6px;font-size:12px;color:#d4d4d8;font-family:ui-monospace,Menlo,monospace;
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:56vw}
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:58vw}
   .zoomctl{pointer-events:auto;display:flex;gap:8px;align-items:center;flex:none;
     background:rgba(8,8,10,.72);backdrop-filter:blur(8px);border:1px solid #27272a;border-radius:12px;padding:6px}
   .zoomctl button{touch-action:manipulation;width:36px;height:36px;border-radius:8px;border:1px solid #3f3f46;
@@ -28,13 +28,12 @@
   .zoomctl button:hover{background:#27272a}
   #index{position:fixed;right:14px;top:50%;transform:translateY(-50%);z-index:5;display:flex;flex-direction:column;gap:4px;
     background:rgba(8,8,10,.72);backdrop-filter:blur(8px);border:1px solid #27272a;border-radius:14px;padding:10px;
-    max-width:200px;max-height:70vh;overflow:auto}
+    max-width:210px;max-height:70vh;overflow:auto}
   #index .cap{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);padding:2px 6px}
   #index button{touch-action:manipulation;text-align:left;background:transparent;border:1px solid transparent;color:var(--ink);
     border-radius:8px;padding:6px 9px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px}
   #index button:hover{background:#18181b;border-color:#3f3f46}
   #index .dot{width:10px;height:10px;border-radius:50%;flex:none}
-  #index small{color:var(--dim);font-size:11px}
   #hint{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;white-space:nowrap;
     background:rgba(8,8,10,.72);backdrop-filter:blur(8px);border:1px solid #27272a;border-radius:999px;
     padding:9px 18px;font-size:13px;color:var(--dim);transition:opacity .6s;pointer-events:none}
@@ -55,8 +54,8 @@
 
 <header>
   <div>
-    <div class="brand"><b>Atlas</b> <span>· a ~2,000-person org chart — zoom into anyone and their team unfolds</span></div>
-    <div id="crumb" class="brand" style="margin-top:8px;display:inline-block">Acme Inc</div>
+    <div class="brand"><b>Atlas</b> <span>· Meridian, a fictional fintech — zoomed out: departments. Zoom in: teams unfold, then people.</span></div>
+    <div id="crumb" class="brand" style="margin-top:8px;display:inline-block">Meridian</div>
   </div>
   <div class="zoomctl">
     <button id="zin" aria-label="Zoom in">+</button>
@@ -65,258 +64,317 @@
   </div>
 </header>
 
-<nav id="index" aria-label="Jump to a VP"><div class="cap">Jump to</div></nav>
-<div id="hint"><b>Drag</b> to move &nbsp;·&nbsp; <b>scroll / pinch</b> to zoom &nbsp;·&nbsp; <b>click a person</b> to dive in</div>
+<nav id="index" aria-label="Jump to a department"><div class="cap">Departments</div></nav>
+<div id="hint"><b>Click a card</b> to unfold its team &nbsp;·&nbsp; <b>scroll / pinch</b> to zoom &nbsp;·&nbsp; <b>drag</b> to pan</div>
 <div id="count">– visible</div>
-<div id="ver">v2026.10.01c</div>
+<div id="ver">v2026.10.01d</div>
 
 <script>
 "use strict";
-/* ================= org model =================
-   Acme Inc → 12 VPs → 9–13 directors each → 11–17 reports each.
-   ≈ 2,000 people. A person's position is a pure function of their
-   path, so the tree is never fully built — teams materialize as
-   you zoom into them. Only visible people are drawn, each exactly
-   once per frame. */
-const MAX_LEVEL = 3, ROOT_R = 12000;
-const EXPAND_PX = 110, LABEL_PX = 24;
-const DEPTS = ["Engineering","Product","Design","Sales","Marketing","Finance","Legal","People Ops","Operations","Data","Security","Customer Success"];
-const FIRST = ["James","Mary","John","Patricia","Robert","Jennifer","Michael","Linda","William","Elizabeth","David","Barbara","Richard","Susan","Joseph","Jessica","Thomas","Sarah","Charles","Karen","Christopher","Nancy","Daniel","Lisa","Matthew","Betty","Anthony","Margaret","Mark","Sandra","Donald","Ashley","Steven","Kimberly","Paul","Emily","Andrew","Donna","Joshua","Michelle","Kenneth","Laura","Kevin","Stephanie","Brian","Rebecca","George","Sharon"];
-const LAST = ["Smith","Johnson","Williams","Brown","Jones","Garcia","Miller","Davis","Rodriguez","Martinez","Hernandez","Lopez","Gonzalez","Wilson","Anderson","Thomas","Taylor","Moore","Jackson","Martin","Lee","Perez","Thompson","White","Harris","Sanchez","Clark","Ramirez","Lewis","Robinson","Walker","Young","Allen","King","Wright","Scott","Torres","Nguyen","Hill","Flores","Green","Adams","Nelson","Baker","Hall","Rivera","Campbell","Mitchell"];
-const AREAS = ["Platform","Infrastructure","Growth","Mobile","Web","Data","ML","Security","Support","Billing","Search","Feed","Messaging","API","DevOps","QA"];
-const LEAD_TITLES = ["Senior Director","Director","Head of"];
-const ROLES = ["Engineering Manager","Staff Engineer","Senior Engineer","Software Engineer","Senior PM","Product Manager","Product Designer","Data Scientist","Data Analyst","Tech Lead","QA Engineer","DevOps Engineer","Support Lead","Account Executive","Marketing Manager","Recruiter","Finance Analyst","Security Engineer","Designer","Engineering Manager"];
+/* ================= Meridian (fictional fintech) =================
+   CEO → 12 departments → 7–10 teams each → 14–21 people each.
+   Classic top-down pyramid. Click a card to unfold its subtree;
+   deep zoom auto-unfolds too. Layout is recomputed only when the
+   expand-set changes; collapsed subtrees take one card of width. */
+const HGAP=28, VGAP=130;
+const CARD={0:[270,108],1:[250,100],2:[220,92],3:[180,72]};
+const DEPTS=[
+  ["Brokerage","SVP, Brokerage",["Equities Trading","Options Trading","Margin & Lending","Order Routing","Market Data","Clearing & Settlement","Corporate Actions","Fractional Shares"]],
+  ["Crypto","SVP, Crypto",["Trading Engine","Wallet","Custody","Token Listings","Staking & Rewards","Crypto Compliance","Onchain Data","DeFi Integrations"]],
+  ["Operations","COO",["Trade Operations","Reconciliation","Fraud Operations","Client Money Movement","Settlements","Vendor Management","Risk Operations","Treasury Ops"]],
+  ["Engineering","CTO",["iOS","Android","Web","Backend Platform","Infrastructure","SRE","Developer Experience","Core Services"]],
+  ["Product","CPO",["Invest Experience","Growth & Activation","Crypto Product","Cash & Banking","Platform Product","New Markets"]],
+  ["Design","VP, Design",["Product Design","Brand Design","Design Systems","UX Research","Motion & Interaction"]],
+  ["Marketing","CMO",["Brand Marketing","Performance Marketing","Content & Social","Communications","Lifecycle Marketing"]],
+  ["Finance","CFO",["FP&A","Accounting","Treasury","Tax","Investor Relations","Procurement"]],
+  ["Legal & Compliance","General Counsel",["Securities Counsel","Crypto Regulatory","Litigation","Compliance Testing","Privacy","Government Affairs"]],
+  ["Customer Experience","VP, Customer Experience",["Support Operations","Trust & Safety","Escalations","Help Center","Community"]],
+  ["Data","VP, Data",["Data Engineering","Analytics","Machine Learning","Experimentation","Data Governance"]],
+  ["Security","CISO",["AppSec","Infrastructure Security","Detection & Response","Identity & Access","Red Team"]],
+];
+const FIRST=["James","Mary","John","Patricia","Robert","Jennifer","Michael","Linda","William","Elizabeth","David","Barbara","Richard","Susan","Joseph","Jessica","Thomas","Sarah","Charles","Karen","Christopher","Nancy","Daniel","Lisa","Matthew","Betty","Anthony","Margaret","Mark","Sandra","Donald","Ashley","Steven","Kimberly","Paul","Emily","Andrew","Donna","Joshua","Michelle","Kenneth","Laura","Kevin","Stephanie","Brian","Rebecca","George","Sharon"];
+const LAST=["Smith","Johnson","Williams","Brown","Jones","Garcia","Miller","Davis","Rodriguez","Martinez","Hernandez","Lopez","Gonzalez","Wilson","Anderson","Thomas","Taylor","Moore","Jackson","Martin","Lee","Perez","Thompson","White","Harris","Sanchez","Clark","Ramirez","Lewis","Robinson","Walker","Young","Allen","King","Wright","Scott","Torres","Nguyen","Hill","Flores","Green","Adams","Nelson","Baker","Hall","Rivera","Campbell","Mitchell"];
+const ROLES=["Software Engineer","Senior Software Engineer","Staff Engineer","Engineering Manager","Product Manager","Senior PM","Product Designer","Data Scientist","Data Analyst","QA Engineer","DevOps Engineer","Support Specialist","Account Executive","Marketing Manager","Recruiter","Financial Analyst","Security Engineer","Compliance Analyst","Operations Analyst","Designer","Tech Lead","Business Analyst","Customer Advocate","Risk Analyst","Engineering Manager"];
 
 function hashStr(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
-const cache = new Map();
+const cache=new Map();
+function rngFor(tag,path){return mulberry32(hashStr(tag+":"+path.join("/")));}
 
 function makeNode(path){
-  const key = path.join("/");
-  if(cache.has(key)) return cache.get(key);
+  const key=path.join("/");
+  if(cache.has(key))return cache.get(key);
   let n;
   if(path.length===0){
-    n = {path:[],level:0,x:0,y:0,r:ROOT_R,parent:null,idx:-1,hue:0,
-         name:"Acme Inc",title:"~2,000 people",initials:"A",kids:null,links:null};
+    n={path:[],level:0,parent:null,idx:-1,hue:45,kind:"ceo",
+       name:"Ava Chen",title:"Chief Executive Officer",initials:"AC",kids:null};
   }else{
-    const parent = makeNode(path.slice(0,-1));
-    n = childrenOf(parent)[path[path.length-1]];
+    n=childrenOf(makeNode(path.slice(0,-1)))[path[path.length-1]];
   }
-  cache.set(key,n); return n;
+  cache.set(key,n);return n;
 }
 function spanCount(p){
-  const rng = mulberry32(hashStr("span:"+p.path.join("/")));
-  if(p.level===0) return 12;
-  if(p.level===1) return 9+Math.floor(rng()*5);   // 9–13 directors
-  if(p.level===2) return 11+Math.floor(rng()*7);  // 11–17 reports
+  const r=rngFor("span",p.path);
+  if(p.level===0)return 12;
+  if(p.level===1)return 7+Math.floor(r()*4);   // 7–10 teams
+  if(p.level===2)return 14+Math.floor(r()*8);  // 14–21 people
   return 0;
 }
 function childrenOf(p){
-  if(p.kids) return p.kids;
-  const k = spanCount(p);
-  if(k===0){ p.kids=[]; return p.kids; }
-  const rng = mulberry32(hashStr("kids:"+p.path.join("/")));
-  // 1 at center + (k-1) on a ring, sized so neighbors don't overlap
-  const m = k-1, s = Math.sin(Math.PI/m);
-  const c = p.r*s/(1+s), ringD = p.r-c, off = rng()*Math.PI*2;
-  const kids = [];
+  if(p.kids)return p.kids;
+  const k=spanCount(p),kids=[];
   for(let i=0;i<k;i++){
-    let x,y;
-    if(i===0){ x=p.x; y=p.y; }
-    else{ const a=off+(i-1)*(Math.PI*2/m); x=p.x+Math.cos(a)*ringD; y=p.y+Math.sin(a)*ringD; }
-    const path = p.path.concat(i);
-    const wrng = mulberry32(hashStr("who:"+path.join("/")));
-    const name = FIRST[Math.floor(wrng()*FIRST.length)]+" "+LAST[Math.floor(wrng()*LAST.length)];
-    const level = path.length, top = path[0];
-    let title;
-    if(level===1) title = "VP, "+DEPTS[i];
-    else if(level===2) title = LEAD_TITLES[Math.floor(wrng()*LEAD_TITLES.length)]+", "+AREAS[Math.floor(wrng()*AREAS.length)];
-    else title = ROLES[Math.floor(wrng()*ROLES.length)];
-    kids.push({path,level,x,y,r:c,parent:p,idx:i,hue:top*30,
-      name,title,initials:name.split(" ").map(w=>w[0]).join(""),kids:null,links:null});
-  }
-  p.kids = kids; return kids;
-}
-function linksOf(n){ // "works closely with" cross-team edges
-  if(n.links) return n.links;
-  n.links = [];
-  if(n.level===0) return n.links;
-  const rng = mulberry32(hashStr("links:"+n.path.join("/")));
-  const count = rng()<0.7?1:2;
-  for(let kk=0;kk<count;kk++){
-    const tp = n.path.slice();
-    let ti = Math.floor(rng()*12);
-    if(ti===tp[0]) ti=(ti+1)%12;
-    tp[0]=ti;
-    for(let d=1;d<tp.length;d++){
-      const anc = makeNode(tp.slice(0,d));
-      tp[d]=Math.floor(rng()*spanCount(anc));
+    const path=p.path.concat(i),level=path.length,top=path[0];
+    const w=rngFor("who",path);
+    const name=FIRST[Math.floor(w()*FIRST.length)]+" "+LAST[Math.floor(w()*LAST.length)];
+    let kind,name2,title,hue=top*30;
+    if(level===1){
+      kind="dept";const d=DEPTS[i];
+      name2=d[0];title=name+" · "+d[1];
+      kids.push({path,level,parent:p,idx:i,hue,kind,name:name2,title,lead:name,leadTitle:d[1],
+                 teams:d[2],kids:null,headcount:0});
+    }else if(level===2){
+      kind="team";const tname=p.teams[i%p.teams.length];
+      title="Head of "+tname;
+      kids.push({path,level,parent:p,idx:i,hue,kind,name:tname,title,lead:name,leadTitle:title,
+                 kids:null,headcount:0});
+    }else{
+      kind="person";
+      title=ROLES[Math.floor(w()*ROLES.length)];
+      kids.push({path,level,parent:p,idx:i,hue,kind,name,title,
+                 initials:name.split(" ").map(s=>s[0]).join(""),kids:null});
     }
-    n.links.push(makeNode(tp));
   }
-  return n.links;
+  // headcounts (people under each dept/team)
+  kids.forEach(c=>{ if(c.kind!=="person"){let hc=0;childrenOf(c).forEach(g=>{hc+=g.kind==="person"?1:childrenOf(g).length;});c.headcount=hc;} });
+  p.kids=kids;return kids;
 }
 let TOTAL=0;
-(function(){ const seen=new Set();
-  (function walk(n){ const k=n.path.join("/"); if(seen.has(k))return; seen.add(k); TOTAL++;
-    childrenOf(n).forEach(walk); })(makeNode([])); })();
+(function(){const seen=new Set();(function walk(n){const k=n.path.join("/");
+  if(seen.has(k))return;seen.add(k);TOTAL++;childrenOf(n).forEach(walk);})(makeNode([]));})();
+
+/* ================= expand state + layout ================= */
+const pinned=new Set(); // path keys manually unfolded
+function autoExpanded(n){
+  if(n.level===0)return true;
+  if(n.level===1)return CARD[1][0]*S.z>210;
+  if(n.level===2)return CARD[2][0]*S.z>320;
+  return false;
+}
+function isExpanded(n){
+  if(n.level>=3)return false;
+  const k=n.path.join("/");
+  if(pinned.has(k))return true;
+  return autoExpanded(n);
+}
+let POS=new Map(), layoutBand="";
+function band(){ // layout only changes when these change
+  return (S.z>0.84?"B":"A")+(S.z>1.45?"C":"");
+}
+function relayout(){
+  const widths=new Map();
+  function width(n){
+    const k=n.path.join("/");
+    if(widths.has(k))return widths.get(k);
+    let w;
+    if(isExpanded(n)){
+      const kids=childrenOf(n);
+      w=kids.reduce((s,c)=>s+width(c),0)+HGAP*(kids.length-1);
+      w=Math.max(w,CARD[n.level][0]);
+    }else w=CARD[n.level][0];
+    widths.set(k,w);return w;
+  }
+  POS=new Map();
+  function place(n,cx,y){
+    POS.set(n.path.join("/"),{x:cx,y:y});
+    if(!isExpanded(n))return;
+    const kids=childrenOf(n);
+    const total=kids.reduce((s,c)=>s+width(c),0)+HGAP*(kids.length-1);
+    let x=cx-total/2;
+    kids.forEach(c=>{const w=width(c);place(c,x+w/2,y+CARD[n.level][1]+VGAP);x+=w+HGAP;});
+  }
+  const root=makeNode([]);
+  width(root);place(root,0,0);
+  layoutBand=band()+":"+pinned.size;
+}
+function nodePos(n){const p=POS.get(n.path.join("/"));return p;}
+function ensureLayout(){
+  const b=band()+":"+pinned.size;
+  if(b!==layoutBand)relayout();
+}
 
 /* ================= camera & canvas ================= */
-const cv=document.getElementById("cv"), ctx=cv.getContext("2d"), stage=document.getElementById("stage");
-const crumb=document.getElementById("crumb"), countEl=document.getElementById("count"), hint=document.getElementById("hint");
+const cv=document.getElementById("cv"),ctx=cv.getContext("2d"),stage=document.getElementById("stage");
+const crumb=document.getElementById("crumb"),countEl=document.getElementById("count"),hint=document.getElementById("hint");
 let vw=0,vh=0;
 function resize(){
   const dpr=Math.min(2,window.devicePixelRatio||1);
-  vw=window.innerWidth; vh=window.innerHeight;
-  cv.width=vw*dpr; cv.height=vh*dpr; cv.style.width=vw+"px"; cv.style.height=vh+"px";
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  draw();
+  vw=window.innerWidth;vh=window.innerHeight;
+  cv.width=vw*dpr;cv.height=vh*dpr;cv.style.width=vw+"px";cv.style.height=vh+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);requestDraw();
 }
 window.addEventListener("resize",resize);
-
-const S={x:0,y:0,z:0.03};
-// coalesce redraws to one per frame — the lag fix
+const S={x:0,y:0,z:0.4};
 let drawQueued=false;
-function requestDraw(){
-  if(drawQueued) return; drawQueued=true;
-  requestAnimationFrame(()=>{ drawQueued=false; draw(); });
-}
+function requestDraw(){if(drawQueued)return;drawQueued=true;requestAnimationFrame(()=>{drawQueued=false;draw();});}
 function zoomAt(cx,cy,f){
-  const wx=(cx-S.x)/S.z, wy=(cy-S.y)/S.z;
-  S.z=Math.min(8,Math.max(0.008,S.z*f));
-  S.x=cx-wx*S.z; S.y=cy-wy*S.z; requestDraw();
+  const wx=(cx-S.x)/S.z,wy=(cy-S.y)/S.z;
+  S.z=Math.min(6,Math.max(0.05,S.z*f));
+  S.x=cx-wx*S.z;S.y=cy-wy*S.z;requestDraw();
 }
-function flyTo(wx,wy,z,dur){
-  dur=dur||650;
-  const sx=S.x,sy=S.y,sz=S.z, tx=vw/2-wx*z, ty=vh/2-wy*z, t0=performance.now();
-  cancelAnimationFrame(flyTo.raf);
+// fly to a node; target re-resolved every frame so mid-flight layout changes track it
+function flyToNode(n,z,dur){
+  dur=dur||700;cancelAnimationFrame(flyToNode.raf);
+  const sz=S.z,t0=performance.now(),key=n.path.join("/");
   (function step(t){
-    let k=Math.min(1,(t-t0)/dur); k=k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;
-    S.x=sx+(tx-sx)*k; S.y=sy+(ty-sy)*k; S.z=sz*Math.pow(z/sz,k);
-    draw(); if(k<1) flyTo.raf=requestAnimationFrame(step);
+    ensureLayout();
+    const p=POS.get(key);if(!p)return;
+    const tx=vw/2-p.x*z,ty=vh*0.32-p.y*z;
+    let k=Math.min(1,(t-t0)/dur);k=k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;
+    const first=t===t0;
+    if(first){flyToNode.sx=S.x;flyToNode.sy=S.y;}
+    S.x=flyToNode.sx+(tx-flyToNode.sx)*k;
+    S.y=flyToNode.sy+(ty-flyToNode.sy)*k;
+    S.z=sz*Math.pow(z/sz,k);
+    draw();if(k<1)flyToNode.raf=requestAnimationFrame(step);
   })(t0);
 }
-function fitRoot(){ S.z=Math.min(vw,vh)/(2*ROOT_R*1.06); S.x=vw/2; S.y=vh/2; draw(); }
+function fitOverview(){
+  ensureLayout();
+  const root=makeNode([]);let x0=1e18,x1=-1e18;
+  childrenOf(root).forEach(d=>{const p=nodePos(d);const w=CARD[1][0];
+    x0=Math.min(x0,p.x-w/2);x1=Math.max(x1,p.x+w/2);});
+  const rp=nodePos(root);
+  S.z=Math.min(vw/(x1-x0+160),vh/700);
+  S.x=vw/2-(x0+x1)/2*S.z;S.y=vh*0.30-rp.y*S.z;draw();
+}
 
 /* ================= visibility ================= */
 let visible=[];
 function computeVisible(){
-  visible=[];
+  ensureLayout();visible=[];
+  const z=S.z;
   (function visit(n){
-    const sr=n.r*S.z, sx=n.x*S.z+S.x, sy=n.y*S.z+S.y;
-    if(sx+sr<-60||sx-sr>vw+60||sy+sr<-60||sy-sr>vh+60) return;
-    n._sr=sr; n._sx=sx; n._sy=sy;
-    n._expanded = n.level<MAX_LEVEL && (n.level===0 || sr>EXPAND_PX);
+    const p=nodePos(n);if(!p)return;
+    const w=CARD[n.level][0],h=CARD[n.level][1];
+    const sx=p.x*z+S.x,sy=p.y*z+S.y;
+    if(sx+w*z/2<-80||sx-w*z/2>vw+80||sy+h*z/2<-80||sy-h*z/2>vh+80){
+      // still recurse if expanded: children may be in view (parent centered above them)
+      if(isExpanded(n))childrenOf(n).forEach(visit);
+      return;
+    }
+    n._sx=sx;n._sy=sy;n._sw=w*z;n._sh=h*z;n._x=p.x;n._y=p.y;
     visible.push(n);
-    if(n._expanded){ const k=childrenOf(n); for(let i=0;i<k.length;i++) visit(k[i]); }
+    if(isExpanded(n))childrenOf(n).forEach(visit);
   })(makeNode([]));
 }
 
-/* ================= draw — everything exactly once ================= */
+/* ================= draw ================= */
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();
+}
 function draw(){
   computeVisible();
   ctx.clearRect(0,0,vw,vh);
-  ctx.fillStyle="#141418";
-  const gs=44;
-  const ox=((S.x%gs)+gs)%gs, oy=((S.y%gs)+gs)%gs;
-  for(let gx=ox;gx<vw;gx+=gs) for(let gy=oy;gy<vh;gy+=gs) ctx.fillRect(gx,gy,1.6,1.6);
+  ctx.fillStyle="#121216";
+  const gs=44,ox=((S.x%gs)+gs)%gs,oy=((S.y%gs)+gs)%gs;
+  for(let gx=ox;gx<vw;gx+=gs)for(let gy=oy;gy<vh;gy+=gs)ctx.fillRect(gx,gy,1.6,1.6);
 
   const visSet=new Set(visible);
-  // 1. team boundary rings (each expanded team drawn ONCE)
-  ctx.setLineDash([7,7]); ctx.lineWidth=1.5; ctx.strokeStyle="rgba(255,255,255,0.07)";
-  for(let i=0;i<visible.length;i++){ const n=visible[i];
-    if(n._expanded && n._sr<40000){ ctx.beginPath(); ctx.arc(n._sx,n._sy,n._sr,0,Math.PI*2); ctx.stroke(); } }
-  ctx.setLineDash([]);
-  // 2. reporting lines
-  ctx.strokeStyle="rgba(255,255,255,0.10)"; ctx.lineWidth=1;
-  ctx.beginPath();
-  for(let i=0;i<visible.length;i++){ const n=visible[i];
-    if(n.parent&&visSet.has(n.parent)){ ctx.moveTo(n.parent._sx,n.parent._sy); ctx.lineTo(n._sx,n._sy); } }
-  ctx.stroke();
-  // 3. cross-team links (each once)
-  ctx.strokeStyle="rgba(96,165,250,0.20)"; ctx.lineWidth=1;
-  ctx.beginPath();
-  const drawn=new Set();
-  for(let i=0;i<visible.length;i++){ const n=visible[i];
-    const ls=linksOf(n);
-    for(let j=0;j<ls.length;j++){ const t=ls[j];
-      if(!visSet.has(t)) continue;
-      const a=n.path.join("/"), b=t.path.join("/");
-      if(a>b) continue;
-      const kk=a+"|"+b; if(drawn.has(kk)) continue; drawn.add(kk);
-      const mx=(n._sx+t._sx)/2, my=(n._sy+t._sy)/2-24;
-      ctx.moveTo(n._sx,n._sy); ctx.quadraticCurveTo(mx,my,t._sx,t._sy);
-    } }
-  ctx.stroke();
-  // 4. people (collapsed nodes only)
-  ctx.textAlign="center"; ctx.textBaseline="middle";
-  for(let i=0;i<visible.length;i++){ const n=visible[i];
-    if(n._expanded) continue;
-    const sr=Math.max(2,n._sr);
-    ctx.beginPath(); ctx.arc(n._sx,n._sy,sr,0,Math.PI*2);
-    ctx.fillStyle=`hsl(${n.hue},60%,52%)`; ctx.fill();
-    ctx.strokeStyle="rgba(0,0,0,0.45)"; ctx.lineWidth=Math.min(3,sr*0.08+0.5); ctx.stroke();
-    if(n._focused){ ctx.strokeStyle="#60a5fa"; ctx.lineWidth=3; ctx.stroke(); }
-    const ifs=Math.min(44,Math.max(9,sr*0.44));
-    ctx.font=`700 ${ifs}px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif`;
-    ctx.fillStyle="rgba(255,255,255,0.95)";
-    ctx.fillText(n.initials,n._sx,n._sy+1);
+  // reporting lines (elbow connectors), batched
+  ctx.strokeStyle="rgba(255,255,255,0.13)";ctx.lineWidth=1.5;ctx.beginPath();
+  for(let i=0;i<visible.length;i++){const n=visible[i];
+    if(!n.parent||!visSet.has(n.parent)||n.parent._sx===undefined)continue;
+    const pw=CARD[n.parent.level][0]*S.z,ph=CARD[n.parent.level][1]*S.z;
+    const x1=n.parent._sx,y1=n.parent._sy+ph/2,x2=n._sx,y2=n._sy-n._sh/2;
+    const my=(y1+y2)/2;
+    ctx.moveTo(x1,y1);ctx.lineTo(x1,my);ctx.lineTo(x2,my);ctx.lineTo(x2,y2);
   }
-  // 5. labels
-  ctx.textBaseline="alphabetic";
-  for(let i=0;i<visible.length;i++){ const n=visible[i];
-    if(n._expanded){
-      if(n.level===0||n._sr<140) continue;
-      ctx.font=`600 13px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif`;
-      ctx.textAlign="left";
-      ctx.lineWidth=4; ctx.strokeStyle="rgba(8,8,10,0.9)";
-      const lx=n._sx-n._sr+14, ly=n._sy-n._sr+24;
-      const s=n.name+" · "+childrenOf(n).length+" people";
-      ctx.strokeText(s,lx,ly); ctx.fillStyle="#a1a1aa"; ctx.fillText(s,lx,ly);
-      continue;
-    }
-    if(n._sr<LABEL_PX) continue;
-    ctx.textAlign="center";
-    const fs=n._sr>200?15:12;
-    ctx.font=`500 ${fs}px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif`;
-    ctx.lineWidth=4; ctx.strokeStyle="rgba(8,8,10,0.85)";
-    let ly=n._sy+n._sr+fs+6;
-    ctx.strokeText(n.name,n._sx,ly); ctx.fillStyle="#ececee"; ctx.fillText(n.name,n._sx,ly);
-    if(n._sr>64){
-      ctx.font=`400 11px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif`;
-      ly+=16; ctx.strokeText(n.title,n._sx,ly); ctx.fillStyle="#a1a1aa"; ctx.fillText(n.title,n._sx,ly);
-    }
-  }
+  ctx.stroke();
+  // cards, parents first
+  ctx.textAlign="left";ctx.textBaseline="alphabetic";
+  for(let i=0;i<visible.length;i++){const n=visible[i];
+    const w=n._sw,h=n._sh,x=n._sx-w/2,y=n._sy-h/2;
+    roundRect(x,y,w,h,Math.min(14,8*S.z+4));
+    if(n.level===0){ctx.fillStyle="#1c1c22";}
+    else{ctx.fillStyle="#101014";}
+    ctx.fill();
+    ctx.strokeStyle=n._focused?"#60a5fa":`hsla(${n.hue},70%,60%,0.55)`;
+    ctx.lineWidth=n._focused?3:1.5;ctx.stroke();
+    // accent bar
+    ctx.fillStyle=`hsl(${n.hue},70%,55%)`;
+    const bw=Math.max(2,4*S.z);
+    roundRect(x,y,bw,h,Math.min(14,8*S.z+4));ctx.fill();
 
-  // breadcrumb: deepest expanded team containing viewport center
-  let b=makeNode([]);
-  for(;;){
-    if(!b._expanded) break;
-    const kids=childrenOf(b); let hit=null;
-    for(let i=0;i<kids.length;i++){ const k=kids[i];
-      if(k._sr===undefined) continue;
-      const dx=vw/2-k._sx, dy=vh/2-k._sy;
-      if(dx*dx+dy*dy<k._sr*k._sr){ hit=k; break; } }
-    if(!hit) break; b=hit;
+    const padL=14*S.z+8, cx=x+padL;
+    ctx.fillStyle="#fafafa";
+    if(n.kind==="person"){
+      const ar=Math.min(h*0.30,26*S.z);
+      ctx.beginPath();ctx.arc(x+ar+10*S.z,n._sy,ar,0,Math.PI*2);
+      ctx.fillStyle=`hsl(${n.hue},60%,52%)`;ctx.fill();
+      ctx.fillStyle="rgba(255,255,255,0.95)";
+      ctx.font=`700 ${ar*0.9}px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif`;
+      ctx.textAlign="center";ctx.textBaseline="middle";
+      ctx.fillText(n.initials,x+ar+10*S.z,n._sy+1);
+      ctx.textAlign="left";ctx.textBaseline="alphabetic";
+      const tx=x+ar*2+18*S.z;
+      ctx.fillStyle="#fafafa";
+      ctx.font=`600 ${Math.max(9,13*S.z)}px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif`;
+      ctx.fillText(n.name,tx,n._sy-2*S.z);
+      ctx.fillStyle="#a1a1aa";
+      ctx.font=`${Math.max(8,11*S.z)}px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif`;
+      ctx.fillText(n.title,tx,n._sy+14*S.z);
+    }else{
+      const fs=Math.max(10,19*S.z);
+      ctx.font=`700 ${fs}px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif`;
+      ctx.fillStyle="#fafafa";
+      ctx.fillText(n.name,cx,y+fs+14*S.z);
+      ctx.font=`${Math.max(8,12.5*S.z)}px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif`;
+      ctx.fillStyle="#a1a1aa";
+      const sub=n.kind==="ceo"?n.title:(n.kind==="dept"?n.lead+" · "+n.leadTitle:n.lead+" · "+n.leadTitle);
+      ctx.fillText(sub,cx,y+fs+32*S.z);
+      if(n.kind!=="ceo"){
+        ctx.fillStyle="#63636b";
+        ctx.font=`${Math.max(8,11*S.z)}px ui-monospace,Menlo,monospace`;
+        ctx.fillText(n.headcount+" people · "+(isExpanded(n)?"tap to collapse":"tap to unfold"),
+          cx,y+fs+48*S.z);
+      }
+    }
   }
-  const names=[]; let q=b; while(q){ names.unshift(q.level===0?q.name:q.name.split(" ")[0]+" "+q.name.split(" ")[1][0]+"."); q=q.parent; }
+  // breadcrumb: deepest visible node containing viewport center
+  let best=null,bestLevel=-1;
+  for(let i=0;i<visible.length;i++){const n=visible[i];
+    if(Math.abs(vw/2-n._sx)<n._sw/2&&Math.abs(vh/2-n._sy)<n._sh/2&&n.level>bestLevel){best=n;bestLevel=n.level;}}
+  const names=["Meridian"];let q=best;
+  const chain=[];
+  while(q){chain.unshift(q.kind==="person"?q.name:q.name);q=q.parent;}
+  if(chain.length>1)names.push(...chain.slice(1));
   crumb.textContent=names.join("  /  ");
-  countEl.textContent=`${visible.length} visible · ${TOTAL.toLocaleString()} total`;
+  countEl.textContent=visible.length+" visible · "+TOTAL.toLocaleString()+" total";
 }
 
 /* ================= interaction ================= */
-let moved=false,downPos=null; const ptrs=new Map(); let pinchD0=0;
-function clearFocus(){ for(let i=0;i<visible.length;i++) visible[i]._focused=false; }
+let moved=false,downPos=null;const ptrs=new Map();let pinchD0=0;
+function clearFocus(){for(let i=0;i<visible.length;i++)visible[i]._focused=false;}
+function nodeAt(cx,cy){
+  const wx=(cx-S.x)/S.z,wy=(cy-S.y)/S.z;
+  for(let i=visible.length-1;i>=0;i--){const n=visible[i];
+    const w=CARD[n.level][0],h=CARD[n.level][1];
+    if(Math.abs(wx-n._x)<w/2&&Math.abs(wy-n._y)<h/2)return n;}
+  return null;
+}
 stage.addEventListener("pointerdown",e=>{
   stage.setPointerCapture(e.pointerId);
   ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(ptrs.size===1){moved=false;downPos={x:e.clientX,y:e.clientY};stage.classList.add("dragging");}
   if(ptrs.size===2){const p=[...ptrs.values()];pinchD0=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);}
-  cancelAnimationFrame(flyTo.raf);
+  cancelAnimationFrame(flyToNode.raf);
 });
 stage.addEventListener("pointermove",e=>{
   if(!ptrs.has(e.pointerId))return;
-  const prev=ptrs.get(e.pointerId); ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  const prev=ptrs.get(e.pointerId);ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(ptrs.size===1){
     const dx=e.clientX-prev.x,dy=e.clientY-prev.y;
     if(downPos&&Math.hypot(e.clientX-downPos.x,e.clientY-downPos.y)>6)moved=true;
@@ -332,23 +390,30 @@ function endPtr(e){
   ptrs.delete(e.pointerId);
   if(ptrs.size===0)stage.classList.remove("dragging");
   if(!moved&&downPos&&e.type==="pointerup"){
-    const wx=(e.clientX-S.x)/S.z, wy=(e.clientY-S.y)/S.z;
-    for(let i=visible.length-1;i>=0;i--){
-      const n=visible[i];
-      if(n._expanded||n.level===0)continue;
-      const dx=wx-n.x,dy=wy-n.y;
-      if(dx*dx+dy*dy<n.r*n.r){
-        clearFocus(); n._focused=true;
-        flyTo(n.x,n.y,Math.min(8,190/n.r)); hideHint(); requestDraw(); break;
+    const n=nodeAt(e.clientX,e.clientY);
+    clearFocus();
+    if(n){
+      n._focused=true;
+      const key=n.path.join("/");
+      if(n.level<3){
+        if(pinned.has(key))pinned.delete(key);else pinned.add(key);
+        ensureLayout();
       }
+      // fly so the node's subtree (or the node) fits nicely
+      let z=S.z;
+      if(n.level===0)z=S.z;
+      else if(n.level===1)z=Math.min(6,Math.max(S.z,0.9));
+      else if(n.level===2)z=Math.min(6,Math.max(S.z,1.7));
+      flyToNode(n,z);hideHint();
     }
+    requestDraw();
   }
 }
 stage.addEventListener("pointerup",endPtr);
 stage.addEventListener("pointercancel",endPtr);
-stage.addEventListener("wheel",e=>{e.preventDefault();cancelAnimationFrame(flyTo.raf);
+stage.addEventListener("wheel",e=>{e.preventDefault();cancelAnimationFrame(flyToNode.raf);
   zoomAt(e.clientX,e.clientY,Math.exp(-e.deltaY*0.0016));hideHintSoon();},{passive:false});
-stage.addEventListener("dblclick",e=>{e.preventDefault();zoomAt(e.clientX,e.clientY,1.7);});
+stage.addEventListener("dblclick",e=>{e.preventDefault();zoomAt(e.clientX,e.clientY,1.6);});
 stage.addEventListener("contextmenu",e=>e.preventDefault());
 
 let hintT=null;
@@ -356,24 +421,25 @@ function hideHint(){hint.style.opacity=0;}
 function hideHintSoon(){clearTimeout(hintT);hintT=setTimeout(hideHint,2500);}
 document.getElementById("zin").onclick=()=>{zoomAt(vw/2,vh/2,1.4);hideHint();};
 document.getElementById("zout").onclick=()=>{zoomAt(vw/2,vh/2,1/1.4);hideHint();};
-document.getElementById("zreset").onclick=()=>{clearFocus();fitRoot();hideHint();};
+document.getElementById("zreset").onclick=()=>{pinned.clear();clearFocus();fitOverview();hideHint();};
 window.addEventListener("keydown",e=>{
   if(e.key==="+"||e.key==="=")zoomAt(vw/2,vh/2,1.35);
   if(e.key==="-")zoomAt(vw/2,vh/2,1/1.35);
-  if(e.key==="0"){clearFocus();fitRoot();}
+  if(e.key==="0"){pinned.clear();clearFocus();fitOverview();}
 });
 const idx=document.getElementById("index");
 childrenOf(makeNode([])).forEach(n=>{
   const b=document.createElement("button");
-  const d=document.createElement("span");d.className="dot";d.style.background=`hsl(${n.hue},60%,52%)`;
+  const d=document.createElement("span");d.className="dot";d.style.background=`hsl(${n.hue},70%,55%)`;
   b.appendChild(d);
-  const t=document.createElement("span");t.innerHTML=`${n.name}<br><small>${n.title}</small>`;
+  const t=document.createElement("span");t.textContent=n.name;
   b.appendChild(t);
-  b.onclick=()=>{clearFocus();n._focused=true;flyTo(n.x,n.y,Math.min(8,200/n.r));hideHint();};
+  b.onclick=()=>{clearFocus();pinned.add(n.path.join("/"));n._focused=true;ensureLayout();
+    flyToNode(n,0.9);hideHint();};
   idx.appendChild(b);
 });
 
-resize(); fitRoot();
+resize();fitOverview();
 setTimeout(hideHint,10000);
 </script>
 </body>

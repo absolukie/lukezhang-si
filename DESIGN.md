@@ -118,3 +118,10 @@ bottom-left, mirroring the version badge bottom-right.
   element drawn exactly once per frame (the old build stroked boundary rings
   once per visible node), redraws coalesced to one per animation frame.
   Breadcrumb, live visible/total counter, VP jump index. v2026.10.01c.
+- `atlas/index.html` v4 (2026-10-01) — pyramid rebuild: Meridian, a fictional
+  fintech. CEO -> 12 departments (Brokerage, Crypto, Operations, ...) ->
+  7-10 teams each -> 14-21 people each = 1,904 generated people. Classic
+  top-down tidy-tree layout; collapsed subtrees take one card of width.
+  Click a card to unfold/collapse its subtree (pinned); deep zoom
+  auto-unfolds too. Elbow reporting lines, dept color accents, breadcrumb,
+  live counter, department jump index. v2026.10.01d.

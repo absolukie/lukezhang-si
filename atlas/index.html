@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Atlas — the infinite pyramid</title>
-<meta name="description" content="An infinite pyramid: every block splits in two, forever. Scroll to dive deeper.">
+<meta name="description" content="An infinite pyramid you scroll through forever: every block splits in two, rows go down without end.">
 <style>
   :root{ --bg:#08080a; --ink:#fafafa; --dim:#a1a1aa; }
   *{box-sizing:border-box}
@@ -45,159 +45,87 @@
 
 <header>
   <div>
-    <div class="brand"><b>Atlas</b> <span>· the infinite pyramid — every block splits in two, forever. Scroll to dive.</span></div>
+    <div class="brand"><b>Atlas</b> <span>· the infinite pyramid — scroll down, it never ends.</span></div>
     <div id="crumb" class="brand" style="margin-top:8px;display:inline-block">Meridian</div>
   </div>
   <div class="zoomctl">
-    <button id="zin" aria-label="Dive deeper">+</button>
-    <button id="zout" aria-label="Ascend">−</button>
-    <button id="zreset" aria-label="Reset view" style="font-size:13px;width:auto;padding:0 12px">reset</button>
+    <button id="zin" aria-label="Scroll down">+</button>
+    <button id="zout" aria-label="Scroll up">−</button>
+    <button id="zreset" aria-label="Back to top" style="font-size:13px;width:auto;padding:0 12px">top</button>
   </div>
 </header>
 
-<div id="hint"><b>Scroll / pinch</b> to dive deeper &nbsp;·&nbsp; <b>scroll up</b> to surface &nbsp;·&nbsp; <b>drag</b> to pan &nbsp;·&nbsp; <b>click</b> selects</div>
-<div id="depth">LEVEL 0 · ∞</div>
-<div id="ver">v2026.10.02b</div>
+<div id="hint"><b>Scroll</b> to descend forever &nbsp;·&nbsp; <b>drag</b> to pan &nbsp;·&nbsp; <b>tap</b> a block to select</div>
+<div id="depth">ROW 0 · ∞</div>
+<div id="ver">v2026.10.02c</div>
 
 <script>
 "use strict";
-/* ================ the infinite pyramid ================
-   Every block splits into exactly 2 children, forever (procedural —
-   nothing is prebuilt, there is no bottom). The view always shows a
-   1-2-4-8 pyramid of big legible blocks. Scrolling dives: the pyramid
-   morphs so the chosen child becomes the new top, revealing its own
-   1-2-4-8 below. Scroll back up to surface. */
-function hashStr(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
-function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
-function rngFor(tag,path){return mulberry32(hashStr(tag+":"+path.join("")));}
-function lerp(a,b,k){return a+(b-a)*k;}
-const PAIRS=[["North","South"],["East","West"],["Consumer","Enterprise"],["Retail","Institutional"],["Platform","Apps"],["Alpha","Beta"],["Prime","Select"],["Core","Edge"],["Nova","Vega"],["Harbor","Summit"]];
-function segName(path){
-  if(path.length===0)return "Meridian";
-  const d=path.length,pair=PAIRS[(d-1)%PAIRS.length];
-  let s=pair[path[d-1]];
-  const cyc=Math.floor((d-1)/PAIRS.length);
-  if(cyc>0)s+=" "+(cyc+1);
+/* ================ the infinite pyramid: infinite-scroll edition ================
+   Row r holds 2^r blocks, rows go down forever. There is no bottom because
+   nothing is stored: a block's name, headcount and color are pure functions
+   of (row, index), so any row can be materialized on demand. Only the blocks
+   intersecting the viewport are drawn. Scroll to descend, drag to pan,
+   tap a block to select it (the camera never moves on tap). */
+function hashNI(r,i){
+  let h=(Math.imul(r|0,2654435761)^Math.imul(i>>>0,40503)^Math.imul((i/4294967296)|0,2246822519))>>>0;
+  h^=h>>>15;h=Math.imul(h,0x85ebca6b)>>>0;h^=h>>>13;h=Math.imul(h,0xc2b2ae35)>>>0;h^=h>>>16;
+  return h>>>0;
+}
+const DIRS=["North","South","East","West","Arctic","Pacific","Atlantic","Central","Harbor","Summit",
+  "Delta","Crest","Beacon","Alpine","Coral","Ember","Frost","Grove","Haven","Juniper",
+  "Kestrel","Lagoon","Meadow","Nimbus","Onyx","Prairie","Quarry","Ridgeline","Sable","Tundra"];
+const SUF=["II","III","IV","V","VI","VII"];
+function nameFor(r,i){
+  if(r===0)return "Meridian";
+  const h=hashNI(r,i);
+  let s=DIRS[h%DIRS.length];
+  if(((h>>>5)%3)===0)s+=" "+SUF[(h>>>7)%SUF.length];
   return s;
 }
-function headcount(path){
-  let hc=1904;
-  for(let i=0;i<path.length;i++){
-    const r=rngFor("hc",path.slice(0,i))();
-    const c0=Math.max(1,Math.round(hc*(0.42+0.16*r)));
-    hc=path[i]===0?c0:Math.max(1,hc-c0);
-  }
-  return hc;
+function headcountFor(r,i){
+  if(r===0)return 1904;
+  const h=hashNI(r,i);
+  return 180+((h>>>4)%9800);
 }
-function hueFor(path){
-  let h=212;
-  for(let i=0;i<path.length;i++)h+=(path[i]===0?16:-16)+9;
-  return ((h%360)+360)%360;
+function hueFor(r,i){
+  if(r===0)return 212;
+  return 150+(hashNI(r,i)>>>9)%210;
 }
+function ancIndex(r,i,k){return Math.floor(i/Math.pow(2,r-k));} // index of the level-k ancestor
 
-/* ---------- layout: stacked centered rows, 1-2-4-8 ---------- */
-const BW=300,BH=110,GX=28,GY=64,ROWS=6;
-function relPos(r,i){return {x:(i-(Math.pow(2,r)-1)/2)*(BW+GX), y:r*(BH+GY)};}
-function bitsOf(i,r){const b=[];for(let k=r-1;k>=0;k--)b.push((i>>k)&1);return b;}
-function idxOf(bits){let i=0;for(const b of bits)i=(i<<1)|b;return i;}
-function startsWith(p,pre){if(pre.length>p.length)return false;for(let i=0;i<pre.length;i++)if(p[i]!==pre[i])return false;return true;}
-function eq(a,b){if(a.length!==b.length)return false;for(let i=0;i<a.length;i++)if(a[i]!==b[i])return false;return true;}
+/* ---------- layout ---------- */
+const BW=300,BH=110,GX=28,GY=64;
+const PITCH=BW+GX, ROWH=BH+GY;
+const MINY=-(BH+140);
+function blockCX(r,i){const n=Math.pow(2,r);return (i-(n-1)/2)*PITCH;}
+function blockCY(r){return r*ROWH;}
 
-/* ---------- state ---------- */
-let focus=[], diveT=0, target=null, selected=null;
-let SC=0.5; const S={x:0,y:0};
-let lastCX=0,lastCY=0;
-
-/* ---------- dive mechanics ---------- */
-function pickTarget(px,py){
-  px=px===undefined?lastCX:px; py=py===undefined?lastCY:py;
-  for(let i=0;i<2;i++){
-    const p=relPos(1,i),sx=p.x*SC+S.x,sy=p.y*SC+S.y;
-    if(Math.abs(px-sx)<BW*SC/2&&Math.abs(py-sy)<BH*SC/2){target=i;return i;}
-  }
-  target=(px<S.x)?0:1;
-  return target;
-}
-const EPS=1e-9;
-function addDive(delta,px,py){
-  if(delta>0&&diveT===0&&target===null)pickTarget(px,py);
-  let v=diveT+delta,guard=0;
-  while(guard++<16){
-    if(v>=1-EPS&&delta>0){
-      if(target===null)pickTarget(px,py);
-      focus.push(target);v-=1;
-      diveT=0;target=null;
-      if(v>EPS)pickTarget(px,py);else v=0; // clamp float dust — never ascend on dust
-      continue;
-    }
-    if(v<0){
-      if(v>-EPS){v=0;break;} // float dust, not a real ascend
-      if(focus.length===0){v=0;break;}
-      target=focus.pop();v+=1;
-      continue;
-    }
-    break;
-  }
-  diveT=Math.min(1,Math.max(0,v));
-  if(diveT<EPS)diveT=0;
-  if(diveT===0)target=null;
-  draw();
-}
-function nudgeDive(dir){
-  if(dir>0&&target===null)pickTarget(vw/2,vh/2);
-  cancelAnimationFrame(nudgeDive.raf);
-  let i=0;const steps=26;
-  (function step(){
-    if(i>=steps)return;
-    addDive(dir/steps);i++;
-    nudgeDive.raf=requestAnimationFrame(step);
-  })();
-}
-
-/* ---------- frame: where each block is right now ---------- */
-function nodeFrame(absP,r,i){
-  const oldP=relPos(r,i);
-  let x=oldP.x,y=oldP.y,op=r<4?1:(r===4?0.55:0);
-  if(target!==null&&diveT>0){
-    const C=focus.concat([target]);
-    if(startsWith(absP,C)){
-      const rel2=absP.slice(C.length),r2=rel2.length,i2=idxOf(rel2);
-      const newP=relPos(r2,i2);
-      x=lerp(oldP.x,newP.x,diveT);y=lerp(oldP.y,newP.y,diveT);
-      op=lerp(op,r2<4?1:(r2===4?0.55:0),diveT);
-    }else if(eq(absP,focus)){
-      x=lerp(oldP.x,0,diveT);y=lerp(oldP.y,-(BH+GY),diveT);op=lerp(1,0.4,diveT);
-    }else{
-      // not in the dive path: slide away with the rest of the pyramid while fading
-      const sh=relPos(1,target);
-      x=oldP.x-sh.x*diveT; y=oldP.y-sh.y*diveT;
-      op=lerp(op,0,diveT);
-    }
-  }
-  return {x:x,y:y,op:op};
-}
-
-/* ---------- camera & canvas ---------- */
+/* ---------- camera ---------- */
 const cv=document.getElementById("cv"),ctx=cv.getContext("2d"),stage=document.getElementById("stage");
 const crumb=document.getElementById("crumb"),depthEl=document.getElementById("depth"),hint=document.getElementById("hint");
 let vw=0,vh=0;
-function baseScale(){return Math.max(0.5,Math.min(vw/3000,vh/1150));}
+let camX=0,camY=0,tX=0,tY=0;   // world coords at viewport top-left (+ smoothed targets)
+let selected=null;             // {r,i} or null
+function homeTargets(){return {x:-vw/2,y:-vh*0.14};}
+function centerRow(){return Math.max(0,Math.round((tY+vh/2)/ROWH));}
+function clampTargets(){
+  if(tY<MINY)tY=MINY;
+  const rc=centerRow(),halfW=Math.pow(2,rc)*PITCH/2;
+  const lo=-halfW-vw+PITCH,hi=halfW-PITCH;
+  tX=(lo>hi)?-vw/2:Math.min(hi,Math.max(lo,tX));
+}
+function goHome(){const h=homeTargets();tX=h.x;tY=h.y;camX=tX;camY=tY;selected=null;}
+
+/* ---------- canvas ---------- */
 function resize(){
   const dpr=Math.min(2,window.devicePixelRatio||1);
   vw=window.innerWidth;vh=window.innerHeight;
   cv.width=vw*dpr;cv.height=vh*dpr;cv.style.width=vw+"px";cv.style.height=vh+"px";
   ctx.setTransform(dpr,0,0,dpr,0,0);
-  lastCX=vw/2;lastCY=vh/2;
-  requestDraw();
+  clampTargets();
 }
 window.addEventListener("resize",resize);
-let drawQueued=false;
-function requestDraw(){if(drawQueued)return;drawQueued=true;requestAnimationFrame(()=>{drawQueued=false;draw();});}
-function fitPyramid(){
-  SC=baseScale();
-  S.x=vw/2;S.y=vh*0.40-((3*(BH+GY))/2)*SC;
-  draw();
-}
 
 /* ---------- draw ---------- */
 function roundRect(x,y,w,h,r){
@@ -206,153 +134,107 @@ function roundRect(x,y,w,h,r){
   ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
   ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();
 }
+function visibleRows(){
+  const r0=Math.max(0,Math.floor(camY/ROWH)-1);
+  const r1=Math.ceil((camY+vh)/ROWH)+1;
+  return [r0,r1];
+}
+function indexRange(r){
+  const n=Math.pow(2,r),x0=-n*PITCH/2;
+  const i0=Math.max(0,Math.floor((camX-x0)/PITCH)-1);
+  const i1=Math.min(n-1,Math.ceil((camX+vw-x0)/PITCH)+1);
+  return [i0,i1];
+}
 function draw(){
   ctx.clearRect(0,0,vw,vh);
+  // dotted backdrop, parallaxes with the camera
   ctx.fillStyle="#121216";
-  const gs=44,ox=((S.x%gs)+gs)%gs,oy=((S.y%gs)+gs)%gs;
+  const gs=44;
+  const ox=((-camX%gs)+gs)%gs,oy=((-camY%gs)+gs)%gs;
   for(let gx=ox;gx<vw;gx+=gs)for(let gy=oy;gy<vh;gy+=gs)ctx.fillRect(gx,gy,1.6,1.6);
-  const X=wx=>wx*SC+S.x, Y=wy=>wy*SC+S.y;
-  const nodes=[];
-  for(let r=0;r<ROWS;r++){
-    const n=1<<r;
-    for(let i=0;i<n;i++){
-      const bits=bitsOf(i,r),absP=focus.concat(bits);
-      const fr=nodeFrame(absP,r,i);
-      if(fr.op>0.02)nodes.push({absP:absP,r:r,i:i,fr:fr});
+  const X=wx=>wx-camX, Y=wy=>wy-camY;
+  const [r0,r1]=visibleRows();
+  // edges: child -> parent, one batched stroke
+  ctx.strokeStyle="rgba(255,255,255,0.13)";ctx.lineWidth=1.5;ctx.beginPath();
+  for(let r=Math.max(1,r0);r<=r1;r++){
+    const [i0,i1]=indexRange(r);
+    for(let i=i0;i<=i1;i++){
+      const pi=Math.floor(i/2);
+      ctx.moveTo(X(blockCX(r,i)),Y(blockCY(r)));
+      ctx.lineTo(X(blockCX(r-1,pi)),Y(blockCY(r-1)+BH));
     }
   }
-  let parentFr=null,parentPath=null;
-  if(focus.length>0){
-    parentPath=focus.slice(0,-1);
-    const oldP={x:0,y:-(BH+GY)};
-    let px=oldP.x,py=oldP.y,pop=0.4;
-    if(target!==null&&diveT>0){
-      const sh=relPos(1,target);
-      px=oldP.x-sh.x*diveT;
-      py=lerp(oldP.y,-(BH+GY)-sh.y,diveT);
-      pop=lerp(0.4,0,diveT);
+  ctx.stroke();
+  // blocks
+  for(let r=r0;r<=r1;r++){
+    const [i0,i1]=indexRange(r);
+    for(let i=i0;i<=i1;i++){
+      const sx=X(blockCX(r,i)),sy=Y(blockCY(r));
+      if(sx<-BW||sx>vw+BW||sy<-BH||sy>vh+BH)continue;
+      drawBlock(r,i,sx,sy);
     }
-    parentFr={x:px,y:py,op:pop};
   }
-  // edges (elbows), batched by alpha bucket
-  ctx.lineWidth=1.5;
-  const byOp={};
-  nodes.forEach(nd=>{
-    if(nd.r>=4||nd.fr.op<0.05)return;
-    for(let c=0;c<2;c++){
-      const ci=nd.i*2+c,cr=nd.r+1;
-      if(cr>=ROWS)continue;
-      const cb=bitsOf(ci,cr),cabs=focus.concat(cb);
-      const cf=nodeFrame(cabs,cr,ci);
-      if(cf.op<0.05)continue;
-      const op=Math.min(nd.fr.op,cf.op);
-      const k=Math.round(op*10)/10;
-      (byOp[k]=byOp[k]||[]).push([nd,cf]);
-    }
-  });
-  for(const k in byOp){
-    ctx.strokeStyle=`rgba(255,255,255,${0.13*parseFloat(k)})`;
-    ctx.beginPath();
-    byOp[k].forEach(([nd,cf])=>{
-      const x1=X(nd.fr.x),y1=Y(nd.fr.y)+BH*SC/2;
-      const x2=X(cf.x),y2=Y(cf.y)-BH*SC/2,my=(y1+y2)/2;
-      ctx.moveTo(x1,y1);ctx.lineTo(x1,my);ctx.lineTo(x2,my);ctx.lineTo(x2,y2);
-    });
-    ctx.stroke();
-  }
-  // blocks, deepest first
-  nodes.sort((a,b)=>b.r-a.r);
-  if(parentFr&&parentFr.op>0.02){
-    drawBlock(parentPath,X(parentFr.x),Y(parentFr.y),BW*SC*0.8,BH*SC*0.8,parentFr.op,true);
-  }
-  nodes.forEach(nd=>{
-    const sx=X(nd.fr.x),sy=Y(nd.fr.y),sw=BW*SC,sh=BH*SC;
-    if(sx+sw/2<-60||sx-sw/2>vw+60||sy+sh/2<-60||sy-sh/2>vh+60)return;
-    drawBlock(nd.absP,sx,sy,sw,sh,nd.fr.op,false);
-  });
   // bottom fade: hints at infinity below
   const grd=ctx.createLinearGradient(0,vh-140,0,vh);
   grd.addColorStop(0,"rgba(8,8,10,0)");grd.addColorStop(1,"rgba(8,8,10,0.85)");
   ctx.fillStyle=grd;ctx.fillRect(0,vh-140,vw,140);
   // chrome
-  const names=["Meridian"];
-  focus.forEach((b,idx)=>names.push(segName(focus.slice(0,idx+1))));
-  crumb.textContent=names.join("  /  ");
-  depthEl.textContent="LEVEL "+focus.length+" · ∞";
+  if(selected){
+    const names=[];
+    for(let k=0;k<=selected.r;k++)names.push(nameFor(k,ancIndex(selected.r,selected.i,k)));
+    crumb.textContent=(names.length>4?"… / "+names.slice(-3).join(" / "):names.join(" / "));
+  }else{
+    crumb.textContent="Meridian";
+  }
+  const rc=centerRow(),label="ROW "+rc+" · ∞";
+  if(depthEl.textContent!==label)depthEl.textContent=label;
 }
-function drawBlock(absP,sx,sy,sw,sh,alpha,dimmed){
-  const nm=segName(absP),hc=headcount(absP),hue=hueFor(absP);
-  ctx.globalAlpha=alpha;
-  roundRect(sx-sw/2,sy-sh/2,sw,sh,Math.min(14,sw*0.06));
-  ctx.fillStyle=dimmed?"#0c0c10":"#101014";ctx.fill();
-  const sel=selected&&eq(selected,absP);
-  ctx.strokeStyle=sel?"#60a5fa":`hsla(${hue},70%,60%,${dimmed?0.3:0.55})`;
+function drawBlock(r,i,sx,sy){
+  const nm=nameFor(r,i),hc=headcountFor(r,i),hue=hueFor(r,i);
+  const sel=selected&&selected.r===r&&selected.i===i;
+  roundRect(sx,sy,BW,BH,14);
+  ctx.fillStyle="#101014";ctx.fill();
+  ctx.strokeStyle=sel?"#60a5fa":`hsla(${hue},70%,60%,0.55)`;
   ctx.lineWidth=sel?3:1.5;ctx.stroke();
   ctx.fillStyle=`hsl(${hue},70%,55%)`;
-  const bw=Math.max(2,sw*0.02);
-  roundRect(sx-sw/2,sy-sh/2,bw,sh,Math.min(14,sw*0.06));ctx.fill();
-  if(sw>80&&!dimmed){
-    ctx.textAlign="left";ctx.textBaseline="alphabetic";
-    const fs=Math.max(11,sw*0.075);
-    ctx.font=`700 ${fs}px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif`;
-    ctx.fillStyle="#fafafa";
-    ctx.fillText(nm,sx-sw/2+sw*0.07,sy-2);
-    ctx.font=`${Math.max(9,sw*0.042)}px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif`;
-    ctx.fillStyle="#a1a1aa";
-    ctx.fillText(hc.toLocaleString()+" people",sx-sw/2+sw*0.07,sy+sw*0.075);
-  }else if(sw>40){
-    ctx.textAlign="center";
-    ctx.font=`700 ${Math.max(10,sw*0.09)}px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif`;
-    ctx.fillStyle="#e8e8ea";
-    ctx.fillText(nm,sx,sy+Math.max(4,sw*0.035));
-  }
-  ctx.globalAlpha=1;ctx.textAlign="left";
+  const bw=Math.max(2,BW*0.02);
+  roundRect(sx,sy,bw,BH,14);ctx.fill();
+  ctx.textAlign="left";ctx.textBaseline="alphabetic";
+  ctx.font=`700 ${BW*0.075}px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif`;
+  ctx.fillStyle="#fafafa";
+  ctx.fillText(nm,sx+BW*0.07,sy+BH*0.42);
+  ctx.font=`${BW*0.042}px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif`;
+  ctx.fillStyle="#a1a1aa";
+  ctx.fillText(hc.toLocaleString()+" people",sx+BW*0.07,sy+BH*0.72);
+  ctx.textAlign="left";
 }
 
 /* ---------- interaction ---------- */
-let moved=false,downPos=null;const ptrs=new Map();let pinchD0=0;
 function hitTest(cx,cy){
-  const z=SC;
-  if(focus.length>0){
-    const shx=target!==null?diveT*relPos(1,target).x:0;
-    const shy=target!==null?diveT*relPos(1,target).y:0;
-    const ppx=S.x-shx*z, ppy=(-(BH+GY)-shy)*z+S.y;
-    if(Math.abs(cx-ppx)<BW*z*0.4&&Math.abs(cy-ppy)<BH*z*0.4)return {parent:true};
-  }
-  for(let r=3;r>=0;r--){
-    const n=1<<r;
-    for(let i=0;i<n;i++){
-      const bits=bitsOf(i,r),absP=focus.concat(bits);
-      const fr=nodeFrame(absP,r,i);
-      if(fr.op<0.3)continue;
-      const sx=fr.x*z+S.x,sy=fr.y*z+S.y,sw=BW*z,sh=BH*z;
-      if(Math.abs(cx-sx)<sw/2&&Math.abs(cy-sy)<sh/2)return {absP:absP,r:r,i:i};
+  const [r0,r1]=visibleRows();
+  for(let r=r0;r<=r1;r++){
+    const [i0,i1]=indexRange(r);
+    for(let i=i0;i<=i1;i++){
+      const sx=blockCX(r,i)-camX,sy=blockCY(r)-camY;
+      if(cx>=sx&&cx<=sx+BW&&cy>=sy&&cy<=sy+BH)return {r:r,i:i};
     }
   }
   return null;
 }
+let moved=false,downPos=null;const ptrs=new Map();
 stage.addEventListener("pointerdown",e=>{
   stage.setPointerCapture(e.pointerId);
   ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
-  lastCX=e.clientX;lastCY=e.clientY;
   if(ptrs.size===1){moved=false;downPos={x:e.clientX,y:e.clientY};stage.classList.add("dragging");}
-  if(ptrs.size===2){const p=[...ptrs.values()];pinchD0=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);}
-  cancelAnimationFrame(nudgeDive.raf);
+  else moved=true;
 });
 stage.addEventListener("pointermove",e=>{
-  lastCX=e.clientX;lastCY=e.clientY;
   if(!ptrs.has(e.pointerId))return;
   const prev=ptrs.get(e.pointerId);ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(ptrs.size===1){
     const dx=e.clientX-prev.x,dy=e.clientY-prev.y;
     if(downPos&&Math.hypot(e.clientX-downPos.x,e.clientY-downPos.y)>6)moved=true;
-    S.x+=dx;S.y+=dy;requestDraw();hideHintSoon();
-  }else if(ptrs.size===2){
-    const p=[...ptrs.values()];
-    const d=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
-    const mx=(p[0].x+p[1].x)/2,my=(p[0].y+p[1].y)/2;
-    if(pinchD0>0)addDive((d/pinchD0-1)*1.6,mx,my);
-    pinchD0=d;moved=true;hideHintSoon();
+    tX-=dx;tY-=dy;clampTargets();hideHintSoon();
   }
 });
 function endPtr(e){
@@ -360,39 +242,50 @@ function endPtr(e){
   if(ptrs.size===0)stage.classList.remove("dragging");
   if(!moved&&downPos&&e.type==="pointerup"){
     const hit=hitTest(e.clientX,e.clientY);
-    if(hit&&hit.parent){nudgeDive(-1);}
-    else selected=hit?hit.absP:null; // select only — the camera never moves on click
-    requestDraw();
+    selected=hit?{r:hit.r,i:hit.i}:null; // select only — the camera never moves on tap
   }
+  downPos=null;
 }
 stage.addEventListener("pointerup",endPtr);
 stage.addEventListener("pointercancel",endPtr);
 stage.addEventListener("wheel",e=>{
-  e.preventDefault();cancelAnimationFrame(nudgeDive.raf);
-  addDive(-e.deltaY*0.0011,e.clientX,e.clientY);hideHintSoon();
+  e.preventDefault();
+  tX+=e.deltaX;tY+=e.deltaY;clampTargets();hideHintSoon();
 },{passive:false});
 stage.addEventListener("dblclick",e=>{
   e.preventDefault();
   const hit=hitTest(e.clientX,e.clientY);
-  if(!hit||hit.parent||hit.r===0)return;
-  target=hit.absP[focus.length]; // dive through the row-1 ancestor
-  nudgeDive(1);
+  if(!hit)return;
+  tX=blockCX(hit.r,hit.i)+BW/2-vw/2;
+  tY=blockCY(hit.r,hit.i)+BH/2-vh/2;
+  clampTargets();
 });
 stage.addEventListener("contextmenu",e=>e.preventDefault());
 
 let hintT=null;
 function hideHint(){hint.style.opacity=0;}
 function hideHintSoon(){clearTimeout(hintT);hintT=setTimeout(hideHint,2500);}
-document.getElementById("zin").onclick=()=>{pickTarget(vw/2,vh/2);nudgeDive(1);hideHint();};
-document.getElementById("zout").onclick=()=>{nudgeDive(-1);hideHint();};
-document.getElementById("zreset").onclick=()=>{focus=[];diveT=0;target=null;selected=null;fitPyramid();hideHint();};
+function page(d){tY+=d*ROWH*3;clampTargets();hideHint();}
+document.getElementById("zin").onclick=()=>page(1);
+document.getElementById("zout").onclick=()=>page(-1);
+document.getElementById("zreset").onclick=()=>{goHome();hideHint();};
 window.addEventListener("keydown",e=>{
-  if(e.key==="+"||e.key==="="){pickTarget(vw/2,vh/2);nudgeDive(1);}
-  if(e.key==="-")nudgeDive(-1);
-  if(e.key==="0"){focus=[];diveT=0;target=null;selected=null;fitPyramid();}
+  if(e.key==="+"||e.key==="="||e.key==="ArrowDown")page(1);
+  else if(e.key==="-"||e.key==="ArrowUp")page(-1);
+  else if(e.key==="0"){goHome();}
 });
 
-resize();fitPyramid();
+/* ---------- main loop: ease the camera toward its target ---------- */
+function frame(){
+  const dx=tX-camX,dy=tY-camY;
+  if(Math.abs(dx)>0.05||Math.abs(dy)>0.05){
+    camX+=dx*0.18;camY+=dy*0.18;
+  }else{camX=tX;camY=tY;}
+  draw();
+  requestAnimationFrame(frame);
+}
+resize();goHome();clampTargets();
+requestAnimationFrame(frame);
 setTimeout(hideHint,12000);
 </script>
 </body>

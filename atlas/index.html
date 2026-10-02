@@ -168,6 +168,9 @@ function nodeFrame(absP,r,i){
     }else if(eq(absP,focus)){
       x=lerp(oldP.x,0,diveT);y=lerp(oldP.y,-(BH+GY),diveT);op=lerp(1,0.4,diveT);
     }else{
+      // not in the dive path: slide away with the rest of the pyramid while fading
+      const sh=relPos(1,target);
+      x=oldP.x-sh.x*diveT; y=oldP.y-sh.y*diveT;
       op=lerp(op,0,diveT);
     }
   }
@@ -222,9 +225,14 @@ function draw(){
   if(focus.length>0){
     parentPath=focus.slice(0,-1);
     const oldP={x:0,y:-(BH+GY)};
-    let py=oldP.y,pop=0.4;
-    if(target!==null&&diveT>0){py=lerp(oldP.y,-(BH+GY)-relPos(1,target).y,diveT);pop=lerp(0.4,0,diveT);}
-    parentFr={x:0,y:py,op:pop};
+    let px=oldP.x,py=oldP.y,pop=0.4;
+    if(target!==null&&diveT>0){
+      const sh=relPos(1,target);
+      px=oldP.x-sh.x*diveT;
+      py=lerp(oldP.y,-(BH+GY)-sh.y,diveT);
+      pop=lerp(0.4,0,diveT);
+    }
+    parentFr={x:px,y:py,op:pop};
   }
   // edges (elbows), batched by alpha bucket
   ctx.lineWidth=1.5;
@@ -306,8 +314,10 @@ let moved=false,downPos=null;const ptrs=new Map();let pinchD0=0;
 function hitTest(cx,cy){
   const z=SC;
   if(focus.length>0){
-    const ppy=(-(BH+GY))*z+S.y-(target!==null?diveT*relPos(1,target).y*z:0);
-    if(Math.abs(cx-S.x)<BW*z*0.4&&Math.abs(cy-ppy)<BH*z*0.4)return {parent:true};
+    const shx=target!==null?diveT*relPos(1,target).x:0;
+    const shy=target!==null?diveT*relPos(1,target).y:0;
+    const ppx=S.x-shx*z, ppy=(-(BH+GY)-shy)*z+S.y;
+    if(Math.abs(cx-ppx)<BW*z*0.4&&Math.abs(cy-ppy)<BH*z*0.4)return {parent:true};
   }
   for(let r=3;r>=0;r--){
     const n=1<<r;

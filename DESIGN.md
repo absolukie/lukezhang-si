@@ -130,3 +130,8 @@ bottom-left, mirroring the version badge bottom-right.
   instantly re-open it; zooming now anchors the card under the cursor when
   the layout reshapes, so you never get stranded on a blank canvas.
   v2026.10.01e.
+- `atlas/index.html` v6 (2026-10-02) — zoom anchoring rework: the anchor is now
+  the deepest expanded branch containing the focal point (gaps between cards
+  still belong to a branch), so zooming out from deep can no longer strand
+  the camera on a blank canvas; the surviving branch stays glued to the
+  focal point as the pyramid reshapes. Layout now stores subtree x-bounds.

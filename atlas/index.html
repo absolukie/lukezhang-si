@@ -186,10 +186,12 @@ function relayout(){
   }
   POS=new Map();
   function place(n,cx,y){
-    POS.set(n.path.join("/"),{x:cx,y:y});
-    if(!isExpanded(n))return;
-    const kids=childrenOf(n);
-    const total=kids.reduce((s,c)=>s+width(c),0)+HGAP*(kids.length-1);
+    const key=n.path.join("/");
+    const exp=isExpanded(n);
+    const kids=exp?childrenOf(n):[];
+    const total=kids.length?kids.reduce((s,c)=>s+width(c),0)+HGAP*(kids.length-1):CARD[n.level][0];
+    POS.set(key,{x:cx,y:y,bx0:cx-total/2,bx1:cx+total/2});
+    if(!exp)return;
     let x=cx-total/2;
     kids.forEach(c=>{const w=width(c);place(c,x+w/2,y+CARD[n.level][1]+VGAP);x+=w+HGAP;});
   }
@@ -218,19 +220,31 @@ const S={x:0,y:0,z:0.4};
 let drawQueued=false;
 function requestDraw(){if(drawQueued)return;drawQueued=true;requestAnimationFrame(()=>{drawQueued=false;draw();});}
 function zoomAt(cx,cy,f){
-  const anchor=nodeAt(cx,cy); // card under the cursor before anything moves
-  const akey=anchor?anchor.path.join("/"):"";
+  // anchor: deepest expanded branch containing the focal point's world x.
+  // gaps between cards still belong to a branch, so this never comes up empty.
+  const wx0=(cx-S.x)/S.z;
+  let anchor=makeNode([]);
+  for(;;){
+    if(!isExpanded(anchor))break;
+    const kids=childrenOf(anchor);
+    let hit=null;
+    for(let i=0;i<kids.length;i++){
+      const p=POS.get(kids[i].path.join("/"));
+      if(p&&wx0>=p.bx0&&wx0<=p.bx1){hit=kids[i];break;}
+    }
+    if(!hit)break;
+    anchor=hit;
+  }
+  const akey=anchor.path.join("/");
   const nz=Math.min(6,Math.max(0.05,S.z*f));
   const wx=(cx-S.x)/S.z,wy=(cy-S.y)/S.z;
   S.z=nz;S.x=cx-wx*nz;S.y=cy-wy*nz;
   ensureLayout();
-  // layout may have reshaped (auto unfold/collapse): keep the anchor glued to the cursor
-  if(anchor){
-    let n=anchor,k=akey;
-    while(n&&!POS.has(k)){k=k.split("/").slice(0,-1).join("/");n=n.parent;}
-    const p=POS.get(k);
-    if(p){S.x=cx-p.x*S.z;S.y=cy-p.y*S.z;}
-  }
+  // the layout may have reshaped: keep the surviving branch node glued to the focal point
+  let n=anchor,k=akey;
+  while(n&&!POS.has(k)){k=k.split("/").slice(0,-1).join("/");n=n.parent;}
+  const p=POS.get(k);
+  if(p){S.x=cx-p.x*S.z;S.y=cy-p.y*S.z;}
   requestDraw();
 }
 // fly to a node; target re-resolved every frame so mid-flight layout changes track it

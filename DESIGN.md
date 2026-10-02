@@ -135,3 +135,9 @@ bottom-left, mirroring the version badge bottom-right.
   still belong to a branch), so zooming out from deep can no longer strand
   the camera on a blank canvas; the surviving branch stays glued to the
   focal point as the pyramid reshapes. Layout now stores subtree x-bounds.
+- `atlas/index.html` v7 (2026-10-02) — static-pyramid rebuild per feedback:
+  full 4-tier pyramid always laid out (CEO -> 12 depts -> ~102 teams ->
+  1,787 people as a dot sea), segment layout, pure semantic zoom
+  (dots -> blocks -> cards -> opened team grids). Click only selects
+  (no camera flight); layout never reshapes so the stranded-camera bug
+  class is gone. v2026.10.02a.

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Atlas — a graph that unfolds as you zoom</title>
-<meta name="description" content="A 1,885-node graph. Zoomed out you see 12 nodes. Zoom into any node and it unfolds into 12 more. Keep going.">
+<title>Atlas — an org chart you can fall into</title>
+<meta name="description" content="A ~2,000-person org chart. Zoomed out you see 12 VPs. Zoom into anyone and their team unfolds.">
 <style>
   :root{ --bg:#08080a; --ink:#fafafa; --dim:#a1a1aa; }
   *{box-sizing:border-box}
@@ -28,12 +28,13 @@
   .zoomctl button:hover{background:#27272a}
   #index{position:fixed;right:14px;top:50%;transform:translateY(-50%);z-index:5;display:flex;flex-direction:column;gap:4px;
     background:rgba(8,8,10,.72);backdrop-filter:blur(8px);border:1px solid #27272a;border-radius:14px;padding:10px;
-    max-width:190px;max-height:70vh;overflow:auto}
+    max-width:200px;max-height:70vh;overflow:auto}
   #index .cap{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);padding:2px 6px}
   #index button{touch-action:manipulation;text-align:left;background:transparent;border:1px solid transparent;color:var(--ink);
     border-radius:8px;padding:6px 9px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px}
   #index button:hover{background:#18181b;border-color:#3f3f46}
   #index .dot{width:10px;height:10px;border-radius:50%;flex:none}
+  #index small{color:var(--dim);font-size:11px}
   #hint{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;white-space:nowrap;
     background:rgba(8,8,10,.72);backdrop-filter:blur(8px);border:1px solid #27272a;border-radius:999px;
     padding:9px 18px;font-size:13px;color:var(--dim);transition:opacity .6s;pointer-events:none}
@@ -54,8 +55,8 @@
 
 <header>
   <div>
-    <div class="brand"><b>Atlas</b> <span>· a 1,885-node generated graph — zoom in and it keeps unfolding</span></div>
-    <div id="crumb" class="brand" style="margin-top:8px;display:inline-block">acme-app</div>
+    <div class="brand"><b>Atlas</b> <span>· a ~2,000-person org chart — zoom into anyone and their team unfolds</span></div>
+    <div id="crumb" class="brand" style="margin-top:8px;display:inline-block">Acme Inc</div>
   </div>
   <div class="zoomctl">
     <button id="zin" aria-label="Zoom in">+</button>
@@ -64,26 +65,27 @@
   </div>
 </header>
 
-<nav id="index" aria-label="Jump to a subsystem"><div class="cap">Jump to</div></nav>
-<div id="hint"><b>Drag</b> to move &nbsp;·&nbsp; <b>scroll / pinch</b> to zoom &nbsp;·&nbsp; <b>click a node</b> to dive in</div>
-<div id="count">– visible · 1,885 total</div>
-<div id="ver">v2026.10.01b</div>
+<nav id="index" aria-label="Jump to a VP"><div class="cap">Jump to</div></nav>
+<div id="hint"><b>Drag</b> to move &nbsp;·&nbsp; <b>scroll / pinch</b> to zoom &nbsp;·&nbsp; <b>click a person</b> to dive in</div>
+<div id="count">– visible</div>
+<div id="ver">v2026.10.01c</div>
 
 <script>
 "use strict";
-/* ================= graph model =================
-   Root (level 0) → 12 subsystems (L1) → 12 modules each (L2)
-   → 12 leaves each (L3). 1 + 12 + 144 + 1728 = 1,885 nodes.
-   A node's position is a pure function of its path, so any
-   node can be materialized without building the whole tree. */
-const BRANCH = 12, MAX_LEVEL = 3, ROOT_R = 12000, CHILD_F = 0.21;
+/* ================= org model =================
+   Acme Inc → 12 VPs → 9–13 directors each → 11–17 reports each.
+   ≈ 2,000 people. A person's position is a pure function of their
+   path, so the tree is never fully built — teams materialize as
+   you zoom into them. Only visible people are drawn, each exactly
+   once per frame. */
+const MAX_LEVEL = 3, ROOT_R = 12000;
 const EXPAND_PX = 110, LABEL_PX = 24;
-const SUBS = ["auth","billing","feed","search","media","chat","notify","analytics","growth","platform","safety","api"];
-const WORDS = ["core","gateway","worker","sync","index","store","cache","queue","stream","batch","ledger","vault",
-  "beacon","relay","forge","scout","lens","pulse","harbor","cipher","drift","ember","flux","grove","halo","iris",
-  "koda","lumen","mesa","onyx","prism","ridge","spark","tide","umbra","vale","wisp","zephyr","anchor","bravo",
-  "cobalt","delta","echo","flint","garnet","helios","ion","juniper","krypton"];
-const EXTS = ["ts","ts","js","py","go","tsx"];
+const DEPTS = ["Engineering","Product","Design","Sales","Marketing","Finance","Legal","People Ops","Operations","Data","Security","Customer Success"];
+const FIRST = ["James","Mary","John","Patricia","Robert","Jennifer","Michael","Linda","William","Elizabeth","David","Barbara","Richard","Susan","Joseph","Jessica","Thomas","Sarah","Charles","Karen","Christopher","Nancy","Daniel","Lisa","Matthew","Betty","Anthony","Margaret","Mark","Sandra","Donald","Ashley","Steven","Kimberly","Paul","Emily","Andrew","Donna","Joshua","Michelle","Kenneth","Laura","Kevin","Stephanie","Brian","Rebecca","George","Sharon"];
+const LAST = ["Smith","Johnson","Williams","Brown","Jones","Garcia","Miller","Davis","Rodriguez","Martinez","Hernandez","Lopez","Gonzalez","Wilson","Anderson","Thomas","Taylor","Moore","Jackson","Martin","Lee","Perez","Thompson","White","Harris","Sanchez","Clark","Ramirez","Lewis","Robinson","Walker","Young","Allen","King","Wright","Scott","Torres","Nguyen","Hill","Flores","Green","Adams","Nelson","Baker","Hall","Rivera","Campbell","Mitchell"];
+const AREAS = ["Platform","Infrastructure","Growth","Mobile","Web","Data","ML","Security","Support","Billing","Search","Feed","Messaging","API","DevOps","QA"];
+const LEAD_TITLES = ["Senior Director","Director","Head of"];
+const ROLES = ["Engineering Manager","Staff Engineer","Senior Engineer","Software Engineer","Senior PM","Product Manager","Product Designer","Data Scientist","Data Analyst","Tech Lead","QA Engineer","DevOps Engineer","Support Lead","Account Executive","Marketing Manager","Recruiter","Finance Analyst","Security Engineer","Designer","Engineering Manager"];
 
 function hashStr(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
@@ -92,63 +94,79 @@ const cache = new Map();
 function makeNode(path){
   const key = path.join("/");
   if(cache.has(key)) return cache.get(key);
-  const level = path.length; // 0=root … 3=leaf
   let n;
-  if(level===0){
-    n = {path:[],level:0,x:0,y:0,r:ROOT_R,parent:null,idx:-1,hue:0,label:"acme-app",kids:null,links:null};
+  if(path.length===0){
+    n = {path:[],level:0,x:0,y:0,r:ROOT_R,parent:null,idx:-1,hue:0,
+         name:"Acme Inc",title:"~2,000 people",initials:"A",kids:null,links:null};
   }else{
     const parent = makeNode(path.slice(0,-1));
-    const kids = childrenOf(parent);
-    n = kids[path[path.length-1]];
+    n = childrenOf(parent)[path[path.length-1]];
   }
   cache.set(key,n); return n;
 }
+function spanCount(p){
+  const rng = mulberry32(hashStr("span:"+p.path.join("/")));
+  if(p.level===0) return 12;
+  if(p.level===1) return 9+Math.floor(rng()*5);   // 9–13 directors
+  if(p.level===2) return 11+Math.floor(rng()*7);  // 11–17 reports
+  return 0;
+}
 function childrenOf(p){
   if(p.kids) return p.kids;
-  if(p.level>=MAX_LEVEL){ p.kids=[]; return p.kids; }
+  const k = spanCount(p);
+  if(k===0){ p.kids=[]; return p.kids; }
   const rng = mulberry32(hashStr("kids:"+p.path.join("/")));
-  const cr = p.r*CHILD_F, ringD = p.r-cr, off = rng()*Math.PI*2;
-  const kids=[];
-  for(let i=0;i<BRANCH;i++){
+  // 1 at center + (k-1) on a ring, sized so neighbors don't overlap
+  const m = k-1, s = Math.sin(Math.PI/m);
+  const c = p.r*s/(1+s), ringD = p.r-c, off = rng()*Math.PI*2;
+  const kids = [];
+  for(let i=0;i<k;i++){
     let x,y;
     if(i===0){ x=p.x; y=p.y; }
-    else{ const a=off+(i-1)*(Math.PI*2/(BRANCH-1)); x=p.x+Math.cos(a)*ringD; y=p.y+Math.sin(a)*ringD; }
-    const path=p.path.concat(i);
-    const lrng=mulberry32(hashStr("n:"+path.join("/")));
-    let label,hue;
-    const top = path[0];
-    hue = top*30;
-    if(path.length===1) label=SUBS[i];
-    else if(path.length===2) label=SUBS[top]+"."+WORDS[Math.floor(lrng()*WORDS.length)];
-    else label=WORDS[Math.floor(lrng()*WORDS.length)]+"."+EXTS[Math.floor(lrng()*EXTS.length)];
-    kids.push({path,level:path.length,x,y,r:cr,parent:p,idx:i,hue,label,kids:null,links:null,
-      seed:Math.floor(lrng()*1e9)});
+    else{ const a=off+(i-1)*(Math.PI*2/m); x=p.x+Math.cos(a)*ringD; y=p.y+Math.sin(a)*ringD; }
+    const path = p.path.concat(i);
+    const wrng = mulberry32(hashStr("who:"+path.join("/")));
+    const name = FIRST[Math.floor(wrng()*FIRST.length)]+" "+LAST[Math.floor(wrng()*LAST.length)];
+    const level = path.length, top = path[0];
+    let title;
+    if(level===1) title = "VP, "+DEPTS[i];
+    else if(level===2) title = LEAD_TITLES[Math.floor(wrng()*LEAD_TITLES.length)]+", "+AREAS[Math.floor(wrng()*AREAS.length)];
+    else title = ROLES[Math.floor(wrng()*ROLES.length)];
+    kids.push({path,level,x,y,r:c,parent:p,idx:i,hue:top*30,
+      name,title,initials:name.split(" ").map(w=>w[0]).join(""),kids:null,links:null});
   }
-  p.kids=kids; return kids;
+  p.kids = kids; return kids;
 }
-function linksOf(n){
+function linksOf(n){ // "works closely with" cross-team edges
   if(n.links) return n.links;
-  n.links=[];
+  n.links = [];
   if(n.level===0) return n.links;
-  const rng=mulberry32(hashStr("links:"+n.path.join("/")));
+  const rng = mulberry32(hashStr("links:"+n.path.join("/")));
   const count = rng()<0.7?1:2;
-  for(let k=0;k<count;k++){
-    const tp=n.path.slice();
-    let ti=Math.floor(rng()*BRANCH);
-    if(ti===tp[0]) ti=(ti+1)%BRANCH;
+  for(let kk=0;kk<count;kk++){
+    const tp = n.path.slice();
+    let ti = Math.floor(rng()*12);
+    if(ti===tp[0]) ti=(ti+1)%12;
     tp[0]=ti;
-    for(let d=1;d<tp.length;d++) tp[d]=Math.floor(rng()*BRANCH);
+    for(let d=1;d<tp.length;d++){
+      const anc = makeNode(tp.slice(0,d));
+      tp[d]=Math.floor(rng()*spanCount(anc));
+    }
     n.links.push(makeNode(tp));
   }
   return n.links;
 }
+let TOTAL=0;
+(function(){ const seen=new Set();
+  (function walk(n){ const k=n.path.join("/"); if(seen.has(k))return; seen.add(k); TOTAL++;
+    childrenOf(n).forEach(walk); })(makeNode([])); })();
 
 /* ================= camera & canvas ================= */
 const cv=document.getElementById("cv"), ctx=cv.getContext("2d"), stage=document.getElementById("stage");
 const crumb=document.getElementById("crumb"), countEl=document.getElementById("count"), hint=document.getElementById("hint");
-let vw=0,vh=0,dpr=1;
+let vw=0,vh=0;
 function resize(){
-  dpr=Math.min(2,window.devicePixelRatio||1);
+  const dpr=Math.min(2,window.devicePixelRatio||1);
   vw=window.innerWidth; vh=window.innerHeight;
   cv.width=vw*dpr; cv.height=vh*dpr; cv.style.width=vw+"px"; cv.style.height=vh+"px";
   ctx.setTransform(dpr,0,0,dpr,0,0);
@@ -156,11 +174,17 @@ function resize(){
 }
 window.addEventListener("resize",resize);
 
-const S={x:0,y:0,z:0.03}; // pan (px) + zoom
+const S={x:0,y:0,z:0.03};
+// coalesce redraws to one per frame — the lag fix
+let drawQueued=false;
+function requestDraw(){
+  if(drawQueued) return; drawQueued=true;
+  requestAnimationFrame(()=>{ drawQueued=false; draw(); });
+}
 function zoomAt(cx,cy,f){
   const wx=(cx-S.x)/S.z, wy=(cy-S.y)/S.z;
   S.z=Math.min(8,Math.max(0.008,S.z*f));
-  S.x=cx-wx*S.z; S.y=cy-wy*S.z; draw();
+  S.x=cx-wx*S.z; S.y=cy-wy*S.z; requestDraw();
 }
 function flyTo(wx,wy,z,dur){
   dur=dur||650;
@@ -174,100 +198,115 @@ function flyTo(wx,wy,z,dur){
 }
 function fitRoot(){ S.z=Math.min(vw,vh)/(2*ROOT_R*1.06); S.x=vw/2; S.y=vh/2; draw(); }
 
-/* ================= visibility: expand frontier ================= */
+/* ================= visibility ================= */
 let visible=[];
 function computeVisible(){
   visible=[];
-  const root=makeNode([]);
   (function visit(n){
     const sr=n.r*S.z, sx=n.x*S.z+S.x, sy=n.y*S.z+S.y;
     if(sx+sr<-60||sx-sr>vw+60||sy+sr<-60||sy-sr>vh+60) return;
     n._sr=sr; n._sx=sx; n._sy=sy;
     n._expanded = n.level<MAX_LEVEL && (n.level===0 || sr>EXPAND_PX);
     visible.push(n);
-    if(n._expanded) childrenOf(n).forEach(visit);
-  })(root);
+    if(n._expanded){ const k=childrenOf(n); for(let i=0;i<k.length;i++) visit(k[i]); }
+  })(makeNode([]));
 }
 
-/* ================= draw ================= */
+/* ================= draw — everything exactly once ================= */
 function draw(){
   computeVisible();
   ctx.clearRect(0,0,vw,vh);
-  // faint dot grid for orientation (screen space)
-  ctx.fillStyle="#17171b";
+  ctx.fillStyle="#141418";
   const gs=44;
-  for(let gx=(S.x%gs+gs)%gs; gx<vw; gx+=gs)
-    for(let gy=(S.y%gs+gs)%gs; gy<vh; gy+=gs)
-      ctx.fillRect(gx,gy,1.6,1.6);
+  const ox=((S.x%gs)+gs)%gs, oy=((S.y%gs)+gs)%gs;
+  for(let gx=ox;gx<vw;gx+=gs) for(let gy=oy;gy<vh;gy+=gs) ctx.fillRect(gx,gy,1.6,1.6);
 
   const visSet=new Set(visible);
-  // ancestor boundary rings (walk up from each visible node)
-  ctx.setLineDash([7,7]);
-  visible.forEach(n=>{
-    let p=n.parent;
-    while(p){ if(p._sr!==undefined && p._sr<40000){
-      ctx.strokeStyle="rgba(255,255,255,0.06)"; ctx.lineWidth=1.5;
-      ctx.beginPath(); ctx.arc(p._sx,p._sy,p._sr,0,Math.PI*2); ctx.stroke();
-    } p=p.parent; }
-  });
+  // 1. team boundary rings (each expanded team drawn ONCE)
+  ctx.setLineDash([7,7]); ctx.lineWidth=1.5; ctx.strokeStyle="rgba(255,255,255,0.07)";
+  for(let i=0;i<visible.length;i++){ const n=visible[i];
+    if(n._expanded && n._sr<40000){ ctx.beginPath(); ctx.arc(n._sx,n._sy,n._sr,0,Math.PI*2); ctx.stroke(); } }
   ctx.setLineDash([]);
-
-  // parent→child edges
+  // 2. reporting lines
   ctx.strokeStyle="rgba(255,255,255,0.10)"; ctx.lineWidth=1;
-  visible.forEach(n=>{
-    if(!n.parent||!visSet.has(n.parent)) return;
-    ctx.beginPath(); ctx.moveTo(n.parent._sx,n.parent._sy); ctx.lineTo(n._sx,n._sy); ctx.stroke();
-  });
-  // cross links (draw once)
+  ctx.beginPath();
+  for(let i=0;i<visible.length;i++){ const n=visible[i];
+    if(n.parent&&visSet.has(n.parent)){ ctx.moveTo(n.parent._sx,n.parent._sy); ctx.lineTo(n._sx,n._sy); } }
+  ctx.stroke();
+  // 3. cross-team links (each once)
   ctx.strokeStyle="rgba(96,165,250,0.20)"; ctx.lineWidth=1;
+  ctx.beginPath();
   const drawn=new Set();
-  visible.forEach(n=>{
-    linksOf(n).forEach(t=>{
-      if(!visSet.has(t)) return;
-      const k=n.path.join("/")+"|"+t.path.join("/");
-      const k2=t.path.join("/")+"|"+n.path.join("/");
-      if(drawn.has(k)||drawn.has(k2)) return;
-      drawn.add(k);
+  for(let i=0;i<visible.length;i++){ const n=visible[i];
+    const ls=linksOf(n);
+    for(let j=0;j<ls.length;j++){ const t=ls[j];
+      if(!visSet.has(t)) continue;
+      const a=n.path.join("/"), b=t.path.join("/");
+      if(a>b) continue;
+      const kk=a+"|"+b; if(drawn.has(kk)) continue; drawn.add(kk);
       const mx=(n._sx+t._sx)/2, my=(n._sy+t._sy)/2-24;
-      ctx.beginPath(); ctx.moveTo(n._sx,n._sy); ctx.quadraticCurveTo(mx,my,t._sx,t._sy); ctx.stroke();
-    });
-  });
-  // nodes (parents first → children on top)
-  visible.forEach(n=>{
-    const sr=Math.max(1.2,n._sr);
-    const L=n.level===1?56:n.level===2?48:42;
+      ctx.moveTo(n._sx,n._sy); ctx.quadraticCurveTo(mx,my,t._sx,t._sy);
+    } }
+  ctx.stroke();
+  // 4. people (collapsed nodes only)
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  for(let i=0;i<visible.length;i++){ const n=visible[i];
+    if(n._expanded) continue;
+    const sr=Math.max(2,n._sr);
     ctx.beginPath(); ctx.arc(n._sx,n._sy,sr,0,Math.PI*2);
-    ctx.fillStyle=n.level===0?"rgba(255,255,255,0.03)":`hsl(${n.hue},62%,${L}%)`;
-    ctx.fill();
-    if(n.level>0){ ctx.strokeStyle="rgba(0,0,0,0.4)"; ctx.lineWidth=1.5; ctx.stroke(); }
+    ctx.fillStyle=`hsl(${n.hue},60%,52%)`; ctx.fill();
+    ctx.strokeStyle="rgba(0,0,0,0.45)"; ctx.lineWidth=Math.min(3,sr*0.08+0.5); ctx.stroke();
     if(n._focused){ ctx.strokeStyle="#60a5fa"; ctx.lineWidth=3; ctx.stroke(); }
-  });
-  // labels
-  ctx.textAlign="center";
-  visible.forEach(n=>{
-    if(n.level===0||n._sr<LABEL_PX) return;
+    const ifs=Math.min(44,Math.max(9,sr*0.44));
+    ctx.font=`700 ${ifs}px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif`;
+    ctx.fillStyle="rgba(255,255,255,0.95)";
+    ctx.fillText(n.initials,n._sx,n._sy+1);
+  }
+  // 5. labels
+  ctx.textBaseline="alphabetic";
+  for(let i=0;i<visible.length;i++){ const n=visible[i];
+    if(n._expanded){
+      if(n.level===0||n._sr<140) continue;
+      ctx.font=`600 13px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif`;
+      ctx.textAlign="left";
+      ctx.lineWidth=4; ctx.strokeStyle="rgba(8,8,10,0.9)";
+      const lx=n._sx-n._sr+14, ly=n._sy-n._sr+24;
+      const s=n.name+" · "+childrenOf(n).length+" people";
+      ctx.strokeText(s,lx,ly); ctx.fillStyle="#a1a1aa"; ctx.fillText(s,lx,ly);
+      continue;
+    }
+    if(n._sr<LABEL_PX) continue;
+    ctx.textAlign="center";
     const fs=n._sr>200?15:12;
     ctx.font=`500 ${fs}px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif`;
     ctx.lineWidth=4; ctx.strokeStyle="rgba(8,8,10,0.85)";
-    const ly=n._sy+n._sr+fs+6;
-    ctx.strokeText(n.label,n._sx,ly); ctx.fillStyle="#e7e7ea"; ctx.fillText(n.label,n._sx,ly);
-  });
+    let ly=n._sy+n._sr+fs+6;
+    ctx.strokeText(n.name,n._sx,ly); ctx.fillStyle="#ececee"; ctx.fillText(n.name,n._sx,ly);
+    if(n._sr>64){
+      ctx.font=`400 11px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif`;
+      ly+=16; ctx.strokeText(n.title,n._sx,ly); ctx.fillStyle="#a1a1aa"; ctx.fillText(n.title,n._sx,ly);
+    }
+  }
 
-  // breadcrumb: deepest expanded node containing viewport center
+  // breadcrumb: deepest expanded team containing viewport center
   let b=makeNode([]);
-  while(b._expanded){
-    const kids=childrenOf(b);
-    const hit=kids.find(k=>{const dx=vw/2-k._sx,dy=vh/2-k._sy;return dx*dx+dy*dy<k._sr*k._sr;});
+  for(;;){
+    if(!b._expanded) break;
+    const kids=childrenOf(b); let hit=null;
+    for(let i=0;i<kids.length;i++){ const k=kids[i];
+      if(k._sr===undefined) continue;
+      const dx=vw/2-k._sx, dy=vh/2-k._sy;
+      if(dx*dx+dy*dy<k._sr*k._sr){ hit=k; break; } }
     if(!hit) break; b=hit;
   }
-  const names=[]; let q=b; while(q){names.unshift(q.label); q=q.parent;}
-  crumb.textContent=names.join(" / ");
-  countEl.textContent=`${visible.length} visible · 1,885 total`;
+  const names=[]; let q=b; while(q){ names.unshift(q.level===0?q.name:q.name.split(" ")[0]+" "+q.name.split(" ")[1][0]+"."); q=q.parent; }
+  crumb.textContent=names.join("  /  ");
+  countEl.textContent=`${visible.length} visible · ${TOTAL.toLocaleString()} total`;
 }
 
 /* ================= interaction ================= */
 let moved=false,downPos=null; const ptrs=new Map(); let pinchD0=0;
-function clearFocus(){visible.forEach(n=>n._focused=false);}
+function clearFocus(){ for(let i=0;i<visible.length;i++) visible[i]._focused=false; }
 stage.addEventListener("pointerdown",e=>{
   stage.setPointerCapture(e.pointerId);
   ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
@@ -281,7 +320,7 @@ stage.addEventListener("pointermove",e=>{
   if(ptrs.size===1){
     const dx=e.clientX-prev.x,dy=e.clientY-prev.y;
     if(downPos&&Math.hypot(e.clientX-downPos.x,e.clientY-downPos.y)>6)moved=true;
-    S.x+=dx;S.y+=dy;draw();hideHintSoon();
+    S.x+=dx;S.y+=dy;requestDraw();hideHintSoon();
   }else if(ptrs.size===2){
     const p=[...ptrs.values()];
     const d=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
@@ -293,16 +332,14 @@ function endPtr(e){
   ptrs.delete(e.pointerId);
   if(ptrs.size===0)stage.classList.remove("dragging");
   if(!moved&&downPos&&e.type==="pointerup"){
-    // click: dive into topmost node under cursor
     const wx=(e.clientX-S.x)/S.z, wy=(e.clientY-S.y)/S.z;
     for(let i=visible.length-1;i>=0;i--){
       const n=visible[i];
-      if(n.level===0)continue;
+      if(n._expanded||n.level===0)continue;
       const dx=wx-n.x,dy=wy-n.y;
       if(dx*dx+dy*dy<n.r*n.r){
         clearFocus(); n._focused=true;
-        const tz=n.level<MAX_LEVEL?Math.min(8,190/n.r):Math.min(8,320/n.r);
-        flyTo(n.x,n.y,tz); hideHint(); draw(); break;
+        flyTo(n.x,n.y,Math.min(8,190/n.r)); hideHint(); requestDraw(); break;
       }
     }
   }
@@ -328,8 +365,10 @@ window.addEventListener("keydown",e=>{
 const idx=document.getElementById("index");
 childrenOf(makeNode([])).forEach(n=>{
   const b=document.createElement("button");
-  const d=document.createElement("span");d.className="dot";d.style.background=`hsl(${n.hue},62%,56%)`;
-  b.appendChild(d); b.appendChild(document.createTextNode(n.label));
+  const d=document.createElement("span");d.className="dot";d.style.background=`hsl(${n.hue},60%,52%)`;
+  b.appendChild(d);
+  const t=document.createElement("span");t.innerHTML=`${n.name}<br><small>${n.title}</small>`;
+  b.appendChild(t);
   b.onclick=()=>{clearFocus();n._focused=true;flyTo(n.x,n.y,Math.min(8,200/n.r));hideHint();};
   idx.appendChild(b);
 });

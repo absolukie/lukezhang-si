@@ -111,3 +111,10 @@ bottom-left, mirroring the version badge bottom-right.
   function of path (deterministic seeded layout), so the tree is never fully
   built. Breadcrumb, live visible/total counter, subsystem jump index.
   Honest label: generated demo graph. Build badge v2026.10.01b.
+- `atlas/index.html` v3 (2026-10-01) — org-chart rebuild per feedback: Acme Inc,
+  12 VPs -> 9-13 directors -> 11-17 reports = 2,033 generated people. People are
+  colored initial-avatars by department; zooming into anyone unfolds their
+  team with reporting lines + cross-team 'works with' edges. Perf fixes: each
+  element drawn exactly once per frame (the old build stroked boundary rings
+  once per visible node), redraws coalesced to one per animation frame.
+  Breadcrumb, live visible/total counter, VP jump index. v2026.10.01c.

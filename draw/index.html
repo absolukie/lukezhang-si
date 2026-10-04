@@ -83,6 +83,9 @@
   .toolbtn.sel { background: var(--ink); color: #fff8ea; }
   .toolbtn:disabled { opacity: 0.35; }
   .toolbtn svg { width: 24px; height: 24px; display: block; }
+  #dlBtn svg { transition: transform 130ms ease, opacity 130ms ease; }
+  #dlBtn.morphing svg { transform: scale(0.3); opacity: 0; }
+  #dlBtn.share { background: var(--ink); color: #fff8ea; }
   #sizes { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; }
   .sizebtn {
     flex: 0 0 auto;
@@ -302,6 +305,7 @@
     if (drawing) return;                       // one stroke at a time
     try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
     disarmClear();
+    setShareMode(false);   // drawing changed — back to copy
     drawing = { c: curColor, s: curSize, e: erasing, p: [pos(e)], id: e.pointerId };
     drawLiveSegment(drawing);
     hideHint();
@@ -400,6 +404,7 @@
     } else {
       return;
     }
+    setShareMode(false);   // drawing changed — back to copy
     updateUndo();
     scheduleSave();
   });
@@ -426,18 +431,36 @@
     strokes = [];
     redrawAll();
     hint.classList.remove("gone");
+    setShareMode(false);   // drawing wiped — back to copy
     updateUndo();
     scheduleSave();
   });
 
-  /* ---------- copy image ----------
-     One tap copies the drawing PNG straight to the clipboard — no sheets,
-     no extra steps. If the browser refuses (older iOS), fall back to the
-     share sheet, then to opening the image in a new tab. */
+  /* ---------- copy, then morph into share ----------
+     One tap copies the drawing PNG to the clipboard. On success the
+     button animates into a share button (tinted, new icon) offering the
+     natural next step; it morphs back to copy after sharing or as soon
+     as the drawing changes again. If copy is refused, share directly. */
   var dlBtn = document.getElementById("dlBtn");
-  dlBtn.title = "copy image";
-  dlBtn.setAttribute("aria-label", "copy image");
-  dlBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+  var COPY_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+  var SHARE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="M7.5 8.5L12 4l4.5 4.5"/><path d="M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/></svg>';
+  var shareMode = false;
+  function paintDlBtn() {
+    dlBtn.innerHTML = shareMode ? SHARE_SVG : COPY_SVG;
+    dlBtn.title = shareMode ? "share image" : "copy image";
+    dlBtn.setAttribute("aria-label", shareMode ? "share image" : "copy image");
+    dlBtn.classList.toggle("share", shareMode);
+  }
+  function setShareMode(on) {
+    if (shareMode === on) return;
+    dlBtn.classList.add("morphing");
+    setTimeout(function () {
+      shareMode = on;
+      paintDlBtn();
+      dlBtn.classList.remove("morphing");
+    }, 130);
+  }
+  paintDlBtn();
   function renderPNG(cb) {
     var out = document.createElement("canvas");
     out.width = canvas.width; out.height = canvas.height;
@@ -456,30 +479,40 @@
       setTimeout(function () { savedPill.textContent = "saved"; }, 300);
     }, 1400);
   }
-  function shareFallback(blob) {
+  function shareFallback(blob, done) {
     var file = null;
     try { file = new File([blob], "drawing.png", { type: "image/png" }); } catch (e) {}
     if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
-      navigator.share({ files: [file], title: "drawing" }).catch(function () { /* sheet dismissed */ });
+      navigator.share({ files: [file], title: "drawing" }).then(done, done);
     } else {
       var url = URL.createObjectURL(blob);
       window.open(url, "_blank");
       setTimeout(function () { URL.revokeObjectURL(url); }, 120000);
+      done();
     }
   }
   dlBtn.addEventListener("click", function () {
+    if (shareMode) {
+      // share the current drawing, then morph back to copy
+      renderPNG(function (blob) {
+        if (blob) shareFallback(blob, function () { setShareMode(false); });
+        else setShareMode(false);
+      });
+      return;
+    }
     renderPNG(function (blob) {
       if (!blob) return;
+      var copyFailed = function () { shareFallback(blob, function () {}); };
       if (navigator.clipboard && window.ClipboardItem) {
         try {
           var item = new ClipboardItem({ "image/png": blob });
           navigator.clipboard.write([item]).then(
-            function () { flashPill("copied"); },
-            function () { shareFallback(blob); }
+            function () { flashPill("copied"); setShareMode(true); },
+            copyFailed
           );
-        } catch (e) { shareFallback(blob); }
+        } catch (e) { copyFailed(); }
       } else {
-        shareFallback(blob);
+        copyFailed();
       }
     });
   });

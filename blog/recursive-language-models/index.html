@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recursive language models, explained — luke's blog</title>
+<meta name="description" content="A recursive language model never reads your giant prompt. It treats the prompt like a file on disk — searches it, slices it, and recursively calls itself on the pieces — reasoning over 10M+ tokens with a normal-size context window.">
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:680px;margin:0 auto;padding:24px;line-height:1.7;color:#222}
+  a{color:#0b5fff}
+  h1{font-size:1.9em;line-height:1.25;margin:0 0 8px}
+  .meta{color:#666;font-size:.9em;margin-bottom:28px}
+  pre{background:#f6f6f6;padding:16px;border-radius:8px;overflow-x:auto;font-size:.85em}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  p code{background:#f0f0f0;padding:2px 5px;border-radius:4px;font-size:.9em}
+  .verdict{background:#f0f7ff;border-left:4px solid #0b5fff;padding:12px 16px;margin:28px 0;border-radius:0 8px 8px 0}
+  nav{margin-top:48px;padding-top:16px;border-top:1px solid #eee;font-size:.9em}
+</style>
+</head>
+<body>
+<h1>Recursive language models, explained</h1>
+<div class="meta">October 4, 2026 · ai · llms</div>
+
+<p><strong>Verdict:</strong> A recursive language model never actually reads your giant prompt. It treats the prompt like a file on disk — stored as a variable in a Python environment — then writes code to search it, slice out the interesting pieces, and recursively call smaller copies of itself on just those pieces. The result: a model with an ordinary context window can reason over 10 million tokens, beating models with far bigger windows at similar or lower cost.</p>
+
+<h2>The idea in one paragraph</h2>
+
+<p>Imagine the difference between forcing someone to memorize a 10,000-page encyclopedia before answering your question, versus handing them the encyclopedia plus the power to hire research assistants. The second person never reads the whole thing. They check the index, send assistants to read specific chapters, and combine the reports. That's the whole trick: stop making the context window bigger, and start treating the prompt as an <em>environment the model can explore</em> instead of a message it must swallow whole.</p>
+
+<h2>How it actually works</h2>
+
+<p>The paper — <a href="https://arxiv.org/abs/2512.24601">Recursive Language Models</a>, from MIT CSAIL, December 2025 — sets up a simple loop:</p>
+
+<p><strong>1. The prompt lives outside the model.</strong> Your 10M-token document is loaded as a string variable in a persistent Python REPL. The root model never sees it directly. All it gets is metadata: how long it is, a short preview, and instructions for poking at it.</p>
+
+<p><strong>2. The model explores with code.</strong> Instead of "reading," the model writes Python: regex searches, slicing out ranges, counting occurrences, printing snippets. It observes the outputs and decides where to look next — like a detective with a search warrant for a very large filing cabinet.</p>
+
+<p><strong>3. It recruits itself.</strong> When it finds a promising chunk, it spawns a recursive sub-call — another instance of the model — pointed at just that snippet, which does dense, careful reasoning over a small piece of text and returns a short answer. The root stitches the answers together.</p>
+
+<p><strong>4. It stops when done.</strong> The loop ends when the model sets a <code>Final</code> variable in the REPL. From the outside, the whole thing looks exactly like a normal LLM call: prompt in, answer out.</p>
+
+<h2>The numbers</h2>
+
+<p>The results are the reason people are paying attention. RLMs handled inputs up to <strong>two orders of magnitude</strong> beyond their physical context window — 10M+ tokens — and dramatically outperformed both base models and standard long-context scaffolds (like RAG) across four different long-context tasks, at comparable or cheaper cost per query. On BrowseComp+, a hard research benchmark, an RLM built from GPT-4o (with GPT-4o-mini doing the sub-calls, no fine-tuning at all) scored <strong>91.3% versus 51%</strong> for RAG with BM25 retrieval.</p>
+
+<p>It also seems to be a trainable skill, not just a prompting trick. The authors took a model that struggled with long-context tasks and fine-tuned it on only <strong>1,000 examples</strong> from unrelated domains to act as a better recursive orchestrator — median improvement of <strong>28.3%</strong> across the four tasks. A thousand examples is nothing in model-training terms, which suggests "knowing how to delegate to yourself" is a compact, learnable behavior.</p>
+
+<h2>Why it matters</h2>
+
+<p>The industry has been in a context-window arms race: 128K, 1M, 10M tokens of raw attention, each step more expensive than the last because attention scales quadratically. And bigger windows have a dirty secret the paper names <strong>context rot</strong>: model quality degrades as the input grows, even when everything technically fits. Stuffing more in doesn't mean the model uses it well.</p>
+
+<p>RLMs reframe the problem as <strong>inference-time scaling</strong> instead of a bigger window. The model's working memory stays small and sharp; the bulk data lives in a symbolic environment it can query precisely. It's the same move computers made decades ago with virtual memory: your program doesn't need 10GB of RAM if the OS can page the right chunks in and out.</p>
+
+<h2>Honest caveats</h2>
+
+<p><strong>Cost is spiky.</strong> Average cost per query is comparable to a base model call, but the variance is high — a confused root model can keep spawning sub-calls and iterating, and you pay for every one.</p>
+
+<p><strong>Latency follows the same curve.</strong> Sequential rounds of explore → delegate → stitch are inherently slower than one big forward pass, especially on tasks that need many hops.</p>
+
+<p><strong>The failure modes are weird.</strong> The paper reports emergent "sysadmin behaviors" — models poking at their REPL environment in unexpected ways — and genuinely bizarre breakdowns when the recursion goes wrong. An orchestrator that can write arbitrary code against its own prompt is powerful, which is exactly why its mistakes are stranger than a normal model's.</p>
+
+<h2>The bigger picture</h2>
+
+<p>The deepest idea here isn't the REPL or the recursion — it's the shift from "the prompt is what the model reads" to "the prompt is what the model <em>operates on</em>." That turns long-context reasoning from a hardware problem (bigger windows, more memory) into an algorithms problem (better search, better delegation), and algorithms problems are where small teams beat big labs. Expect every serious agent framework to grow a recursive-exploration mode within a year. The context window isn't dead — it's just no longer the whole game.</p>
+
+<nav><a href="/blog/">← all posts</a></nav>
+</body>
+</html>

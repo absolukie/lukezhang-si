@@ -430,20 +430,32 @@
     scheduleSave();
   });
 
-  /* ---------- download png ---------- */
-  document.getElementById("dlBtn").addEventListener("click", function () {
+  /* ---------- save / share image ----------
+     iPhone Safari ignores the download attribute, so: if the Web Share
+     API can share files we open the native share sheet (Save Image lives
+     there); otherwise we open the PNG in a new tab for a long-press save. */
+  var dlBtn = document.getElementById("dlBtn");
+  dlBtn.title = "save / share image";
+  dlBtn.setAttribute("aria-label", "save or share image");
+  dlBtn.addEventListener("click", function () {
     var out = document.createElement("canvas");
     out.width = canvas.width; out.height = canvas.height;
     var octx = out.getContext("2d");
     octx.fillStyle = PAPER;
     octx.fillRect(0, 0, out.width, out.height);
     octx.drawImage(canvas, 0, 0);
-    var a = document.createElement("a");
-    a.href = out.toDataURL("image/png");
-    a.download = "drawing.png";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    out.toBlob(function (blob) {
+      if (!blob) return;
+      var file = null;
+      try { file = new File([blob], "drawing.png", { type: "image/png" }); } catch (e) {}
+      if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file], title: "drawing" }).catch(function () { /* sheet dismissed */ });
+      } else {
+        var url = URL.createObjectURL(blob);
+        window.open(url, "_blank");
+        setTimeout(function () { URL.revokeObjectURL(url); }, 120000);
+      }
+    }, "image/png");
   });
 
   /* ---------- init ---------- */

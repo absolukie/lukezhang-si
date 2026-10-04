@@ -83,9 +83,21 @@
   .toolbtn.sel { background: var(--ink); color: #fff8ea; }
   .toolbtn:disabled { opacity: 0.35; }
   .toolbtn svg { width: 24px; height: 24px; display: block; }
-  #dlBtn svg { transition: transform 130ms ease, opacity 130ms ease; }
-  #dlBtn.morphing svg { transform: scale(0.3); opacity: 0; }
+  #dlBtn {
+    transition: transform 120ms ease,
+      background-color 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      color 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  #dlBtn .dl-icons { position: relative; width: 24px; height: 24px; }
+  #dlBtn .dl-icon { position: absolute; inset: 0; pointer-events: none; }
+  #dlBtn .dl-copy { opacity: 1; transform: translateY(0) rotate(0deg) scale(1); }
+  #dlBtn .dl-share { opacity: 0; transform: translateY(3px) rotate(6deg) scale(0.82); }
+  #dlBtn.share .dl-copy { opacity: 0; transform: translateY(-2px) rotate(-6deg) scale(0.82); }
+  #dlBtn.share .dl-share { opacity: 1; transform: translateY(0) rotate(0deg) scale(1); }
   #dlBtn.share { background: var(--ink); color: #fff8ea; }
+  @media (prefers-reduced-motion: reduce) {
+    #dlBtn { transition: none; }
+  }
   #sizes { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; }
   .sizebtn {
     flex: 0 0 auto;
@@ -445,21 +457,73 @@
   var COPY_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
   var SHARE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="M7.5 8.5L12 4l4.5 4.5"/><path d="M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/></svg>';
   var shareMode = false;
+  // Mount once: both glyphs share a fixed center throughout the handoff.
+  dlBtn.innerHTML = '<span class="dl-icons" aria-hidden="true">' +
+    '<span class="dl-icon dl-copy">' + COPY_SVG + '</span>' +
+    '<span class="dl-icon dl-share">' + SHARE_SVG + '</span></span>';
+  var dlCopy = dlBtn.querySelector(".dl-copy");
+  var dlShare = dlBtn.querySelector(".dl-share");
+  var dlAnimations = [];
+  var dlReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  function cancelDlAnimations() {
+    dlAnimations.forEach(function (animation) { animation.cancel(); });
+    dlAnimations = [];
+  }
+  function dlPose(element) {
+    var style = getComputedStyle(element);
+    return { transform: style.transform, opacity: style.opacity };
+  }
   function paintDlBtn() {
-    dlBtn.innerHTML = shareMode ? SHARE_SVG : COPY_SVG;
     dlBtn.title = shareMode ? "share image" : "copy image";
     dlBtn.setAttribute("aria-label", shareMode ? "share image" : "copy image");
     dlBtn.classList.toggle("share", shareMode);
   }
   function setShareMode(on) {
     if (shareMode === on) return;
-    dlBtn.classList.add("morphing");
-    setTimeout(function () {
-      shareMode = on;
-      paintDlBtn();
-      dlBtn.classList.remove("morphing");
-    }, 130);
+    var animate = !dlReducedMotion.matches && typeof dlBtn.animate === "function";
+    // Read the rendered poses before cancelling, including a partially finished morph.
+    var copyPose = animate ? dlPose(dlCopy) : null;
+    var sharePose = animate ? dlPose(dlShare) : null;
+    var buttonPose = animate ? getComputedStyle(dlBtn).transform : null;
+    cancelDlAnimations();
+    shareMode = on;
+    paintDlBtn(); // Commit semantics and resting styles immediately; no deferred state changes.
+    if (!animate) return;
+
+    var incoming = on ? dlShare : dlCopy;
+    var outgoing = on ? dlCopy : dlShare;
+    var incomingEnd = dlPose(incoming);
+    var outgoingEnd = dlPose(outgoing);
+    var buttonEnd = getComputedStyle(dlBtn).transform;
+    dlAnimations.push(outgoing.animate([
+      on ? copyPose : sharePose,
+      outgoingEnd
+    ], { duration: 180, easing: "cubic-bezier(0.4, 0, 0.2, 1)" }));
+    dlAnimations.push(incoming.animate([
+      Object.assign({}, on ? sharePose : copyPose, {
+        offset: 0, easing: "cubic-bezier(0.16, 1, 0.3, 1)"
+      }),
+      { transform: "translateY(0) rotate(" + (on ? -1 : 1) + "deg) scale(1.06)",
+        opacity: 1, offset: 0.68, easing: "cubic-bezier(0.33, 0, 0.2, 1)" },
+      incomingEnd
+    ], { duration: 400 }));
+    // A small confirmation pulse on copy success; reversals simply settle from the current scale.
+    var buttonFrames = [{ transform: buttonPose }];
+    if (on) {
+      buttonFrames[0].easing = "cubic-bezier(0.2, 0.8, 0.3, 1)";
+      buttonFrames.push({ transform: "scale(1.06)", offset: 0.35,
+        easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
+    }
+    buttonFrames.push({ transform: buttonEnd });
+    dlAnimations.push(dlBtn.animate(buttonFrames, {
+      duration: on ? 400 : 240, easing: on ? "linear" : "cubic-bezier(0.22, 1, 0.36, 1)"
+    }));
   }
+  function dlMotionChanged() {
+    if (dlReducedMotion.matches) cancelDlAnimations();
+  }
+  if (dlReducedMotion.addEventListener) dlReducedMotion.addEventListener("change", dlMotionChanged);
+  else dlReducedMotion.addListener(dlMotionChanged);
   paintDlBtn();
   function renderPNG(cb) {
     var out = document.createElement("canvas");

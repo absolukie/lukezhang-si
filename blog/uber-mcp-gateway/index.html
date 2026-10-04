@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Uber's MCP Gateway, explained — luke's blog</title>
+<meta name="description" content="Uber put one gateway in front of 800+ MCP servers and 5,000+ tools. The architecture — and three ideas for taming tool-context bloat worth stealing.">
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:680px;margin:0 auto;padding:24px;line-height:1.7;color:#222}
+  a{color:#0b5fff}
+  h1{font-size:1.9em;line-height:1.25;margin:0 0 8px}
+  .meta{color:#666;font-size:.9em;margin-bottom:28px}
+  pre{background:#f6f6f6;padding:16px;border-radius:8px;overflow-x:auto;font-size:.85em}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  p code{background:#f0f0f0;padding:2px 5px;border-radius:4px;font-size:.9em}
+  .diagram{background:#fafafa;border:1px solid #eee;border-radius:8px;padding:8px;margin:24px 0;overflow-x:auto}
+  .diagram .caption{font-size:.85em;color:#666;text-align:center;margin-top:4px}
+  .verdict{background:#f0f7ff;border-left:4px solid #0b5fff;padding:12px 16px;margin:28px 0;border-radius:0 8px 8px 0}
+  nav{margin-top:48px;padding-top:16px;border-top:1px solid #eee;font-size:.9em}
+</style>
+</head>
+<body>
+<h1>Uber's MCP Gateway, explained</h1>
+<div class="meta">October 3, 2026 · ai · infrastructure</div>
+
+<p><strong>Verdict:</strong> Uber put a single gateway in front of every tool its AI agents can touch — 800+ MCP servers, 5,000+ tools — and in doing so solved the three problems that kill agent projects at scale: discovery, auth sprawl, and context bloat. You don't need Uber's scale to steal the ideas: discover tools incrementally instead of preloading them, trim tool responses before they reach the model, and let the agent write code instead of making fifty round trips.</p>
+
+<h2>What MCP is, in one paragraph</h2>
+
+<p>The Model Context Protocol is a standard plug for AI agents — USB-C for tools. Before it, every agent needed a custom integration for every data source: one handshake for the database, another for Slack, another for the internal API. MCP defines one discoverable way for a model to list tools and call them, so agent builders spend their time on the agent instead of the socket. (Anthropic introduced it in late 2024; it now lives under the Agentic AI Foundation.)</p>
+
+<h2>Why Uber built a gateway</h2>
+
+<p>When agents took off inside Uber, every team started exposing tools its own way. Internal APIs weren't agent-accessible at all, and each SaaS tool had its own auth and setup dance — so building an agent meant weeks of plumbing before you wrote a single prompt. The fix was a centralized MCP Gateway: one place where tools get registered, discovered, authorized, and called. It now fronts 800+ MCP servers and 5,000+ tools, and every agent-to-tool call passes through it.</p>
+
+<h2>The architecture: two planes</h2>
+
+<p><strong>Control Plane — the registry and the crawler.</strong> The MCP Registry is where servers are looked up and where teams register their own. Next to it runs the AutoCrawler: it scans Uber's IDL (interface definition language) registry and <em>generates</em> MCP tool definitions from service metadata automatically. Exposing a Thrift, gRPC, or HTTP endpoint as an MCP server becomes a configuration change — zero rewrites to the underlying service. Internal services get lighter scrutiny and auto-generation; third-party servers get rigorous review and are blocked by default in production.</p>
+
+<p><strong>Data Plane — the proxy.</strong> The Proxy Gateway translates between MCP and whatever the backend speaks (HTTP, gRPC, TChannel), handling authentication, authorization, rate limiting, telemetry, and audit logging in one place instead of in every team's hand-rolled proxy. It also fronts SaaS tools like Google, Slack, and Jira: the gateway manages hosting and token exchange, so engineers get one common way to install and call any MCP.</p>
+
+<div class="diagram">
+<pre class="mermaid">
+flowchart TB
+    A["AI agent"] --> B["MCP Gateway"]
+    B --> C["Control plane<br/>Registry + AutoCrawler<br/>(IDL registry → tool definitions)"]
+    B --> D["Data plane<br/>Proxy: MCP ↔ HTTP / gRPC / TChannel<br/>(auth, rate limits, telemetry, audit)"]
+    D --> E["Internal services"]
+    D --> F["SaaS tools"]
+</pre>
+<div class="caption">Diagram — the two planes of Uber's MCP Gateway. Services are never rewritten; the gateway adapts them.</div>
+</div>
+
+<h2>Three ideas worth stealing</h2>
+
+<p>Uber's exact numbers won't transfer to your setup, but the methodology does. These three are the payload:</p>
+
+<p><strong>1. Omni MCP — discover tools incrementally.</strong> The naive approach loads every tool definition into the model's context up front. At Uber's scale that was reportedly 50–70K tokens of schema <em>per session</em> — and because every turn re-sends history, the tax was repaid on every single turn. Omni MCP flips it: a single entry-point MCP that can discover and invoke any other MCP in the gateway on demand. Tool search becomes the primary interface; schemas are pulled in only for the task at hand. Overhead stops growing with the size of your tool library.</p>
+
+<p><strong>2. Response Projection — trim payloads before they hit context.</strong> Even with discovery solved, fat tool responses eat context. Uber's CLI pattern resolves and invokes the tool at the moment it's needed, and the response is projected down so it barely touches the context window. Same principle as discovery: never pay for what the model doesn't need.</p>
+
+<p><strong>3. Code Mode — batch tool calls into scripts.</strong> Under vanilla MCP, each tool action is its own round trip. Code Mode (via the <code>aifx</code> CLI) lets the model write a small script that runs the whole sequence in a subprocess, with only the final summary returned to context. Uber ships roughly 25 pre-packaged "code-mode skills" for its most-used tools so the efficient path is the default, not something engineers opt into. Reported result across these optimizations: around 40% fleet-wide token savings.</p>
+
+<div class="verdict">
+  <strong>The one-liner:</strong> Treat your tool layer like infrastructure, not an afterthought — one gateway for auth, discovery, and observability, plus incremental discovery, trimmed responses, and code-mode batching to keep the context window for actual reasoning.
+</div>
+
+<p><em>Distilled from <a href="https://x.com/ubereng/status/2106071967619322330">Uber Engineering's article</a> on X.</em></p>
+
+<nav><a href="/blog/">← all posts</a> · <a href="/">home</a></nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
+</body>
+</html>

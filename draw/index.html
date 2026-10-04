@@ -430,32 +430,58 @@
     scheduleSave();
   });
 
-  /* ---------- save / share image ----------
-     iPhone Safari ignores the download attribute, so: if the Web Share
-     API can share files we open the native share sheet (Save Image lives
-     there); otherwise we open the PNG in a new tab for a long-press save. */
+  /* ---------- copy image ----------
+     One tap copies the drawing PNG straight to the clipboard — no sheets,
+     no extra steps. If the browser refuses (older iOS), fall back to the
+     share sheet, then to opening the image in a new tab. */
   var dlBtn = document.getElementById("dlBtn");
-  dlBtn.title = "save / share image";
-  dlBtn.setAttribute("aria-label", "save or share image");
-  dlBtn.addEventListener("click", function () {
+  dlBtn.title = "copy image";
+  dlBtn.setAttribute("aria-label", "copy image");
+  dlBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+  function renderPNG(cb) {
     var out = document.createElement("canvas");
     out.width = canvas.width; out.height = canvas.height;
     var octx = out.getContext("2d");
     octx.fillStyle = PAPER;
     octx.fillRect(0, 0, out.width, out.height);
     octx.drawImage(canvas, 0, 0);
-    out.toBlob(function (blob) {
+    out.toBlob(cb, "image/png");
+  }
+  function flashPill(text) {
+    savedPill.textContent = text;
+    savedPill.classList.add("show");
+    clearTimeout(savedTimer);
+    savedTimer = setTimeout(function () {
+      savedPill.classList.remove("show");
+      setTimeout(function () { savedPill.textContent = "saved"; }, 300);
+    }, 1400);
+  }
+  function shareFallback(blob) {
+    var file = null;
+    try { file = new File([blob], "drawing.png", { type: "image/png" }); } catch (e) {}
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: "drawing" }).catch(function () { /* sheet dismissed */ });
+    } else {
+      var url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(function () { URL.revokeObjectURL(url); }, 120000);
+    }
+  }
+  dlBtn.addEventListener("click", function () {
+    renderPNG(function (blob) {
       if (!blob) return;
-      var file = null;
-      try { file = new File([blob], "drawing.png", { type: "image/png" }); } catch (e) {}
-      if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
-        navigator.share({ files: [file], title: "drawing" }).catch(function () { /* sheet dismissed */ });
+      if (navigator.clipboard && window.ClipboardItem) {
+        try {
+          var item = new ClipboardItem({ "image/png": blob });
+          navigator.clipboard.write([item]).then(
+            function () { flashPill("copied"); },
+            function () { shareFallback(blob); }
+          );
+        } catch (e) { shareFallback(blob); }
       } else {
-        var url = URL.createObjectURL(blob);
-        window.open(url, "_blank");
-        setTimeout(function () { URL.revokeObjectURL(url); }, 120000);
+        shareFallback(blob);
       }
-    }, "image/png");
+    });
   });
 
   /* ---------- init ---------- */

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RAG, explained — luke's blog</title>
+<meta name="description" content="Retrieval-augmented generation: don't retrain the model, give it a library card. How RAG grounds chatbots in your documents by retrieving passages at query time — and why retrieval quality, not model size, decides how good the answers are.">
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:680px;margin:0 auto;padding:24px;line-height:1.7;color:#222}
+  a{color:#0b5fff}
+  h1{font-size:1.9em;line-height:1.25;margin:0 0 8px}
+  .meta{color:#666;font-size:.9em;margin-bottom:28px}
+  pre{background:#f6f6f6;padding:16px;border-radius:8px;overflow-x:auto;font-size:.85em}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  p code{background:#f0f0f0;padding:2px 5px;border-radius:4px;font-size:.9em}
+  .verdict{background:#f0f7ff;border-left:4px solid #0b5fff;padding:12px 16px;margin:28px 0;border-radius:0 8px 8px 0}
+  .mermaid{background:#fafbff;border:1px solid #e3e9f7;border-radius:12px;padding:20px 8px;margin:28px 0;overflow-x:auto;text-align:center}
+  .mermaid svg{max-width:100%;height:auto}
+  nav{margin-top:48px;padding-top:16px;border-top:1px solid #eee;font-size:.9em}
+</style>
+</head>
+<body>
+<h1>RAG, explained</h1>
+<div class="meta">October 4, 2026 · ai · llms</div>
+
+<p><strong>Verdict:</strong> RAG — retrieval-augmented generation — is the open-book exam for AI. Instead of relying on whatever the model memorized during training, you give it a searchable library of your documents at query time: fetch the relevant passages, paste them into the prompt, and let the model answer from those. It's how nearly every "chat with your docs" product works. And its quality ceiling is decided almost entirely by the retrieval step, not by how smart the model is.</p>
+
+<h2>The idea in one paragraph</h2>
+
+<p>A language model is a student who took the exam prep course months ago and can't bring notes. RAG lets the student bring the textbook. When a question arrives, the system looks up the most relevant pages, photocopies them into the exam booklet, and the student answers with the material right in front of them. The model's job shifts from <em>remembering facts</em> to <em>reading comprehension</em> — which, it turns out, models are much better at.</p>
+
+<h2>How it actually works</h2>
+
+<p>The recipe, from the 2020 paper by Lewis et al. at Meta, has barely changed — only the components got better:</p>
+
+<p><strong>1. Chunk.</strong> Your documents are sliced into passages, typically a few hundred tokens each. A 200-page manual becomes a few thousand chunks.</p>
+
+<p><strong>2. Embed.</strong> Each chunk is converted into a vector — a long list of numbers capturing its meaning — by an embedding model. Similar meanings land near each other in vector space.</p>
+
+<p><strong>3. Index.</strong> The vectors go into a vector database with an approximate nearest-neighbor index (usually HNSW), so "find the 5 chunks closest to this query" takes milliseconds even across millions of chunks.</p>
+
+<p><strong>4. Retrieve.</strong> At query time, the user's question is embedded the same way, the index returns the top-k most similar chunks, and those chunks are pasted into the prompt alongside the question.</p>
+
+<p><strong>5. Generate.</strong> The model writes its answer grounded in the retrieved passages — and can cite them, so you can check its work.</p>
+
+<div class="mermaid">
+flowchart TD
+    D["Your documents<br/>PDFs, wikis, tickets"] --> CH["Chunking<br/>a few hundred tokens each"]
+    CH --> EM["Embedding model<br/>text becomes vectors"]
+    EM --> VDB[("Vector database<br/>HNSW index")]
+    Q["User question"] --> QE["Embed the question"]
+    QE --> RET["Nearest-neighbor search<br/>top-k passages"]
+    VDB --> RET
+    RET --> PROMPT["Prompt = question<br/>+ retrieved passages"]
+    PROMPT --> LLM["LLM answers<br/>from the passages"]
+</div>
+
+<h2>Why it took over</h2>
+
+<p>Three problems, one fix. <strong>Frozen knowledge:</strong> a model's training has a cutoff date, and retraining costs millions — but a document index can be updated in seconds. <strong>Hallucinations:</strong> a model answering from retrieved text fabricates far less than one answering from memory, and citations make every claim checkable. <strong>Private data:</strong> your company's docs were never in the training set, so without retrieval the model simply can't know them. RAG turned "the model doesn't know our stuff" from a retraining problem into a search problem.</p>
+
+<h2>Where it breaks</h2>
+
+<p>RAG's dirty secret is that the generator is rarely the bottleneck. The failure is almost always upstream:</p>
+
+<div class="mermaid">
+flowchart LR
+    Q2["Question:<br/>who approved the refund?"] --> R2["Retriever returns<br/>5 chunks about<br/>'refund policy'"]
+    R2 --> MISS["The approval email<br/>was chunk 6.<br/>Never retrieved."]
+    MISS --> G2["Generator writes a<br/>confident answer<br/>from the wrong chunks"]
+</div>
+
+<p><strong>Retrieval is the ceiling.</strong> If the key passage isn't in the top-k, the model can't use it — no amount of model intelligence recovers information it never saw. Most RAG quality work is really retrieval work: better chunking, better embeddings, rerankers that re-score the candidates.</p>
+
+<p><strong>Chunking destroys structure.</strong> A table split across two chunks, a pronoun whose antecedent is three chunks back, a conclusion separated from its evidence — the index is a bag of passages, and relationships between them are lost unless you deliberately preserve them.</p>
+
+<p><strong>It doesn't fix reasoning.</strong> RAG finds the pages; the model still has to do multi-hop reasoning across them. On complex research tasks, naive retrieve-then-read stalls out — the recursive-language-models paper reported 51% for RAG with BM25 retrieval on BrowseComp+ versus 91.3% for the recursive approach, which searches and reasons iteratively instead of in one shot.</p>
+
+<h2>The modern upgrades</h2>
+
+<p>Nobody serious runs 2020-style RAG anymore. <strong>Rerankers</strong> take the retriever's rough top-50 and carefully re-score them down to the best 5. <strong>Contextual retrieval</strong> prepends a summary of each chunk's parent document before embedding, so "the refund was approved" carries its context with it. <strong>GraphRAG</strong> extracts entities and relationships into a knowledge graph for questions that span many documents. And <strong>agentic RAG</strong> hands the retriever to the model as a tool: instead of one retrieve-then-read pass, the model searches, reads, and searches again based on what it learned — which is, not coincidentally, halfway to the recursive approach.</p>
+
+<h2>The bigger picture</h2>
+
+<p>RAG's real legacy isn't the pipeline — it's the pattern: <em>don't memorize, look things up.</em> Parametric memory (weights) is expensive to update and impossible to audit; external memory (your documents) is cheap to update and comes with receipts. Every serious AI system now has some form of this split. The interesting frontier is who controls the lookup: a fixed pipeline that retrieves once, or the model itself, deciding what to fetch next based on what it just read. RAG started as the former. The field is moving toward the latter — and that's a story for the recursive-models post.</p>
+
+<nav><a href="/blog/">← all posts</a></nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({ startOnLoad: true, theme: 'neutral', themeVariables: {
+  primaryColor: '#e8f0ff', primaryTextColor: '#1a1a1a', primaryBorderColor: '#0b5fff',
+  lineColor: '#0b5fff', textColor: '#222', mainBkg: '#f6f8ff', nodeBorder: '#0b5fff'
+}});
+</script>
+</body>
+</html>

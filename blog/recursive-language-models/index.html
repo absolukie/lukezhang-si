@@ -14,6 +14,8 @@
   code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
   p code{background:#f0f0f0;padding:2px 5px;border-radius:4px;font-size:.9em}
   .verdict{background:#f0f7ff;border-left:4px solid #0b5fff;padding:12px 16px;margin:28px 0;border-radius:0 8px 8px 0}
+  .mermaid{background:#fafbff;border:1px solid #e3e9f7;border-radius:12px;padding:20px 8px;margin:28px 0;overflow-x:auto;text-align:center}
+  .mermaid svg{max-width:100%;height:auto}
   nav{margin-top:48px;padding-top:16px;border-top:1px solid #eee;font-size:.9em}
 </style>
 </head>
@@ -39,6 +41,17 @@
 
 <p><strong>4. It stops when done.</strong> The loop ends when the model sets a <code>Final</code> variable in the REPL. From the outside, the whole thing looks exactly like a normal LLM call: prompt in, answer out.</p>
 
+<div class="mermaid">
+flowchart TD
+    P["Prompt P<br/>10M tokens of documents"] --> REPL["Python REPL<br/>P lives here as a string variable"]
+    REPL --> ROOT["Root model M<br/>sees only metadata:<br/>length, preview, access rules"]
+    ROOT -->|"writes code:<br/>regex, slicing, search"| EXEC["Run code<br/>in the REPL"]
+    EXEC -->|"stdout metadata<br/>short prefix + length"| ROOT
+    ROOT -->|"promising chunk found"| SUB["Sub-RLM call<br/>dense reasoning<br/>on one snippet"]
+    SUB -->|"short answer<br/>context discarded"| ROOT
+    ROOT -->|"sets the Final variable"| DONE["Return Final<br/>as the response"]
+</div>
+
 <h2>The numbers</h2>
 
 <p>The results are the reason people are paying attention. RLMs handled inputs up to <strong>two orders of magnitude</strong> beyond their physical context window — 10M+ tokens — and dramatically outperformed both base models and standard long-context scaffolds (like RAG) across four different long-context tasks, at comparable or cheaper cost per query. On BrowseComp+, a hard research benchmark, an RLM built from GPT-4o (with GPT-4o-mini doing the sub-calls, no fine-tuning at all) scored <strong>91.3% versus 51%</strong> for RAG with BM25 retrieval.</p>
@@ -50,6 +63,22 @@
 <p>The industry has been in a context-window arms race: 128K, 1M, 10M tokens of raw attention, each step more expensive than the last because attention scales quadratically. And bigger windows have a dirty secret the paper names <strong>context rot</strong>: model quality degrades as the input grows, even when everything technically fits. Stuffing more in doesn't mean the model uses it well.</p>
 
 <p>RLMs reframe the problem as <strong>inference-time scaling</strong> instead of a bigger window. The model's working memory stays small and sharp; the bulk data lives in a symbolic environment it can query precisely. It's the same move computers made decades ago with virtual memory: your program doesn't need 10GB of RAM if the OS can page the right chunks in and out.</p>
+
+<div class="mermaid">
+flowchart LR
+    subgraph RAG["RAG"]
+        direction TB
+        A1["Chunk the corpus,<br/>embed, index it"] --> A2["Retrieve top-k<br/>chunks per query"] --> A3["Paste into prompt,<br/>generate answer"]
+    end
+    subgraph BIG["Giant context window"]
+        direction TB
+        B1["Feed all 10M<br/>tokens at once"] --> B2["Hope attention<br/>finds the needle"]
+    end
+    subgraph RLM["RLM"]
+        direction TB
+        C1["Prompt = variable<br/>in a REPL"] --> C2["Search and slice<br/>with code"] --> C3["Recursive sub-calls<br/>on the pieces"]
+    end
+</div>
 
 <h2>Honest caveats</h2>
 
@@ -64,5 +93,12 @@
 <p>The deepest idea here isn't the REPL or the recursion — it's the shift from "the prompt is what the model reads" to "the prompt is what the model <em>operates on</em>." That turns long-context reasoning from a hardware problem (bigger windows, more memory) into an algorithms problem (better search, better delegation), and algorithms problems are where small teams beat big labs. Expect every serious agent framework to grow a recursive-exploration mode within a year. The context window isn't dead — it's just no longer the whole game.</p>
 
 <nav><a href="/blog/">← all posts</a></nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({ startOnLoad: true, theme: 'neutral', themeVariables: {
+  primaryColor: '#e8f0ff', primaryTextColor: '#1a1a1a', primaryBorderColor: '#0b5fff',
+  lineColor: '#0b5fff', textColor: '#222', mainBkg: '#f6f8ff', nodeBorder: '#0b5fff'
+}});
+</script>
 </body>
 </html>

@@ -186,6 +186,7 @@
   var clearLabel = document.getElementById("clearLabel");
 
   var strokes = [];      // {c, s, e, p:[[nx,ny],...]} — points stored normalized 0..1
+  var clearedBackup = null; // strokes wiped by the last clear, restorable via undo
   var curColor = COLORS[0];
   var curSize = SIZES[1];
   var erasing = false;
@@ -318,7 +319,8 @@
     if (!drawing || (e && e.pointerId !== drawing.id)) return;
     if (drawing.p.length > 0) {
       strokes.push({ c: drawing.c, s: drawing.s, e: drawing.e, p: drawing.p });
-      undoBtn.disabled = false;
+      clearedBackup = null;   // a new stroke discards the clear backup
+      updateUndo();
       scheduleSave();
     }
     drawing = null;
@@ -380,12 +382,25 @@
     eraserBtn.classList.toggle("sel", erasing);
   });
 
+  function updateUndo() {
+    undoBtn.disabled = !(strokes.length || clearedBackup);
+  }
+
   undoBtn.addEventListener("click", function () {
-    if (!strokes.length) return;
-    strokes.pop();
-    redrawAll();
-    undoBtn.disabled = !strokes.length;
-    if (!strokes.length) hint.classList.remove("gone");
+    if (clearedBackup && !strokes.length) {
+      // undo a clear: bring the whole wiped drawing back
+      strokes = clearedBackup;
+      clearedBackup = null;
+      redrawAll();
+      hideHint();
+    } else if (strokes.length) {
+      strokes.pop();
+      redrawAll();
+      if (!strokes.length) hint.classList.remove("gone");
+    } else {
+      return;
+    }
+    updateUndo();
     scheduleSave();
   });
 
@@ -407,10 +422,11 @@
       return;
     }
     disarmClear();
+    clearedBackup = strokes;   // keep it so one undo brings the drawing back
     strokes = [];
     redrawAll();
-    undoBtn.disabled = true;
     hint.classList.remove("gone");
+    updateUndo();
     scheduleSave();
   });
 
@@ -433,7 +449,7 @@
   /* ---------- init ---------- */
   load();
   resize();
-  if (strokes.length) { hideHint(); undoBtn.disabled = false; }
+  if (strokes.length) { hideHint(); updateUndo(); }
 })();
 </script>
 </body>

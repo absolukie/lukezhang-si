@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>draw &middot; lukezhang.si</title>
+<style>
+  :root {
+    --paper: #fdfbf4;
+    --ink: #2b2118;
+    --bar: #fff8ea;
+    --line: #efdfc2;
+    --accent: #e8833a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: var(--paper);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+    overscroll-behavior: none;
+  }
+  body { display: flex; flex-direction: column; }
+
+  /* ---------- toolbar ---------- */
+  #bar {
+    flex: 0 0 auto;
+    padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
+    background: var(--bar);
+    border-bottom: 1px solid var(--line);
+    z-index: 3;
+  }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .row + .row { margin-top: 10px; }
+  #home {
+    flex: 0 0 auto;
+    color: var(--ink);
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 17px;
+    width: 38px; height: 38px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 12px;
+    background: #f7ecd4;
+    touch-action: manipulation;
+  }
+  #colors {
+    display: flex; align-items: center; gap: 10px;
+    overflow-x: auto; flex: 1 1 auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding: 2px;
+  }
+  #colors::-webkit-scrollbar { display: none; }
+  .sw {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 2px solid rgba(0,0,0,.14);
+    flex: 0 0 auto; padding: 0; cursor: pointer;
+    touch-action: manipulation;
+    transition: transform 120ms ease;
+  }
+  .sw:active { transform: scale(1.15); }
+  .sw.sel { border-color: var(--ink); box-shadow: 0 0 0 2px var(--bar), 0 0 0 4px var(--ink); }
+  .sw.custom { position: relative; overflow: hidden;
+    background: conic-gradient(#e23b3b,#f07f1f,#f5c518,#2fa84f,#2b7de2,#7a4fd0,#e23b3b); }
+  .sw.custom input {
+    position: absolute; inset: -8px; opacity: 0; cursor: pointer;
+    touch-action: manipulation;
+  }
+  .toolbtn {
+    flex: 0 0 auto;
+    width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid transparent; border-radius: 14px;
+    background: #f7ecd4; color: var(--ink);
+    cursor: pointer; touch-action: manipulation;
+    transition: transform 120ms ease, background 120ms ease;
+  }
+  .toolbtn:active { transform: scale(0.92); }
+  .toolbtn.sel { background: var(--ink); color: #fff8ea; }
+  .toolbtn:disabled { opacity: 0.35; }
+  .toolbtn svg { width: 24px; height: 24px; display: block; }
+  #sizes { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; }
+  .sizebtn {
+    flex: 0 0 auto;
+    width: 44px; height: 44px; border-radius: 14px;
+    border: 2px solid transparent; background: #f7ecd4;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .sizebtn.sel { border-color: var(--ink); }
+  .sizebtn span { display: block; border-radius: 50%; background: var(--ink); }
+  #clearBtn {
+    width: auto; padding: 0 16px; height: 44px;
+    font-weight: 700; font-size: 15px; gap: 8px;
+  }
+  #clearBtn.armed { background: #d43a2e; color: #fff; border-color: #d43a2e; }
+
+  /* ---------- canvas ---------- */
+  #wrap { position: relative; flex: 1 1 auto; }
+  #pad {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    display: block;
+    background: var(--paper);
+    touch-action: none;
+    cursor: crosshair;
+  }
+  #hint {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none;
+    color: rgba(43,33,24,.28);
+    font-size: 17px; font-weight: 600; text-align: center;
+    padding: 0 40px; line-height: 1.5;
+    transition: opacity 400ms ease;
+  }
+  #hint.gone { opacity: 0; }
+  #saved {
+    position: absolute; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom));
+    transform: translateX(-50%) translateY(8px);
+    background: rgba(43,33,24,.82); color: #fff8ea;
+    font-size: 13px; font-weight: 600;
+    padding: 8px 16px; border-radius: 999px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 250ms ease, transform 250ms ease;
+    z-index: 2;
+  }
+  #saved.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+  <div id="bar">
+    <div class="row">
+      <a id="home" href="/" aria-label="back to lukezhang.si">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+      </a>
+      <div id="colors" role="radiogroup" aria-label="colors"></div>
+    </div>
+    <div class="row">
+      <div id="sizes" role="radiogroup" aria-label="brush sizes"></div>
+      <button class="toolbtn" id="eraserBtn" aria-label="eraser" title="eraser">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 15l8.5-8.5a2.1 2.1 0 013 3L11 15H8l-3-3z"/><path d="M5 15l3 3h9a2 2 0 002-2v-1l-2-2"/><path d="M13.5 6.5l3 3"/></svg>
+      </button>
+      <button class="toolbtn" id="undoBtn" aria-label="undo" title="undo" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5L3 10l5 5"/><path d="M3 10h11a6 6 0 016 6v1"/></svg>
+      </button>
+      <button class="toolbtn" id="dlBtn" aria-label="save image" title="save image">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>
+      </button>
+      <button class="toolbtn" id="clearBtn" aria-label="clear drawing" title="clear drawing">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2"/><path d="M6 7l1 13a1 1 0 001 1h8a1 1 0 001-1l1-13"/><path d="M10 11v6M14 11v6"/></svg>
+        <span id="clearLabel">clear</span>
+      </button>
+    </div>
+  </div>
+
+  <div id="wrap">
+    <canvas id="pad"></canvas>
+    <div id="hint">draw anything &mdash; it saves in this browser automatically</div>
+    <div id="saved">saved</div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+  var KEY = "lzsi.draw.v1";
+  var PAPER = "#fdfbf4";
+
+  var COLORS = ["#1c1a17", "#e23b3b", "#f07f1f", "#f5c518",
+                "#2fa84f", "#2b7de2", "#7a4fd0", "#ef6fb0",
+                "#8a5a3b", "#9aa0a6"];
+  var SIZES = [4, 10, 22];
+
+  var canvas = document.getElementById("pad");
+  var ctx = canvas.getContext("2d");
+  var wrap = document.getElementById("wrap");
+  var hint = document.getElementById("hint");
+  var savedPill = document.getElementById("saved");
+  var undoBtn = document.getElementById("undoBtn");
+  var eraserBtn = document.getElementById("eraserBtn");
+  var clearBtn = document.getElementById("clearBtn");
+  var clearLabel = document.getElementById("clearLabel");
+
+  var strokes = [];      // {c, s, e, p:[[nx,ny],...]} — points stored normalized 0..1
+  var curColor = COLORS[0];
+  var curSize = SIZES[1];
+  var erasing = false;
+  var drawing = null;    // active stroke
+  var dpr = 1, W = 0, H = 0;
+
+  /* ---------- storage ---------- */
+  function load() {
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (!raw) return;
+      var arr = JSON.parse(raw);
+      if (Array.isArray(arr)) strokes = arr.filter(function (s) {
+        return s && Array.isArray(s.p) && s.p.length > 0;
+      });
+    } catch (e) { /* corrupted or unavailable — start blank */ }
+  }
+  var saveTimer = null, savedTimer = null;
+  function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      try { localStorage.setItem(KEY, JSON.stringify(strokes)); } catch (e) { /* storage full/blocked */ }
+      savedPill.classList.add("show");
+      clearTimeout(savedTimer);
+      savedTimer = setTimeout(function () { savedPill.classList.remove("show"); }, 1400);
+    }, 500);
+  }
+
+  /* ---------- canvas sizing ---------- */
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 3);
+    var r = wrap.getBoundingClientRect();
+    W = Math.max(1, r.width); H = Math.max(1, r.height);
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    redrawAll();
+  }
+  window.addEventListener("resize", resize);
+  window.addEventListener("orientationchange", function () { setTimeout(resize, 120); });
+
+  /* ---------- drawing ---------- */
+  function strokeStyle(s) {
+    ctx.strokeStyle = s.e ? "#000" : s.c;
+    ctx.lineWidth = s.s;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.globalCompositeOperation = s.e ? "destination-out" : "source-over";
+  }
+  function drawStroke(s) {
+    var pts = s.p;
+    if (pts.length === 1) {
+      strokeStyle(s);
+      ctx.beginPath();
+      ctx.arc(pts[0][0] * W, pts[0][1] * H, s.s / 2, 0, Math.PI * 2);
+      ctx.globalCompositeOperation = s.e ? "destination-out" : "source-over";
+      ctx.fillStyle = s.e ? "#000" : s.c;
+      ctx.fill();
+      ctx.globalCompositeOperation = "source-over";
+      return;
+    }
+    strokeStyle(s);
+    ctx.beginPath();
+    var x0 = pts[0][0] * W, y0 = pts[0][1] * H;
+    ctx.moveTo(x0, y0);
+    for (var i = 1; i < pts.length - 1; i++) {
+      var xc = (pts[i][0] * W + pts[i + 1][0] * W) / 2;
+      var yc = (pts[i][1] * H + pts[i + 1][1] * H) / 2;
+      ctx.quadraticCurveTo(pts[i][0] * W, pts[i][1] * H, xc, yc);
+    }
+    var last = pts[pts.length - 1];
+    ctx.lineTo(last[0] * W, last[1] * H);
+    ctx.stroke();
+    ctx.globalCompositeOperation = "source-over";
+  }
+  function redrawAll() {
+    ctx.clearRect(0, 0, W, H);
+    for (var i = 0; i < strokes.length; i++) drawStroke(strokes[i]);
+  }
+  // incremental: draw only the newest segment of the live stroke
+  function drawLiveSegment(s) {
+    var pts = s.p, n = pts.length;
+    strokeStyle(s);
+    ctx.beginPath();
+    if (n === 1) {
+      ctx.arc(pts[0][0] * W, pts[0][1] * H, s.s / 2, 0, Math.PI * 2);
+      ctx.fillStyle = s.e ? "#000" : s.c;
+      ctx.fill();
+    } else if (n === 2) {
+      ctx.moveTo(pts[0][0] * W, pts[0][1] * H);
+      ctx.lineTo(pts[1][0] * W, pts[1][1] * H);
+      ctx.stroke();
+    } else {
+      var a = pts[n - 3], b = pts[n - 2], c = pts[n - 1];
+      var ax = a[0] * W, ay = a[1] * H, bx = b[0] * W, by = b[1] * H;
+      var mx1 = (ax + bx) / 2, my1 = (ay + by) / 2;
+      var mx2 = (bx + c[0] * W) / 2, my2 = (by + c[1] * H) / 2;
+      ctx.moveTo(mx1, my1);
+      ctx.quadraticCurveTo(bx, by, mx2, my2);
+      ctx.stroke();
+    }
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  function pos(e) {
+    var r = canvas.getBoundingClientRect();
+    return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height];
+  }
+  function hideHint() { hint.classList.add("gone"); }
+
+  canvas.addEventListener("pointerdown", function (e) {
+    e.preventDefault();
+    if (drawing) return;                       // one stroke at a time
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    disarmClear();
+    drawing = { c: curColor, s: curSize, e: erasing, p: [pos(e)], id: e.pointerId };
+    drawLiveSegment(drawing);
+    hideHint();
+  });
+  canvas.addEventListener("pointermove", function (e) {
+    if (!drawing || e.pointerId !== drawing.id) return;
+    e.preventDefault();
+    var p = pos(e), last = drawing.p[drawing.p.length - 1];
+    var dx = (p[0] - last[0]) * W, dy = (p[1] - last[1]) * H;
+    if (dx * dx + dy * dy < 1.2) return;        // skip sub-pixel jitter
+    drawing.p.push(p);
+    drawLiveSegment(drawing);
+  });
+  function endStroke(e) {
+    if (!drawing || (e && e.pointerId !== drawing.id)) return;
+    if (drawing.p.length > 0) {
+      strokes.push({ c: drawing.c, s: drawing.s, e: drawing.e, p: drawing.p });
+      undoBtn.disabled = false;
+      scheduleSave();
+    }
+    drawing = null;
+  }
+  canvas.addEventListener("pointerup", endStroke);
+  canvas.addEventListener("pointercancel", endStroke);
+  canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+
+  /* ---------- toolbar ---------- */
+  var colorsEl = document.getElementById("colors");
+  COLORS.forEach(function (c, i) {
+    var b = document.createElement("button");
+    b.className = "sw" + (i === 0 ? " sel" : "");
+    b.style.background = c;
+    b.setAttribute("aria-label", "color " + c);
+    b.addEventListener("click", function () {
+      curColor = c; erasing = false; eraserBtn.classList.remove("sel");
+      setSel(colorsEl, b);
+    });
+    colorsEl.appendChild(b);
+  });
+  var customWrap = document.createElement("div");
+  customWrap.className = "sw custom";
+  customWrap.title = "custom color";
+  var customInput = document.createElement("input");
+  customInput.type = "color";
+  customInput.value = "#e8833a";
+  customInput.setAttribute("aria-label", "custom color");
+  customInput.addEventListener("input", function () {
+    curColor = customInput.value; erasing = false; eraserBtn.classList.remove("sel");
+    setSel(colorsEl, customWrap);
+  });
+  customWrap.appendChild(customInput);
+  colorsEl.appendChild(customWrap);
+
+  function setSel(container, el) {
+    var kids = container.children;
+    for (var i = 0; i < kids.length; i++) kids[i].classList.remove("sel");
+    el.classList.add("sel");
+  }
+
+  var sizesEl = document.getElementById("sizes");
+  SIZES.forEach(function (s, i) {
+    var b = document.createElement("button");
+    b.className = "sizebtn" + (i === 1 ? " sel" : "");
+    b.setAttribute("aria-label", "brush size " + s);
+    var dot = document.createElement("span");
+    var d = Math.max(6, Math.min(26, s));
+    dot.style.width = d + "px"; dot.style.height = d + "px";
+    b.appendChild(dot);
+    b.addEventListener("click", function () {
+      curSize = s; setSel(sizesEl, b);
+    });
+    sizesEl.appendChild(b);
+  });
+
+  eraserBtn.addEventListener("click", function () {
+    erasing = !erasing;
+    eraserBtn.classList.toggle("sel", erasing);
+  });
+
+  undoBtn.addEventListener("click", function () {
+    if (!strokes.length) return;
+    strokes.pop();
+    redrawAll();
+    undoBtn.disabled = !strokes.length;
+    if (!strokes.length) hint.classList.remove("gone");
+    scheduleSave();
+  });
+
+  /* ---------- clear: tap once to arm, tap again to wipe ---------- */
+  var clearArmed = false, clearTimer = null;
+  function disarmClear() {
+    if (!clearArmed) return;
+    clearArmed = false;
+    clearBtn.classList.remove("armed");
+    clearLabel.textContent = "clear";
+    clearTimeout(clearTimer);
+  }
+  clearBtn.addEventListener("click", function () {
+    if (!clearArmed) {
+      clearArmed = true;
+      clearBtn.classList.add("armed");
+      clearLabel.textContent = "sure?";
+      clearTimer = setTimeout(disarmClear, 2600);
+      return;
+    }
+    disarmClear();
+    strokes = [];
+    redrawAll();
+    undoBtn.disabled = true;
+    hint.classList.remove("gone");
+    scheduleSave();
+  });
+
+  /* ---------- download png ---------- */
+  document.getElementById("dlBtn").addEventListener("click", function () {
+    var out = document.createElement("canvas");
+    out.width = canvas.width; out.height = canvas.height;
+    var octx = out.getContext("2d");
+    octx.fillStyle = PAPER;
+    octx.fillRect(0, 0, out.width, out.height);
+    octx.drawImage(canvas, 0, 0);
+    var a = document.createElement("a");
+    a.href = out.toDataURL("image/png");
+    a.download = "drawing.png";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  });
+
+  /* ---------- init ---------- */
+  load();
+  resize();
+  if (strokes.length) { hideHint(); undoBtn.disabled = false; }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Care Circle — Respite Coordinator</title>
+<link rel="stylesheet" href="../../shared/kit.css"><script src="../../shared/kit.js"></script>
+<!--SHIM-->
+<style>
+:root{--bg:#f4f2ea;--panel:#fffdf8;--panel2:#eceadf;--ink:#22302a;--muted:#6f7a72;--line:#ddd8c8;--accent:#2f7d6a;--accent2:#d9a441;--good:#1e7d4f;--warn:#b07d10;--bad:#b23b3b}
+body{font-family:Georgia,"Times New Roman",serif}
+.k-nav-t,.k-hero h1,.k-kpi-v{font-family:Georgia,serif}
+.cal{display:grid;grid-template-columns:86px repeat(7,1fr);gap:6px;margin-top:14px}
+.cal-h{font-size:12px;font-weight:700;color:var(--muted);text-align:center;padding:6px 0;text-transform:uppercase;letter-spacing:.05em}
+.slot{border:1px solid var(--line);border-radius:10px;min-height:74px;padding:6px;font-size:12px;cursor:pointer;background:var(--panel)}
+.slot:hover{border-color:var(--accent)}
+.slot .who{font-weight:700;font-family:-apple-system,"Segoe UI",sans-serif}
+.slot.open{background:#faf3e3;border-style:dashed}
+.slot .tm{color:var(--muted);font-size:11px}
+.avdot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+.person{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.avatar{width:40px;height:40px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-family:-apple-system,"Segoe UI",sans-serif}
+@media(max-width:900px){.cal{grid-template-columns:70px repeat(7,minmax(90px,1fr));overflow-x:auto}}
+.k-nav-title{color:#f4f6fa!important}.k-nav-sub{color:#aeb7c4!important}</style></head>
+<body>
+<script>
+"use strict";
+const K=window.Kit;
+K.nav({title:"Care Circle",sub:"Respite coverage for Mom — next week"});
+const store=K.store("carecircle");
+const PEOPLE=[
+ {id:"elena",name:"Elena Vargas",role:"Daughter",color:"#2f7d6a",avail:{0:[2],1:[2],2:[0,2],3:[2],4:[2],5:[0,1,2],6:[0,1,2]},note:"Evenings + weekends"},
+ {id:"marcus",name:"Marcus Vargas",role:"Son",color:"#4a6fa5",avail:{1:[1],3:[1],5:[0],6:[1]},note:"Tue/Thu afternoons, Sat AM"},
+ {id:"priya",name:"Priya Nair",role:"Home aide (paid)",color:"#8a5a2b",avail:{0:[0],2:[0],4:[0],1:[0]},note:"Mon/Wed/Fri mornings"},
+ {id:"rosa",name:"Rosa Mendez",role:"Neighbor",color:"#a34a6e",avail:{2:[1],4:[1],0:[1]},note:"Tue/Thu afternoons"},
+ {id:"tom",name:"Tom Okafor",role:"Son-in-law",color:"#5a6e46",avail:{5:[1,2],6:[0,1]},note:"Weekends"}
+];
+const SLOTS=["Morning 8–12","Afternoon 12–5","Evening 5–9"];
+const DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const BASE=new Date(2026,9,5); // Mon Oct 5 2026
+function dstr(i){const d=new Date(BASE);d.setDate(d.getDate()+i);return d.toISOString().slice(0,10);}
+let state=store.get("state",{assign:{}});
+function save(){store.set("state",state);}
+function personName(id){const p=PEOPLE.find(p=>p.id===id);return p?p.name:"—";}
+function autoBuild(){
+ const f=K.rng("carecircle-week");
+ const load={};PEOPLE.forEach(p=>load[p.id]=0);
+ const assign={};
+ for(let d=0;d<7;d++)for(let s=0;s<3;s++){
+   const key=d+"-"+s;
+   const cand=PEOPLE.filter(p=>(p.avail[d]||[]).includes(s));
+   if(!cand.length){assign[key]=null;continue;}
+   cand.sort((a,b)=>(load[a.id]-load[b.id])||(f()-0.5));
+   const chosen=cand[0];
+   // fairness: discourage same person covering adjacent slots same day unless aide
+   assign[key]=chosen.id;load[chosen.id]++;
+ }
+ state.assign=assign;save();renderAll();
+ const open=Object.values(assign).filter(v=>!v).length;
+ K.toast(open?("Week built — "+open+" slot(s) still open"):("Week built — all 21 slots covered"), open?"warn":"ok");
+}
+function renderAll(){renderKPIs();renderCal();renderPeople();}
+const wrap=K.el('<div class="k-wrap"></div>');document.body.appendChild(wrap);
+wrap.addEventListener("click",function(e){
+ if(e.target&&e.target.id==="autob")autoBuild();
+ if(e.target&&e.target.id==="clr"){state.assign={};save();renderAll();K.toast("Week cleared","warn");}
+});
+wrap.appendChild(K.el('<div class="k-hero"><h1>Who\'s with Mom next week?</h1><p>Care Circle turns everyone\'s availability into a fair coverage calendar. Hit <b>Auto-build week</b> and it fills all 21 shifts — respecting who can actually do what — then tap any shift to reassign.</p><div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap"><button class="k-btn k-primary" id="autob">Auto-build week</button><button class="k-btn" id="clr">Clear</button></div></div>'));
+const kpis=K.el('<div class="k-kpis"></div>');wrap.appendChild(kpis);
+const host=K.el('<div></div>');wrap.appendChild(host);
+function renderKPIs(){
+ kpis.innerHTML='';
+ const a=state.assign;const vals=Object.values(a);
+ const covered=vals.filter(v=>v).length;
+ const fam=PEOPLE.filter(p=>p.role!=="Home aide (paid)");
+ const hours={};fam.forEach(p=>hours[p.id]=0);
+ vals.forEach(v=>{if(v&&hours[v]!=null)hours[v]+=1;});
+ const top=fam.slice().sort((x,y)=>hours[y.id]-hours[x.id])[0];
+ K.kpi(kpis,{label:"Shifts covered",value:covered+" / 21",delta:covered===21?"Full coverage":"Tap Auto-build week"});
+ K.kpi(kpis,{label:"Family shifts",value:String(vals.filter(v=>v&&PEOPLE.find(p=>p.id===v).role!=="Home aide (paid)").length)});
+ K.kpi(kpis,{label:"Busiest caregiver",value:top?top.name.split(" ")[0]:"—",delta:top?hours[top.id]+" shifts":""});
+ const open=21-covered;
+ K.kpi(kpis,{label:"Open shifts",value:String(open),delta:open?"Needs backup plan":"None — you're set"});
+}
+function renderCal(){
+ host.innerHTML='';
+ const cal=K.el('<div class="k-card"><h3>Week of Oct 5 – Oct 11</h3><div class="cal" id="cal"></div><p class="k-muted" style="font-size:13px;margin-top:10px">Tap a shift to reassign it. Dashed = open shift, needs coverage.</p></div>');
+ host.appendChild(cal);
+ const grid=cal.querySelector("#cal");
+ grid.appendChild(K.el('<div></div>'));
+ DAYS.forEach((d,i)=>grid.appendChild(K.el('<div class="cal-h">'+d+'<br><span style="font-weight:400">'+K.when(dstr(i))+'</span></div>')));
+ for(let s=0;s<3;s++)for(let d=0;d<7;d++){
+   if(d===0){const lab=K.el('<div class="cal-h" style="text-align:right;padding-right:8px">'+SLOTS[s].split(" ")[0]+'<br><span style="font-weight:400">'+SLOTS[s].split(" ").slice(1).join(" ")+'</span></div>');grid.appendChild(lab);}
+ }
+ // rebuild properly row by row
+ grid.innerHTML='';grid.appendChild(K.el('<div></div>'));
+ DAYS.forEach((d,i)=>grid.appendChild(K.el('<div class="cal-h">'+d+'<br><span style="font-weight:400">'+K.when(dstr(i))+'</span></div>')));
+ for(let s=0;s<3;s++){
+   grid.appendChild(K.el('<div class="cal-h" style="text-align:right">'+SLOTS[s]+'</div>'));
+   for(let d=0;d<7;d++){
+     const key=d+"-"+s;const pid=state.assign[key];
+     const p=PEOPLE.find(p=>p.id===pid);
+     const cell=K.el('<div class="slot'+(pid?'':' open')+'"><div class="tm">'+SLOTS[s]+'</div><div class="who">'+(p?'<span class="avdot" style="background:'+p.color+'"></span>'+K.esc(p.name.split(" ")[0]):"Open — tap")+'</div>'+(p?'<div class="tm">'+K.esc(p.role)+'</div>':'')+'</div>');
+     cell.onclick=()=>reassign(d,s);
+     grid.appendChild(cell);
+   }
+ }
+ const ph=K.el('<div class="k-card" style="margin-top:14px"><h3>Care team</h3><div id="ppl"></div></div>');
+ host.appendChild(ph);renderPeopleInto(ph.querySelector("#ppl"));
+ const rp=K.el('<div class="k-card" style="margin-top:14px"><h3>Coverage by person</h3><div id="bars"></div></div>');
+ host.appendChild(rp);
+ const counts=PEOPLE.map(p=>({label:p.name.split(" ")[0]+" "+p.name.split(" ")[1][0]+".",value:Object.values(state.assign).filter(v=>v===p.id).length,color:p.color,vtext:Object.values(state.assign).filter(v=>v===p.id).length+" shifts"}));
+ K.bars(rp.querySelector("#bars"),counts);
+}
+function renderPeople(){}
+function renderPeopleInto(elx){
+ elx.innerHTML='';
+ PEOPLE.forEach(p=>{
+   const av=DAYS.map((d,i)=>'<span title="'+d+'" style="display:inline-block;width:14px;height:14px;border-radius:4px;margin:1px;background:'+((p.avail[i]||[]).length?'var(--accent)':'#e7e2d4')+'"></span>').join("");
+   const row=K.el('<div class="person"><div class="avatar" style="background:'+p.color+'">'+K.initials(p.name)+'</div><div style="flex:1"><div style="font-weight:700">'+K.esc(p.name)+' <span class="k-muted" style="font-weight:400">· '+K.esc(p.role)+'</span></div><div class="k-muted" style="font-size:12px">'+K.esc(p.note)+'</div></div><div>'+av+'</div></div>');
+   elx.appendChild(row);
+ });
+}
+function reassign(d,s){
+ const key=d+"-"+s;
+ const opts=PEOPLE.filter(function(p){return (p.avail[d]||[]).includes(s);});
+ const cur=state.assign[key];
+ let html='<p class="k-muted" style="margin-top:0">'+DAYS[d]+' &middot; '+SLOTS[s]+' &mdash; only people available then:</p>';
+ if(!opts.length)html+='<p>No one listed as available for this slot. Consider a backup aide.</p>';
+ opts.forEach(function(p){
+   html+='<button class="k-btn reopt" data-pid="'+p.id+'" style="display:block;width:100%;margin:6px 0;text-align:left;'+(cur===p.id?'border:2px solid var(--accent)':'')+'"><span class="avdot" style="background:'+p.color+'"></span>'+K.esc(p.name)+' <span class="k-muted">&middot; '+K.esc(p.role)+'</span></button>';
+ });
+ if(cur)html+='<button class="k-btn reopt" data-pid="" style="display:block;width:100%;margin:6px 0">Leave open (find backup)</button>';
+ const close=K.modal({title:"Reassign shift",body:html,actions:[{label:"Done",primary:true}]});
+ const ovs=document.querySelectorAll(".k-modal-overlay");const root=ovs[ovs.length-1];
+ root.querySelectorAll(".reopt").forEach(function(b){
+   b.addEventListener("click",function(){
+     const pid=b.getAttribute("data-pid");
+     state.assign[key]=pid||null;save();renderAll();close();
+     if(pid)K.toast(personName(pid).split(" ")[0]+" covers "+DAYS[d]+" "+SLOTS[s].split(" ")[0].toLowerCase(),"ok");
+     else K.toast("Shift left open","warn");
+   });
+ });
+}
+renderAll();
+if(!Object.keys(state.assign).length){autoBuild();}
+</script></body></html>

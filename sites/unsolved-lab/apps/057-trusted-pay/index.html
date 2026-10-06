@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trusted Pay — Independently verify suspicious or high-risk transfers.</title>
+<link rel="stylesheet" href="../../shared/kit.css">
+<script src="../../shared/kit.js"></script>
+<style>
+/* ===== W6 Kit fallback CSS (only matters if shared/kit.css missing) ===== */
+:root{--bg:#ffffff;--panel:#f6f6f4;--panel2:#ffffff;--ink:#1b1b1b;--muted:#6f6f6f;--line:#e4e4df;--accent:#1d4ed8;--accent2:#0d9488;--good:#15803d;--warn:#b45309;--bad:#b91c1c}
+*{box-sizing:border-box}
+body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);margin:0;line-height:1.5}
+.k-wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+.k-grid{display:grid;gap:16px}
+.k-card{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.k-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:10px;padding:9px 16px;font-size:14px;font-weight:600;cursor:pointer}
+.k-btn:hover{border-color:var(--accent)}
+.k-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.k-primary:hover{filter:brightness(1.08)}
+.k-input,.k-select,textarea.k-input{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;background:var(--panel2);color:var(--ink);font-family:inherit}
+.k-input:focus,.k-select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+.k-table{width:100%;border-collapse:collapse;font-size:14px}
+.k-table th{text-align:left;padding:10px 12px;border-bottom:2px solid var(--line);color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.k-table td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+.k-table tr:last-child td{border-bottom:none}
+.k-badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
+.k-badge.ok{background:#dcfce7;color:#166534}.k-badge.warn{background:#fef3c7;color:#92400e}.k-badge.bad{background:#fee2e2;color:#991b1b}.k-badge.info{background:#dbeafe;color:#1e40af}
+.k-tabs{display:flex;gap:6px;border-bottom:2px solid var(--line);margin-bottom:16px;flex-wrap:wrap}
+.k-tabs button{border:none;background:none;padding:10px 14px;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
+.k-tabs button.active{color:var(--ink);border-bottom-color:var(--accent)}
+.k-kpi{display:flex;flex-direction:column;gap:2px}
+.k-kpi .k-kpi-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.k-kpi .k-kpi-value{font-size:28px;font-weight:800}
+.k-kpi .k-kpi-delta{font-size:13px}
+.k-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#111827;color:#fff;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:600;opacity:0;transition:all .25s;z-index:9999;pointer-events:none;max-width:90vw}
+.k-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.k-toast.ok{background:#166534}.k-toast.warn{background:#92400e}.k-toast.bad{background:#991b1b}
+.k-modal-back{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9998;padding:20px}
+.k-modal{background:var(--panel2);border-radius:16px;max-width:560px;width:100%;max-height:85vh;overflow:auto;padding:24px}
+.k-modal h2{margin:0 0 12px}
+.k-modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap}
+.k-empty{text-align:center;padding:48px 20px;color:var(--muted)}
+.k-empty h3{color:var(--ink);margin:0 0 8px}
+.k-hero{border-radius:18px;padding:32px;background:var(--panel);border:1px solid var(--line);margin-bottom:20px}
+.k-split{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:760px){.k-split{grid-template-columns:1fr}}
+.k-muted{color:var(--muted)}
+.k-nav{padding:16px 0}
+.k-chart-bar{height:10px;border-radius:6px;background:var(--accent);min-width:4px}
+.k-timeline{position:relative;padding-left:26px}
+.k-timeline:before{content:"";position:absolute;left:8px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.k-timeline-ev{position:relative;padding:0 0 18px}
+.k-timeline-ev:before{content:"";position:absolute;left:-24px;top:5px;width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--panel2)}
+.k-timeline-ev.warn:before{background:var(--warn)}.k-timeline-ev.bad:before{background:var(--bad)}.k-timeline-ev.ok:before{background:var(--good)}
+.k-timeline-ev .t{font-size:12px;color:var(--muted);font-weight:600}
+</style>
+<script>
+/* ===== W6 Kit fallback JS: implements window.Kit contract if shared/kit.js missing ===== */
+(function(){
+if(window.Kit&&window.Kit.rng)return;
+function xmur3(str){var h=1779033703^str.length;for(var i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19}return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^=h>>>16)>>>0}}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+var Kit={};
+Kit.rng=function(s){var f=mulberry32(xmur3(String(s))());return f};
+Kit.pick=function(f,a){return a[Math.floor(f()*a.length)]};
+Kit.int=function(f,a,b){return a+Math.floor(f()*(b-a+1))};
+Kit.shuffle=function(f,a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(f()*(i+1));var t=a[i];a[i]=a[j];a[j]=t}return a};
+Kit.uid=function(p){return (p||'')+Math.random().toString(36).slice(2,10)};
+Kit.esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
+Kit.el=function(html){var t=document.createElement('template');t.innerHTML=html.trim();return t.content.firstElementChild};
+Kit.store=function(ns){var p='w6:'+ns+':';function read(k){try{var v=localStorage.getItem(p+k);return v==null?undefined:JSON.parse(v)}catch(e){return undefined}}return{get:function(k,fb){var v=read(k);return v===undefined?fb:v},set:function(k,v){try{localStorage.setItem(p+k,JSON.stringify(v))}catch(e){}},del:function(k){try{localStorage.removeItem(p+k)}catch(e){}}}};
+Kit.nav=function(o){var old=document.querySelector('.k-nav');if(old)old.remove();var h=Kit.el('<div class="k-nav k-wrap"><div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><h1 style="margin:0;font-size:24px;letter-spacing:-.02em">'+Kit.esc(o.title)+'</h1>'+(o.sub?'<div class="k-muted" style="font-size:14px">'+Kit.esc(o.sub)+'</div>':'')+'</div><div class="k-nav-actions" style="display:flex;gap:8px;flex-wrap:wrap"></div></div></div>');var ac=h.querySelector('.k-nav-actions');(o.actions||[]).forEach(function(a){var b=Kit.el('<button class="k-btn'+(a.primary?' k-primary':'')+'">'+Kit.esc(a.label)+'</button>');b.onclick=a.onClick;ac.appendChild(b)});document.body.insertBefore(h,document.body.firstChild)};
+Kit.toast=function(msg,kind){var t=document.querySelector('.k-toast');if(t)t.remove();t=Kit.el('<div class="k-toast '+(kind||'')+'">'+Kit.esc(msg)+'</div>');document.body.appendChild(t);requestAnimationFrame(function(){t.classList.add('show')});setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.remove()},300)},2600)};
+Kit.modal=function(o){var back=Kit.el('<div class="k-modal-back"><div class="k-modal" role="dialog"><h2>'+Kit.esc(o.title)+'</h2><div class="k-modal-body"></div><div class="k-modal-actions"></div></div></div>');var body=back.querySelector('.k-modal-body');if(typeof o.body==='string')body.innerHTML=o.body;else if(o.body)body.appendChild(o.body);var acts=back.querySelector('.k-modal-actions');function close(){back.remove()}(o.actions||[{label:'Close'}]).forEach(function(a){var b=Kit.el('<button class="k-btn'+(a.primary?' k-primary':'')+'">'+Kit.esc(a.label)+'</button>');b.onclick=function(){if(a.onClick)a.onClick(close);else close()};acts.appendChild(b)});back.addEventListener('click',function(e){if(e.target===back)close()});document.body.appendChild(back);return close};
+Kit.tabs=function(host,tabs){host.innerHTML='';var bar=Kit.el('<div class="k-tabs" role="tablist"></div>');var pane=Kit.el('<div></div>');host.appendChild(bar);host.appendChild(pane);tabs.forEach(function(t,i){var b=Kit.el('<button role="tab">'+Kit.esc(t.label)+'</button>');if(i===0)b.classList.add('active');b.onclick=function(){bar.querySelectorAll('button').forEach(function(x){x.classList.remove('active')});b.classList.add('active');pane.innerHTML='';t.render(pane)};bar.appendChild(b)});if(tabs[0])tabs[0].render(pane)};
+Kit.table=function(host,cols,rows,opt){opt=opt||{};host.innerHTML='';var wrap=Kit.el('<div></div>');if(opt.search){var s=Kit.el('<input class="k-input" placeholder="Search…" style="max-width:280px;margin-bottom:10px">');s.oninput=function(){draw(s.value.toLowerCase())};wrap.appendChild(s)}var tw=Kit.el('<div style="overflow-x:auto"></div>');wrap.appendChild(tw);host.appendChild(wrap);var page=0;var ps=opt.pageSize||0;function filtered(q){if(!q)return rows;return rows.filter(function(r){return cols.some(function(c){var v=r[c.key];return v!=null&&String(v).toLowerCase().indexOf(q)>=0})})}function draw(q){var fr=filtered(q||'');var total=fr.length;var view=fr;if(ps&&total>ps){view=fr.slice(page*ps,page*ps+ps)}var h='<table class="k-table"><thead><tr>'+cols.map(function(c){return '<th'+(c.num?' style="text-align:right"':'')+'>'+Kit.esc(c.label)+'</th>'}).join('')+'</tr></thead><tbody>';view.forEach(function(r){h+='<tr>'+cols.map(function(c){var v=r[c.key];if(c.fmt)v=c.fmt(v,r);else v=Kit.esc(v==null?'':v);return '<td'+(c.num?' style="text-align:right"':'')+'>'+v+'</td>'}).join('')+'</tr>'});h+='</tbody></table>';if(!view.length)h='<div class="k-empty"><h3>No results</h3><div>Nothing matches.</div></div>';tw.innerHTML=h;var pg=wrap.querySelector('.k-pg');if(pg)pg.remove();if(ps&&total>ps){var pgn=Kit.el('<div class="k-pg" style="display:flex;gap:8px;align-items:center;margin-top:10px"><button class="k-btn">← Prev</button><span class="k-muted" style="font-size:13px">Page '+(page+1)+' of '+Math.ceil(total/ps)+'</span><button class="k-btn">Next →</button></div>');var btns=pgn.querySelectorAll('button');btns[0].onclick=function(){if(page>0){page--;draw(q||'')}};btns[1].onclick=function(){if((page+1)*ps<total){page++;draw(q||'')}};wrap.appendChild(pgn)}}draw('')};
+Kit.bars=function(host,items){host.innerHTML='';var max=Math.max.apply(null,items.map(function(i){return i.value}).concat([1]));items.forEach(function(i){var row=Kit.el('<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="font-weight:600">'+Kit.esc(i.label)+'</span><span class="k-muted">'+Kit.esc(i.display!=null?i.display:i.value)+'</span></div><div style="background:var(--panel);border-radius:6px;height:12px"><div class="k-chart-bar" style="width:'+(100*i.value/max)+'%;background:'+(i.color||'var(--accent)')+'"></div></div></div>');host.appendChild(row)})};
+Kit.line=function(host,series){var W=560,H=220,P=34;var all=[];series.forEach(function(s){s.points.forEach(function(p){all.push(p)})});var mn=Math.min.apply(null,all.concat([0])),mx=Math.max.apply(null,all.concat([1]));function X(i,n){return P+i*(W-2*P)/Math.max(n-1,1)}function Y(v){return H-P-(v-mn)*(H-2*P)/Math.max(mx-mn,1e-9)}var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;background:var(--panel);border-radius:12px">';series.forEach(function(s){var pts=s.points.map(function(p,i){return X(i,s.points.length)+','+Y(p)}).join(' ');svg+='<polyline points="'+pts+'" fill="none" stroke="'+(s.color||'var(--accent)')+'" stroke-width="2.5"/>'});svg+='</svg><div style="display:flex;gap:14px;margin-top:6px;flex-wrap:wrap">'+series.map(function(s){return '<span style="font-size:12px" class="k-muted"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+(s.color||'var(--accent)')+'"></span> '+Kit.esc(s.name)+'</span>'}).join('')+'</div>';host.innerHTML=svg};
+Kit.donut=function(host,items){var tot=items.reduce(function(a,i){return a+i.value},0)||1;var R=54,C=2*Math.PI*R,off=0,segs='';var cols=['#1d4ed8','#0d9488','#b45309','#b91c1c','#6d28d9','#0e7490'];items.forEach(function(it,i){var frac=it.value/tot;segs+='<circle cx="70" cy="70" r="'+R+'" fill="none" stroke="'+(it.color||cols[i%cols.length])+'" stroke-width="18" stroke-dasharray="'+(frac*C)+' '+C+'" stroke-dashoffset="'+(-off*C)+'" transform="rotate(-90 70 70)"/>';off+=frac});host.innerHTML='<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap"><svg width="140" height="140" viewBox="0 0 140 140">'+segs+'<text x="70" y="76" text-anchor="middle" font-size="20" font-weight="800" fill="var(--ink)">'+Kit.esc(items._center||'')+'</text></svg><div>'+items.map(function(it,i){return '<div style="font-size:13px;margin-bottom:6px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+(it.color||cols[i%cols.length])+'"></span> <b>'+Kit.esc(it.label)+'</b> <span class="k-muted">'+Kit.pct(it.value/tot)+'</span></div>'}).join('')+'</div></div>'};
+Kit.timeline=function(host,events){host.innerHTML='<div class="k-timeline">'+events.map(function(e){return '<div class="k-timeline-ev '+(e.kind||'')+'"><div class="t">'+Kit.esc(e.t)+'</div><div style="font-weight:700">'+Kit.esc(e.title)+'</div>'+(e.body?'<div class="k-muted" style="font-size:13px">'+Kit.esc(e.body)+'</div>':'')+'</div>'}).join('')+'</div>'};
+Kit.graph=function(host,g){var n=g.nodes.length,W=560,H=300;var pos={};g.nodes.forEach(function(nd,i){var a=2*Math.PI*i/Math.max(n,1);pos[nd.id]=[W/2+Math.cos(a)*(W/2-70),H/2+Math.sin(a)*(H/2-60)]});var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;background:var(--panel);border-radius:12px">';g.edges.forEach(function(e){var a=pos[e.a],b=pos[e.b];if(!a||!b)return;svg+='<line x1="'+a[0]+'" y1="'+a[1]+'" x2="'+b[0]+'" y2="'+b[1]+'" stroke="var(--line)" stroke-width="2"/>'+(e.label?'<text x="'+((a[0]+b[0])/2)+'" y="'+((a[1]+b[1])/2-6)+'" text-anchor="middle" font-size="10" fill="var(--muted)">'+Kit.esc(e.label)+'</text>':'')});g.nodes.forEach(function(nd){var p=pos[nd.id];svg+='<g><circle cx="'+p[0]+'" cy="'+p[1]+'" r="26" fill="'+(nd.color||'var(--accent)')+'"/><text x="'+p[0]+'" y="'+(p[1]+4)+'" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">'+Kit.esc(Kit.initials(nd.label))+'</text><text x="'+p[0]+'" y="'+(p[1]+42)+'" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">'+Kit.esc(nd.label)+'</text>'+(nd.sub?'<text x="'+p[0]+'" y="'+(p[1]+55)+'" text-anchor="middle" font-size="10" fill="var(--muted)">'+Kit.esc(nd.sub)+'</text>':'')+'</g>'});svg+='</svg>';host.innerHTML=svg};
+Kit.badge=function(t,k){return '<span class="k-badge k-badge-'+Kit.esc(k||'info')+'">'+Kit.esc(t)+'</span>'};
+Kit.kpi=function(host,o){host.innerHTML='<div class="k-kpi"><div class="k-kpi-label">'+Kit.esc(o.label)+'</div><div class="k-kpi-value">'+Kit.esc(o.value)+'</div>'+(o.delta?'<div class="k-kpi-delta">'+Kit.esc(o.delta)+'</div>':'')+'</div>'};
+Kit.empty=function(host,title,sub,al,af){host.innerHTML='<div class="k-empty"><h3>'+Kit.esc(title)+'</h3><div style="margin-bottom:14px">'+Kit.esc(sub||'')+'</div>'+(al?'<button class="k-btn k-primary">'+Kit.esc(al)+'</button>':'')+'</div>';if(al){var b=host.querySelector('button');if(b&&af)b.onclick=af}};
+Kit.money=function(n){return '$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})};
+Kit.num=function(n){return Number(n).toLocaleString('en-US')};
+Kit.pct=function(x){return (x*100).toFixed(1)+'%'};
+Kit.when=function(d){var dt=new Date(d);return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})};
+Kit.initials=function(n){return String(n||'').split(/\s+/).map(function(w){return w[0]}).join('').slice(0,2).toUpperCase()};
+Kit.copy=function(t){if(navigator.clipboard)navigator.clipboard.writeText(t).then(function(){Kit.toast('Copied to clipboard','ok')},function(){Kit.toast('Copy failed','bad')});else Kit.toast('Clipboard unavailable','warn')};
+window.Kit=Kit;
+})();
+</script>
+<script>
+/* W6 compat: normalize action-handler conventions across kit implementations.
+   The contract we coded against: nav actions support {label,primary,onClick},
+   modal actions support {label,primary,onClick(close)}. If the loaded kit uses
+   a different convention (href links / fn), adapt it here — never break apps. */
+(function(){
+var K=window.Kit;if(!K||K.__w6compat)return;K.__w6compat=true;
+try{
+if(typeof K.nav==='function'&&K.nav.toString().indexOf('onClick')<0){
+var _nav=K.nav;
+K.nav=function(o){o=o||{};var bar=_nav(o);var links=bar.querySelectorAll('.k-nav-actions a');
+(o.actions||[]).forEach(function(d,i){var a=links[i];if(!a)return;
+if(d.primary)a.classList.add('k-primary');
+a.addEventListener('click',function(e){e.preventDefault();if(typeof d.onClick==='function')d.onClick();});});
+return bar;};}
+if(typeof K.modal==='function'&&K.modal.toString().indexOf('onClick')<0){
+var _modal=K.modal;
+K.modal=function(o){o=o||{};(o.actions||[]).forEach(function(a){
+if(typeof a.onClick==='function'&&typeof a.fn!=='function'){var f=a.onClick;a.fn=function(){f(function(){});};}});
+return _modal(o);};}
+}catch(e){/* compat must never break the app */}
+})();
+</script>
+</head>
+<body>
+<style>body{padding-top:104px}/* qa-c: clear fixed .k-nav header */
+:root{--bg:#f5f3ee;--panel:#ece8dc;--panel2:#fffdf8;--ink:#26241e;--muted:#8a8474;--line:#ddd7c2;--accent:#b45309;--accent2:#1d4ed8;--good:#15803d;--warn:#b45309;--bad:#b91c1c}
+body{background:var(--bg)}
+.sans{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.hold-card{border:3px solid var(--accent);background:linear-gradient(135deg,#fffdf8,#fef6e4)}
+.check{display:flex;gap:12px;align-items:flex-start;padding:14px;border:1px solid var(--line);border-radius:12px;margin-bottom:10px;cursor:pointer;transition:border-color .15s;background:var(--panel2)}
+.check:hover{border-color:var(--accent)}
+.check.done{border-color:var(--good);background:#f0fdf4}
+.check input{width:22px;height:22px;margin-top:2px;accent-color:var(--good);flex:none}
+.script{display:none;margin-top:8px;background:var(--panel);border-radius:8px;padding:10px 12px;font-size:13px}
+.check.open .script{display:block}
+.flag{border-left:5px solid var(--bad)}
+.count{font-variant-numeric:tabular-nums;font-weight:800}
+.vault{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:#1c1917;color:#fbbf24;border-radius:10px;padding:14px}
+#print-root{display:none}
+@media print{body>*{display:none!important}#print-root{display:block!important;color:#111;font-family:Georgia,'Times New Roman',serif;padding:24px}}
+</style>
+<div class="k-wrap sans" style="padding-bottom:60px">
+<div class="k-card hold-card">
+<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">
+<div style="font-size:48px">🛡️</div>
+<div style="flex:1;min-width:220px">
+<div class="k-muted" style="font-size:12px;font-weight:700">TRANSFER ON HOLD</div>
+<div style="font-size:34px;font-weight:800">$9,500.00 <span class="k-muted" style="font-size:16px;font-weight:400">contractor deposit</span></div>
+<div class="k-muted">To: <b style="color:var(--ink)">Summit Remodeling LLC</b> · wire · requested today 9:14 AM</div>
+</div>
+<div style="text-align:center"><div class="k-muted" style="font-size:12px;font-weight:700">HOLD EXPIRES IN</div><div class="count" style="font-size:28px;color:var(--accent)" id="countdown">23:41:07</div><div class="k-muted" style="font-size:12px">auto-releases never — you decide</div></div>
+</div></div>
+<div class="k-grid" style="grid-template-columns:repeat(4,1fr);margin:18px 0" id="kpis"></div>
+<div class="k-split">
+<div>
+<h3 style="margin:0 0 10px">Callback verification checklist <span class="k-muted" style="font-weight:400;font-size:13px" id="ck-count"></span></h3>
+<div class="k-muted" style="font-size:13px;margin-bottom:12px">Never verify using contact details from the invoice itself. Look each one up independently. Tap a step for the call script.</div>
+<div id="checks"></div>
+</div>
+<div>
+<h3 style="margin:0 0 10px">Why this was held</h3>
+<div class="k-grid" id="flags" style="margin-bottom:16px"></div>
+<div class="k-card"><b style="font-size:13px">VERIFICATION VAULT</b><div class="vault" id="vault" style="margin-top:8px">No verifications logged yet.<br>Each completed check is timestamped here.</div></div>
+<div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+<button class="k-btn k-primary" id="release" data-core disabled style="font-size:15px;padding:11px 22px">Release $9,500</button>
+<button class="k-btn" id="hold">Keep holding</button>
+<button class="k-btn" id="report" style="color:var(--bad);border-color:var(--bad)">Report fraud</button>
+</div>
+<div id="done-msg"></div>
+</div>
+</div>
+<h3 style="margin:26px 0 10px">Other pending transfers</h3>
+<div class="k-card" style="padding:6px 18px"><div id="others"></div></div>
+</div>
+<div id="print-root"></div>
+<script>
+(function(){
+const K=window.Kit;
+K.nav({title:'Trusted Pay',sub:'High-risk transfers wait for independent verification — not vibes.',actions:[
+{label:'New transfer',onClick:()=>K.toast('Transfer composer stubbed in demo','warn')}]});
+const CHECKS=[
+{t:'Called the contractor at an independently verified number',s:'Look up Summit Remodeling LLC on the CA Contractors State License Board site — call the number listed there, NOT the one on the invoice.',script:'"Hi, this is Luke. I received an invoice for a $9,500 deposit referencing job #SR-2214. Can you confirm the amount, the job number, and the account the wire should go to?" — write down exactly what they say.'},
+{t:'Verified the business license is active',s:'CSLB license #1048821 — check status, bond, and that the name matches the invoice exactly.',script:'On cslb.ca.gov, enter the license number. Confirm: status ACTIVE, business name matches "Summit Remodeling LLC" letter-for-letter, workers\u2019 comp current.'},
+{t:'Confirmed bank details by voice callback',s:'Read the routing + account numbers back to them on the call. One digit off = money gone.',script:'"I have routing 121042882, account ending 4417. Please confirm both." If they hesitate or the numbers differ from the invoice, STOP.'},
+{t:'Matched invoice to the signed quote',s:'Quote was $18,000 total with 25% deposit = $4,500. This invoice asks $9,500 (53%).',script:'Ask: "My signed quote says a 25% deposit. Why does this invoice show $9,500?" Get the answer in writing before releasing a cent.'},
+{t:'Searched for complaints / scams',s:'"Summit Remodeling LLC" + complaints / BBB / Yelp / CSLB disciplinary actions.',script:'Five minutes of searching. Look for: name variations, disconnected numbers, or the same invoice format reported as fraud.'}];
+const FLAGS=[
+{t:'Amount just under the $10,000 reporting threshold',d:'$9,500 avoids automatic currency-transaction reporting. Classic structuring pattern.'},
+{t:'"Wire TODAY or crew walks" pressure',d:'Invoice says the crew is reassigned Friday unless paid today. Urgency kills verification.'},
+{t:'Bank account changed from the quote',d:'Quote listed Wells Fargo; this invoice routes to a new Chase account opened 3 weeks ago.'},
+{t:'Gmail contact, no company domain',d:'summit.remodeling.2026@gmail.com — no website, no branded email for an $18k job.'}];
+const store=K.store('tpay57');let doneChecks=store.get('checks',[]);
+let vaultLog=store.get('vault',[]);
+const kh=document.getElementById('kpis');
+K.kpi(kh.appendChild(document.createElement('div')),{label:'Amount held',value:'$9,500'});
+K.kpi(kh.appendChild(document.createElement('div')),{label:'Risk signals',value:'4',delta:'2 critical'});
+K.kpi(kh.appendChild(document.createElement('div')),{label:'Checks done',value:doneChecks.length+' / 5',delta:'all required to release'});
+K.kpi(kh.appendChild(document.createElement('div')),{label:'Fraud caught (demo)',value:'$0',delta:'…so far'});
+// countdown
+let secs=23*3600+41*60+7;
+setInterval(()=>{secs=Math.max(0,secs-1);const h=String(Math.floor(secs/3600)).padStart(2,'0'),m=String(Math.floor(secs%3600/60)).padStart(2,'0'),s=String(secs%60).padStart(2,'0');document.getElementById('countdown').textContent=h+':'+m+':'+s},1000);
+const fh=document.getElementById('flags');
+FLAGS.forEach((f,i)=>fh.appendChild(K.el(`<div class="k-card flag" style="padding:12px 14px"><div style="display:flex;gap:8px;align-items:center">${K.badge(i<2?'CRITICAL':'WARNING',i<2?'bad':'warn')}<b style="font-size:14px">${K.esc(f.t)}</b></div><div class="k-muted" style="font-size:13px;margin-top:4px">${K.esc(f.d)}</div></div>`)));
+function drawChecks(){
+const host=document.getElementById('checks');host.innerHTML='';
+CHECKS.forEach((c,i)=>{
+const done=doneChecks.includes(i);
+const elc=K.el(`<div class="check ${done?'done':''}"><input type="checkbox" ${done?'checked':''}><div style="flex:1"><div style="font-weight:700;${done?'text-decoration:line-through;opacity:.6':''}">${i+1}. ${K.esc(c.t)}</div><div class="k-muted" style="font-size:13px">${K.esc(c.s)}</div><div class="script"><b>📞 Call script:</b><br>${K.esc(c.script)}</div></div></div>`);
+elc.querySelector('input').onclick=e=>{e.stopPropagation();const ix=doneChecks.indexOf(i);if(e.target.checked&&ix<0){doneChecks.push(i);logVault(c.t)}if(!e.target.checked&&ix>=0)doneChecks.splice(ix,1);store.set('checks',doneChecks);drawChecks()};
+elc.onclick=e=>{if(e.target.tagName!=='INPUT')elc.classList.toggle('open')};
+host.appendChild(elc)});
+document.getElementById('ck-count').textContent='('+doneChecks.length+'/5)';
+kh.children[2].querySelector('.k-kpi-value').textContent=doneChecks.length+' / 5';
+const rel=document.getElementById('release');
+rel.disabled=doneChecks.length<5;
+rel.textContent=doneChecks.length<5?`Release $9,500 (${doneChecks.length}/5 checks)`:'✓ All checks passed — Release $9,500';
+}
+function logVault(t){const v=document.getElementById('vault');if(v.textContent.includes('No verifications'))v.innerHTML='';const entry={time:new Date().toLocaleTimeString(),text:t};vaultLog.push(entry);store.set('vault',vaultLog);v.innerHTML+=`✓ ${K.esc(entry.time)} — ${K.esc(entry.text)}<br>`}
+function paintVault(){const v=document.getElementById('vault');if(!vaultLog.length)return;v.innerHTML=vaultLog.map(e=>`✓ ${K.esc(e.time)} — ${K.esc(e.text)}<br>`).join('')}
+paintVault();
+drawChecks();
+document.getElementById('release').onclick=()=>{
+document.getElementById('done-msg').innerHTML=`<div class="k-card" style="margin-top:14px;border:2px solid var(--good)"><div style="font-size:18px;font-weight:800;color:var(--good)">✓ $9,500 released to Summit Remodeling LLC</div><div class="k-muted" style="font-size:13px">All 5 independent verifications logged with timestamps. Receipt #TP-88412. The vault record is your proof of due diligence.</div><div style="margin-top:10px"><button class="k-btn" id="btn-print">🖨 Print verification record</button></div></div>`;
+document.getElementById('btn-print').onclick=()=>{buildReceipt();window.print();};
+K.toast('Payment released — verification record saved','ok');
+document.getElementById('release').disabled=true;
+};
+function buildReceipt(){
+const rows=vaultLog.map(v=>'<tr><td style="padding:6px 10px;border-bottom:1px solid #ccc;white-space:nowrap">'+K.esc(v.time)+'</td><td style="padding:6px 10px;border-bottom:1px solid #ccc">'+K.esc(v.text)+'</td></tr>').join('');
+const flags=FLAGS.map(f=>'<li style="margin-bottom:4px"><b>'+K.esc(f.t)+'</b> — '+K.esc(f.d)+'</li>').join('');
+document.getElementById('print-root').innerHTML='<h1 style="font-size:22px;margin:0 0 4px">Trusted Pay — Verification Record</h1>'
++'<p style="font-size:14px">Receipt <b>#TP-88412</b> · '+K.esc(new Date().toLocaleString())+'<br>Transfer: <b>$9,500.00</b> contractor deposit → <b>Summit Remodeling LLC</b> (wire)</p>'
++'<h2 style="font-size:15px;margin:18px 0 6px">Risk signals that triggered the hold</h2><ul style="font-size:13.5px;padding-left:20px">'+flags+'</ul>'
++'<h2 style="font-size:15px;margin:18px 0 6px">Independent verifications completed</h2><table style="border-collapse:collapse;width:100%;font-size:13.5px"><tr><th style="text-align:left;padding:6px 10px;border-bottom:2px solid #333">Time</th><th style="text-align:left;padding:6px 10px;border-bottom:2px solid #333">Check</th></tr>'+rows+'</table>'
++'<p style="margin-top:18px;font-size:12.5px;color:#555">Each verification was completed via an independently looked-up contact — never details from the invoice itself. This record is your proof of due diligence.</p>';
+}
+document.getElementById('hold').onclick=()=>K.toast('Hold extended 24h. Contractor notified of verification delay.','info');
+document.getElementById('report').onclick=e=>{K.modal({title:'Report suspected fraud',body:'<p>This packages the invoice, the 4 risk signals, and your verification log into a report for your bank\'s fraud team and the FTC.</p>',actions:[{label:'Send report',primary:true,onClick:c=>{c();K.toast('Report sent to bank fraud team + FTC (demo)','ok')}},{label:'Cancel'}]})};
+K.table(document.getElementById('others'),
+[{key:'to',label:'Recipient'},{key:'amt',label:'Amount',num:true,fmt:v=>K.money(v)},{key:'risk',label:'Risk',fmt:v=>K.badge(v,v==='Low'?'ok':v==='Medium'?'warn':'bad')},{key:'status',label:'Status'}],
+[{to:'PG&E — autopay',amt:184.22,risk:'Low',status:'Auto-approved'},{to:'Rover pet sitter — Maya R.',amt:240,risk:'Low',status:'Released'} ,{to:'Craigslist seller — patio set',amt:650,risk:'Medium',status:'Held · 1 check left'},{to:'"IRS refund fee" — Zelle',amt:1200,risk:'High',status:'Blocked · reported'}],
+{pageSize:5});
+})();
+</script>
+
+</body>
+</html>

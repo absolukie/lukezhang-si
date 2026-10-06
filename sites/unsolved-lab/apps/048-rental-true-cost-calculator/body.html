@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TrueRent — Rental True-Cost Calculator</title>
+<link rel="stylesheet" href="../../shared/kit.css"><script src="../../shared/kit.js"></script>
+<!--SHIM-->
+<style>
+:root{--bg:#f2f7f3;--panel:#ffffff;--panel2:#e8f0e9;--ink:#152419;--muted:#5d6f61;--line:#d3e0d5;--accent:#047857;--accent2:#d9a441;--good:#15803d;--warn:#b45309;--bad:#b91c1c}
+.slider{margin:14px 0}
+.slider .row{display:flex;justify-content:space-between;font-size:14px;font-weight:600}
+.slider .row b{color:var(--accent);font-size:16px}
+.big{font-size:52px;font-weight:800;letter-spacing:-.03em;color:var(--accent)}
+.k-hero{background:linear-gradient(120deg,#ffffff,#ecf5ee)}
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.vs{grid-template-columns:1fr}}
+.k-nav-title{color:#f4f6fa!important}.k-nav-sub{color:#aeb7c4!important}</style></head>
+<body>
+<script>
+"use strict";
+const K=window.Kit;
+K.nav({title:"TrueRent",sub:"What will this apartment REALLY cost?"});
+const store=K.store("truerent");
+const COLORS=["#047857","#0ea5e9","#d9a441","#8b5cf6","#ef4444","#f97316","#64748b","#14b8a6"];
+function def(){return{rent:2400,items:[
+ {id:"parking",label:"Parking spot",v:150,on:true},{id:"util",label:"Utilities (elec/gas/water/trash)",v:180,on:true},
+ {id:"ins",label:"Renter's insurance",v:25,on:true},{id:"pet",label:"Pet rent (1 cat)",v:50,on:true},
+ {id:"commute",label:"Commute (gas + tolls)",v:240,on:true},{id:"fees",label:"Amenity / admin fees (amortized)",v:45,on:true},
+ {id:"laundry",label:"Laundry (in-building)",v:40,on:true},{id:"storage",label:"Storage unit",v:50,on:false}
+]};}
+let state=store.get("state",def());
+function save(){store.set("state",state);}
+function total(){return state.rent+state.items.filter(i=>i.on).reduce((a,i)=>a+i.v,0);}
+const wrap=K.el('<div class="k-wrap"></div>');document.body.appendChild(wrap);
+wrap.appendChild(K.el('<div class="k-hero"><h1>$2,400 rent → <span style="color:var(--accent)">$3,180</span> reality.</h1><p>TrueRent adds everything landlords leave out of the headline number — parking, utilities, insurance, the commute — so you compare apartments on the number you\'ll actually pay.</p></div>'));
+const topRow=K.el('<div class="k-split"></div>');wrap.appendChild(topRow);
+const left=K.el('<div class="k-card"><h3>Dial in your costs</h3><div style="margin-bottom:6px"><button class="k-btn" id="resetbtn">Reset</button></div><div class="slider"><div class="row"><span>🏠 Base rent</span><b id="rv">'+K.money(state.rent)+'</b></div><input type="range" id="rr" min="800" max="6000" step="50" value="'+state.rent+'"></div><div id="items"></div></div>');
+const right=K.el('<div class="k-card" style="text-align:center"><h3 style="text-align:left">True monthly cost</h3><div class="big" id="big"></div><div class="k-muted" id="ann"></div><div id="donut" style="margin-top:8px"></div></div>');
+topRow.appendChild(left);topRow.appendChild(right);
+const cmp=K.el('<div class="k-card" style="margin-top:14px"><h3>Head-to-head: which apartment is actually cheaper?</h3><div class="vs"><div><b>Maple Court</b> <span class="k-muted">· $2,400 rent</span><div id="d1"></div></div><div><b>Depot Lofts</b> <span class="k-muted">· $2,650 rent</span><div id="d2"></div></div></div><p id="verdict" style="font-size:16px"></p></div>');
+wrap.appendChild(cmp);
+function paint(){
+ left.querySelector("#rv").textContent=K.money(state.rent);
+ left.querySelector("#rr").value=state.rent;
+ const box=left.querySelector("#items");box.innerHTML='';
+ state.items.forEach(it=>{
+   const d=K.el('<div class="slider"><div class="row"><span><input type="checkbox" id="c-'+it.id+'" '+(it.on?"checked":"")+' style="width:18px;height:18px;accent-color:var(--accent);vertical-align:-3px"> '+K.esc(it.label)+'</span><b id="v-'+it.id+'">'+K.money(it.v)+'</b></div><input type="range" id="r-'+it.id+'" min="0" max="500" step="5" value="'+it.v+'" '+(it.on?"":"disabled style='opacity:.35'")+'>');
+   d.querySelector("#c-"+it.id).onchange=e=>{it.on=e.target.checked;save();paint();};
+   d.querySelector("#r-"+it.id).oninput=e=>{it.v=+e.target.value;d.querySelector("#v-"+it.id).textContent=K.money(it.v);save();paintNums();};
+   box.appendChild(d);
+ });
+ paintNums();
+}
+function paintNums(){
+ const t=total();
+ right.querySelector("#big").textContent=K.money(t);
+ right.querySelector("#ann").textContent=K.money(t*12)+" / year · "+K.money(t*12*3)+" over a 3-yr stay";
+ const items=[{label:"Base rent",value:state.rent,color:COLORS[0],vtext:K.money(state.rent)}]
+   .concat(state.items.filter(i=>i.on).map((i,x)=>({label:i.label,value:i.v,color:COLORS[(x+1)%COLORS.length],vtext:K.money(i.v)})));
+ const dn=right.querySelector("#donut");dn.innerHTML='';
+ K.donut(dn,items);
+
+ // comparison: Maple Court uses current sliders; Depot Lofts: rent 2650, parking 0 (included), util 150, ins 25, pet 75, commute 120, fees 60
+ const a=t;
+ const b=2650+0+150+25+75+120+60;
+ cmp.querySelector("#d1").innerHTML='<div class="big" style="font-size:36px">'+K.money(a)+'</div><div class="k-muted">true / mo</div>';
+ cmp.querySelector("#d2").innerHTML='<div class="big" style="font-size:36px">'+K.money(b)+'</div><div class="k-muted">true / mo</div>';
+ const win=a<b?"Maple Court":"Depot Lofts";
+ cmp.querySelector("#verdict").innerHTML=K.badge("Verdict: "+win+" is cheaper by "+K.money(Math.abs(a-b))+"/mo","ok")+' <span class="k-muted" style="font-size:13px">Despite the $'+Math.abs(state.rent-2650).toLocaleString()+' headline rent gap '+(a<b?"in Maple Court's favor":"against Maple Court")+'.</span>';
+}
+left.querySelector("#rr").oninput=e=>{state.rent=+e.target.value;left.querySelector("#rv").textContent=K.money(state.rent);save();paintNums();};
+left.addEventListener("click",function(e){if(e.target&&e.target.id==="resetbtn"){state=def();save();paint();K.toast("Reset to defaults","info");}});
+paint();
+</script></body></html>

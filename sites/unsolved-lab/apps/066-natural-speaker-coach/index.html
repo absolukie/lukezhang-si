@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phrasecraft — Unsolved Lab</title>
+<link rel="stylesheet" href="../../shared/kit.css">
+<style>
+/* Kit fallback CSS (trimmed) — only helpers NOT in shared/kit.css.
+   Loaded after shared/kit.css; the real kit owns all .k-* base classes. */
+.k-check{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin:8px 0;cursor:pointer;background:var(--panel)}
+.k-check:hover{border-color:var(--accent)}
+.k-check.done{background:var(--panel2)}
+.k-check.done .k-check-t{text-decoration:line-through;color:var(--muted)}
+.k-check input{margin-top:4px;accent-color:var(--accent);width:17px;height:17px;flex-shrink:0}
+
+/* design-critic: shared kit header is dark but --ink is dark -> force light header text */
+.k-nav-title{color:#f8f6f0}
+.k-nav-sub{color:rgba(248,246,240,.62)}
+
+/* design-critic: keep scrolled-to section clear of the fixed header */
+#results{scroll-margin-top:84px}
+.k-foot{margin-top:36px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+
+</style>
+<style>body{padding-top:104px}/* qa-c: clear fixed .k-nav header */
+
+:root{--bg:#f7f3ea;--panel:#fffdf8;--panel2:#efe8d6;--ink:#23203a;--muted:#7a7466;--line:#e0d6bf;--accent:#3b3b8f;--accent2:#b3541e;--good:#2e7d4f;--warn:#b97f0f;--bad:#b3402e}
+body{background:var(--bg);font-family:Georgia,'Times New Roman',serif}
+.k-wrap{font-family:Georgia,'Times New Roman',serif}
+.k-hero{background:linear-gradient(180deg,#fffdf8,#f3ecdb);border:1px solid var(--line)}
+.k-btn.k-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.k-tab.active{border-bottom-color:var(--accent)}
+.mark{background:#ffe1a8;border-radius:3px;padding:0 2px;font-weight:700}
+.rewrite{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:8px 0;background:var(--panel)}
+.rewrite.best{border-color:var(--good);box-shadow:0 0 0 1px var(--good)}
+.ctx{font-size:12px;font-weight:800;letter-spacing:.06em;color:var(--accent2)}
+.score-ring{width:110px;height:110px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:conic-gradient(var(--accent) var(--p,0%),#e8e0cc 0);font-weight:800}
+.score-ring>div{background:var(--panel);width:84px;height:84px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.chip{display:inline-block;border:1px solid var(--line);background:var(--panel);border-radius:99px;padding:6px 14px;margin:4px;font-size:13px;cursor:pointer}
+.chip:hover{border-color:var(--accent)}
+
+</style>
+</head>
+<body>
+
+<div class="k-wrap">
+  <div id="hdr"></div>
+  <div class="k-hero" style="margin-bottom:16px">
+    <h2 style="margin:0 0 6px">👂 Phrasecraft <span class="k-muted" style="font-size:15px;font-weight:400">— the Native Ear</span></h2>
+    <p class="k-muted" style="margin:0 0 14px">Grammatically correct isn't the same as <em>natural</em>. Paste a sentence; Phrasecraft finds the phrasing no native speaker would use — and teaches the version they'd actually say.</p>
+    <textarea class="k-input" id="phrase" style="min-height:80px;font-size:17px">I am very much liking it</textarea>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
+      <button class="k-btn k-primary" id="analyze-btn" style="font-size:16px;padding:11px 26px">Analyze naturalness</button>
+      <span class="k-muted" style="font-size:13px">or try:</span>
+      <span class="chip" data-ex="I am very much liking it">I am very much liking it</span>
+      <span class="chip" data-ex="I will revert back to you soonest">I will revert back to you soonest</span>
+      <span class="chip" data-ex="She is having a car since 2020">She is having a car since 2020</span>
+    </div>
+  </div>
+  <div id="results"></div>
+  <div class="k-foot"><span>Phrasecraft · rule-based pattern engine (~30 hand-built patterns), not a full NLP model</span><span>Unsolved Lab #66</span></div>
+</div>
+
+<script src="../../shared/kit.js"></script>
+<script>
+/* Kit fallback JS — minimal stand-ins for the shared/kit.js contract.
+   Only installed if window.Kit is absent (or lacks rng). */
+(function(){
+if(window.Kit && window.Kit.rng) return;
+function xmur3(str){let h=1779033703^str.length;for(let i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return function(){h=Math.imul(h^(h>>>16),2246822507);h=Math.imul(h^(h>>>13),3266489909);return (h^=h>>>16)>>>0;};}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const rng=s=>mulberry32(xmur3(String(s))());
+const pick=(r,a)=>a[Math.floor(r()*a.length)];
+const int=(r,a,b)=>a+Math.floor(r()*(b-a+1));
+const shuffle=(r,a)=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;}return a;};
+let _uid=0; const uid=p=>(p||'id')+'-'+(++_uid)+'-'+Math.floor(Math.random()*46656).toString(36);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function H(host,html){ if(!host) return html; const el=typeof host==='string'?document.querySelector(host):host; if(el) el.innerHTML=html; return html; }
+function store(ns){const k='unsolvedlab.'+ns;function read(){try{const v=localStorage.getItem(k);return v==null?undefined:JSON.parse(v);}catch(e){return undefined;}}
+  return{get:function(d){const v=read();return v===undefined?(d===undefined?{}:d):v;},set:function(v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}},del:function(){try{localStorage.removeItem(k);}catch(e){}}};}
+function nav(o){o=o||{};const acts=(o.actions||[]).map(a=>'<button class="k-btn'+(a.primary?' k-primary':'')+'" data-act="'+esc(a.id||'')+'">'+esc(a.label||'')+'</button>').join('');
+  const html='<div class="k-head"><div><h1>'+esc(o.title||'')+'</h1>'+(o.sub?'<div class="sub">'+esc(o.sub)+'</div>':'')+'</div><div style="display:flex;gap:8px;flex-wrap:wrap">'+acts+'</div></div>';
+  if(o.host) H(o.host,html); return html;}
+function toast(msg,kind){let t=document.querySelector('.k-toast');if(!t){t=document.createElement('div');t.className='k-toast';document.body.appendChild(t);}
+  t.textContent=msg;t.className='k-toast show '+(kind||'');clearTimeout(t._h);t._h=setTimeout(()=>{t.className='k-toast';},2600);}
+function modal(o){const veil=document.createElement('div');veil.className='k-modal-veil';
+  const acts=(o.actions||[]).map((a,i)=>'<button class="k-btn'+(a.primary?' k-primary':'')+'" data-ma="'+i+'">'+esc(a.label)+'</button>').join('');
+  veil.innerHTML='<div class="k-modal"><h3>'+esc(o.title||'')+'</h3><div>'+(o.body||'')+'</div><div class="k-modal-actions">'+acts+'</div></div>';
+  const close=()=>{veil.remove();document.removeEventListener('keydown',onkey);};
+  const onkey=e=>{if(e.key==='Escape')close();};document.addEventListener('keydown',onkey);
+  veil.addEventListener('click',e=>{if(e.target===veil)close();const b=e.target.closest('[data-ma]');if(b){const a=(o.actions||[])[+b.dataset.ma];if(a&&a.fn)a.fn(close);else close();}});
+  document.body.appendChild(veil);return close;}
+function tabs(host,tablist){const el=typeof host==='string'?document.querySelector(host):host;if(!el)return;
+  let cur=tablist[0]&&tablist[0].id;
+  function draw(){el.innerHTML='<div class="k-tabs">'+tablist.map(t=>'<button class="k-tab'+(t.id===cur?' active':'')+'" data-tab="'+esc(t.id)+'">'+esc(t.label)+'</button>').join('')+'</div><div class="k-tab-body"></div>';
+    const body=el.querySelector('.k-tab-body');const t=tablist.find(x=>x.id===cur);if(t&&t.render)t.render(body);
+    el.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{cur=b.dataset.tab;draw();});}
+  draw();}
+function table(host,cols,rows,opts){opts=opts||{};const el=typeof host==='string'?document.querySelector(host):host;
+  let q='',page=0,sortK=null,sortD=1;const ps=opts.pageSize||10;
+  function filtered(){let r=rows;if(q){const l=q.toLowerCase();r=r.filter(row=>cols.some(c=>String(row[c.key]??'').toLowerCase().includes(l)));}
+    if(sortK){const c=cols.find(x=>x.key===sortK);r=r.slice().sort((a,b)=>{const va=a[sortK],vb=b[sortK];const n=(c&&c.num);let d=n?(+va-+vb):String(va).localeCompare(String(vb));return d*sortD;});}return r;}
+  function cell(c,row){let v=row[c.key];if(c.fmt)v=c.fmt(v,row);return '<td'+(c.num?' style="text-align:right;font-variant-numeric:tabular-nums"':'')+'>'+(v==null?'':v)+'</td>';}
+  function draw(){if(!el)return;const fr=filtered();const pages=Math.max(1,Math.ceil(fr.length/ps));page=Math.min(page,pages-1);
+    const slice=fr.slice(page*ps,page*ps+ps);
+    let html='';if(opts.search!==false)html+='<div style="margin-bottom:10px;max-width:320px"><input class="k-input k-search" placeholder="Search…" value="'+esc(q)+'"></div>';
+    html+='<div style="overflow-x:auto"><table class="k-table"><thead><tr>'+cols.map(c=>'<th data-sk="'+esc(c.key)+'" style="'+(c.num?'text-align:right':'')+'">'+esc(c.label)+(sortK===c.key?(sortD>0?' ▲':' ▼'):'')+'</th>').join('')+'</tr></thead><tbody>';
+    html+=slice.length?slice.map(r=>'<tr>'+cols.map(c=>cell(c,r)).join('')+'</tr>').join(''):'<tr><td colspan="'+cols.length+'" style="text-align:center;color:var(--muted);padding:24px">No rows</td></tr>';
+    html+='</tbody></table></div>';
+    if(pages>1)html+='<div style="display:flex;gap:8px;align-items:center;margin-top:10px"><button class="k-btn" data-pg="-1">‹ Prev</button><span class="k-muted" style="font-size:13px">Page '+(page+1)+' of '+pages+'</span><button class="k-btn" data-pg="1">Next ›</button></div>';
+    el.innerHTML=html;
+    const si=el.querySelector('.k-search');if(si){si.oninput=()=>{q=si.value;page=0;draw();const n=el.querySelector('.k-search');n.focus();n.setSelectionRange(n.value.length,n.value.length);};}
+    el.querySelectorAll('th[data-sk]').forEach(th=>th.onclick=()=>{const k=th.dataset.sk;if(sortK===k)sortD*=-1;else{sortK=k;sortD=1;}draw();});
+    el.querySelectorAll('[data-pg]').forEach(b=>b.onclick=()=>{page+=+b.dataset.pg;draw();});}
+  draw();}
+function bars(host,items){const max=Math.max.apply(null,[1].concat(items.map(i=>i.value)));
+  const html=items.map(i=>'<div class="k-bar-row"><span class="k-muted">'+esc(i.label)+'</span><div class="k-bar-track"><div class="k-bar-fill" style="width:'+Math.round(100*i.value/max)+'%;'+(i.color?'background:'+esc(i.color):'')+'"></div></div><strong>'+esc(String(i.disp!=null?i.disp:i.value))+'</strong></div>').join('');
+  return H(host,html);}
+function line(host,series){const W=640,Hh=240,pad=34;let all=[];series.forEach(s=>s.points.forEach(p=>all.push(p)));
+  const mn=Math.min.apply(null,all.concat([0])),mx=Math.max.apply(null,all.concat([1]));
+  const X=i=>pad+i*(W-2*pad)/Math.max(1,series[0].points.length-1),Y=v=>Hh-pad-(v-mn)*(Hh-2*pad)/((mx-mn)||1);
+  const colors=['#2456e0','#0ea5a5','#c93a3a','#b97f0f','#7c3aed','#1c8a4c'];
+  let svg='<svg viewBox="0 0 '+W+' '+Hh+'" style="width:100%;height:auto;display:block" role="img">';
+  for(let g=0;g<=4;g++){const v=mn+(mx-mn)*g/4;svg+='<line x1="'+pad+'" y1="'+Y(v)+'" x2="'+(W-pad)+'" y2="'+Y(v)+'" stroke="var(--line)"/><text x="4" y="'+(Y(v)+4)+'" font-size="10" fill="var(--muted)">'+esc(String(Math.round(v*100)/100))+'</text>';}
+  series.forEach((s,si)=>{const c=s.color||colors[si%colors.length];const pts=s.points.map((p,i)=>X(i).toFixed(1)+','+Y(p).toFixed(1)).join(' ');
+    svg+='<polyline points="'+pts+'" fill="none" stroke="'+esc(c)+'" stroke-width="2.5" stroke-linejoin="round"/>';
+    s.points.forEach((p,i)=>{svg+='<circle cx="'+X(i)+'" cy="'+Y(p)+'" r="3.5" fill="'+esc(c)+'"><title>'+esc(s.name+': '+p)+'</title></circle>';});});
+  svg+='</svg><div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px">'+series.map((s,si)=>'<span style="font-size:12px"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:'+esc(s.color||colors[si%colors.length])+';margin-right:5px"></span>'+esc(s.name)+'</span>').join('')+'</div>';
+  return H(host,svg);}
+function donut(host,items){const tot=items.reduce((a,i)=>a+i.value,0)||1;const colors=['#2456e0','#0ea5a5','#c93a3a','#b97f0f','#7c3aed','#1c8a4c','#5b6b7c'];
+  let a0=-Math.PI/2;const R=80,r=52,cx=100,cy=100;let svg='<svg viewBox="0 0 200 200" style="width:200px;height:200px" role="img">';
+  items.forEach((it,i)=>{const frac=it.value/tot,a1=a0+frac*2*Math.PI;const big=frac>0.5?1:0;
+    const x0=cx+R*Math.cos(a0),y0=cy+R*Math.sin(a0),x1=cx+R*Math.cos(a1),y1=cy+R*Math.sin(a1);
+    const xi1=cx+r*Math.cos(a1),yi1=cy+r*Math.sin(a1),xi0=cx+r*Math.cos(a0),yi0=cy+r*Math.sin(a0);
+    const c=it.color||colors[i%colors.length];
+    if(frac>0)svg+='<path d="M'+x0.toFixed(1)+' '+y0.toFixed(1)+' A'+R+' '+R+' 0 '+big+' 1 '+x1.toFixed(1)+' '+y1.toFixed(1)+' L'+xi1.toFixed(1)+' '+yi1.toFixed(1)+' A'+r+' '+r+' 0 '+big+' 0 '+xi0.toFixed(1)+' '+yi0.toFixed(1)+' Z" fill="'+esc(c)+'"><title>'+esc(it.label+': '+it.value)+'</title></path>';
+    a0=a1;});
+  svg+='<text x="100" y="96" text-anchor="middle" font-size="22" font-weight="800" fill="var(--ink)">'+esc(String(items._total!=null?items._total:tot))+'</text><text x="100" y="116" text-anchor="middle" font-size="11" fill="var(--muted)">total</text></svg>';
+  const legend='<div style="display:grid;gap:6px;margin-top:4px">'+items.map((it,i)=>'<div style="display:flex;gap:8px;align-items:center;font-size:13px"><span style="width:11px;height:11px;border-radius:3px;background:'+esc(it.color||colors[i%colors.length])+'"></span><span class="k-muted">'+esc(it.label)+'</span><strong style="margin-left:auto">'+esc(String(it.disp!=null?it.disp:it.value))+'</strong></div>').join('')+'</div>';
+  return H(host,'<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">'+svg+legend+'</div>');}
+function timeline(host,events){const html='<div class="k-tl">'+events.map(e=>'<div class="k-tl-ev '+(e.kind||'')+'"><div class="k-tl-t">'+esc(e.t||'')+'</div><div style="font-weight:700">'+esc(e.title||'')+'</div>'+(e.body?'<div class="k-muted" style="font-size:13px">'+esc(e.body)+'</div>':'')+'</div>').join('')+'</div>';return H(host,html);}
+function graph(host,g){const nodes=g.nodes||[],edges=g.edges||[];
+  const incoming={};nodes.forEach(n=>incoming[n.id]=0);edges.forEach(e=>{if(incoming[e.b]!=null)incoming[e.b]++;});
+  const depth={},queue=[];nodes.forEach(n=>{if(!incoming[n.id]){depth[n.id]=0;queue.push(n.id);}});
+  const adj={};edges.forEach(e=>{(adj[e.a]=adj[e.a]||[]).push(e.b);});
+  while(queue.length){const id=queue.shift();(adj[id]||[]).forEach(b=>{const nd=(depth[id]||0)+1;if(depth[b]==null||nd>depth[b])depth[b]=nd;incoming[b]--;if(incoming[b]<=0)queue.push(b);});}
+  nodes.forEach(n=>{if(depth[n.id]==null)depth[n.id]=0;});
+  const layers={};nodes.forEach(n=>{const d=depth[n.id];(layers[d]=layers[d]||[]).push(n);});
+  const maxD=Math.max.apply(null,Object.keys(layers).map(Number).concat([0]));
+  const maxL=Math.max.apply(null,Object.values(layers).map(l=>l.length).concat([1]));
+  const W=Math.max(560,(maxD+1)*230),Hh=Math.max(280,maxL*96+60);
+  const pos={};Object.keys(layers).forEach(d=>{layers[d].forEach((n,i)=>{pos[n.id]={x:+d*230+115,y:i*96+70};});});
+  let svg='<svg viewBox="0 0 '+W+' '+Hh+'" style="width:100%;height:auto;display:block" role="img"><defs><marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="none" stroke="var(--muted)" stroke-width="1.5"/></marker></defs>';
+  edges.forEach(e=>{const a=pos[e.a],b=pos[e.b];if(!a||!b)return;
+    svg+='<line x1="'+(a.x+62)+'" y1="'+a.y+'" x2="'+(b.x-66)+'" y2="'+b.y+'" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#ah)"/>';
+    if(e.label)svg+='<text x="'+((a.x+b.x)/2)+'" y="'+((a.y+b.y)/2-6)+'" font-size="10" fill="var(--muted)" text-anchor="middle">'+esc(e.label)+'</text>';});
+  nodes.forEach(n=>{const p=pos[n.id];const c=n.color||'#2456e0';
+    svg+='<g data-node="'+esc(n.id)+'" style="cursor:pointer"><rect x="'+(p.x-62)+'" y="'+(p.y-30)+'" width="124" height="60" rx="10" fill="var(--panel)" stroke="'+esc(c)+'" stroke-width="2"/>'+
+    '<text x="'+p.x+'" y="'+(p.y-4)+'" text-anchor="middle" font-size="12" font-weight="700" fill="var(--ink)">'+esc(n.label)+'</text>'+
+    (n.sub?'<text x="'+p.x+'" y="'+(p.y+14)+'" text-anchor="middle" font-size="10" fill="var(--muted)">'+esc(n.sub)+'</text>':'')+'</g>';});
+  svg+='</svg>';return H(host,svg);}
+function badge(txt,kind){return '<span class="k-badge '+(kind||'')+'">'+esc(txt)+'</span>';}
+function kpi(host,o){const d=o.delta!=null?'<div class="k-kpi-d" style="color:'+(String(o.delta).charAt(0)==='-'?'var(--bad)':'var(--good)')+'">'+esc(o.delta)+'</div>':'';
+  const html='<div class="k-kpi"><div class="k-kpi-l">'+esc(o.label||'')+'</div><div class="k-kpi-v">'+esc(o.value||'')+'</div>'+d+'</div>';return H(host,html);}
+function empty(host,title,sub,actionLabel,actionFn){const id=uid('e');
+  const html='<div class="k-empty"><h3>'+esc(title||'Nothing here yet')+'</h3><p>'+esc(sub||'')+'</p>'+(actionLabel?'<button class="k-btn k-primary" id="'+id+'">'+esc(actionLabel)+'</button>':'')+'</div>';
+  if(host){H(host,html);const b=document.getElementById(id);if(b&&actionFn)b.onclick=actionFn;}return html;}
+function money(n){const v=Number(n)||0;return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function num(n){return (Number(n)||0).toLocaleString('en-US');}
+function pct(x){return (Math.round(Number(x)*1000)/10)+'%';}
+function when(d){try{const dt=d instanceof Date?d:new Date(d);if(isNaN(dt))return esc(String(d));
+  return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}catch(e){return esc(String(d));}}
+function initials(name){return String(name||'').split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join('');}
+function copy(txt){const done=()=>toast('Copied to clipboard','ok');
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(done).catch(()=>fallback());}else fallback();
+  function fallback(){const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done();}catch(e){toast('Copy failed','bad');}ta.remove();}}
+window.Kit={rng:rng,pick:pick,int:int,shuffle:shuffle,uid:uid,esc:esc,el:function(h){const d=document.createElement('div');d.innerHTML=h;return d.firstElementChild;},store:store,nav:nav,toast:toast,modal:modal,tabs:tabs,table:table,bars:bars,line:line,donut:donut,timeline:timeline,graph:graph,badge:badge,kpi:kpi,empty:empty,money:money,num:num,pct:pct,when:when,initials:initials,copy:copy,_fallback:true};
+})();
+
+</script>
+<script>
+
+(function(){
+const K=window.Kit;
+const PATTERNS=[
+ {re:/very much liking/i,label:'"very much liking"',issue:'Adverb pile-up on a stative verb. Natives intensify "like" with "really", and prefer simple present for states.',
+  fixes:[{t:"I'm really enjoying it.",c:'CASUAL · DEFAULT',why:'"Enjoy" is the dynamic verb natives reach for; "really" is the natural intensifier.'},{t:'I like it a lot.',c:'NEUTRAL',why:'Simple, warm, zero friction. The safest all-purpose version.'},{t:'I\u2019m a big fan.',c:'ENTHUSIASTIC',why:'Idiomatic upgrade when you want to sound genuinely excited.'}]},
+ {re:/revert back/i,label:'"revert back"',issue:'"Revert" already means "go back" — the "back" is redundant. Common in South-Asian business English; reads as non-native elsewhere.',
+  fixes:[{t:"I'll get back to you soon.",c:'BUSINESS · DEFAULT',why:'"Get back to" is the standard phrasing; "revert" alone also works but sounds stiff.'},{t:"I'll follow up shortly.",c:'BUSINESS · CRISP',why:'One verb, no redundancy, slightly more senior tone.'}]},
+ {re:/soonest/i,label:'"soonest"',issue:'"Soonest" as an adverb ("reply soonest") is archaic outside fixed phrases. Natives say "as soon as possible" or "shortly".',
+  fixes:[{t:'…as soon as possible.',c:'FORMAL',why:'The full idiom. Never wrong.'},{t:'…shortly.',c:'BUSINESS · DEFAULT',why:'What native professionals actually write in email.'}]},
+ {re:/is having a car/i,label:'"is having a car"',issue:'Stative verbs (have, own, know, like) don\u2019t take the continuous. "She has had a car since 2020" — present perfect for a state continuing to now.',
+  fixes:[{t:"She's had a car since 2020.",c:'DEFAULT',why:'Present perfect + "since" is the exact tool for this meaning.'},{t:"She's owned a car since 2020.",c:'PRECISE',why:'"Own" removes all ambiguity about possession.'}]},
+ {re:/discuss about/i,label:'"discuss about"',issue:'"Discuss" is transitive — it takes the object directly. The "about" marks this instantly.',
+  fixes:[{t:"Let's discuss the plan.",c:'DEFAULT',why:'Direct object, no preposition.'},{t:"Let's talk about the plan.",c:'CASUAL',why:'If you want "about", switch the verb to "talk".'}]},
+ {re:/more better|more bigger|more faster/i,label:'"more + comparative"',issue:'Double comparative. The -er ending already does the job of "more".',
+  fixes:[{t:'…better.',c:'DEFAULT',why:'Drop "more" — the comparative suffix carries the meaning.'}]},
+ {re:/according to me/i,label:'"according to me"',issue:'"According to" cites an authority — citing yourself sounds odd. Natives say "in my opinion" or just state it.',
+  fixes:[{t:'In my opinion…',c:'DEFAULT',why:'The natural opinion frame.'},{t:'I think…',c:'CASUAL',why:'Shorter and more confident.'}]},
+ {re:/do the needful/i,label:'"do the needful"',issue:'Archaic in most Englishes; survives in Indian business English. Elsewhere it reads as a meme.',
+  fixes:[{t:'Please take care of it.',c:'BUSINESS',why:'Direct and natural.'},{t:'Could you handle this?',c:'POLITE',why:'Softer request form.'}]},
+ {re:/prepone/i,label:'"prepone"',issue:'Real word in Indian English, but unknown elsewhere — it will confuse most native speakers.',
+  fixes:[{t:'…moved up / brought forward.',c:'UNIVERSAL',why:'Understood in every English variety.'}]},
+ {re:/myself.*,( I|i am)/i,label:'"…myself, I am…"',issue:'Leading with "myself" ("Myself John, I am…") is a hypercorrection. "Myself" is reflexive only.',
+  fixes:[{t:"I'm John…",c:'DEFAULT',why:'Just start with "I".'}]},
+ {re:/it is raining outside/i,label:'"It is raining outside"',issue:'Not wrong — just robotic. Natives contract and drop "outside" (where else would it rain?).',
+  fixes:[{t:"It's raining.",c:'DEFAULT',why:'Contraction + dropped redundancy = native rhythm.'}]},
+ {re:/i am agree/i,label:'"I am agree"',issue:'"Agree" is a verb, not an adjective. No "am".',
+  fixes:[{t:'I agree.',c:'DEFAULT',why:'Verb takes no auxiliary here.'}]},
+ {re:/informations|advices|furnitures/i,label:'uncountable noun plural',issue:'Information, advice, furniture are uncountable — no plural -s, ever.',
+  fixes:[{t:'…pieces of information.',c:'DEFAULT',why:'Use a counter word for uncountables.'},{t:'…some advice.',c:'DEFAULT',why:'"Some" + singular form.'}]},
+ {re:/yesterday night/i,label:'"yesterday night"',issue:'The idiom is "last night". "Yesterday night" is understandable but instantly foreign.',
+  fixes:[{t:'last night',c:'DEFAULT',why:'Fixed idiom — memorize it as a chunk.'}]},
+ {re:/open the light|close the light/i,label:'"open/close the light"',issue:'Calque from languages where lights "open". English: turn on / turn off.',
+  fixes:[{t:'Turn on the light.',c:'DEFAULT',why:'The only natural verb pair.'}]},
+ {re:/what is your good name/i,label:'"your good name"',issue:'Polite in Indian English; elsewhere it sounds like a joke. Just ask the name.',
+  fixes:[{t:"What's your name?",c:'DEFAULT',why:'Direct is polite in most Englishes.'}]},
+ {re:/i am having (a )?(doubt|question)/i,label:'"having a doubt"',issue:'"Having a doubt" is Indian-English for "I have a question". Elsewhere "doubt" means disbelief.',
+  fixes:[{t:'I have a question.',c:'UNIVERSAL',why:'"Doubt" will actively mislead non-Indian listeners.'}]},
+ {re:/too much (good|nice|happy)/i,label:'"too much good"',issue:'"Too much" is negative overload. For positive degree, natives use "so" or "very".',
+  fixes:[{t:'so good',c:'DEFAULT',why:'"So" intensifies without the negative tint of "too".'}]},
+ {re:/didn.?t knew|didn.?t went|didn.?t saw/i,label:'"didn\u2019t + past verb"',issue:'After "didn\u2019t", the verb returns to base form. One of the most common fossilized errors.',
+  fixes:[{t:"didn't know",c:'DEFAULT',why:'"Did" already carries the past — the main verb relaxes to base form.'}]},
+ {re:/more.*prefer/i,label:'"more prefer"',issue:'"Prefer" already encodes "more like". "More prefer" doubles it.',
+  fixes:[{t:'I prefer tea.',c:'DEFAULT',why:'"Prefer" = "like more". Nothing to add.'}]},
+ {re:/is existed|are existed/i,label:'"is existed"',issue:'"Exist" is intransitive — things just exist. No passive.',
+  fixes:[{t:'…exists.',c:'DEFAULT',why:'Active intransitive, full stop.'}]},
+ {re:/repeat again/i,label:'"repeat again"',issue:'"Repeat" already means "say again".',
+  fixes:[{t:'Could you repeat that?',c:'DEFAULT',why:'Drop "again".'}]},
+ {re:/free gift/i,label:'"free gift"',issue:'Gifts are free by definition — marketing-speak that natives notice.',
+  fixes:[{t:'gift',c:'DEFAULT',why:'Or "complimentary" in formal contexts.'}]},
+ {re:/each and every/i,label:'"each and every"',issue:'Legalistic doubling; in normal speech pick one.',
+  fixes:[{t:'every',c:'DEFAULT',why:'One determiner is enough.'}]},
+ {re:/in my point of view/i,label:'"in my point of view"',issue:'The idiom is "from my point of view" or "in my view" — mixed versions jar.',
+  fixes:[{t:'From my point of view…',c:'DEFAULT',why:'Fixed preposition: from.'},{t:'In my view…',c:'CRISP',why:'Shorter twin idiom.'}]},
+ {re:/despite of|inspite of/i,label:'"despite of"',issue:'"Despite" never takes "of". (You may be thinking of "in spite of".)',
+  fixes:[{t:'despite the rain',c:'DEFAULT',why:'Bare "despite" + noun.'}]},
+ {re:/return back/i,label:'"return back"',issue:'Same redundancy class as "revert back" — return means go back.',
+  fixes:[{t:"I'll return it tomorrow.",c:'DEFAULT',why:'Drop "back".'}]},
+ {re:/comprises of/i,label:'"comprises of"',issue:'"Comprise" = "consist of". Pick one construction.',
+  fixes:[{t:'…comprises three parts.',c:'FORMAL',why:'Direct object, no "of".'},{t:'…consists of three parts.',c:'FORMAL',why:'Or the "of" version with "consist".'}]},
+];
+K.nav({title:'\u{1F442} Phrasecraft',sub:'Native Ear · correct isn\u2019t the same as natural'});
+/* Weak-spot memory: patterns the user keeps hitting, persisted across sessions. */
+const wst=K.store('phrasecraft66');
+let weak=wst.get('weak',{});
+function scoreOf(hits){return Math.max(8,100-hits.reduce((a,h)=>a+22,0));}
+function analyze(rec){
+ const text=document.getElementById('phrase').value.trim();
+ const box=document.getElementById('results');
+ if(!text){box.innerHTML='';K.toast('Paste a sentence first','warn');return;}
+ const hits=PATTERNS.filter(p=>p.re.test(text));
+ if(rec!==false){hits.forEach(h=>{weak[h.label]=weak[h.label]||{n:0};weak[h.label].n++;});wst.set('weak',weak);}
+ const s=scoreOf(hits);
+ let html='<div class="k-card" style="margin-bottom:14px"><div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap"><div class="score-ring" style="--p:'+s+'%"><div><span style="font-size:26px">'+s+'</span><span class="k-muted" style="font-size:11px">NATURALNESS</span></div></div><div style="flex:1;min-width:220px"><h3 style="margin:0 0 6px">'+(hits.length?hits.length+' unnatural pattern'+(hits.length>1?'s':'')+' found':'No issues found — this sounds native 🎉')+'</h3><div class="k-muted" style="font-size:14px">Input: <em>"'+K.esc(text)+'"</em></div>'+(hits.length?'<div class="k-muted" style="font-size:13px;margin-top:6px">Every flagged phrase is grammatically defensible — that\u2019s exactly why it\u2019s hard to fix without feedback like this.</div>':'')+'</div></div></div>';
+ html+=weakCard();
+ html+=hits.map((h,hi)=>{
+  let marked=K.esc(text);const m=text.match(h.re);if(m){marked=K.esc(text.slice(0,m.index))+'<span class="mark">'+K.esc(m[0])+'</span>'+K.esc(text.slice(m.index+m[0].length));}
+  return '<div class="k-card" style="margin-bottom:12px"><div style="font-size:12px;font-weight:800;letter-spacing:.06em;color:var(--bad)">PATTERN '+(hi+1)+' · '+K.esc(h.label)+'</div><div style="font-size:17px;margin:8px 0">'+marked+'</div><div class="k-muted" style="font-size:14px;margin-bottom:8px">🔍 '+K.esc(h.issue)+'</div><div style="font-size:12px;font-weight:800;letter-spacing:.06em;color:var(--good);margin-bottom:4px">NATURAL REWRITES</div>'+
+  h.fixes.map((f,fi)=>'<div class="rewrite'+(fi===0?' best':'')+'"><span class="ctx">'+K.esc(f.c)+'</span><div style="font-size:16px;font-weight:700;margin:3px 0">'+K.esc(f.t)+'</div><div class="k-muted" style="font-size:13px">'+K.esc(f.why)+'</div></div>').join('')+'</div>';}).join('');
+ box.innerHTML=html;
+ const pb=document.getElementById('pracBtn');if(pb)pb.onclick=startPractice;
+ box.scrollIntoView({behavior:'smooth',block:'start'});}
+function weakCard(){
+ const labels=Object.keys(weak);
+ if(!labels.length)return '';
+ const rows=labels.sort((a,b)=>weak[b].n-weak[a].n).map(l=>'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px"><span>'+K.esc(l)+'</span><b>×'+weak[l].n+'</b></div>').join('');
+ return '<div class="k-card" style="margin-bottom:14px"><h3 style="margin-top:0">Your weak spots <span class="k-muted" style="font-weight:400;font-size:13px">— patterns you keep hitting, remembered across sessions</span></h3>'+rows+'<button class="k-btn k-primary" id="pracBtn" style="margin-top:10px">Practice my weak spots</button></div>';
+}
+let prac={list:[],i:0};
+function startPractice(){
+ prac.list=Object.keys(weak).map(l=>PATTERNS.find(p=>p.label===l)).filter(Boolean);
+ if(!prac.list.length){K.toast('No weak spots yet — analyze a sentence first','warn');return;}
+ prac.i=0;renderPractice();
+ document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function renderPractice(){
+ const box=document.getElementById('results');
+ const p=prac.list[prac.i];
+ box.innerHTML='<div class="k-card"><div class="k-muted" style="font-size:12px;font-weight:700;letter-spacing:.06em">DRILL '+(prac.i+1)+' OF '+prac.list.length+'</div>'
+ +'<div style="font-size:12px;font-weight:800;letter-spacing:.06em;color:var(--bad);margin-top:8px">PATTERN · '+K.esc(p.label)+'</div>'
+ +'<div class="k-muted" style="font-size:14px;margin:8px 0">'+K.esc(p.issue)+'</div>'
+ +'<label class="k-muted" style="font-size:12px">Say it the way a native would:</label>'
+ +'<textarea class="k-input" id="pract" style="min-height:60px;font-size:16px;margin:6px 0"></textarea>'
+ +'<div id="pans" style="display:none"></div>'
+ +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="k-btn" id="preveal">Reveal natural versions</button><button class="k-btn k-primary" id="pnailed" disabled>I nailed it</button><button class="k-btn" id="pmissed" disabled>Still tricky</button><button class="k-btn" id="pexit">Exit practice</button></div></div>';
+ const ans=box.querySelector('#pans');
+ box.querySelector('#preveal').onclick=function(){
+  ans.style.display='block';
+  ans.innerHTML='<div style="font-size:12px;font-weight:800;letter-spacing:.06em;color:var(--good);margin:10px 0 4px">NATURAL REWRITES</div>'+p.fixes.map(function(f){return '<div class="rewrite"><span class="ctx">'+K.esc(f.c)+'</span><div style="font-size:16px;font-weight:700;margin:3px 0">'+K.esc(f.t)+'</div><div class="k-muted" style="font-size:13px">'+K.esc(f.why)+'</div></div>';}).join('');
+  box.querySelector('#pnailed').disabled=false;box.querySelector('#pmissed').disabled=false;
+ };
+ function grade(ok){
+  const w=weak[p.label];
+  if(w){if(ok){w.n--;if(w.n<=0)delete weak[p.label];}else w.n++;}
+  wst.set('weak',weak);
+  K.toast(ok?'Weak spot fading — nice':'Kept on your weak-spot list',ok?'ok':'warn');
+  prac.i++;
+  if(prac.i>=prac.list.length){analyze(false);K.toast('Practice round done — weak spots updated');}
+  else renderPractice();
+ }
+ box.querySelector('#pnailed').onclick=function(){grade(true);};
+ box.querySelector('#pmissed').onclick=function(){grade(false);};
+ box.querySelector('#pexit').onclick=function(){analyze(false);};
+}
+document.getElementById('analyze-btn').onclick=analyze;
+document.querySelectorAll('[data-ex]').forEach(c=>c.onclick=()=>{document.getElementById('phrase').value=c.dataset.ex;analyze();});
+analyze();
+})();
+
+</script>
+</body>
+</html>

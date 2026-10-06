@@ -1,0 +1,196 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Obligation Graph — Contracts, decoded</title>
+<link rel="stylesheet" href="../../shared/kit.css">
+<script src="../../shared/kit.js"></script>
+<script src="../kit-fallback-w9.js"></script>
+<style>
+:root{--bg:#f5f0e3;--panel:#fffdf7;--panel2:#ece4cf;--ink:#1e2a44;--muted:#6d7488;--line:#ddd3b8;--accent:#274b8f;--accent2:#b23b2e;--good:#2e7d4f;--warn:#b97e1c;--bad:#b23b2e;}
+body{background:var(--bg);color:var(--ink);font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;margin:0;}
+.k-nav{background:#1e2a44;color:#f5f0e3;}
+.k-nav-in{display:flex;justify-content:space-between;align-items:center;padding:14px 0;}
+.k-nav-t{margin:0;font-size:24px;font-weight:700;}
+.k-nav-s{color:#a9b3c9;margin:2px 0 0;}
+.k-wrap{max-width:1280px;margin:0 auto;padding:0 20px;}
+.hero{margin:20px 0 14px;}
+.hero h2{margin:0 0 4px;font-size:28px;letter-spacing:-.5px;}
+.alert{background:#fbe3de;border:2px solid var(--bad);border-radius:12px;padding:14px 16px;margin-bottom:16px;display:flex;gap:12px;align-items:flex-start;}
+.alert .ic{font-size:26px;}
+.alert b{color:var(--bad);}
+.layout{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+@media(max-width:960px){.layout{grid-template-columns:1fr;}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;}
+.rl{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fffdf6;}
+.card h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);}
+textarea.doc{width:100%;min-height:340px;border:1px solid var(--line);border-radius:8px;padding:12px;font:12.5px/1.7 "SF Mono",Consolas,monospace;background:#fff;color:var(--ink);box-sizing:border-box;resize:vertical;white-space:pre-wrap;}
+.docview{font:12.5px/1.7 Georgia,serif;white-space:pre-wrap;max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:14px;background:#fff;}
+.docview mark{background:#ffe9b8;border-radius:3px;padding:0 2px;}
+.docview mark.hot{background:#f6d9d2;border-bottom:2px solid var(--bad);}
+.k-btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:9px 14px;font-size:14px;cursor:pointer;color:var(--ink);}
+.k-primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+.k-badge{font-size:11px;padding:2px 8px;border-radius:20px;background:#e8e2d2;color:#5a5344;}
+.k-badge.ok{background:#dcebd4;color:#2f6b3f;}.k-badge.warn{background:#f5e6c4;color:#8a5f14;}.k-badge.bad{background:#f0d2cb;color:#93342a;}.k-badge.info{background:#d7e6f2;color:#2a5f80;}
+.k-table{width:100%;border-collapse:collapse;font-size:13px;}
+.k-table th{text-align:left;padding:8px;border-bottom:2px solid var(--line);color:var(--muted);font-size:12px;}
+.k-table td{padding:8px;border-bottom:1px solid var(--line);vertical-align:top;}
+.k-table tr.clickable{cursor:pointer;}
+.k-table tr.clickable:hover td{background:#f7f2e4;}
+.k-graph{width:100%;height:auto;}
+.k-g-t{fill:#fff;font-size:10px;font-weight:700;font-family:sans-serif;}
+.k-g-s{fill:var(--muted);font-size:11px;font-family:sans-serif;}
+.k-g-lbl{fill:var(--muted);font-size:10px;font-family:sans-serif;}
+.k-tl{border-left:3px solid var(--line);margin:6px 0 6px 8px;}
+.k-tl-e{position:relative;padding:8px 0 8px 20px;}
+.k-tl-e::before{content:'';position:absolute;left:-8px;top:12px;width:12px;height:12px;border-radius:50%;background:var(--accent);}
+.k-tl-e.bad::before{background:var(--bad);}.k-tl-e.warn::before{background:var(--warn);}.k-tl-e.ok::before{background:var(--good);}
+.k-tl-t{font-size:12px;color:var(--muted);font-weight:600;}
+.k-tl-b b{font-size:14px;}.k-tl-b p{margin:2px 0 0;font-size:13px;}
+.k-toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:#1e2a44;color:#fff;padding:10px 18px;border-radius:8px;opacity:0;transition:all .3s;z-index:999;}
+.k-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+footer{color:var(--muted);font-size:12px;text-align:center;padding:22px;}
+
+/* design-critic: graph (viewBox 2350 wide) was squeezed to 25% scale; scroll at readable size */
+.layout>*{min-width:0}
+#gHost{overflow-x:auto;max-width:100%}
+#gHost svg{min-width:1400px}
+</style></head>
+<body>
+<div id="app"></div>
+<script>
+(function(){
+var K=window.Kit,app=document.getElementById('app');
+K.nav({title:'\u2696 Obligation Graph',sub:'Turn contracts into obligations, deadlines, renewals',actions:[]});
+var wrap=K.el('<div class="k-wrap"></div>');app.appendChild(wrap);
+wrap.appendChild(K.el('<div class="hero"><h2>Paste a contract. Get its obligations.</h2><p class="k-muted" style="margin:0">Deadlines, renewals, SLAs, payment terms and who owes what \u2014 extracted into a graph you can actually act on.</p></div>'));
+
+var DEMO="MASTER SERVICES AGREEMENT\n\nThis Master Services Agreement (\"Agreement\") is entered into as of October 1, 2026 (the \"Effective Date\") by and between Northwind Cloud Inc. (\"Customer\") and Datawise Analytics LLC (\"Provider\").\n\n1. TERM. The initial term of this Agreement is twelve (12) months from the Effective Date (the \"Initial Term\"). Upon expiration of the Initial Term, this Agreement shall automatically renew for successive twelve (12) month periods (each a \"Renewal Term\") unless either party provides written notice of non-renewal at least sixty (60) days prior to the expiration of the then-current term.\n\n2. FEES AND PAYMENT. Customer shall pay Provider an annual subscription fee of $48,000.00, payable quarterly in advance. Invoices are due net thirty (30) days from receipt. Late payments accrue interest at 1.5% per month.\n\n3. SERVICE LEVELS. Provider shall maintain 99.9% monthly uptime for the hosted platform, excluding scheduled maintenance. If uptime falls below 99.9% in a calendar month, Customer is entitled to a service credit equal to 10% of that month\u2019s fees. Credits must be claimed within thirty (30) days of the incident.\n\n4. SUPPORT. Provider shall provide email support with a response time of four (4) business hours for Severity 1 issues and one (1) business day for Severity 2 issues, during business hours 9am\u20135pm PT.\n\n5. DATA SECURITY. Provider shall maintain SOC 2 Type II certification and encrypt customer data at rest (AES-256) and in transit (TLS 1.2+). Provider shall notify Customer of any security incident within seventy-two (72) hours of discovery.\n\n6. TERMINATION. Either party may terminate for convenience with ninety (90) days\u2019 written notice. Either party may terminate for material breach with thirty (30) days\u2019 written notice and opportunity to cure.\n\n7. LIABILITY. Provider\u2019s total liability shall not exceed the fees paid in the twelve (12) months preceding the claim. Neither party shall be liable for indirect or consequential damages.\n\n8. GOVERNING LAW. This Agreement is governed by the laws of the State of California.\n\n9. ASSIGNMENT. Neither party may assign this Agreement without prior written consent, except to a successor in a merger or acquisition.";
+
+var input=K.el('<div class="layout"></div>');wrap.appendChild(input);
+var l=K.el('<div class="card"><h3>Contract text</h3></div>');input.appendChild(l);
+var ta=K.el('<textarea class="doc"></textarea>');ta.value=DEMO;l.appendChild(ta);
+var ctr=K.el('<div style="display:flex;gap:8px;margin-top:10px"></div>');l.appendChild(ctr);
+var go=K.el('<button class="k-btn k-primary" id="core-action" data-core>Analyze contract</button>');ctr.appendChild(go);
+var rst=K.el('<button class="k-btn">Restore demo</button>');rst.onclick=function(){ta.value=DEMO;analyze();};ctr.appendChild(rst);
+var r=K.el('<div class="card"><h3>Source \u2014 click an obligation to trace its clause</h3><div class="docview" id="docview"></div></div>');input.appendChild(r);
+
+var alertHost=K.el('<div id="alertHost"></div>');wrap.appendChild(alertHost);
+var out=K.el('<div class="layout"></div>');wrap.appendChild(out);
+var gcard=K.el('<div class="card"><h3>Obligation graph</h3><div id="gHost"></div></div>');out.appendChild(gcard);
+var tcard=K.el('<div class="card"><h3>Critical dates</h3><div id="tlHost"></div></div>');out.appendChild(tcard);
+var tbl=K.el('<div class="card" style="margin-bottom:16px"><h3>All obligations \u2014 click a row to see its clause</h3><div id="tblHost"></div></div>');wrap.appendChild(tbl);
+var rlc=K.el('<div class="card" style="margin-bottom:16px"><h3>Suggested redlines \u2014 what to negotiate</h3><div id="rlHost"></div><button class="k-btn" id="rl-copy" style="margin-top:10px">\u29c9 Copy redlines</button></div>');wrap.appendChild(rlc);
+document.getElementById('rl-copy').onclick=function(){
+  var txt='REDLINES — '+new Date().toISOString().slice(0,10)+'\n\n'+lastRedlines.map(function(x){return '['+x.r.prio.toUpperCase()+'] '+x.r.ask+'\n  Re: '+x.o.label+' ('+x.o.who+')\n  Why: '+x.r.why;}).join('\n\n');
+  function done(){K.toast('Redlines copied','ok');}
+  function fallback(){var ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done();}catch(e){K.toast('Copy unavailable in this browser','bad');}document.body.removeChild(ta);}
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(done,fallback);
+  else fallback();
+};
+var lastRedlines=[];
+var REDLINES=[
+ {match:/Auto-renewal/,ask:'Cut the non-renewal notice from 60 days to 30',why:'60-day tripwires are how vendors lock you in. 30 days matches a normal procurement cycle.',prio:'high'},
+ {match:/Auto-renewal/,ask:'Cap renewal terms at 6 months, not 12',why:'Halves your exposure if the relationship sours mid-year.',prio:'med'},
+ {match:/quarterly in advance/,ask:'Bill quarterly in arrears \u2014 or monthly',why:'Advance billing means you finance the vendor interest-free. Arrears aligns payment with value received.',prio:'high'},
+ {match:/Late interest/,ask:'Cap at 1.0% per month with a 10-day grace period',why:'1.5%/mo compounds to ~19.6% APR. A grace period covers normal AP processing lag.',prio:'med'},
+ {match:/Uptime SLA/,ask:'Raise the credit to 25% of monthly fees below 99.5%',why:'A flat 10% is a rounding error next to an outage\u2019s real cost. Tiered credits scale the pain.',prio:'med'},
+ {match:/Liability cap/,ask:'Make the cap mutual and carve out data-breach liability',why:'A one-sided cap while your data sits in their cloud is the worst combination.',prio:'high'},
+ {match:/Breach notification/,ask:'Keep the 72-hour clause \u2014 it\u2019s market standard',why:'No redline needed here; this one already favors you.',prio:'low'}
+];
+function renderRedlines(obs){
+  var host=document.getElementById('rlHost');host.innerHTML='';
+  lastRedlines=[];
+  obs.forEach(function(o){REDLINES.forEach(function(r){if(r.match.test(o.label))lastRedlines.push({o:o,r:r});});});
+  if(!lastRedlines.length){K.empty(host,'No redlines','Nothing negotiable detected in this contract.');return;}
+  lastRedlines.forEach(function(x){
+    host.appendChild(K.el('<div class="rl"><div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;flex-wrap:wrap">'+K.badge(x.r.prio==='high'?'NEGOTIATE':x.r.prio==='med'?'CONSIDER':'KEEP',x.r.prio==='high'?'bad':x.r.prio==='med'?'warn':'ok')+'<b>'+K.esc(x.r.ask)+'</b></div><div class="k-muted" style="font-size:13px">Re: '+K.esc(x.o.label)+' \u00b7 '+K.esc(x.r.why)+'</div></div>'));
+  });
+}
+
+/* ---------- extraction engine ---------- */
+function findClauses(text){
+  var clauses=[],re=/^(\d+)\.\s+([A-Z][A-Z \/\-]+?)\./gm,m,idx=[];
+  while((m=re.exec(text)))idx.push({n:m[1],title:m[2].trim(),start:m.index});
+  idx.push({start:text.length});
+  for(var i=0;i<idx.length-1;i++)clauses.push({n:idx[i].n,title:idx[i].title,text:text.slice(idx[i].start,idx[i+1].start).trim(),start:idx[i].start,end:idx[i+1].start});
+  return clauses;
+}
+var RULES=[
+ {type:'Renewal',who:'Both',sev:'bad',re:/automatically renew[\s\S]*?non-renewal at least\s+\w+\s*\(\s*(\d+)\s*\)\s*days?[\s\S]*?prior/i,label:'Auto-renewal',detail:function(m){return 'Renews automatically unless cancelled '+m[1]+' days before term end.';},date:function(){return {t:'Non-renewal deadline',body:'60 days before Oct 1, 2027 \u2192 Aug 2, 2027',kind:'bad'};}},
+ {type:'Term',who:'Both',sev:'info',re:/initial term[^.]*?twelve\s*\(\s*12\s*\)\s*months?/i,label:'Initial term: 12 months',detail:function(){return 'Effective Oct 1, 2026 \u2013 Sep 30, 2027.';},date:function(){return {t:'Initial term ends',body:'Sep 30, 2027',kind:''};}},
+ {type:'Payment',who:'Customer',sev:'warn',re:/\$[\d,]+\.\d{2}[^.]*?quarterly in advance/i,label:'Fees: quarterly in advance',detail:function(m){return m[0].slice(0,90)+'\u2026';},date:function(){return {t:'Q1 invoice due',body:'Net 30 from Oct 1, 2026 \u2192 Oct 31, 2026',kind:'warn'};}},
+ {type:'Payment',who:'Customer',sev:'info',re:/late payments accrue interest at ([\d.]+% per month)/i,label:'Late interest',detail:function(m){return 'Late payments accrue '+m[1]+'.';}},
+ {type:'SLA',who:'Provider',sev:'warn',re:/maintain (99\.9%) monthly uptime/i,label:'Uptime SLA 99.9%',detail:function(){return 'Below 99.9% \u2192 10% service credit; claim within 30 days of incident.';}},
+ {type:'SLA',who:'Provider',sev:'info',re:/response time of ([^.]+?) for Severity 1/i,label:'Support SLA',detail:function(m){return 'Sev-1 response: '+m[1].trim()+'.';}},
+ {type:'Security',who:'Provider',sev:'warn',re:/notify Customer of any security incident within ([^.]+?) of discovery/i,label:'Breach notification',detail:function(m){return 'Notify within '+m[1].trim()+'.';}},
+ {type:'Security',who:'Provider',sev:'info',re:/maintain (SOC 2 Type II) certification/i,label:'SOC 2 Type II required',detail:function(){return 'Certification must stay current for the agreement term.';}},
+ {type:'Termination',who:'Both',sev:'info',re:/terminate for convenience with ([^.]+?) written notice/i,label:'Convenience termination',detail:function(m){return 'Either party, '+m[1].trim()+' notice.';}},
+ {type:'Termination',who:'Both',sev:'info',re:/terminate for material breach with ([^.]+?) written notice/i,label:'Breach termination',detail:function(m){return m[1].trim()+' notice + cure period.';}},
+ {type:'Liability',who:'Provider',sev:'info',re:/liability shall not exceed ([^.]+?preceding the claim)/i,label:'Liability cap',detail:function(m){return 'Capped at '+m[1].trim()+'.';}},
+ {type:'Legal',who:'Both',sev:'info',re:/governed by the laws of ([^.]+?)\./i,label:'Governing law',detail:function(m){return m[1].trim()+'.';}}
+];
+function analyze(){
+  var text=ta.value;
+  var clauses=findClauses(text);
+  var obs=[];
+  clauses.forEach(function(c){
+    RULES.forEach(function(rl){
+      var m=rl.re.exec(c.text);
+      if(m)obs.push({type:rl.type,who:rl.who,sev:rl.sev,label:rl.label,detail:rl.detail(m),clause:c,date:rl.date?rl.date(m):null,hot:rl.sev==='bad'});
+    });
+  });
+  renderDoc(clauses,obs);renderAlert(obs);renderGraph(obs);renderTimeline(obs);renderTable(obs,clauses);renderRedlines(obs);
+}
+function renderDoc(clauses,obs){
+  var v=document.getElementById('docview');var html='';
+  clauses.forEach(function(c){
+    var t=K.esc(c.text);
+    var hot=obs.some(function(o){return o.clause===c&&o.hot;});
+    html+='<div id="cl-'+c.n+'" style="margin-bottom:14px;padding:8px;border-radius:6px;'+(hot?'background:#fdf0ec;border:1px solid #e5b3a8':'')+'"><b>\u00a7'+c.n+' '+K.esc(c.title)+'</b><br>'+t+'</div>';
+  });
+  v.innerHTML=html||'<span class="k-muted">No numbered clauses detected.</span>';
+}
+function renderAlert(obs){
+  var h=document.getElementById('alertHost');h.innerHTML='';
+  var renew=obs.filter(function(o){return o.sev==='bad';})[0];
+  if(renew){
+    h.appendChild(K.el('<div class="alert"><div class="ic">\u26a0\uFE0F</div><div><b>Hidden auto-renewal flagged.</b> \u00a7'+renew.clause.n+' renews for 12-month terms automatically \u2014 you must give <b>60 days\u2019 written notice</b> before Sep 30, 2027 or you\u2019re locked in another year. <a href="#" id="jumpRen" style="color:#b23b2e">Jump to clause \u00a7'+renew.clause.n+'</a></div></div>'));
+    document.getElementById('jumpRen').onclick=function(e){e.preventDefault();scrollToClause(renew.clause.n);};
+  }
+}
+function scrollToClause(n){
+  var elc=document.getElementById('cl-'+n);
+  if(elc){elc.scrollIntoView({behavior:'smooth',block:'center'});elc.style.outline='3px solid #b23b2e';setTimeout(function(){elc.style.outline='none';},1600);}
+}
+function renderGraph(obs){
+  var nodes=[{id:'root',label:'Agreement',color:'#274b8f'}],edges=[];
+  var byType={};
+  obs.forEach(function(o,i){
+    if(!byType[o.type]){byType[o.type]=true;nodes.push({id:'t:'+o.type,label:o.type,color:o.sev==='bad'?'#b23b2e':o.sev==='warn'?'#b97e1c':'#2e7d4f'});edges.push({a:'root',b:'t:'+o.type});}
+    var id='o'+i;nodes.push({id:id,label:o.label.slice(0,14),color:o.sev==='bad'?'#b23b2e':o.sev==='warn'?'#e8a13d':'#7fb08a'});
+    edges.push({a:'t:'+o.type,b:id,label:o.who});
+  });
+  K.graph(document.getElementById('gHost'),{nodes:nodes,edges:edges});
+  /* design-critic: shared kit sets border-color (no-op on SVG); promote it to a real stroke so nodes are visible */
+  document.querySelectorAll('#gHost svg rect').forEach(function(rc){if(rc.style.borderColor){rc.setAttribute('stroke',rc.style.borderColor);rc.setAttribute('stroke-width','2.5');}});
+}
+function renderTimeline(obs){
+  var evs=obs.filter(function(o){return o.date;}).map(function(o){return{t:o.date.t,title:o.label,body:o.date.body,kind:o.date.kind};});
+  var host=document.getElementById('tlHost');host.innerHTML='';
+  if(evs.length)K.timeline(host,evs);else K.empty(host,'No dated obligations','Paste a contract with terms and dates.');
+}
+function renderTable(obs){
+  var host=document.getElementById('tblHost');
+  K.table(host,
+    [{key:'type',label:'Type',fmt:function(v,o){return K.badge(v,o.sev==='bad'?'bad':o.sev==='warn'?'warn':'ok');}},
+     {key:'label',label:'Obligation'},
+     {key:'who',label:'Owes',fmt:function(v){return K.badge(v,'info');}},
+     {key:'detail',label:'Detail',fmt:function(v){return K.esc(v);}},
+     {key:'cl',label:'Clause'}],
+    obs.map(function(o){return{type:o.type,label:o.label,who:o.who,detail:o.detail,cl:'\u00a7'+o.clause.n+' '+o.clause.title,n:o.clause.n};}),
+    {search:true});
+  host.querySelectorAll('tbody tr').forEach(function(tr,i){tr.classList.add('clickable');tr.onclick=function(){scrollToClause(obs[i].clause.n);};});
+}
+go.onclick=analyze;
+analyze();
+wrap.appendChild(K.el('<footer>Obligation Graph \u00b7 demo extraction rules \u2014 production uses clause-level NLP with attorney review mode</footer>'));
+})();
+</script></body></html>

@@ -1,0 +1,203 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Process Dig — How we actually ship</title>
+<link rel="stylesheet" href="../../shared/kit.css">
+<script src="../../shared/kit.js"></script>
+<script src="../kit-fallback-w9.js"></script>
+<style>
+:root{--bg:#ece5d5;--panel:#faf6ea;--panel2:#e2d7bc;--ink:#2a2419;--muted:#7d7260;--line:#d3c7a8;--accent:#b4552d;--accent2:#2e5d4b;--good:#2e7d4f;--warn:#b97e1c;--bad:#b23b2e;}
+body{background:var(--bg);color:var(--ink);font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;margin:0;}
+.k-nav{background:#2a2419;color:#f2ecdc;}
+.k-nav-in{display:flex;justify-content:space-between;align-items:center;padding:14px 0;}
+.k-nav-t{margin:0;font-size:24px;font-weight:800;}
+.k-nav-t .dg{color:#e09a5f;}
+.k-nav-s{color:#b7ab90;margin:2px 0 0;}
+.k-wrap{max-width:1280px;margin:0 auto;padding:0 20px;}
+.hero{margin:20px 0 14px;display:flex;justify-content:space-between;align-items:end;flex-wrap:wrap;gap:10px;}
+.hero h2{margin:0;font-size:28px;letter-spacing:-.5px;}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;}
+.seg button{border:none;background:none;padding:10px 18px;font-size:14px;cursor:pointer;color:var(--ink);}
+.seg button.on{background:var(--accent);color:#fff;font-weight:600;}
+.layout{display:grid;grid-template-columns:380px 1fr;gap:16px;margin-bottom:16px;}
+@media(max-width:960px){.layout{grid-template-columns:1fr;}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;}
+.card h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);}
+.fchips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+.fchip{border:1px solid var(--line);background:#fff;border-radius:16px;padding:5px 12px;font-size:12px;cursor:pointer;}
+.fchip.on{background:#2a2419;color:#f2ecdc;border-color:#2a2419;}
+.ev{border-left:3px solid var(--line);padding:8px 0 8px 12px;margin-bottom:4px;font-size:13px;}
+.ev .et{font-size:11px;color:var(--muted);font-weight:600;}
+.ev b{font-size:13px;}
+.ev p{margin:2px 0 0;color:var(--muted);font-size:12px;}
+.ev.ticket{border-color:#2f4b7c;}.ev.deploy{border-color:#b4552d;}.ev.pr{border-color:#6a4b9e;}.ev.doc{border-color:#2e7d4f;}.ev.incident{border-color:#b23b2e;}
+#feedHost{max-height:640px;overflow:auto;}
+.step{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px;background:#fff;cursor:pointer;}
+.step:hover{border-color:var(--accent);}
+.step.open{border:2px solid var(--accent);}
+.step .sh{display:flex;gap:12px;align-items:center;}
+.step .num{width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;flex:none;}
+.step .sm{flex:1;}
+.step .sm b{font-size:15px;}
+.step .sm p{margin:2px 0 0;font-size:13px;color:var(--muted);}
+.conf{font-size:12px;font-weight:700;color:var(--accent2);}
+.evd{display:none;margin-top:10px;border-top:1px dashed var(--line);padding-top:10px;}
+.step.open .evd{display:block;}
+.evd .er{font-size:13px;padding:6px 0;border-bottom:1px dotted var(--line);}
+.evd .er:last-child{border:none;}
+.divg{background:#fbe3de;border:1px solid #e5b3a8;border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:13px;}
+.divg b{color:var(--bad);}
+.k-badge{font-size:11px;padding:2px 8px;border-radius:20px;background:#e8e2d2;color:#5a5344;}
+.k-badge.ok{background:#dcebd4;color:#2f6b3f;}.k-badge.warn{background:#f5e6c4;color:#8a5f14;}.k-badge.bad{background:#f0d2cb;color:#93342a;}.k-badge.info{background:#d7e6f2;color:#2a5f80;}
+.k-toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:#2a2419;color:#fff;padding:10px 18px;border-radius:8px;opacity:0;transition:all .3s;z-index:999;}
+.k-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+footer{color:var(--muted);font-size:12px;text-align:center;padding:22px;}
+</style></head>
+<body>
+<div id="app"></div>
+<script>
+(function(){
+var K=window.Kit,app=document.getElementById('app');
+K.nav({title:'Process Dig',sub:'Reconstructing how work really gets done',actions:[]});
+document.querySelector('.k-nav-title').innerHTML='<span class="dg">\u25c6</span> Process Dig';
+var wrap=K.el('<div class="k-wrap"></div>');app.appendChild(wrap);
+wrap.appendChild(K.el('<div class="hero"><div><h2>Excavation: \u201chow we actually ship\u201d</h2><p class="k-muted" style="margin:4px 0 0">36 artifacts from tickets, deploys, PRs and docs \u2014 Sep 14 to Oct 2, 2026. No wiki was consulted.</p></div><div class="seg" id="modeSeg"><button class="on" data-m="actual">Reconstructed (actual)</button><button data-m="doc">Documented (wiki)</button></div></div>'));
+
+/* ---------- seeded activity ---------- */
+var ACT=[
+ ['ticket','Sep 14','PROJ-881 moved to Ready','Priya picked it up 40 min later','ticket'],
+ ['pr','Sep 14','PR #412 opened: checkout retry','Branch cut same day as pickup','pr'],
+ ['pr','Sep 15','PR #412 approved by Marco','Single reviewer; merged 2h later','pr'],
+ ['deploy','Sep 15','CI passed in 11 min','Staging deploy auto-triggered','deploy'],
+ ['deploy','Sep 15','Staging smoke: 5 min','Deploy notes: "smoke ok, ship it"','deploy'],
+ ['ticket','Sep 16','PROJ-884 moved to Ready','Waiting 3 days before pickup','ticket'],
+ ['doc','Sep 16','Runbook updated: rollback steps','Sofia edited deploy runbook','doc'],
+ ['pr','Sep 18','PR #415 opened: coupon stacking','Two commits, no linked ticket','pr'],
+ ['pr','Sep 18','PR #415 approved by Priya','Merged same afternoon','pr'],
+ ['deploy','Sep 18','Prod deploy Thu 2:04 PM','Batch of 3 PRs, no incident','deploy'],
+ ['ticket','Sep 21','PROJ-889 moved to Ready','Picked up next morning','ticket'],
+ ['pr','Sep 21','PR #418 opened: address autocomplete','Draft for 2 days, then ready','pr'],
+ ['pr','Sep 23','PR #418 approved by Sofia','One comment thread, merged','pr'],
+ ['deploy','Sep 23','CI passed in 14 min','Flaky test retried once','deploy'],
+ ['deploy','Sep 23','Staging smoke: 4 min','No full QA pass recorded','deploy'],
+ ['incident','Sep 24','INC-77: checkout latency spike','Rolled back in 22 min via runbook','incident'],
+ ['doc','Sep 24','Postmortem: INC-77','"Ship smaller batches on Thursdays"','doc'],
+ ['ticket','Sep 25','PROJ-891 moved to Ready','Hotfix lane, picked up in 1h','ticket'],
+ ['pr','Sep 25','PR #421 opened: latency fix','Direct to main after 1 review','pr'],
+ ['deploy','Sep 25','Prod deploy Thu 2:11 PM','Hotfix included in Thursday batch','deploy'],
+ ['ticket','Sep 28','PROJ-893 moved to Ready','Picked up same day','ticket'],
+ ['pr','Sep 28','PR #424 opened: invoice PDF','-','pr'],
+ ['pr','Sep 29','PR #424 approved by Marco','Requested changes first, then approved','pr'],
+ ['deploy','Sep 29','CI passed in 9 min','-','deploy'],
+ ['deploy','Sep 30','Staging smoke: 6 min','QA engineer on PTO; smoke only','deploy'],
+ ['ticket','Sep 30','PROJ-895 moved to Ready','-','ticket'],
+ ['pr','Oct 1','PR #427 opened: refund webhook','-','pr'],
+ ['pr','Oct 1','PR #427 approved by Priya','Merged within the hour','pr'],
+ ['deploy','Oct 1','CI passed in 12 min','-','deploy'],
+ ['deploy','Oct 2','Prod deploy Thu 2:07 PM','Batch of 2 PRs','deploy'],
+ ['doc','Oct 2','Wiki: "Deploy Process v3"','Still says: 2 reviewers, full QA, deploy anytime','doc'],
+ ['ticket','Oct 2','PROJ-897 moved to Ready','Awaiting pickup','ticket']
+];
+var STEPS=[
+ {n:1,t:'Ticket pulled from \u201cReady\u2019',d:'Median pickup: same day. Nobody waits for sprint planning.',conf:96,ev:[0,5,10,20,25,31]},
+ {n:2,t:'Branch cut + PR within 24h',d:'PRs open the same day the ticket is picked up, 6 of 7 times.',conf:92,ev:[1,7,11,21,26]},
+ {n:3,t:'One teammate reviews',d:'Every merged PR had exactly one approver \u2014 never two, never zero.',conf:100,ev:[2,8,12,22,27]},
+ {n:4,t:'Merge to main, CI runs ~12 min',d:'CI is the real gatekeeper: 9\u201314 min, flaky tests just get retried.',conf:94,ev:[3,13,23,28]},
+ {n:5,t:'Staging gets a 5-minute smoke',d:'Deploy notes say "smoke ok" \u2014 no full QA pass in any of the 6 cycles.',conf:88,ev:[4,14,24]},
+ {n:6,t:'Prod ships Thursday ~2 PM',d:'All 3 prod deploys landed Thursday between 2:04 and 2:11 PM. It\u2019s a batch window, not "anytime".',conf:97,ev:[9,19,29]},
+ {n:7,t:'Rollback via runbook when it burns',d:'INC-77 rolled back in 22 min following the runbook Sofia updated Sep 16.',conf:90,ev:[15,16,6]}
+];
+var DOCSTEPS=[
+ {n:1,t:'Groom ticket in sprint planning',d:'Wiki v3: tickets are estimated and scheduled each Monday.'},
+ {n:2,t:'Open PR with linked ticket',d:'Wiki v3: every PR links its ticket.'},
+ {n:3,t:'Two reviewers approve',d:'Wiki v3: "No merge without two approvals."'},
+ {n:4,t:'CI must pass',d:'Wiki v3: green build required.'},
+ {n:5,t:'Full QA pass on staging',d:'Wiki v3: QA signs off a 40-point checklist.'},
+ {n:6,t:'Deploy anytime after approval',d:'Wiki v3: "We deploy continuously."'},
+ {n:7,t:'File incident report if needed',d:'Wiki v3: postmortem within a week.'}
+];
+var DIVS=[
+ ['Two reviewers required \u2192 one in practice','Wiki demands two approvals; all 7 merged PRs had exactly one. Either the rule is wrong or the team is \u2014 and the team ships fine.'],
+ ['Full QA pass \u2192 5-minute smoke','The 40-point QA checklist appears in zero deploy notes. Staging gets a quick smoke while QA was on PTO and nobody missed it.'],
+ ['Deploy anytime \u2192 Thursday 2 PM batch','"Continuous deployment" is actually a weekly Thursday-afternoon batch. The wiki describes an aspiration, not the operation.']
+];
+var WIKIFIX=[
+ {head:'Two reviewers required → one in practice',says:'"No merge without two approvals."',seen:'All 7 merged PRs had exactly one approver — the team ships fine.',fix:'"One teammate reviews each PR before merge; same-day review is the norm."'},
+ {head:'Full QA pass → 5-minute smoke',says:'"Run the full 40-point QA checklist before every deploy."',seen:'The checklist appears in zero deploy notes; staging gets a quick smoke test.',fix:'"Staging gets a 5-minute smoke test per deploy; the full QA checklist is reserved for risky changes."'},
+ {head:'Deploy anytime → Thursday 2 PM batch',says:'"Continuous deployment — ship whenever."',seen:'Deploys actually ship in a weekly Thursday-afternoon batch.',fix:'"Production deploys go out in the Thursday ~2 PM batch window."'}
+];
+
+var layout=K.el('<div class="layout"></div>');wrap.appendChild(layout);
+var feed=K.el('<div class="card"><h3>Artifact feed</h3><div class="fchips" id="fchips"></div><div id="feedHost"></div></div>');layout.appendChild(feed);
+var right=K.el('<div class="card"><h3 id="rightTitle">Reconstructed process \u2014 7 steps</h3><div id="stepsHost"></div></div>');layout.appendChild(right);
+
+var TYPES=['all','ticket','pr','deploy','doc','incident'];
+var fstate={type:'all'};
+var chipHost=document.getElementById('fchips');
+TYPES.forEach(function(t){
+  var c=K.el('<button class="fchip'+(t==='all'?' on':'')+'">'+t+'</button>');
+  c.onclick=function(){fstate.type=t;chipHost.querySelectorAll('.fchip').forEach(function(x){x.classList.remove('on');});c.classList.add('on');renderFeed();};
+  chipHost.appendChild(c);
+});
+function renderFeed(){
+  var h=document.getElementById('feedHost');h.innerHTML='';
+  ACT.forEach(function(a,i){
+    if(fstate.type!=='all'&&a[4]!==fstate.type)return;
+    h.appendChild(K.el('<div class="ev '+a[4]+'"><div class="et">'+a[1].toUpperCase()+' \u00b7 '+a[4].toUpperCase()+'</div><b>'+K.esc(a[2])+'</b><p>'+K.esc(a[3])+'</p></div>'));
+  });
+}
+function renderSteps(mode){
+  var host=document.getElementById('stepsHost');host.innerHTML='';
+  document.getElementById('rightTitle').textContent=mode==='actual'?'Reconstructed process \u2014 7 steps':'Documented process (wiki v3) \u2014 7 steps';
+  if(mode==='doc'){
+    host.appendChild(K.el('<div class="divg" style="background:#fdf6e8;border-color:#e0c98f"><b style="color:#8a5f14">3 divergences found.</b> The wiki describes how the team <i>should</i> ship. The feed shows how it <i>does</i>. Expand each below.</div>'));
+    DIVS.forEach(function(dv){host.appendChild(K.el('<div class="divg"><b>'+K.esc(dv[0])+'</b><br>'+K.esc(dv[1])+'</div>'));});
+    var prb=K.el('<button class="btn" style="margin:4px 0 8px">Draft wiki fix PR</button>');
+    prb.onclick=function(){
+      var lines=['# Wiki update PR — "Deploy Process" v3 → v4','',
+        '_Drafted by Process Dig from 36 observed artifacts (Sep 14 – Oct 2, 2026)._','',
+        'The wiki describes the ideal. The artifacts show the practice. This PR reconciles them:','','## Changes',''];
+      WIKIFIX.forEach(function(w,i){
+        lines.push('### '+(i+1)+'. '+w.head,'','**Wiki says:** '+w.says,'','**Observed:** '+w.seen,'','**Proposed text:** '+w.fix,'');
+      });
+      lines.push('---','_Generated by Process Dig — divergences are evidence; proposed text is a starting draft for a human editor._');
+      var md=lines.join('\n');
+      var m=K.modal({title:'Wiki fix PR — copy into the wiki editor',body:'<textarea class="input" id="prmd" rows="14" readonly style="font-size:12px;line-height:1.5"></textarea><div class="k-small k-muted" style="margin-top:8px">Paste this into a wiki page or PR description, then edit the proposed text like a human would.</div>'});
+      m.querySelector('#prmd').value=md;
+      m.footer('<button class="btn" data-close>Close</button><button class="btn primary" id="prcopy">Copy markdown</button>');
+      m.querySelector('#prcopy').onclick=function(){K.copy(md);};
+    };
+    host.appendChild(prb);
+  }
+  var steps=mode==='actual'?STEPS:DOCSTEPS;
+  steps.forEach(function(s){
+    var el=K.el('<div class="step"><div class="sh"><div class="num">'+s.n+'</div><div class="sm"><b>'+K.esc(s.t)+'</b><p>'+K.esc(s.d)+'</p></div>'+(s.conf?'<span class="conf">'+s.conf+'%</span>':'')+'</div><div class="evd"></div></div>');
+    if(mode==='actual'){
+      var box=el.querySelector('.evd');
+      box.appendChild(K.el('<p class="k-muted" style="font-size:12px;margin:0 0 6px">Supporting artifacts \u2014 click a chip to filter the feed</p>'));
+      s.ev.forEach(function(ai){
+        var a=ACT[ai];
+        var chip=K.el('<button class="fchip">'+a[1]+' \u00b7 '+K.esc(a[2].slice(0,34))+'</button>');
+        chip.onclick=function(e){e.stopPropagation();fstate.type=a[4];chipHost.querySelectorAll('.fchip').forEach(function(x){x.classList.toggle('on',x.textContent===a[4]);});renderFeed();K.toast('Feed filtered: '+a[4]);};
+        var row=K.el('<div class="er"></div>');row.appendChild(chip);box.appendChild(row);
+      });
+    }
+    el.querySelector('.sh').onclick=function(){el.classList.toggle('open');};
+    host.appendChild(el);
+  });
+}
+document.querySelectorAll('#modeSeg button').forEach(function(b){
+  b.onclick=function(){
+    document.querySelectorAll('#modeSeg button').forEach(function(x){x.classList.remove('on');});
+    b.classList.add('on');renderSteps(b.getAttribute('data-m'));
+    if(b.getAttribute('data-m')==='doc')K.toast('3 divergences vs actual','warn');
+  };
+});
+var coreBtn=K.el('<button class="k-btn k-primary" id="core-action" style="margin-bottom:16px">Show me the biggest divergence</button>');
+coreBtn.onclick=function(){
+  document.querySelectorAll('#modeSeg button')[1].click();
+  setTimeout(function(){document.getElementById('stepsHost').scrollIntoView({behavior:'smooth',block:'start'});},60);
+};
+wrap.insertBefore(coreBtn,layout);
+renderFeed();renderSteps('actual');
+wrap.appendChild(K.el('<footer>Process Dig \u00b7 demo excavation of a fictional team \u2014 production connects Jira, GitHub, and your docs</footer>'));
+})();
+</script></body></html>

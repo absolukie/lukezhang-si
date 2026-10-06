@@ -1,0 +1,186 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MailBox — Your paper mail, digitized and triaged</title>
+<link rel="stylesheet" href="../../shared/kit.css">
+<script src="../../shared/kit.js"></script>
+<script src="../kit-fallback-w9.js"></script>
+<style>
+:root{--bg:#efe9db;--panel:#fffdf6;--panel2:#e4d9bd;--ink:#2b2620;--muted:#7d7462;--line:#d9cdae;--accent:#8a5a1e;--accent2:#2e5d4b;--good:#2e7d4f;--warn:#b97e1c;--bad:#b23b2e;}
+body{background:var(--bg);color:var(--ink);font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;margin:0;}
+.k-nav{background:#3a3226;color:#f5efe0;}
+.k-nav-in{display:flex;justify-content:space-between;align-items:center;padding:14px 0;}
+.k-nav-t{margin:0;font-size:24px;font-weight:700;}
+.k-nav-s{color:#c9bfa8;margin:2px 0 0;}
+.k-wrap{max-width:1180px;margin:0 auto;padding:0 20px;}
+.hero{margin:20px 0 14px;}
+.hero h2{margin:0 0 4px;font-size:28px;letter-spacing:-.5px;}
+.layout{display:grid;grid-template-columns:380px 1fr;gap:16px;margin-bottom:16px;}
+@media(max-width:900px){.layout{grid-template-columns:1fr;}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;}
+.card h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);}
+.toolbar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;}
+.k-select{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;background:#fff;color:var(--ink);}
+.k-btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:9px 14px;font-size:14px;cursor:pointer;color:var(--ink);}
+.k-primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+.letter{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:#fff;cursor:pointer;display:flex;gap:12px;}
+.letter:hover{border-color:var(--accent);}
+.letter.sel{border:2px solid var(--accent);}
+.letter.done{opacity:.55;}
+.letter.done .l-sub{text-decoration:line-through;}
+.urg{width:14px;border-radius:6px;flex:none;}
+.l-main{flex:1;min-width:0;}
+.l-sub{font-weight:700;font-size:14px;margin:0 0 2px;}
+.l-from{font-size:12px;color:var(--muted);margin:0;}
+.l-tags{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;}
+.k-badge{font-size:11px;padding:2px 8px;border-radius:20px;background:#e8e2d2;color:#5a5344;}
+.k-badge.ok{background:#dcebd4;color:#2f6b3f;}.k-badge.warn{background:#f5e6c4;color:#8a5f14;}.k-badge.bad{background:#f0d2cb;color:#93342a;}.k-badge.info{background:#d7e6f2;color:#2a5f80;}
+.scan{background:#fff;border:1px solid var(--line);border-radius:8px;padding:26px 30px;font-family:Georgia,serif;font-size:14px;line-height:1.8;box-shadow:inset 0 0 40px rgba(138,90,30,.05);min-height:300px;}
+.scan h4{font-family:"Avenir Next",sans-serif;margin:0 0 4px;font-size:15px;}
+.scan .addr{font-size:12px;color:var(--muted);margin-bottom:14px;}
+mark.dl{background:#f6d9d2;border-bottom:2px solid var(--bad);padding:0 2px;border-radius:3px;}
+mark.amt{background:#dcebd4;border-bottom:2px solid var(--good);padding:0 2px;border-radius:3px;}
+mark.tsk{background:#fdf0c8;border-bottom:2px solid var(--warn);padding:0 2px;border-radius:3px;}
+.ext{margin-top:14px;}
+.kv{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px dashed var(--line);}
+.task{display:flex;gap:8px;align-items:center;font-size:14px;padding:6px 0;}
+.task input{accent-color:var(--accent);width:16px;height:16px;}
+.task.done span{text-decoration:line-through;color:var(--muted);}
+.k-toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:#2b2620;color:#fff;padding:10px 18px;border-radius:8px;opacity:0;transition:all .3s;z-index:999;}
+.k-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.k-modal-w{position:fixed;inset:0;background:rgba(43,38,32,.45);display:flex;align-items:center;justify-content:center;z-index:1000;}
+.k-modal{background:#fffdf6;border-radius:12px;padding:20px;max-width:440px;width:90%;}
+.k-modal-a{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin:10px 0;flex-wrap:wrap;}
+footer{color:var(--muted);font-size:12px;text-align:center;padding:22px;}
+</style></head>
+<body>
+<div id="app"></div>
+<script>
+(function(){
+var K=window.Kit,app=document.getElementById('app');
+K.nav({title:'\u2709\uFE0F MailBox',sub:'Paper mail, digitized and triaged',actions:[]});
+var wrap=K.el('<div class="k-wrap"></div>');app.appendChild(wrap);
+wrap.appendChild(K.el('<div class="hero"><h2>6 letters scanned this week</h2><p class="k-muted" style="margin:0">Sorted by urgency. Deadlines and dollar amounts pulled straight from the page \u2014 nothing to retype.</p></div>'));
+
+var TODAY=new Date(2026,9,3);
+var MONTHS={january:0,february:1,march:2,april:3,may:4,june:5,july:6,august:7,september:8,october:9,november:10,december:11};
+
+/* real extraction: parse dates + amounts from letter bodies */
+function extractDates(body){
+  var out=[],re=/\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:,?\s*(\d{4}))?/gi,m;
+  while((m=re.exec(body))){var yr=m[3]?+m[3]:2026;out.push({text:m[0],date:new Date(yr,MONTHS[m[1].toLowerCase()],+m[2])});}
+  return out;
+}
+function extractAmounts(body){
+  var out=[],re=/\$[\d,]+(?:\.\d{2})?/g,m;
+  while((m=re.exec(body)))out.push({text:m[0],start:m.index,end:m.index+m[0].length});
+  return out;
+}
+function highlight(body){
+  var h=K.esc(body);
+  extractAmounts(body).slice().reverse().forEach(function(a){
+    h=h.slice(0,a.start)+'<mark class="amt">'+h.slice(a.start,a.end)+'</mark>'+h.slice(a.end);
+  });
+  // note: esc offsets match raw offsets for these ASCII bodies
+  extractDates(body).forEach(function(dd){
+    var i=h.indexOf(K.esc(dd.text));
+    if(i>=0)h=h.slice(0,i)+'<mark class="dl">'+h.slice(i,i+K.esc(dd.text).length)+'</mark>'+h.slice(i+K.esc(dd.text).length);
+  });
+  return h;
+}
+
+var LETTERS=[
+ {from:'Internal Revenue Service',sub:'CP14 \u2014 Balance due notice',body:'Dear Taxpayer,\n\nOur records show a balance due of $1,284.00 for tax year 2025. Payment is due by October 31, 2026 to avoid additional penalties and interest.\n\nIf you cannot pay in full, you may apply for a payment plan at irs.gov by October 31, 2026. Failure to respond by November 30, 2026 may result in enforced collection action.\n\nSincerely,\nIRS Service Center',tasks:['Pay $1,284.00 or set up a payment plan','Confirm payment posted (keep notice for records)']},
+ {from:'Superior Court of California',sub:'Jury summons \u2014 Group 42',body:'You are summoned for jury service beginning October 19, 2026 at 8:00 AM, 725 Court Street, Martinez, CA.\n\nCheck your group status after 5:00 PM on October 18, 2026. Failure to appear may result in a fine of up to $1,500.00.\n\nPostponement requests must be submitted by October 12, 2026.',tasks:['Confirm group status Oct 18 after 5 PM','Request postponement if needed (by Oct 12)']},
+ {from:'Antioch Hills HOA',sub:'Q4 dues + late fee warning',body:'Dear Homeowner,\n\nYour Q4 HOA dues of $385.00 were due October 1, 2026. A late fee of $25.00 applies after October 15, 2026.\n\nPlease remit $385.00 to avoid the fee. Contact the board by October 20, 2026 with any dispute.',tasks:['Pay $385.00 HOA dues']},
+ {from:'State Farm',sub:'Auto policy renewal',body:'Your auto policy renews November 15, 2026. Your new 6-month premium is $742.00.\n\nNo action is required if your payment method is current \u2014 coverage continues automatically. Review your declarations page enclosed.',tasks:['Review declarations page','Update garaging address if you moved']},
+ {from:'PG&E',sub:'Monthly statement',body:'Your September statement is ready. Amount due: $214.63 by October 25, 2026.\n\nAverage daily usage is up 12% vs last year. Consider our time-of-use rate plan.',tasks:['Pay $214.63']},
+ {from:'Friends of the Library',sub:'Fall book sale invitation',body:'Join us for the annual fall book sale, November 7, 2026, 10 AM \u2013 4 PM at the Maplewood Library.\n\nDonations of gently used books are welcome through November 1, 2026. We hope to see you there!',tasks:['Drop off book donations (optional)']}
+];
+function urgency(L){
+  var dates=extractDates(L.body);
+  var soonest=dates.length?Math.min.apply(null,dates.map(function(x){return x.date;})):null;
+  var daysLeft=soonest?Math.round((soonest-TODAY)/86400000):9999;
+  var gov=/IRS|Court|DMV|County|State/i.test(L.from);
+  var money=/\$/.test(L.body);
+  var s=0;
+  if(daysLeft<=10)s+=45;else if(daysLeft<=30)s+=30;else if(daysLeft<=60)s+=15;
+  if(gov)s+=25; if(money)s+=10;
+  if(/failure|penalt|fine|collection/i.test(L.body))s+=10;
+  return Math.min(99,s);
+}
+LETTERS.forEach(function(L,i){L.id='L'+i;L.dates=extractDates(L.body);L.amounts=extractAmounts(L.body);L.urg=urgency(L);L.done=false;});
+LETTERS.sort(function(a,b){return b.urg-a.urg;});
+
+var state={sel:LETTERS[0].id,sort:'urgency',doneTasks:{}};
+var store=K.store('mailbox');var persisted=store.get('done',{});
+Object.keys(persisted).forEach(function(k){state.doneTasks[k]=persisted[k];});
+LETTERS.forEach(function(L){if(persisted['letter:'+L.id])L.done=true;});
+
+var layout=K.el('<div class="layout"></div>');wrap.appendChild(layout);
+var leftC=K.el('<div class="card"><h3>Inbox \u2014 triaged</h3></div>');layout.appendChild(leftC);
+var tb=K.el('<div class="toolbar"></div>');leftC.appendChild(tb);
+var sortSel=K.el('<select class="k-select"><option value="urgency">Sort: urgency</option><option value="deadline">Sort: deadline</option><option value="sender">Sort: sender</option></select>');
+sortSel.onchange=function(){state.sort=sortSel.value;renderList();};tb.appendChild(sortSel);
+var listHost=K.el('<div id="lhost"></div>');leftC.appendChild(listHost);
+
+var rightC=K.el('<div class="card"><h3>Scanned letter</h3><div id="dhost"></div></div>');layout.appendChild(rightC);
+
+function urgColor(u){return u>=70?'#b23b2e':u>=40?'#b97e1c':'#2e7d4f';}
+function urgLabel(u){return u>=70?'urgent':u>=40?'soon':'routine';}
+function sorted(){
+  var a=LETTERS.slice();
+  if(state.sort==='urgency')a.sort(function(x,y){return y.urg-x.urg;});
+  if(state.sort==='deadline')a.sort(function(x,y){var dx=x.dates.length?x.dates[0].date:new Date(2099,0,1),dy=y.dates.length?y.dates[0].date:new Date(2099,0,1);return dx-dy;});
+  if(state.sort==='sender')a.sort(function(x,y){return x.from<y.from?-1:1;});
+  return a;
+}
+function renderList(){
+  listHost.innerHTML='';
+  var open=sorted().filter(function(L){return !L.done;});
+  var done=sorted().filter(function(L){return L.done;});
+  if(!open.length)K.empty(listHost,'Inbox zero','Every letter is handled. Nice.',null,null);
+  open.concat(done).forEach(function(L){
+    var dl=L.dates.length?L.dates[0]:null;
+    var row=K.el('<div class="letter'+(L.id===state.sel?' sel':'')+(L.done?' done':'')+'"><div class="urg" style="background:'+urgColor(L.urg)+'"></div><div class="l-main"><p class="l-sub">'+K.esc(L.sub)+'</p><p class="l-from">'+K.esc(L.from)+'</p><div class="l-tags">'+K.badge(urgLabel(L)+' \u00b7 '+L.urg,'ok')+(dl?K.badge('due '+K.when(dl.date),Math.round((dl.date-TODAY)/86400000)<=14?'bad':'warn'):'')+(L.amounts.length?K.badge(L.amounts[0].text,'info'):'')+'</div></div></div>');
+    row.onclick=function(){state.sel=L.id;renderList();renderDetail();};
+    listHost.appendChild(row);
+  });
+}
+function renderDetail(){
+  var L=LETTERS.filter(function(x){return x.id===state.sel;})[0];if(!L)return;
+  var h=document.getElementById('dhost');h.innerHTML='';
+  var head=K.el('<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div><b style="font-size:17px">'+K.esc(L.sub)+'</b><p class="k-muted" style="margin:2px 0 0;font-size:13px">'+K.esc(L.from)+'</p></div>'+K.badge(urgLabel(L.urg)+' \u00b7 '+L.urg,L.urg>=70?'bad':L.urg>=40?'warn':'ok')+'</div>');
+  h.appendChild(head);
+  var scan=K.el('<div class="scan"><h4>'+K.esc(L.from)+'</h4><div class="addr">Scanned Oct 2, 2026 \u00b7 300 DPI \u00b7 OCR confidence 98%</div><div>'+highlight(L.body).replace(/\n/g,'<br>')+'</div></div>');
+  h.appendChild(scan);
+  h.appendChild(K.el('<div class="legend"><span><mark class="dl">deadline</mark></span><span><mark class="amt">amount</mark></span><span><mark class="tsk">action items below</mark></span></div>'));
+  var ext=K.el('<div class="ext"><h3 style="font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted)">Extracted</h3></div>');
+  ext.innerHTML+='<div class="kv"><span>Deadlines found</span><b>'+(L.dates.length?L.dates.map(function(x){return K.esc(x.text);}).join(', '):'none')+'</b></div><div class="kv"><span>Amounts</span><b>'+(L.amounts.length?L.amounts.map(function(x){return K.esc(x.text);}).join(', '):'none')+'</b></div><div class="kv"><span>Urgency score</span><b>'+L.urg+'/99</b></div>';
+  h.appendChild(ext);
+  var th=K.el('<h3 style="font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);margin:12px 0 4px">Action items</h3>');h.appendChild(th);
+  L.tasks.forEach(function(t,i){
+    var key=L.id+':'+i,dn=!!state.doneTasks[key];
+    var row=K.el('<label class="task'+(dn?' done':'')+'"><input type="checkbox"'+(dn?' checked':'')+'><span>'+K.esc(t)+'</span></label>');
+    row.querySelector('input').onchange=function(e){state.doneTasks[key]=e.target.checked;store.set('done',state.doneTasks);row.classList.toggle('done',e.target.checked);K.toast(e.target.checked?'Task done':'Task reopened','ok');};
+    h.appendChild(row);
+  });
+  var btns=K.el('<div style="display:flex;gap:8px;margin-top:14px"></div>');h.appendChild(btns);
+  var doneBtn=K.el('<button class="k-btn k-primary" id="core-action">'+(L.done?'Reopen letter':'Mark letter handled')+'</button>');
+  doneBtn.onclick=function(){L.done=!L.done;store.set('done',Object.assign(store.get('done',{}),{['letter:'+L.id]:L.done}));renderList();renderDetail();K.toast(L.done?'Filed away':'Back in inbox','ok');};
+  var calBtn=K.el('<button class="k-btn">Add deadline to calendar</button>');
+  calBtn.onclick=function(){
+    if(!L.dates.length){K.toast('No deadline in this letter','warn');return;}
+    var d=L.dates[0].date;
+    var p2=function(n){return String(n).padStart(2,'0');};
+    var ics=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//MailBox//EN','BEGIN:VEVENT','UID:'+L.id+'@mailbox.local','DTSTAMP:20261004T070000Z','DTSTART;VALUE=DATE:'+d.getFullYear()+p2(d.getMonth()+1)+p2(d.getDate()),'SUMMARY:Mail deadline: '+L.sub,'DESCRIPTION:'+(L.tasks[0]||L.from)+' ('+L.dates[0].text+')','END:VEVENT','END:VCALENDAR'].join('\n');
+    var blob=new Blob([ics],{type:'text/calendar'});
+    var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='mailbox-'+L.id+'.ics';document.body.appendChild(a);a.click();
+    setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},800);
+    K.toast('Calendar file downloaded - open it to add the deadline','ok');
+  };
+  btns.appendChild(doneBtn);btns.appendChild(calBtn);
+}
+renderList();renderDetail();
+wrap.appendChild(K.el('<footer>MailBox \u00b7 demo scans with real date/amount extraction \u2014 point your phone camera in production</footer>'));
+})();
+</script></body></html>

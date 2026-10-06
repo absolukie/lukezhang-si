@@ -28,7 +28,6 @@ const SITES = ["leetcode-games", "ergosphere", "illusion-bowling", "shotgrep", "
   "hairball",
   "peggie",
   "get-clocked",
-  "blog-decision-doc",
   "black-hole-post-doc",
   "china-korea-hq",
   "draw-guess",
@@ -102,7 +101,10 @@ const SITES = ["leetcode-games", "ergosphere", "illusion-bowling", "shotgrep", "
   "tesla-commute-tco",
   "what-should-we-talk-about",
   "world-todo",
-  "fifty-tracks"];
+  "fifty-tracks",
+  "spf-blog-post",
+  "birds-of-a-feather",
+  "unsolved-lab"];
 const PROJECTS_HOST = "projects.lukezhang.si";
 const SITE_HOST_RE = /^([a-z0-9-]+)\.lukezhang\.si$/;
 
@@ -257,6 +259,37 @@ async function handleTakeTemp(request, env) {
   return err("not found", 404);
 }
 
+// ---- Trade Compass quotes (unsolved-lab) ----
+// GET /unsolved-lab/api/quotes?symbol=X → Yahoo Finance v8 chart API.
+// Same-origin proxy so the static site never needs a key or CORS.
+// (The Trade Compass client itself hasn't landed yet; this route waits for it.)
+var QUOTE_SYMBOL_RE = /^[A-Za-z0-9.\-=^]{1,24}$/;
+var YAHOO_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+
+async function handleUnsolvedQuotes(request, env) {
+  if (request.method !== "GET") return err("method not allowed", 405);
+  var url = new URL(request.url);
+  var symbol = (url.searchParams.get("symbol") || "").trim().toUpperCase();
+  if (!QUOTE_SYMBOL_RE.test(symbol)) return err("bad symbol", 400);
+  var target = "https://query1.finance.yahoo.com/v8/finance/chart/" +
+    encodeURIComponent(symbol) + "?interval=1d&range=1mo";
+  var upstream;
+  try {
+    upstream = await fetch(target, { headers: { "User-Agent": YAHOO_UA } });
+  } catch (e) {
+    return err("quote upstream unreachable", 502);
+  }
+  if (!upstream.ok) return err("quote upstream error", 502);
+  var body = await upstream.text();
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "public, max-age=60, s-maxage=300"
+    }
+  });
+}
+
 // ---- Decision-doc submissions ----
 // POST /api/decision/submit  {slug, picks, notes}  → stores in KV (rate-limited)
 // GET  /api/decision/responses?slug=X&key=READ_KEY  → newest-first (private read key)
@@ -401,6 +434,11 @@ export default {
       (host === PROJECTS_HOST || host === "takes.lukezhang.si")
     ) {
       return handleTakeTemp(request, env);
+    }
+
+    // Trade Compass quotes: /unsolved-lab/api/quotes?symbol=X → Yahoo Finance chart API.
+    if (url.pathname === "/unsolved-lab/api/quotes" && host === PROJECTS_HOST) {
+      return handleUnsolvedQuotes(request, env);
     }
 
     // Game backend APIs (same-origin for the ported games).

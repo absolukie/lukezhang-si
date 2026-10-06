@@ -1,0 +1,186 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sensory Map — Find your calmest route</title>
+<link rel="stylesheet" href="../../shared/kit.css">
+<script src="../../shared/kit.js"></script>
+<script src="../kit-fallback-w9.js"></script>
+<style>
+:root{--bg:#f7f5ee;--panel:#fffef9;--panel2:#ece7d6;--ink:#2c332b;--muted:#7a8272;--line:#ddd6c0;--accent:#3f6b4f;--accent2:#c98a3d;--good:#3f7d4e;--warn:#b97e1c;--bad:#a84335;}
+body{background:var(--bg);color:var(--ink);font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;margin:0;}
+.k-nav{background:var(--panel);border-bottom:1px solid var(--line);}
+.k-nav-in{display:flex;justify-content:space-between;align-items:center;padding:14px 0;}
+.k-nav-t{margin:0;font-size:24px;font-weight:800;letter-spacing:-.5px;}
+.k-nav-t .leaf{color:var(--accent);}
+.k-wrap{max-width:1180px;margin:0 auto;padding:0 20px;}
+.hero{margin:20px 0 14px;}
+.hero h2{margin:0 0 4px;font-size:28px;letter-spacing:-.5px;}
+.layout{display:grid;grid-template-columns:300px 1fr;gap:16px;margin-bottom:16px;}
+@media(max-width:900px){.layout{grid-template-columns:1fr;}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;}
+.card h3{margin:0 0 12px;font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);}
+.f-row{margin-bottom:14px;}
+.f-row label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;}
+.f-row small{color:var(--muted);font-weight:400;}
+input[type=range]{width:100%;accent-color:var(--accent);}
+.k-select,.k-input{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:14px;background:#fff;color:var(--ink);box-sizing:border-box;}
+.chk{display:flex;gap:8px;align-items:center;font-size:14px;margin:8px 0;cursor:pointer;}
+.chk input{accent-color:var(--accent);width:16px;height:16px;}
+.k-btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:9px 14px;font-size:14px;cursor:pointer;color:var(--ink);}
+.k-primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+#mapSvg{width:100%;height:auto;background:#eef0e4;border-radius:12px;border:1px solid var(--line);display:block;}
+.pin{cursor:pointer;transition:transform .15s;}
+.pin:hover{transform:scale(1.25);}
+.pin.sel circle.ring{stroke:#2c332b;stroke-width:2.5;}
+.venue{display:flex;gap:12px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#fff;cursor:pointer;}
+.venue:hover{border-color:var(--accent);}
+.venue.sel{border:2px solid var(--accent);}
+.score{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:#fff;flex:none;}
+.vmeta{flex:1;min-width:0;}
+.vmeta b{font-size:14px;}
+.vmeta p{margin:2px 0 0;font-size:12px;color:var(--muted);}
+.meter{display:flex;gap:3px;margin-top:6px;}
+.meter i{width:26px;height:6px;border-radius:3px;background:#e4dfcd;}
+.detail{margin-top:14px;}
+.kv{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px dashed var(--line);}
+.kv:last-child{border:none;}
+.quiet{background:#e9f2e4;border:1px solid #bcd6ac;border-radius:8px;padding:8px 10px;font-size:13px;margin-top:10px;}
+.k-badge{font-size:11px;padding:2px 8px;border-radius:20px;background:#e8e2d2;color:#5a5344;}
+.k-badge.ok{background:#dcebd4;color:#2f6b3f;}.k-badge.warn{background:#f5e6c4;color:#8a5f14;}.k-badge.bad{background:#f0d2cb;color:#93342a;}
+.k-toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:#2c332b;color:#fff;padding:10px 18px;border-radius:8px;opacity:0;transition:all .3s;z-index:999;}
+.k-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+footer{color:var(--muted);font-size:12px;text-align:center;padding:22px;}
+</style></head>
+<body>
+<div id="app"></div>
+<script>
+(function(){
+var K=window.Kit,app=document.getElementById('app');
+K.nav({title:'Sensory Map',sub:'Find your calmest route through town',actions:[]});
+document.querySelector('.k-nav-title').innerHTML='<span class="leaf">\u25cf</span> Sensory Map';
+var wrap=K.el('<div class="k-wrap"></div>');app.appendChild(wrap);
+wrap.appendChild(K.el('<div class="hero"><h2>Saturday morning, low-sensory groceries</h2><p class="k-muted" style="margin:0">Every venue scored on noise, crowding, lighting, seating and bathrooms \u2014 at the hour you\u2019ll actually go.</p></div>'));
+
+/* ---------- seeded venue data ---------- */
+var VENUES=[
+ {id:'greenway',name:'Greenway Market',type:'Grocery',x:180,y:120,noise:2,light:2,seat:14,bath:true,fluor:false,quiet:'Sat 7\u20139 AM \u00b7 Wed 8\u20139 PM',crowd:{'Sat 8 AM':1,'Sat 11 AM':3,'Sat 2 PM':4,'Sat 6 PM':3,'Weekday 10 AM':2},note:'Co-op with cork floors and no overhead music before 9 AM.'},
+ {id:'megamart',name:'MegaMart Superstore',type:'Grocery',x:470,y:90,noise:5,light:5,seat:4,bath:true,fluor:true,quiet:'None listed',crowd:{'Sat 8 AM':3,'Sat 11 AM':5,'Sat 2 PM':5,'Sat 6 PM':4,'Weekday 10 AM':3},note:'Fluorescent aisles, frequent PA announcements.'},
+ {id:'corner',name:'Corner Produce',type:'Grocery',x:120,y:300,noise:2,light:3,seat:2,bath:false,fluor:false,quiet:'Daily 8\u201310 AM',crowd:{'Sat 8 AM':2,'Sat 11 AM':3,'Sat 2 PM':2,'Sat 6 PM':2,'Weekday 10 AM':1},note:'Tiny shop, one room, door chime only. No public bathroom.'},
+ {id:'harbor',name:'Harbor Foods',type:'Grocery',x:360,y:260,noise:3,light:3,seat:8,bath:true,fluor:false,quiet:'Sat 8\u20139:30 AM',crowd:{'Sat 8 AM':2,'Sat 11 AM':4,'Sat 2 PM':4,'Sat 6 PM':3,'Weekday 10 AM':2},note:'Warm LED retrofit in 2025; benches every third aisle.'},
+ {id:'library',name:'Maplewood Library',type:'Library',x:250,y:200,noise:1,light:2,seat:40,bath:true,fluor:false,quiet:'Always \u2014 quiet floor upstairs',crowd:{'Sat 8 AM':1,'Sat 11 AM':2,'Sat 2 PM':3,'Sat 6 PM':1,'Weekday 10 AM':1},note:'Designated silent floor; stim toys at the desk.'},
+ {id:'pharma',name:'WellRx Pharmacy',type:'Pharmacy',x:540,y:200,noise:3,light:4,seat:6,bath:false,fluor:true,quiet:'Weekdays 9\u201310 AM',crowd:{'Sat 8 AM':2,'Sat 11 AM':3,'Sat 2 PM':3,'Sat 6 PM':2,'Weekday 10 AM':2},note:'Drive-through avoids the fluorescent waiting area.'},
+ {id:'cafe',name:'Fern Caf\u00e9',type:'Caf\u00e9',x:300,y:90,noise:2,light:1,seat:22,bath:true,fluor:false,quiet:'Daily before 9 AM',crowd:{'Sat 8 AM':1,'Sat 11 AM':3,'Sat 2 PM':3,'Sat 6 PM':2,'Weekday 10 AM':2},note:'Window light only; patio is the quietest seat.'},
+ {id:'depot',name:'Home Depot \u2014 Elm St',type:'Hardware',x:600,y:320,noise:4,light:4,seat:2,bath:true,fluor:true,quiet:'None listed',crowd:{'Sat 8 AM':2,'Sat 11 AM':5,'Sat 2 PM':5,'Sat 6 PM':3,'Weekday 10 AM':2},note:'Concrete echo; forklift beeps near lumber.'},
+ {id:'park',name:'Elm Grove Park',type:'Park',x:90,y:180,noise:1,light:1,seat:18,bath:true,fluor:false,quiet:'Always',crowd:{'Sat 8 AM':1,'Sat 11 AM':2,'Sat 2 PM':3,'Sat 6 PM':2,'Weekday 10 AM':1},note:'Shaded benches by the creek; distant traffic hum.'},
+ {id:'clinic',name:'Maplewood Clinic',type:'Clinic',x:430,y:170,noise:2,light:3,seat:16,bath:true,fluor:false,quiet:'First appointment slot daily',crowd:{'Sat 8 AM':1,'Sat 11 AM':2,'Sat 2 PM':2,'Sat 6 PM':1,'Weekday 10 AM':2},note:'Low-sensory waiting nook behind reception.'}
+];
+var TIMES=['Sat 8 AM','Sat 11 AM','Sat 2 PM','Sat 6 PM','Weekday 10 AM'];
+var state={time:'Sat 8 AM',maxNoise:3,needSeat:false,needBath:false,noFluor:true,type:'Grocery',sel:'greenway'};
+
+function score(v){
+  var crowd=v.crowd[state.time]||3;
+  var s=100 - crowd*(state.wCrowd||5) - v.noise*(state.wNoise||4) - v.light*(state.wLight||3);
+  if(v.bath)s+=4; if(!v.fluor)s+=4; if(v.seat>=8)s+=4;
+  return Math.max(5,Math.min(99,Math.round(s)));
+}
+function color(s){return s>=75?'#3f7d4e':s>=55?'#8a9a3f':s>=35?'#c98a3d':'#a84335';}
+function passes(v){
+  if(state.type!=='All'&&v.type!==state.type)return false;
+  if(v.noise>state.maxNoise)return false;
+  if(state.needSeat&&v.seat<8)return false;
+  if(state.needBath&&!v.bath)return false;
+  if(state.noFluor&&v.fluor)return false;
+  return true;
+}
+
+var layout=K.el('<div class="layout"></div>');wrap.appendChild(layout);
+/* filters */
+var f=K.el('<div class="card"><h3>Your sensory profile</h3></div>');layout.appendChild(f);
+function frow(label,sub){var r=K.el('<div class="f-row"><label>'+K.esc(label)+'<br><small>'+K.esc(sub)+'</small></label></div>');f.appendChild(r);return r;}
+var r1=frow('When are you going?','Crowding changes by hour');
+var tsel=K.el('<select class="k-select">'+TIMES.map(function(t){return '<option'+(t===state.time?' selected':'')+'>'+t+'</option>';}).join('')+'</select>');
+tsel.onchange=function(){state.time=tsel.value;render();};r1.appendChild(tsel);
+var r2=frow('Max tolerable noise','1 = library-quiet \u00b7 5 = superstore Saturday');
+var nr=K.el('<input type="range" min="1" max="5" step="1" value="'+state.maxNoise+'">');
+var nlab=K.el('<small>Up to level <b id="nl">'+state.maxNoise+'</b></small>');
+nr.oninput=function(){state.maxNoise=+nr.value;document.getElementById('nl').textContent=nr.value;render();};
+r2.appendChild(nr);r2.appendChild(nlab);
+var r3=frow('Looking for','');
+var tysel=K.el('<select class="k-select">'+['Grocery','Library','Pharmacy','Caf\u00e9','Hardware','Park','Clinic','All'].map(function(t){return '<option'+(t===state.type?' selected':'')+'>'+t+'</option>';}).join('')+'</select>');
+tysel.onchange=function(){state.type=tysel.value;render();};r3.appendChild(tysel);
+[['needSeat','Plenty of seating (8+ seats)'],['needBath','Public bathrooms'],['noFluor','No fluorescent lighting']].forEach(function(p){
+  var c=K.el('<label class="chk"><input type="checkbox"'+(state[p[0]]?' checked':'')+'> '+K.esc(p[1])+'</label>');
+  c.querySelector('input').onchange=function(e){state[p[0]]=e.target.checked;render();};
+  f.appendChild(c);
+});
+var goBtn=K.el('<button class="k-btn k-primary" id="core-action" style="width:100%;margin-top:6px">Find my calmest spot</button>');
+var calBtn=K.el('<button class="k-btn" id="calbtn" style="width:100%;margin-top:6px">Calibrate my sensitivities</button>');
+calBtn.onclick=function(){
+ var body='<p class="k-muted" style="margin-top:0">How much does each factor bother you? The calm scores re-weight instantly.</p>'
+ +[['wCrowd','Crowding',5],['wNoise','Noise',4],['wLight','Harsh lighting',3]].map(function(q){
+   return '<label class="k-muted" style="font-size:12px;display:block;margin:10px 0 4px">'+q[1]+' — <b id="cv-'+q[0]+'">'+(state[q[0]]||q[2])+'</b>/10</label><input type="range" min="1" max="10" step="1" value="'+(state[q[0]]||q[2])+'" id="cr-'+q[0]+'" style="width:100%">';
+ }).join('');
+ K.modal({title:'Calibrate scoring',body:body,actions:[{label:'Cancel'},{label:'Apply',primary:true,fn:function(){
+  ['wCrowd','wNoise','wLight'].forEach(function(k){var el=document.getElementById('cr-'+k);if(el)state[k]=+el.value;});
+  render();K.toast('Scoring calibrated to your sensitivities');
+ }}]});
+ ['wCrowd','wNoise','wLight'].forEach(function(k){
+  var el=document.getElementById('cr-'+k);
+  if(el)el.oninput=function(){document.getElementById('cv-'+k).textContent=el.value;};
+ });
+};
+f.appendChild(calBtn);
+goBtn.onclick=function(){var best=VENUES.filter(passes).sort(function(a,b){return score(b)-score(a);})[0];if(best){state.sel=best.id;render();K.toast('Calmest match: '+best.name,'ok');}else K.toast('No venues match \u2014 try loosening a filter','bad');};
+f.appendChild(goBtn);
+
+/* map + list */
+var main=K.el('<div></div>');layout.appendChild(main);
+var mapCard=K.el('<div class="card" style="margin-bottom:16px"><h3>Maplewood \u2014 <span id="mapT"></span></h3><svg id="mapSvg" viewBox="0 0 700 420" role="img" aria-label="Sensory map of Maplewood"></svg></div>');
+main.appendChild(mapCard);
+var listCard=K.el('<div class="card"><h3>Ranked for you</h3><div id="vlist"></div><div class="detail" id="vdetail"></div></div>');
+main.appendChild(listCard);
+
+function renderMap(){
+  var svg=document.getElementById('mapSvg');
+  var s='<rect x="0" y="0" width="700" height="420" fill="#eef0e4"/>';
+  s+='<g stroke="#d8dcc8" stroke-width="10"><line x1="0" y1="210" x2="700" y2="210"/><line x1="350" y1="0" x2="350" y2="420"/><line x1="0" y1="80" x2="700" y2="80" stroke-width="6"/><line x1="0" y1="340" x2="700" y2="340" stroke-width="6"/><line x1="150" y1="0" x2="150" y2="420" stroke-width="6"/><line x1="550" y1="0" x2="550" y2="420" stroke-width="6"/></g>';
+  s+='<g font-size="10" fill="#9aa08a" font-family="sans-serif"><text x="8" y="204">Elm St</text><text x="356" y="16">Maple Ave</text><text x="8" y="74">Creek Rd</text></g>';
+  s+='<rect x="380" y="300" width="120" height="60" rx="8" fill="#dce5cf"/><text x="440" y="334" font-size="11" text-anchor="middle" fill="#6a7a5a" font-family="sans-serif">Elm Grove Park</text>';
+  VENUES.forEach(function(v){
+    if(!passes(v))return;
+    var sc=score(v);
+    s+='<g class="pin'+(v.id===state.sel?' sel':'')+'" data-id="'+v.id+'"><circle class="ring" cx="'+v.x+'" cy="'+v.y+'" r="15" fill="'+color(sc)+'" opacity="0.25"/><circle cx="'+v.x+'" cy="'+v.y+'" r="9" fill="'+color(sc)+'" stroke="#fff" stroke-width="2"/><text x="'+v.x+'" y="'+(v.y+26)+'" font-size="10" text-anchor="middle" fill="#2c332b" font-family="sans-serif">'+K.esc(v.name)+'</text></g>';
+  });
+  svg.innerHTML=s;
+  svg.querySelectorAll('.pin').forEach(function(p){p.addEventListener('click',function(){state.sel=p.getAttribute('data-id');render();});});
+  document.getElementById('mapT').textContent=state.time;
+}
+function meterRow(label,val,max,invert){
+  var h='<div style="font-size:12px;margin:4px 0"><span style="display:inline-block;width:86px;color:var(--muted)">'+K.esc(label)+'</span><span class="meter" style="display:inline-flex">';
+  for(var i=1;i<=max;i++){var on=invert?i<=val:i<=val;h+='<i style="'+(on?'background:'+color(100-(val/max)*60):'')+'"></i>';}
+  return h+'</span></div>';
+}
+function render(){
+  renderMap();
+  var list=VENUES.filter(passes).sort(function(a,b){return score(b)-score(a);});
+  var host=document.getElementById('vlist');host.innerHTML='';
+  if(!list.length){K.empty(host,'Nothing matches','Loosen a filter to see more venues.');}
+  list.forEach(function(v){
+    var sc=score(v);
+    var row=K.el('<div class="venue'+(v.id===state.sel?' sel':'')+'"><div class="score" style="background:'+color(sc)+'">'+sc+'</div><div class="vmeta"><b>'+K.esc(v.name)+'</b> '+K.badge(v.type,v.noise<=2?'ok':v.noise>=4?'bad':'warn')+'<p>'+K.esc(v.note)+'</p></div></div>');
+    row.onclick=function(){state.sel=v.id;render();};
+    host.appendChild(row);
+  });
+  var d=document.getElementById('vdetail');d.innerHTML='';
+  var v=VENUES.filter(function(x){return x.id===state.sel&&passes(x);})[0]||list[0];
+  if(v){
+    d.appendChild(K.el('<h3 style="margin-top:4px">Why '+K.esc(v.name)+' scores '+score(v)+'</h3>'));
+    d.innerHTML+=meterRow('Noise',v.noise,5)+meterRow('Crowd @ '+state.time,v.crowd[state.time]||3,5)+meterRow('Light harshness',v.light,5);
+    var kv=K.el('<div style="margin-top:8px"></div>');
+    kv.innerHTML='<div class="kv"><span>Seating</span><b>'+v.seat+' seats</b></div><div class="kv"><span>Bathrooms</span><b>'+(v.bath?'Yes':'No')+'</b></div><div class="kv"><span>Fluorescent lights</span><b>'+(v.fluor?'Yes':'No')+'</b></div><div class="kv"><span>Lighting</span><b>'+(v.fluor?'Fluorescent':'Warm / natural')+'</b></div>';
+    d.appendChild(kv);
+    d.appendChild(K.el('<div class="quiet"><b>Quiet hours:</b> '+K.esc(v.quiet)+'</div>'));
+  }
+}
+render();
+wrap.appendChild(K.el('<footer>Sensory Map \u00b7 demo data for fictional Maplewood \u2014 venue profiles are community-verified in production</footer>'));
+})();
+</script></body></html>

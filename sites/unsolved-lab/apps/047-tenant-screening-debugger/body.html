@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ClearName — Tenant Screening Debugger</title>
+<link rel="stylesheet" href="../../shared/kit.css"><script src="../../shared/kit.js"></script>
+<!--SHIM-->
+<style>
+:root{--bg:#faf7f0;--panel:#ffffff;--panel2:#f0e9da;--ink:#292019;--muted:#7c6f5e;--line:#e2d8c2;--accent:#b45309;--accent2:#0e7c5b;--good:#15803d;--warn:#b45309;--bad:#b91c1c}
+.finding{border:2px solid var(--line);border-radius:14px;padding:16px;margin:10px 0;background:var(--panel)}
+.finding.err{border-color:var(--bad)}
+.finding.warnx{border-color:var(--warn)}
+.letter{background:#fffdf6;border:1px solid var(--line);border-radius:12px;padding:20px;font-family:Georgia,serif;font-size:14px;line-height:1.7;white-space:pre-wrap}
+.rej{background:var(--panel2);border-radius:12px;padding:18px;font-size:14px}
+.k-nav-title{color:#f4f6fa!important}.k-nav-sub{color:#aeb7c4!important}</style></head>
+<body>
+<script>
+"use strict";
+const K=window.Kit;
+K.nav({title:"🔍 ClearName",sub:"Tenant screening debugger"});
+const store=K.store("clearname");
+let state=store.get("state",{analyzed:false});
+function save(){store.set("state",state);}
+const FINDINGS=[
+ {item:"Eviction filing — Maricopa County, 2021",detail:"Filed against “Jonathon Reyes”, DOB 1984, Phoenix AZ. You are Jonah Reyes, DOB 1998, Riverton CA. Different person, similar name — a classic mixed-file error.",verdict:"err",label:"Likely wrong person",fix:"Dispute with all three bureaus + screening company. Furnisher must verify within 30 days (FCRA §611)."},
+ {item:"Collection — $412, “Bay Medical Group”",detail:"Listed as unpaid since 2022. Under current rules, paid medical collections under $500 should not appear — and this one shows no payment history at all.",verdict:"warnx",label:"Disputable",fix:"Request debt validation. If the collector can't produce the original bill, it must be removed."},
+ {item:"Late payment — auto loan, 30 days, 2023",detail:"One 30-day late on a Capital One auto loan, since brought current. Accurate, but 3 years old and isolated.",verdict:"ok",label:"Accurate — explain it",fix:"Add a 100-word consumer statement: job change during the period, 36 on-time payments since."},
+ {item:"Credit inquiries — 4 in 60 days",detail:"All from apartment applications (rate-shopping window). Screening models should treat these as one, but some landlord scores count each.",verdict:"warnx",label:"Scoring quirk",fix:"Ask the landlord which score they use; offer your Passport with the inquiry explanation attached."}
+];
+const wrap=K.el('<div class="k-wrap"></div>');document.body.appendChild(wrap);
+wrap.appendChild(K.el('<div class="k-hero"><h1>Rejected? Let\'s read the fine print.</h1><p>ClearName decodes your screening report line by line, flags what\'s wrong vs. what\'s merely ugly, and drafts the dispute letter for you. An estimated <b>1 in 5</b> screening reports contains a material error.</p><div id="cta" style="margin-top:14px"></div></div>'));
+const cta=wrap.querySelector("#cta");
+const host=K.el('<div></div>');wrap.appendChild(host);
+function render(){
+ host.innerHTML='';
+ cta.innerHTML='';
+ if(!state.analyzed){
+   const r=K.el('<div class="k-card"><h3>The rejection notice</h3><div class="rej">“Thank you for your interest in <b>Depot Lofts</b>. After reviewing your tenant screening report (provided by SafeRent Solutions), we are unable to approve your application at this time. Adverse action reasons: <b>eviction history</b>, <b>collection account</b>, <b>insufficient credit history</b>.”<div class="k-muted" style="margin-top:8px;font-size:12px">Received Oct 1, 2026 · Report #SR-88412</div></div><p class="k-muted">Paste your own report above — or run the demo analysis on this one.</p></div>');
+   host.appendChild(r);
+   const b=K.el('<button class="k-btn k-primary" style="font-size:17px;padding:14px 26px">🔍 Analyze this report</button>');
+   b.onclick=analyze;cta.appendChild(b);
+   return;
+ }
+ const k=K.el('<div class="k-kpis"></div>');host.appendChild(k);
+ K.kpi(k,{label:"Report lines checked",value:"4"});
+ K.kpi(k,{label:"Likely errors",value:"1",delta:"Wrong-person eviction"});
+ K.kpi(k,{label:"Disputable",value:"2"});
+ K.kpi(k,{label:"Win probability",value:"High",delta:"if eviction is removed"});
+ host.appendChild(K.el('<h2>Findings</h2>'));
+ FINDINGS.forEach(f=>{
+   host.appendChild(K.el('<div class="finding '+f.verdict+'"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:16px">'+K.esc(f.item)+'</b>'+(f.verdict==="err"?K.badge("✖ Likely wrong person","bad"):f.verdict==="warnx"?K.badge("⚠ Disputable","warn"):K.badge("✓ Accurate","ok"))+'</div><p style="font-size:14px;margin:10px 0">'+K.esc(f.detail)+'</p><div style="background:var(--panel2);border-radius:8px;padding:10px 12px;font-size:13px"><b>What to do:</b> '+K.esc(f.fix)+'</div></div>'));
+ });
+ const lw=K.el('<div class="k-card" style="margin-top:16px"><h3>✉️ Dispute letter — ready to send</h3><p class="k-muted" style="font-size:13px">Generated from the findings above. Send to SafeRent Solutions + Equifax, Experian, TransUnion.</p><div class="letter" id="ltr"></div><div style="margin-top:12px;display:flex;gap:8px"><button class="k-btn k-primary" id="cp">Copy letter</button><button class="k-btn" id="rst">Start over</button></div></div>');
+ host.appendChild(lw);
+ const letter="October 3, 2026\n\nSafeRent Solutions — Dispute Department\nRe: Screening Report #SR-88412 — Jonah Reyes, DOB 06/14/1998\n\nTo whom it may concern:\n\nI am writing to dispute inaccurate information in the tenant screening report referenced above, which caused an adverse rental decision on October 1, 2026.\n\n1. EVICTION FILING (Maricopa County, 2021) — This record belongs to “Jonathon Reyes,” DOB 1984, of Phoenix, AZ. I am Jonah Reyes, DOB 1998, of Riverton, CA. This is a mixed-file error involving a different individual. Please remove it immediately.\n\n2. COLLECTION — Bay Medical Group, $412 — I request validation of this debt under the FDCPA, including the original bill and proof of assignment. Absent validation, please delete.\n\nUnder FCRA §611, please investigate and respond within 30 days. Enclosed: copy of government ID and proof of address.\n\nSincerely,\nJonah Reyes\njordan.ellis@example.com · (555) 014-8820";
+ lw.querySelector("#ltr").textContent=letter;
+ lw.querySelector("#cp").onclick=()=>K.copy(letter);
+ lw.querySelector("#rst").onclick=()=>{state.analyzed=false;save();render();};
+ host.appendChild(K.el('<div class="k-card" style="margin-top:14px"><h3>After the dispute</h3><div id="tl"></div></div>'));
+ const tl=host.querySelector("#tl");
+ K.timeline(tl,[
+  {t:"Day 0",title:"Disputes filed",body:"Sent to screening company + 3 bureaus (certified mail, return receipt).",kind:"info"},
+  {t:"Day 30",title:"Investigation deadline",body:"Furnisher must verify or the item is deleted by law.",kind:"warn"},
+  {t:"Day 35",title:"Re-apply with clean report",body:"Re-send your Renter Passport to Depot Lofts with the corrected report.",kind:"ok"}
+ ]);
+}
+function analyze(){state.analyzed=true;save();render();K.toast("Analysis complete — 1 likely error found","ok");document.querySelector(".k-wrap").scrollIntoView();}
+render();
+</script></body></html>

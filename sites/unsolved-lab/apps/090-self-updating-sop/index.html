@@ -1,0 +1,178 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Living SOP — The process that updates itself</title>
+<link rel="stylesheet" href="../../shared/kit.css">
+<script src="../../shared/kit.js"></script>
+<script src="../kit-fallback-w9.js"></script>
+<style>
+:root{--bg:#eef0f2;--panel:#ffffff;--panel2:#e3e9ec;--ink:#232d36;--muted:#687885;--line:#d3dce1;--accent:#e8641b;--accent2:#2f4b7c;--good:#2e7d4f;--warn:#b97e1c;--bad:#b23b2e;}
+body{background:var(--bg);color:var(--ink);font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;margin:0;}
+.k-nav{background:#232d36;color:#fff;border-bottom:4px solid var(--accent);}
+.k-nav-in{display:flex;justify-content:space-between;align-items:center;padding:14px 0;}
+.k-nav-t{margin:0;font-size:24px;font-weight:800;}
+.k-nav-t .ls{color:var(--accent);}
+.k-nav-s{color:#9fb0bc;margin:2px 0 0;}
+.k-wrap{max-width:1280px;margin:0 auto;padding:0 20px;}
+.hero{margin:20px 0 14px;}
+.hero h2{margin:0 0 4px;font-size:28px;letter-spacing:-.5px;}
+.layout{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+@media(max-width:960px){.layout{grid-template-columns:1fr;}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;}
+.card h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);}
+.sop-step{display:flex;gap:12px;padding:10px 0;border-bottom:1px dashed var(--line);font-size:14px;align-items:flex-start;}
+.sop-step:last-child{border:none;}
+.sop-step .n{width:28px;height:28px;border-radius:50%;background:var(--accent2);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:none;}
+.sop-step.changed .n{background:var(--accent);}
+.sop-step .t b{display:block;}
+.sop-step .t small{color:var(--muted);}
+.sop-step .chg-tag{font-size:11px;background:#fde8d8;color:#a34d12;border-radius:10px;padding:2px 8px;margin-left:6px;}
+.divg{border:2px solid var(--accent);border-radius:12px;padding:14px;margin-bottom:12px;background:#fff;}
+.divg.resolved{border-color:var(--line);opacity:.75;}
+.divg h4{margin:0 0 4px;font-size:15px;}
+.divg p{margin:4px 0;font-size:13px;color:var(--muted);}
+.divg .evline{font-size:12px;background:#f4f6f8;border-radius:6px;padding:6px 8px;margin:6px 0;}
+.divg .row{display:flex;gap:8px;margin-top:8px;}
+.k-btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;color:var(--ink);}
+.k-primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+.k-badge{font-size:11px;padding:2px 8px;border-radius:20px;background:#e8e2d2;color:#5a5344;}
+.k-badge.ok{background:#dcebd4;color:#2f6b3f;}.k-badge.warn{background:#f5e6c4;color:#8a5f14;}.k-badge.bad{background:#f0d2cb;color:#93342a;}
+.k-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+.k-table th{text-align:left;padding:7px;border-bottom:2px solid var(--line);color:var(--muted);font-size:12px;}
+.k-table td{padding:7px;border-bottom:1px solid var(--line);}
+.dots{display:flex;gap:3px;}
+.dots i{width:10px;height:10px;border-radius:50%;background:#d3dce1;}
+.dots i.y{background:var(--good);}.dots i.n{background:#e0a49a;}.dots i.r{background:var(--warn);}
+.k-tl{border-left:3px solid var(--line);margin:6px 0 6px 8px;}
+.k-tl-e{position:relative;padding:8px 0 8px 20px;}
+.k-tl-e::before{content:'';position:absolute;left:-8px;top:12px;width:12px;height:12px;border-radius:50%;background:var(--accent);}
+.k-tl-t{font-size:12px;color:var(--muted);font-weight:600;}
+.k-tl-b b{font-size:14px;}.k-tl-b p{margin:2px 0 0;font-size:13px;}
+.k-toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:#232d36;color:#fff;padding:10px 18px;border-radius:8px;opacity:0;transition:all .3s;z-index:999;}
+.k-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+footer{color:var(--muted);font-size:12px;text-align:center;padding:22px;}
+</style></head>
+<body>
+<div id="app"></div>
+<script>
+(function(){
+var K=window.Kit,app=document.getElementById('app');
+K.nav({title:'Living SOP',sub:'The deploy process that updates itself',actions:[]});
+document.querySelector('.k-nav-title').innerHTML='<span class="ls">\u25c8</span> Living SOP';
+var wrap=K.el('<div class="k-wrap"></div>');app.appendChild(wrap);
+wrap.appendChild(K.el('<div class="hero"><h2>Documented vs. last 20 deploys</h2><p class="k-muted" style="margin:4px 0 0">Living SOP diffs the written process against what the team <i>actually did</i> \u2014 and proposes updates. Nothing changes without your approval.</p></div>'));
+
+/* ---------- documented SOP ---------- */
+var SOP=[
+ {t:'Create release branch from main',note:'Naming: release/YYYY-MM-DD'},
+ {t:'Run full test suite',note:'Must be green before staging'},
+ {t:'Staging deploy + full QA checklist',note:'40-point checklist, QA sign-off'},
+ {t:'Database backup',note:'Snapshot before any migration'},
+ {t:'Run migrations',note:'Forward-only, reversible'},
+ {t:'Deploy to prod (blue/green)',note:'Thursday batch window ~2 PM'},
+ {t:'Smoke-test prod for 15 minutes',note:'Health, checkout, login'},
+ {t:'Post deploy note + update rollback doc',note:'In #deploys and the runbook'}
+];
+/* ---------- last 20 deploys: per-step status y=yes in order, r=reordered/late, n=skipped ---------- */
+var DEPLOYS=[
+ ['D-120','Oct 2','Priya','yynryyyy','38',0],['D-119','Sep 30','Marco','yynyyyyy','41',0],
+ ['D-118','Sep 25','Sofia','yynryyyn','35',0],['D-117','Sep 23','Priya','yynyyyyn','44',0],
+ ['D-116','Sep 18','Marco','yyyyyyyy','39',0],['D-115','Sep 15','Sofia','yynryyyn','37',0],
+ ['D-114','Sep 11','Priya','yynyyyyn','52',1],['D-113','Sep 9','Marco','yynryyyn','36',0],
+ ['D-112','Sep 4','Sofia','yynyyyyn','40',0],['D-111','Aug 28','Priya','yyyyyyyy','38',0],
+ ['D-110','Aug 27','Marco','yyyryyyn','42',0],['D-109','Aug 21','Sofia','yynyyyyy','39',0],
+ ['D-108','Aug 20','Priya','yynryyyn','37',1],['D-107','Aug 14','Marco','yynyyyyn','45',0],
+ ['D-106','Aug 13','Sofia','yyyyyyyy','36',0],['D-105','Aug 7','Priya','yynryyyn','41',0],
+ ['D-104','Aug 6','Marco','yynyyyyy','38',0],['D-103','Jul 31','Sofia','yyyryyyn','40',0],
+ ['D-102','Jul 30','Priya','yynyyyyn','43',0],['D-101','Jul 24','Marco','yyyryyyy','37',0]
+];
+
+var store=K.store('livingsop9');
+var accepted=store.get('accepted',{}), dismissed=store.get('dismissed',{}), log=store.get('log',[]);
+
+function detect(){
+  var divs=[];
+  var stats=SOP.map(function(_,si){
+    var y=0,r=0,n=0;
+    DEPLOYS.forEach(function(d){var c=d[3][si];if(c==='y')y++;else if(c==='r')r++;else n++;});
+    return{y:y,r:r,n:n};
+  });
+  // step 3 (idx2): full QA checklist skipped -> smoke only
+  if(stats[2].n>=6)divs.push({step:2,title:'Full QA checklist skipped in '+stats[2].n+'/20 deploys',body:'The team runs a 5-minute smoke test on staging instead of the 40-point checklist \u2014 including while QA was on PTO, with no incidents traced to it.',fix:'Staging deploy + 5-minute smoke test',ev:DEPLOYS.filter(function(d){return d[3][2]==='n';}).slice(0,5).map(function(d){return d[0];})});
+  // step 4 (idx3): backup reordered (done after migration)
+  if(stats[3].r>=6)divs.push({step:3,title:'DB backup runs AFTER migration in '+stats[3].r+'/20 deploys',body:'The snapshot still happens every time \u2014 just after migrations complete, because the new migration runner snapshots automatically post-run.',fix:'Database backup (auto-snapshot runs after migration)',ev:DEPLOYS.filter(function(d){return d[3][3]==='r';}).slice(0,5).map(function(d){return d[0];})});
+  // step 8 (idx7): rollback doc skipped
+  if(stats[7].n>=6)divs.push({step:7,title:'Rollback doc update skipped in '+stats[7].n+'/20 deploys',body:'Deploy notes go to #deploys, but the runbook\u2019s rollback section hasn\u2019t been touched since Sep 16 \u2014 it\u2019s stale by 8 deploys.',fix:'Post deploy note in #deploys (rollback doc: update only on rollback-path changes)',ev:DEPLOYS.filter(function(d){return d[3][7]==='n';}).slice(0,5).map(function(d){return d[0];})});
+  return{divs:divs,stats:stats};
+}
+
+function spark(step){
+  var bars=DEPLOYS.map(function(dp){
+    var c=dp[3][step];
+    var col=c==='y'?'#2e9e5b':c==='r'?'#e8a13d':'#d64545';
+    var what=c==='y'?'as documented':c==='r'?'reordered':'skipped';
+    return '<span title="'+dp[0]+' '+dp[1]+' ('+dp[2]+'): '+what+'" style="flex:1;height:'+(c==='y'?'10px':c==='r'?'16px':'22px')+';background:'+col+';border-radius:2px;min-width:3px"></span>';
+  }).join('');
+  return '<div style="margin:10px 0 4px"><div class="k-muted" style="font-size:11.5px;margin-bottom:4px">Step '+(step+1)+' across the last 20 deploys (newest \u2192 oldest) \u2014 taller red = skipped</div><div style="display:flex;gap:3px;align-items:flex-end;height:24px">'+bars+'</div></div>';
+}
+
+var layout=K.el('<div class="layout"></div>');wrap.appendChild(layout);
+var sopCard=K.el('<div class="card"><h3>Documented SOP \u2014 deploy process v3 <span id="verTag"></span></h3><div id="sopHost"></div></div>');layout.appendChild(sopCard);
+var divCard=K.el('<div class="card"><h3>Detected divergences \u2014 <span id="divCount"></span></h3><div id="divHost"></div></div>');layout.appendChild(divCard);
+var tblCard=K.el('<div class="card" style="margin-bottom:16px"><h3>Last 20 deploys \u2014 step conformance <span class="k-muted" style="text-transform:none">(green = as documented, amber = reordered, red = skipped)</span></h3><div id="tblHost"></div></div>');wrap.appendChild(tblCard);
+var logCard=K.el('<div class="card" style="margin-bottom:16px"><h3>SOP change log</h3><div id="logHost"></div></div>');wrap.appendChild(logCard);
+var coreBtn=K.el('<button class="k-btn k-primary" id="core-action" data-core style="margin-bottom:16px">Accept all 3 divergences into the SOP</button>');
+wrap.insertBefore(coreBtn,layout);
+
+function render(){
+  var det=detect();
+  var open=det.divs.filter(function(d){return !accepted[d.step]&&!dismissed[d.step];});
+  document.getElementById('divCount').textContent=open.length+' open';
+  var nAcc=Object.keys(accepted).length;
+  document.getElementById('verTag').textContent=nAcc?('(+ '+nAcc+' adopted change'+(nAcc>1?'s':'')+')'):'';
+  // SOP list
+  var sh=document.getElementById('sopHost');sh.innerHTML='';
+  SOP.forEach(function(s,i){
+    var ch=accepted[i];
+    var el=K.el('<div class="sop-step'+(ch?' changed':'')+'"><div class="n">'+(i+1)+'</div><div class="t"><b>'+K.esc(ch||s.t)+(ch?'<span class="chg-tag">updated Oct 3</span>':'')+'</b><small>'+K.esc(s.note)+'</small></div></div>');
+    sh.appendChild(el);
+  });
+  // divergences
+  var dh=document.getElementById('divHost');dh.innerHTML='';
+  if(!open.length)K.empty(dh,'SOP matches reality','No open divergences. The documented process reflects the last 20 deploys.');
+  open.forEach(function(d){
+    var el=K.el('<div class="divg"><h4>\u26a0\uFE0F '+K.esc(d.title)+'</h4><p>'+K.esc(d.body)+'</p><div class="evline">Evidence: '+d.ev.join(', ')+' \u2026</div>'+spark(d.step)+'<p><b>Proposed SOP text:</b> \u201c'+K.esc(d.fix)+'\u201d</p><div class="row"><button class="k-btn k-primary aBtn">Accept into SOP</button><button class="k-btn dBtn">Dismiss</button></div></div>');
+    el.querySelector('.aBtn').onclick=function(){acceptDiv(d);};
+    el.querySelector('.dBtn').onclick=function(){dismissed[d.step]=true;store.set('dismissed',dismissed);pushLog('Divergence dismissed','Step '+(d.step+1)+': kept documented text.');render();K.toast('Divergence dismissed');};
+    dh.appendChild(el);
+  });
+  det.divs.filter(function(d){return accepted[d.step]||dismissed[d.step];}).forEach(function(d){
+    dh.appendChild(K.el('<div class="divg resolved"><h4>'+(accepted[d.step]?'\u2705 Adopted: ':'\uD83D\uDDD1\uFE0F Dismissed: ')+K.esc(d.title)+'</h4></div>'));
+  });
+  // deploy table
+  var th=document.getElementById('tblHost');
+  K.table(th,
+    [{key:'id',label:'Deploy'},{key:'date',label:'Date'},{key:'who',label:'Lead'},
+     {key:'steps',label:'Steps 1\u20138',fmt:function(v,r){var s='';for(var i=0;i<8;i++){var c=r.raw[i];s+='<i class="'+(c==='y'?'y':c==='r'?'r':'n')+'" title="Step '+(i+1)+': '+(c==='y'?'as documented':c==='r'?'reordered':'skipped')+'"></i>';}return '<span class="dots">'+s+'</span>';}},
+     {key:'dur',label:'Mins',num:true},{key:'conf',label:'Conformance',fmt:function(v,r){var y=(r.raw.match(/y/g)||[]).length;return K.badge(y+'/8',y>=7?'ok':y>=5?'warn':'bad');}}],
+    DEPLOYS.map(function(d){return{id:d[0],date:d[1],who:d[2],steps:'',raw:d[3],dur:+d[4]};}),{pageSize:20});
+  // log
+  var lh=document.getElementById('logHost');lh.innerHTML='';
+  if(!log.length)K.empty(lh,'No changes yet','Accept a divergence to write the first entry.');
+  else K.timeline(lh,log.slice().reverse());
+}
+function acceptDiv(d){
+  accepted[d.step]=d.fix;store.set('accepted',accepted);
+  pushLog('SOP updated \u2014 step '+(d.step+1),'Adopted actual practice: \u201c'+d.fix+'\u201d');
+  render();K.toast('SOP updated: step '+(d.step+1),'ok');
+}
+function pushLog(t,b){log.push({t:'Oct 3, 2026',title:t,body:b,kind:''});store.set('log',log);}
+coreBtn.onclick=function(){
+  var det=detect();var n=0;
+  det.divs.forEach(function(d){if(!accepted[d.step]&&!dismissed[d.step]){accepted[d.step]=d.fix;n++;}});
+  store.set('accepted',accepted);
+  if(n){pushLog('Bulk adoption',n+' divergences adopted into SOP v3.1.');render();K.toast(n+' divergences adopted','ok');}
+  else K.toast('Nothing open to adopt','warn');
+};
+render();
+wrap.appendChild(K.el('<footer>Living SOP \u00b7 demo diff of a fictional deploy process \u2014 production reads your CI/CD + ticket history</footer>'));
+})();
+</script></body></html>

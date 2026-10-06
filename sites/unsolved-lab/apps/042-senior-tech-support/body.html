@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HelpButton — Senior Tech Support</title>
+<link rel="stylesheet" href="../../shared/kit.css"><script src="../../shared/kit.js"></script>
+<!--SHIM-->
+<style>
+:root{--bg:#f2f6fb;--panel:#ffffff;--panel2:#e8eef7;--ink:#101828;--muted:#5b6b80;--line:#d7e0ee;--accent:#1a6fd4;--accent2:#12a37c;--good:#12a37c;--warn:#b07d10;--bad:#c03535}
+.bigbtn{display:block;width:100%;text-align:left;background:var(--panel);border:3px solid var(--line);border-radius:20px;padding:22px;font-size:24px;font-weight:800;margin:12px 0;cursor:pointer;color:var(--ink)}
+.bigbtn:hover{border-color:var(--accent);background:#f6faff}
+.bigbtn .sub{display:block;font-size:16px;font-weight:400;color:var(--muted);margin-top:6px}
+.bigbtn .em{font-size:34px;margin-right:12px}
+.stepcard{background:var(--panel);border:3px solid var(--accent);border-radius:20px;padding:28px;margin:16px 0}
+.stepnum{font-size:18px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.08em}
+.steptitle{font-size:30px;font-weight:800;margin:10px 0}
+.stepbody{font-size:20px;line-height:1.6;color:var(--ink)}
+.hugebtn{font-size:22px!important;padding:18px 28px!important;border-radius:16px!important}
+.req{border:2px solid var(--line);border-radius:16px;padding:16px;margin:10px 0;background:var(--panel)}
+.viewtoggle{display:flex;gap:8px;margin:16px 0}
+.viewtoggle .k-btn{font-size:16px;padding:12px 20px}
+.viewtoggle .on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.helper{border:2px dashed var(--accent2);border-radius:16px;padding:16px;margin:10px 0;background:#f2fbf7}
+.k-hero h1{font-size:38px}
+.k-nav-title{color:#f4f6fa!important}.k-nav-sub{color:#aeb7c4!important}</style></head>
+<body>
+<script>
+"use strict";
+const K=window.Kit;
+K.nav({title:"HelpButton",sub:"Trusted tech help, in huge type"});
+const store=K.store("helpbutton");
+const ISSUES=[
+ {id:"stuck",emoji:"📱",title:"My phone is stuck",sub:"Frozen screen, app won't close, nothing responds",
+  steps:[["Don't panic — nothing is broken","Your phone is just thinking too hard. We will restart it together. It takes about one minute."],
+   ["Hold the side button","Find the long button on the right edge of your phone. Press it and keep holding it down."],
+   ["Keep holding…","Keep your finger down until the screen goes completely black. This can take 10 seconds."],
+   ["Wait for the logo","Let go. Wait quietly. A white apple (or logo) will appear. Your phone is waking up."],
+   ["You're back!","Everything will be where you left it. Try opening your app again — it should work now."]]},
+ {id:"cantsee",emoji:"🔊",title:"I can't hear / see well",sub:"Volume too low, text too small, screen too dark",
+  steps:[["Let's make things bigger and louder","We will turn up the volume and make the text bigger. Two quick changes."],
+   ["Turn the volume up","Find the two small buttons on the left edge. Press the TOP one five times. You should hear it get louder."],
+   ["Make text bigger","Open Settings (the gray gear) → Display & Brightness → Text Size → drag the dot to the right."],
+   ["Check it","Open your messages. The words should be nice and big now."]]},
+ {id:"scam",emoji:"🛡️",title:"Something looks like a scam",sub:"Strange message, pop-up, or someone asking for money",
+  steps:[["Stop — do not tap anything","Close this and do not reply, do not call back, and do not send money or gift cards."],
+   ["Take a screenshot","Press the side button and the top volume button at the same time, quickly. This saves what you see."],
+   ["Call your trusted person","Call Elena at the number saved in your phone — not any number in the message."],
+   ["Delete the message","Hold your finger on the message, then tap Delete. It is gone. You did great."]]},
+ {id:"person",emoji:"💬",title:"Talk to a person",sub:"A real helper from your trusted circle calls you",
+  steps:[["We're calling Maya","Maya is a trusted helper your family approved. She will call within 10 minutes."],
+   ["Keep your phone nearby","When it rings, swipe the green button to answer. It's just Maya — take your time."],
+   ["Describe what you see","Just read out loud whatever is on your screen. Maya will guide you step by step."]]}
+];
+const HELPERS=[
+ {name:"Maya Chen",role:"Granddaughter — approved by Elena",status:"Available now"},
+ {name:"Elena Vargas",role:"Daughter — approved",status:"Available evenings"},
+ {name:"Sam Whitfield",role:"Neighborhood tech volunteer — background-checked",status:"Available weekends"}
+];
+let state=store.get("state",{view:"senior",requests:[],active:null});
+function save(){store.set("state",state);}
+const wrap=K.el('<div class="k-wrap" style="max-width:760px"></div>');document.body.appendChild(wrap);
+wrap.appendChild(K.el('<div class="k-hero"><h1>Need help with your phone?</h1><p>Tap the big button that matches your problem. A trusted helper from your own family circle will walk you through the fix — in huge type, one step at a time.</p></div>'));
+const tg=K.el('<div class="viewtoggle"></div>');wrap.appendChild(tg);
+const host=K.el('<div></div>');wrap.appendChild(host);
+function drawToggle(){
+ tg.innerHTML='';
+ const b1=K.el('<button class="k-btn hugebtn'+(state.view==="senior"?" on":"")+'">👴 Get help</button>');
+ const b2=K.el('<button class="k-btn hugebtn'+(state.view==="helper"?" on":"")+'">🧑‍💻 Helper view</button>');
+ b1.onclick=()=>{state.view="senior";save();drawToggle();render();};
+ b2.onclick=()=>{state.view="helper";save();drawToggle();render();};
+ tg.appendChild(b1);tg.appendChild(b2);
+}
+function render(){host.innerHTML='';state.view==="senior"?renderSenior():renderHelper();}
+function renderSenior(){
+ const done=state.requests.filter(r=>r.status==="fixed").length;
+ if(state.active){
+   renderSession(host,state.active,true);return;
+ }
+ host.appendChild(K.el('<h2 style="font-size:26px">What\'s wrong?</h2>'));
+ ISSUES.forEach(it=>{
+   const b=K.el('<button class="bigbtn"><span class="em">'+it.emoji+'</span>'+K.esc(it.title)+'<span class="sub">'+K.esc(it.sub)+'</span></button>');
+   b.onclick=()=>request(it);
+   host.appendChild(b);
+ });
+ if(state.requests.length){
+   host.appendChild(K.el('<h2 style="font-size:26px;margin-top:28px">Your past requests</h2>'));
+   state.requests.slice().reverse().forEach(r=>{
+     const it=ISSUES.find(i=>i.id===r.issue);
+     host.appendChild(K.el('<div class="req"><b style="font-size:18px">'+it.emoji+' '+K.esc(it.title)+'</b><div class="k-muted">'+K.esc(r.helper)+' · '+K.esc(r.when)+'</div><div style="margin-top:6px">'+K.badge(r.status==="fixed"?"Fixed ✓":"Waiting","ok"===""?"":"")+(r.status==="fixed"?K.badge("Fixed ✓","ok"):K.badge("Helper on the way","info"))+'</div></div>'));
+   });
+ }
+ if(done)host.appendChild(K.el('<p class="k-muted" style="font-size:18px">🎉 '+done+' problem'+(done>1?"s":"")+' fixed so far. You\'re doing great.</p>'));
+}
+function request(it){
+ const helper=K.pick(K.rng("helper"+Date.now()),HELPERS).name;
+ const r={id:K.uid("req"),issue:it.id,helper:helper,when:new Date().toLocaleString(),status:"waiting",step:0};
+ state.requests.push(r);state.active=r.id;save();render();
+ K.toast("Help request sent to "+helper,"ok");
+}
+function renderSession(hostx,rid,senior){
+ const r=state.requests.find(x=>x.id===rid);if(!r){state.active=null;render();return;}
+ const it=ISSUES.find(i=>i.id===r.issue);
+ const s=it.steps[r.step];
+ const card=K.el('<div class="stepcard"><div class="stepnum">Step '+(r.step+1)+' of '+it.steps.length+' · '+K.esc(r.helper)+' is helping</div><div class="steptitle">'+K.esc(s[0])+'</div><div class="stepbody">'+K.esc(s[1])+'</div><div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap" id="nav"></div></div>');
+ hostx.appendChild(card);
+ const navx=card.querySelector("#nav");
+ if(r.step>0){const b=K.el('<button class="k-btn hugebtn">← Back</button>');b.onclick=()=>{r.step--;save();render();};navx.appendChild(b);}
+ if(r.step<it.steps.length-1){const b=K.el('<button class="k-btn k-primary hugebtn">Next step →</button>');b.onclick=()=>{r.step++;save();render();};navx.appendChild(b);}
+ else{const b=K.el('<button class="k-btn k-primary hugebtn">✓ It\'s fixed!</button>');b.onclick=()=>{r.status="fixed";state.active=null;save();render();K.toast("Marked fixed — nice work!","ok");};navx.appendChild(b);}
+ if(senior){const q=K.el('<button class="k-btn hugebtn">I\'m stuck — call '+K.esc(r.helper.split(" ")[0])+'</button>');q.onclick=()=>K.toast("Calling "+r.helper+"… (demo)","info");hostx.appendChild(q);}
+}
+function renderHelper(){
+ host.appendChild(K.el('<h2 style="font-size:26px">Trusted helpers</h2>'));
+ HELPERS.forEach(h=>host.appendChild(K.el('<div class="helper"><b style="font-size:18px">'+K.esc(h.name)+'</b><div class="k-muted">'+K.esc(h.role)+'</div><div style="margin-top:4px">'+K.badge(h.status,h.status.includes("now")?"ok":"info")+'</div></div>')));
+ host.appendChild(K.el('<h2 style="font-size:26px;margin-top:20px">Open requests</h2>'));
+ const open=state.requests.filter(r=>r.status!=="fixed");
+ if(!open.length){K.empty(host,"No open requests","When Mom or Dad taps a big button, it lands here.");return;}
+ open.slice().reverse().forEach(r=>{
+   const it=ISSUES.find(i=>i.id===r.issue);
+   const d=K.el('<div class="req"><b style="font-size:18px">'+it.emoji+' '+K.esc(it.title)+'</b><div class="k-muted">Requested '+K.esc(r.when)+'</div><div style="margin-top:10px;display:flex;gap:8px"><button class="k-btn k-primary" id="go">Start help session</button></div></div>');
+   d.querySelector("#go").onclick=()=>{state.active=r.id;save();helperSession(r);};
+   host.appendChild(d);
+ });
+}
+function helperSession(r){
+ host.innerHTML='<h2 style="font-size:26px">Helping with: '+K.esc(ISSUES.find(i=>i.id===r.issue).title)+'</h2><p class="k-muted" style="font-size:17px">Read each step aloud. Big type is for them — this is your script.</p>';
+ renderSession(host,r.id,false);
+}
+drawToggle();render();
+</script></body></html>

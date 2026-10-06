@@ -1,0 +1,1351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Birds of a Feather — flock together.</title>
+<meta name="description" content="Birds of a Feather: sort word-birds into their flocks in this cozy word-solitaire puzzle. 200 levels + a daily migration.">
+<meta name="theme-color" content="#f6efe1">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
+<style>
+:root{
+  --paper:#f6efe1; --card:#fffdf7; --ink:#2e2a23; --ink-soft:#7a7163;
+  --line:#e3d6ba; --bad:#b3402e;
+  --acc0:#c2703f; --acc1:#7c9a5f; --acc2:#d9a13b; --acc3:#5f83a8;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  touch-action:manipulation; user-select:none; -webkit-user-select:none;
+  overflow:hidden;
+}
+.serif{font-family:Georgia,"Times New Roman",serif;}
+#app{max-width:540px; margin:0 auto; height:100dvh; height:100svh; display:flex; flex-direction:column; position:relative;}
+.screen{display:none; flex:1; flex-direction:column; min-height:0;}
+.screen.active{display:flex;}
+
+/* ---------- header ---------- */
+header{
+  display:flex; align-items:center; gap:8px; padding:10px 12px 6px;
+  border-bottom:1.5px solid var(--line); flex:0 0 auto;
+}
+header .ttl{font-family:Georgia,serif; font-size:17px; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; line-height:1.2;}
+#parline{display:block; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif; font-size:10.5px; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+#movecount{display:flex; flex-direction:column; align-items:center; line-height:1.05; padding:0 2px; flex:0 0 auto;}
+#movecount b{font-family:Georgia,serif; font-size:16px; font-weight:normal;}
+#movecount span{font-size:9px; color:var(--ink-soft);}
+.iconbtn{
+  border:1.5px solid var(--ink); background:var(--card); color:var(--ink);
+  border-radius:10px; min-width:40px; height:36px; font-size:17px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; padding:0 8px;
+  touch-action:manipulation;
+}
+.iconbtn:active{transform:translateY(1px);}
+#feathers{display:flex; gap:3px; align-items:center; padding:0 4px;}
+#feathers svg{width:20px; height:20px;}
+#feathers svg.lost{opacity:.18; filter:grayscale(1);}
+
+/* ---------- home ---------- */
+#screen-home{align-items:center; justify-content:center; text-align:center; padding:24px; gap:6px; overflow-y:auto;}
+#logo{width:120px; height:100px;}
+#screen-home h1{font-family:Georgia,serif; font-size:34px; margin:8px 0 0; letter-spacing:.5px;}
+#screen-home .tag{font-family:Georgia,serif; font-style:italic; color:var(--ink-soft); font-size:17px; margin:0 0 18px;}
+.bigbtn{
+  font-family:Georgia,serif; font-size:18px; width:100%; max-width:300px;
+  padding:13px; margin:5px 0; border:2px solid var(--ink); border-radius:14px;
+  background:var(--card); color:var(--ink); cursor:pointer; touch-action:manipulation;
+}
+.bigbtn:active{transform:translateY(2px);}
+.bigbtn.primary{background:var(--ink); color:var(--paper);}
+.bigbtn .sub{display:block; font-family:-apple-system,sans-serif; font-size:12px; opacity:.65; margin-top:2px; font-style:normal;}
+#home-foot{margin-top:18px; font-size:12px; color:var(--ink-soft);}
+
+/* ---------- developer browser ---------- */
+#screen-dev{overflow-y:auto; padding:24px 14px calc(30px + env(safe-area-inset-bottom));}
+#screen-dev h1{font-family:Georgia,serif; font-size:28px; margin:0 0 6px;}
+#screen-dev .tag{font-size:13px; color:var(--ink-soft); margin:0 0 18px;}
+.dev-panel{border:1.5px solid var(--ink); border-radius:14px; background:var(--card); padding:12px; margin-bottom:14px; flex:0 0 auto;}
+.dev-panel h2{font-family:Georgia,serif; font-size:20px; margin:0 0 12px;}
+#dev-levels{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px;}
+.dev-level{border:1.5px solid var(--ink); border-radius:10px; background:var(--paper); color:var(--ink); padding:7px 1px; font-family:Georgia,serif; font-size:16px; cursor:pointer; touch-action:manipulation;}
+.dev-level:active{transform:translateY(1px);}
+.dev-meta{display:block; font-family:-apple-system,sans-serif; font-size:9px; color:var(--ink-soft); margin-top:3px; min-height:11px;}
+#dev-dailies{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px;}
+#dev-dailies .bigbtn{font-size:14px; padding:10px 2px; margin:0;}
+#dev-hud{display:none; padding:8px 12px 0; color:var(--ink-soft); font-size:12px;}
+#dev-hud label{display:inline-flex; align-items:center; gap:6px; min-height:32px; cursor:pointer; touch-action:manipulation;}
+#dev-reveal{margin:0; accent-color:var(--ink); cursor:pointer; touch-action:manipulation;}
+.card .home-caption{display:block; font-size:9px; line-height:1.2; color:var(--ink-soft); margin-top:4px; overflow-wrap:break-word;}
+
+/* ---------- flocks ---------- */
+#flocks{display:grid; grid-template-columns:repeat(4,1fr); gap:6px; padding:10px 10px 4px; flex:0 0 auto;}
+.flock{
+  border:1.5px solid var(--ink); border-radius:12px; background:var(--card);
+  padding:6px 2px 7px; text-align:center; cursor:pointer; touch-action:manipulation;
+  position:relative; transition:transform .12s;
+}
+.flock:active{transform:scale(.96);}
+.flock .nest{width:44px; height:36px; margin:0 auto;}
+.flock .fname{font-family:Georgia,serif; font-size:12.5px; margin-top:2px; line-height:1.15; min-height:29px; display:flex; align-items:center; justify-content:center;}
+.flock .quota{font-size:11px; color:var(--ink-soft); margin-top:1px;}
+.flock .dots{display:flex; gap:3px; justify-content:center; margin-top:4px; flex-wrap:wrap; padding:0 4px;}
+.flock .dots i{width:8px; height:8px; border-radius:50%; border:1.2px solid var(--ink-soft); display:block;}
+.flock .dots i.on{background:var(--fc,#c2703f); border-color:var(--fc,#c2703f);}
+.flock.pulse{animation:pulse 1.4s ease;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(46,42,35,0);}30%{box-shadow:0 0 0 6px var(--fc,#c2703f);}}
+
+/* ---------- draw pile ---------- */
+#drawpile{display:flex; gap:16px; justify-content:center; align-items:flex-start; padding:4px 10px 8px; flex:0 0 auto;}
+.pile{display:flex; flex-direction:column; align-items:center; gap:3px; position:relative;}
+.pile .pilelabel{font-size:10.5px; color:var(--ink-soft); font-family:Georgia,serif; font-style:italic; min-height:14px;}
+#stockart{width:62px; height:82px; display:flex; align-items:center; justify-content:center;}
+#stockpile.live{cursor:pointer; touch-action:manipulation;}
+#stockpile.live:active #stockart{transform:translateY(2px);}
+#stockpile.pulse #stockart{animation:pulse 1.4s ease;}
+#stockart .perch{width:62px; min-height:78px;}
+.pilecount{position:absolute; top:-8px; right:0; background:var(--ink); color:var(--paper); font-size:11px; min-width:20px; height:20px; border-radius:10px; display:flex; align-items:center; justify-content:center; padding:0 5px;}
+.waste-empty{width:62px; height:82px; border:1.5px dashed var(--ink-soft); border-radius:10px; display:flex; align-items:center; justify-content:center; color:var(--ink-soft); font-size:10.5px; font-family:Georgia,serif; font-style:italic;}
+#wastepile{cursor:pointer; touch-action:manipulation;}
+.wcard{width:66px;}
+.wcard svg.bird{width:30px; height:25px;}
+
+/* ---------- tableau ---------- */
+#tableau{flex:1; display:flex; gap:6px; padding:10px; overflow-y:auto; align-items:flex-start; min-height:0;}
+.col{flex:1; display:flex; flex-direction:column; min-width:0;}
+.card{
+  background:var(--card); border:1.5px solid var(--ink); border-radius:10px;
+  padding:5px 2px 6px; text-align:center; position:relative;
+}
+.card + .card{margin-top:-30px;}
+.card svg.bird{width:34px; height:28px; display:block; margin:0 auto;}
+.card .pic{font-size:30px; line-height:1.2; display:block;}
+.wcard .pic{font-size:26px;}
+.card .w{font-family:Georgia,serif; font-size:13px; line-height:1.1; display:block; padding:0 1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.card .w.long{font-size:11px;} .card .w.xlong{font-size:9.5px;}
+.card.buried{opacity:.42; filter:saturate(.25); pointer-events:none;}
+.card.buried.xray{opacity:.85; filter:none;}
+.card.open{cursor:pointer;}
+.card.sel{transform:translateY(-7px); box-shadow:0 4px 0 var(--ink); border-width:2px; z-index:5;}
+.card.shake{animation:shake .38s;}
+@keyframes shake{20%{transform:translateX(-6px);}45%{transform:translateX(5px);}70%{transform:translateX(-3px);}}
+.card.fresh{animation:pop .3s ease;}
+@keyframes pop{0%{transform:scale(.6); opacity:0;}100%{transform:scale(1); opacity:1;}}
+.perch{
+  border:1.5px dashed var(--ink-soft); border-radius:10px; min-height:64px;
+  display:flex; align-items:center; justify-content:center; color:var(--ink-soft);
+  font-size:11px; font-family:Georgia,serif; font-style:italic;
+}
+
+/* ---------- power-up bar ---------- */
+#powerbar{display:flex; gap:6px; padding:8px 12px 0; flex:0 0 auto;}
+.pow{
+  flex:1; display:flex; flex-direction:column; align-items:center; gap:2px;
+  border:1.5px solid var(--ink); border-radius:10px; background:var(--card); color:var(--ink);
+  padding:6px 2px 5px; cursor:pointer; position:relative; touch-action:manipulation;
+}
+.pow:active{transform:translateY(1px);}
+.pow svg{width:22px; height:22px;}
+.pow .plabel{font-size:9.5px; font-family:Georgia,serif;}
+.pow .pcount{
+  position:absolute; top:-7px; right:-5px; background:var(--ink); color:var(--paper);
+  font-size:10px; min-width:18px; height:18px; border-radius:9px;
+  display:flex; align-items:center; justify-content:center; padding:0 4px;
+}
+.pow.empty{opacity:.38;}
+
+/* ---------- action bar ---------- */
+#actionbar{display:flex; gap:8px; padding:8px 12px calc(24px + env(safe-area-inset-bottom)); flex:0 0 auto;}
+#btn-call{
+  flex:1; font-family:Georgia,serif; font-size:16px; padding:11px;
+  border:2px solid var(--ink); border-radius:12px; background:var(--card);
+  color:var(--ink); cursor:pointer; touch-action:manipulation;
+}
+#btn-call:active{transform:translateY(2px);}
+#btn-call:disabled{opacity:.4;}
+#movehint{flex:0 0 auto; align-self:center; font-size:12px; color:var(--ink-soft); font-style:italic; font-family:Georgia,serif;}
+
+/* ---------- overlays ---------- */
+#overlay{position:fixed; inset:0; background:rgba(46,42,35,.5); display:none; align-items:center; justify-content:center; z-index:100; padding:20px;}
+#overlay.show{display:flex;}
+.panel{
+  background:var(--paper); border:2px solid var(--ink); border-radius:18px;
+  padding:26px 24px; max-width:330px; width:100%; text-align:center;
+  animation:panelin .25s ease; max-height:86dvh; overflow-y:auto;
+}
+@keyframes panelin{from{transform:scale(.92) translateY(8px); opacity:0;}}
+.panel h2{font-family:Georgia,serif; margin:0 0 6px; font-size:24px;}
+.panel p{font-size:14px; color:var(--ink-soft); margin:6px 0 14px; line-height:1.5;}
+.panel .movesline{font-family:Georgia,serif; font-size:15px; color:var(--ink); margin:2px 0 6px;}
+.panel .stars{font-size:42px; letter-spacing:6px; margin:4px 0 8px;}
+.panel .stars .s{color:#ddd0ab;}
+.panel .stars .s.earned{color:var(--acc2); text-shadow:0 1px 0 var(--ink);}
+.howrow{display:flex; gap:10px; text-align:left; margin:10px 0; align-items:flex-start;}
+.howrow .n{flex:0 0 26px; height:26px; border-radius:50%; background:var(--ink); color:var(--paper); font-family:Georgia,serif; display:flex; align-items:center; justify-content:center; font-size:14px;}
+.howrow p{margin:0; font-size:13.5px; color:var(--ink);}
+
+/* ---------- toast ---------- */
+#toast{
+  position:fixed; left:50%; bottom:88px; transform:translateX(-50%) translateY(10px);
+  background:var(--ink); color:var(--paper); font-size:13.5px; padding:9px 16px;
+  border-radius:20px; opacity:0; transition:opacity .2s, transform .2s; z-index:200;
+  pointer-events:none; max-width:86%; text-align:center;
+}
+#toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+/* ---------- map ---------- */
+#screen-map{overflow-y:auto; padding:6px 0 30px;}
+#mapwrap{position:relative;}
+.mapnode{cursor:pointer; touch-action:manipulation;}
+.mapnode.locked{cursor:default;}
+.mapnode text{font-family:Georgia,serif; pointer-events:none;}
+
+/* ---------- field guide ---------- */
+#screen-fieldguide{overflow-y:auto;}
+#fg-top{display:flex; align-items:center; gap:8px; padding:10px 12px 6px; border-bottom:1.5px solid var(--line); flex:0 0 auto;}
+#fg-top .ttl{font-family:Georgia,serif; font-size:17px; flex:1;}
+#fg-count{font-size:12px; color:var(--ink-soft); white-space:nowrap;}
+#fg-sub{padding:10px 14px 0; font-size:13px; color:var(--ink-soft); font-family:Georgia,serif; font-style:italic; flex:0 0 auto;}
+#fg-grid{padding:6px 12px calc(30px + env(safe-area-inset-bottom));}
+.fg-theme{font-family:Georgia,serif; font-size:16px; margin:14px 2px 8px;}
+.fg-cells{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px;}
+.fg-cell{border:1.5px solid var(--line); border-radius:12px; background:var(--card); padding:8px 4px; text-align:center; min-width:0; cursor:pointer; touch-action:manipulation;}
+.fg-cell.locked{cursor:default;}
+.fg-pop{text-align:center; padding:6px;}
+.fg-pop img{width:min(72vw,320px); aspect-ratio:1; object-fit:cover; border-radius:14px; background:#e9dcc0; image-rendering:pixelated; display:block; margin:0 auto;}
+.fg-pop-word{font-family:Georgia,serif; font-size:22px; margin-top:10px; text-transform:capitalize;}
+.fg-pop-theme{font-size:13px; color:var(--ink-soft); margin:4px 0 12px;}
+.fg-cell img{width:100%; aspect-ratio:1; object-fit:cover; border-radius:8px; background:#e9dcc0; display:block;}
+.fg-cell.locked img{filter:brightness(.32) saturate(.45);}
+.fg-cell .fg-word{font-family:Georgia,serif; font-size:12px; margin-top:5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+
+/* ---------- misc ---------- */
+#version{position:fixed; right:8px; bottom:4px; font-size:10px; color:var(--ink-soft); opacity:.7; z-index:5; pointer-events:none;}
+.puff{position:fixed; z-index:90; pointer-events:none; width:16px; height:16px;}
+.ghostcard{box-shadow:0 6px 14px rgba(46,42,35,.3);}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="gameheader" style="display:none">
+    <button class="iconbtn" id="btn-back" aria-label="Back">←</button>
+    <div class="ttl"><span id="leveltitle">Level 1</span><span id="parline"></span></div>
+    <div id="movecount" title="Moves"><b id="movenum">0</b><span>moves</span></div>
+    <div id="feathers" aria-label="Feathers remaining"></div>
+    <button class="iconbtn" id="btn-mute" aria-label="Sound">🔔</button>
+  </header>
+
+  <section class="screen active" id="screen-home">
+    <svg id="logo" viewBox="0 0 120 100" aria-hidden="true">
+      <ellipse cx="60" cy="88" rx="34" ry="7" fill="none" stroke="#2e2a23" stroke-width="2.5"/>
+      <ellipse cx="60" cy="84" rx="26" ry="5" fill="none" stroke="#2e2a23" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <path d="M38 52 Q44 30 62 28 Q80 26 84 40 L92 43 L84 46 Q80 58 62 58 Q46 58 38 52 Z" fill="#c2703f" stroke="#2e2a23" stroke-width="2.5" stroke-linejoin="round"/>
+      <path d="M50 44 Q58 40 66 44 Q60 50 52 48 Z" fill="#2e2a23" opacity=".25"/>
+      <circle cx="72" cy="36" r="2.6" fill="#2e2a23"/>
+      <path d="M84 40 L92 43 L84 46" fill="none" stroke="#2e2a23" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M40 50 Q34 54 30 58 M42 54 Q38 60 34 64" stroke="#2e2a23" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    </svg>
+    <h1>Birds of a Feather</h1>
+    <p class="tag">flock together.</p>
+    <button class="bigbtn primary" id="btn-journey">Begin the Journey<span class="sub" id="journey-sub">200 levels</span></button>
+    <button class="bigbtn" id="btn-daily">Daily Migration<span class="sub" id="daily-sub">a fresh puzzle every day</span></button>
+    <button class="bigbtn" id="btn-how">How to play</button>
+    <button class="bigbtn" id="btn-fieldguide">Field Guide<span class="sub" id="fg-sub2">birds you have homed</span></button>
+    <div id="home-foot">An original word-sorting puzzle · works offline</div>
+  </section>
+
+  <section class="screen" id="screen-map">
+    <div id="mapwrap"></div>
+  </section>
+
+  <section class="screen" id="screen-dev">
+    <h1>Developer browser</h1>
+    <p class="tag">Explore every flock · progress and streaks stay untouched.</p>
+    <div class="dev-panel">
+      <h2>Journey levels</h2>
+      <div id="dev-levels"></div>
+    </div>
+    <div class="dev-panel">
+      <h2>Daily seeds</h2>
+      <div id="dev-dailies"></div>
+    </div>
+  </section>
+
+  <section class="screen" id="screen-game">
+    <div id="dev-hud"><label for="dev-reveal"><input type="checkbox" id="dev-reveal"> Reveal solution</label></div>
+    <div id="flocks"></div>
+    <div id="drawpile">
+      <div class="pile" id="stockpile" role="button" tabindex="0" aria-label="Draw pile">
+        <div class="pilecount" id="stockcount" style="display:none"></div>
+        <div id="stockart"></div>
+        <div class="pilelabel" id="stocklabel"></div>
+      </div>
+      <div class="pile" id="wastepile" role="button" tabindex="0" aria-label="Waste pile">
+        <div id="wastecard"></div>
+        <div class="pilelabel">waste</div>
+      </div>
+    </div>
+    <div id="tableau"></div>
+    <div id="powerbar"></div>
+    <div id="actionbar">
+      <button id="btn-call">📣 Call <span style="font-size:12px; opacity:.6">(−1 feather)</span></button>
+      <div id="movehint">tap a bird, then its flock</div>
+    </div>
+  </section>
+
+  <section class="screen" id="screen-fieldguide">
+    <div id="fg-top">
+      <button class="iconbtn" id="btn-fg-back" aria-label="Back">←</button>
+      <div class="ttl">Field Guide</div>
+      <div id="fg-count"></div>
+    </div>
+    <div id="fg-sub">Every bird you have homed, collected. Portraits appear as they are painted.</div>
+    <div id="fg-grid"></div>
+  </section>
+</div>
+
+<div id="overlay"><div class="panel" id="panel"></div></div>
+<div id="toast"></div>
+<div id="version">v2026.10.04-05</div>
+
+<script src="par.js"></script>
+<script src="content.js"></script>
+<script>
+(function () {
+'use strict';
+var C = window.BoFContent;
+/* Solver: prefer the content.js re-exports (C.*); fall back to window.BoFPar
+ * from par.js, which always carries the real implementation. */
+var SZ = (C && C.dealLayout && C.parFor && C.oracleFor && C.dealSeed) ? C : (window.BoFPar || null);
+var $ = function (s) { return document.querySelector(s); };
+var INK = '#2e2a23';
+var ACCENTS = ['#c2703f', '#7c9a5f', '#d9a13b', '#5f83a8'];
+var params = new URLSearchParams(window.location.search);
+var devMode = params.get('dev') === '1';
+
+/* ---------------- storage ---------------- */
+var store = {
+  get: function (k, d) { try { var v = localStorage.getItem('bof_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set: function (k, v) { try { localStorage.setItem('bof_' + k, JSON.stringify(v)); } catch (e) {} }
+};
+var progress = store.get('progress', { unlocked: 1, stars: {} });
+var daily = store.get('daily', { lastDone: null, streak: 0 });
+var muted = store.get('muted', false);
+var powerups = Object.assign(
+  { oracle: 2, undo: 2, feather: 2, xray: 2, scramble: 2 },
+  store.get('powerups', {})
+);
+var fgSeen = {};
+store.get('fieldguide', []).forEach(function (w) { fgSeen[w] = 1; });
+function fgSpot(word) {
+  if (isDevPlay()) return; // dev play never mutates player progress
+  if (fgSeen[word]) return;
+  fgSeen[word] = 1;
+  store.set('fieldguide', Object.keys(fgSeen));
+}
+
+/* ---------------- audio ---------------- */
+var AC = null;
+function ac() {
+  if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+  if (AC && AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function tone(f0, f1, dur, type, vol, delay) {
+  try {
+    var ctx = ac(); if (!ctx || muted) return;
+    var t = ctx.currentTime + (delay || 0);
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol || 0.12, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(t); o.stop(t + dur + 0.05);
+  } catch (e) { /* sound must never break gameplay */ }
+}
+function sfx(name) {
+  if (muted) return;
+  if (name === 'select') tone(700, 700, 0.06, 'sine', 0.05);
+  else if (name === 'right') { tone(620, 620, 0.09, 'sine', 0.1); tone(880, 880, 0.12, 'sine', 0.1, 0.08); }
+  else if (name === 'wrong') tone(220, 140, 0.22, 'square', 0.06);
+  else if (name === 'call') { tone(520, 780, 0.14, 'sine', 0.09); tone(780, 1040, 0.14, 'sine', 0.07, 0.12); }
+  else if (name === 'win') { [523, 659, 784, 1046].forEach(function (f, i) { tone(f, f, 0.16, 'sine', 0.1, i * 0.11); }); }
+  else if (name === 'star') tone(1200, 1600, 0.18, 'sine', 0.08);
+}
+function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }
+
+/* ---------------- svg ---------------- */
+function birdSVG(color) {
+  return '<svg class="bird" viewBox="0 0 48 40" aria-hidden="true">' +
+    '<path d="M10 25 Q15 12 27 11 Q39 10 41 20 L46 22.5 L41 25 Q39 33 27 33 Q15 33 10 25 Z" fill="' + color + '" stroke="' + INK + '" stroke-width="2" stroke-linejoin="round"/>' +
+    '<path d="M17 24 Q23 20 29 23 Q24 28 19 27 Z" fill="' + INK + '" opacity=".22"/>' +
+    '<circle cx="32" cy="17.5" r="2.2" fill="' + INK + '"/>' +
+    '<path d="M41 20 L46 22.5 L41 25" fill="none" stroke="' + INK + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+    '<path d="M12 24 Q7 27 4 31 M13 27 Q10 31 8 35" stroke="' + INK + '" stroke-width="2" fill="none" stroke-linecap="round"/>' +
+    '</svg>';
+}
+function nestSVG(accent) {
+  return '<svg class="nest" viewBox="0 0 60 48" aria-hidden="true">' +
+    '<ellipse cx="30" cy="34" rx="26" ry="11" fill="#e9dcc0" stroke="' + INK + '" stroke-width="2.5"/>' +
+    '<ellipse cx="30" cy="31" rx="19" ry="7.5" fill="none" stroke="' + INK + '" stroke-width="1.6" stroke-dasharray="5 3.5"/>' +
+    '<path d="M12 30 Q30 22 48 30 M16 36 Q30 30 44 36" fill="none" stroke="' + accent + '" stroke-width="2" stroke-linecap="round"/>' +
+    '<ellipse cx="30" cy="14" rx="4" ry="5.5" fill="' + accent + '" stroke="' + INK + '" stroke-width="1.6" transform="rotate(-18 30 14)"/>' +
+    '<ellipse cx="38" cy="16" rx="3.4" ry="4.6" fill="' + accent + '" stroke="' + INK + '" stroke-width="1.6" transform="rotate(14 38 16)" opacity=".85"/>' +
+    '</svg>';
+}
+function featherSVG(color) {
+  return '<svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">' +
+    '<path d="M10 2 Q15 7 12 14 Q10 17 10 18 Q10 17 8 14 Q5 7 10 2 Z" fill="' + color + '" stroke="' + INK + '" stroke-width="1.4"/>' +
+    '<path d="M10 4 L10 16" stroke="' + INK + '" stroke-width="1"/>' +
+    '</svg>';
+}
+function stockBackSVG() {
+  return '<svg viewBox="0 0 62 82" width="62" height="82" aria-hidden="true">' +
+    '<rect x="2" y="2" width="58" height="78" rx="9" fill="#c2703f" stroke="' + INK + '" stroke-width="2.5"/>' +
+    '<rect x="9" y="9" width="44" height="64" rx="6" fill="none" stroke="#f6efe1" stroke-width="1.6"/>' +
+    '<path d="M31 20 Q40 32 35 50 Q33 58 31 62 Q29 58 27 50 Q22 32 31 20 Z" fill="#f6efe1" opacity=".92"/>' +
+    '<path d="M31 24 L31 58" stroke="#c2703f" stroke-width="1.6"/>' +
+    '</svg>';
+}
+function redealSVG() {
+  return '<svg viewBox="0 0 62 82" width="62" height="82" aria-hidden="true">' +
+    '<rect x="2" y="2" width="58" height="78" rx="9" fill="#fffdf7" stroke="' + INK + '" stroke-width="2.5"/>' +
+    '<path d="M46 30 A14 14 0 1 0 47 50" fill="none" stroke="' + INK + '" stroke-width="3" stroke-linecap="round"/>' +
+    '<path d="M46 21 L48 33 L37 29 Z" fill="' + INK + '"/>' +
+    '</svg>';
+}
+function oracleSVG() {
+  return '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+    '<path d="M2 12 Q12 4.5 22 12 Q12 19.5 2 12 Z" fill="none" stroke="' + INK + '" stroke-width="2"/>' +
+    '<circle cx="12" cy="12" r="3.4" fill="#5f83a8" stroke="' + INK + '" stroke-width="1.6"/>' +
+    '</svg>';
+}
+function undoSVG() {
+  return '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+    '<path d="M9 5 L4 10 L9 15" fill="none" stroke="' + INK + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+    '<path d="M4 10 H14 Q20 10 20 16 L20 19" fill="none" stroke="' + INK + '" stroke-width="2" stroke-linecap="round"/>' +
+    '</svg>';
+}
+function xraySVG() {
+  return '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+    '<path d="M2 12 Q12 4.5 22 12 Q12 19.5 2 12 Z" fill="none" stroke="' + INK + '" stroke-width="2"/>' +
+    '<circle cx="12" cy="12" r="2.4" fill="' + INK + '"/>' +
+    '<path d="M18.5 3.5 L19.6 6 L22.2 7 L19.6 8 L18.5 10.5 L17.4 8 L14.8 7 L17.4 6 Z" fill="#d9a13b" stroke="' + INK + '" stroke-width="1"/>' +
+    '</svg>';
+}
+function scrambleSVG() {
+  return '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+    '<path d="M3 7 H12 L16 3 M12 7 L16 11" fill="none" stroke="' + INK + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+    '<path d="M3 17 H12 L16 13 M21 7 L16 11 L21 15" fill="none" stroke="' + INK + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+    '</svg>';
+}
+
+/* ---------------- screens ---------------- */
+function show(id) {
+  document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('active'); });
+  $('#' + id).classList.add('active');
+  $('#gameheader').style.display = (id === 'screen-game') ? 'flex' : 'none';
+}
+var toastT = null;
+function toast(msg) {
+  var t = $('#toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(function () { t.classList.remove('show'); }, 1900);
+}
+
+/* ---------------- game state ---------------- */
+var G = null;
+function isDevPlay() { return G && typeof G.key === 'string' && G.key.indexOf('dev:') === 0; }
+
+function startLevel(levelObj, key, title) {
+  if (!SZ) { toast('Puzzle engine is still loading — try again in a moment.'); return; }
+  var layout = SZ.dealLayout(levelObj, key);
+  var total = 0;
+  layout.columns.forEach(function (col) { total += col.length; });
+  total += layout.stock.length;
+  G = {
+    level: levelObj, key: key, title: title,
+    columns: layout.columns,
+    stock: layout.stock,
+    waste: [],
+    redealsLeft: 2,
+    moves: 0,
+    undoStack: [],
+    par: SZ.parFor(levelObj, key),
+    selected: null,
+    feathers: levelObj.feathers, mistakes: 0,
+    homed: 0, total: total, over: false,
+    accents: {}, xrayUntil: 0,
+    queue: [], flyingUid: null
+  };
+  levelObj.flocks.forEach(function (f, i) { G.accents[f.name] = ACCENTS[i % 4]; });
+  $('#leveltitle').textContent = title;
+  $('#parline').textContent = 'Par ' + G.par + ' - proven optimal';
+  $('#dev-hud').style.display = isDevPlay() ? 'block' : 'none';
+  renderFeathers(); renderFlocks(); renderTableau(true); renderPiles(); renderMoves(); renderPowerBar();
+  updateMuteBtn();
+  show('screen-game');
+}
+
+function openCard(col) {
+  var c = G.columns[col];
+  return c.length ? c[c.length - 1] : null;
+}
+function wasteTop() {
+  return G.waste.length ? G.waste[G.waste.length - 1] : null;
+}
+function flockIndex(home) {
+  for (var i = 0; i < G.level.flocks.length; i++) if (G.level.flocks[i].name === home) return i;
+  return -1;
+}
+
+function renderFeathers() {
+  var el = $('#feathers'); el.innerHTML = '';
+  for (var i = 0; i < G.level.feathers; i++) {
+    var s = document.createElement('span');
+    s.innerHTML = featherSVG('#8a7c5f');
+    if (i >= G.feathers) s.firstChild.classList.add('lost');
+    el.appendChild(s);
+  }
+}
+function renderMoves() { $('#movenum').textContent = G.moves; }
+
+function renderFlocks() {
+  var box = $('#flocks'); box.innerHTML = '';
+  G.level.flocks.forEach(function (f, fi) {
+    var acc = G.accents[f.name];
+    var d = document.createElement('div');
+    d.className = 'flock'; d.style.setProperty('--fc', acc);
+    d.setAttribute('data-fi', fi);
+    var dots = '';
+    for (var i = 0; i < f.cards.length; i++) dots += '<i></i>';
+    d.innerHTML = nestSVG(acc) +
+      '<div class="fname">' + escapeHtml(f.name) + '</div>' +
+      '<div class="quota"><span class="qnum">0</span>/' + f.cards.length + '</div>' +
+      '<div class="dots">' + dots + '</div>';
+    d.addEventListener('click', function () { tapFlock(fi); });
+    box.appendChild(d);
+  });
+}
+
+function picFor(w) { return '<span class="pic" aria-hidden="true">' + (C.EMOJI[w] || '\u2754') + '</span>'; }
+function cardEl(card, col, buried) {
+  var d = document.createElement('div');
+  var xray = buried && G && Date.now() < G.xrayUntil;
+  d.className = 'card' + (buried ? ' buried' : ' open') + (xray ? ' xray' : '');
+  d.setAttribute('data-uid', card.uid);
+  var wc = card.w.length > 9 ? 'xlong' : (card.w.length > 7 ? 'long' : '');
+  d.innerHTML = picFor(card.w) + '<span class="w ' + wc + '">' + escapeHtml(card.w) + '</span>';
+  if (!buried && isDevPlay() && $('#dev-reveal').checked) {
+    d.innerHTML += '<span class="home-caption">' + escapeHtml(card.home) + '</span>';
+  }
+  if (xray) {
+    d.innerHTML += '<span class="home-caption">' + escapeHtml(card.home) + '</span>';
+  }
+  if (!buried) d.addEventListener('click', function () { tapCard(card, col, d); });
+  if (G && G.flyingUid === card.uid) d.style.visibility = 'hidden';
+  return d;
+}
+
+function isLeaving(uid) {
+  if (!G) return false;
+  if (G.flyingUid === uid) return true;
+  return G.queue.some(function (job) { return job.sel.uid === uid; });
+}
+
+function renderTableau(deal) {
+  var t = $('#tableau'); t.innerHTML = '';
+  G.columns.forEach(function (colCards, ci) {
+    var col = document.createElement('div');
+    col.className = 'col';
+    if (!colCards.length) {
+      col.innerHTML = '<div class="perch">empty<br>perch</div>';
+    } else {
+      colCards.forEach(function (card, idx) {
+        var buried = idx < colCards.length - 1;
+        if (buried) {
+          // Every card above this one is already flying or queued to fly:
+          // it is effectively open and can be tapped right now.
+          var clear = true;
+          for (var j = idx + 1; j < colCards.length; j++) {
+            if (!isLeaving(colCards[j].uid)) { clear = false; break; }
+          }
+          if (clear) buried = false;
+        }
+        var el = cardEl(card, ci, buried);
+        if (deal) { el.style.animation = 'pop .3s ease backwards'; el.style.animationDelay = (ci * 40 + idx * 25) + 'ms'; }
+        col.appendChild(el);
+      });
+    }
+    t.appendChild(col);
+  });
+  if (G.selected) {
+    var sel = t.querySelector('[data-uid="' + G.selected.uid + '"]');
+    if (sel) sel.classList.add('sel');
+  }
+}
+
+function wasteCardEl(card) {
+  var d = document.createElement('div');
+  var isSel = G.selected && G.selected.from === 'waste' && G.selected.uid === card.uid;
+  d.className = 'card open wcard' + (isSel ? ' sel' : '');
+  d.setAttribute('data-uid', card.uid);
+  var wc = card.w.length > 9 ? 'xlong' : (card.w.length > 7 ? 'long' : '');
+  d.innerHTML = picFor(card.w) + '<span class="w ' + wc + '">' + escapeHtml(card.w) + '</span>';
+  d.addEventListener('click', tapWaste);
+  if (G && G.flyingUid === card.uid) d.style.visibility = 'hidden';
+  return d;
+}
+
+function renderPiles() {
+  var sp = $('#stockpile'), sc = $('#stockcount'), sl = $('#stocklabel'), sa = $('#stockart');
+  sp.classList.remove('pulse');
+  if (G.stock.length) {
+    sa.innerHTML = stockBackSVG();
+    sc.textContent = G.stock.length; sc.style.display = 'flex';
+    sl.textContent = 'draw';
+    sp.classList.add('live'); sp.classList.remove('redeal');
+  } else if (G.waste.length && G.redealsLeft > 0) {
+    sa.innerHTML = redealSVG();
+    sc.textContent = G.redealsLeft; sc.style.display = 'flex';
+    sl.textContent = 'redeal';
+    sp.classList.add('live'); sp.classList.add('redeal');
+  } else {
+    sa.innerHTML = '<div class="perch"></div>';
+    sc.style.display = 'none';
+    sl.textContent = '';
+    sp.classList.remove('live'); sp.classList.remove('redeal');
+  }
+  var wc = $('#wastecard');
+  wc.innerHTML = '';
+  var top = wasteTop();
+  if (top) {
+    wc.appendChild(wasteCardEl(top));
+  } else {
+    wc.innerHTML = '<div class="waste-empty">waste</div>';
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+$('#dev-reveal').addEventListener('change', function () {
+  if (isDevPlay()) renderTableau(false);
+});
+
+function selectCard(sel) {
+  if (!G || G.over) return;
+  G.selected = sel;
+  document.querySelectorAll('.card.sel').forEach(function (e) { e.classList.remove('sel'); });
+  renderTableau(false);
+  renderPiles();
+  sfx('select');
+}
+
+function tapCard(card, col, el) {
+  if (!G || G.over) return;
+  if (G.selected && G.selected.uid === card.uid) {
+    G.selected = null; el.classList.remove('sel'); return;
+  }
+  selectCard({ uid: card.uid, card: card, from: 'col', col: col });
+}
+
+function tapWaste() {
+  if (!G || G.over) return;
+  var card = wasteTop();
+  if (!card) return;
+  if (G.selected && G.selected.from === 'waste' && G.selected.uid === card.uid) {
+    G.selected = null; renderPiles(); return;
+  }
+  selectCard({ uid: card.uid, card: card, from: 'waste', col: -1 });
+}
+
+/* ---------------- draw pile ---------------- */
+function drawStock() {
+  if (!G || G.over) return;
+  if (G.stock.length) {
+    G.waste.push(G.stock.shift());
+    G.moves++;
+    G.selected = null;
+    renderPiles(); renderMoves();
+    var el = $('#wastecard .card');
+    if (el) el.classList.add('fresh');
+    sfx('select');
+  } else if (G.waste.length && G.redealsLeft > 0) {
+    redeal();
+  }
+}
+function redeal() {
+  if (!G || G.over) return;
+  if (G.stock.length || !G.waste.length || G.redealsLeft <= 0) return;
+  G.stock = G.waste.slice();
+  G.waste = [];
+  G.redealsLeft--;
+  G.moves++;
+  G.selected = null;
+  renderPiles(); renderMoves();
+  sfx('select');
+  toast(G.redealsLeft === 1 ? 'Waste shuffled back into the stock — 1 redeal left.' : 'Waste shuffled back into the stock.');
+}
+$('#stockpile').addEventListener('click', drawStock);
+$('#wastepile').addEventListener('click', tapWaste);
+[['#stockpile', drawStock], ['#wastepile', tapWaste]].forEach(function (pair) {
+  $(pair[0]).addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pair[1](); }
+  });
+});
+
+function pumpQueue() {
+  if (!G || G.over || G.flyingUid) return;
+  var job = G.queue.shift();
+  if (!job) return;
+  var sel = job.sel, fi = job.fi;
+  var src = sel.from === 'waste' ? G.waste : G.columns[sel.col];
+  var present = src.some(function (c) { return c.uid === sel.card.uid; });
+  var flock = G.level.flocks[fi];
+  if (!present || !flock || sel.card.home !== flock.name) { pumpQueue(); return; }
+  // Keep the card visually selected until its flight actually begins, then
+  // measure it exactly where the user sees it. Unlifting or re-rendering
+  // first would make the ghost jump on takeoff.
+  if (G.selected && G.selected.uid === sel.uid) G.selected = null;
+  G.flyingUid = sel.card.uid;
+  var cardElQ = document.querySelector('[data-uid="' + sel.uid + '"]');
+  var nestBox = document.querySelectorAll('.flock')[fi];
+  // The card leaves the hand the moment it takes off: mutate state and
+  // reveal the card beneath it now, so its pop plays in parallel with the
+  // flight instead of waiting for the landing.
+  var src2 = sel.from === 'waste' ? G.waste : G.columns[sel.col];
+  var idx = -1;
+  for (var i = src2.length - 1; i >= 0; i--) {
+    if (src2[i].uid === sel.card.uid) { idx = i; break; }
+  }
+  if (idx < 0) { G.flyingUid = null; pumpQueue(); return; }
+  src2.splice(idx, 1);
+  G.undoStack.push({ card: sel.card, from: sel.from, col: sel.col, home: sel.card.home });
+  G.homed++;
+  G.moves++;
+  fgSpot(sel.card.w);
+  flyToNest(cardElQ, nestBox, function () {
+    G.flyingUid = null;
+    if (!G || G.over) return;
+    sfx('right');
+    if (G.homed >= G.total) { G.queue.length = 0; winLevel(); return; }
+    pumpQueue();
+  });
+  // Re-render after takeoff: hides the original, reveals and pops the card
+  // beneath it, and fills the flock quota. The ghost is fixed-position,
+  // so this never moves it.
+  renderTableau(false); renderPiles(); renderMoves();
+  updateQuota(fi);
+  var fresh = sel.from === 'col' ? openCardEl(sel.col) : null;
+  if (fresh) fresh.classList.add('fresh');
+}
+
+function tapFlock(fi) {
+  if (!G || G.over) return;
+  var flock = G.level.flocks[fi];
+  if (!G.selected) { toast('Tap a bird first, then its flock.'); return; }
+  var sel = G.selected;
+  var cardElQ = document.querySelector('[data-uid="' + sel.uid + '"]');
+  if (sel.card.home === flock.name) {
+    // The card stays visually selected until its flight actually begins,
+    // so rapid taps never make cards jump.
+    G.queue.push({ sel: sel, fi: fi });
+    pumpQueue();
+  } else {
+    G.selected = null;
+    if (cardElQ) {
+      cardElQ.classList.remove('sel');
+      cardElQ.classList.remove('shake'); void cardElQ.offsetWidth; cardElQ.classList.add('shake');
+    }
+    G.mistakes++; G.feathers--;
+    renderFeathers();
+    sfx('wrong'); buzz(60);
+    if (cardElQ) {
+      var r = cardElQ.getBoundingClientRect();
+      puff(r.left + r.width / 2, r.top + 20, '#8a7c5f');
+    }
+    toast('"' + sel.card.w + '" doesn\u2019t belong with the ' + flock.name + '.');
+    if (G.feathers <= 0) setTimeout(failLevel, 650);
+  }
+}
+
+function openCardEl(col) {
+  var colEl = document.querySelectorAll('#tableau .col')[col];
+  if (!colEl) return null;
+  var cards = colEl.querySelectorAll('.card.open');
+  return cards.length ? cards[cards.length - 1] : null;
+}
+
+function updateQuota(fi) {
+  var flock = G.level.flocks[fi];
+  var box = document.querySelectorAll('.flock')[fi];
+  var remaining = 0;
+  G.columns.forEach(function (col) {
+    col.forEach(function (c) { if (c.home === flock.name) remaining++; });
+  });
+  G.waste.forEach(function (c) { if (c.home === flock.name) remaining++; });
+  var n = flock.cards.length - remaining;
+  box.querySelector('.qnum').textContent = n;
+  var dots = box.querySelectorAll('.dots i');
+  for (var i = 0; i < dots.length; i++) dots[i].classList.toggle('on', i < n);
+  box.animate(
+    [{ transform: 'scale(1)' }, { transform: 'scale(1.08)' }, { transform: 'scale(1)' }],
+    { duration: 260, easing: 'ease-out' }
+  );
+}
+
+function flyToNest(cardEl, nestBox, done) {
+  if (!cardEl) { done(); return; }
+  var r1 = cardEl.getBoundingClientRect();
+  var nest = nestBox.querySelector('.nest');
+  var r2 = (nest || nestBox).getBoundingClientRect();
+  var ghost = cardEl.cloneNode(true);
+  ghost.classList.add('ghostcard');
+  ghost.style.cssText += ';position:fixed;left:' + r1.left + 'px;top:' + r1.top + 'px;' +
+    'width:' + r1.width + 'px;margin:0;z-index:90;pointer-events:none;';
+  document.body.appendChild(ghost);
+  cardEl.style.visibility = 'hidden';
+  var dx = (r2.left + r2.width / 2) - (r1.left + r1.width / 2);
+  var dy = (r2.top + r2.height / 2) - (r1.top + r1.height / 2);
+  var anim = ghost.animate([
+    { transform: 'translate(0,0) scale(1)', opacity: 1, offset: 0 },
+    { transform: 'translate(' + dx * 0.5 + 'px,' + (dy * 0.5 - 46) + 'px) scale(.8)', opacity: 1, offset: 0.55 },
+    { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(.35)', opacity: 0.9, offset: 1 }
+  ], { duration: 560, easing: 'cubic-bezier(.3,.65,.35,1)' });
+  anim.onfinish = function () { ghost.remove(); done(); };
+}
+
+function puff(x, y, color) {
+  for (var i = 0; i < 7; i++) {
+    (function (i) {
+      var s = document.createElement('div');
+      s.className = 'puff'; s.innerHTML = featherSVG(color);
+      s.style.left = (x - 8) + 'px'; s.style.top = (y - 8) + 'px';
+      document.body.appendChild(s);
+      var ang = (i / 7) * Math.PI * 2 + Math.random() * 0.5;
+      var dist = 34 + Math.random() * 30;
+      s.animate([
+        { transform: 'translate(0,0) rotate(0deg)', opacity: 1 },
+        { transform: 'translate(' + Math.cos(ang) * dist + 'px,' + (Math.sin(ang) * dist - 14) + 'px) rotate(' + (Math.random() * 260 - 130) + 'deg)', opacity: 0 }
+      ], { duration: 650 + Math.random() * 250, easing: 'cubic-bezier(.2,.7,.3,1)' }).onfinish = function () { s.remove(); };
+    })(i);
+  }
+}
+
+/* ---------------- power-ups ---------------- */
+var POWERS = [
+  { id: 'oracle', label: 'Oracle', icon: oracleSVG },
+  { id: 'undo', label: 'Undo', icon: undoSVG },
+  { id: 'feather', label: 'Feather', icon: function () { return featherSVG('#8a7c5f'); } },
+  { id: 'xray', label: 'X-ray', icon: xraySVG },
+  { id: 'scramble', label: 'Shuffle', icon: scrambleSVG }
+];
+function renderPowerBar() {
+  var bar = $('#powerbar'); bar.innerHTML = '';
+  POWERS.forEach(function (p) {
+    var n = powerups[p.id] || 0;
+    var b = document.createElement('button');
+    b.className = 'pow' + (n <= 0 ? ' empty' : '');
+    b.setAttribute('aria-label', p.label + ' (' + n + ' left)');
+    b.innerHTML = p.icon() + '<span class="plabel">' + p.label + '</span><span class="pcount">' + n + '</span>';
+    (function (id) { b.addEventListener('click', function () { usePower(id); }); })(p.id);
+    bar.appendChild(b);
+  });
+}
+function spend(id) {
+  powerups[id] = Math.max(0, (powerups[id] || 0) - 1);
+  store.set('powerups', powerups);
+  renderPowerBar();
+}
+function usePower(id) {
+  if (!G || G.over) return;
+  if ((powerups[id] || 0) <= 0) { toast('No ' + id + ' left — earn more by playing.'); return; }
+  if (id === 'oracle') {
+    var gs = {
+      wasteTop: wasteTop(),
+      stockLeft: G.stock.length,
+      colTops: G.columns.map(function (c) { return c.length ? c[c.length - 1] : null; })
+    };
+    var mv = SZ.oracleFor(gs);
+    if (!mv) return; // terminal state: nothing exposed
+    spend('oracle');
+    if (mv.type === 'draw') {
+      var sp = $('#stockpile');
+      sp.classList.remove('pulse'); void sp.offsetWidth; sp.classList.add('pulse');
+      toast('Oracle: draw from the stock.');
+    } else {
+      if (mv.type === 'place-waste') selectCard({ uid: gs.wasteTop.uid, card: gs.wasteTop, from: 'waste', col: -1 });
+      else selectCard({ uid: gs.colTops[mv.col].uid, card: gs.colTops[mv.col], from: 'col', col: mv.col });
+      var fi = flockIndex(mv.home);
+      if (fi >= 0) {
+        var box = document.querySelectorAll('.flock')[fi];
+        box.classList.remove('pulse'); void box.offsetWidth; box.classList.add('pulse');
+      }
+      toast('Oracle: this bird belongs with the ' + mv.home + '.');
+    }
+  } else if (id === 'undo') {
+    if (G.flyingUid || G.queue.length) return;
+    var u = G.undoStack.pop();
+    if (!u) { toast('Nothing to undo.'); return; }
+    spend('undo');
+    if (u.from === 'waste') G.waste.push(u.card);
+    else G.columns[u.col].push(u.card);
+    G.homed--;
+    G.moves = Math.max(0, G.moves - 1);
+    G.selected = null;
+    var ufi = flockIndex(u.home);
+    if (ufi >= 0) updateQuota(ufi);
+    renderTableau(false); renderPiles(); renderMoves();
+    toast('Undone.');
+  } else if (id === 'feather') {
+    if (G.feathers >= G.level.feathers) { toast('Feathers already full.'); return; }
+    spend('feather');
+    G.feathers = Math.min(G.level.feathers, G.feathers + 1);
+    renderFeathers();
+    toast('+1 feather.');
+  } else if (id === 'xray') {
+    spend('xray');
+    var g = G;
+    G.xrayUntil = Date.now() + 5000;
+    renderTableau(false);
+    setTimeout(function () { if (G === g) renderTableau(false); }, 5200);
+    toast('Buried cards revealed for 5 seconds.');
+  } else if (id === 'scramble') {
+    spend('scramble');
+    var all = [];
+    G.columns.forEach(function (col) { while (col.length) all.push(col.pop()); });
+    for (var i = all.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = all[i]; all[i] = all[j]; all[j] = tmp;
+    }
+    G.selected = null;
+    all.forEach(function (c, k) { G.columns[k % 5].push(c); });
+    renderTableau(true);
+    toast('Tableau reshuffled.');
+  }
+}
+function earnPower(id) {
+  powerups[id] = (powerups[id] || 0) + 1;
+}
+
+/* ---------------- call (hint) ---------------- */
+$('#btn-call').addEventListener('click', function () {
+  if (!G || G.over) return;
+  if (!G.selected) { toast('Select a bird first, then call.'); return; }
+  if (G.feathers <= 1) { toast('Keep at least one feather in reserve!'); return; }
+  var home = G.selected.card.home;
+  var fi = flockIndex(home);
+  if (fi < 0) return;
+  G.feathers--; renderFeathers();
+  var box = document.querySelectorAll('.flock')[fi];
+  box.classList.remove('pulse'); void box.offsetWidth; box.classList.add('pulse');
+  sfx('call');
+  toast('The ' + home + ' flock answers the call.');
+});
+
+/* ---------------- win / fail ---------------- */
+function stars() {
+  if (G.moves === G.par) return 3;
+  if (G.moves <= G.par + 2) return 2;
+  return 1;
+}
+
+function winLevel() {
+  G.over = true;
+  sfx('win');
+  var st = stars();
+  var isDaily = typeof G.key === 'string' && G.key.indexOf('daily:') === 0;
+  var isFun = typeof G.key === 'string' && G.key.indexOf('daily-fun:') === 0;
+  var isDev = isDevPlay();
+  var journeyComplete = G.key === 200 || G.key === 'dev:200';
+  var nextHtml;
+  // Dev wins must never mutate or save journey progress, daily streaks, or power-ups.
+  if (isDev) {
+    nextHtml = '<p>Dev play complete · progress and streaks untouched.</p>' +
+      (journeyComplete ? '<p>You finished the whole migration!</p>' : '') +
+      '<button class="bigbtn primary" data-act="replay">Play again</button>' +
+      '<button class="bigbtn" data-act="dev">Developer browser</button>';
+  } else if (isFun) {
+    nextHtml = '<p>Just for fun — no streak on the line.</p>' +
+      '<button class="bigbtn primary" data-act="replay">Play again</button>' +
+      '<button class="bigbtn" data-act="home">Home</button>';
+  } else if (isDaily) {
+    var ds = G.key.slice(6);
+    var yest = new Date(); yest.setDate(yest.getDate() - 1);
+    var yestStr = yest.getFullYear() + '-' + String(yest.getMonth() + 1).padStart(2, '0') + '-' + String(yest.getDate()).padStart(2, '0');
+    daily.streak = (daily.lastDone === yestStr) ? daily.streak + 1 : 1;
+    daily.lastDone = ds;
+    store.set('daily', daily);
+    updateDailyBtn();
+    nextHtml = '<p>Streak: \uD83D\uDD25 ' + daily.streak + (daily.streak === 1 ? ' day' : ' days') + ' — see you tomorrow.</p>' +
+      '<button class="bigbtn" data-act="home">Home</button>';
+  } else {
+    var n = G.key;
+    progress.stars[n] = Math.max(progress.stars[n] || 0, st);
+    progress.unlocked = Math.max(progress.unlocked, Math.min(n + 1, 200));
+    store.set('progress', progress);
+    buildMap();
+    nextHtml = (n < 200 ? '<button class="bigbtn primary" data-act="next">Next level →</button>' : '<p>You finished the whole migration!</p>') +
+      '<button class="bigbtn" data-act="replay">Replay</button>' +
+      '<button class="bigbtn" data-act="map">Level map</button>';
+  }
+  // Power-up earn economy: every real (non-dev) completion pays out.
+  var earned = [];
+  if (!isDev) {
+    earnPower('undo'); earned.push('Undo');
+    earnPower('feather'); earned.push('Feather');
+    if (st === 3) { earnPower('oracle'); earned.push('Oracle'); }
+    if (typeof G.key === 'number' && G.key % 5 === 0) { earnPower('xray'); earned.push('X-ray'); earnPower('scramble'); earned.push('Shuffle'); }
+    store.set('powerups', powerups);
+    renderPowerBar();
+  }
+  var starHtml = '';
+  for (var i = 0; i < 3; i++) starHtml += '<span class="s' + (i < st ? ' earned' : '') + '">★</span>';
+  panel(
+    '<h2>' + (journeyComplete ? 'Journey complete!' : 'Flock complete!') + '</h2>' +
+    '<p class="movesline">' + G.moves + ' moves - Par ' + G.par + '</p>' +
+    '<div class="stars">' + starHtml + '</div>' +
+    '<p>' + (st === 3 ? 'Par matched — a flawless migration.' : st === 2 ? 'Within two of par — nearly flawless.' : 'Finished — the flock forgives the extra detours.') + '</p>' +
+    nextHtml
+  );
+  if (earned.length) {
+    toast(earned.map(function (l) { return '+1 ' + l; }).join(', ') + ' earned');
+  }
+  var earnedStars = document.querySelectorAll('#panel .stars .earned');
+  earnedStars.forEach(function (el, i) {
+    setTimeout(function () { sfx('star'); el.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.35)' }, { transform: 'scale(1)' }], { duration: 300 }); }, 350 + i * 320);
+  });
+}
+
+function failLevel() {
+  if (!G || G.over) return;
+  G.over = true;
+  panel(
+    '<h2>The flock scatters…</h2>' +
+    '<p>Out of feathers. Study the flocks and try again — the quotas are your best clue.</p>' +
+    '<button class="bigbtn primary" data-act="replay">Try again</button>' +
+    (isDevPlay() ? '<button class="bigbtn" data-act="dev">Developer browser</button>' : '<button class="bigbtn" data-act="map">Level map</button>')
+  );
+}
+
+function panel(html) {
+  $('#panel').innerHTML = html;
+  $('#overlay').classList.add('show');
+  $('#panel').querySelectorAll('[data-act]').forEach(function (b) {
+    b.addEventListener('click', function () { panelAct(b.getAttribute('data-act')); });
+  });
+}
+function closePanel() { $('#overlay').classList.remove('show'); }
+
+function panelAct(act) {
+  closePanel();
+  if (act === 'next') {
+    if (typeof G.key === 'number' && G.key < 200) {
+      startLevel(C.getLevel(G.key + 1), G.key + 1, levelTitle(G.key + 1));
+    } else if (G.key === 200 || G.key === 'dev:200') {
+      panel('<h2>Journey complete!</h2><p>You finished the whole migration!</p>' +
+        '<button class="bigbtn" data-act="home">Home</button>');
+    }
+  }
+  else if (act === 'replay') {
+    if (isDevPlay()) startLevel(G.level, G.key, G.title);
+    else if (typeof G.key === 'string') startDaily(true);
+    else startLevel(C.getLevel(G.key), G.key, levelTitle(G.key));
+  }
+  else if (act === 'dailyfun') startDaily(true);
+  else if (act === 'dev') showDev();
+  else if (act === 'map') { buildMap(); show('screen-map'); }
+  else if (act === 'home') goHome();
+}
+
+function levelTitle(n, levelObj) {
+  var lv = levelObj || C.getLevel(n);
+  return 'Level ' + n + (lv.name && lv.name.indexOf('Level') !== 0 ? ' · ' + lv.name : '');
+}
+
+/* ---------------- header buttons ---------------- */
+$('#btn-back').addEventListener('click', function () {
+  if (isDevPlay()) { showDev(); return; }
+  var isDaily = G && typeof G.key === 'string' && G.key.indexOf('daily:') === 0;
+  if (isDaily) goHome(); else { buildMap(); show('screen-map'); }
+});
+$('#btn-mute').addEventListener('click', function () {
+  muted = !muted; store.set('muted', muted); updateMuteBtn();
+});
+function updateMuteBtn() { $('#btn-mute').textContent = muted ? '🔕' : '🔔'; }
+
+/* ---------------- home ---------------- */
+function goHome() {
+  if (devMode) { showDev(); return; }
+  updateDailyBtn();
+  $('#journey-sub').textContent = 'continue · level ' + Math.min(progress.unlocked, 200) + ' of 200';
+  $('#fg-sub2').textContent = Object.keys(fgSeen).length + ' of ' + fgTotalWords() + ' spotted';
+  show('screen-home');
+}
+$('#btn-journey').addEventListener('click', function () { buildMap(); show('screen-map'); });
+$('#btn-daily').addEventListener('click', function () { startDaily(false); });
+$('#btn-how').addEventListener('click', function () {
+  panel(
+    '<h2>How to play</h2>' +
+    '<div class="howrow"><div class="n">1</div><p><b>Tap a bird, then tap its flock.</b> Right flock and the bird flies home; wrong flock costs you a feather.</p></div>' +
+    '<div class="howrow"><div class="n">2</div><p><b>Only the front bird</b> of each column can move. Clearing one reveals the bird behind it.</p></div>' +
+    '<div class="howrow"><div class="n">3</div><p><b>Tricky words fit two flocks.</b> Each flock needs an exact number of birds — use the quotas to deduce where the tricky ones belong.</p></div>' +
+    '<div class="howrow"><div class="n">4</div><p><b>Call</b> costs a feather and reveals the right flock for your selected bird.</p></div>' +
+    '<div class="howrow"><div class="n">5</div><p><b>Stuck? Draw from the stock.</b> The top waste card plays like any open bird. When the stock runs out you may shuffle the waste back in — twice per level.</p></div>' +
+    '<div class="howrow"><div class="n">6</div><p><b>Power-ups are earned by playing.</b> Oracle reveals the next optimal move, Undo takes one back, Feather restores a life, X-ray peeks at buried cards for 5 seconds, Shuffle re-deals the tableau.</p></div>' +
+    '<div class="howrow"><div class="n">7</div><p><b>Par is the proven-optimal move count.</b> Match par for 3 stars, finish within par + 2 for 2 stars. Every placement, draw and redeal counts as one move.</p></div>' +
+    '<button class="bigbtn primary" data-act="close">Got it</button>'
+  );
+  $('#panel').querySelector('[data-act="close"]').addEventListener('click', closePanel);
+});
+
+function todayStr() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function updateDailyBtn() {
+  var ds = todayStr();
+  $('#daily-sub').textContent = (daily.lastDone === ds)
+    ? 'done today · 🔥 ' + daily.streak + '-day streak'
+    : 'a fresh puzzle every day' + (daily.streak ? ' · 🔥 ' + daily.streak : '');
+}
+function startDaily(replay) {
+  var ds = todayStr();
+  if (!replay && daily.lastDone === ds) {
+    panel('<h2>Already migrated!</h2><p>You finished today\u2019s puzzle. Streak: \uD83D\uDD25 ' + daily.streak + '. Come back tomorrow for a new one.</p>' +
+      '<button class="bigbtn primary" data-act="dailyfun">Replay for fun</button>' +
+      '<button class="bigbtn" data-act="home">Home</button>');
+    return;
+  }
+  var key = replay ? 'daily-fun:' + ds : 'daily:' + ds;
+  startLevel(C.dailyLevel(ds), key, 'Daily Migration');
+}
+
+/* ---------------- field guide ---------------- */
+function fgWords() {
+  var seen = {}, out = [];
+  Object.keys(C.POOLS).forEach(function (theme) {
+    C.POOLS[theme].forEach(function (e) {
+      var w = typeof e === 'string' ? e : e[0];
+      if (!seen[w]) { seen[w] = true; out.push({ w: w, theme: theme }); }
+    });
+  });
+  return out;
+}
+function fgTotalWords() { return fgWords().length; }
+function buildFieldGuide() {
+  var grid = $('#fg-grid'); grid.innerHTML = '';
+  var words = fgWords();
+  var byTheme = {}, order = [];
+  words.forEach(function (e) {
+    if (!byTheme[e.theme]) { byTheme[e.theme] = []; order.push(e.theme); }
+    byTheme[e.theme].push(e.w);
+  });
+  order.forEach(function (theme) {
+    var h = document.createElement('div');
+    h.className = 'fg-theme'; h.textContent = theme;
+    grid.appendChild(h);
+    var cells = document.createElement('div');
+    cells.className = 'fg-cells';
+    byTheme[theme].forEach(function (w) {
+      var spotted = !!fgSeen[w];
+      var cell = document.createElement('div');
+      cell.className = 'fg-cell' + (spotted ? '' : ' locked');
+      var img = document.createElement('img');
+      img.loading = 'lazy';
+      img.alt = w;
+      img.src = 'field-guide/birds/' + w + '.webp';
+      img.onerror = function () { this.onerror = null; this.src = 'field-guide/robin-placeholder.webp'; };
+      cell.appendChild(img);
+      var label = document.createElement('div');
+      label.className = 'fg-word';
+      label.textContent = spotted ? w : '?';
+      cell.appendChild(label);
+      if (spotted) (function (ww, th) {
+        cell.addEventListener('click', function () { showFgPopup(ww, th); });
+      })(w, theme);
+      cells.appendChild(cell);
+    });
+    grid.appendChild(cells);
+  });
+  $('#fg-count').textContent = Object.keys(fgSeen).length + ' / ' + words.length + ' spotted';
+}
+$('#btn-fieldguide').addEventListener('click', function () { buildFieldGuide(); show('screen-fieldguide'); });
+$('#btn-fg-back').addEventListener('click', goHome);
+function showFgPopup(w, theme) {
+  $('#panel').innerHTML =
+    '<div class="fg-pop">' +
+    '<img src="field-guide/birds/' + w + '.webp" alt="' + escapeHtml(w) + '" onerror="this.onerror=null;this.src=\'field-guide/robin-placeholder.webp\'">' +
+    '<div class="fg-pop-word">' + escapeHtml(w) + '</div>' +
+    '<div class="fg-pop-theme">' + escapeHtml(theme) + '</div>' +
+    '<button class="bigbtn" id="fg-pop-close">Close</button>' +
+    '</div>';
+  $('#overlay').classList.add('show');
+  $('#fg-pop-close').addEventListener('click', closePanel);
+  var ov = $('#overlay');
+  var bg = function (e) { if (e.target === ov) { closePanel(); ov.removeEventListener('click', bg); } };
+  ov.addEventListener('click', bg);
+}
+
+/* ---------------- developer browser ---------------- */
+var devBuilt = false;
+var devLevels = {};
+
+function devLevel(n) {
+  if (!devLevels[n]) devLevels[n] = C.getLevel(n);
+  return devLevels[n];
+}
+
+function startDevLevel(n) {
+  var lv;
+  try { lv = devLevel(n); }
+  catch (e) { toast('Level ' + n + ' content is not available yet.'); return; }
+  startLevel(lv, 'dev:' + n, levelTitle(n, lv));
+}
+
+function showDev() {
+  show('screen-dev');
+  if (devBuilt) return;
+  devBuilt = true;
+  var grid = $('#dev-levels');
+  // Bottom-up: level 1 at the bottom, 200 at the top.
+  for (var n = 200; n >= 1; n--) {
+    (function (n) {
+      var b = document.createElement('button');
+      b.className = 'dev-level';
+      b.setAttribute('data-level', n);
+      b.innerHTML = n + '<span class="dev-meta">…</span>';
+      b.addEventListener('click', function () { startDevLevel(n); });
+      grid.appendChild(b);
+    })(n);
+  }
+  var dates = $('#dev-dailies');
+  for (var i = 0; i < 14; i++) {
+    var d = new Date();
+    d.setDate(d.getDate() - i);
+    var ds = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+    (function (ds) {
+      var b = document.createElement('button');
+      b.className = 'bigbtn';
+      b.textContent = ds;
+      b.addEventListener('click', function () {
+        startLevel(C.dailyLevel(ds), 'dev:daily:' + ds, 'Daily Migration · ' + ds);
+      });
+      dates.appendChild(b);
+    })(ds);
+  }
+  // Render the buttons first; generate metadata in batches of 20 afterwards.
+  var next = 1;
+  function fillMetadata() {
+    var end = Math.min(next + 20, 201);
+    for (; next < end; next++) {
+      var meta = grid.querySelector('[data-level="' + next + '"] .dev-meta');
+      try {
+        var cards = C.allCards(devLevel(next));
+        var ambiguous = cards.filter(function (card) { return card.cands.length > 1; }).length;
+        meta.textContent = cards.length + 'c·' + ambiguous + 'a';
+      } catch (e) {
+        // The content worker may not have supplied all 200 levels yet.
+        meta.textContent = 'pending';
+      }
+    }
+    if (next <= 200) setTimeout(fillMetadata, 0);
+  }
+  setTimeout(fillMetadata, 20);
+}
+
+/* ---------------- map ---------------- */
+function buildMap() {
+  var wrap = $('#mapwrap'); wrap.innerHTML = '';
+  var W = 360, rowH = 74, top = 50;
+  var H = top * 2 + 200 * rowH;
+  var NS = 'http://www.w3.org/2000/svg';
+  var svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  svg.setAttribute('width', '100%');
+  function pt(i) { return [W / 2 + 105 * Math.sin(i * 0.62), top + (199 - i) * rowH]; }
+  var d = 'M' + pt(0)[0] + ' ' + pt(0)[1];
+  for (var i = 1; i < 200; i++) {
+    var p = pt(i), q = pt(i - 1);
+    d += ' C' + q[0] + ' ' + (q[1] - rowH / 2) + ' ' + p[0] + ' ' + (p[1] + rowH / 2) + ' ' + p[0] + ' ' + p[1];
+  }
+  var path = document.createElementNS(NS, 'path');
+  path.setAttribute('d', d); path.setAttribute('fill', 'none');
+  path.setAttribute('stroke', '#d8c9a3'); path.setAttribute('stroke-width', '5');
+  path.setAttribute('stroke-linecap', 'round');
+  svg.appendChild(path);
+  for (var n = 1; n <= 200; n++) {
+    (function (n) {
+      var i = n - 1, p = pt(i);
+      var locked = n > progress.unlocked;
+      var st = progress.stars[n] || 0;
+      var g = document.createElementNS(NS, 'g');
+      g.setAttribute('class', 'mapnode' + (locked ? ' locked' : ''));
+      var c = document.createElementNS(NS, 'circle');
+      c.setAttribute('cx', p[0]); c.setAttribute('cy', p[1]); c.setAttribute('r', 21);
+      c.setAttribute('fill', locked ? '#e7dcc2' : '#fffdf7');
+      c.setAttribute('stroke', locked ? '#b7a87f' : INK); c.setAttribute('stroke-width', 2);
+      g.appendChild(c);
+      var t = document.createElementNS(NS, 'text');
+      t.setAttribute('x', p[0]); t.setAttribute('y', p[1] + 5.5);
+      t.setAttribute('text-anchor', 'middle'); t.setAttribute('font-size', '14');
+      t.setAttribute('fill', locked ? '#b7a87f' : INK);
+      t.textContent = locked ? '·' : n;
+      g.appendChild(t);
+      if (st > 0) {
+        var s2 = document.createElementNS(NS, 'text');
+        s2.setAttribute('x', p[0]); s2.setAttribute('y', p[1] + 38);
+        s2.setAttribute('text-anchor', 'middle'); s2.setAttribute('font-size', '11');
+        s2.setAttribute('fill', '#d9a13b');
+        var sstr = ''; for (var k = 0; k < st; k++) sstr += '★';
+        s2.textContent = sstr;
+        g.appendChild(s2);
+      }
+      if (!locked) g.addEventListener('click', function () { startLevel(C.getLevel(n), n, levelTitle(n)); });
+      svg.appendChild(g);
+    })(n);
+  }
+  wrap.appendChild(svg);
+  // Scroll after layout: buildMap runs before show('screen-map'), so measure on the next frame.
+  requestAnimationFrame(function () {
+    var sc = document.getElementById('screen-map');
+    if (!sc.classList.contains('active')) return;
+    var uy = pt(Math.min(Math.max(progress.unlocked, 1), 200) - 1)[1];
+    var sh = svg.clientHeight || sc.scrollHeight;
+    sc.scrollTop = Math.max(0, (uy / H) * sh - sc.clientHeight * 0.45);
+  });
+}
+
+/* ---------------- boot ---------------- */
+updateMuteBtn();
+renderPowerBar();
+goHome();
+var ql = params.get('level');
+if (ql && !devMode) {
+  var n = parseInt(ql, 10);
+  if (n >= 1 && n <= 200) startLevel(C.getLevel(n), n, levelTitle(n));
+}
+if ('serviceWorker' in navigator) {
+  var hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (hadController) window.location.reload();
+  });
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  });
+}
+})();
+</script>
+</body>
+</html>

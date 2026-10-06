@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Keyring — Universal Renter Passport</title>
+<link rel="stylesheet" href="../../shared/kit.css"><script src="../../shared/kit.js"></script>
+<!--SHIM-->
+<style>
+:root{--bg:#f4faf7;--panel:#ffffff;--panel2:#e8f2ec;--ink:#14261d;--muted:#5f7268;--line:#d5e2d9;--accent:#0e7c5b;--accent2:#d9a441;--good:#15803d;--warn:#b45309;--bad:#b91c1c}
+.passport{background:linear-gradient(135deg,#0e7c5b,#14a37a);color:#fff;border-radius:18px;padding:26px;margin:20px 0;position:relative;overflow:hidden}
+.passport h2{margin:0 0 4px;font-size:26px}
+.passport .sub{opacity:.85;font-size:14px}
+.score{position:absolute;right:22px;top:22px;background:rgba(255,255,255,.18);border-radius:14px;padding:10px 16px;text-align:center}
+.score b{font-size:28px;display:block}
+.listing{border:1px solid var(--line);border-radius:14px;padding:18px;margin:12px 0;background:var(--panel);display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.listing img{width:120px;height:90px;object-fit:cover;border-radius:10px;background:var(--panel2)}
+.apt{border-left:4px solid var(--line);padding:12px 16px;margin:10px 0;background:var(--panel);border-radius:0 12px 12px 0}
+.field{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+.k-nav-title{color:#f4f6fa!important}.k-nav-sub{color:#aeb7c4!important}</style></head>
+<body>
+<script>
+"use strict";
+const K=window.Kit;
+K.nav({title:"Keyring",sub:"Universal Renter Passport"});
+const store=K.store("keyring");
+const LISTINGS=[
+ {id:"l1",name:"Maple Court Apartments",unit:"2bd · 880 sqft · Sunnyvale",rent:2400,tag:"Under flight path"},
+ {id:"l2",name:"Depot Lofts",unit:"2bd · 950 sqft · Mountain View",rent:2650,tag:"By freight line"},
+ {id:"l3",name:"El Camino Gardens",unit:"2bd · 810 sqft · Riverton",rent:2350,tag:"Quiet street"}
+];
+const PROFILE=[
+ ["Full name","Jordan Ellis"],["Email","jordan.ellis@example.com"],["Phone","(555) 014-8820"],
+ ["Gross monthly income","$14,200"],["Employer","Robinhood · 3.1 yrs"],["Credit score","742 (Good)"],
+ ["Rental history","4 yrs, zero late payments"],["References","2 verified"],["ID verified","✓ Government ID"],["Pet","1 cat (indoor)"]
+];
+let state=store.get("state",{apps:{l1:"none",l2:"none",l3:"none"}});
+function save(){store.set("state",state);}
+const wrap=K.el('<div class="k-wrap"></div>');document.body.appendChild(wrap);
+const pp=K.el('<div class="passport"><div class="score"><b>92</b><span style="font-size:12px">PROFILE<br>SCORE</span></div><h2>🛂 Renter Passport</h2><div class="sub">Jordan Ellis · Verified identity · Updated Oct 2026</div><div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap"><button class="k-btn" id="sharebtn" style="background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.4);color:#fff">Copy share link</button>'+K.badge("ID verified","ok")+K.badge("Income verified","ok")+K.badge("2 references","ok")+'</div></div>');
+wrap.appendChild(pp);
+const tabs=K.el('<div></div>');wrap.appendChild(tabs);
+const TABDEFS=[{id:"apply",label:"Apply",render:renderApply},{id:"profile",label:"My profile",render:renderProfile},{id:"track",label:"Track applications",render:renderTrack}];
+function buildTabs(){K.tabs(tabs,TABDEFS);}
+wrap.addEventListener("click",function(e){if(e.target&&e.target.id==="sharebtn")K.copy("https://keyring.app/p/absolukie-8f3k (demo)");});
+buildTabs();
+function applyNow(id){
+ if(state.apps[id]!=="none"){K.toast("Already applied to this listing","warn");return;}
+ state.apps[id]="applied";save();
+ setTimeout(()=>{if(state.apps[id]==="applied"){state.apps[id]="under review";save();buildTabs();K.toast("Update: application under review","info");}},4000);
+ K.toast("Application sent with your Passport ✓","ok");
+ buildTabs();
+}
+function statusBadge(s){
+ return s==="none"?K.badge("Not applied",""):s==="applied"?K.badge("Applied ✓","info"):s==="under review"?K.badge("Under review","warn"):s==="approved"?K.badge("Approved 🎉","ok"):K.badge(s,"bad");
+}
+function renderApply(h){
+ h.innerHTML='<p class="k-muted">One verified profile, sent everywhere. No more re-typing your life story per landlord.</p>';
+ LISTINGS.forEach(l=>{
+   const st=state.apps[l.id];
+   const d=K.el('<div class="listing"><div style=\"width:120px;height:90px;border-radius:10px;background:#0e7c5b;display:flex;align-items:center;justify-content:center;font-size:34px;color:#fff;flex-shrink:0\">&#8962;</div><div style="flex:1;min-width:200px"><b style="font-size:17px">'+K.esc(l.name)+'</b><div class="k-muted" style="font-size:13px">'+K.esc(l.unit)+' · '+K.esc(l.tag)+'</div><div style="font-size:20px;font-weight:800;margin-top:4px">'+K.money(l.rent)+'<span class="k-muted" style="font-size:13px;font-weight:400">/mo</span></div></div><div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end">'+statusBadge(st)+'<button class="k-btn '+(st==="none"?"k-primary":"")+'" '+(st!=="none"?"disabled style=\'opacity:.5\'":"")+' id="ap"> '+(st==="none"?"Apply with Passport":"Applied")+'</button></div></div>');
+   if(st==="none")d.querySelector("#ap").onclick=()=>applyNow(l.id);
+   h.appendChild(d);
+ });
+}
+function renderProfile(h){
+ h.innerHTML='';
+ const c=K.el('<div class="k-card"><h3>Verified renter profile</h3><div id="f"></div><p class="k-muted" style="font-size:13px;margin-top:12px">Landlords see this — nothing else. Your SSN and bank logins are never shared; income is verified via tokenized payroll proof.</p></div>');
+ h.appendChild(c);
+ PROFILE.forEach(p=>c.querySelector("#f").appendChild(K.el('<div class="field"><span class="k-muted">'+K.esc(p[0])+'</span><b>'+K.esc(p[1])+'</b></div>')));
+}
+function renderTrack(h){
+ h.innerHTML='';
+ const ids=Object.keys(state.apps).filter(id=>state.apps[id]!=="none");
+ if(!ids.length){K.empty(h,"No applications yet","Apply to a listing and it will be tracked here automatically.");return;}
+ const ev={applied:[["Just now","Application sent with Passport","ok"]],"under review":[["Just now","Application sent with Passport","ok"],["2 min later","Landlord opened your Passport","info"]]};
+ ids.forEach(id=>{
+   const l=LISTINGS.find(x=>x.id===id);const st=state.apps[id];
+   const d=K.el('<div class="apt" style="border-color:var(--accent)"><b style="font-size:16px">'+K.esc(l.name)+'</b> <span class="k-muted">· '+K.money(l.rent)+'/mo</span><div style="margin:6px 0">'+statusBadge(st)+'</div><div id="tl"></div></div>');
+   h.appendChild(d);
+   K.timeline(d.querySelector("#tl"),(ev[st]||ev.applied).map(e=>({t:e[0],title:e[1],kind:e[2]})));
+ });
+ const done=Object.values(state.apps).filter(s=>s!=="none").length;
+ if(done)host2note(h,done);
+}
+function host2note(h,done){h.appendChild(K.el('<p class="k-muted" style="font-size:13px">'+done+' application'+(done>1?"s":"")+' sent · average landlord response: 2.3 days · Passport viewed '+done+'×</p>'));}
+</script></body></html>

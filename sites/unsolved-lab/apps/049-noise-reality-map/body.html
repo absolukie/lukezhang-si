@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HushHunt — Noise Reality Map</title>
+<link rel="stylesheet" href="../../shared/kit.css"><script src="../../shared/kit.js"></script>
+<!--SHIM-->
+<style>
+:root{--bg:#0f1b24;--panel:#16242f;--panel2:#1e2f3d;--ink:#eef4f8;--muted:#8fa3b5;--line:#284052;--accent:#2dd4bf;--accent2:#f5a623;--good:#2fbf71;--warn:#f5a623;--bad:#e5534b}
+.k-card,.k-nav{background:var(--panel);border-color:var(--line)}
+.k-btn{background:var(--panel2);border-color:var(--line);color:var(--ink)}
+.k-primary{background:var(--accent);border-color:var(--accent);color:#06231f}
+.k-table th{color:var(--muted);border-color:var(--line)}.k-table td{border-color:var(--line)}
+.aptcard{border:2px solid var(--line);border-radius:16px;padding:20px;margin:12px 0;background:var(--panel);cursor:pointer}
+.aptcard.sel{border-color:var(--accent)}
+.db{font-size:44px;font-weight:800}
+.bar-quiet{background:var(--good)!important}.bar-loud{background:var(--bad)!important}
+.k-hero{background:linear-gradient(135deg,#16242f,#1d3345);border-color:var(--line)}
+.k-hero h1{color:var(--accent)}
+.k-gl{stroke:#284052}.k-gl-t{fill:#8fa3b5}.k-bar-t{background:#1e2f3d}
+</style></head>
+<body>
+<script>
+"use strict";
+const K=window.Kit;
+K.nav({title:"HushHunt",sub:"Noise reality map"});
+// Seeded 24h dB profiles: Maple Court under SJC flight path; Depot Lofts by freight line
+function profile(kind){
+ const f=K.rng("noise-"+kind);const pts=[];
+ for(let h=0;h<24;h++){
+   let db;
+   if(kind==="flight"){
+     db=44+f()*3; // base
+     if(h>=6&&h<9)db+=14+f()*6;      // morning departures
+     if(h>=17&&h<22)db+=10+f()*6;    // evening arrivals
+     if(h>=22||h<6)db-=6;            // curfew-ish
+   }else{
+     db=42+f()*3;
+     if(h===3||h===4)db+=22+f()*5;   // 3:40am freight
+     if(h===13)db+=14+f()*4;         // midday freight
+     if(h>=23||h<6)db+=2;
+   }
+   pts.push({x:h+":00",y:Math.round(db)});
+ }
+ return pts.map(function(p){return p.y;});
+}
+const A={id:"maple",name:"Maple Court",desc:"2bd · Sunnyvale — under SJC flight path",pts:profile("flight"),color:"#2dd4bf"};
+const B={id:"depot",name:"Depot Lofts",desc:"2bd · Mountain View — 200m from freight line",pts:profile("depot"),color:"#f5a623"};
+const store=K.store("hushhunt");
+let state=store.get("state",{sel:["maple","depot"]});
+function save(){store.set("state",state);}
+function stats(p){const day=p.pts.slice(7,22).reduce((a,x)=>a+x,0)/15;const night=p.pts.filter((_,i)=>i>=22||i<7).reduce((a,x)=>a+x,0)/9;const peak=Math.max.apply(null,p.pts);return{day:day,night:night,peak:peak};}
+const wrap=K.el('<div class="k-wrap"></div>');document.body.appendChild(wrap);
+wrap.appendChild(K.el('<div class="k-hero"><h1>How loud is it <i>really</i>?</h1><div style="margin-top:14px"><button class="k-btn k-primary" id="qwbtn" style="font-size:16px;padding:12px 24px">Find quietest 8h window</button></div><p>Listings say "vibrant neighborhood". HushHunt models the actual decibels — flight paths, freight schedules, rush-hour roar — hour by hour, so you know before you sign.</p></div>'));
+const host=K.el('<div></div>');wrap.appendChild(host);
+wrap.addEventListener("click",function(e){if(e.target&&e.target.id==="qwbtn")quietWindow();});
+function bestWindow(p){let best=1e9,bh=0;for(let h=0;h<24;h++){let s=0;for(let k=0;k<8;k++)s+=p.pts[(h+k)%24];if(s<best){best=s;bh=h;}}return{h:bh,avg:best/8};}
+function windowCaveat(p){const w=bestWindow(p);const hours=[];for(let k=0;k<8;k++)hours.push((w.h+k)%24);
+ if(p.id==="depot"&&hours.includes(3))return {bad:true,txt:'— <b style="color:#e5534b">but the 3:40am freight horn lands inside every window</b>'};
+ if(p.id==="maple"&&hours.some(h=>h>=6&&h<9))return {bad:true,txt:'— <b style="color:#e5534b">but morning departures (6–9am) clip the end of this window</b>'};
+ return {bad:false,txt:'· no known peak events inside'};}
+function render(){
+ host.innerHTML='';
+ const cards=K.el('<div class="k-split"></div>');host.appendChild(cards);
+ [A,B].forEach(p=>{
+   const s=stats(p);const on=state.sel.includes(p.id);
+   const c=K.el('<div class="aptcard'+(on?" sel":"")+'"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><b style="font-size:20px">'+p.name+'</b><div class="k-muted" style="font-size:13px">'+p.desc+'</div></div>'+(on?K.badge("On chart","ok"):K.badge("Hidden",""))+'</div><div class="db" style="color:'+p.color+'">'+s.night.toFixed(0)+'<span style="font-size:16px;color:var(--muted)"> dB avg night</span></div><div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'+K.badge("Day "+s.day.toFixed(0)+" dB",s.day>60?"warn":"info")+K.badge("Peak "+s.peak+" dB",s.peak>70?"bad":"warn")+'</div><div class="k-muted" style="font-size:12px;margin-top:8px">'+(p.id==="maple"?"✈️ SJC departures 6–9am, arrivals 5–10pm · ~38 flights/day overhead":"🚂 Freight passes ~3:40am + 1:10pm · horn at crossing 200m away")+'</div></div>');
+   c.onclick=()=>{const i=state.sel.indexOf(p.id);if(i>=0){if(state.sel.length>1)state.sel.splice(i,1);}else state.sel.push(p.id);save();render();};
+   cards.appendChild(c);
+ });
+ const ch=K.el('<div class="k-card" style="margin-top:14px"><h3>Decibels by hour <span class="k-muted" style="font-weight:400;font-size:13px">· 55 dB = loud conversation · 70 dB = vacuum cleaner · hour 0 = midnight</span></h3><div id="ln"></div><div id="qw"></div></div>');
+ host.appendChild(ch);
+ K.line(ch.querySelector("#ln"),state.sel.map(id=>{const p=id==="maple"?A:B;return{name:p.name,color:p.color,points:p.pts};}));
+ const qw=ch.querySelector("#qw");
+ qw.innerHTML=state.sel.map(id=>{const p=id==="maple"?A:B;const w=bestWindow(p);const cv=windowCaveat(p);
+   return '<div style="margin-top:10px;padding:10px 14px;border-radius:10px;background:'+(cv.bad?'#3a1d1d':'#0f2f26')+';border:1px solid '+(cv.bad?'#e5534b':'#2fbf71')+'">'
+   +'🌙 <b>'+p.name+'</b>: quietest 8h is <b>'+w.h+':00–'+((w.h+8)%24)+':00</b> ('+w.avg.toFixed(1)+' dB avg) '+cv.txt+'</div>';}).join('');
+ const tb=K.el('<div class="k-card" style="margin-top:14px"><h3>Sleep impact</h3><div id="t"></div></div>');
+ host.appendChild(tb);
+ K.table(tb.querySelector("#t"),
+  [{key:"m",label:"Metric"}, {key:"maple",label:"Maple Court",num:true},{key:"depot",label:"Depot Lofts",num:true}],
+  [{m:"Avg night (10pm–7am)",maple:stats(A).night.toFixed(1)+" dB",depot:stats(B).night.toFixed(1)+" dB"},
+   {m:"Peak event",maple:"✈️ "+stats(A).peak+" dB flyover",depot:"🚂 "+stats(B).peak+" dB freight horn"},
+   {m:"WHO sleep guideline",maple:"45 dB",depot:"45 dB"},
+   {m:"Verdict",maple:stats(A).night>50?K.badge("Disrupted sleep","bad"):K.badge("OK","ok"),depot:stats(B).night>50?K.badge("Disrupted sleep","bad"):K.badge("OK","ok")}]);
+ const w=state.sel.includes("maple")&&state.sel.includes("depot")
+   ? (stats(A).night<stats(B).night?"Maple Court":"Depot Lofts")+" is quieter at night by "+Math.abs(stats(A).night-stats(B).night).toFixed(1)+" dB"
+   : "Select both apartments to compare.";
+ const hh=K.el('<p style="font-size:16px">'+K.badge("Head-to-head","info")+' '+w+' <button class="k-btn" id="copyhh" style="font-size:12px;padding:4px 12px;margin-left:8px">Copy verdict</button></p>');
+ host.appendChild(hh);
+ hh.querySelector("#copyhh").onclick=()=>{K.copy("HushHunt verdict — Maple Court vs Depot Lofts:\n"+w+"\n\nMaple Court: night "+stats(A).night.toFixed(1)+" dB, peak "+stats(A).peak+" dB (SJC flights)\nDepot Lofts: night "+stats(B).night.toFixed(1)+" dB, peak "+stats(B).peak+" dB (3:40am freight horn)");};
+}
+function quietWindow(){
+ // best 8h consecutive window per selected apt
+ const res=state.sel.map(id=>{const p=id==="maple"?A:B;const w=bestWindow(p);return p.name+": "+w.h+":00–"+((w.h+8)%24)+":00 ("+w.avg.toFixed(1)+" dB avg)";});
+ K.modal({title:"🌙 Quietest 8-hour windows",body:"<p>Best sleep windows, from the modeled data:</p><ul>"+res.map(r=>"<li>"+K.esc(r)+"</li>").join("")+"</ul><p class='k-muted' style='font-size:13px'>Depot Lofts' 3:40am freight horn falls inside every window — earplugs recommended regardless.</p>",actions:[{label:"Got it",primary:true}]});
+}
+render();
+</script></body></html>

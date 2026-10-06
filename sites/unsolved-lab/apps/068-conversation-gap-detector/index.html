@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FluentGap — Unsolved Lab</title>
+<link rel="stylesheet" href="../../shared/kit.css">
+<style>
+/* Kit fallback CSS (trimmed) — only helpers NOT in shared/kit.css.
+   Loaded after shared/kit.css; the real kit owns all .k-* base classes. */
+.k-check{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin:8px 0;cursor:pointer;background:var(--panel)}
+.k-check:hover{border-color:var(--accent)}
+.k-check.done{background:var(--panel2)}
+.k-check.done .k-check-t{text-decoration:line-through;color:var(--muted)}
+.k-check input{margin-top:4px;accent-color:var(--accent);width:17px;height:17px;flex-shrink:0}
+
+/* design-critic: shared kit header is dark but --ink is dark -> force light header text */
+.k-nav-title{color:#f8f6f0}
+.k-nav-sub{color:rgba(248,246,240,.62)}
+
+/* design-critic: keep scrolled-to section clear of the fixed header */
+#results{scroll-margin-top:84px}
+.k-foot{margin-top:36px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+
+</style>
+<style>body{padding-top:104px}/* qa-c: clear fixed .k-nav header */
+
+:root{--bg:#eef1f4;--panel:#ffffff;--panel2:#e8edf1;--ink:#1e2a33;--muted:#75828d;--line:#d9e0e6;--accent:#e8762b;--accent2:#2b7de8;--good:#2e7d4f;--warn:#b97f0f;--bad:#c0392b}
+body{background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.k-btn.k-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.k-tab.active{border-bottom-color:var(--accent)}
+.chatlog{background:#1e2a33;color:#dce6ec;border-radius:12px;padding:16px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.7;max-height:340px;overflow:auto}
+.chatlog .you{color:#7fd4ff}.chatlog .them{color:#ffd28a}
+.gap{border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:10px;padding:14px 16px;margin:10px 0;background:var(--panel)}
+.moment{background:var(--panel2);border-radius:8px;padding:10px 12px;margin:8px 0;font-size:13px}
+.moment .fix{color:var(--good);font-weight:700}
+.avoid-meter{height:10px;background:var(--panel2);border-radius:99px;overflow:hidden}
+.avoid-meter>div{height:100%;background:var(--accent)}
+
+</style>
+</head>
+<body>
+
+<div class="k-wrap">
+  <div id="hdr"></div>
+  <div class="k-hero" style="margin-bottom:16px">
+    <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+      <div style="font-size:44px">🕳️</div>
+      <div style="flex:1;min-width:260px">
+        <h2 style="margin:0 0 6px">FluentGap <span class="k-muted" style="font-size:15px;font-weight:400">— the Gap Finder</span></h2>
+        <p class="k-muted" style="margin:0">Seeded chat log: <strong>214 messages</strong> with your language partner over 6 weeks. FluentGap hunts for the grammar you <em>avoid</em> — the holes your fluency falls through.</p>
+      </div>
+      <button class="k-btn k-primary" id="analyze-btn" data-core style="font-size:16px;padding:12px 28px">Analyze my conversations</button>
+    </div>
+  </div>
+  <div id="results"><div class="k-card"><h3 style="margin-top:0">Your chat log</h3><div class="chatlog" id="chat-preview"></div><p class="k-muted" style="font-size:13px;margin-bottom:0">Press <strong>Analyze my conversations</strong> to find what you're dodging.</p></div></div>
+  <div class="k-foot"><span>FluentGap · seeded demo logs — real use needs chat import with consent</span><span>Unsolved Lab #68</span></div>
+</div>
+
+<script src="../../shared/kit.js"></script>
+<script>
+/* Kit fallback JS — minimal stand-ins for the shared/kit.js contract.
+   Only installed if window.Kit is absent (or lacks rng). */
+(function(){
+if(window.Kit && window.Kit.rng) return;
+function xmur3(str){let h=1779033703^str.length;for(let i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return function(){h=Math.imul(h^(h>>>16),2246822507);h=Math.imul(h^(h>>>13),3266489909);return (h^=h>>>16)>>>0;};}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const rng=s=>mulberry32(xmur3(String(s))());
+const pick=(r,a)=>a[Math.floor(r()*a.length)];
+const int=(r,a,b)=>a+Math.floor(r()*(b-a+1));
+const shuffle=(r,a)=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;}return a;};
+let _uid=0; const uid=p=>(p||'id')+'-'+(++_uid)+'-'+Math.floor(Math.random()*46656).toString(36);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function H(host,html){ if(!host) return html; const el=typeof host==='string'?document.querySelector(host):host; if(el) el.innerHTML=html; return html; }
+function store(ns){const k='unsolvedlab.'+ns;function read(){try{const v=localStorage.getItem(k);return v==null?undefined:JSON.parse(v);}catch(e){return undefined;}}
+  return{get:function(d){const v=read();return v===undefined?(d===undefined?{}:d):v;},set:function(v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}},del:function(){try{localStorage.removeItem(k);}catch(e){}}};}
+function nav(o){o=o||{};const acts=(o.actions||[]).map(a=>'<button class="k-btn'+(a.primary?' k-primary':'')+'" data-act="'+esc(a.id||'')+'">'+esc(a.label||'')+'</button>').join('');
+  const html='<div class="k-head"><div><h1>'+esc(o.title||'')+'</h1>'+(o.sub?'<div class="sub">'+esc(o.sub)+'</div>':'')+'</div><div style="display:flex;gap:8px;flex-wrap:wrap">'+acts+'</div></div>';
+  if(o.host) H(o.host,html); return html;}
+function toast(msg,kind){let t=document.querySelector('.k-toast');if(!t){t=document.createElement('div');t.className='k-toast';document.body.appendChild(t);}
+  t.textContent=msg;t.className='k-toast show '+(kind||'');clearTimeout(t._h);t._h=setTimeout(()=>{t.className='k-toast';},2600);}
+function modal(o){const veil=document.createElement('div');veil.className='k-modal-veil';
+  const acts=(o.actions||[]).map((a,i)=>'<button class="k-btn'+(a.primary?' k-primary':'')+'" data-ma="'+i+'">'+esc(a.label)+'</button>').join('');
+  veil.innerHTML='<div class="k-modal"><h3>'+esc(o.title||'')+'</h3><div>'+(o.body||'')+'</div><div class="k-modal-actions">'+acts+'</div></div>';
+  const close=()=>{veil.remove();document.removeEventListener('keydown',onkey);};
+  const onkey=e=>{if(e.key==='Escape')close();};document.addEventListener('keydown',onkey);
+  veil.addEventListener('click',e=>{if(e.target===veil)close();const b=e.target.closest('[data-ma]');if(b){const a=(o.actions||[])[+b.dataset.ma];if(a&&a.fn)a.fn(close);else close();}});
+  document.body.appendChild(veil);return close;}
+function tabs(host,tablist){const el=typeof host==='string'?document.querySelector(host):host;if(!el)return;
+  let cur=tablist[0]&&tablist[0].id;
+  function draw(){el.innerHTML='<div class="k-tabs">'+tablist.map(t=>'<button class="k-tab'+(t.id===cur?' active':'')+'" data-tab="'+esc(t.id)+'">'+esc(t.label)+'</button>').join('')+'</div><div class="k-tab-body"></div>';
+    const body=el.querySelector('.k-tab-body');const t=tablist.find(x=>x.id===cur);if(t&&t.render)t.render(body);
+    el.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{cur=b.dataset.tab;draw();});}
+  draw();}
+function table(host,cols,rows,opts){opts=opts||{};const el=typeof host==='string'?document.querySelector(host):host;
+  let q='',page=0,sortK=null,sortD=1;const ps=opts.pageSize||10;
+  function filtered(){let r=rows;if(q){const l=q.toLowerCase();r=r.filter(row=>cols.some(c=>String(row[c.key]??'').toLowerCase().includes(l)));}
+    if(sortK){const c=cols.find(x=>x.key===sortK);r=r.slice().sort((a,b)=>{const va=a[sortK],vb=b[sortK];const n=(c&&c.num);let d=n?(+va-+vb):String(va).localeCompare(String(vb));return d*sortD;});}return r;}
+  function cell(c,row){let v=row[c.key];if(c.fmt)v=c.fmt(v,row);return '<td'+(c.num?' style="text-align:right;font-variant-numeric:tabular-nums"':'')+'>'+(v==null?'':v)+'</td>';}
+  function draw(){if(!el)return;const fr=filtered();const pages=Math.max(1,Math.ceil(fr.length/ps));page=Math.min(page,pages-1);
+    const slice=fr.slice(page*ps,page*ps+ps);
+    let html='';if(opts.search!==false)html+='<div style="margin-bottom:10px;max-width:320px"><input class="k-input k-search" placeholder="Search…" value="'+esc(q)+'"></div>';
+    html+='<div style="overflow-x:auto"><table class="k-table"><thead><tr>'+cols.map(c=>'<th data-sk="'+esc(c.key)+'" style="'+(c.num?'text-align:right':'')+'">'+esc(c.label)+(sortK===c.key?(sortD>0?' ▲':' ▼'):'')+'</th>').join('')+'</tr></thead><tbody>';
+    html+=slice.length?slice.map(r=>'<tr>'+cols.map(c=>cell(c,r)).join('')+'</tr>').join(''):'<tr><td colspan="'+cols.length+'" style="text-align:center;color:var(--muted);padding:24px">No rows</td></tr>';
+    html+='</tbody></table></div>';
+    if(pages>1)html+='<div style="display:flex;gap:8px;align-items:center;margin-top:10px"><button class="k-btn" data-pg="-1">‹ Prev</button><span class="k-muted" style="font-size:13px">Page '+(page+1)+' of '+pages+'</span><button class="k-btn" data-pg="1">Next ›</button></div>';
+    el.innerHTML=html;
+    const si=el.querySelector('.k-search');if(si){si.oninput=()=>{q=si.value;page=0;draw();const n=el.querySelector('.k-search');n.focus();n.setSelectionRange(n.value.length,n.value.length);};}
+    el.querySelectorAll('th[data-sk]').forEach(th=>th.onclick=()=>{const k=th.dataset.sk;if(sortK===k)sortD*=-1;else{sortK=k;sortD=1;}draw();});
+    el.querySelectorAll('[data-pg]').forEach(b=>b.onclick=()=>{page+=+b.dataset.pg;draw();});}
+  draw();}
+function bars(host,items){const max=Math.max.apply(null,[1].concat(items.map(i=>i.value)));
+  const html=items.map(i=>'<div class="k-bar-row"><span class="k-muted">'+esc(i.label)+'</span><div class="k-bar-track"><div class="k-bar-fill" style="width:'+Math.round(100*i.value/max)+'%;'+(i.color?'background:'+esc(i.color):'')+'"></div></div><strong>'+esc(String(i.disp!=null?i.disp:i.value))+'</strong></div>').join('');
+  return H(host,html);}
+function line(host,series){const W=640,Hh=240,pad=34;let all=[];series.forEach(s=>s.points.forEach(p=>all.push(p)));
+  const mn=Math.min.apply(null,all.concat([0])),mx=Math.max.apply(null,all.concat([1]));
+  const X=i=>pad+i*(W-2*pad)/Math.max(1,series[0].points.length-1),Y=v=>Hh-pad-(v-mn)*(Hh-2*pad)/((mx-mn)||1);
+  const colors=['#2456e0','#0ea5a5','#c93a3a','#b97f0f','#7c3aed','#1c8a4c'];
+  let svg='<svg viewBox="0 0 '+W+' '+Hh+'" style="width:100%;height:auto;display:block" role="img">';
+  for(let g=0;g<=4;g++){const v=mn+(mx-mn)*g/4;svg+='<line x1="'+pad+'" y1="'+Y(v)+'" x2="'+(W-pad)+'" y2="'+Y(v)+'" stroke="var(--line)"/><text x="4" y="'+(Y(v)+4)+'" font-size="10" fill="var(--muted)">'+esc(String(Math.round(v*100)/100))+'</text>';}
+  series.forEach((s,si)=>{const c=s.color||colors[si%colors.length];const pts=s.points.map((p,i)=>X(i).toFixed(1)+','+Y(p).toFixed(1)).join(' ');
+    svg+='<polyline points="'+pts+'" fill="none" stroke="'+esc(c)+'" stroke-width="2.5" stroke-linejoin="round"/>';
+    s.points.forEach((p,i)=>{svg+='<circle cx="'+X(i)+'" cy="'+Y(p)+'" r="3.5" fill="'+esc(c)+'"><title>'+esc(s.name+': '+p)+'</title></circle>';});});
+  svg+='</svg><div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px">'+series.map((s,si)=>'<span style="font-size:12px"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:'+esc(s.color||colors[si%colors.length])+';margin-right:5px"></span>'+esc(s.name)+'</span>').join('')+'</div>';
+  return H(host,svg);}
+function donut(host,items){const tot=items.reduce((a,i)=>a+i.value,0)||1;const colors=['#2456e0','#0ea5a5','#c93a3a','#b97f0f','#7c3aed','#1c8a4c','#5b6b7c'];
+  let a0=-Math.PI/2;const R=80,r=52,cx=100,cy=100;let svg='<svg viewBox="0 0 200 200" style="width:200px;height:200px" role="img">';
+  items.forEach((it,i)=>{const frac=it.value/tot,a1=a0+frac*2*Math.PI;const big=frac>0.5?1:0;
+    const x0=cx+R*Math.cos(a0),y0=cy+R*Math.sin(a0),x1=cx+R*Math.cos(a1),y1=cy+R*Math.sin(a1);
+    const xi1=cx+r*Math.cos(a1),yi1=cy+r*Math.sin(a1),xi0=cx+r*Math.cos(a0),yi0=cy+r*Math.sin(a0);
+    const c=it.color||colors[i%colors.length];
+    if(frac>0)svg+='<path d="M'+x0.toFixed(1)+' '+y0.toFixed(1)+' A'+R+' '+R+' 0 '+big+' 1 '+x1.toFixed(1)+' '+y1.toFixed(1)+' L'+xi1.toFixed(1)+' '+yi1.toFixed(1)+' A'+r+' '+r+' 0 '+big+' 0 '+xi0.toFixed(1)+' '+yi0.toFixed(1)+' Z" fill="'+esc(c)+'"><title>'+esc(it.label+': '+it.value)+'</title></path>';
+    a0=a1;});
+  svg+='<text x="100" y="96" text-anchor="middle" font-size="22" font-weight="800" fill="var(--ink)">'+esc(String(items._total!=null?items._total:tot))+'</text><text x="100" y="116" text-anchor="middle" font-size="11" fill="var(--muted)">total</text></svg>';
+  const legend='<div style="display:grid;gap:6px;margin-top:4px">'+items.map((it,i)=>'<div style="display:flex;gap:8px;align-items:center;font-size:13px"><span style="width:11px;height:11px;border-radius:3px;background:'+esc(it.color||colors[i%colors.length])+'"></span><span class="k-muted">'+esc(it.label)+'</span><strong style="margin-left:auto">'+esc(String(it.disp!=null?it.disp:it.value))+'</strong></div>').join('')+'</div>';
+  return H(host,'<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">'+svg+legend+'</div>');}
+function timeline(host,events){const html='<div class="k-tl">'+events.map(e=>'<div class="k-tl-ev '+(e.kind||'')+'"><div class="k-tl-t">'+esc(e.t||'')+'</div><div style="font-weight:700">'+esc(e.title||'')+'</div>'+(e.body?'<div class="k-muted" style="font-size:13px">'+esc(e.body)+'</div>':'')+'</div>').join('')+'</div>';return H(host,html);}
+function graph(host,g){const nodes=g.nodes||[],edges=g.edges||[];
+  const incoming={};nodes.forEach(n=>incoming[n.id]=0);edges.forEach(e=>{if(incoming[e.b]!=null)incoming[e.b]++;});
+  const depth={},queue=[];nodes.forEach(n=>{if(!incoming[n.id]){depth[n.id]=0;queue.push(n.id);}});
+  const adj={};edges.forEach(e=>{(adj[e.a]=adj[e.a]||[]).push(e.b);});
+  while(queue.length){const id=queue.shift();(adj[id]||[]).forEach(b=>{const nd=(depth[id]||0)+1;if(depth[b]==null||nd>depth[b])depth[b]=nd;incoming[b]--;if(incoming[b]<=0)queue.push(b);});}
+  nodes.forEach(n=>{if(depth[n.id]==null)depth[n.id]=0;});
+  const layers={};nodes.forEach(n=>{const d=depth[n.id];(layers[d]=layers[d]||[]).push(n);});
+  const maxD=Math.max.apply(null,Object.keys(layers).map(Number).concat([0]));
+  const maxL=Math.max.apply(null,Object.values(layers).map(l=>l.length).concat([1]));
+  const W=Math.max(560,(maxD+1)*230),Hh=Math.max(280,maxL*96+60);
+  const pos={};Object.keys(layers).forEach(d=>{layers[d].forEach((n,i)=>{pos[n.id]={x:+d*230+115,y:i*96+70};});});
+  let svg='<svg viewBox="0 0 '+W+' '+Hh+'" style="width:100%;height:auto;display:block" role="img"><defs><marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="none" stroke="var(--muted)" stroke-width="1.5"/></marker></defs>';
+  edges.forEach(e=>{const a=pos[e.a],b=pos[e.b];if(!a||!b)return;
+    svg+='<line x1="'+(a.x+62)+'" y1="'+a.y+'" x2="'+(b.x-66)+'" y2="'+b.y+'" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#ah)"/>';
+    if(e.label)svg+='<text x="'+((a.x+b.x)/2)+'" y="'+((a.y+b.y)/2-6)+'" font-size="10" fill="var(--muted)" text-anchor="middle">'+esc(e.label)+'</text>';});
+  nodes.forEach(n=>{const p=pos[n.id];const c=n.color||'#2456e0';
+    svg+='<g data-node="'+esc(n.id)+'" style="cursor:pointer"><rect x="'+(p.x-62)+'" y="'+(p.y-30)+'" width="124" height="60" rx="10" fill="var(--panel)" stroke="'+esc(c)+'" stroke-width="2"/>'+
+    '<text x="'+p.x+'" y="'+(p.y-4)+'" text-anchor="middle" font-size="12" font-weight="700" fill="var(--ink)">'+esc(n.label)+'</text>'+
+    (n.sub?'<text x="'+p.x+'" y="'+(p.y+14)+'" text-anchor="middle" font-size="10" fill="var(--muted)">'+esc(n.sub)+'</text>':'')+'</g>';});
+  svg+='</svg>';return H(host,svg);}
+function badge(txt,kind){return '<span class="k-badge '+(kind||'')+'">'+esc(txt)+'</span>';}
+function kpi(host,o){const d=o.delta!=null?'<div class="k-kpi-d" style="color:'+(String(o.delta).charAt(0)==='-'?'var(--bad)':'var(--good)')+'">'+esc(o.delta)+'</div>':'';
+  const html='<div class="k-kpi"><div class="k-kpi-l">'+esc(o.label||'')+'</div><div class="k-kpi-v">'+esc(o.value||'')+'</div>'+d+'</div>';return H(host,html);}
+function empty(host,title,sub,actionLabel,actionFn){const id=uid('e');
+  const html='<div class="k-empty"><h3>'+esc(title||'Nothing here yet')+'</h3><p>'+esc(sub||'')+'</p>'+(actionLabel?'<button class="k-btn k-primary" id="'+id+'">'+esc(actionLabel)+'</button>':'')+'</div>';
+  if(host){H(host,html);const b=document.getElementById(id);if(b&&actionFn)b.onclick=actionFn;}return html;}
+function money(n){const v=Number(n)||0;return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function num(n){return (Number(n)||0).toLocaleString('en-US');}
+function pct(x){return (Math.round(Number(x)*1000)/10)+'%';}
+function when(d){try{const dt=d instanceof Date?d:new Date(d);if(isNaN(dt))return esc(String(d));
+  return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}catch(e){return esc(String(d));}}
+function initials(name){return String(name||'').split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join('');}
+function copy(txt){const done=()=>toast('Copied to clipboard','ok');
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(done).catch(()=>fallback());}else fallback();
+  function fallback(){const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done();}catch(e){toast('Copy failed','bad');}ta.remove();}}
+window.Kit={rng:rng,pick:pick,int:int,shuffle:shuffle,uid:uid,esc:esc,el:function(h){const d=document.createElement('div');d.innerHTML=h;return d.firstElementChild;},store:store,nav:nav,toast:toast,modal:modal,tabs:tabs,table:table,bars:bars,line:line,donut:donut,timeline:timeline,graph:graph,badge:badge,kpi:kpi,empty:empty,money:money,num:num,pct:pct,when:when,initials:initials,copy:copy,_fallback:true};
+})();
+
+</script>
+<script>
+
+(function(){
+const K=window.Kit;
+const LOG=[
+ ['you','hey! how was your weekend'],
+ ['them','Pretty good! Went hiking. What did you do?'],
+ ['you','i stayed home. i watched a movie. it was good'],
+ ['them','Which one?'],
+ ['you','the new sci-fi one. i liked it a lot'],
+ ['you','yesterday i go to the store — i mean, i went to the store'],
+ ['them','haha nice self-correction'],
+ ['you','i bought vegetables. i am cooking now'],
+ ['them','What are you making?'],
+ ['you','soup. my mom taught me before she moved'],
+ ['you','i wish i visit her more'],
+ ['them','You should! When did she move?'],
+ ['you','she moved last year. before that we lived together'],
+ ['you','if i have more time i will visit every month'],
+ ['them','Yeah, family time matters'],
+ ['you','i started learning guitar last month'],
+ ['them','Oh nice! How is it going?'],
+ ['you','hard! my fingers hurt. but i practice every day'],
+ ['you','my teacher said i improved a lot'],
+ ['them','That is great progress'],
+ ['you','i want to play a full song before december'],
+ ['you','i never played in front of people before'],
+ ['them','First time for everything!'],
+ ['you','by the way did you finish the report?'],
+ ['them','Almost — deadline is Friday'],
+ ['you','i finished mine yesterday. i worked late'],
+ ['you','i am tired today because of it'],
+];
+const GAPS=[
+ {name:'Past perfect',avoid:100,desc:'You have used the past perfect <strong>zero times</strong> in 214 messages — but simple past where past perfect was needed, <strong>11 times</strong>.',
+  moments:[
+   {said:'"my mom taught me before she moved"',fix:'"my mom had taught me before she moved"',why:'Two past events, one earlier than the other — "had taught" orders them.'},
+   {said:'"i never played in front of people before"',fix:'"I\u2019d never played in front of people before"',why:'"Before" + a first-time experience is the textbook past-perfect trigger.'},
+   {said:'"she moved last year. before that we lived together"',fix:'"she moved last year. Before that we had lived together"',why:'The living-together ended before the move — "had lived" makes the sequence clear.'},
+   {said:'"i finished mine yesterday. i worked late"',fix:'"I\u2019d finished mine yesterday — I\u2019d worked late"',why:'Cause (working late) precedes effect (finished). Past perfect shows it.'},
+   {said:'"yesterday i go to the store — i mean, i went"',fix:'Self-correction is good! Next level: "I\u2019d gone to the store earlier"',why:'When the trip happened before the story moment, "had gone" is native.'}],
+  drill:'Rewrite 3 of your own messages above using "had" + past participle. Say them out loud.'},
+ {name:'Second conditional',avoid:82,desc:'<strong>9 attempts</strong> at hypotheticals — <strong>7</strong> used "will" where "would" belongs ("if i have more time i will visit").',
+  moments:[
+   {said:'"if i have more time i will visit every month"',fix:'"if I had more time I\u2019d visit every month"',why:'Unreal present → past simple + would. This is the #1 fossilized pattern in your log.'},
+   {said:'"i wish i visit her more"',fix:'"I wish I visited her more"',why:'"Wish" about the present takes past simple — same unreal rule.'}],
+  drill:'Finish 5x: "If I had an extra hour a day, I\u2019d ___." Use your real life.'},
+ {name:'Present perfect continuous',avoid:74,desc:'Actions that started in the past and continue now are always rendered as simple present ("i practice every day") — the duration nuance is missing.',
+  moments:[
+   {said:'"i started learning guitar last month"',fix:'"I\u2019ve been learning guitar since last month"',why:'Started then, still going — "have been + -ing" carries the streak.'},
+   {said:'"i am tired today because of it"',fix:'"I\u2019ve been working late, so I\u2019m wiped"',why:'Links the past effort to the present state in one breath.'}],
+  drill:'Describe 3 ongoing situations in your life with "I\u2019ve been ___-ing since/for…".'},
+];
+K.nav({title:'\u{1F573}\uFE0F FluentGap',sub:'Gap Finder · the grammar you avoid is the grammar you need'});
+document.getElementById('chat-preview').innerHTML=LOG.map(l=>'<div><span class="'+l[0]+'">'+l[0]+':</span> '+K.esc(l[1])+'</div>').join('');
+document.getElementById('analyze-btn').onclick=()=>{
+ const box=document.getElementById('results');
+ box.innerHTML='<div class="k-card" style="margin-bottom:14px"><h3 style="margin-top:0">🔬 Analysis complete — 214 messages, 6 weeks</h3><p class="k-muted">You\u2019re fluent and fast — but fluency is hiding <strong>3 avoidance patterns</strong>. You don\u2019t make these errors; you <em>steer around</em> them, which is why no teacher ever flagged them.</p><div class="k-grid" style="grid-template-columns:repeat(3,1fr)">'+
+ GAPS.map(g=>'<div><div style="font-size:12px;font-weight:800;letter-spacing:.05em">'+K.esc(g.name).toUpperCase()+'</div><div class="avoid-meter"><div style="width:'+g.avoid+'%"></div></div><div style="font-size:12px" class="k-muted">'+g.avoid+'% avoidance rate</div></div>').join('')+'</div></div>'+
+ GAPS.map((g,gi)=>'<div class="gap"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px"><h3 style="margin:0">🕳️ Gap '+(gi+1)+': '+K.esc(g.name)+'</h3>'+K.badge(g.avoid+'% avoided','warn')+'</div><p style="font-size:14px">'+g.desc+'</p><div style="font-size:12px;font-weight:800;letter-spacing:.06em" class="k-muted">MOMENTS YOU NEEDED IT</div>'+
+ g.moments.map(m=>'<div class="moment"><div>💬 you said: <em>"'+K.esc(m.said)+'"</em></div><div class="fix">✓ native version: '+K.esc(m.fix)+'</div><div class="k-muted">'+K.esc(m.why)+'</div></div>').join('')+
+ '<div style="background:#fff8ec;border:1px solid #f0dcae;border-radius:8px;padding:10px 12px;font-size:13px;margin-top:6px">🏋️ <strong>Your drill:</strong> '+K.esc(g.drill)+'<div style="margin-top:8px"><button class="k-btn k-primary" data-drill="'+gi+'">Start interactive drill</button></div></div></div>').join('');
+ box.querySelectorAll('[data-drill]').forEach(b=>b.onclick=()=>startDrill(+b.dataset.drill));
+ box.scrollIntoView({behavior:'smooth'});
+ K.toast('3 gaps found — past perfect is the big one','warn');};
+const DRILLS={
+ 'Past perfect':{re:/\bhad\b|['\u2019]d\b/i,hint:'Use "had" (or \u2019d) + past participle — e.g. "had taught"'},
+ 'Second conditional':{re:/\bwould\b|['\u2019]d\b/i,hint:'Use "would" (or \u2019d) — e.g. "I\u2019d visit"'},
+ 'Present perfect continuous':{re:/['\u2019]ve been\b|\bhave been\b|\bhas been\b/i,hint:'Use "have/has been + -ing" — e.g. "I\u2019ve been learning"'}};
+function startDrill(gi){
+ const g=GAPS[gi],d=DRILLS[g.name]||{re:/./,hint:''};
+ const key=g.name==='Past perfect'?'had':g.name==='Second conditional'?'would':'have been';
+ let i=0,score=0,close=null;
+ function host(){return document.querySelector('.k-modal-body');}
+ function draw(){
+  const h=host();if(!h)return;
+  if(i>=g.moments.length){
+   h.innerHTML='<h3 style="margin-top:0">Drill complete — '+score+'/'+g.moments.length+'</h3><p class="k-muted">'+(score===g.moments.length?'Flawless. That gap is closing.':score*2>=g.moments.length?'Solid reps — run it again tomorrow.':'Good start — re-read the "why" lines above and try again.')+'</p><button class="k-btn k-primary" id="dDone">Done</button>';
+   h.querySelector('#dDone').onclick=function(){close();};return;}
+  const m=g.moments[i];
+  h.innerHTML='<div class="k-muted" style="font-size:12px;font-weight:800;letter-spacing:.06em">REP '+(i+1)+' OF '+g.moments.length+' · SCORE '+score+'</div>'+
+  '<div class="moment" style="margin-top:8px"><div>💬 you said: <em>"'+K.esc(m.said)+'"</em></div><div class="k-muted" style="font-size:12px">'+K.esc(d.hint)+'</div></div>'+
+  '<input class="k-input" id="dIn" placeholder="Rewrite it using the '+K.esc(g.name)+'…">'+
+  '<div id="dFb" style="min-height:22px;font-size:13px;margin-top:6px"></div>'+
+  '<div style="display:flex;gap:8px;margin-top:6px"><button class="k-btn k-primary" id="dCheck">Check</button><button class="k-btn" id="dSkip">Skip</button></div>';
+  const inp=h.querySelector('#dIn');inp.focus();
+  inp.addEventListener('keydown',function(e){if(e.key==='Enter')h.querySelector('#dCheck').click();});
+  h.querySelector('#dCheck').onclick=function(){
+   const v=inp.value.trim(),fb=h.querySelector('#dFb');
+   if(!v){fb.innerHTML='<span style="color:var(--warn)">Type your rewrite first.</span>';return;}
+   if(d.re.test(v)){score++;fb.innerHTML='<span style="color:var(--good);font-weight:700">✓ Pattern used — nice.</span> Native version: '+K.esc(m.fix);setTimeout(function(){i++;draw();},1500);}
+   else{fb.innerHTML='<span style="color:var(--bad);font-weight:700">✗ No "'+key+'" pattern detected.</span> '+K.esc(d.hint);}};
+  h.querySelector('#dSkip').onclick=function(){i++;draw();};}
+ close=K.modal({title:'🏋️ Drill: '+g.name,body:'<div class="k-muted">Loading drill…</div>',actions:[]});
+ draw();}
+})();
+
+</script>
+</body>
+</html>

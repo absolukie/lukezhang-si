@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SpeedTruth — Internet Reality Map</title>
+<link rel="stylesheet" href="../../shared/kit.css"><script src="../../shared/kit.js"></script>
+<!--SHIM-->
+<style>
+:root{--bg:#f6f4ef;--panel:#ffffff;--panel2:#efe9dc;--ink:#211a12;--muted:#77694f;--line:#e0d5bd;--accent:#ea580c;--accent2:#0e7c5b;--good:#15803d;--warn:#b45309;--bad:#b91c1c}
+.prov{border:2px solid var(--line);border-radius:14px;padding:18px;margin:10px 0;background:var(--panel)}
+.prov.best{border-color:var(--good);box-shadow:0 4px 18px rgba(21,128,61,.12)}
+.vsbar{height:14px;border-radius:7px;background:var(--panel2);overflow:hidden;margin:6px 0;position:relative}
+.vsbar i{display:block;height:100%}
+.addr{display:flex;gap:8px;margin:16px 0}
+.addr .k-input{font-size:16px;padding:14px}
+.k-hero{background:linear-gradient(120deg,#fff,#fdf3ea);border-color:var(--line)}
+.k-hero h1 .t{color:var(--accent)}
+.k-nav-title{color:#f4f6fa!important}.k-nav-sub{color:#aeb7c4!important}</style></head>
+<body>
+<script>
+"use strict";
+const K=window.Kit;
+K.nav({title:"⚡ SpeedTruth",sub:"Building-level internet intelligence"});
+const store=K.store("speedtruth");
+let state=store.get("state",{addr:"456 Oak Ave #12, Riverton, CA"});
+function save(){store.set("state",state);}
+function lookup(addr){
+ const f=K.rng("speed-"+addr.toLowerCase());
+ const mk=(name,tech,adv,measRatio,color)=>({name:name,tech:tech,adv:adv,meas:Math.round(adv*(measRatio+f()*0.08)),lat:Math.round(8+f()*22),color:color});
+ const provs=[
+  mk("Xfinity","Cable DOCSIS 3.1",400,0.52,"#ea580c"),
+  mk("AT&T Fiber","Fiber FTTH",1000,0.93,"#0e7c5b"),
+  mk("T-Mobile Home","5G fixed wireless",300,0.29,"#d92662")
+ ];
+ provs.forEach(p=>{p.outages=K.int(f,1,6);p.lastOut="Sep "+K.int(f,4,28);});
+ provs.sort((a,b)=>b.meas-a.meas);
+ return provs;
+}
+const wrap=K.el('<div class="k-wrap"></div>');document.body.appendChild(wrap);
+wrap.appendChild(K.el('<div class="k-hero"><h1>Advertised <span class="t">400 Mbps</span>. Delivered <span class="t">212</span>.</h1><p>SpeedTruth checks what residents at your exact address actually measure — real speeds vs. the brochure, outage history, and latency — before you pick a provider or sign a lease.</p></div>'));
+const addr=K.el('<div class="addr"><input class="k-input" id="a" value="'+K.esc(state.addr)+'"><button class="k-btn k-primary" id="go" style="font-size:16px;padding:14px 24px;white-space:nowrap">Look up</button></div>');
+wrap.appendChild(addr);
+const host=K.el('<div></div>');wrap.appendChild(host);
+function run(){
+ const a=addr.querySelector("#a").value.trim()||state.addr;
+ state.addr=a;save();
+ const provs=lookup(a);
+ host.innerHTML='<p class="k-muted">📍 <b>'+K.esc(a)+'</b> · based on 214 resident speed tests at this building + FCC outage filings</p>';
+ const k=K.el('<div class="k-kpis"></div>');host.appendChild(k);
+ K.kpi(k,{label:"Fastest measured",value:provs[0].meas+" Mbps",delta:provs[0].name});
+ K.kpi(k,{label:"Best latency",value:Math.min.apply(null,provs.map(p=>p.lat))+" ms",delta:"for video calls / gaming"});
+ K.kpi(k,{label:"Outages (12 mo)",value:String(provs.reduce((s,p)=>s+p.outages,0)),delta:"across providers"});
+ provs.forEach((p,i)=>{
+   const ratio=p.meas/p.adv;
+   const d=K.el('<div class="prov'+(i===0?" best":"")+'">'+(i===0?K.badge("🏆 Best at this address","ok"):"")+'<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap"><b style="font-size:19px">'+K.esc(p.name)+'</b><span class="k-muted">'+K.esc(p.tech)+'</span></div><div style="margin-top:10px"><div style="display:flex;justify-content:space-between;font-size:13px"><span>Advertised: <b>'+p.adv+' Mbps</b></span><span>Measured: <b style="color:'+(ratio>0.8?"var(--good)":ratio>0.4?"var(--warn)":"var(--bad)")+'">'+p.meas+' Mbps ('+Math.round(ratio*100)+'%)</b></span></div><div class="vsbar"><i style="width:'+(100*p.meas/1000)+'%;background:'+p.color+'"></i></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'+K.badge("Latency "+p.lat+" ms",p.lat<20?"ok":p.lat<40?"warn":"bad")+K.badge("⚡ "+p.outages+" outages / yr",p.outages<=2?"ok":"warn")+K.badge("Last: "+p.lastOut,"")+'</div></div></div>');
+   host.appendChild(d);
+ });
+ const tl=K.el('<div class="k-card" style="margin-top:14px"><h3>Outage history — this building (12 mo)</h3><div id="t"></div></div>');
+ host.appendChild(tl);
+ const f=K.rng("out-"+state.addr);
+ const evs=[];const kinds=["ok","warn","bad","info"];
+ const descs=["Fiber cut during street work — 6h","Planned maintenance — 2h overnight","Node congestion during storms — intermittent","DNS failure — 3h","Power outage, building-wide — 4h"];
+ for(let i=0;i<5;i++){evs.push({t:"202"+K.int(f,5,6)+"-"+String(K.int(f,1,12)).padStart(2,"0"),title:K.pick(f,descs),body:K.pick(f,["Xfinity","AT&T","T-Mobile"])+" customers affected",kind:K.pick(f,kinds)});}
+ evs.sort((a,b)=>b.t.localeCompare(a.t));
+ K.timeline(tl.querySelector("#t"),evs);
+ host.appendChild(K.el('<div class="k-card" style="margin-top:14px"><h3>Verdict</h3><p style="font-size:16px">'+K.badge("Get AT&T Fiber","ok")+' <b>'+provs[0].meas+' Mbps measured</b> — the only provider delivering &gt;90% of advertised speed here. Cable drops to '+provs[2].meas+' Mbps at peak hours; 5G is a backup, not a primary.</p><p class="k-muted" style="font-size:13px">Ask the landlord: is the building fiber-lit to the unit, or to the basement? It changes everything.</p></div>'));
+ K.toast("Lookup complete — 3 providers at this address","ok");
+}
+addr.querySelector("#go").onclick=run;
+addr.querySelector("#a").onkeydown=e=>{if(e.key==="Enter")run();};
+run();
+</script></body></html>

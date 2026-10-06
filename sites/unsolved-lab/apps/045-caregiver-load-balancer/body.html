@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FairShare — Caregiver Load Balancer</title>
+<link rel="stylesheet" href="../../shared/kit.css"><script src="../../shared/kit.js"></script>
+<!--SHIM-->
+<style>
+:root{--bg:#f3f6fb;--panel:#ffffff;--panel2:#e9eef7;--ink:#16233a;--muted:#64748f;--line:#dbe3f0;--accent:#2563eb;--accent2:#0d9488;--good:#16a34a;--warn:#d97706;--bad:#dc2626}
+.task{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:8px 0;background:var(--panel);display:flex;gap:12px;align-items:center}
+.task .hrs{margin-left:auto;font-weight:800;white-space:nowrap}
+.move{background:#f0f7ff;border:2px dashed var(--accent);border-radius:12px;padding:12px 14px;margin:8px 0;font-size:14px}
+.k-hero{background:linear-gradient(120deg,#ffffff,#eef4ff)}
+.k-nav-title{color:#f4f6fa!important}.k-nav-sub{color:#aeb7c4!important}</style></head>
+<body>
+<script>
+"use strict";
+const K=window.Kit;
+K.nav({title:"⚖️ FairShare",sub:"Caregiver load balancer"});
+const store=K.store("fairshare");
+const PEOPLE=[
+ {id:"elena",name:"Elena Vargas",color:"#2563eb",rel:"Daughter"},
+ {id:"marcus",name:"Marcus Vargas",color:"#0d9488",rel:"Son"},
+ {id:"tom",name:"Tom Okafor",color:"#7c5a3a",rel:"Son-in-law"}
+];
+const TASKS=[
+ {id:"t1",name:"Overnight stays (3×/week)",hrs:9,who:"elena",flex:false,note:"Mom won't sleep alone"},
+ {id:"t2",name:"Morning meds + breakfast",hrs:5,who:"elena",flex:true},
+ {id:"t3",name:"Grocery + errands",hrs:3,who:"elena",flex:true},
+ {id:"t4",name:"Doctor-visit driving",hrs:4,who:"elena",flex:true},
+ {id:"t5",name:"Bills + insurance calls",hrs:2,who:"elena",flex:true},
+ {id:"t6",name:"Weekend companionship",hrs:5,who:"elena",flex:true},
+ {id:"t7",name:"Lawn + home repairs",hrs:4,who:"marcus",flex:true},
+ {id:"t8",name:"Sunday dinner hosting",hrs:3,who:"tom",flex:true}
+];
+let state=store.get("state",{tasks:TASKS.map(t=>({id:t.id,who:t.who})),proposal:null,applied:false});
+function save(){store.set("state",state);}
+function hours(){const h={elena:0,marcus:0,tom:0};state.tasks.forEach(t=>{const def=TASKS.find(x=>x.id===t.id);h[t.who]+=def.hrs;});return h;}
+function fairness(h){const vals=PEOPLE.map(p=>h[p.id]);const mean=vals.reduce((a,b)=>a+b,0)/vals.length;const sd=Math.sqrt(vals.reduce((a,v)=>a+(v-mean)*(v-mean),0)/vals.length);return Math.max(0,100-Math.round(sd/mean*100));}
+const wrap=K.el('<div class="k-wrap"></div>');document.body.appendChild(wrap);
+wrap.appendChild(K.el('<div class="k-hero"><h1>One sibling is doing 80% of the care.</h1><div style="margin-top:14px"><button class="k-btn k-primary" id="propbtn" style="font-size:16px;padding:12px 24px">Propose rebalance</button></div><p>FairShare counts every caregiving hour, shows exactly who carries what, and proposes a concrete rebalance — task by task — so the conversation starts from facts, not guilt.</p></div>'));
+const host=K.el('<div></div>');wrap.appendChild(host);
+wrap.addEventListener("click",function(e){if(e.target&&e.target.id==="propbtn")propose();});
+function render(){
+ host.innerHTML='';
+ const h=hours();const tot=Object.values(h).reduce((a,b)=>a+b,0);
+ const k=K.el('<div class="k-kpis"></div>');host.appendChild(k);
+ const elenaShare=h.elena/tot;
+ K.kpi(k,{label:"Elena's share",value:Math.round(elenaShare*100)+"%",delta:elenaShare>0.6?"⚠ Burnout risk — over 60%":"Within healthy range"});
+ K.kpi(k,{label:"Family hours / week",value:String(tot)});
+ K.kpi(k,{label:"Fairness score",value:fairness(h)+" / 100",delta:state.applied?"After rebalance ✓":"Before rebalance"});
+ const chart=K.el('<div class="k-card"><h3>Hours per person / week</h3><div id="b"></div>'+(elenaShare>0.6?'<p style="margin:10px 0 0">'+K.badge("Elena carries "+Math.round(elenaShare*100)+"%","bad")+' <span class="k-muted" style="font-size:13px">Fair share would be ~'+Math.round(tot/3)+' hrs each.</span></p>':'<p style="margin:10px 0 0">'+K.badge("Balanced","ok")+'</p>')+'</div>');
+ host.appendChild(chart);
+ K.bars(chart.querySelector("#b"),PEOPLE.map(p=>({label:p.name,value:h[p.id],color:p.color,vtext:h[p.id]+" hrs ("+Math.round(h[p.id]/tot*100)+"%)"})));
+ const tl=K.el('<div class="k-card" style="margin-top:14px"><h3>Task assignments</h3><div id="t"></div></div>');
+ host.appendChild(tl);
+ K.table(tl.querySelector("#t"),
+  [{key:"task",label:"Task"},{key:"who",label:"Owner"},{key:"hrs",label:"Hrs/wk",num:true},{key:"flex",label:"Movable"}],
+  state.tasks.map(t=>{const def=TASKS.find(x=>x.id===t.id);const p=PEOPLE.find(x=>x.id===t.who);
+   return{task:"<b>"+K.esc(def.name)+"</b><br><span class='k-muted' style='font-size:12px'>"+K.esc(def.note||"")+"</span>",who:"<span style='color:"+p.color+";font-weight:700'>"+K.esc(p.name.split(" ")[0])+"</span>",hrs:def.hrs,flex:def.flex?K.badge("Yes","info"):K.badge("No — fixed","warn")};}));
+ if(state.proposal&&!state.applied)renderProposal();
+ if(state.applied)host.appendChild(K.el('<div class="k-card" style="margin-top:14px;border-color:var(--good)"><h3>✅ Rebalance applied</h3><p class="k-muted">Tasks were reassigned on Oct 3. Fairness score recomputed above. Review in two weeks — loads drift.</p><button class="k-btn" id="undo">Undo rebalance</button></div>')).querySelector("#undo").onclick=()=>{state.applied=false;state.proposal=null;state.tasks=TASKS.map(t=>({id:t.id,who:t.who}));save();render();};
+}
+function propose(){
+ const h=hours();const tot=Object.values(h).reduce((a,b)=>a+b,0);
+ const target=tot/3;
+ const moves=[];const sim={elena:h.elena,marcus:h.marcus,tom:h.tom};
+ const flexElena=state.tasks.filter(t=>t.who==="elena"&&TASKS.find(x=>x.id===t.id).flex)
+   .map(t=>({t:t,def:TASKS.find(x=>x.id===t.id)})).sort((a,b)=>b.def.hrs-a.def.hrs);
+ const receivers=["marcus","tom"];
+ let ri=0;
+ for(const f of flexElena){
+   if(sim.elena-target<=2)break;
+   const to=receivers[ri%receivers.length];ri++;
+   moves.push({task:f.def.name,hrs:f.def.hrs,from:"elena",to:to});
+   sim.elena-=f.def.hrs;sim[to]+=f.def.hrs;
+ }
+ if(!moves.length){K.toast("Already balanced — nothing to move","info");return;}
+ state.proposal={moves:moves,after:sim,before:h};state.applied=false;save();render();
+ K.toast("Rebalance proposal ready — review below","ok");
+ document.querySelector("#proposal").scrollIntoView({behavior:"smooth"});
+}
+function renderProposal(){
+ const p=state.proposal;
+ const d=K.el('<div class="k-card" id="proposal" style="margin-top:14px;border-color:var(--accent)"><h3>📋 Rebalance proposal</h3><p class="k-muted">Move flexible tasks off Elena until everyone is near '+Math.round((p.before.elena+p.before.marcus+p.before.tom)/3)+' hrs/week. Fixed tasks (overnights) stay.</p><div id="mv"></div><div class="k-kpis" id="kk"></div><div style="display:flex;gap:8px"><button class="k-btn k-primary" id="apply">Apply rebalance</button><button class="k-btn" id="dismiss">Dismiss</button></div></div>');
+ host.appendChild(d);
+ p.moves.forEach(m=>{
+   const to=PEOPLE.find(x=>x.id===m.to);
+   d.querySelector("#mv").appendChild(K.el('<div class="move">Move <b>'+K.esc(m.task)+'</b> ('+m.hrs+' hrs) from <b>Elena</b> → <b style="color:'+to.color+'">'+K.esc(to.name.split(" ")[0])+'</b></div>'));
+ });
+ const kk=d.querySelector("#kk");
+ const f0=fairness(p.before),f1=fairness(p.after);
+ K.kpi(kk,{label:"Fairness before",value:f0+" / 100"});K.kpi(kk,{label:"Fairness after",value:f1+" / 100",delta:"+"+(f1-f0)+" points"});
+ d.querySelector("#apply").onclick=()=>{
+   p.moves.forEach(m=>{const t=state.tasks.find(x=>TASKS.find(y=>y.id===x.id).name===m.task);if(t)t.who=m.to;});
+   state.applied=true;save();render();K.toast("Rebalance applied — new assignments live","ok");
+ };
+ d.querySelector("#dismiss").onclick=()=>{state.proposal=null;save();render();};
+}
+render();
+</script></body></html>

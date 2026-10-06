@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ledger — Family Decision Ledger</title>
+<link rel="stylesheet" href="../../shared/kit.css"><script src="../../shared/kit.js"></script>
+<!--SHIM-->
+<style>
+:root{--bg:#f6f2e9;--panel:#fffdf6;--panel2:#efe8d8;--ink:#2b2419;--muted:#7a6f5c;--line:#ddd2ba;--accent:#8a5a2b;--accent2:#2f7d6a;--good:#1e7d4f;--warn:#b07d10;--bad:#b23b3b}
+body{font-family:Georgia,"Times New Roman",serif}
+.opt{border:2px solid var(--line);border-radius:14px;padding:18px;margin:12px 0;background:var(--panel)}
+.opt.winner{border-color:var(--accent);box-shadow:0 4px 18px rgba(138,90,43,.15)}
+.opt h3{margin:0 0 4px;font-size:20px}
+.scorebar{height:12px;background:var(--panel2);border-radius:6px;overflow:hidden;margin:8px 0}
+.scorebar i{display:block;height:100%;background:var(--accent)}
+.vote{border-left:4px solid var(--line);padding:10px 14px;margin:10px 0;background:var(--panel);border-radius:0 10px 10px 0}
+.vote.support{border-color:var(--good)}.vote.lean{border-color:var(--warn)}.vote.oppose{border-color:var(--bad)}
+.crit{margin:14px 0}
+.crit .row{display:flex;justify-content:space-between;font-size:14px;font-weight:700}
+input[type=range]{width:100%}
+.k-btn,.k-badge,.k-input,.k-select,textarea{font-family:-apple-system,"Segoe UI",sans-serif}
+.k-nav-title{color:#f4f6fa!important}.k-nav-sub{color:#aeb7c4!important}</style></head>
+<body>
+<script>
+"use strict";
+const K=window.Kit;
+K.nav({title:"Ledger",sub:"Family Decision Ledger"});
+const store=K.store("decisionledger");
+const CRIT=[{id:"safety",label:"Safety",w:30},{id:"cost",label:"Affordability",w:20},{id:"indep",label:"Independence",w:20},{id:"social",label:"Social life",w:15},{id:"medical",label:"Medical access",w:15}];
+const OPTIONS=[
+ {id:"home",name:"Stay at home with a daily aide",cost:"~$3,200/mo",scores:{safety:55,cost:70,indep:90,social:45,medical:60},pros:["Familiar home, full independence","Cheapest option"],cons:["Alone 16 hrs/day","No on-site medical"]},
+ {id:"sunrise",name:"Sunrise Assisted Living",cost:"~$5,800/mo",scores:{safety:92,cost:40,indep:60,social:88,medical:90},pros:["24/7 staff, on-site nurse","Daily activities, built-in community"],cons:["Most expensive","Smaller private space"]},
+ {id:"elena",name:"Move in with Elena",cost:"~$1,500/mo",scores:{safety:78,cost:90,indep:45,social:70,medical:65},pros:["Family always near","Lowest cost"],cons:["Elena's burnout risk","Less independence for Mom"]}
+];
+const DECIDERS=[
+ {name:"Elena Vargas",role:"Daughter · primary caregiver",stance:"support",pick:"sunrise",note:"Mom fell twice last month. I can't keep covering nights alone."},
+ {name:"Marcus Vargas",role:"Son",stance:"lean",pick:"home",note:"Worried about cost long-term, but safety is slipping at home."},
+ {name:"Rosa Delgado (Mom)",role:"Decision subject",stance:"oppose",pick:"home",note:"I don't want to leave my garden. But I'm scared of falling again."},
+ {name:"Dr. Priya Chen",role:"Geriatrician (advisory)",stance:"support",pick:"sunrise",note:"Clinically: 24/7 supervision recommended after the second fall."}
+];
+let state=store.get("state",{weights:{safety:30,cost:20,indep:20,social:15,medical:15},votes:DECIDERS.map(d=>({name:d.name,stance:d.stance,pick:d.pick,note:d.note})),decided:false,log:[
+ {t:"Sep 12",title:"First family call",body:"Elena raised the idea after Mom's second fall. Agreed to research options.",kind:"info"},
+ {t:"Sep 19",title:"Toured Sunrise",body:"Elena + Marcus visited. Mom liked the garden courtyard; disliked the small kitchen.",kind:"ok"},
+ {t:"Sep 26",title:"Dr. Chen's assessment",body:"Geriatrician recommends 24/7 supervision. Written note filed.",kind:"warn"},
+ {t:"Oct 2",title:"Mom's wishes recorded",body:"Mom prefers staying home but consents to family deciding if safety requires it.",kind:"info"}
+]});
+function save(){store.set("state",state);}
+function weighted(opt){
+ let tot=0,wsum=0;
+ CRIT.forEach(c=>{const w=state.weights[c.id]||0;tot+=opt.scores[c.id]*w;wsum+=w;});
+ return wsum?tot/wsum:0;
+}
+const wrap=K.el('<div class="k-wrap"></div>');document.body.appendChild(wrap);
+wrap.appendChild(K.el('<div class="k-hero"><h1>Should Mom move to assisted living?</h1><p>The biggest family decision, written down properly: options scored against what matters, every decider\'s stance recorded, and the reasoning preserved — so nobody re-litigates it at Thanksgiving.</p><div style="margin-top:12px" id="status"></div><div style="margin-top:12px"><button class="k-btn" id="cpsum">Copy summary</button></div></div>'));
+const tabs=K.el('<div></div>');wrap.appendChild(tabs);
+K.tabs(tabs,[
+ {id:"weigh",label:"1 · Weigh options",render:renderWeigh},
+ {id:"deciders",label:"2 · Deciders",render:renderDeciders},
+ {id:"timeline",label:"3 · Discussion log",render:renderLog}
+]);
+function refreshStatus(){
+ const s=wrap.querySelector("#status");
+ const w=OPTIONS.slice().sort((a,b)=>weighted(b)-weighted(a))[0];
+ s.innerHTML=state.decided?K.badge("Decision recorded: "+w.name,"ok"):("Current leader: <b>"+K.esc(w.name)+"</b> ("+weighted(w).toFixed(0)+"/100) — "+K.badge("Undecided","warn"));
+}
+function renderWeigh(h){
+ h.innerHTML='';
+ const c=K.el('<div class="k-card"><h3>What matters most? <span class="k-muted" style="font-weight:400;font-size:13px">Drag to set importance</span></h3><div id="cr"></div><p class="k-muted" style="font-size:13px">Weights always total 100.</p></div>');
+ h.appendChild(c);const cr=c.querySelector("#cr");
+ CRIT.forEach(ct=>{
+   const d=K.el('<div class="crit"><div class="row"><span>'+ct.label+'</span><span id="v-'+ct.id+'">'+state.weights[ct.id]+'</span></div><input type="range" min="0" max="60" value="'+state.weights[ct.id]+'" id="r-'+ct.id+'"></div>');
+   d.querySelector("#r-"+ct.id).oninput=e=>{
+     state.weights[ct.id]=+e.target.value;
+     const sum=Object.values(state.weights).reduce((a,b)=>a+b,0);
+     if(sum!==100){const diff=100-sum;const others=CRIT.filter(x=>x.id!==ct.id);const per=Math.round(diff/others.length);others.forEach(o=>{state.weights[o.id]=Math.max(0,state.weights[o.id]+per);});
+       const s2=Object.values(state.weights).reduce((a,b)=>a+b,0);state.weights[others[0].id]+=100-s2;}
+     save();CRIT.forEach(x=>{const rr=h.querySelector("#r-"+x.id);if(rr&&x.id!==ct.id)rr.value=state.weights[x.id];const vv=h.querySelector("#v-"+x.id);if(vv)vv.textContent=state.weights[x.id];});
+     h.querySelector("#v-"+ct.id).textContent=state.weights[ct.id];
+     paintScores();refreshStatus();
+   };
+   cr.appendChild(d);
+ });
+ const sc=K.el('<div id="scores" style="margin-top:8px"></div>');h.appendChild(sc);
+ const fin=K.el('<div class="k-card" style="margin-top:14px"><h3>Record the decision</h3><p class="k-muted">When the family agrees, lock it in. The ledger keeps the reasoning forever.</p><button class="k-btn k-primary" id="lock">'+(state.decided?"Reopen decision":"Record decision")+'</button></div>');
+ h.appendChild(fin);
+ fin.querySelector("#lock").onclick=()=>{state.decided=!state.decided;save();renderWeigh(h);refreshStatus();K.toast(state.decided?"Decision locked into the ledger":"Decision reopened",state.decided?"ok":"warn");};
+ function paintScores(){
+   sc.innerHTML='';
+   const ranked=OPTIONS.slice().sort((a,b)=>weighted(b)-weighted(a));
+   ranked.forEach((o,i)=>{
+     const w=weighted(o);
+     const d=K.el('<div class="opt'+(i===0?" winner":"")+'">'+(i===0?K.badge("Leading option","ok"):"")+'<h3>'+K.esc(o.name)+'</h3><div class="k-muted">'+K.esc(o.cost)+'</div><div class="scorebar"><i style="width:'+w.toFixed(0)+'%"></i></div><b>'+w.toFixed(0)+' / 100</b><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;font-size:13px"><div><b style="color:var(--good)">Pros</b><ul style="margin:4px 0;padding-left:18px">'+o.pros.map(p=>"<li>"+K.esc(p)+"</li>").join("")+'</ul></div><div><b style="color:var(--bad)">Cons</b><ul style="margin:4px 0;padding-left:18px">'+o.cons.map(p=>"<li>"+K.esc(p)+"</li>").join("")+'</ul></div></div><div style="margin-top:8px" class="k-muted">Criterion scores: '+CRIT.map(cc=>cc.label+" "+o.scores[cc.id]).join(" · ")+'</div></div>');
+     sc.appendChild(d);
+   });
+ }
+ paintScores();refreshStatus();
+}
+function renderDeciders(h){
+ h.innerHTML='';
+ const tally={support:0,lean:0,oppose:0};
+ state.votes.forEach(v=>tally[v.stance]++);
+ const k=K.el('<div class="k-kpis"></div>');h.appendChild(k);
+ K.kpi(k,{label:"Support",value:String(tally.support)});K.kpi(k,{label:"Leaning",value:String(tally.lean)});K.kpi(k,{label:"Oppose",value:String(tally.oppose)});
+ state.votes.forEach((v,i)=>{
+   const opt=OPTIONS.find(o=>o.id===v.pick);
+    const d=K.el("<div class='vote "+v.stance+"'><b>"+K.esc(v.name)+"</b> <span class='k-muted'>&middot; "+K.esc(DECIDERS[i]?DECIDERS[i].role:"")+"</span><div style='margin:6px 0'>"+(v.stance==="support"?K.badge("Supports","ok"):v.stance==="lean"?K.badge("Leaning","warn"):K.badge("Opposes","bad"))+" favors: <b>"+K.esc(opt?opt.name:"-")+"</b></div><div class='k-muted' style='font-style:italic'>&ldquo;"+K.esc(v.note)+"&rdquo;</div><div style='margin-top:8px'><select class='k-select' style='max-width:220px' id='st'><option value='support'>Supports</option><option value='lean'>Leaning</option><option value='oppose'>Opposes</option></select></div></div>");
+   const sel=d.querySelector("#st");sel.value=v.stance;
+   sel.onchange=()=>{v.stance=sel.value;save();renderDeciders(h);K.toast("Stance updated","ok");};
+   h.appendChild(d);
+ });
+ const add=K.el('<div class="k-card" style="margin-top:14px"><h3>Add a decider</h3><div style="display:flex;gap:8px;flex-wrap:wrap"><input class="k-input" id="nm" placeholder="Name" style="max-width:220px"><select class="k-select" id="pk" style="max-width:240px">'+OPTIONS.map(o=>'<option value="'+o.id+'">'+K.esc(o.name)+'</option>').join("")+'</select><button class="k-btn k-primary" id="go">Add</button></div></div>');
+ h.appendChild(add);
+ add.querySelector("#go").onclick=()=>{
+   const nm=add.querySelector("#nm").value.trim();if(!nm){K.toast("Enter a name","bad");return;}
+   state.votes.push({name:nm,stance:"lean",pick:add.querySelector("#pk").value,note:""});save();renderDeciders(h);K.toast(nm+" added as decider","ok");
+ };
+}
+function renderLog(h){
+ h.innerHTML='';
+ const t=K.el('<div></div>');h.appendChild(t);
+ K.timeline(t,state.log.map(e=>({t:e.t,title:e.title,body:e.body,kind:e.kind})));
+ const add=K.el('<div class="k-card" style="margin-top:14px"><h3>Log a discussion</h3><input class="k-input" id="ti" placeholder="Title" style="margin-bottom:8px"><textarea class="k-input" id="bo" rows="2" placeholder="What was said or decided?"></textarea><div style="margin-top:8px"><button class="k-btn k-primary" id="go">Add to log</button></div></div>');
+ h.appendChild(add);
+ add.querySelector("#go").onclick=()=>{
+   const ti=add.querySelector("#ti").value.trim();if(!ti){K.toast("Enter a title","bad");return;}
+   state.log.push({t:"Oct 3",title:ti,body:add.querySelector("#bo").value.trim(),kind:"info"});save();renderLog(h);K.toast("Logged","ok");
+ };
+}
+function copySummary(){
+ const w=OPTIONS.slice().sort((a,b)=>weighted(b)-weighted(a))[0];
+ const lines=["FAMILY DECISION LEDGER — Move to assisted living?",state.decided?"STATUS: DECIDED":"STATUS: UNDECIDED","",
+  "WEIGHTS: "+CRIT.map(c=>c.label+" "+state.weights[c.id]).join(", "),"",
+  ...OPTIONS.slice().sort((a,b)=>weighted(b)-weighted(a)).map(o=>o.name+": "+weighted(o).toFixed(0)+"/100 ("+o.cost+")"),"",
+  "DECIDERS:",...state.votes.map(v=>"- "+v.name+": "+v.stance+" → "+(OPTIONS.find(o=>o.id===v.pick)||{}).name)];
+ K.copy(lines.join("\n"));
+}
+wrap.querySelector("#cpsum").onclick=copySummary;
+refreshStatus();
+</script></body></html>

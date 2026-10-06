@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RideLine — Appointment Transport Router</title>
+<link rel="stylesheet" href="../../shared/kit.css"><script src="../../shared/kit.js"></script>
+<!--SHIM-->
+<style>
+:root{--bg:#10151f;--panel:#1a2233;--panel2:#242e45;--ink:#f2f5fb;--muted:#93a0b8;--line:#2c3752;--accent:#f5a623;--accent2:#39c6d6;--good:#2fbf71;--warn:#f5a623;--bad:#e5534b}
+body{background:var(--bg);color:var(--ink)}
+.k-card,.k-nav{background:var(--panel);border-color:var(--line)}
+.k-input,.k-select,.k-btn{background:var(--panel2);border-color:var(--line);color:var(--ink)}
+.k-table th{color:var(--muted);border-color:var(--line)}.k-table td{border-color:var(--line)}
+.k-primary{background:var(--accent);border-color:var(--accent);color:#1a1408}
+.stop{border:2px solid var(--line);border-radius:14px;padding:16px;margin:10px 0;background:var(--panel);display:flex;gap:14px;align-items:flex-start}
+.stop .n{width:38px;height:38px;border-radius:50%;background:var(--accent);color:#1a1408;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px}
+.leg{display:flex;align-items:center;gap:10px;margin:0 0 0 19px;padding:6px 0;color:var(--muted);font-size:13px}
+.leg .bar{width:2px;height:26px;background:var(--line)}
+.van{background:#12352f;border:2px solid var(--good);border-radius:12px;padding:12px 16px;margin:8px 0}
+.toggle{display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:10px 0;cursor:pointer}
+.toggle input{width:22px;height:22px;accent-color:var(--accent)}
+.k-hero{background:linear-gradient(135deg,#1a2233,#232c47);border-color:var(--line)}
+.k-hero h1{color:var(--accent)}
+</style></head>
+<body>
+<script>
+"use strict";
+const K=window.Kit;
+K.nav({title:"🚌 RideLine",sub:"Tuesday appointment transport — Mom"});
+const store=K.store("rideline");
+const APPTS=[
+ {id:"cardio",name:"Dr. Chen — Cardiologist",addr:"Sutter Health, 301 Old San Francisco Rd, Sunnyvale",at:"9:30 AM",dur:60,win:["9:15 AM","10:00 AM"],mobility:"standard",mustFirst:false},
+ {id:"rx",name:"CVS Pharmacy pickup",addr:"CVS, 275 E El Camino Real, Sunnyvale",at:"11:00 AM",dur:15,win:["10:30 AM","12:30 PM"],mobility:"standard",mustFirst:false},
+ {id:"pt",name:"Physical therapy",addr:"Bay PT, 880 W Maude Ave, Sunnyvale",at:"2:00 PM",dur:45,win:["1:45 PM","2:30 PM"],mobility:"wheelchair",mustFirst:false}
+];
+// travel minutes between: home, cardio, rx, pt
+const TRAVEL={home:{cardio:22,rx:18,pt:25},cardio:{home:22,rx:9,pt:14},rx:{home:18,cardio:9,pt:11},pt:{home:25,cardio:14,rx:11}};
+function t2m(t){const m=t.match(/(\d+):(\d+) (AM|PM)/);let h=+m[1]%12;if(m[3]==="PM")h+=12;return h*60+ +m[2];}
+function m2t(m){let h=Math.floor(m/60),mm=m%60;const ap=h>=12?"PM":"AM";h=h%12||12;return h+":"+String(mm).padStart(2,"0")+" "+ap;}
+let state=store.get("state",{order:["cardio","rx","pt"],vanRequired:true,optimized:false});
+function save(){store.set("state",state);}
+const wrap=K.el('<div class="k-wrap"></div>');document.body.appendChild(wrap);
+wrap.addEventListener("click",function(e){if(e.target&&e.target.id==="optbtn")optimize();});
+wrap.appendChild(K.el('<div class="k-hero"><h1>Tuesday, Oct 6 — 3 appointments, 1 smooth ride</h1><div style="margin-top:14px"><button class="k-btn k-primary" id="optbtn" style="font-size:16px;padding:12px 24px">Optimize route</button></div><p>RideLine sequences the appointments, books the right vehicle, and pads the timing for wheelchair loading — so Mom is never rushed and never waiting curbside.</p></div>'));
+const kpis=K.el('<div class="k-kpis"></div>');wrap.appendChild(kpis);
+const ctrl=K.el('<div class="k-card"><h3>Trip settings</h3><label class="toggle"><input type="checkbox" id="van"><span><b>♿ Wheelchair van required</b><br><span class="k-muted" style="font-size:13px">Adds 12 min loading per stop · driver assists with transfers</span></span></label><p class="k-muted" style="font-size:13px;margin-bottom:0">Departing from: Home — 456 Oak Ave, Riverton</p></div>');
+wrap.appendChild(ctrl);
+const van=ctrl.querySelector("#van");van.checked=state.vanRequired;
+van.onchange=()=>{state.vanRequired=van.checked;save();render();K.toast(state.vanRequired?"Wheelchair van booked":"Standard sedan booked","ok");};
+const route=K.el('<div id="route"></div>');wrap.appendChild(route);
+function buildPlan(order){
+ const loadPad=state.vanRequired?12:4;
+ let t=t2m("8:40 AM"); // leave home
+ const stops=[];let prev="home";let tight=0;
+ order.forEach((id,i)=>{
+   const a=APPTS.find(x=>x.id===id);
+   const drive=TRAVEL[prev][id];
+   t+=drive;
+   const apptT=t2m(a.at);
+   let wait=0,status="ok",note="";
+   if(t<apptT-15){wait=apptT-15-t;note="Arrive "+m2t(t)+", "+wait+" min early — grab coffee ☕";}
+   else if(t>apptT+10){status="bad";tight++;note="⚠ Running "+(t-apptT)+" min late — call clinic!";}
+   else if(t>apptT){status="warn";note="Arrive "+m2t(t)+" — a few minutes past, still fine";}
+   else{note="Arrive "+m2t(t)+" — right on time ✓";}
+   t=Math.max(t,apptT-15);
+   const depart=t+a.dur+loadPad;
+   stops.push({a:a,arrive:t,depart:depart,drive:drive,wait:wait,status:status,note:note,loadPad:loadPad});
+   t=depart;prev=id;
+ });
+ const home=TRAVEL[prev].home;t+=home;
+ return{stops:stops,homeAt:t,tight:tight,totalMiles:Math.round(order.reduce((s,id,i)=>s+TRAVEL[i?order[i-1]:"home"][id],0)*1.4)};
+}
+function optimize(){
+ // try all permutations, score by lateness then total time
+ const ids=APPTS.map(a=>a.id);
+ const perms=[[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]].map(p=>p.map(i=>ids[i]));
+ let best=null,bestScore=1e9;
+ perms.forEach(o=>{const p=buildPlan(o);const score=p.tight*1000+p.homeAt;if(score<bestScore){bestScore=score;best=o;}});
+ state.order=best;state.optimized=true;save();render();
+ K.toast("Route optimized — "+best.map(id=>APPTS.find(a=>a.id===id).name.split(" — ")[0]).join(" → "),"ok");
+}
+function render(){
+ kpis.innerHTML='';route.innerHTML='';
+ const plan=buildPlan(state.order);
+ K.kpi(kpis,{label:"First pickup",value:"8:40 AM",delta:"From home"});
+ K.kpi(kpis,{label:"Home by",value:m2t(plan.homeAt),delta:plan.totalMiles+" mi total"});
+ K.kpi(kpis,{label:"Vehicle",value:state.vanRequired?"♿ Wheelchair van":"Sedan",delta:state.vanRequired?"Driver assists transfers":""});
+ K.kpi(kpis,{label:"Timing risks",value:String(plan.tight),delta:plan.tight?"Review flagged stops":"All stops comfortable"});
+ if(state.optimized)route.appendChild(K.el('<p>'+K.badge("Optimized order","ok")+' <span class="k-muted" style="font-size:13px">Best of 6 possible sequences by on-time arrival.</span></p>'));
+ plan.stops.forEach((s,i)=>{
+   const d=K.el('<div class="stop"><div class="n">'+(i+1)+'</div><div style="flex:1"><b style="font-size:17px">'+K.esc(s.a.name)+'</b><div class="k-muted" style="font-size:13px">'+K.esc(s.a.addr)+'</div><div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+K.badge("Appt "+s.a.at,"info")+K.badge("Arrive "+m2t(s.arrive),s.status==="ok"?"ok":s.status)+K.badge(s.a.dur+" min visit","")+ (s.a.mobility==="wheelchair"?K.badge("♿ wheelchair","warn"):"")+'</div><div class="k-muted" style="font-size:13px;margin-top:6px">'+K.esc(s.note)+' · departs '+m2t(s.depart)+'</div></div></div>');
+   route.appendChild(d);
+   if(i<plan.stops.length-1||true){
+     const next=i<plan.stops.length-1?plan.stops[i+1]:null;
+     const leg=K.el('<div class="leg"><div class="bar"></div><span>🚐 '+(next?s.drive+" min drive":TRAVEL[s.a.id].home+" min drive")+' → '+(next?K.esc(next.a.name.split(" — ")[0]):"Home")+(state.vanRequired?' <span class="k-muted">(+'+s.loadPad+' min wheelchair loading)</span>':'')+'</span></div>');
+     route.appendChild(leg);
+   }
+ });
+ const v=K.el('<div class="van"><b>'+(state.vanRequired?"♿ Wheelchair van — booked":"🚗 Standard sedan — booked")+'</b><div class="k-muted" style="font-size:13px;color:var(--muted)">Driver: Luis (4.9★, wheelchair-certified) · $68 flat for the day · arrives 8:30 AM</div></div>');
+ route.appendChild(v);
+ const tbl=K.el('<div class="k-card" style="margin-top:14px"><h3>Timing detail</h3><div id="t"></div></div>');
+ route.appendChild(tbl);
+ K.table(tbl.querySelector("#t"),
+  [{key:"stop",label:"Stop"},{key:"arrive",label:"Arrive",num:true},{key:"appt",label:"Appt",num:true},{key:"depart",label:"Depart",num:true},{key:"status",label:"Status",fmt:v=>v}],
+  plan.stops.map(s=>({stop:s.a.name.split(" — ")[0],arrive:m2t(s.arrive),appt:s.a.at,depart:m2t(s.depart),status:s.status==="ok"?K.badge("On time","ok"):s.status==="warn"?K.badge("Slightly late","warn"):K.badge("Late — call","bad")})));
+}
+render();
+</script></body></html>

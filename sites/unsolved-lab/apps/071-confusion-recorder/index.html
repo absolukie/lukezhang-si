@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Confusion Log</title>
+<link rel="stylesheet" href="../../shared/kit.css">
+<style>body{padding-top:104px}/* qa-c: clear fixed .k-nav header */
+/* Common kit-fallback styles. Per-app palette vars are overridden in app.css. */
+:root{
+--bg:#f7f5f0;--panel:#ffffff;--panel2:#f1ede4;--ink:#23211c;--muted:#6f6a5e;
+--line:#e2dccf;--accent:#b5542a;--accent2:#e8a020;--good:#2e7d4f;--warn:#b7791f;--bad:#b3382e;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);
+font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+line-height:1.55}
+.k-wrap{max-width:1120px;margin:0 auto;padding:20px 18px 64px}
+.k-nav{background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+.k-nav-in{max-width:1120px;margin:0 auto;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.k-nav-t{margin:0;font-size:22px;letter-spacing:.2px}
+.k-nav-s{margin:2px 0 0;color:var(--muted);font-size:13px}
+.k-nav-a{display:flex;gap:8px;flex-wrap:wrap}
+.k-hero{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:26px 24px;margin:18px 0}
+.k-hero h2{margin:0 0 6px;font-size:26px}
+.k-hero p{margin:0;color:var(--muted)}
+.k-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:16px 0}
+.k-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.k-card h3{margin:0 0 8px;font-size:16px}
+.k-muted{color:var(--muted)}.k-small{font-size:13px}
+.k-split{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:760px){.k-split{grid-template-columns:1fr}}
+.k-btn{display:inline-block;border:1px solid var(--line);background:var(--panel2);color:var(--ink);
+border-radius:9px;padding:9px 16px;font-size:14px;font-weight:600;cursor:pointer}
+.k-btn:hover{filter:brightness(.97)}
+.k-btn.k-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.k-input,.k-select,textarea.k-input{width:100%;border:1px solid var(--line);border-radius:9px;
+padding:10px 12px;font-size:14px;background:#fff;color:var(--ink);font-family:inherit}
+textarea.k-input{min-height:88px;resize:vertical}
+label.k-label{display:block;font-size:13px;font-weight:600;margin:10px 0 4px}
+.k-table{width:100%;border-collapse:collapse;font-size:14px}
+.k-table th{text-align:left;color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.4px;
+padding:8px 10px;border-bottom:2px solid var(--line)}
+.k-table td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.k-table tr:hover td{background:var(--panel2)}
+.k-badge{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;padding:3px 10px;
+background:var(--panel2);color:var(--ink);border:1px solid var(--line);white-space:nowrap}
+.k-badge.ok{background:#e4f2e9;color:#1e6b3e;border-color:#bfe0c9}
+.k-badge.warn{background:#fbf0da;color:#8a5a12;border-color:#ecd9ab}
+.k-badge.bad{background:#fbe7e4;color:#a02c22;border-color:#f0c4bd}
+.k-badge.info{background:#e3eefb;color:#2456a6;border-color:#c3d8f2}
+.k-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0}
+.k-tab{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:8px 16px;
+font-size:14px;font-weight:600;cursor:pointer;color:var(--muted)}
+.k-tab.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.k-kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.k-kpi .k-kpi-l{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+.k-kpi .k-kpi-v{font-size:26px;font-weight:800;margin-top:2px}
+.k-kpi .k-kpi-d{font-size:13px;color:var(--muted)}
+.k-toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);background:var(--ink);color:var(--bg);
+padding:12px 20px;border-radius:10px;font-size:14px;font-weight:600;opacity:0;transition:all .3s;z-index:99;max-width:90vw}
+.k-toast.show{opacity:1;transform:translate(-50%,0)}
+.k-toast.good{background:var(--good)}.k-toast.bad{background:var(--bad)}
+.k-modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:90;padding:18px}
+.k-modal{background:var(--panel);border-radius:14px;max-width:560px;width:100%;max-height:85vh;overflow:auto;padding:22px}
+.k-modal h3{margin:0 0 10px}
+.k-modal-f{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
+.k-empty{text-align:center;padding:44px 20px;color:var(--muted)}
+.k-empty h3{color:var(--ink);margin:0 0 6px}
+.k-bar-row{display:flex;align-items:center;gap:10px;margin:7px 0;font-size:14px}
+.k-bar-l{width:150px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.k-bar-t{flex:1;background:var(--panel2);border-radius:6px;height:14px;overflow:hidden}
+.k-bar-f{height:100%;border-radius:6px;background:var(--accent)}
+.k-bar-v{width:56px;text-align:right;font-variant-numeric:tabular-nums;color:var(--muted);flex:none}
+.k-tl{position:relative;margin:14px 0;padding-left:26px}
+.k-tl:before{content:"";position:absolute;left:8px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.k-tl-ev{position:relative;margin:0 0 16px}
+.k-tl-ev:before{content:"";position:absolute;left:-24px;top:5px;width:12px;height:12px;border-radius:50%;
+background:var(--accent);border:2px solid var(--panel)}
+.k-tl-ev .k-tl-t{font-weight:700}
+.k-tl-ev .k-tl-b{color:var(--muted);font-size:13px}
+.k-graph{width:100%;overflow:auto}
+.k-klist{list-style:none;margin:0;padding:0}
+.k-klist li{padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
+.k-klist li:last-child{border-bottom:0}
+.k-flex{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.k-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+.k-note{background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--accent);
+border-radius:0 10px 10px 0;padding:12px 16px;margin:14px 0;font-size:14px}
+.k-quiz-opt{display:block;width:100%;text-align:left;margin:8px 0}
+.k-quiz-opt.picked{outline:2px solid var(--accent)}
+.k-quiz-opt.right{outline:2px solid var(--good)}
+.k-quiz-opt.wrong{outline:2px solid var(--bad)}
+@media(max-width:640px){.k-bar-l{width:104px}.k-wrap{padding:14px 12px 48px}}
+
+:root{
+--bg:#faf5ec;--panel:#fffdf7;--panel2:#f3ecdd;--ink:#2c2519;--muted:#7c7261;
+--line:#e6dcc8;--accent:#b5542a;--accent2:#d98e32;--good:#2e7d4f;--warn:#b7791f;--bad:#b3382e;
+}
+body{font-family:Georgia,"Iowan Old Style","Times New Roman",serif}
+.k-nav-t,.k-hero h2,.k-card h3,.k-tab{font-family:Georgia,"Iowan Old Style",serif}
+.conf-item{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:10px 0;background:var(--panel)}
+.conf-item.resolved{opacity:.6}
+.conf-item.resolved .conf-topic{text-decoration:line-through}
+.conf-topic{font-weight:700;font-size:16px}
+.conf-meta{font-size:12px;color:var(--muted);margin-top:4px}
+.sev{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:2px;background:var(--line)}
+.sev.f{background:var(--accent)}
+.cluster-card{border:2px solid var(--accent);border-radius:12px;padding:16px 18px;margin:12px 0;background:var(--panel)}
+.cluster-card .rank{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--accent)}
+.start-here{background:var(--accent);color:#fff;border-radius:999px;padding:3px 12px;font-size:12px;font-weight:800;margin-left:8px}
+.cklist{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.ck{display:flex;gap:8px;align-items:flex-start;font-size:13.5px;cursor:pointer}
+.ck input{margin-top:3px;accent-color:var(--accent)}
+textarea.k-input,.k-input,.k-select{background:#fffdf7}
+.k-tab.on{background:var(--accent);border-color:var(--accent);color:#fff}
+
+</style>
+</head>
+<body>
+<div class="k-wrap" id="app"></div>
+
+<script src="../../shared/kit.js"></script>
+<script>
+/* Fallback Kit (window.Kit). If ../../shared/kit.js loads later it replaces this. */
+(function(){
+if(window.Kit && window.Kit._real) return;
+function hashStr(s){let h=1779033703^s.length;for(let i=0;i<s.length;i++){h=Math.imul(h^s.charCodeAt(i),3432918353);h=(h<<13)|(h>>>19);}return h>>>0;}
+function mulberry32(a){return function(){a|=0;a=(a+0x6D2B79F5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;};}
+var uidc=0;
+var Kit={
+_rng:null,
+rng:function(seed){return mulberry32(hashStr(String(seed)));},
+pick:function(r,arr){return arr[Math.floor(r()*arr.length)];},
+int:function(r,a,b){return a+Math.floor(r()*(b-a+1));},
+shuffle:function(r,arr){var a=arr.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(r()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}return a;},
+uid:function(p){uidc++;return (p||"id")+"-"+uidc+"-"+Date.now().toString(36);},
+esc:function(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});},
+el:function(html){var t=document.createElement("template");t.innerHTML=String(html).trim();return t.content.firstElementChild;},
+store:function(ns){return{
+get:function(k,d){try{var v=localStorage.getItem(ns+":"+k);return v==null?d:JSON.parse(v);}catch(e){return d;}},
+set:function(k,v){try{localStorage.setItem(ns+":"+k,JSON.stringify(v));}catch(e){}},
+del:function(k){try{localStorage.removeItem(ns+":"+k);}catch(e){}}};},
+nav:function(o){var n=this.el('<header class="k-nav"><div class="k-nav-in"><div><h1 class="k-nav-t"></h1><p class="k-nav-s"></p></div><div class="k-nav-a"></div></div></header>');
+n.querySelector(".k-nav-t").textContent=o.title||"";n.querySelector(".k-nav-s").textContent=o.sub||"";
+var a=n.querySelector(".k-nav-a");(o.actions||[]).forEach(function(x){a.appendChild(x);});
+document.body.insertBefore(n,document.body.firstChild);return n;},
+toast:function(msg,kind){var t=this.el('<div class="k-toast'+(kind?" "+kind:"")+'"></div>');t.textContent=msg;
+document.body.appendChild(t);setTimeout(function(){t.classList.add("show");},10);
+setTimeout(function(){t.classList.remove("show");setTimeout(function(){t.remove();},400);},2600);},
+modal:function(o){var ov=this.el('<div class="k-modal-ov"><div class="k-modal" role="dialog"><h3></h3><div class="k-modal-b"></div><div class="k-modal-f"></div></div></div>');
+ov.querySelector("h3").textContent=o.title||"";ov.querySelector(".k-modal-b").innerHTML=o.body||"";
+var f=ov.querySelector(".k-modal-f");(o.actions||[{label:"Close",primary:true}]).forEach(function(x){
+var b=document.createElement("button");b.className="k-btn"+(x.primary?" k-primary":"");b.textContent=x.label;
+b.onclick=function(){if(x.onClick)x.onClick();if(!x.keep)ov.remove();};f.appendChild(b);});
+ov.addEventListener("click",function(e){if(e.target===ov)ov.remove();});
+document.body.appendChild(ov);return ov;},
+tabs:function(host,list){host.innerHTML="";var self=this;
+var bar=this.el('<div class="k-tabs"></div>');var pane=this.el('<div class="k-tabpane"></div>');
+host.appendChild(bar);host.appendChild(pane);
+function show(id){var it=null;list.forEach(function(x){if(x.id===id)it=x;});
+bar.querySelectorAll(".k-tab").forEach(function(b){b.classList.toggle("on",b.dataset.id===id);});
+pane.innerHTML="";if(it&&it.render)it.render(pane);}
+list.forEach(function(x,i){var b=self.el('<button class="k-tab"></button>');b.textContent=x.label;b.dataset.id=x.id;
+b.onclick=function(){show(x.id);};bar.appendChild(b);});
+if(list.length)show(list[0].id);},
+table:function(host,cols,rows,opt){opt=opt||{};host.innerHTML="";var self=this;var page=0;var q="";
+var wrap=this.el('<div></div>');host.appendChild(wrap);
+function draw(){var rs=rows.filter(function(r){if(!q)return true;
+return cols.some(function(c){var v=r[c.key];return v!=null&&String(v).toLowerCase().indexOf(q)>=0;});});
+var ps=opt.pageSize||rs.length;var np=Math.max(1,Math.ceil(rs.length/ps));page=Math.min(page,np-1);
+var slice=rs.slice(page*ps,(page+1)*ps);
+var h='<div class="k-flex" style="justify-content:space-between;margin-bottom:8px">';
+if(opt.search)h+='<input class="k-input k-search" style="max-width:280px" placeholder="Search…">';
+h+='<span class="k-muted k-small">'+rs.length+' rows</span></div>';
+h+='<div style="overflow-x:auto"><table class="k-table"><thead><tr>';
+cols.forEach(function(c){h+='<th'+(c.num?' style="text-align:right"':"")+'>'+self.esc(c.label)+'</th>';});
+h+='</tr></thead><tbody>';
+slice.forEach(function(r){h+='<tr>';cols.forEach(function(c){var v=r[c.key];if(c.fmt)v=c.fmt(v,r);
+h+='<td'+(c.num?' style="text-align:right"':"")+'>'+(v==null?"":v)+'</td>';});h+='</tr>';});
+h+='</tbody></table></div>';
+if(np>1)h+='<div class="k-flex" style="margin-top:8px"><button class="k-btn k-prev">← Prev</button><span class="k-muted k-small">Page '+(page+1)+' of '+np+'</span><button class="k-btn k-next">Next →</button></div>';
+wrap.innerHTML=h;
+var si=wrap.querySelector(".k-search");if(si){si.value=q;si.oninput=function(){q=si.value.toLowerCase();page=0;draw();};}
+var pv=wrap.querySelector(".k-prev");if(pv)pv.onclick=function(){if(page>0){page--;draw();}};
+var nx=wrap.querySelector(".k-next");if(nx)nx.onclick=function(){if(page<np-1){page++;draw();}};
+draw();}
+},
+bars:function(host,items){host.innerHTML="";var max=0;items.forEach(function(i){if(i.value>max)max=i.value;});
+var self=this;items.forEach(function(i){var w=max?Math.round(i.value/max*100):0;
+var row=self.el('<div class="k-bar-row"><span class="k-bar-l" title="'+self.esc(i.label)+'">'+self.esc(i.label)+'</span><span class="k-bar-t"><span class="k-bar-f" style="width:'+w+'%'+(i.color?';background:'+i.color:'')+'"></span></span><span class="k-bar-v">'+self.esc(i.disp!=null?i.disp:i.value)+'</span></div>');
+host.appendChild(row);});},
+line:function(host,series,opt){opt=opt||{};host.innerHTML="";var W=560,H=240,pad=34;
+var cv=document.createElement("canvas");cv.width=W*2;cv.height=H*2;cv.style.width="100%";cv.style.maxWidth=W+"px";cv.style.height="auto";
+var g=cv.getContext("2d");g.scale(2,2);host.appendChild(cv);
+var all=[];series.forEach(function(s){s.points.forEach(function(p){all.push(p);});});
+var mn=Math.min.apply(null,all.concat([0])),mx=Math.max.apply(null,all.concat([1]));if(mx===mn)mx=mn+1;
+function X(i,n){return pad+(W-2*pad)*(n<=1?0:i/(n-1));}
+function Y(v){return H-pad-(H-2*pad)*(v-mn)/(mx-mn);}
+g.strokeStyle="rgba(0,0,0,.12)";g.fillStyle="rgba(0,0,0,.5)";g.font="10px sans-serif";
+for(var k=0;k<=4;k++){var v=mn+(mx-mn)*k/4,yy=Y(v);g.beginPath();g.moveTo(pad,yy);g.lineTo(W-pad,yy);g.stroke();g.fillText(Math.round(v).toString(),4,yy+3);}
+series.forEach(function(s,si){g.strokeStyle=s.color||["#b5542a","#0e7c7c","#2456a6"][si%3];g.lineWidth=2.5;g.beginPath();
+s.points.forEach(function(p,i){var x=X(i,s.points.length),y=Y(p);if(i===0)g.moveTo(x,y);else g.lineTo(x,y);});g.stroke();});
+var lgY=H-8;series.forEach(function(s,si){var x=pad+si*130;g.fillStyle=s.color||["#b5542a","#0e7c7c","#2456a6"][si%3];g.fillRect(x,lgY-8,18,8);g.fillStyle="rgba(0,0,0,.6)";g.fillText(s.name,x+22,lgY);});},
+donut:function(host,items){host.innerHTML="";var R=70,r=46,cx=90,cy=90;var tot=0;items.forEach(function(i){tot+=i.value;});
+var ns="http://www.w3.org/2000/svg";var svg=document.createElementNS(ns,"svg");svg.setAttribute("viewBox","0 0 180 180");svg.style.width="180px";svg.style.maxWidth="100%";
+var a0=-Math.PI/2;var self=this;
+items.forEach(function(i,idx){var frac=tot?i.value/tot:0;var a1=a0+frac*Math.PI*2;
+var p=document.createElementNS(ns,"path");var large=frac>0.5?1:0;
+var x0=cx+R*Math.cos(a0),y0=cy+R*Math.sin(a0),x1=cx+R*Math.cos(a1),y1=cy+R*Math.sin(a1);
+var xi1=cx+r*Math.cos(a1),yi1=cy+r*Math.sin(a1),xi0=cx+r*Math.cos(a0),yi0=cy+r*Math.sin(a0);
+p.setAttribute("d","M"+x0+","+y0+" A"+R+","+R+" 0 "+large+" 1 "+x1+","+y1+" L"+xi1+","+yi1+" A"+r+","+r+" 0 "+large+" 0 "+xi0+","+yi0+" Z");
+p.setAttribute("fill",i.color||["#b5542a","#0e7c7c","#2456a6","#e8a020"][idx%4]);
+var tt=document.createElementNS(ns,"title");tt.textContent=i.label+": "+i.value;p.appendChild(tt);svg.appendChild(p);a0=a1;});
+host.appendChild(svg);
+var ul=this.el('<ul class="k-klist"></ul>');items.forEach(function(i,idx){
+var li=self.el('<li><span class="k-badge" style="background:'+(i.color||["#b5542a","#0e7c7c","#2456a6","#e8a020"][idx%4])+';color:#fff;border:0">'+self.esc(String(i.value))+'</span> '+self.esc(i.label)+'</li>');
+ul.appendChild(li);});host.appendChild(ul);},
+timeline:function(host,events){host.innerHTML="";var self=this;var tl=this.el('<div class="k-tl"></div>');
+events.forEach(function(e){var d=self.el('<div class="k-tl-ev"><div class="k-small k-muted">'+self.esc(e.t||"")+'</div><div class="k-tl-t">'+self.esc(e.title||"")+'</div><div class="k-tl-b">'+self.esc(e.body||"")+'</div></div>');tl.appendChild(d);});
+host.appendChild(tl);},
+graph:function(host,o){host.innerHTML="";var nodes=o.nodes||[],edges=o.edges||[];
+var W=620,rowH=64;var levels={};nodes.forEach(function(n){var l=n.level||0;levels[l]=levels[l]||[];levels[l].push(n);});
+var maxL=Math.max.apply(null,Object.keys(levels).map(Number).concat([0]));
+var H=(maxL+1)*rowH+30;var ns="http://www.w3.org/2000/svg";
+var svg=document.createElementNS(ns,"svg");svg.setAttribute("viewBox","0 0 "+W+" "+H);svg.style.width="100%";svg.style.maxWidth=W+"px";
+var pos={};var self=this;
+Object.keys(levels).forEach(function(l){var arr=levels[l];arr.forEach(function(n,i){pos[n.id]={x:W*(i+1)/(arr.length+1),y:30+Number(l)*rowH};});});
+edges.forEach(function(e){var a=pos[e.a],b=pos[e.b];if(!a||!b)return;
+var ln=document.createElementNS(ns,"line");ln.setAttribute("x1",a.x);ln.setAttribute("y1",a.y);ln.setAttribute("x2",b.x);ln.setAttribute("y2",b.y);
+ln.setAttribute("stroke","rgba(0,0,0,.25)");ln.setAttribute("stroke-width","2");svg.appendChild(ln);
+if(e.label){var tx=document.createElementNS(ns,"text");tx.setAttribute("x",(a.x+b.x)/2+6);tx.setAttribute("y",(a.y+b.y)/2-4);
+tx.setAttribute("font-size","10");tx.setAttribute("fill","rgba(0,0,0,.55)");tx.textContent=e.label;svg.appendChild(tx);}});
+nodes.forEach(function(n){var p=pos[n.id];var gEl=document.createElementNS(ns,"g");gEl.style.cursor=n.onClick?"pointer":"default";
+var c=document.createElementNS(ns,"circle");c.setAttribute("cx",p.x);c.setAttribute("cy",p.y);c.setAttribute("r","20");
+c.setAttribute("fill",n.color||"#0e7c7c");c.setAttribute("stroke","#fff");c.setAttribute("stroke-width","3");gEl.appendChild(c);
+var t=document.createElementNS(ns,"text");t.setAttribute("x",p.x);t.setAttribute("y",p.y+38);t.setAttribute("text-anchor","middle");
+t.setAttribute("font-size","11");t.setAttribute("font-weight","700");t.setAttribute("fill","currentColor");t.textContent=n.label;gEl.appendChild(t);
+if(n.sub){var s=document.createElementNS(ns,"text");s.setAttribute("x",p.x);s.setAttribute("y",p.y+52);s.setAttribute("text-anchor","middle");
+s.setAttribute("font-size","10");s.setAttribute("fill","rgba(0,0,0,.55)");s.textContent=n.sub;gEl.appendChild(s);}
+if(n.onClick)gEl.addEventListener("click",function(){n.onClick(n);});
+svg.appendChild(gEl);});
+var wrap=this.el('<div class="k-graph"></div>');wrap.appendChild(svg);host.appendChild(wrap);},
+badge:function(txt,kind){return '<span class="k-badge '+(kind||"")+'">'+this.esc(txt)+'</span>';},
+kpi:function(host,o){var d=this.el('<div class="k-kpi"><div class="k-kpi-l"></div><div class="k-kpi-v"></div><div class="k-kpi-d"></div></div>');
+d.querySelector(".k-kpi-l").textContent=o.label||"";d.querySelector(".k-kpi-v").innerHTML=o.value||"";
+d.querySelector(".k-kpi-d").textContent=o.delta||"";host.appendChild(d);},
+empty:function(host,title,sub,al,fn){var d=this.el('<div class="k-empty"><h3></h3><p></p></div>');
+d.querySelector("h3").textContent=title||"";d.querySelector("p").textContent=sub||"";
+if(al){var b=document.createElement("button");b.className="k-btn k-primary";b.textContent=al;b.onclick=fn;d.appendChild(b);}
+host.appendChild(d);},
+money:function(n){return "$"+Number(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});},
+num:function(n){return Number(n).toLocaleString("en-US");},
+pct:function(x){return (x*100).toFixed(1)+"%";},
+when:function(d){try{return new Date(d).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});}catch(e){return String(d);}},
+initials:function(name){return String(name||"").split(/\s+/).map(function(w){return w[0];}).join("").slice(0,2).toUpperCase();},
+copy:function(txt){var self=this;function done(){self.toast("Copied to clipboard","good");}
+if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(done,done);}else{var ta=document.createElement("textarea");ta.value=txt;document.body.appendChild(ta);ta.select();try{document.execCommand("copy");}catch(e){}ta.remove();done();}}
+};
+if(!window.Kit)window.Kit=Kit;else{for(var k in Kit){if(!window.Kit[k])window.Kit[k]=Kit[k];}}
+})();
+
+</script>
+<script>
+/* Confusion Log — capture confusion moments, cluster into learning priorities. */
+(function(){
+"use strict";
+var K=window.Kit, app=document.getElementById("app");
+var store=K.store("confusion-log-v1");
+
+var CLUSTERS=[
+ {id:"async", name:"Async JavaScript", keys:["promise","promises","async","await","then","fetch","microtask","macrotask","event loop","callback","resolve","reject"], tip:"Work through one end-to-end async flow (fetch → parse → render) and draw the event-loop order on paper."},
+ {id:"react", name:"React Hooks & State", keys:["useeffect","usestate","hook","hooks","state","props","context","render","component","cleanup","closure","stale","batch"], tip:"Build one tiny counter app and predict every render before running it. The render mental-model unlocks all of this."},
+ {id:"css", name:"CSS Layout", keys:["css","grid","flex","flexbox","center","margin","layout","responsive","div","align","wrap","collapse"], tip:"Rebuild the same card in both flexbox and grid — knowing when each wins ends 80% of layout confusion."}
+];
+
+function seedData(){
+ var r=K.rng("confusion-seed-71");
+ var rows=[
+  ["Promise chains vs async/await","I never know when to use .then() chains versus async/await — are they actually the same thing?",4,"2026-09-28"],
+  ["Microtasks vs macrotasks","Why does a resolved promise run before a setTimeout(fn, 0)? What order does the event loop use?",4,"2026-09-29"],
+  ["fetch() error handling","fetch doesn't reject on a 404 — so where am I supposed to check for HTTP errors?",3,"2026-09-30"],
+  ["useEffect cleanup timing","When does the cleanup function actually run — before the next effect, on unmount, or both?",5,"2026-10-01"],
+  ["Stale closures in useState","My event handler sees the old state value even after setState. Why is the state 'stuck'?",4,"2026-10-01"],
+  ["Props drilling vs context","At what point should I stop passing props down and just use context?",3,"2026-10-02"],
+  ["Grid vs flexbox","When do I reach for CSS grid versus flexbox? They seem to overlap completely.",3,"2026-10-02"],
+  ["Centering a div","margin: 0 auto works sometimes and not others, and vertical centering is a mystery.",2,"2026-10-03"]
+ ];
+ return rows.map(function(x,i){return{id:K.uid("c"),topic:x[0],text:x[1],severity:x[2],date:x[3],resolved:false};});
+}
+var items=store.get("items",null);
+if(!items){items=seedData();store.set("items",items);}
+var checks=store.get("checks",{});
+var CSTEPS={
+ async:["Trace one fetch \u2192 parse \u2192 render flow on paper, in order","Rewrite the same flow with .then() chains and with async/await","Explain out loud why a resolved promise beats setTimeout(fn,0)"],
+ react:["Build a tiny counter; predict every render before running it","Add a useEffect, log when cleanup runs, and explain why","Refactor one prop-drilling chain into context"],
+ css:["Rebuild the same card in flexbox, then in grid","Center a div three ways: flex, grid, margin auto","Make a layout responsive with minmax()/wrap \u2014 no media queries"]
+};
+
+function score(text,keys){var t=text.toLowerCase(),s=0;keys.forEach(function(k){if(t.indexOf(k)>=0)s+=k.length>5?2:1;});return s;}
+function clusterize(){
+ var groups=CLUSTERS.map(function(c){return{id:c.id,name:c.name,tip:c.tip,items:[]};});
+ items.filter(function(i){return !i.resolved;}).forEach(function(it){
+  var blob=it.topic+" "+it.text,best=null,bs=0;
+  groups.forEach(function(g,i){var s=score(blob,CLUSTERS[i].keys);if(s>bs){bs=s;best=g;}});
+  (best||groups[0]).items.push(it);
+ });
+ groups.forEach(function(g){g.avg=g.items.length?g.items.reduce(function(a,i){return a+i.severity;},0)/g.items.length:0;
+  g.score=g.avg*(1+g.items.length/10);});
+ groups.sort(function(a,b){return b.score-a.score;});
+ return groups.filter(function(g){return g.items.length;});
+}
+
+function sevDots(s){var h="";for(var i=1;i<=5;i++)h+='<span class="sev'+(i<=s?" f":"")+'"></span>';return h;}
+
+function render(){
+ app.innerHTML="";
+ K.nav({title:"Confusion Log",sub:"Capture confusion moments. Cluster them into learning priorities.",
+  actions:[btn("＋ Log confusion",scrollForm,true)]});
+ var groups=clusterize();
+ var open=items.filter(function(i){return !i.resolved;});
+ var hero=K.el('<div class="k-hero"><h2>Your confusion, decoded</h2><p>Log what trips you up as it happens. When you\'re ready, cluster everything into a short, ordered study plan — highest-leverage confusion first.</p><div class="k-flex" style="margin-top:14px"><button class="k-btn k-primary" id="btnCluster">Cluster my confusions</button><span class="k-muted k-small" id="clInfo"></span></div></div>');
+ app.appendChild(hero);
+ var kpis=K.el('<div class="k-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))"></div>');
+ K.kpi(kpis,{label:"Open confusions",value:K.num(open.length)});
+ K.kpi(kpis,{label:"Resolved",value:K.num(items.length-open.length)});
+ K.kpi(kpis,{label:"Learning priorities",value:K.num(groups.length)});
+ K.kpi(kpis,{label:"Top priority",value:groups.length?groups[0].name:"—"}); /* design-critic: was K.esc(name); K.kpi escapes value itself, causing literal "&amp;" */
+ app.appendChild(kpis);
+
+ var host=K.el('<div id="clusters"></div>');app.appendChild(host);
+ hero.querySelector("#btnCluster").onclick=function(){drawClusters(host,groups,true);hero.querySelector("#clInfo").textContent=groups.length+" priorities suggested — start with #1.";};
+ hero.querySelector("#clInfo").textContent=groups.length+" priorities suggested — start with #1.";
+ drawClusters(host,groups,true);
+
+ var formSec=K.el('<div class="k-card" id="logform" style="margin-top:20px"><h3>Log a confusion</h3></div>');
+ formSec.innerHTML+='<label class="k-label">Topic</label><input class="k-input" id="fTopic" placeholder="e.g. CSS specificity wars">';
+ formSec.innerHTML+='<label class="k-label">What exactly confuses you?</label><textarea class="k-input" id="fText" placeholder="Describe the moment it stopped making sense…"></textarea>';
+ formSec.innerHTML+='<label class="k-label">How stuck are you? <span class="k-muted" id="sevVal">(3)</span></label><input type="range" id="fSev" min="1" max="5" value="3" style="width:100%">';
+ formSec.innerHTML+='<div style="margin-top:12px"><button class="k-btn k-primary" id="fAdd">Save confusion</button></div>';
+ app.appendChild(formSec);
+ formSec.querySelector("#fSev").oninput=function(e){formSec.querySelector("#sevVal").textContent="("+e.target.value+")";};
+ formSec.querySelector("#fAdd").onclick=function(){
+  var t=formSec.querySelector("#fTopic").value.trim(),x=formSec.querySelector("#fText").value.trim();
+  if(!t){K.toast("Give the confusion a topic","bad");return;}
+  items.unshift({id:K.uid("c"),topic:t,text:x||"(no details yet)",severity:+formSec.querySelector("#fSev").value,date:new Date().toISOString().slice(0,10),resolved:false});
+  store.set("items",items);K.toast("Logged — cluster again to reprioritize","good");render();
+ };
+
+ var listSec=K.el('<div class="k-card" style="margin-top:20px"><h3>All confusions</h3><div id="clist"></div></div>');
+ app.appendChild(listSec);
+ var cl=listSec.querySelector("#clist");
+ if(!items.length){K.empty(cl,"Nothing logged yet","Capture the next moment something stops making sense.");}
+ items.forEach(function(it){
+  var d=K.el('<div class="conf-item'+(it.resolved?" resolved":"")+'"><div class="conf-topic"></div><div class="k-small"></div><div class="conf-meta"></div><div class="k-flex" style="margin-top:8px"></div></div>');
+  d.querySelector(".conf-topic").textContent=it.topic;
+  d.querySelector(".k-small").textContent=it.text;
+  d.querySelector(".conf-meta").innerHTML=sevDots(it.severity)+' <span style="margin-left:8px">'+K.when(it.date)+'</span>';
+  var row=d.querySelector(".k-flex");
+  var b1=document.createElement("button");b1.className="k-btn";b1.style.fontSize="12px";b1.textContent=it.resolved?"Reopen":"Mark understood";
+  b1.onclick=function(){it.resolved=!it.resolved;store.set("items",items);render();};
+  var b2=document.createElement("button");b2.className="k-btn";b2.style.fontSize="12px";b2.textContent="Delete";
+  b2.onclick=function(){items=items.filter(function(x){return x.id!==it.id;});store.set("items",items);render();};
+  row.appendChild(b1);row.appendChild(b2);cl.appendChild(d);
+ });
+}
+function btn(label,fn,primary){var b=document.createElement("button");b.className="k-btn"+(primary?" k-primary":"");b.textContent=label;b.onclick=fn;return b;}
+function scrollForm(){var f=document.getElementById("logform");if(f)f.scrollIntoView({behavior:"smooth",block:"center"});}
+function drawClusters(host,groups,expanded){
+ host.innerHTML="";
+ if(!groups.length){K.empty(host,"No open confusions","Log a few confusions first, then cluster them.");return;}
+ var note=K.el('<div class="k-note">Suggested learning order, ranked by <b>average stuck-ness × topic size</b>. Tackle #1 before #2 — each cluster unlocks the next.</div>');
+ host.appendChild(note);
+ groups.forEach(function(g,i){
+  var card=K.el('<div class="cluster-card"><div class="rank">Priority #'+(i+1)+'</div><h3 style="margin:6px 0"></h3><div class="k-small k-muted"></div><div class="k-flex" style="margin-top:10px"></div><div class="k-note" style="border-left-color:var(--good)"></div></div>');
+  card.querySelector("h3").innerHTML=K.esc(g.name)+(i===0?'<span class="start-here">start here</span>':"");
+  card.querySelector(".k-small").textContent=g.items.length+" confusions · avg stuck-ness "+g.avg.toFixed(1)+"/5";
+  var acts=card.querySelector(".k-flex");
+  var tb=document.createElement("button");tb.className="k-btn";tb.textContent=g.items.length+" confusions — view";
+  tb.onclick=function(){K.modal({title:g.name,body:g.items.map(function(it){return "<p><b>"+K.esc(it.topic)+"</b><br><span class='k-muted'>"+K.esc(it.text)+"</span></p>";}).join("")});};
+  acts.appendChild(tb);
+  var cp=document.createElement("button");cp.className="k-btn";cp.textContent="Copy study plan";
+  cp.onclick=function(){K.copy("Study plan — "+g.name+"\n"+g.items.map(function(it){return "• "+it.topic;}).join("\n")+"\nHow: "+g.tip);};
+  acts.appendChild(cp);
+  card.querySelector(".k-note").innerHTML="<b>How to clear it:</b> "+K.esc(g.tip);
+  var csteps=CSTEPS[g.id]||[];
+  if(csteps.length){
+   checks[g.id]=checks[g.id]||[];
+   var chead=K.el('<div style="font-weight:700;font-size:13px;margin:10px 0 4px">Do this next:</div>');
+   card.appendChild(chead);
+   var clist=K.el('<div class="cklist"></div>');
+   csteps.forEach(function(sx,si){
+    var lab=K.el('<label class="ck"><input type="checkbox"'+(checks[g.id][si]?" checked":"")+'> <span>'+K.esc(sx)+'</span></label>');
+    lab.querySelector("input").onchange=function(e){checks[g.id][si]=e.target.checked;store.set("checks",checks);cprog();};
+    clist.appendChild(lab);
+   });
+   card.appendChild(clist);
+   var cprogEl=K.el('<div class="k-small k-muted" style="margin-top:6px"></div>');
+   function cprog(){var n=csteps.filter(function(s,si){return checks[g.id][si];}).length;cprogEl.textContent=n+"/"+csteps.length+" steps done";}
+   cprog();card.appendChild(cprogEl);
+  }
+  host.appendChild(card);
+ });
+ if(!expanded){var more=K.el('<p class="k-muted k-small" style="text-align:center">Hit “Cluster my confusions” above to refresh the plan after logging more.</p>');host.appendChild(more);}
+}
+render();
+})();
+
+</script>
+</body>
+</html>

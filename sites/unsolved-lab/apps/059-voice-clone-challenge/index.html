@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voice Lock — Family authentication system for emergency requests.</title>
+<link rel="stylesheet" href="../../shared/kit.css">
+<script src="../../shared/kit.js"></script>
+<style>
+/* ===== W6 Kit fallback CSS (only matters if shared/kit.css missing) ===== */
+:root{--bg:#ffffff;--panel:#f6f6f4;--panel2:#ffffff;--ink:#1b1b1b;--muted:#6f6f6f;--line:#e4e4df;--accent:#1d4ed8;--accent2:#0d9488;--good:#15803d;--warn:#b45309;--bad:#b91c1c}
+*{box-sizing:border-box}
+body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);margin:0;line-height:1.5}
+.k-wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+.k-grid{display:grid;gap:16px}
+.k-card{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.k-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:10px;padding:9px 16px;font-size:14px;font-weight:600;cursor:pointer}
+.k-btn:hover{border-color:var(--accent)}
+.k-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.k-primary:hover{filter:brightness(1.08)}
+.k-input,.k-select,textarea.k-input{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;background:var(--panel2);color:var(--ink);font-family:inherit}
+.k-input:focus,.k-select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+.k-table{width:100%;border-collapse:collapse;font-size:14px}
+.k-table th{text-align:left;padding:10px 12px;border-bottom:2px solid var(--line);color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.k-table td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+.k-table tr:last-child td{border-bottom:none}
+.k-badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
+.k-badge.ok{background:#dcfce7;color:#166534}.k-badge.warn{background:#fef3c7;color:#92400e}.k-badge.bad{background:#fee2e2;color:#991b1b}.k-badge.info{background:#dbeafe;color:#1e40af}
+.k-tabs{display:flex;gap:6px;border-bottom:2px solid var(--line);margin-bottom:16px;flex-wrap:wrap}
+.k-tabs button{border:none;background:none;padding:10px 14px;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
+.k-tabs button.active{color:var(--ink);border-bottom-color:var(--accent)}
+.k-kpi{display:flex;flex-direction:column;gap:2px}
+.k-kpi .k-kpi-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.k-kpi .k-kpi-value{font-size:28px;font-weight:800}
+.k-kpi .k-kpi-delta{font-size:13px}
+.k-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#111827;color:#fff;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:600;opacity:0;transition:all .25s;z-index:9999;pointer-events:none;max-width:90vw}
+.k-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.k-toast.ok{background:#166534}.k-toast.warn{background:#92400e}.k-toast.bad{background:#991b1b}
+.k-modal-back{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9998;padding:20px}
+.k-modal{background:var(--panel2);border-radius:16px;max-width:560px;width:100%;max-height:85vh;overflow:auto;padding:24px}
+.k-modal h2{margin:0 0 12px}
+.k-modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap}
+.k-empty{text-align:center;padding:48px 20px;color:var(--muted)}
+.k-empty h3{color:var(--ink);margin:0 0 8px}
+.k-hero{border-radius:18px;padding:32px;background:var(--panel);border:1px solid var(--line);margin-bottom:20px}
+.k-split{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:760px){.k-split{grid-template-columns:1fr}}
+.k-muted{color:var(--muted)}
+.k-nav{padding:16px 0}
+.k-chart-bar{height:10px;border-radius:6px;background:var(--accent);min-width:4px}
+.k-timeline{position:relative;padding-left:26px}
+.k-timeline:before{content:"";position:absolute;left:8px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.k-timeline-ev{position:relative;padding:0 0 18px}
+.k-timeline-ev:before{content:"";position:absolute;left:-24px;top:5px;width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--panel2)}
+.k-timeline-ev.warn:before{background:var(--warn)}.k-timeline-ev.bad:before{background:var(--bad)}.k-timeline-ev.ok:before{background:var(--good)}
+.k-timeline-ev .t{font-size:12px;color:var(--muted);font-weight:600}
+</style>
+<script>
+/* ===== W6 Kit fallback JS: implements window.Kit contract if shared/kit.js missing ===== */
+(function(){
+if(window.Kit&&window.Kit.rng)return;
+function xmur3(str){var h=1779033703^str.length;for(var i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19}return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^=h>>>16)>>>0}}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+var Kit={};
+Kit.rng=function(s){var f=mulberry32(xmur3(String(s))());return f};
+Kit.pick=function(f,a){return a[Math.floor(f()*a.length)]};
+Kit.int=function(f,a,b){return a+Math.floor(f()*(b-a+1))};
+Kit.shuffle=function(f,a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(f()*(i+1));var t=a[i];a[i]=a[j];a[j]=t}return a};
+Kit.uid=function(p){return (p||'')+Math.random().toString(36).slice(2,10)};
+Kit.esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
+Kit.el=function(html){var t=document.createElement('template');t.innerHTML=html.trim();return t.content.firstElementChild};
+Kit.store=function(ns){var p='w6:'+ns+':';function read(k){try{var v=localStorage.getItem(p+k);return v==null?undefined:JSON.parse(v)}catch(e){return undefined}}return{get:function(k,fb){var v=read(k);return v===undefined?fb:v},set:function(k,v){try{localStorage.setItem(p+k,JSON.stringify(v))}catch(e){}},del:function(k){try{localStorage.removeItem(p+k)}catch(e){}}}};
+Kit.nav=function(o){var old=document.querySelector('.k-nav');if(old)old.remove();var h=Kit.el('<div class="k-nav k-wrap"><div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><h1 style="margin:0;font-size:24px;letter-spacing:-.02em">'+Kit.esc(o.title)+'</h1>'+(o.sub?'<div class="k-muted" style="font-size:14px">'+Kit.esc(o.sub)+'</div>':'')+'</div><div class="k-nav-actions" style="display:flex;gap:8px;flex-wrap:wrap"></div></div></div>');var ac=h.querySelector('.k-nav-actions');(o.actions||[]).forEach(function(a){var b=Kit.el('<button class="k-btn'+(a.primary?' k-primary':'')+'">'+Kit.esc(a.label)+'</button>');b.onclick=a.onClick;ac.appendChild(b)});document.body.insertBefore(h,document.body.firstChild)};
+Kit.toast=function(msg,kind){var t=document.querySelector('.k-toast');if(t)t.remove();t=Kit.el('<div class="k-toast '+(kind||'')+'">'+Kit.esc(msg)+'</div>');document.body.appendChild(t);requestAnimationFrame(function(){t.classList.add('show')});setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.remove()},300)},2600)};
+Kit.modal=function(o){var back=Kit.el('<div class="k-modal-back"><div class="k-modal" role="dialog"><h2>'+Kit.esc(o.title)+'</h2><div class="k-modal-body"></div><div class="k-modal-actions"></div></div></div>');var body=back.querySelector('.k-modal-body');if(typeof o.body==='string')body.innerHTML=o.body;else if(o.body)body.appendChild(o.body);var acts=back.querySelector('.k-modal-actions');function close(){back.remove()}(o.actions||[{label:'Close'}]).forEach(function(a){var b=Kit.el('<button class="k-btn'+(a.primary?' k-primary':'')+'">'+Kit.esc(a.label)+'</button>');b.onclick=function(){if(a.onClick)a.onClick(close);else close()};acts.appendChild(b)});back.addEventListener('click',function(e){if(e.target===back)close()});document.body.appendChild(back);return close};
+Kit.tabs=function(host,tabs){host.innerHTML='';var bar=Kit.el('<div class="k-tabs" role="tablist"></div>');var pane=Kit.el('<div></div>');host.appendChild(bar);host.appendChild(pane);tabs.forEach(function(t,i){var b=Kit.el('<button role="tab">'+Kit.esc(t.label)+'</button>');if(i===0)b.classList.add('active');b.onclick=function(){bar.querySelectorAll('button').forEach(function(x){x.classList.remove('active')});b.classList.add('active');pane.innerHTML='';t.render(pane)};bar.appendChild(b)});if(tabs[0])tabs[0].render(pane)};
+Kit.table=function(host,cols,rows,opt){opt=opt||{};host.innerHTML='';var wrap=Kit.el('<div></div>');if(opt.search){var s=Kit.el('<input class="k-input" placeholder="Search…" style="max-width:280px;margin-bottom:10px">');s.oninput=function(){draw(s.value.toLowerCase())};wrap.appendChild(s)}var tw=Kit.el('<div style="overflow-x:auto"></div>');wrap.appendChild(tw);host.appendChild(wrap);var page=0;var ps=opt.pageSize||0;function filtered(q){if(!q)return rows;return rows.filter(function(r){return cols.some(function(c){var v=r[c.key];return v!=null&&String(v).toLowerCase().indexOf(q)>=0})})}function draw(q){var fr=filtered(q||'');var total=fr.length;var view=fr;if(ps&&total>ps){view=fr.slice(page*ps,page*ps+ps)}var h='<table class="k-table"><thead><tr>'+cols.map(function(c){return '<th'+(c.num?' style="text-align:right"':'')+'>'+Kit.esc(c.label)+'</th>'}).join('')+'</tr></thead><tbody>';view.forEach(function(r){h+='<tr>'+cols.map(function(c){var v=r[c.key];if(c.fmt)v=c.fmt(v,r);else v=Kit.esc(v==null?'':v);return '<td'+(c.num?' style="text-align:right"':'')+'>'+v+'</td>'}).join('')+'</tr>'});h+='</tbody></table>';if(!view.length)h='<div class="k-empty"><h3>No results</h3><div>Nothing matches.</div></div>';tw.innerHTML=h;var pg=wrap.querySelector('.k-pg');if(pg)pg.remove();if(ps&&total>ps){var pgn=Kit.el('<div class="k-pg" style="display:flex;gap:8px;align-items:center;margin-top:10px"><button class="k-btn">← Prev</button><span class="k-muted" style="font-size:13px">Page '+(page+1)+' of '+Math.ceil(total/ps)+'</span><button class="k-btn">Next →</button></div>');var btns=pgn.querySelectorAll('button');btns[0].onclick=function(){if(page>0){page--;draw(q||'')}};btns[1].onclick=function(){if((page+1)*ps<total){page++;draw(q||'')}};wrap.appendChild(pgn)}}draw('')};
+Kit.bars=function(host,items){host.innerHTML='';var max=Math.max.apply(null,items.map(function(i){return i.value}).concat([1]));items.forEach(function(i){var row=Kit.el('<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="font-weight:600">'+Kit.esc(i.label)+'</span><span class="k-muted">'+Kit.esc(i.display!=null?i.display:i.value)+'</span></div><div style="background:var(--panel);border-radius:6px;height:12px"><div class="k-chart-bar" style="width:'+(100*i.value/max)+'%;background:'+(i.color||'var(--accent)')+'"></div></div></div>');host.appendChild(row)})};
+Kit.line=function(host,series){var W=560,H=220,P=34;var all=[];series.forEach(function(s){s.points.forEach(function(p){all.push(p)})});var mn=Math.min.apply(null,all.concat([0])),mx=Math.max.apply(null,all.concat([1]));function X(i,n){return P+i*(W-2*P)/Math.max(n-1,1)}function Y(v){return H-P-(v-mn)*(H-2*P)/Math.max(mx-mn,1e-9)}var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;background:var(--panel);border-radius:12px">';series.forEach(function(s){var pts=s.points.map(function(p,i){return X(i,s.points.length)+','+Y(p)}).join(' ');svg+='<polyline points="'+pts+'" fill="none" stroke="'+(s.color||'var(--accent)')+'" stroke-width="2.5"/>'});svg+='</svg><div style="display:flex;gap:14px;margin-top:6px;flex-wrap:wrap">'+series.map(function(s){return '<span style="font-size:12px" class="k-muted"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+(s.color||'var(--accent)')+'"></span> '+Kit.esc(s.name)+'</span>'}).join('')+'</div>';host.innerHTML=svg};
+Kit.donut=function(host,items){var tot=items.reduce(function(a,i){return a+i.value},0)||1;var R=54,C=2*Math.PI*R,off=0,segs='';var cols=['#1d4ed8','#0d9488','#b45309','#b91c1c','#6d28d9','#0e7490'];items.forEach(function(it,i){var frac=it.value/tot;segs+='<circle cx="70" cy="70" r="'+R+'" fill="none" stroke="'+(it.color||cols[i%cols.length])+'" stroke-width="18" stroke-dasharray="'+(frac*C)+' '+C+'" stroke-dashoffset="'+(-off*C)+'" transform="rotate(-90 70 70)"/>';off+=frac});host.innerHTML='<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap"><svg width="140" height="140" viewBox="0 0 140 140">'+segs+'<text x="70" y="76" text-anchor="middle" font-size="20" font-weight="800" fill="var(--ink)">'+Kit.esc(items._center||'')+'</text></svg><div>'+items.map(function(it,i){return '<div style="font-size:13px;margin-bottom:6px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+(it.color||cols[i%cols.length])+'"></span> <b>'+Kit.esc(it.label)+'</b> <span class="k-muted">'+Kit.pct(it.value/tot)+'</span></div>'}).join('')+'</div></div>'};
+Kit.timeline=function(host,events){host.innerHTML='<div class="k-timeline">'+events.map(function(e){return '<div class="k-timeline-ev '+(e.kind||'')+'"><div class="t">'+Kit.esc(e.t)+'</div><div style="font-weight:700">'+Kit.esc(e.title)+'</div>'+(e.body?'<div class="k-muted" style="font-size:13px">'+Kit.esc(e.body)+'</div>':'')+'</div>'}).join('')+'</div>'};
+Kit.graph=function(host,g){var n=g.nodes.length,W=560,H=300;var pos={};g.nodes.forEach(function(nd,i){var a=2*Math.PI*i/Math.max(n,1);pos[nd.id]=[W/2+Math.cos(a)*(W/2-70),H/2+Math.sin(a)*(H/2-60)]});var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;background:var(--panel);border-radius:12px">';g.edges.forEach(function(e){var a=pos[e.a],b=pos[e.b];if(!a||!b)return;svg+='<line x1="'+a[0]+'" y1="'+a[1]+'" x2="'+b[0]+'" y2="'+b[1]+'" stroke="var(--line)" stroke-width="2"/>'+(e.label?'<text x="'+((a[0]+b[0])/2)+'" y="'+((a[1]+b[1])/2-6)+'" text-anchor="middle" font-size="10" fill="var(--muted)">'+Kit.esc(e.label)+'</text>':'')});g.nodes.forEach(function(nd){var p=pos[nd.id];svg+='<g><circle cx="'+p[0]+'" cy="'+p[1]+'" r="26" fill="'+(nd.color||'var(--accent)')+'"/><text x="'+p[0]+'" y="'+(p[1]+4)+'" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">'+Kit.esc(Kit.initials(nd.label))+'</text><text x="'+p[0]+'" y="'+(p[1]+42)+'" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">'+Kit.esc(nd.label)+'</text>'+(nd.sub?'<text x="'+p[0]+'" y="'+(p[1]+55)+'" text-anchor="middle" font-size="10" fill="var(--muted)">'+Kit.esc(nd.sub)+'</text>':'')+'</g>'});svg+='</svg>';host.innerHTML=svg};
+Kit.badge=function(t,k){return '<span class="k-badge k-badge-'+Kit.esc(k||'info')+'">'+Kit.esc(t)+'</span>'};
+Kit.kpi=function(host,o){host.innerHTML='<div class="k-kpi"><div class="k-kpi-label">'+Kit.esc(o.label)+'</div><div class="k-kpi-value">'+Kit.esc(o.value)+'</div>'+(o.delta?'<div class="k-kpi-delta">'+Kit.esc(o.delta)+'</div>':'')+'</div>'};
+Kit.empty=function(host,title,sub,al,af){host.innerHTML='<div class="k-empty"><h3>'+Kit.esc(title)+'</h3><div style="margin-bottom:14px">'+Kit.esc(sub||'')+'</div>'+(al?'<button class="k-btn k-primary">'+Kit.esc(al)+'</button>':'')+'</div>';if(al){var b=host.querySelector('button');if(b&&af)b.onclick=af}};
+Kit.money=function(n){return '$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})};
+Kit.num=function(n){return Number(n).toLocaleString('en-US')};
+Kit.pct=function(x){return (x*100).toFixed(1)+'%'};
+Kit.when=function(d){var dt=new Date(d);return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})};
+Kit.initials=function(n){return String(n||'').split(/\s+/).map(function(w){return w[0]}).join('').slice(0,2).toUpperCase()};
+Kit.copy=function(t){if(navigator.clipboard)navigator.clipboard.writeText(t).then(function(){Kit.toast('Copied to clipboard','ok')},function(){Kit.toast('Copy failed','bad')});else Kit.toast('Clipboard unavailable','warn')};
+window.Kit=Kit;
+})();
+</script>
+<script>
+/* W6 compat: normalize action-handler conventions across kit implementations.
+   The contract we coded against: nav actions support {label,primary,onClick},
+   modal actions support {label,primary,onClick(close)}. If the loaded kit uses
+   a different convention (href links / fn), adapt it here — never break apps. */
+(function(){
+var K=window.Kit;if(!K||K.__w6compat)return;K.__w6compat=true;
+try{
+if(typeof K.nav==='function'&&K.nav.toString().indexOf('onClick')<0){
+var _nav=K.nav;
+K.nav=function(o){o=o||{};var bar=_nav(o);var links=bar.querySelectorAll('.k-nav-actions a');
+(o.actions||[]).forEach(function(d,i){var a=links[i];if(!a)return;
+if(d.primary)a.classList.add('k-primary');
+a.addEventListener('click',function(e){e.preventDefault();if(typeof d.onClick==='function')d.onClick();});});
+return bar;};}
+if(typeof K.modal==='function'&&K.modal.toString().indexOf('onClick')<0){
+var _modal=K.modal;
+K.modal=function(o){o=o||{};(o.actions||[]).forEach(function(a){
+if(typeof a.onClick==='function'&&typeof a.fn!=='function'){var f=a.onClick;a.fn=function(){f(function(){});};}});
+return _modal(o);};}
+}catch(e){/* compat must never break the app */}
+})();
+</script>
+</head>
+<body>
+<style>body{padding-top:104px}/* qa-c: clear fixed .k-nav header */
+:root{--bg:#0b0f0c;--panel:#131a14;--panel2:#18211a;--ink:#eef4ee;--muted:#8ba08c;--line:#243024;--accent:#22c55e;--accent2:#38bdf8;--good:#22c55e;--warn:#f59e0b;--bad:#ef4444}
+body{background:var(--bg)}
+.sans{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.phone{background:#000;border:1px solid var(--line);border-radius:28px;padding:20px;max-width:340px;margin:0 auto;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.caller-anim{width:110px;height:110px;border-radius:50%;background:linear-gradient(135deg,#166534,#22c55e);display:flex;align-items:center;justify-content:center;font-size:48px;margin:10px auto;animation:ring 1.6s infinite}
+@keyframes ring{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.5)}50%{box-shadow:0 0 0 18px rgba(34,197,94,0)}}
+.q-card{border:2px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px}
+.q-card.asked{border-color:var(--warn)}
+.q-card.failed{border-color:var(--bad);background:#2a1215}
+.q-card.passed{border-color:var(--good);background:#0f2417}
+.safe-word{font-family:ui-monospace,Menlo,monospace;background:#0f2417;border:2px dashed var(--good);border-radius:12px;padding:16px;text-align:center}
+.log{font-family:ui-monospace,Menlo,monospace;font-size:12px;max-height:200px;overflow:auto}
+.log div{padding:4px 0;border-bottom:1px solid var(--line)}
+</style>
+<div class="k-wrap sans" style="padding-bottom:60px">
+<div class="k-split">
+<div>
+<div class="phone" id="phone">
+<div class="k-muted" style="text-align:center;font-size:12px" id="call-status">INCOMING CALL</div>
+<div class="caller-anim" id="caller-face">👨</div>
+<div style="text-align:center"><div style="font-size:20px;font-weight:800" id="caller-name">Dad</div><div class="k-muted" style="font-size:13px" id="caller-num">mobile · (480) 555-0134</div></div>
+<div class="k-muted" id="call-timer" style="text-align:center;margin:8px 0;font-size:13px">ringing…</div>
+<div style="display:flex;gap:10px;justify-content:center;margin-top:10px">
+<button class="k-btn" id="decline" style="background:#3f1d1d;border-color:var(--bad);color:#fca5a5">✕ Decline</button>
+<button class="k-btn k-primary" id="answer" data-core style="background:var(--good);border-color:var(--good)">✓ Answer</button>
+</div>
+<div id="call-ui" style="display:none;margin-top:14px">
+<div class="k-muted" style="font-size:12px;font-weight:700;margin-bottom:8px">VOICEPRINT CHECK</div>
+<div id="voiceprint"></div>
+</div>
+</div>
+</div>
+<div>
+<h3 style="margin:0 0 8px">The challenge</h3>
+<p class="k-muted" style="font-size:14px">It's 11:47 PM. "Dad" is calling: he's been in a car accident, needs <b style="color:var(--ink)">$3,800 bail wired in 30 minutes</b>, and begs you not to tell Mom. His voice sounds… right. But AI voice clones need only 3 seconds of audio.</p>
+<div id="questions"></div>
+<div class="safe-word" style="margin-top:14px"><div class="k-muted" style="font-size:11px;font-weight:700">FAMILY SAFE WORD</div><div style="font-size:24px;font-weight:800;color:var(--good);letter-spacing:.1em">BLUEBERRY PANCAKE</div><div class="k-muted" style="font-size:12px">Set Sep 2026 · only real family knows it</div></div>
+<h3 style="margin:18px 0 8px">Verification log</h3>
+<div class="k-card log" id="vlog"></div>
+</div>
+</div>
+</div>
+<script>
+(function(){
+const K=window.Kit;
+K.nav({title:'Voice Lock',sub:'Family authentication for emergency requests. Trust, but verify.',actions:[
+{label:'Change safe word',onClick:()=>K.toast('Safe-word rotation stubbed in demo','warn')}]});
+const QUESTIONS=[
+{q:'What did we have for dinner the night before my wedding?',a:'tacos from the truck on 5th',why:'A voice clone knows public facts, not private memories. This one is ungoogleable.'},
+{q:'What\u2019s our family safe word?',a:'blueberry pancake',why:'The safe word is the kill-switch. A real family member says it instantly; a scammer stalls.'},
+{q:'Which hospital was I born in — and what did you call the nurse?',a:'st. joseph\u2019s / "sarge"',why:'Two-part memory: place + nickname. Clones can\u2019t improvise shared history.'}];
+let qi=0,answered=false,failed=0,callStart=null,timerInt=null;
+const decayLog=[]; /* per-question voiceprint decay ledger */
+function log(m,cls){const l=document.getElementById('vlog');l.insertAdjacentHTML('afterbegin',`<div style="${cls==='bad'?'color:#fca5a5':cls==='good'?'color:#86efac':''}"><span class="k-muted">${new Date().toLocaleTimeString()}</span> ${m}</div>`)}
+function drawQ(){
+const host=document.getElementById('questions');host.innerHTML='';
+QUESTIONS.forEach((qq,i)=>{
+const st=i<qi?(qq.ok?'passed':'failed'):(i===qi&&answered?'asked':'');
+const card=K.el(`<div class="q-card ${st}"><div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">${K.badge('Q'+(i+1),'info')}<b>Challenge question ${i+1}</b>${st==='passed'?K.badge('PASSED','ok'):''}${st==='failed'?K.badge('FAILED','bad'):''}</div>
+<div style="font-size:15px;margin-bottom:8px">“${K.esc(qq.q)}”</div>
+${i===qi?(answered?`<div style="display:flex;gap:8px"><input class="k-input" id="ans" placeholder='Type what "Dad" answers…'><button class="k-btn k-primary" id="ask-now">Submit answer</button></div><div class="k-muted" style="font-size:12px;margin-top:6px">In real life you ask this out loud. Here, type the caller\u2019s answer.</div>`:`<button class="k-btn k-primary" id="ask-q">🎤 Ask this question</button>`):''}
+${st?`<div class="k-muted" style="font-size:13px;margin-top:8px">💡 ${K.esc(qq.why)}</div>`:''}</div>`);
+host.appendChild(card)});
+const btn=document.getElementById('ask-now');
+const askBtn=document.getElementById('ask-q');
+if(askBtn)askBtn.onclick=()=>{answered=true;log('Voice Lock: asking challenge question '+(qi+1)+' — “'+QUESTIONS[qi].q+'”');drawQ();};
+if(btn)btn.onclick=()=>{
+const ans=document.getElementById('ans').value.trim().toLowerCase();
+const qq=QUESTIONS[qi];
+const hit=ans.includes(qq.a.split(' ')[0])||qq.a.split('/').some(p=>ans.includes(p.trim().split(' ')[0]));
+const before=Math.max(8,92-failed*31-qi*4);
+qq.ok=hit;qi++;answered=false;
+if(hit){log('Q'+(qi)+' answered correctly ✓','good')}else{failed++;log('Q'+(qi)+' FAILED — caller could not answer ✗','bad')}
+const after=Math.max(8,92-failed*31-qi*4);
+decayLog.push({q:qi,ok:hit,from:before,to:after,note:hit?'Correct answer — but vocal stress markers still elevated vs Dad\u2019s enrolled sample.':'Wrong answer to an ungoogleable memory (expected \u201c'+qq.a.split('/')[0].trim()+'\u201d).'});
+drawQ();drawVoiceprint();
+if(qi>=QUESTIONS.length)finish();
+};
+}
+function drawVoiceprint(){
+const vp=document.getElementById('voiceprint');
+const match=Math.max(8,92-failed*31-qi*4);
+vp.innerHTML=`<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><span>Voiceprint match</span><b style="color:${match<50?'#fca5a5':'#86efac'}">${match}%</b></div>
+<div style="height:10px;border-radius:6px;background:var(--panel);overflow:hidden"><div style="height:100%;width:${match}%;background:${match<50?'var(--bad)':'var(--good)'};transition:width .6s"></div></div>
+<div class="k-muted" style="font-size:12px;margin-top:6px">${match<50?'⚠️ Voice matches the clone profile more than Dad.':'Voice alone proves nothing — keep challenging.'}</div>`
++(decayLog.length?'<div style="margin-top:8px">'+decayLog.map(d=>'<div style="display:flex;gap:8px;font-size:12.5px;padding:6px 0;border-top:1px solid var(--line)"><span>'+(d.ok?'✓':'✗')+'</span><div><b>Q'+d.q+'</b> · '+d.from+'% → <b style="color:'+(d.to<50?'#fca5a5':'#86efac')+'">'+d.to+'%</b><div class="k-muted">'+K.esc(d.note)+'</div></div></div>').join('')+'</div>':'');
+}
+function finish(){
+const el=document.getElementById('call-status');
+if(failed>=2){
+el.innerHTML='<span style="color:#fca5a5;font-weight:800">⚠️ LIKELY VOICE CLONE — DO NOT SEND MONEY</span>';
+log('<b>VERDICT: probable AI voice clone.</b> Failed '+failed+'/3 challenges.','bad');
+K.modal({title:'Verdict: probable voice clone',body:'<p>The caller <b>failed '+failed+' of 3</b> challenge questions only the real Dad could answer. The voiceprint also drifted from Dad\u2019s enrolled sample.</p><div class="k-card" style="background:var(--panel)"><b>Do now:</b><ul style="font-size:14px"><li>Do <b>not</b> wire money or share codes.</li><li>Hang up and call Dad\u2019s real number directly.</li><li>Report the number to the family circle.</li></ul></div>',actions:[{label:'Hang up & call real Dad',primary:true,onClick:c=>{c();log('Called Dad\u2019s verified number — he\u2019s home, fine. ✓','good');K.toast('Real Dad confirmed safe. Scam blocked.','ok')}},{label:'Report number'}]});
+}else{
+el.innerHTML='<span style="color:#86efac;font-weight:800">✓ IDENTITY CONFIRMED</span>';
+log('<b>VERDICT: identity confirmed</b> via challenges.','good');
+K.toast('Identity confirmed — proceed carefully','ok');
+}
+}
+document.getElementById('answer').onclick=()=>{
+document.getElementById('answer').style.display='none';document.getElementById('decline').style.display='none';
+document.getElementById('call-status').textContent='CALL CONNECTED — 11:47 PM';
+document.getElementById('call-ui').style.display='block';
+document.getElementById('caller-face').style.animation='none';
+callStart=Date.now();
+timerInt=setInterval(()=>{const s=Math.floor((Date.now()-callStart)/1000);document.getElementById('call-timer').textContent='on call '+Math.floor(s/60)+':'+String(s%60).padStart(2,'0')},1000);
+log('Call answered. Voiceprint: 92% match to "Dad" — <b>not conclusive</b>.');
+log('"Dad": "Son, I\u2019ve been in an accident, I need $3,800 wired in 30 minutes. Please don\u2019t tell your mother."');
+log('Voice Lock: asking challenge question 1…');
+answered=false;drawQ();drawVoiceprint();
+K.toast('Ask the challenge questions — voice alone is not proof','warn');
+};
+document.getElementById('decline').onclick=()=>{clearInterval(timerInt);document.getElementById('call-status').textContent='CALL DECLINED';log('Call declined. If it was really Dad, he\u2019ll call back on the verified number.');K.toast('Declined. Real family calls back.','info')};
+log('Voice Lock armed. 3 challenge questions loaded. Safe word set.');
+drawQ();
+})();
+</script>
+
+</body>
+</html>

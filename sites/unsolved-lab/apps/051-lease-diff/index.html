@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lease Diff — Intelligently compare leases and highlight important changes.</title>
+<link rel="stylesheet" href="../../shared/kit.css">
+<script src="../../shared/kit.js"></script>
+<style>
+/* ===== W6 Kit fallback CSS (only matters if shared/kit.css missing) ===== */
+:root{--bg:#ffffff;--panel:#f6f6f4;--panel2:#ffffff;--ink:#1b1b1b;--muted:#6f6f6f;--line:#e4e4df;--accent:#1d4ed8;--accent2:#0d9488;--good:#15803d;--warn:#b45309;--bad:#b91c1c}
+*{box-sizing:border-box}
+body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);margin:0;line-height:1.5}
+.k-wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+.k-grid{display:grid;gap:16px}
+.k-card{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.k-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:10px;padding:9px 16px;font-size:14px;font-weight:600;cursor:pointer}
+.k-btn:hover{border-color:var(--accent)}
+.k-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.k-primary:hover{filter:brightness(1.08)}
+.k-input,.k-select,textarea.k-input{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;background:var(--panel2);color:var(--ink);font-family:inherit}
+.k-input:focus,.k-select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+.k-table{width:100%;border-collapse:collapse;font-size:14px}
+.k-table th{text-align:left;padding:10px 12px;border-bottom:2px solid var(--line);color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.k-table td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+.k-table tr:last-child td{border-bottom:none}
+.k-badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
+.k-badge.ok{background:#dcfce7;color:#166534}.k-badge.warn{background:#fef3c7;color:#92400e}.k-badge.bad{background:#fee2e2;color:#991b1b}.k-badge.info{background:#dbeafe;color:#1e40af}
+.k-tabs{display:flex;gap:6px;border-bottom:2px solid var(--line);margin-bottom:16px;flex-wrap:wrap}
+.k-tabs button{border:none;background:none;padding:10px 14px;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
+.k-tabs button.active{color:var(--ink);border-bottom-color:var(--accent)}
+.k-kpi{display:flex;flex-direction:column;gap:2px}
+.k-kpi .k-kpi-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.k-kpi .k-kpi-value{font-size:28px;font-weight:800}
+.k-kpi .k-kpi-delta{font-size:13px}
+.k-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#111827;color:#fff;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:600;opacity:0;transition:all .25s;z-index:9999;pointer-events:none;max-width:90vw}
+.k-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.k-toast.ok{background:#166534}.k-toast.warn{background:#92400e}.k-toast.bad{background:#991b1b}
+.k-modal-back{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9998;padding:20px}
+.k-modal{background:var(--panel2);border-radius:16px;max-width:560px;width:100%;max-height:85vh;overflow:auto;padding:24px}
+.k-modal h2{margin:0 0 12px}
+.k-modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap}
+.k-empty{text-align:center;padding:48px 20px;color:var(--muted)}
+.k-empty h3{color:var(--ink);margin:0 0 8px}
+.k-hero{border-radius:18px;padding:32px;background:var(--panel);border:1px solid var(--line);margin-bottom:20px}
+.k-split{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:760px){.k-split{grid-template-columns:1fr}}
+.k-muted{color:var(--muted)}
+.k-nav{padding:16px 0}
+.k-chart-bar{height:10px;border-radius:6px;background:var(--accent);min-width:4px}
+.k-timeline{position:relative;padding-left:26px}
+.k-timeline:before{content:"";position:absolute;left:8px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.k-timeline-ev{position:relative;padding:0 0 18px}
+.k-timeline-ev:before{content:"";position:absolute;left:-24px;top:5px;width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--panel2)}
+.k-timeline-ev.warn:before{background:var(--warn)}.k-timeline-ev.bad:before{background:var(--bad)}.k-timeline-ev.ok:before{background:var(--good)}
+.k-timeline-ev .t{font-size:12px;color:var(--muted);font-weight:600}
+</style>
+<script>
+/* ===== W6 Kit fallback JS: implements window.Kit contract if shared/kit.js missing ===== */
+(function(){
+if(window.Kit&&window.Kit.rng)return;
+function xmur3(str){var h=1779033703^str.length;for(var i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19}return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^=h>>>16)>>>0}}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+var Kit={};
+Kit.rng=function(s){var f=mulberry32(xmur3(String(s))());return f};
+Kit.pick=function(f,a){return a[Math.floor(f()*a.length)]};
+Kit.int=function(f,a,b){return a+Math.floor(f()*(b-a+1))};
+Kit.shuffle=function(f,a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(f()*(i+1));var t=a[i];a[i]=a[j];a[j]=t}return a};
+Kit.uid=function(p){return (p||'')+Math.random().toString(36).slice(2,10)};
+Kit.esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
+Kit.el=function(html){var t=document.createElement('template');t.innerHTML=html.trim();return t.content.firstElementChild};
+Kit.store=function(ns){var p='w6:'+ns+':';function read(k){try{var v=localStorage.getItem(p+k);return v==null?undefined:JSON.parse(v)}catch(e){return undefined}}return{get:function(k,fb){var v=read(k);return v===undefined?fb:v},set:function(k,v){try{localStorage.setItem(p+k,JSON.stringify(v))}catch(e){}},del:function(k){try{localStorage.removeItem(p+k)}catch(e){}}}};
+Kit.nav=function(o){var old=document.querySelector('.k-nav');if(old)old.remove();var h=Kit.el('<div class="k-nav k-wrap"><div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><h1 style="margin:0;font-size:24px;letter-spacing:-.02em">'+Kit.esc(o.title)+'</h1>'+(o.sub?'<div class="k-muted" style="font-size:14px">'+Kit.esc(o.sub)+'</div>':'')+'</div><div class="k-nav-actions" style="display:flex;gap:8px;flex-wrap:wrap"></div></div></div>');var ac=h.querySelector('.k-nav-actions');(o.actions||[]).forEach(function(a){var b=Kit.el('<button class="k-btn'+(a.primary?' k-primary':'')+'">'+Kit.esc(a.label)+'</button>');b.onclick=a.onClick;ac.appendChild(b)});document.body.insertBefore(h,document.body.firstChild)};
+Kit.toast=function(msg,kind){var t=document.querySelector('.k-toast');if(t)t.remove();t=Kit.el('<div class="k-toast '+(kind||'')+'">'+Kit.esc(msg)+'</div>');document.body.appendChild(t);requestAnimationFrame(function(){t.classList.add('show')});setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.remove()},300)},2600)};
+Kit.modal=function(o){var back=Kit.el('<div class="k-modal-back"><div class="k-modal" role="dialog"><h2>'+Kit.esc(o.title)+'</h2><div class="k-modal-body"></div><div class="k-modal-actions"></div></div></div>');var body=back.querySelector('.k-modal-body');if(typeof o.body==='string')body.innerHTML=o.body;else if(o.body)body.appendChild(o.body);var acts=back.querySelector('.k-modal-actions');function close(){back.remove()}(o.actions||[{label:'Close'}]).forEach(function(a){var b=Kit.el('<button class="k-btn'+(a.primary?' k-primary':'')+'">'+Kit.esc(a.label)+'</button>');b.onclick=function(){if(a.onClick)a.onClick(close);else close()};acts.appendChild(b)});back.addEventListener('click',function(e){if(e.target===back)close()});document.body.appendChild(back);return close};
+Kit.tabs=function(host,tabs){host.innerHTML='';var bar=Kit.el('<div class="k-tabs" role="tablist"></div>');var pane=Kit.el('<div></div>');host.appendChild(bar);host.appendChild(pane);tabs.forEach(function(t,i){var b=Kit.el('<button role="tab">'+Kit.esc(t.label)+'</button>');if(i===0)b.classList.add('active');b.onclick=function(){bar.querySelectorAll('button').forEach(function(x){x.classList.remove('active')});b.classList.add('active');pane.innerHTML='';t.render(pane)};bar.appendChild(b)});if(tabs[0])tabs[0].render(pane)};
+Kit.table=function(host,cols,rows,opt){opt=opt||{};host.innerHTML='';var wrap=Kit.el('<div></div>');if(opt.search){var s=Kit.el('<input class="k-input" placeholder="Search…" style="max-width:280px;margin-bottom:10px">');s.oninput=function(){draw(s.value.toLowerCase())};wrap.appendChild(s)}var tw=Kit.el('<div style="overflow-x:auto"></div>');wrap.appendChild(tw);host.appendChild(wrap);var page=0;var ps=opt.pageSize||0;function filtered(q){if(!q)return rows;return rows.filter(function(r){return cols.some(function(c){var v=r[c.key];return v!=null&&String(v).toLowerCase().indexOf(q)>=0})})}function draw(q){var fr=filtered(q||'');var total=fr.length;var view=fr;if(ps&&total>ps){view=fr.slice(page*ps,page*ps+ps)}var h='<table class="k-table"><thead><tr>'+cols.map(function(c){return '<th'+(c.num?' style="text-align:right"':'')+'>'+Kit.esc(c.label)+'</th>'}).join('')+'</tr></thead><tbody>';view.forEach(function(r){h+='<tr>'+cols.map(function(c){var v=r[c.key];if(c.fmt)v=c.fmt(v,r);else v=Kit.esc(v==null?'':v);return '<td'+(c.num?' style="text-align:right"':'')+'>'+v+'</td>'}).join('')+'</tr>'});h+='</tbody></table>';if(!view.length)h='<div class="k-empty"><h3>No results</h3><div>Nothing matches.</div></div>';tw.innerHTML=h;var pg=wrap.querySelector('.k-pg');if(pg)pg.remove();if(ps&&total>ps){var pgn=Kit.el('<div class="k-pg" style="display:flex;gap:8px;align-items:center;margin-top:10px"><button class="k-btn">← Prev</button><span class="k-muted" style="font-size:13px">Page '+(page+1)+' of '+Math.ceil(total/ps)+'</span><button class="k-btn">Next →</button></div>');var btns=pgn.querySelectorAll('button');btns[0].onclick=function(){if(page>0){page--;draw(q||'')}};btns[1].onclick=function(){if((page+1)*ps<total){page++;draw(q||'')}};wrap.appendChild(pgn)}}draw('')};
+Kit.bars=function(host,items){host.innerHTML='';var max=Math.max.apply(null,items.map(function(i){return i.value}).concat([1]));items.forEach(function(i){var row=Kit.el('<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="font-weight:600">'+Kit.esc(i.label)+'</span><span class="k-muted">'+Kit.esc(i.display!=null?i.display:i.value)+'</span></div><div style="background:var(--panel);border-radius:6px;height:12px"><div class="k-chart-bar" style="width:'+(100*i.value/max)+'%;background:'+(i.color||'var(--accent)')+'"></div></div></div>');host.appendChild(row)})};
+Kit.line=function(host,series){var W=560,H=220,P=34;var all=[];series.forEach(function(s){s.points.forEach(function(p){all.push(p)})});var mn=Math.min.apply(null,all.concat([0])),mx=Math.max.apply(null,all.concat([1]));function X(i,n){return P+i*(W-2*P)/Math.max(n-1,1)}function Y(v){return H-P-(v-mn)*(H-2*P)/Math.max(mx-mn,1e-9)}var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;background:var(--panel);border-radius:12px">';series.forEach(function(s){var pts=s.points.map(function(p,i){return X(i,s.points.length)+','+Y(p)}).join(' ');svg+='<polyline points="'+pts+'" fill="none" stroke="'+(s.color||'var(--accent)')+'" stroke-width="2.5"/>'});svg+='</svg><div style="display:flex;gap:14px;margin-top:6px;flex-wrap:wrap">'+series.map(function(s){return '<span style="font-size:12px" class="k-muted"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+(s.color||'var(--accent)')+'"></span> '+Kit.esc(s.name)+'</span>'}).join('')+'</div>';host.innerHTML=svg};
+Kit.donut=function(host,items){var tot=items.reduce(function(a,i){return a+i.value},0)||1;var R=54,C=2*Math.PI*R,off=0,segs='';var cols=['#1d4ed8','#0d9488','#b45309','#b91c1c','#6d28d9','#0e7490'];items.forEach(function(it,i){var frac=it.value/tot;segs+='<circle cx="70" cy="70" r="'+R+'" fill="none" stroke="'+(it.color||cols[i%cols.length])+'" stroke-width="18" stroke-dasharray="'+(frac*C)+' '+C+'" stroke-dashoffset="'+(-off*C)+'" transform="rotate(-90 70 70)"/>';off+=frac});host.innerHTML='<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap"><svg width="140" height="140" viewBox="0 0 140 140">'+segs+'<text x="70" y="76" text-anchor="middle" font-size="20" font-weight="800" fill="var(--ink)">'+Kit.esc(items._center||'')+'</text></svg><div>'+items.map(function(it,i){return '<div style="font-size:13px;margin-bottom:6px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+(it.color||cols[i%cols.length])+'"></span> <b>'+Kit.esc(it.label)+'</b> <span class="k-muted">'+Kit.pct(it.value/tot)+'</span></div>'}).join('')+'</div></div>'};
+Kit.timeline=function(host,events){host.innerHTML='<div class="k-timeline">'+events.map(function(e){return '<div class="k-timeline-ev '+(e.kind||'')+'"><div class="t">'+Kit.esc(e.t)+'</div><div style="font-weight:700">'+Kit.esc(e.title)+'</div>'+(e.body?'<div class="k-muted" style="font-size:13px">'+Kit.esc(e.body)+'</div>':'')+'</div>'}).join('')+'</div>'};
+Kit.graph=function(host,g){var n=g.nodes.length,W=560,H=300;var pos={};g.nodes.forEach(function(nd,i){var a=2*Math.PI*i/Math.max(n,1);pos[nd.id]=[W/2+Math.cos(a)*(W/2-70),H/2+Math.sin(a)*(H/2-60)]});var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;background:var(--panel);border-radius:12px">';g.edges.forEach(function(e){var a=pos[e.a],b=pos[e.b];if(!a||!b)return;svg+='<line x1="'+a[0]+'" y1="'+a[1]+'" x2="'+b[0]+'" y2="'+b[1]+'" stroke="var(--line)" stroke-width="2"/>'+(e.label?'<text x="'+((a[0]+b[0])/2)+'" y="'+((a[1]+b[1])/2-6)+'" text-anchor="middle" font-size="10" fill="var(--muted)">'+Kit.esc(e.label)+'</text>':'')});g.nodes.forEach(function(nd){var p=pos[nd.id];svg+='<g><circle cx="'+p[0]+'" cy="'+p[1]+'" r="26" fill="'+(nd.color||'var(--accent)')+'"/><text x="'+p[0]+'" y="'+(p[1]+4)+'" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">'+Kit.esc(Kit.initials(nd.label))+'</text><text x="'+p[0]+'" y="'+(p[1]+42)+'" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">'+Kit.esc(nd.label)+'</text>'+(nd.sub?'<text x="'+p[0]+'" y="'+(p[1]+55)+'" text-anchor="middle" font-size="10" fill="var(--muted)">'+Kit.esc(nd.sub)+'</text>':'')+'</g>'});svg+='</svg>';host.innerHTML=svg};
+Kit.badge=function(t,k){return '<span class="k-badge k-badge-'+Kit.esc(k||'info')+'">'+Kit.esc(t)+'</span>'};
+Kit.kpi=function(host,o){host.innerHTML='<div class="k-kpi"><div class="k-kpi-label">'+Kit.esc(o.label)+'</div><div class="k-kpi-value">'+Kit.esc(o.value)+'</div>'+(o.delta?'<div class="k-kpi-delta">'+Kit.esc(o.delta)+'</div>':'')+'</div>'};
+Kit.empty=function(host,title,sub,al,af){host.innerHTML='<div class="k-empty"><h3>'+Kit.esc(title)+'</h3><div style="margin-bottom:14px">'+Kit.esc(sub||'')+'</div>'+(al?'<button class="k-btn k-primary">'+Kit.esc(al)+'</button>':'')+'</div>';if(al){var b=host.querySelector('button');if(b&&af)b.onclick=af}};
+Kit.money=function(n){return '$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})};
+Kit.num=function(n){return Number(n).toLocaleString('en-US')};
+Kit.pct=function(x){return (x*100).toFixed(1)+'%'};
+Kit.when=function(d){var dt=new Date(d);return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})};
+Kit.initials=function(n){return String(n||'').split(/\s+/).map(function(w){return w[0]}).join('').slice(0,2).toUpperCase()};
+Kit.copy=function(t){if(navigator.clipboard)navigator.clipboard.writeText(t).then(function(){Kit.toast('Copied to clipboard','ok')},function(){Kit.toast('Copy failed','bad')});else Kit.toast('Clipboard unavailable','warn')};
+window.Kit=Kit;
+})();
+</script>
+<script>
+/* W6 compat: normalize action-handler conventions across kit implementations.
+   The contract we coded against: nav actions support {label,primary,onClick},
+   modal actions support {label,primary,onClick(close)}. If the loaded kit uses
+   a different convention (href links / fn), adapt it here — never break apps. */
+(function(){
+var K=window.Kit;if(!K||K.__w6compat)return;K.__w6compat=true;
+try{
+if(typeof K.nav==='function'&&K.nav.toString().indexOf('onClick')<0){
+var _nav=K.nav;
+K.nav=function(o){o=o||{};var bar=_nav(o);var links=bar.querySelectorAll('.k-nav-actions a');
+(o.actions||[]).forEach(function(d,i){var a=links[i];if(!a)return;
+if(d.primary)a.classList.add('k-primary');
+a.addEventListener('click',function(e){e.preventDefault();if(typeof d.onClick==='function')d.onClick();});});
+return bar;};}
+if(typeof K.modal==='function'&&K.modal.toString().indexOf('onClick')<0){
+var _modal=K.modal;
+K.modal=function(o){o=o||{};(o.actions||[]).forEach(function(a){
+if(typeof a.onClick==='function'&&typeof a.fn!=='function'){var f=a.onClick;a.fn=function(){f(function(){});};}});
+return _modal(o);};}
+}catch(e){/* compat must never break the app */}
+})();
+</script>
+</head>
+<body>
+<style>body{padding-top:104px}/* qa-c: clear fixed .k-nav header */
+:root{--bg:#faf6ee;--panel:#f3ecdd;--panel2:#fffdf8;--ink:#2a251a;--muted:#8a7f68;--line:#e5dcc6;--accent:#8a5a17;--accent2:#1d4ed8;--good:#15803d;--warn:#b45309;--bad:#b91c1c}
+body{font-family:Georgia,'Times New Roman',serif;background:var(--bg)}
+h1,h2,h3,.sans{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.lease-card{border-top:4px solid var(--accent)}
+.diff-row{cursor:pointer;transition:background .15s}
+.diff-row:hover{background:var(--panel)}
+.clause-old{background:#fee2e2;border-left:4px solid var(--bad);padding:10px 14px;border-radius:0 8px 8px 0}
+.clause-new{background:#dcfce7;border-left:4px solid var(--good);padding:10px 14px;border-radius:0 8px 8px 0}
+.shimmer{background:linear-gradient(90deg,var(--panel) 25%,#efe7d3 50%,var(--panel) 75%);background-size:200% 100%;animation:sh 1s infinite linear;border-radius:8px;height:64px;margin-bottom:10px}
+@keyframes sh{to{background-position:-200% 0}}
+.stamp{display:inline-block;border:3px solid var(--bad);color:var(--bad);font-weight:800;padding:6px 14px;border-radius:8px;transform:rotate(-4deg);letter-spacing:.08em}
+</style>
+<div class="k-wrap" style="padding-bottom:60px">
+<div class="k-hero lease-card sans">
+<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+<div style="flex:1;min-width:240px">
+<h2 style="margin:0 0 6px">Renewal vs. current lease</h2>
+<div class="k-muted">456 Oak Ave #12, Riverton, CA · 12-month renewal offered Oct 2026</div>
+</div>
+<div id="verdict-stamp" style="display:none"><span class="stamp">1 DEALBREAKER</span></div>
+</div>
+<div class="k-split" style="margin-top:18px">
+<div class="k-card"><div class="k-muted" style="font-size:12px;font-weight:700">CURRENT LEASE</div><div style="font-size:20px;font-weight:800">2024 – 2025</div><div class="k-muted">12 clauses · signed Sep 2024</div></div>
+<div class="k-card"><div class="k-muted" style="font-size:12px;font-weight:700">RENEWAL OFFER</div><div style="font-size:20px;font-weight:800">2025 – 2026</div><div class="k-muted">12 clauses · expires Oct 15, 2026</div></div>
+</div>
+</div>
+<div id="loading" class="k-card sans"><div class="k-muted" style="margin-bottom:10px;font-weight:600">Reading both leases clause by clause…</div><div class="shimmer"></div><div class="shimmer"></div><div class="shimmer"></div></div>
+<div id="results" style="display:none" class="sans">
+<div class="k-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px" id="kpis"></div>
+<h3 style="margin:4px 0 12px">Flagged changes <span class="k-muted" style="font-weight:400;font-size:14px">— worst first</span></h3>
+<div id="diffs" class="k-grid"></div>
+<h3 style="margin:26px 0 12px">All clauses</h3>
+<div class="k-card" style="padding:6px 18px"><div id="clause-table"></div></div>
+</div>
+</div>
+<script>
+(function(){
+const K=window.Kit;
+let lastDiffs=null;
+K.nav({title:'Lease Diff',sub:'Intelligently compare leases and highlight important changes.',actions:[
+{label:'Re-run analysis',onClick:run},
+{label:'Export report',primary:true,onClick:exportReport}
+]});
+function exportReport(){
+ if(!lastDiffs||!lastDiffs.length){K.toast('Run the analysis first','warn');return;}
+ const flagged=lastDiffs.filter(d=>d.changed).sort((a,b)=>({bad:0,warn:1,info:2}[a.sev]-{bad:0,warn:1,info:2}[b.sev]));
+ const same=lastDiffs.filter(d=>!d.changed).map(d=>d.name).join(', ');
+ const L=[];
+ L.push('LEASE DIFF — RENEWAL ANALYSIS');
+ L.push('456 Oak Ave #12, Riverton, CA · 12-month renewal offered Oct 2026');
+ L.push('Generated '+new Date().toLocaleString());
+ L.push('');
+ L.push('SUMMARY: '+lastDiffs.length+' clauses compared · '+flagged.length+' changed · '+flagged.filter(d=>d.sev==='bad').length+' dealbreaker');
+ L.push('');
+ flagged.forEach(d=>{
+  L.push((d.sev==='bad'?'[DEALBREAKER] ':'[CHANGED] ')+d.name+' — '+d.label);
+  L.push('Why: '+d.why);
+  if(d.action)L.push('Suggested move: '+d.action);
+  L.push('Current: "'+d.oldT+'"');
+  L.push('Renewal: "'+d.newT+'"');
+  L.push('');
+ });
+ L.push('UNCHANGED CLAUSES: '+same);
+ L.push('');
+ L.push('Generated by Lease Diff (demo analysis — not legal advice).');
+ const blob=new Blob([L.join('\n')],{type:'text/plain'});
+ const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='lease-diff-report.txt';a.click();
+ setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+ K.toast('Report downloaded','ok');
+}
+// ---------- seeded lease data ----------
+const CURRENT=[
+{id:'rent',name:'Monthly rent',text:'Tenant shall pay $2,850.00 per month, due on the 1st of each month.',val:2850},
+{id:'deposit',name:'Security deposit',text:'A security deposit of $2,850.00 is held by Landlord, refundable per CA Civil Code §1950.5.',val:2850},
+{id:'term',name:'Lease term',text:'Twelve (12) months, commencing November 1st of the start year.',val:12},
+{id:'pets',name:'Pet policy',text:'One dog under 40 lbs permitted with a refundable pet deposit of $300.',val:300},
+{id:'maint',name:'Maintenance response',text:'Landlord shall respond to non-emergency maintenance requests within 48 hours.',val:48},
+{id:'disputes',name:'Dispute resolution',text:'Disputes shall be resolved by mediation in San Mateo County, or small-claims court.',val:'mediation'},
+{id:'guests',name:'Guest policy',text:'Guests may stay up to 14 consecutive nights with prior written notice.',val:14},
+{id:'insurance',name:"Renter's insurance",text:'Tenant shall maintain renter\'s insurance with at least $100,000 liability coverage.',val:100000},
+{id:'parking',name:'Parking',text:'One assigned covered parking space (#47) is included in rent.',val:1},
+{id:'utilities',name:'Utilities',text:'Tenant pays electricity and internet; water, trash, and gas are included.',val:'split'},
+{id:'notice',name:'Termination notice',text:'Either party may terminate with 30 days written notice at end of term.',val:30},
+{id:'smoking',name:'Smoking',text:'No smoking of any substance inside the unit or common areas.',val:'no'}];
+const RENEWAL=[
+{id:'rent',name:'Monthly rent',text:'Tenant shall pay $3,000.00 per month, due on the 1st of each month.',val:3000},
+{id:'deposit',name:'Security deposit',text:'A security deposit of $2,850.00 is held by Landlord, refundable per CA Civil Code §1950.5.',val:2850},
+{id:'term',name:'Lease term',text:'Twelve (12) months, commencing November 1st of the start year.',val:12},
+{id:'pets',name:'Pet policy',text:'One dog under 40 lbs permitted with a refundable pet deposit of $500.',val:500},
+{id:'maint',name:'Maintenance response',text:'Landlord shall respond to non-emergency maintenance requests within 5 business days.',val:120},
+{id:'disputes',name:'Dispute resolution',text:'ALL disputes shall be resolved by BINDING ARBITRATION with a class-action waiver, administered by a private arbitrator selected by Landlord.',val:'arbitration'},
+{id:'guests',name:'Guest policy',text:'Guests may stay up to 14 consecutive nights with prior written notice.',val:14},
+{id:'insurance',name:"Renter's insurance",text:'Tenant shall maintain renter\'s insurance with at least $100,000 liability coverage.',val:100000},
+{id:'parking',name:'Parking',text:'One assigned covered parking space (#47) is included in rent.',val:1},
+{id:'utilities',name:'Utilities',text:'Tenant pays electricity and internet; water, trash, and gas are included.',val:'split'},
+{id:'notice',name:'Termination notice',text:'Either party may terminate with 30 days written notice at end of term.',val:30},
+{id:'smoking',name:'Smoking',text:'No smoking of any substance inside the unit or common areas.',val:'no'}];
+const ANALYSIS={
+rent:{sev:'warn',label:'Rent increased',why:'$2,850 → $3,000 / month (+5.3%, +$1,800 / year). Above the 3.1% CPI trend for the area — worth a counter-offer.',action:'Counter at $2,925 and ask for the increase in writing with comps.'},
+pets:{sev:'warn',label:'Pet deposit raised',why:'$300 → $500 (+67%). CA caps total deposits; verify this plus your $2,850 deposit stays within legal limits.',action:'Ask for the pet deposit to stay at $300 given zero prior claims.'},
+maint:{sev:'warn',label:'Maintenance window widened',why:'48 hours → 5 business days. A week-long wait for a broken heater or leak is a real downgrade in habitability protection.',action:'Push back to 48 hours for urgent issues, 5 days only for cosmetic.'},
+disputes:{sev:'bad',label:'Binding arbitration added',why:'You would waive your right to sue, to join a class action, and to a public court — disputes go to a private arbitrator the landlord picks.',action:'Strike this clause. It is the single most tenant-hostile change in the renewal.'}};
+// ---------- real diff engine ----------
+function diffLeases(a,b){
+return b.map(nb=>{const ob=a.find(x=>x.id===nb.id);const changed=ob.text!==nb.text;
+const an=ANALYSIS[nb.id];return{id:nb.id,name:nb.name,changed,oldT:ob.text,newT:nb.text,sev:changed?an.sev:'ok',label:changed?an.label:'Unchanged',why:changed?an.why:'No change from current lease.',action:changed?an.action:null,oldV:ob.val,newV:nb.val}})}
+
+function run(){
+document.getElementById('loading').style.display='block';
+document.getElementById('results').style.display='none';
+document.getElementById('verdict-stamp').style.display='none';
+setTimeout(()=>{
+const diffs=diffLeases(CURRENT,RENEWAL);
+lastDiffs=diffs;
+const flagged=diffs.filter(d=>d.changed).sort((a,b)=>({bad:0,warn:1,info:2}[a.sev]-{bad:0,warn:1,info:2}[b.sev]));
+document.getElementById('loading').style.display='none';
+document.getElementById('results').style.display='block';
+document.getElementById('verdict-stamp').style.display='block';
+const kh=document.getElementById('kpis');kh.innerHTML='';
+K.kpi(kh.appendChild(document.createElement('div')),{label:'Clauses compared',value:'12'});
+K.kpi(kh.appendChild(document.createElement('div')),{label:'Changed',value:String(flagged.length),delta:'4 need review'});
+K.kpi(kh.appendChild(document.createElement('div')),{label:'Dealbreakers',value:'1',delta:'arbitration clause'});
+K.kpi(kh.appendChild(document.createElement('div')),{label:'Yearly cost delta',value:'+$1,800',delta:'rent + pet deposit'});
+const dh=document.getElementById('diffs');dh.innerHTML='';
+flagged.forEach(d=>{
+const card=K.el(`<div class="k-card"><div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">${K.badge(d.sev==='bad'?'DEALBREAKER':d.sev==='warn'?'CHANGED':'NOTE',d.sev==='bad'?'bad':d.sev)}<b style="font-size:17px">${K.esc(d.name)}</b></div>
+<div class="k-grid" style="grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px"><div><div class="k-muted" style="font-size:11px;font-weight:700">CURRENT</div><div class="clause-old" style="font-family:Georgia,serif;font-size:13px">${K.esc(d.oldT)}</div></div><div><div class="k-muted" style="font-size:11px;font-weight:700">RENEWAL</div><div class="clause-new" style="font-family:Georgia,serif;font-size:13px">${K.esc(d.newT)}</div></div></div>
+<div style="font-size:14px;margin-bottom:8px">${K.esc(d.why)}</div>
+<div class="k-card" style="background:var(--panel);padding:10px 14px"><b style="font-size:13px">Suggested move:</b> <span style="font-size:13px">${K.esc(d.action)}</span></div>
+<div style="margin-top:10px;display:flex;gap:8px"><button class="k-btn" data-act="copy">Copy talking point</button><button class="k-btn" data-act="accept">Accept change</button></div></div>`);
+card.querySelector('[data-act=copy]').onclick=()=>K.copy(`${d.name}: ${d.why} Suggested: ${d.action}`);
+card.querySelector('[data-act=accept]').onclick=(e)=>{e.target.disabled=true;e.target.textContent='Accepted ✓';K.toast('Change accepted — removed from flags','ok')};
+dh.appendChild(card)});
+K.table(document.getElementById('clause-table'),
+[{key:'name',label:'Clause'},{key:'status',label:'Status',fmt:v=>v},{key:'oldT',label:'Current',fmt:v=>'<span class="k-muted">'+K.esc(v.slice(0,60))+'…</span>'},{key:'newT',label:'Renewal',fmt:v=>'<span class="k-muted">'+K.esc(v.slice(0,60))+'…</span>'}],
+diffs.map(d=>({name:d.name,status:K.badge(d.changed?(d.sev==='bad'?'DEALBREAKER':'CHANGED'):'SAME',d.changed?(d.sev==='bad'?'bad':'warn'):'ok'),oldT:d.oldT,newT:d.newT,id:d.id})),
+{search:true,pageSize:6});
+// row click -> full text modal (match by clause name in first cell)
+document.getElementById('clause-table').querySelectorAll('tbody tr').forEach(tr=>{
+tr.classList.add('diff-row');tr.onclick=()=>{const nm=tr.cells[0].textContent.trim();const d=diffs.find(x=>x.name===nm);if(!d)return;
+K.modal({title:d.name,body:`<div style="display:flex;gap:8px;margin-bottom:10px">${K.badge(d.changed?'CHANGED':'UNCHANGED',d.changed?'warn':'ok')}</div><div class="k-muted" style="font-size:11px;font-weight:700">CURRENT LEASE</div><p style="font-family:Georgia,serif">${K.esc(d.oldT)}</p><div class="k-muted" style="font-size:11px;font-weight:700">RENEWAL OFFER</div><p style="font-family:Georgia,serif">${K.esc(d.newT)}</p>${d.action?`<div class="k-card" style="background:var(--panel)"><b>Suggested move:</b> ${K.esc(d.action)}</div>`:''}`,actions:[{label:'Close',primary:true}]})}});
+K.toast('Analysis complete: 4 changes, 1 dealbreaker','warn');
+},900)}
+run();
+})();
+</script>
+
+</body>
+</html>

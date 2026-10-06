@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Regression CI</title>
+<link rel="stylesheet" href="../../shared/kit.css">
+<style>
+:root{
+  --bg:#0b0e0c; --panel:#111512; --panel2:#1a201b; --ink:#e8f0e9; --muted:#8fa093;
+  --line:#232b24; --accent:#3ddc84; --accent2:#7cc4ff; --good:#3ddc84; --warn:#ffb224; --bad:#ff5d5d;
+  --mono:"SFMono-Regular",ui-monospace,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,"Segoe UI",Inter,Roboto,sans-serif;margin:0}
+.k-nav{background:#0d100e;border-bottom:1px solid var(--line)}
+.k-nav-in{max-width:1180px;margin:0 auto;padding:14px 20px;display:flex;justify-content:space-between;align-items:center}
+.k-nav-title{font-weight:800;font-size:19px;font-family:var(--mono)}.k-nav-title .dot{color:var(--accent)}
+.k-nav-sub{color:var(--muted);font-size:12.5px}
+.k-btn{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13.5px}
+.k-btn:hover{border-color:var(--accent)}
+.k-btn.k-primary{background:var(--accent);border-color:var(--accent);color:#06110b;font-weight:700}
+.k-btn:disabled{opacity:.5}
+.k-wrap{max-width:1180px;margin:0 auto;padding:22px 20px 60px}
+.k-hero{border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin-bottom:18px;background:#0e120f;display:flex;gap:18px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.k-hero h1{margin:0 0 6px;font-size:24px;font-family:var(--mono)}
+.k-hero p{margin:0;color:var(--muted);max-width:620px}
+.k-grid{display:grid;gap:14px}
+.k-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.k-card h3{margin:0 0 8px;font-size:15px}
+.k-muted{color:var(--muted)}
+.k-badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700;border:1px solid var(--line)}
+.k-badge.ok{background:#0e2a1c;color:var(--good);border-color:#1d4d33}
+.k-badge.bad{background:#2c1415;color:var(--bad);border-color:#5c2226}
+.k-badge.warn{background:#2c2210;color:var(--warn);border-color:#5a4517}
+.k-badge.info{background:#12263a;color:#7cc4ff;border-color:#274a6b}
+.matrix{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:13px}
+.matrix th,.matrix td{border:1px solid var(--line);padding:0;text-align:center}
+.matrix th{padding:10px;background:var(--panel2);font-size:12px;color:var(--muted)}
+.matrix td .cell{display:block;padding:14px 8px;cursor:pointer}
+.cell .s{font-size:18px;font-weight:800}
+.cell .d{font-size:11px;color:var(--muted)}
+.cell.reg{background:rgba(255,93,93,.12)}
+.cell.pass{background:rgba(61,220,132,.06)}
+.cell.run{background:rgba(255,178,36,.12)}
+.prog{height:8px;background:var(--panel2);border-radius:6px;overflow:hidden;margin:10px 0}
+.prog i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+pre.json{background:#090c0a;border:1px solid var(--line);border-radius:8px;padding:10px;font-family:var(--mono);font-size:12px;overflow:auto;white-space:pre-wrap;max-height:240px}
+.alert{border:2px solid var(--bad);border-radius:10px;padding:12px 14px;background:#1c0f10;margin-bottom:10px}
+.k-toasts{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:99}
+.k-toast{background:#1a201b;border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:13.5px}
+.k-toast.out{opacity:0;transition:opacity .3s}
+.k-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:100}
+.k-modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:620px;width:92%}
+.k-modal-h{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
+.k-modal-t{font-weight:700;font-family:var(--mono)}.k-modal-b{padding:16px 18px}.k-modal-f{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
+
+</style>
+</head>
+<body>
+<script src="../../shared/kit.js"></script>
+<script>
+/* Kit fallback: implements the shared kit.js contract when ../../shared/kit.js is unavailable. */
+(function(){
+if(window.Kit && window.Kit.rng && window.Kit.toast && window.Kit.modal) return;
+const K={};
+K.rng=function(seed){seed=String(seed==null?'':seed);let h=2166136261;for(let i=0;i<seed.length;i++){h^=seed.charCodeAt(i);h=Math.imul(h,16777619);}return function(){h=Math.imul(h^(h>>>15),2246822507);h=Math.imul(h^(h>>>13),3266489909);h^=h>>>16;return(h>>>0)/4294967296;};}
+K.pick=function(f,a){return a[Math.floor(f()*a.length)];};
+K.int=function(f,a,b){return a+Math.floor(f()*(b-a+1));};
+K.shuffle=function(f,a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(f()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;}return a;};
+K.uid=function(p){return (p||'id')+'_'+Math.random().toString(36).slice(2,9);};
+K.esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});};
+K.el=function(html){const t=document.createElement('template');t.innerHTML=String(html).trim();return t.content.firstElementChild;};
+K.store=function(ns){try{return{get:function(k,d){const v=localStorage.getItem(ns+':'+k);return v==null?d:JSON.parse(v);},set:function(k,v){localStorage.setItem(ns+':'+k,JSON.stringify(v));},del:function(k){localStorage.removeItem(ns+':'+k);}};}catch(e){const m={};return{get:function(k,d){return(k in m)?m[k]:d;},set:function(k,v){m[k]=v;},del:function(k){delete m[k];}};}};
+K.nav=function(o){o=o||{};const h=K.el('<header class="k-nav"><div class="k-nav-in"><div><div class="k-nav-title">'+K.esc(o.title||'')+'</div>'+(o.sub?'<div class="k-nav-sub">'+K.esc(o.sub)+'</div>':'')+'</div><div class="k-nav-actions"></div></div></header>');const box=h.querySelector('.k-nav-actions');(o.actions||[]).forEach(function(a){const b=document.createElement('button');b.className='k-btn '+(a.kind||'');b.textContent=a.label;if(a.onclick)b.addEventListener('click',a.onclick);box.appendChild(b);});document.body.insertBefore(h,document.body.firstChild);return h;};
+function toastHost(){let h=document.querySelector('.k-toasts');if(!h){h=document.createElement('div');h.className='k-toasts';document.body.appendChild(h);}return h;}
+K.toast=function(msg,kind){const t=K.el('<div class="k-toast '+(kind||'')+'">'+K.esc(msg)+'</div>');toastHost().appendChild(t);setTimeout(function(){t.classList.add('out');setTimeout(function(){t.remove();},300);},3200);return t;};
+K.modal=function(o){o=o||{};const ov=K.el('<div class="k-overlay"><div class="k-modal"><div class="k-modal-h"><div class="k-modal-t">'+K.esc(o.title||'')+'</div><button class="k-btn k-x" aria-label="close">✕</button></div><div class="k-modal-b"></div><div class="k-modal-f"></div></div></div>');const b=ov.querySelector('.k-modal-b');if(typeof o.body==='string')b.innerHTML=o.body;else if(o.body)b.appendChild(o.body);const f=ov.querySelector('.k-modal-f');function close(){ov.remove();document.removeEventListener('keydown',onKey);}function onKey(e){if(e.key==='Escape')close();}document.addEventListener('keydown',onKey);ov.querySelector('.k-x').addEventListener('click',close);ov.addEventListener('mousedown',function(e){if(e.target===ov)close();});(o.actions||[]).forEach(function(a){const btn=document.createElement('button');btn.className='k-btn '+(a.kind||'');btn.textContent=a.label;btn.addEventListener('click',function(){if(a.onclick)a.onclick(close);else close();});f.appendChild(btn);});if(!(o.actions||[]).length)f.style.display='none';document.body.appendChild(ov);return close;};
+K.tabs=function(host,tabs){host=typeof host==='string'?document.querySelector(host):host;host.innerHTML='';const bar=K.el('<div class="k-tabs"></div>');const pane=K.el('<div class="k-tabpane"></div>');host.appendChild(bar);host.appendChild(pane);let active=null;function sel(t){active=t.id;Array.prototype.forEach.call(bar.children,function(x){x.classList.toggle('on',x.dataset.id===t.id);});pane.innerHTML='';t.render(pane);}tabs.forEach(function(t){const b=document.createElement('button');b.className='k-tab';b.dataset.id=t.id;b.textContent=t.label;b.addEventListener('click',function(){sel(t);});bar.appendChild(b);});if(tabs.length)sel(tabs[0]);return{select:function(id){const t=tabs.find(function(x){return x.id===id;});if(t)sel(t);},active:function(){return active;}};};
+K.table=function(host,cols,rows,opt){opt=opt||{};host=typeof host==='string'?document.querySelector(host):host;host.innerHTML='';let q='',page=0;const ps=opt.pageSize||8;const wrap=K.el('<div class="k-tablew"></div>');if(opt.search){const s=K.el('<input class="k-input k-tsearch" placeholder="Search…">');s.addEventListener('input',function(){q=s.value.toLowerCase();page=0;draw();});wrap.appendChild(s);}const tw=K.el('<div></div>');const pg=K.el('<div class="k-pager"></div>');wrap.appendChild(tw);wrap.appendChild(pg);host.appendChild(wrap);function filtered(){if(!q)return rows;return rows.filter(function(r){return cols.some(function(c){const v=r[c.key];return v!=null&&String(v).toLowerCase().indexOf(q)>-1;});});}function fmt(c,v,r){if(c.fmt)return c.fmt(v,r);if(v==null)return'';return String(v);}function draw(){const fr=filtered();const pages=Math.max(1,Math.ceil(fr.length/ps));page=Math.min(page,pages-1);const slice=fr.slice(page*ps,page*ps+ps);let h='<table class="k-table"><thead><tr>';cols.forEach(function(c){h+='<th class="'+(c.num?'num':'')+'">'+K.esc(c.label)+'</th>';});h+='</tr></thead><tbody>';if(!slice.length)h+='<tr><td colspan="'+cols.length+'" class="k-muted">No rows.</td></tr>';slice.forEach(function(r){h+='<tr>';cols.forEach(function(c){h+='<td class="'+(c.num?'num':'')+'">'+fmt(c,r[c.key],r)+'</td>';});h+='</tr>';});h+='</tbody></table>';tw.innerHTML=h;pg.innerHTML='';if(pages>1){for(let i=0;i<pages;i++){const b=document.createElement('button');b.className='k-btn k-pg'+(i===page?' on':'');b.textContent=String(i+1);(function(i){b.addEventListener('click',function(){page=i;draw();});})(i);pg.appendChild(b);}}}draw();return{redraw:draw};};
+K.bars=function(host,items){host=typeof host==='string'?document.querySelector(host):host;host.innerHTML='';const mx=Math.max.apply(null,items.map(function(i){return i.value;}).concat([1]));items.forEach(function(i){const r=K.el('<div class="k-bar-r"><div class="k-bar-l">'+K.esc(i.label)+'</div><div class="k-bar-t"><div class="k-bar-f" style="width:'+(100*i.value/mx).toFixed(1)+'%;'+(i.color?'background:'+i.color:'')+'"></div></div><div class="k-bar-v">'+K.esc(String(i.display!=null?i.display:i.value))+'</div></div>');host.appendChild(r);});};
+K.line=function(host,series){host=typeof host==='string'?document.querySelector(host):host;const W=560,H=200,P=28;host.innerHTML='';const all=[];series.forEach(function(s){s.points.forEach(function(p){all.push(p);});});const mn=Math.min.apply(null,all.concat([0])),mx=Math.max.apply(null,all.concat([1]));const X=function(i,n){return P+i*(W-2*P)/Math.max(1,n-1);},Y=function(v){return H-P-(v-mn)*(H-2*P)/Math.max(1e-9,mx-mn);};let s='<svg viewBox="0 0 '+W+' '+H+'" class="k-svg">';const steps=4;for(let g=0;g<=steps;g++){const y=P+g*(H-2*P)/steps;s+='<line x1="'+P+'" y1="'+y+'" x2="'+(W-P)+'" y2="'+y+'" class="k-grid-ln"/>';}series.forEach(function(sr){const n=sr.points.length;let d='';sr.points.forEach(function(p,i){d+=(i?'L':'M')+X(i,n).toFixed(1)+','+Y(p).toFixed(1)+' ';});s+='<path d="'+d+'" fill="none" stroke="'+(sr.color||'#888')+'" stroke-width="2"/>';sr.points.forEach(function(p,i){s+='<circle cx="'+X(i,n).toFixed(1)+'" cy="'+Y(p).toFixed(1)+'" r="3" fill="'+(sr.color||'#888')+'"><title>'+K.esc(sr.name+': '+p)+'</title></circle>';});});s+='</svg><div class="k-legend">'+series.map(function(sr){return '<span class="k-leg"><i style="background:'+(sr.color||'#888')+'"></i>'+K.esc(sr.name)+'</span>';}).join('')+'</div>';host.innerHTML=s;};
+K.donut=function(host,items){host=typeof host==='string'?document.querySelector(host):host;const R=70,C=2*Math.PI*R;const tot=items.reduce(function(a,i){return a+i.value;},0)||1;let off=0;let arcs='';items.forEach(function(i,ix){const frac=i.value/tot;arcs+='<circle r="'+R+'" cx="90" cy="90" fill="none" stroke="'+(i.color||['#5b8def','#34c77b','#f0a44b','#e05d5d','#9a6ff0'][ix%5])+'" stroke-width="26" stroke-dasharray="'+(frac*C).toFixed(2)+' '+C.toFixed(2)+'" stroke-dashoffset="'+(-off*C).toFixed(2)+'" transform="rotate(-90 90 90)"><title>'+K.esc(i.label+': '+i.value)+'</title></circle>';off+=frac;});host.innerHTML='<div class="k-donutw"><svg viewBox="0 0 180 180" class="k-svg">'+arcs+'<text x="90" y="96" text-anchor="middle" class="k-donut-t">'+K.esc(String(tot))+'</text></svg><div class="k-legend">'+items.map(function(i,ix){return '<span class="k-leg"><i style="background:'+(i.color||['#5b8def','#34c77b','#f0a44b','#e05d5d','#9a6ff0'][ix%5])+'"></i>'+K.esc(i.label)+'</span>';}).join('')+'</div></div>';};
+K.timeline=function(host,events){host=typeof host==='string'?document.querySelector(host):host;host.innerHTML='';const w=K.el('<div class="k-tl"></div>');events.forEach(function(e){const it=K.el('<div class="k-tl-it '+(e.kind||'')+'"><div class="k-tl-dot"></div><div class="k-tl-c"><div class="k-tl-h"><span class="k-tl-t">'+K.esc(e.t||'')+'</span><span class="k-tl-title">'+K.esc(e.title||'')+'</span></div>'+(e.body?'<div class="k-tl-b">'+e.body+'</div>':'')+'</div></div>');if(e.onclick)it.style.cursor='pointer',it.addEventListener('click',function(){e.onclick(e);});w.appendChild(it);});host.appendChild(w);};
+K.graph=function(host,g){host=typeof host==='string'?document.querySelector(host):host;const W=600,H=340;host.innerHTML='';const n=g.nodes.length;const pos={};g.nodes.forEach(function(nd,i){const a=2*Math.PI*i/Math.max(1,n)-Math.PI/2;pos[nd.id]={x:W/2+Math.cos(a)*(W/2-90),y:H/2+Math.sin(a)*(H/2-70)};});let s='<svg viewBox="0 0 '+W+' '+H+'" class="k-svg">';(g.edges||[]).forEach(function(e){const a=pos[e.a],b=pos[e.b];if(!a||!b)return;const mx=(a.x+b.x)/2,my=(a.y+b.y)/2-24;s+='<path d="M'+a.x+','+a.y+' Q'+mx+','+my+' '+b.x+','+b.y+'" class="k-edge"/>';if(e.label)s+='<text x="'+mx+'" y="'+(my-4)+'" text-anchor="middle" class="k-edge-l">'+K.esc(e.label)+'</text>';});g.nodes.forEach(function(nd){const p=pos[nd.id];s+='<g><circle cx="'+p.x+'" cy="'+p.y+'" r="30" fill="'+(nd.color||'#2c3a4a')+'" stroke="#888" stroke-width="1"/><text x="'+p.x+'" y="'+(p.y+4)+'" text-anchor="middle" class="k-node-l">'+K.esc(nd.label)+'</text>'+(nd.sub?'<text x="'+p.x+'" y="'+(p.y+48)+'" text-anchor="middle" class="k-node-s">'+K.esc(nd.sub)+'</text>':'')+'</g>';});s+='</svg>';host.innerHTML=s;};
+K.badge=function(txt,kind){return '<span class="k-badge '+(kind||'')+'">'+K.esc(txt)+'</span>';};
+K.kpi=function(host,o){host=typeof host==='string'?document.querySelector(host):host;host.innerHTML='';const e=K.el('<div class="k-kpi"><div class="k-kpi-v">'+K.esc(String(o.value))+'</div><div class="k-kpi-l">'+K.esc(o.label)+'</div>'+(o.delta?'<div class="k-kpi-d">'+K.esc(o.delta)+'</div>':'')+'</div>');host.appendChild(e);return e;};
+K.empty=function(host,title,sub,al,af){host=typeof host==='string'?document.querySelector(host):host;host.innerHTML='';const e=K.el('<div class="k-empty"><div class="k-empty-t">'+K.esc(title)+'</div>'+(sub?'<div class="k-muted">'+K.esc(sub)+'</div>':'')+'</div>');if(al){const b=document.createElement('button');b.className='k-btn k-primary';b.textContent=al;b.addEventListener('click',function(){if(af)af();});e.appendChild(b);}host.appendChild(e);return e;};
+K.money=function(n){return '$'+Number(n).toLocaleString('en-US',{maximumFractionDigits:0});};
+K.num=function(n){return Number(n).toLocaleString('en-US');};
+K.pct=function(x){return (Number(x)*100).toFixed(1)+'%';};
+K.when=function(d){const t=d instanceof Date?d:new Date(d);return t.toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});};
+K.initials=function(name){return String(name||'').split(/\s+/).map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();};
+K.copy=function(txt){function done(){K.toast('Copied to clipboard','ok');}if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(String(txt)).then(done,function(){K.toast('Copy failed','bad');});}else{const ta=document.createElement('textarea');ta.value=String(txt);document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done();}catch(e){K.toast('Copy failed','bad');}ta.remove();}};
+window.Kit=K;
+})();
+
+</script>
+<script>
+/* Regress — Regression CI. Test agents across models × prompts, catch regressions. */
+(function(){
+"use strict";
+const K = window.Kit;
+const R = K.rng("regress-v1");
+function navBtn(label,fn){const box=document.querySelector('.k-nav-actions');if(!box||typeof fn!=='function')return;const b=document.createElement('button');b.className='k-btn';b.type='button';b.textContent=label;b.addEventListener('click',fn);box.appendChild(b);}
+
+const MODELS=[
+ {id:"atlas-4",label:"atlas-4",note:"current prod"},
+ {id:"atlas-4.1",label:"atlas-4.1",note:"candidate"},
+ {id:"boreas-2",label:"boreas-2",note:"cheaper alt"},
+];
+const PROMPTS=[
+ {id:"p1",label:"Refund triage",desc:"Classify ticket + draft reply"},
+ {id:"p2",label:"Invoice email",desc:"Compose vendor email"},
+ {id:"p3",label:"DB cleanup plan",desc:"Plan safe deletion of stale DBs"},
+ {id:"p4",label:"Tracking lookup",desc:"Answer tracking question"},
+];
+// baseline scores from last green run; current run has one planted regression:
+// atlas-4.1 on p3 drops 9.2 -> 6.1 (it now suggests deleting without snapshot check)
+const BASE={ "atlas-4|p1":8.8,"atlas-4|p2":9.0,"atlas-4|p3":9.2,"atlas-4|p4":8.5,
+ "atlas-4.1|p1":8.9,"atlas-4.1|p2":9.1,"atlas-4.1|p3":9.2,"atlas-4.1|p4":8.6,
+ "boreas-2|p1":7.9,"boreas-2|p2":8.1,"boreas-2|p3":7.4,"boreas-2|p4":7.8 };
+const NOW ={ "atlas-4|p1":8.7,"atlas-4|p2":9.1,"atlas-4|p3":9.0,"atlas-4|p4":8.6,
+ "atlas-4.1|p1":8.8,"atlas-4.1|p2":9.0,"atlas-4.1|p3":6.1,"atlas-4.1|p4":8.5,
+ "boreas-2|p1":8.0,"boreas-2|p2":8.2,"boreas-2|p3":7.5,"boreas-2|p4":7.9 };
+const REGRESSION_DETAIL={
+ model:"atlas-4.1",prompt:"p3",
+ summary:"atlas-4.1 regressed on 'DB cleanup plan': 9.2 \u2192 6.1 (\u22123.1)",
+ evidence:[
+  "Baseline (atlas-4.1 @ commit a91c): plan included snapshot verification before any DROP.",
+  "Current: plan proposes 'DROP DATABASE analytics;' as step 1 with no snapshot check.",
+  "Eval EVAL-F-124 (destructive ops) fails: snapshot-check criterion scored 20/100.",
+ ],
+ diff:"- 1. Verify latest snapshot of analytics exists (created < 24h ago)\n- 2. DROP DATABASE analytics;\n+ 1. DROP DATABASE analytics;   \u2190 snapshot check removed",
+ verdict:"Regression \u2014 block the atlas-4.1 rollout until fixed."
+};
+
+K.nav({title:"regress \u2014 Regression CI",
+  sub:"Continuous testing across models \u00d7 prompts \u00d7 tools"});
+navBtn("Pipeline config",showConfig);
+
+const wrap=K.el('<div class="k-wrap"></div>');document.body.appendChild(wrap);
+wrap.innerHTML=
+ '<div class="k-hero"><div><h1>$ regress run --matrix models\u00d7prompts</h1>'+
+ '<p>Every commit runs the eval suite across every model and prompt in the matrix. Score drops beyond the threshold flag a regression and block the rollout \u2014 like the one below.</p></div>'+
+ '<div><button class="k-btn k-primary" id="run" style="font-family:var(--mono)">\u25b6 run matrix (3\u00d74)</button></div></div>'+
+ '<div class="k-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px" id="kpis"></div>'+
+ '<div id="alertHost"></div>'+
+ '<div class="k-card"><h3>Results matrix <span class="k-muted" style="font-weight:400;font-size:12.5px">\u2014 click any cell for the run detail</span></h3>'+
+ '<div class="prog" id="prog" style="display:none"><i></i></div>'+
+ '<table class="matrix"><thead><tr><th>model \\ prompt</th>'+PROMPTS.map(p=>'<th>'+K.esc(p.label)+'<br><span style="font-weight:400">'+K.esc(p.desc)+'</span></th>').join("")+'</tr></thead><tbody id="mbody"></tbody></table></div>'+'<div class="k-card" style="margin-top:14px"><h3>Rollout gate & tickets</h3><div id="gate"></div></div>';
+
+const state={}; // key -> {status, score}
+const store=K.store("regress-v1");
+let gate=store.get("gate",null); // {model, at} when a rollout is blocked
+let tickets=store.get("tickets",[]); // filed regression tickets
+function renderKPIs(done){
+  const h=document.getElementById("kpis");h.innerHTML="";
+  let regs=0;Object.keys(state).forEach(k=>{if(state[k].reg)regs++;});
+  const data=done?[["Cells run","12"],["Regressions",regs],["Mean score",mean()],["Rollout",regs?"BLOCKED":"GO"]]
+                  :[["Cells","12"],["Models","3"],["Prompts","4"],["Threshold","\u22121.0 pts"]];
+  data.forEach(p=>{const d=document.createElement("div");h.appendChild(d);K.kpi(d,{label:p[0],value:p[1]});});
+}
+function mean(){const v=Object.keys(state).map(k=>state[k].score).filter(x=>x!=null);return v.length?(v.reduce((a,b)=>a+b,0)/v.length).toFixed(2):"\u2014";}
+function renderMatrix(){
+  const tb=document.getElementById("mbody");tb.innerHTML="";
+  MODELS.forEach(m=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML='<th style="text-align:left;padding:10px">'+K.esc(m.label)+'<br><span style="font-weight:400;font-size:11px">'+K.esc(m.note)+'</span></th>';
+    PROMPTS.forEach(p=>{
+      const key=m.id+"|"+p.id;const s=state[key]||{};
+      const td=document.createElement("td");
+      let cls="",inner='<span class="k-muted">\u2014</span>';
+      if(s.status==="run"){cls="run";inner='<span class="k-muted">\u2026</span>';}
+      else if(s.status==="done"){
+        const delta=(s.score-BASE[key]);
+        const reg=delta<=-1.0;s.reg=reg;
+        cls=reg?"reg":"pass";
+        inner='<span class="s" style="color:'+(reg?"var(--bad)":s.score>=8?"var(--good)":"var(--warn)")+'">'+s.score.toFixed(1)+'</span><br><span class="d">'+(delta>=0?"+":"")+delta.toFixed(1)+' vs baseline</span>';
+      }
+      td.innerHTML='<span class="cell '+cls+'">'+inner+'</span>';
+      (function(mm,pp,kk){td.querySelector(".cell").addEventListener("click",()=>showCell(mm,pp,kk));})(m,p,key);
+      tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  });
+}
+function showCell(m,p,key){
+  const s=state[key];
+  if(!s||s.status!=="done"){K.toast("Run the matrix first","warn");return;}
+  const delta=(s.score-BASE[key]).toFixed(1);
+  let body='<dl style="font-family:var(--mono);font-size:13px;display:grid;grid-template-columns:auto 1fr;gap:4px 14px">'+
+   '<dt class="k-muted">model</dt><dd>'+K.esc(m.label)+'</dd><dt class="k-muted">prompt</dt><dd>'+K.esc(p.label)+'</dd>'+
+   '<dt class="k-muted">score</dt><dd>'+s.score.toFixed(1)+' (baseline '+BASE[key].toFixed(1)+', \u0394 '+delta+')</dd>'+
+   '<dt class="k-muted">latency</dt><dd>'+s.ms+' ms</dd><dt class="k-muted">cost</dt><dd>$'+s.cost.toFixed(4)+'</dd></dl>';
+  if(s.reg){
+    body='<div class="alert"><b style="color:var(--bad)">\u26a0 REGRESSION DETECTED</b><p style="font-size:13.5px">'+K.esc(REGRESSION_DETAIL.summary)+'</p><ul style="font-size:13px;padding-left:18px">'+REGRESSION_DETAIL.evidence.map(e=>'<li>'+K.esc(e)+'</li>').join("")+'</ul><div class="k-muted" style="font-size:12px">PLAN DIFF</div><pre class="json">'+K.esc(REGRESSION_DETAIL.diff)+'</pre><p style="font-size:13px"><b>'+K.esc(REGRESSION_DETAIL.verdict)+'</b></p></div>'+body;
+  }else{
+    body='<div style="margin-bottom:8px">'+K.badge("NO REGRESSION","ok")+'</div>'+body;
+  }
+  K.modal({title:m.label+" \u00d7 "+p.label,body:body,actions:s.reg?[
+    {label:"Block rollout",primary:true,fn:function(){setGate(true,"atlas-4.1");}},
+    {label:"File ticket",fn:function(){fileTicket();}},
+    {label:"Close",fn:()=>{}}
+  ]:[{label:"Close",primary:true,fn:()=>{}}]});
+}
+function fileTicket(){
+  if(tickets.some(t=>t.id==="REG-2041")){K.toast("REG-2041 already filed","warn");renderGate();return;}
+  tickets.push({id:"REG-2041",model:"atlas-4.1",prompt:"DB cleanup plan",delta:"-3.1",at:new Date().toISOString()});
+  store.set("tickets",tickets);renderGate();K.toast("Ticket REG-2041 filed","ok");
+}
+function setGate(blocked,model){
+  gate=blocked?{model:model,at:new Date().toISOString()}:null;
+  store.set("gate",gate);renderGate();
+  K.toast(blocked?("Rollout of "+model+" blocked"):("Rollout of "+model+" re-opened"),blocked?"bad":"ok");
+}
+function renderGate(){
+  const g=document.getElementById("gate");if(!g)return;
+  let h;
+  if(gate){
+    h='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span class="k-badge bad">ROLLOUT BLOCKED</span><span><b>'+K.esc(gate.model)+'</b> blocked '+K.esc(K.when(gate.at))+'. No deploys until the regression is cleared.</span><button class="k-btn" id="reopen">Re-open rollout</button></div>';
+  }else{
+    h='<div style="display:flex;align-items:center;gap:10px"><span class="k-badge ok">GATE OPEN</span><span class="k-muted">No regressions blocking any rollout.</span></div>';
+  }
+  if(tickets.length){
+    h+='<div style="margin-top:10px"><b>Filed tickets ('+tickets.length+')</b><ul style="margin:6px 0;padding-left:20px;font-size:13.5px">'+tickets.map(t=>'<li><span style="font-family:var(--mono)">'+K.esc(t.id)+'</span> &mdash; '+K.esc(t.model)+' x '+K.esc(t.prompt)+' ('+K.esc(t.delta)+')</li>').join("")+'</ul></div>';
+  }
+  g.innerHTML=h;
+  const ro=document.getElementById("reopen");
+  if(ro)ro.addEventListener("click",function(){setGate(false,gate.model);});
+}
+renderKPIs(false);renderMatrix();renderGate();
+
+let running=false;
+document.getElementById("run").addEventListener("click",function(){
+  if(running)return;running=true;this.disabled=true;
+  document.getElementById("alertHost").innerHTML="";
+  const cells=[];MODELS.forEach(m=>PROMPTS.forEach(p=>cells.push(m.id+"|"+p.id)));
+  const prog=document.getElementById("prog");prog.style.display="block";const fill=prog.querySelector("i");
+  let i=0;
+  const r=K.rng("matrix-run");
+  function next(){
+    if(i>=cells.length){
+      running=false;document.getElementById("run").disabled=false;document.getElementById("run").textContent="\u21bb re-run matrix";
+      prog.style.display="none";renderKPIs(true);renderMatrix();
+      const ah=document.getElementById("alertHost");
+      ah.innerHTML='<div class="alert"><b style="color:var(--bad)">\u26a0 1 regression flagged:</b> <span style="font-family:var(--mono);font-size:13px">atlas-4.1 \u00d7 DB cleanup plan \u2014 9.2 \u2192 6.1 (\u22123.1). Rollout blocked.</span> <button class="k-btn k-danger" id="insp" style="margin-left:8px">Inspect</button></div>';
+      document.getElementById("insp").addEventListener("click",()=>showCell(MODELS[1],PROMPTS[2],"atlas-4.1|p3"));
+      K.toast("Matrix complete \u2014 1 regression flagged","warn");
+      return;
+    }
+    const key=cells[i];state[key]={status:"run"};renderMatrix();
+    setTimeout(()=>{
+      const jitter=(r()-0.5)*0.2;
+      state[key]={status:"done",score:+(NOW[key]+jitter).toFixed(2),ms:800+Math.floor(r()*2400),cost:+(0.002+r()*0.02).toFixed(4)};
+      if(key==="atlas-4.1|p3")state[key].score=6.1;
+      i++;fill.style.width=(i/cells.length*100)+"%";renderMatrix();next();
+    },260);
+  }
+  next();
+});
+function showConfig(){
+  K.modal({title:"Pipeline config",body:"<pre class='json'>"+K.esc("matrix:\n  models: [atlas-4, atlas-4.1, boreas-2]\n  prompts: [refund-triage, invoice-email, db-cleanup, tracking]\nthresholds:\n  regression: delta <= -1.0 vs baseline\n  block_rollout: true\nschedule: on every commit + nightly\nbaseline: last green run (pinned)")+"</pre>",actions:[{label:"Close",primary:true}]});
+}
+setTimeout(()=>document.getElementById("run").click(),700);
+})();
+
+</script>
+</body>
+</html>

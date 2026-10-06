@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FixTrack — Manage unresolved rental maintenance problems and evidence.</title>
+<link rel="stylesheet" href="../../shared/kit.css">
+<script src="../../shared/kit.js"></script>
+<style>
+/* ===== W6 Kit fallback CSS (only matters if shared/kit.css missing) ===== */
+:root{--bg:#ffffff;--panel:#f6f6f4;--panel2:#ffffff;--ink:#1b1b1b;--muted:#6f6f6f;--line:#e4e4df;--accent:#1d4ed8;--accent2:#0d9488;--good:#15803d;--warn:#b45309;--bad:#b91c1c}
+*{box-sizing:border-box}
+body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);margin:0;line-height:1.5}
+.k-wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+.k-grid{display:grid;gap:16px}
+.k-card{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.k-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:10px;padding:9px 16px;font-size:14px;font-weight:600;cursor:pointer}
+.k-btn:hover{border-color:var(--accent)}
+.k-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.k-primary:hover{filter:brightness(1.08)}
+.k-input,.k-select,textarea.k-input{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;background:var(--panel2);color:var(--ink);font-family:inherit}
+.k-input:focus,.k-select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+.k-table{width:100%;border-collapse:collapse;font-size:14px}
+.k-table th{text-align:left;padding:10px 12px;border-bottom:2px solid var(--line);color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.k-table td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+.k-table tr:last-child td{border-bottom:none}
+.k-badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
+.k-badge.ok{background:#dcfce7;color:#166534}.k-badge.warn{background:#fef3c7;color:#92400e}.k-badge.bad{background:#fee2e2;color:#991b1b}.k-badge.info{background:#dbeafe;color:#1e40af}
+.k-tabs{display:flex;gap:6px;border-bottom:2px solid var(--line);margin-bottom:16px;flex-wrap:wrap}
+.k-tabs button{border:none;background:none;padding:10px 14px;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
+.k-tabs button.active{color:var(--ink);border-bottom-color:var(--accent)}
+.k-kpi{display:flex;flex-direction:column;gap:2px}
+.k-kpi .k-kpi-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.k-kpi .k-kpi-value{font-size:28px;font-weight:800}
+.k-kpi .k-kpi-delta{font-size:13px}
+.k-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#111827;color:#fff;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:600;opacity:0;transition:all .25s;z-index:9999;pointer-events:none;max-width:90vw}
+.k-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.k-toast.ok{background:#166534}.k-toast.warn{background:#92400e}.k-toast.bad{background:#991b1b}
+.k-modal-back{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9998;padding:20px}
+.k-modal{background:var(--panel2);border-radius:16px;max-width:560px;width:100%;max-height:85vh;overflow:auto;padding:24px}
+.k-modal h2{margin:0 0 12px}
+.k-modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap}
+.k-empty{text-align:center;padding:48px 20px;color:var(--muted)}
+.k-empty h3{color:var(--ink);margin:0 0 8px}
+.k-hero{border-radius:18px;padding:32px;background:var(--panel);border:1px solid var(--line);margin-bottom:20px}
+.k-split{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:760px){.k-split{grid-template-columns:1fr}}
+.k-muted{color:var(--muted)}
+.k-nav{padding:16px 0}
+.k-chart-bar{height:10px;border-radius:6px;background:var(--accent);min-width:4px}
+.k-timeline{position:relative;padding-left:26px}
+.k-timeline:before{content:"";position:absolute;left:8px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.k-timeline-ev{position:relative;padding:0 0 18px}
+.k-timeline-ev:before{content:"";position:absolute;left:-24px;top:5px;width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--panel2)}
+.k-timeline-ev.warn:before{background:var(--warn)}.k-timeline-ev.bad:before{background:var(--bad)}.k-timeline-ev.ok:before{background:var(--good)}
+.k-timeline-ev .t{font-size:12px;color:var(--muted);font-weight:600}
+</style>
+<script>
+/* ===== W6 Kit fallback JS: implements window.Kit contract if shared/kit.js missing ===== */
+(function(){
+if(window.Kit&&window.Kit.rng)return;
+function xmur3(str){var h=1779033703^str.length;for(var i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19}return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^=h>>>16)>>>0}}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+var Kit={};
+Kit.rng=function(s){var f=mulberry32(xmur3(String(s))());return f};
+Kit.pick=function(f,a){return a[Math.floor(f()*a.length)]};
+Kit.int=function(f,a,b){return a+Math.floor(f()*(b-a+1))};
+Kit.shuffle=function(f,a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(f()*(i+1));var t=a[i];a[i]=a[j];a[j]=t}return a};
+Kit.uid=function(p){return (p||'')+Math.random().toString(36).slice(2,10)};
+Kit.esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
+Kit.el=function(html){var t=document.createElement('template');t.innerHTML=html.trim();return t.content.firstElementChild};
+Kit.store=function(ns){var p='w6:'+ns+':';function read(k){try{var v=localStorage.getItem(p+k);return v==null?undefined:JSON.parse(v)}catch(e){return undefined}}return{get:function(k,fb){var v=read(k);return v===undefined?fb:v},set:function(k,v){try{localStorage.setItem(p+k,JSON.stringify(v))}catch(e){}},del:function(k){try{localStorage.removeItem(p+k)}catch(e){}}}};
+Kit.nav=function(o){var old=document.querySelector('.k-nav');if(old)old.remove();var h=Kit.el('<div class="k-nav k-wrap"><div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><h1 style="margin:0;font-size:24px;letter-spacing:-.02em">'+Kit.esc(o.title)+'</h1>'+(o.sub?'<div class="k-muted" style="font-size:14px">'+Kit.esc(o.sub)+'</div>':'')+'</div><div class="k-nav-actions" style="display:flex;gap:8px;flex-wrap:wrap"></div></div></div>');var ac=h.querySelector('.k-nav-actions');(o.actions||[]).forEach(function(a){var b=Kit.el('<button class="k-btn'+(a.primary?' k-primary':'')+'">'+Kit.esc(a.label)+'</button>');b.onclick=a.onClick;ac.appendChild(b)});document.body.insertBefore(h,document.body.firstChild)};
+Kit.toast=function(msg,kind){var t=document.querySelector('.k-toast');if(t)t.remove();t=Kit.el('<div class="k-toast '+(kind||'')+'">'+Kit.esc(msg)+'</div>');document.body.appendChild(t);requestAnimationFrame(function(){t.classList.add('show')});setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.remove()},300)},2600)};
+Kit.modal=function(o){var back=Kit.el('<div class="k-modal-back"><div class="k-modal" role="dialog"><h2>'+Kit.esc(o.title)+'</h2><div class="k-modal-body"></div><div class="k-modal-actions"></div></div></div>');var body=back.querySelector('.k-modal-body');if(typeof o.body==='string')body.innerHTML=o.body;else if(o.body)body.appendChild(o.body);var acts=back.querySelector('.k-modal-actions');function close(){back.remove()}(o.actions||[{label:'Close'}]).forEach(function(a){var b=Kit.el('<button class="k-btn'+(a.primary?' k-primary':'')+'">'+Kit.esc(a.label)+'</button>');b.onclick=function(){if(a.onClick)a.onClick(close);else close()};acts.appendChild(b)});back.addEventListener('click',function(e){if(e.target===back)close()});document.body.appendChild(back);return close};
+Kit.tabs=function(host,tabs){host.innerHTML='';var bar=Kit.el('<div class="k-tabs" role="tablist"></div>');var pane=Kit.el('<div></div>');host.appendChild(bar);host.appendChild(pane);tabs.forEach(function(t,i){var b=Kit.el('<button role="tab">'+Kit.esc(t.label)+'</button>');if(i===0)b.classList.add('active');b.onclick=function(){bar.querySelectorAll('button').forEach(function(x){x.classList.remove('active')});b.classList.add('active');pane.innerHTML='';t.render(pane)};bar.appendChild(b)});if(tabs[0])tabs[0].render(pane)};
+Kit.table=function(host,cols,rows,opt){opt=opt||{};host.innerHTML='';var wrap=Kit.el('<div></div>');if(opt.search){var s=Kit.el('<input class="k-input" placeholder="Search…" style="max-width:280px;margin-bottom:10px">');s.oninput=function(){draw(s.value.toLowerCase())};wrap.appendChild(s)}var tw=Kit.el('<div style="overflow-x:auto"></div>');wrap.appendChild(tw);host.appendChild(wrap);var page=0;var ps=opt.pageSize||0;function filtered(q){if(!q)return rows;return rows.filter(function(r){return cols.some(function(c){var v=r[c.key];return v!=null&&String(v).toLowerCase().indexOf(q)>=0})})}function draw(q){var fr=filtered(q||'');var total=fr.length;var view=fr;if(ps&&total>ps){view=fr.slice(page*ps,page*ps+ps)}var h='<table class="k-table"><thead><tr>'+cols.map(function(c){return '<th'+(c.num?' style="text-align:right"':'')+'>'+Kit.esc(c.label)+'</th>'}).join('')+'</tr></thead><tbody>';view.forEach(function(r){h+='<tr>'+cols.map(function(c){var v=r[c.key];if(c.fmt)v=c.fmt(v,r);else v=Kit.esc(v==null?'':v);return '<td'+(c.num?' style="text-align:right"':'')+'>'+v+'</td>'}).join('')+'</tr>'});h+='</tbody></table>';if(!view.length)h='<div class="k-empty"><h3>No results</h3><div>Nothing matches.</div></div>';tw.innerHTML=h;var pg=wrap.querySelector('.k-pg');if(pg)pg.remove();if(ps&&total>ps){var pgn=Kit.el('<div class="k-pg" style="display:flex;gap:8px;align-items:center;margin-top:10px"><button class="k-btn">← Prev</button><span class="k-muted" style="font-size:13px">Page '+(page+1)+' of '+Math.ceil(total/ps)+'</span><button class="k-btn">Next →</button></div>');var btns=pgn.querySelectorAll('button');btns[0].onclick=function(){if(page>0){page--;draw(q||'')}};btns[1].onclick=function(){if((page+1)*ps<total){page++;draw(q||'')}};wrap.appendChild(pgn)}}draw('')};
+Kit.bars=function(host,items){host.innerHTML='';var max=Math.max.apply(null,items.map(function(i){return i.value}).concat([1]));items.forEach(function(i){var row=Kit.el('<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="font-weight:600">'+Kit.esc(i.label)+'</span><span class="k-muted">'+Kit.esc(i.display!=null?i.display:i.value)+'</span></div><div style="background:var(--panel);border-radius:6px;height:12px"><div class="k-chart-bar" style="width:'+(100*i.value/max)+'%;background:'+(i.color||'var(--accent)')+'"></div></div></div>');host.appendChild(row)})};
+Kit.line=function(host,series){var W=560,H=220,P=34;var all=[];series.forEach(function(s){s.points.forEach(function(p){all.push(p)})});var mn=Math.min.apply(null,all.concat([0])),mx=Math.max.apply(null,all.concat([1]));function X(i,n){return P+i*(W-2*P)/Math.max(n-1,1)}function Y(v){return H-P-(v-mn)*(H-2*P)/Math.max(mx-mn,1e-9)}var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;background:var(--panel);border-radius:12px">';series.forEach(function(s){var pts=s.points.map(function(p,i){return X(i,s.points.length)+','+Y(p)}).join(' ');svg+='<polyline points="'+pts+'" fill="none" stroke="'+(s.color||'var(--accent)')+'" stroke-width="2.5"/>'});svg+='</svg><div style="display:flex;gap:14px;margin-top:6px;flex-wrap:wrap">'+series.map(function(s){return '<span style="font-size:12px" class="k-muted"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+(s.color||'var(--accent)')+'"></span> '+Kit.esc(s.name)+'</span>'}).join('')+'</div>';host.innerHTML=svg};
+Kit.donut=function(host,items){var tot=items.reduce(function(a,i){return a+i.value},0)||1;var R=54,C=2*Math.PI*R,off=0,segs='';var cols=['#1d4ed8','#0d9488','#b45309','#b91c1c','#6d28d9','#0e7490'];items.forEach(function(it,i){var frac=it.value/tot;segs+='<circle cx="70" cy="70" r="'+R+'" fill="none" stroke="'+(it.color||cols[i%cols.length])+'" stroke-width="18" stroke-dasharray="'+(frac*C)+' '+C+'" stroke-dashoffset="'+(-off*C)+'" transform="rotate(-90 70 70)"/>';off+=frac});host.innerHTML='<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap"><svg width="140" height="140" viewBox="0 0 140 140">'+segs+'<text x="70" y="76" text-anchor="middle" font-size="20" font-weight="800" fill="var(--ink)">'+Kit.esc(items._center||'')+'</text></svg><div>'+items.map(function(it,i){return '<div style="font-size:13px;margin-bottom:6px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+(it.color||cols[i%cols.length])+'"></span> <b>'+Kit.esc(it.label)+'</b> <span class="k-muted">'+Kit.pct(it.value/tot)+'</span></div>'}).join('')+'</div></div>'};
+Kit.timeline=function(host,events){host.innerHTML='<div class="k-timeline">'+events.map(function(e){return '<div class="k-timeline-ev '+(e.kind||'')+'"><div class="t">'+Kit.esc(e.t)+'</div><div style="font-weight:700">'+Kit.esc(e.title)+'</div>'+(e.body?'<div class="k-muted" style="font-size:13px">'+Kit.esc(e.body)+'</div>':'')+'</div>'}).join('')+'</div>'};
+Kit.graph=function(host,g){var n=g.nodes.length,W=560,H=300;var pos={};g.nodes.forEach(function(nd,i){var a=2*Math.PI*i/Math.max(n,1);pos[nd.id]=[W/2+Math.cos(a)*(W/2-70),H/2+Math.sin(a)*(H/2-60)]});var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;background:var(--panel);border-radius:12px">';g.edges.forEach(function(e){var a=pos[e.a],b=pos[e.b];if(!a||!b)return;svg+='<line x1="'+a[0]+'" y1="'+a[1]+'" x2="'+b[0]+'" y2="'+b[1]+'" stroke="var(--line)" stroke-width="2"/>'+(e.label?'<text x="'+((a[0]+b[0])/2)+'" y="'+((a[1]+b[1])/2-6)+'" text-anchor="middle" font-size="10" fill="var(--muted)">'+Kit.esc(e.label)+'</text>':'')});g.nodes.forEach(function(nd){var p=pos[nd.id];svg+='<g><circle cx="'+p[0]+'" cy="'+p[1]+'" r="26" fill="'+(nd.color||'var(--accent)')+'"/><text x="'+p[0]+'" y="'+(p[1]+4)+'" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">'+Kit.esc(Kit.initials(nd.label))+'</text><text x="'+p[0]+'" y="'+(p[1]+42)+'" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">'+Kit.esc(nd.label)+'</text>'+(nd.sub?'<text x="'+p[0]+'" y="'+(p[1]+55)+'" text-anchor="middle" font-size="10" fill="var(--muted)">'+Kit.esc(nd.sub)+'</text>':'')+'</g>'});svg+='</svg>';host.innerHTML=svg};
+Kit.badge=function(t,k){return '<span class="k-badge k-badge-'+Kit.esc(k||'info')+'">'+Kit.esc(t)+'</span>'};
+Kit.kpi=function(host,o){host.innerHTML='<div class="k-kpi"><div class="k-kpi-label">'+Kit.esc(o.label)+'</div><div class="k-kpi-value">'+Kit.esc(o.value)+'</div>'+(o.delta?'<div class="k-kpi-delta">'+Kit.esc(o.delta)+'</div>':'')+'</div>'};
+Kit.empty=function(host,title,sub,al,af){host.innerHTML='<div class="k-empty"><h3>'+Kit.esc(title)+'</h3><div style="margin-bottom:14px">'+Kit.esc(sub||'')+'</div>'+(al?'<button class="k-btn k-primary">'+Kit.esc(al)+'</button>':'')+'</div>';if(al){var b=host.querySelector('button');if(b&&af)b.onclick=af}};
+Kit.money=function(n){return '$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})};
+Kit.num=function(n){return Number(n).toLocaleString('en-US')};
+Kit.pct=function(x){return (x*100).toFixed(1)+'%'};
+Kit.when=function(d){var dt=new Date(d);return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})};
+Kit.initials=function(n){return String(n||'').split(/\s+/).map(function(w){return w[0]}).join('').slice(0,2).toUpperCase()};
+Kit.copy=function(t){if(navigator.clipboard)navigator.clipboard.writeText(t).then(function(){Kit.toast('Copied to clipboard','ok')},function(){Kit.toast('Copy failed','bad')});else Kit.toast('Clipboard unavailable','warn')};
+window.Kit=Kit;
+})();
+</script>
+<script>
+/* W6 compat: normalize action-handler conventions across kit implementations.
+   The contract we coded against: nav actions support {label,primary,onClick},
+   modal actions support {label,primary,onClick(close)}. If the loaded kit uses
+   a different convention (href links / fn), adapt it here — never break apps. */
+(function(){
+var K=window.Kit;if(!K||K.__w6compat)return;K.__w6compat=true;
+try{
+if(typeof K.nav==='function'&&K.nav.toString().indexOf('onClick')<0){
+var _nav=K.nav;
+K.nav=function(o){o=o||{};var bar=_nav(o);var links=bar.querySelectorAll('.k-nav-actions a');
+(o.actions||[]).forEach(function(d,i){var a=links[i];if(!a)return;
+if(d.primary)a.classList.add('k-primary');
+a.addEventListener('click',function(e){e.preventDefault();if(typeof d.onClick==='function')d.onClick();});});
+return bar;};}
+if(typeof K.modal==='function'&&K.modal.toString().indexOf('onClick')<0){
+var _modal=K.modal;
+K.modal=function(o){o=o||{};(o.actions||[]).forEach(function(a){
+if(typeof a.onClick==='function'&&typeof a.fn!=='function'){var f=a.onClick;a.fn=function(){f(function(){});};}});
+return _modal(o);};}
+}catch(e){/* compat must never break the app */}
+})();
+</script>
+</head>
+<body>
+<style>body{padding-top:104px}/* qa-c: clear fixed .k-nav header */
+:root{--bg:#16181d;--panel:#1f232b;--panel2:#262c36;--ink:#f4f5f7;--muted:#9aa3b2;--line:#313845;--accent:#f97316;--accent2:#38bdf8;--good:#22c55e;--warn:#f59e0b;--bad:#ef4444}
+body{background:var(--bg)}
+.sans{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.ticket{cursor:pointer;transition:border-color .15s}
+.ticket:hover{border-color:var(--accent)}
+.age-ring{width:64px;height:64px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;flex:none}
+.ladder{display:flex;gap:0;margin:18px 0}
+.rung{flex:1;text-align:center;position:relative;padding-top:26px;font-size:12px;color:var(--muted)}
+.rung:before{content:"";position:absolute;top:8px;left:50%;transform:translateX(-50%);width:16px;height:16px;border-radius:50%;background:var(--line);border:2px solid var(--muted)}
+.rung.done{color:var(--ink);font-weight:700}.rung.done:before{background:var(--good);border-color:var(--good)}
+.rung.now{color:var(--accent);font-weight:800}.rung.now:before{background:var(--accent);border-color:var(--accent);box-shadow:0 0 0 5px rgba(249,115,22,.25)}
+.rung:after{content:"";position:absolute;top:15px;left:-50%;width:100%;height:2px;background:var(--line);z-index:-1}
+.rung:first-child:after{display:none}
+.rung.done:after{background:var(--good)}
+.letter{background:#fffdf6;color:#1c1917;border-radius:12px;padding:28px;font-family:Georgia,serif;box-shadow:0 8px 30px rgba(0,0,0,.4)}
+</style>
+<div class="k-wrap sans" style="padding-bottom:60px">
+<div class="k-hero" style="background:linear-gradient(135deg,#232a35,#2b2118);border:1px solid var(--line)">
+<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+<div class="age-ring" style="background:#3a1414;border:3px solid var(--bad);color:#fca5a5"><span style="font-size:22px" id="hero-age">–</span><span style="font-size:10px;font-weight:600">DAYS</span></div>
+<div style="flex:1;min-width:220px">
+<h2 style="margin:0 0 6px" id="hero-title">Kitchen leak still dripping</h2>
+<div class="k-muted">Reported Sep 24 · 3 follow-ups ignored · CA law says 30 days is the limit. Time to escalate.</div>
+</div>
+<button class="k-btn k-primary" id="gen-letter" style="font-size:16px;padding:12px 22px;background:var(--accent);border-color:var(--accent)">📄 Generate escalation letter</button>
+</div></div>
+<div class="k-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px" id="kpis"></div>
+<div style="display:flex;gap:10px;align-items:center;margin:0 0 12px;flex-wrap:wrap"><h3 style="margin:0">Open tickets</h3><span style="flex:1"></span><button class="k-btn" id="t-new">＋ New ticket</button><button class="k-btn" id="t-export">⤓ Export log</button></div>
+<div id="tickets" class="k-grid"></div>
+<div id="detail" style="display:none;margin-top:24px"></div>
+</div>
+<script>
+(function(){
+const K=window.Kit;
+K.nav({title:'FixTrack',sub:'Unresolved rental maintenance, tracked and escalated with the law on your side.'});
+function formModal(title,formHTML,onSave){
+  K.modal({title:title,body:formHTML,actions:[{label:'Cancel'}]});
+  var boxes=document.querySelectorAll('.k-modal');var box=boxes[boxes.length-1];
+  box.querySelector('[data-save]').onclick=function(){onSave(box);};
+  return box;
+}
+function closeModalBox(box){var ov=box.parentElement;if(ov)ov.remove();}
+function newTicket(){
+  formModal('New maintenance ticket',
+   '<label class="k-lab">Issue</label><input class="k-input" id="nt-title" placeholder="e.g. Bathroom fan dead">'
+   +'<label class="k-lab">Category</label><select class="k-select" id="nt-cat"><option>Plumbing</option><option>Electrical</option><option>Appliance</option><option>Security</option><option>Other</option></select>'
+   +'<label class="k-lab">Severity</label><select class="k-select" id="nt-sev"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select>'
+   +'<label class="k-lab">Notes</label><textarea class="k-input" id="nt-note" rows="3" placeholder="What is broken? How did you report it?"></textarea>'
+   +'<div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end"><button class="k-btn k-primary" data-save>Open ticket</button></div>',
+   function(box){
+    const title=box.querySelector('#nt-title').value.trim();
+    if(!title){K.toast('Describe the issue','warn');return;}
+    const t={id:'u'+Date.now(),title:title,cat:box.querySelector('#nt-cat').value,sev:box.querySelector('#nt-sev').value,opened:Date.now(),stage:0,
+      notes:box.querySelector('#nt-note').value.trim()||'No notes yet.',
+      law:'CA Civil Code §1941.1 — landlord must keep the unit habitable; §1942 — after 30 days notice, tenant may repair & deduct.'};
+    tickets.push(t);const cts=store.get('tickets',[]);cts.push(t);store.set('tickets',cts);stages[t.id]=0;store.set('stages',stages);
+    closeModalBox(box);
+    drawTickets();updateKpis();K.toast('Ticket opened — day counter started','ok');
+  });
+}
+function exportLog(){
+  const L=['FIXTRACK MAINTENANCE LOG — exported '+K.when(Date.now()),''];
+  [...tickets].sort((a,b)=>age(b)-age(a)).forEach(t=>{
+    L.push(age(t)+' days open — '+t.title+' ['+STAGES[stages[t.id]]+']');
+    L.push('  Opened '+K.when(t.opened)+' · '+t.cat+' · '+t.sev+' severity');
+    L.push('  Law: '+t.law);
+    (follows[t.id]||[]).forEach(x=>L.push('  Follow-up '+K.when(x.t)+': '+x.note));
+    L.push('');
+  });
+  dl('fixtrack-maintenance-log.txt',L.join('\n'));
+  K.toast('Log downloaded ('+tickets.length+' tickets)','ok');
+}
+const DAY=864e5, NOW=Date.now();
+const tickets=[
+{id:'t1',title:'Kitchen sink leak — cabinet warping',opened:NOW-40*DAY,sev:'critical',stage:2,cat:'Plumbing',
+ notes:'Slow drip under sink; particleboard swelling. Reported Sep 24 via portal #REQ-301. Follow-ups Oct 1, Oct 8, Oct 15 — no visit scheduled.',
+ law:'CA Civil Code §1941.1(a)(2) — landlord must keep plumbing in good working order. §1942 — after 30 days notice, tenant may repair & deduct.'},
+{id:'t2',title:'Bedroom window won\'t lock',opened:NOW-18*DAY,sev:'high',stage:1,cat:'Security',
+ notes:'Ground-floor window latch broken. Reported Sep 25 #REQ-305. One follow-up, "parts ordered".',
+ law:'CA Civil Code §1941.3 — landlord must install/maintain working locks on windows.'},
+{id:'t3',title:'Hallway light flickers',opened:NOW-6*DAY,sev:'low',stage:0,cat:'Electrical',
+ notes:'Reported Sep 27 #REQ-312. Likely ballast. No follow-up yet.',
+ law:'CA Civil Code §1941.1 — electrical lighting must be maintained.'},
+{id:'t4',title:'Garbage disposal jammed',opened:NOW-2*DAY,sev:'medium',stage:0,cat:'Appliance',
+ notes:'Reported Oct 1 #REQ-318. Hums but doesn\'t spin.',
+ law:'Appliance provided with unit — landlord responsible per lease §7.'}];
+const STAGES=['Reported','Followed up','Formal notice sent','Code enforcement','Repair & deduct / legal'];
+const store=K.store('fixtrack53');let stages=store.get('stages',{t1:2,t2:1,t3:0,t4:0});
+let follows=store.get('follows',{});
+store.get('tickets',[]).forEach(ct=>{if(!tickets.find(t=>t.id===ct.id))tickets.push(ct);});
+function totalLogged(){return Object.keys(follows).reduce((n,k)=>n+follows[k].length,0);}
+function dl(name,text){const b=new Blob([text],{type:'text/plain'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000);}
+function age(t){return Math.floor((NOW-t.opened)/DAY)}
+const kh=document.getElementById('kpis');
+function updateKpis(){
+  kh.innerHTML='';
+  const oldest=tickets.reduce((m,t)=>Math.max(m,age(t)),0);
+  const atLaw=tickets.filter(t=>age(t)>=30).length;
+  K.kpi(kh.appendChild(document.createElement('div')),{label:'Open tickets',value:String(tickets.length)});
+  K.kpi(kh.appendChild(document.createElement('div')),{label:'Oldest',value:oldest+' days',delta:oldest>=30?'past CA 30-day limit':'within limit'});
+  K.kpi(kh.appendChild(document.createElement('div')),{label:'Follow-ups logged',value:String(4+totalLogged()),delta:'4 seeded + your logs'});
+  K.kpi(kh.appendChild(document.createElement('div')),{label:'At legal threshold',value:String(atLaw),delta:'repair & deduct unlocked'});
+  const h0=tickets[0];
+  document.getElementById('hero-age').textContent=age(h0);
+  document.getElementById('hero-title').textContent=h0.title.split('—')[0].trim()+' — day '+age(h0);
+}
+updateKpis();
+document.getElementById('t-new').onclick=newTicket;
+document.getElementById('t-export').onclick=exportLog;
+const sevB={critical:'bad',high:'warn',medium:'info',low:'ok'};
+function drawTickets(){
+const host=document.getElementById('tickets');host.innerHTML='';
+[...tickets].sort((a,b)=>age(b)-age(a)).forEach(t=>{
+const a=age(t),st=stages[t.id];
+const card=K.el(`<div class="k-card ticket"><div style="display:flex;gap:14px;align-items:center">
+<div class="age-ring" style="background:${a>=30?'#3a1414':'#1a2b1a'};border:3px solid ${a>=30?'var(--bad)':'var(--good)'};color:${a>=30?'#fca5a5':'#86efac'}"><span style="font-size:20px">${a}</span><span style="font-size:10px;font-weight:600">DAYS</span></div>
+<div style="flex:1"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${K.badge(t.sev.toUpperCase(),sevB[t.sev])}${K.badge(t.cat,'info')}</div>
+<div style="font-weight:700;font-size:16px;margin:4px 0">${K.esc(t.title)}</div>
+<div class="k-muted" style="font-size:13px">Stage: <b style="color:var(--ink)">${STAGES[st]}</b> · opened ${K.when(t.opened)}</div></div>
+<span style="font-size:22px;color:var(--muted)">›</span></div></div>`);
+card.onclick=()=>showDetail(t);host.appendChild(card)});
+}
+function ladderHTML(st){
+return `<div class="ladder">${STAGES.map((s,i)=>`<div class="rung ${i<st?'done':i===st?'now':''}">${s}</div>`).join('')}</div>`;
+}
+function showDetail(t){
+const st=stages[t.id],a=age(t);
+const d=document.getElementById('detail');d.style.display='block';
+d.innerHTML=`<div class="k-card" style="border-top:4px solid ${a>=30?'var(--bad)':'var(--accent)'}">
+<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px">${K.badge(t.sev.toUpperCase(),sevB[t.sev])}<h2 style="margin:0">${K.esc(t.title)}</h2></div>
+<div class="k-muted">Opened ${K.when(t.opened)} · ${a} days ago · Ticket #${t.id.toUpperCase().replace('T','REQ-3')}</div>
+${ladderHTML(st)}
+<div class="k-card" style="background:var(--panel);margin-bottom:14px"><b style="font-size:13px">CASE NOTES</b><p style="font-size:14px;margin:6px 0">${K.esc(t.notes)}</p>
+<b style="font-size:13px">APPLICABLE LAW</b><p style="font-size:14px;margin:6px 0;color:var(--accent2)">${K.esc(t.law)}</p></div>
+<h4>Event log</h4><div id="d-tl"></div>
+<div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+<button class="k-btn k-primary" id="d-escalate" style="background:var(--accent);border-color:var(--accent)">⬆ Escalate to: ${STAGES[Math.min(st+1,4)]}</button>
+<button class="k-btn" id="d-letter">📄 Generate escalation letter</button>
+<button class="k-btn" id="d-follow">Log a follow-up call</button></div></div>`;
+const evs=[{t:K.when(t.opened),title:'Reported',body:'Via resident portal '+t.id.toUpperCase(),kind:''}];
+if(st>=1)evs.push({t:K.when(t.opened+7*DAY),title:'Follow-up #1',body:'Called office — "we\'ll send someone"',kind:'warn'});
+if(st>=2)evs.push({t:K.when(t.opened+14*DAY),title:'Follow-up #2 — ignored',body:'Email, no response',kind:'warn'});
+if(st>=2&&t.id==='t1')evs.push({t:K.when(t.opened+21*DAY),title:'Follow-up #3 — ignored',body:'In-person visit, office closed',kind:'bad'});
+if(st>=3)evs.push({t:K.when(NOW-2*DAY),title:'Formal notice sent',body:'Certified mail with 30-day history',kind:'bad'});
+(follows[t.id]||[]).forEach(x=>evs.push({t:K.when(x.t),title:'Follow-up logged',body:x.note,kind:'warn'}));
+K.timeline(d.querySelector('#d-tl'),evs);
+d.querySelector('#d-escalate').onclick=()=>{if(stages[t.id]<4){stages[t.id]++;store.set('stages',stages);drawTickets();showDetail(t);K.toast('Escalated to: '+STAGES[stages[t.id]],'ok')}else K.toast('Already at final stage','warn')};
+d.querySelector('#d-letter').onclick=()=>letterModal(t);
+d.querySelector('#d-follow').onclick=()=>{
+  formModal('Log follow-up — '+t.title,
+   '<label class="k-lab">What happened?</label><input class="k-input" id="fo-note" placeholder="e.g. Called office — said they will send someone Friday">'
+   +'<div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end"><button class="k-btn k-primary" data-save>Log follow-up</button></div>',
+   function(box){
+    const note=box.querySelector('#fo-note').value.trim()||'Follow-up logged';
+    (follows[t.id]=follows[t.id]||[]).push({t:Date.now(),note:note});store.set('follows',follows);
+    closeModalBox(box);
+    updateKpis();showDetail(t);K.toast('Follow-up logged with timestamp','ok');
+  });
+};
+d.scrollIntoView({behavior:'smooth'});
+}
+function letterText(t){
+return `VIA CERTIFIED MAIL — RETURN RECEIPT REQUESTED\n\n${K.when(Date.now())}\n\nRe: URGENT — Unresolved maintenance: ${t.title}\nUnit #510, 456 Oak Ave, Riverton, CA\n\nDear Property Manager:\n\nOn ${K.when(t.opened)} I reported the above maintenance issue (${Math.floor((NOW-t.opened)/DAY)} days ago). Despite multiple follow-ups, it remains unresolved.\n\n${t.law}\n\nBecause more than 30 days have passed since written notice, California law now entitles me to have the repair performed and deduct the cost from rent, or to pursue remedies through code enforcement.\n\nPlease complete this repair within 7 days of this letter. A full event log with timestamps is attached.\n\nSincerely,\nTenant, Unit #12`;
+}
+function letterModal(t){
+K.modal({title:'Escalation letter — '+t.title,body:`<div class="letter" style="max-height:50vh;overflow:auto"><pre style="white-space:pre-wrap;font-family:Georgia,serif;margin:0;font-size:14px">${K.esc(letterText(t))}</pre></div>`,
+actions:[{label:'Copy letter',primary:true,onClick:c=>{K.copy(letterText(t));c()}},{label:'Mark formal notice sent',onClick:c=>{stages[t.id]=Math.max(stages[t.id],2);store.set('stages',stages);drawTickets();showDetail(t);c();K.toast('Stage updated: formal notice sent','ok')}},{label:'Close'}]});
+}
+document.getElementById('gen-letter').onclick=()=>letterModal(tickets[0]);
+drawTickets();showDetail(tickets[0]);
+})();
+</script>
+
+</body>
+</html>

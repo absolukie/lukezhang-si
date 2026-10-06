@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RideLine — Appointment Transport Router</title>
+<link rel="stylesheet" href="../../shared/kit.css"><script src="../../shared/kit.js"></script>
+<script>
+/* Guarded Kit fallback — only defines window.Kit if shared/kit.js (built in parallel) didn't. */
+window.Kit = window.Kit || (function(){
+"use strict";
+function rng(seed){let h=1779033703^String(seed).length;const s=String(seed);for(let i=0;i<s.length;i++){h=Math.imul(h^s.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);h^=h>>>16;return (h>>>0)/4294967296;};}
+const pick=(f,a)=>a[Math.floor(f()*a.length)];
+const int=(f,a,b)=>a+Math.floor(f()*(b-a+1));
+function shuffle(f,a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(f()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;}return a;}
+let _u=0;const uid=p=>(p||'id')+'-'+(++_u)+'-'+Math.floor(Math.random()*46656).toString(36);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function el(html){const t=document.createElement('template');t.innerHTML=String(html).trim();return t.content.firstElementChild;}
+function store(ns){return{get(k,d){try{const v=localStorage.getItem(ns+':'+k);return v==null?d:JSON.parse(v);}catch(e){return d;}},set(k,v){try{localStorage.setItem(ns+':'+k,JSON.stringify(v));}catch(e){}},del(k){try{localStorage.removeItem(ns+':'+k);}catch(e){}}};}
+const money=n=>'$'+Math.round(Number(n)||0).toLocaleString('en-US');
+const num=n=>Number(n||0).toLocaleString('en-US');
+const pct=x=>(Number(x)*100).toFixed(0)+'%';
+const when=d=>{try{return new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric'});}catch(e){return String(d);}};
+const initials=n=>String(n||'').split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
+function copy(t){if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(String(t)).then(()=>toast('Copied to clipboard','ok'),()=>toast('Copy failed','bad'));}else{toast('Copy not available','bad');}}
+function toast(msg,kind){let c=document.querySelector('.k-toast-c');if(!c){c=el('<div class="k-toast-c"></div>');document.body.appendChild(c);}const t=el('<div class="k-toast '+(kind||'')+'">'+esc(msg)+'</div>');c.appendChild(t);setTimeout(()=>{t.classList.add('out');setTimeout(()=>t.remove(),300);},2600);}
+function nav(o){o=o||{};const h=el('<header class="k-nav"><div class="k-nav-in"><div><div class="k-nav-t">'+esc(o.title||'')+'</div>'+(o.sub?'<div class="k-nav-s">'+esc(o.sub)+'</div>':'')+'</div><div class="k-nav-a"></div></div></header>');const a=h.querySelector('.k-nav-a');(o.actions||[]).forEach(x=>{const b=el('<button class="k-btn'+(x.primary?' k-primary':'')+'">'+esc(x.label)+'</button>');b.onclick=x.onClick;a.appendChild(b);});document.body.prepend(h);return h;}
+function modal(o){o=o||{};const ov=el('<div class="k-mov"><div class="k-modal"><div class="k-m-t">'+esc(o.title||'')+'</div><div class="k-m-b"></div><div class="k-m-a"></div></div></div>');const b=ov.querySelector('.k-m-b');if(typeof o.body==='string')b.innerHTML=o.body;else if(o.body)b.appendChild(o.body);const a=ov.querySelector('.k-m-a');(o.actions||[{label:'Close'}]).forEach(x=>{const btn=el('<button class="k-btn'+(x.primary?' k-primary':'')+'">'+esc(x.label)+'</button>');btn.onclick=()=>{if(x.onClick)x.onClick();if(x.keepOpen!==true)ov.remove();};a.appendChild(btn);});ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});document.body.appendChild(ov);return ov;}
+function tabs(host,list){host.innerHTML='';const bar=el('<div class="k-tabs"></div>');const pane=el('<div class="k-tabpane"></div>');host.appendChild(bar);host.appendChild(pane);list.forEach((t,i)=>{const b=el('<button class="k-tab'+(i===0?' on':'')+'">'+esc(t.label)+'</button>');b.onclick=()=>{bar.querySelectorAll('.k-tab').forEach(x=>x.classList.remove('on'));b.classList.add('on');pane.innerHTML='';t.render(pane);};bar.appendChild(b);});if(list[0])list[0].render(pane);}
+function table(host,cols,rows,opt){opt=opt||{};host.innerHTML='';if(!rows||!rows.length){empty(host,'No rows yet','Nothing to show here.');return;}let data=rows.slice();const wrap=el('<div></div>');const mk=()=>{let html='<table class="k-table"><thead><tr>';cols.forEach(c=>{html+='<th class="'+(c.num?'r':'')+'">'+esc(c.label)+'</th>';});html+='</tr></thead><tbody>';data.forEach(r=>{html+='<tr>';cols.forEach(c=>{let v=r[c.key];if(c.fmt)v=c.fmt(v,r);else v=esc(v==null?'—':v);html+='<td class="'+(c.num?'r':'')+'">'+v+'</td>';});html+='</tr>';});html+='</tbody></table>';wrap.innerHTML=html;};if(opt.search){const inp=el('<input class="k-input" placeholder="Search…" style="max-width:280px;margin-bottom:10px">');inp.oninput=()=>{const q=inp.value.toLowerCase();data=rows.filter(r=>cols.some(c=>String(r[c.key]).toLowerCase().includes(q)));mk();};host.appendChild(inp);}mk();host.appendChild(wrap);}
+function bars(host,items){host.innerHTML='';const max=Math.max.apply(null,items.map(i=>i.value).concat([1]));items.forEach(i=>{const r=el('<div class="k-bar-r"><div class="k-bar-l">'+esc(i.label)+'</div><div class="k-bar-t"><div class="k-bar-f" style="width:'+(100*i.value/max).toFixed(1)+'%;'+(i.color?'background:'+i.color:'')+'"></div></div><div class="k-bar-v">'+esc(i.vtext!=null?i.vtext:String(Math.round(i.value)))+'</div></div>');host.appendChild(r);});}
+function line(host,series){host.innerHTML='';const W=560,H=240,P=34;let all=[];series.forEach(s=>s.points.forEach(p=>all.push(p.y)));const mn=Math.min.apply(null,all.concat([0])),mx=Math.max.apply(null,all.concat([1]));const X=i=>P+i*(W-2*P)/(series[0].points.length-1);const Y=v=>H-P-(v-mn)/(mx-mn||1)*(H-2*P);let s='<svg class="k-chart" viewBox="0 0 '+W+' '+H+'">';for(let g=0;g<=4;g++){const v=mn+(mx-mn)*g/4;s+='<line x1="'+P+'" y1="'+Y(v)+'" x2="'+(W-P)+'" y2="'+Y(v)+'" class="k-gl"/><text x="'+(P-6)+'" y="'+(Y(v)+4)+'" class="k-gl-t" text-anchor="end">'+Math.round(v)+'</text>';}series[0].points.forEach((p,i)=>{if(i%Math.ceil(series[0].points.length/8)===0)s+='<text x="'+X(i)+'" y="'+(H-8)+'" class="k-gl-t" text-anchor="middle">'+esc(p.x)+'</text>';});series.forEach((sr,si)=>{const pts=sr.points.map((p,i)=>X(i).toFixed(1)+','+Y(p.y).toFixed(1)).join(' ');s+='<polyline points="'+pts+'" fill="none" stroke="'+(sr.color||'#2563eb')+'" stroke-width="2.5"/>';sr.points.forEach((p,i)=>{s+='<circle cx="'+X(i)+'" cy="'+Y(p.y)+'" r="3" fill="'+(sr.color||'#2563eb')+'"><title>'+esc(sr.name+': '+p.x+' = '+p.y)+'</title></circle>';});});s+='</svg><div class="k-legend">';series.forEach(sr=>{s+='<span class="k-lg"><i style="background:'+(sr.color||'#2563eb')+'"></i>'+esc(sr.name)+'</span>';});s+='</div>';host.innerHTML=s;}
+function donut(host,items){host.innerHTML='';const S=170,R=64,C=2*Math.PI*R;const tot=items.reduce((a,i)=>a+i.value,0)||1;let off=0,arcs='';items.forEach(i=>{const frac=i.value/tot;arcs+='<circle cx="85" cy="85" r="'+R+'" fill="none" stroke="'+(i.color||'#888')+'" stroke-width="26" stroke-dasharray="'+(frac*C).toFixed(1)+' '+C.toFixed(1)+'" stroke-dashoffset="'+(-off*C).toFixed(1)+'" transform="rotate(-90 85 85)"/>';off+=frac;});let leg='<div class="k-legend">';items.forEach(i=>{leg+='<span class="k-lg"><i style="background:'+(i.color||'#888')+'"></i>'+esc(i.label)+' '+esc(i.vtext!=null?i.vtext:money(i.value))+'</span>';});leg+='</div>';host.innerHTML='<div class="k-donut-w"><svg class="k-chart" viewBox="0 0 170 170" style="max-width:220px">'+arcs+'<text x="85" y="80" text-anchor="middle" class="k-donut-t">'+esc(items._center||money(tot))+'</text><text x="85" y="100" text-anchor="middle" class="k-donut-s">'+esc(items._centerSub||'total')+'</text></svg>'+leg+'</div>';}
+function timeline(host,events){host.innerHTML='';events.forEach(e=>{const r=el('<div class="k-tl-r"><div class="k-tl-t">'+esc(e.t)+'</div><div class="k-tl-d k-tl-'+(e.kind||'info')+'"><div class="k-tl-h">'+esc(e.title)+'</div>'+(e.body?'<div class="k-tl-b">'+e.body+'</div>':'')+'</div></div>');host.appendChild(r);});}
+function graph(host,g){host.innerHTML='';const W=560,H=320,cx=W/2,cy=H/2,R=Math.min(W,H)/2-50;const n=g.nodes.length;const pos={};g.nodes.forEach((nd,i)=>{const a=2*Math.PI*i/n-Math.PI/2;pos[nd.id]=[cx+R*Math.cos(a),cy+R*Math.sin(a)];});let s='<svg class="k-chart" viewBox="0 0 '+W+' '+H+'">';g.edges.forEach(e=>{const a=pos[e.a],b=pos[e.b];s+='<line x1="'+a[0]+'" y1="'+a[1]+'" x2="'+b[0]+'" y2="'+b[1]+'" class="k-edge"/>';if(e.label)s+='<text x="'+((a[0]+b[0])/2)+'" y="'+((a[1]+b[1])/2-6)+'" class="k-gl-t" text-anchor="middle">'+esc(e.label)+'</text>';});g.nodes.forEach(nd=>{const p=pos[nd.id];s+='<g><circle cx="'+p[0]+'" cy="'+p[1]+'" r="26" fill="'+(nd.color||'#2563eb')+'"/><text x="'+p[0]+'" y="'+(p[1]+4)+'" text-anchor="middle" class="k-nd-t">'+esc(initials(nd.label))+'</text><text x="'+p[0]+'" y="'+(p[1]+42)+'" text-anchor="middle" class="k-gl-t">'+esc(nd.label)+'</text>'+(nd.sub?'<text x="'+p[0]+'" y="'+(p[1]+54)+'" text-anchor="middle" class="k-mut">'+esc(nd.sub)+'</text>':'')+'</g>';});s+='</svg>';host.innerHTML=s;}
+function badge(t,k){return '<span class="k-badge '+(k||'')+'">'+esc(t)+'</span>';}
+function kpi(host,o){const d=el('<div class="k-kpi"><div class="k-kpi-l">'+esc(o.label)+'</div><div class="k-kpi-v">'+esc(o.value)+'</div>'+(o.delta?'<div class="k-kpi-d">'+esc(o.delta)+'</div>':'')+'</div>');host.appendChild(d);}
+function empty(host,title,sub,al,af){host.innerHTML='';const d=el('<div class="k-empty"><div class="k-empty-t">'+esc(title)+'</div>'+(sub?'<div class="k-empty-s">'+esc(sub)+'</div>':'')+'</div>');if(al){const b=el('<button class="k-btn k-primary">'+esc(al)+'</button>');b.onclick=af;d.appendChild(b);}host.appendChild(d);}
+const css='.k-wrap{max-width:1120px;margin:0 auto;padding:20px 16px 64px}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg,#f7f6f3);color:var(--ink,#1c1a17)}.k-nav{position:sticky;top:0;z-index:20;background:var(--panel,#fff);border-bottom:1px solid var(--line,#e5e0d8)}.k-nav-in{max-width:1120px;margin:0 auto;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px}.k-nav-t{font-weight:800;font-size:20px;letter-spacing:-.02em}.k-nav-s{color:var(--muted,#6b655c);font-size:13px}.k-nav-a{display:flex;gap:8px;flex-wrap:wrap}.k-hero{background:var(--panel,#fff);border:1px solid var(--line,#e5e0d8);border-radius:16px;padding:28px;margin:20px 0}.k-hero h1{margin:0 0 8px;font-size:32px;letter-spacing:-.02em}.k-hero p{margin:0;color:var(--muted,#6b655c);max-width:640px;line-height:1.5}.k-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}.k-card{background:var(--panel,#fff);border:1px solid var(--line,#e5e0d8);border-radius:14px;padding:18px}.k-card h3{margin:0 0 6px;font-size:16px}.k-split{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:760px){.k-split{grid-template-columns:1fr}}.k-btn{border:1px solid var(--line,#e5e0d8);background:var(--panel,#fff);color:var(--ink,#1c1a17);border-radius:10px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer}.k-btn:hover{border-color:var(--accent,#2563eb)}.k-primary{background:var(--accent,#2563eb);border-color:var(--accent,#2563eb);color:#fff}.k-primary:hover{filter:brightness(1.08)}.k-input,.k-select{border:1px solid var(--line,#e5e0d8);border-radius:10px;padding:10px 12px;font-size:14px;width:100%;box-sizing:border-box;background:#fff;color:var(--ink,#1c1a17)}label.k-lab{display:block;font-size:12px;font-weight:700;color:var(--muted,#6b655c);margin:12px 0 6px;text-transform:uppercase;letter-spacing:.06em}.k-table{width:100%;border-collapse:collapse;font-size:14px}.k-table th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted,#6b655c);padding:8px;border-bottom:2px solid var(--line,#e5e0d8)}.k-table td{padding:10px 8px;border-bottom:1px solid var(--line,#e5e0d8);vertical-align:top}.k-table .r{text-align:right}.k-badge{display:inline-block;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:#eee;color:#333}.k-badge.ok{background:#dcf5e5;color:#0d6b3f}.k-badge.warn{background:#fdeecb;color:#8a5a00}.k-badge.bad{background:#fbdfe0;color:#a11f24}.k-badge.info{background:#dbeafe;color:#1d4fd7}.k-tabs{display:flex;gap:6px;border-bottom:2px solid var(--line,#e5e0d8);margin:18px 0}.k-tab{border:0;background:none;padding:10px 14px;font-size:14px;font-weight:600;color:var(--muted,#6b655c);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}.k-tab.on{color:var(--ink,#1c1a17);border-bottom-color:var(--accent,#2563eb)}.k-kpi{background:var(--panel,#fff);border:1px solid var(--line,#e5e0d8);border-radius:14px;padding:16px;min-width:150px;flex:1}.k-kpi-l{font-size:12px;color:var(--muted,#6b655c);text-transform:uppercase;letter-spacing:.05em;font-weight:700}.k-kpi-v{font-size:28px;font-weight:800;margin-top:4px}.k-kpi-d{font-size:13px;color:var(--muted,#6b655c);margin-top:2px}.k-kpis{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}.k-toast-c{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:99;display:flex;flex-direction:column;gap:8px;align-items:center}.k-toast{background:#1c1a17;color:#fff;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.25);transition:opacity .3s}.k-toast.ok{background:#0d6b3f}.k-toast.bad{background:#a11f24}.k-toast.out{opacity:0}.k-mov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:flex;align-items:center;justify-content:center;padding:20px}.k-modal{background:#fff;border-radius:16px;max-width:560px;width:100%;max-height:85vh;overflow:auto;padding:24px}.k-m-t{font-size:20px;font-weight:800;margin-bottom:12px}.k-m-a{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}.k-empty{text-align:center;padding:48px 20px;color:var(--muted,#6b655c)}.k-empty-t{font-size:18px;font-weight:700;color:var(--ink,#1c1a17);margin-bottom:6px}.k-empty-s{font-size:14px;margin-bottom:14px}.k-muted{color:var(--muted,#6b655c)}.k-chart{width:100%;height:auto;display:block}.k-gl{stroke:#e5e0d8;stroke-width:1}.k-gl-t{font-size:11px;fill:#8a8478}.k-mut{font-size:11px;fill:#8a8478}.k-nd-t{font-size:12px;font-weight:800;fill:#fff}.k-edge{stroke:#b9b2a4;stroke-width:1.5}.k-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:13px}.k-lg i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px}.k-bar-r{display:flex;align-items:center;gap:10px;margin:8px 0}.k-bar-l{width:150px;font-size:13px;font-weight:600;flex-shrink:0}.k-bar-t{flex:1;background:#efece5;border-radius:8px;height:22px;overflow:hidden}.k-bar-f{height:100%;background:var(--accent,#2563eb);border-radius:8px;transition:width .4s}.k-bar-v{width:90px;font-size:13px;font-weight:700;text-align:right;flex-shrink:0}.k-tl-r{display:flex;gap:14px;margin:0 0 4px}.k-tl-t{width:120px;flex-shrink:0;font-size:12px;font-weight:700;color:var(--muted,#6b655c);padding-top:14px;text-align:right}.k-tl-d{flex:1;border-left:3px solid #dbeafe;background:var(--panel,#fff);border-radius:0 10px 10px 0;padding:10px 14px;margin-bottom:10px}.k-tl-ok{border-left-color:var(--good,#16a34a)}.k-tl-warn{border-left-color:var(--warn,#d97706)}.k-tl-bad{border-left-color:var(--bad,#dc2626)}.k-tl-h{font-weight:700;font-size:14px}.k-tl-b{font-size:13px;color:var(--muted,#6b655c);margin-top:2px}.k-donut-w{display:flex;gap:18px;align-items:center;flex-wrap:wrap}.k-donut-t{font-size:22px;font-weight:800;fill:var(--ink,#1c1a17)}.k-donut-s{font-size:11px;fill:var(--muted,#6b655c)}input[type=range]{width:100%;accent-color:var(--accent,#2563eb)}';
+const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+return{rng:rng,pick:pick,int:int,shuffle:shuffle,uid:uid,esc:esc,el:el,store:store,nav:nav,toast:toast,modal:modal,tabs:tabs,table:table,bars:bars,line:line,donut:donut,timeline:timeline,graph:graph,badge:badge,kpi:kpi,empty:empty,money:money,num:num,pct:pct,when:when,initials:initials,copy:copy};
+})();
+</script>
+
+<style>
+:root{--bg:#10151f;--panel:#1a2233;--panel2:#242e45;--ink:#f2f5fb;--muted:#93a0b8;--line:#2c3752;--accent:#f5a623;--accent2:#39c6d6;--good:#2fbf71;--warn:#f5a623;--bad:#e5534b}
+body{background:var(--bg);color:var(--ink)}
+.k-card,.k-nav{background:var(--panel);border-color:var(--line)}
+.k-input,.k-select,.k-btn{background:var(--panel2);border-color:var(--line);color:var(--ink)}
+.k-table th{color:var(--muted);border-color:var(--line)}.k-table td{border-color:var(--line)}
+.k-primary{background:var(--accent);border-color:var(--accent);color:#1a1408}
+.stop{border:2px solid var(--line);border-radius:14px;padding:16px;margin:10px 0;background:var(--panel);display:flex;gap:14px;align-items:flex-start}
+.stop .n{width:38px;height:38px;border-radius:50%;background:var(--accent);color:#1a1408;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px}
+.leg{display:flex;align-items:center;gap:10px;margin:0 0 0 19px;padding:6px 0;color:var(--muted);font-size:13px}
+.leg .bar{width:2px;height:26px;background:var(--line)}
+.van{background:#12352f;border:2px solid var(--good);border-radius:12px;padding:12px 16px;margin:8px 0}
+.toggle{display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:10px 0;cursor:pointer}
+.toggle input{width:22px;height:22px;accent-color:var(--accent)}
+.k-hero{background:linear-gradient(135deg,#1a2233,#232c47);border-color:var(--line)}
+.k-hero h1{color:var(--accent)}
+
+/* design-critic: shared kit.css has no .k-kpis layout rule, so stat cards stacked full-width; restore the intended responsive row */
+.k-kpis{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}
+.k-kpis>.k-kpi{flex:1 1 200px;min-width:170px}
+</style></head>
+<body>
+<script>
+"use strict";
+const K=window.Kit;
+K.nav({title:"🚌 RideLine",sub:"Tuesday appointment transport — Mom"});
+const store=K.store("rideline");
+const APPTS=[
+ {id:"cardio",name:"Dr. Chen — Cardiologist",addr:"Sutter Health, 301 Old San Francisco Rd, Sunnyvale",at:"9:30 AM",dur:60,win:["9:15 AM","10:00 AM"],mobility:"standard",mustFirst:false},
+ {id:"rx",name:"CVS Pharmacy pickup",addr:"CVS, 275 E El Camino Real, Sunnyvale",at:"11:00 AM",dur:15,win:["10:30 AM","12:30 PM"],mobility:"standard",mustFirst:false},
+ {id:"pt",name:"Physical therapy",addr:"Bay PT, 880 W Maude Ave, Sunnyvale",at:"2:00 PM",dur:45,win:["1:45 PM","2:30 PM"],mobility:"wheelchair",mustFirst:false}
+];
+// travel minutes between: home, cardio, rx, pt
+const TRAVEL={home:{cardio:22,rx:18,pt:25},cardio:{home:22,rx:9,pt:14},rx:{home:18,cardio:9,pt:11},pt:{home:25,cardio:14,rx:11}};
+function t2m(t){const m=t.match(/(\d+):(\d+) (AM|PM)/);let h=+m[1]%12;if(m[3]==="PM")h+=12;return h*60+ +m[2];}
+function m2t(m){let h=Math.floor(m/60),mm=m%60;const ap=h>=12?"PM":"AM";h=h%12||12;return h+":"+String(mm).padStart(2,"0")+" "+ap;}
+let state=store.get("state",{order:["cardio","rx","pt"],vanRequired:true,optimized:false,traffic:1.0});
+if(typeof state.traffic!=="number")state.traffic=1.0;
+function save(){store.set("state",state);}
+const wrap=K.el('<div class="k-wrap"></div>');document.body.appendChild(wrap);
+wrap.addEventListener("click",function(e){if(e.target&&e.target.id==="optbtn")optimize();});
+wrap.appendChild(K.el('<div class="k-hero"><h1>Tuesday, Oct 6 — 3 appointments, 1 smooth ride</h1><div style="margin-top:14px"><button class="k-btn k-primary" id="optbtn" data-core="1" style="font-size:16px;padding:12px 24px">Optimize route</button></div><p>RideLine sequences the appointments, books the right vehicle, and pads the timing for wheelchair loading — so Mom is never rushed and never waiting curbside.</p></div>'));
+const kpis=K.el('<div class="k-kpis"></div>');wrap.appendChild(kpis);
+const ctrl=K.el('<div class="k-card"><h3>Trip settings</h3><label class="toggle"><input type="checkbox" id="van"><span><b>♿ Wheelchair van required</b><br><span class="k-muted" style="font-size:13px">Adds 12 min loading per stop · driver assists with transfers</span></span></label><div style="margin:10px 0"><label class="k-muted" style="font-size:13px"><b>Traffic conditions</b> &mdash; <span id="trafLbl"></span></label><input type="range" id="traf" min="0.8" max="1.6" step="0.1" style="width:100%"><div class="k-muted" style="font-size:12px;display:flex;justify-content:space-between"><span>Light (0.8x)</span><span>Normal</span><span>Heavy (1.6x)</span></div></div><p class="k-muted" style="font-size:13px;margin-bottom:0">Departing from: Home — 456 Oak Ave, Riverton</p></div>');
+wrap.appendChild(ctrl);
+const van=ctrl.querySelector("#van");van.checked=state.vanRequired;
+van.onchange=()=>{state.vanRequired=van.checked;save();render();K.toast(state.vanRequired?"Wheelchair van booked":"Standard sedan booked","ok");};
+const traf=ctrl.querySelector("#traf");const trafLbl=ctrl.querySelector("#trafLbl");
+traf.value=state.traffic;
+function trafName(v){return v<0.95?"Light \u2014 clear roads":v>1.25?"Heavy \u2014 rush hour, pad extra time":"Normal \u2014 typical Tuesday";}
+function drawTraf(){trafLbl.textContent=trafName(state.traffic)+" ("+state.traffic.toFixed(1)+"x drive times)";}
+drawTraf();
+traf.oninput=function(){state.traffic=+traf.value;drawTraf();save();render();};
+const route=K.el('<div id="route"></div>');wrap.appendChild(route);
+function buildPlan(order){
+ const loadPad=state.vanRequired?12:4;
+ let t=t2m("8:40 AM"); // leave home
+ const stops=[];let prev="home";let tight=0;
+ order.forEach((id,i)=>{
+   const a=APPTS.find(x=>x.id===id);
+   const drive=Math.round(TRAVEL[prev][id]*state.traffic);
+   t+=drive;
+   const apptT=t2m(a.at);
+   let wait=0,status="ok",note="";
+   if(t<apptT-15){wait=apptT-15-t;note="Arrive "+m2t(t)+", "+wait+" min early — grab coffee ☕";}
+   else if(t>apptT+10){status="bad";tight++;note="⚠ Running "+(t-apptT)+" min late — call clinic!";}
+   else if(t>apptT){status="warn";note="Arrive "+m2t(t)+" — a few minutes past, still fine";}
+   else{note="Arrive "+m2t(t)+" — right on time ✓";}
+   t=Math.max(t,apptT-15);
+   const depart=t+a.dur+loadPad;
+   stops.push({a:a,arrive:t,depart:depart,drive:drive,wait:wait,status:status,note:note,loadPad:loadPad});
+   t=depart;prev=id;
+ });
+ const home=Math.round(TRAVEL[prev].home*state.traffic);t+=home;
+ return{stops:stops,homeAt:t,tight:tight,totalMiles:Math.round(order.reduce((s,id,i)=>s+TRAVEL[i?order[i-1]:"home"][id],0)*1.4)};
+}
+function optimize(){
+ // try all permutations, score by lateness then total time
+ const ids=APPTS.map(a=>a.id);
+ const perms=[[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]].map(p=>p.map(i=>ids[i]));
+ let best=null,bestScore=1e9;
+ perms.forEach(o=>{const p=buildPlan(o);const score=p.tight*1000+p.homeAt;if(score<bestScore){bestScore=score;best=o;}});
+ state.order=best;state.optimized=true;save();render();
+ K.toast("Route optimized — "+best.map(id=>APPTS.find(a=>a.id===id).name.split(" — ")[0]).join(" → "),"ok");
+}
+function render(){
+ kpis.innerHTML='';route.innerHTML='';
+ const plan=buildPlan(state.order);
+ K.kpi(kpis,{label:"First pickup",value:"8:40 AM",delta:"From home"});
+ K.kpi(kpis,{label:"Home by",value:m2t(plan.homeAt),delta:plan.totalMiles+" mi total"});
+ K.kpi(kpis,{label:"Vehicle",value:state.vanRequired?"♿ Wheelchair van":"Sedan",delta:state.vanRequired?"Driver assists transfers":""});
+ K.kpi(kpis,{label:"Timing risks",value:String(plan.tight),delta:plan.tight?"Review flagged stops":"All stops comfortable"});
+ if(state.optimized)route.appendChild(K.el('<p>'+K.badge("Optimized order","ok")+' <span class="k-muted" style="font-size:13px">Best of 6 possible sequences by on-time arrival.</span></p>'));
+ plan.stops.forEach((s,i)=>{
+   const d=K.el('<div class="stop"><div class="n">'+(i+1)+'</div><div style="flex:1"><b style="font-size:17px">'+K.esc(s.a.name)+'</b><div class="k-muted" style="font-size:13px">'+K.esc(s.a.addr)+'</div><div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+K.badge("Appt "+s.a.at,"info")+K.badge("Arrive "+m2t(s.arrive),s.status==="ok"?"ok":s.status)+K.badge(s.a.dur+" min visit","")+ (s.a.mobility==="wheelchair"?K.badge("♿ wheelchair","warn"):"")+'</div><div class="k-muted" style="font-size:13px;margin-top:6px">'+K.esc(s.note)+' · departs '+m2t(s.depart)+'</div></div></div>');
+   route.appendChild(d);
+   if(i<plan.stops.length-1||true){
+     const next=i<plan.stops.length-1?plan.stops[i+1]:null;
+     const leg=K.el('<div class="leg"><div class="bar"></div><span>🚐 '+(next?s.drive+" min drive":TRAVEL[s.a.id].home+" min drive")+' → '+(next?K.esc(next.a.name.split(" — ")[0]):"Home")+(state.vanRequired?' <span class="k-muted">(+'+s.loadPad+' min wheelchair loading)</span>':'')+'</span></div>');
+     route.appendChild(leg);
+   }
+ });
+ const v=K.el('<div class="van"><b>'+(state.vanRequired?"♿ Wheelchair van — booked":"🚗 Standard sedan — booked")+'</b><div class="k-muted" style="font-size:13px;color:var(--muted)">Driver: Luis (4.9★, wheelchair-certified) · $68 flat for the day · arrives 8:30 AM</div></div>');
+ route.appendChild(v);
+ const tbl=K.el('<div class="k-card" style="margin-top:14px"><h3>Timing detail</h3><div id="t"></div></div>');
+ route.appendChild(tbl);
+ K.table(tbl.querySelector("#t"),
+  [{key:"stop",label:"Stop"},{key:"arrive",label:"Arrive",num:true},{key:"appt",label:"Appt",num:true},{key:"depart",label:"Depart",num:true},{key:"status",label:"Status",fmt:v=>v}],
+  plan.stops.map(s=>({stop:s.a.name.split(" — ")[0],arrive:m2t(s.arrive),appt:s.a.at,depart:m2t(s.depart),status:s.status==="ok"?K.badge("On time","ok"):s.status==="warn"?K.badge("Slightly late","warn"):K.badge("Late — call","bad")})));
+}
+render();
+</script></body></html>

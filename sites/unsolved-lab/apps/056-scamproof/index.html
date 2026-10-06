@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ScamProof — Analyze suspicious numbers, emails, texts, URLs, QR codes, invoices, messages.</title>
+<link rel="stylesheet" href="../../shared/kit.css">
+<script src="../../shared/kit.js"></script>
+<style>
+/* ===== W6 Kit fallback CSS (only matters if shared/kit.css missing) ===== */
+:root{--bg:#ffffff;--panel:#f6f6f4;--panel2:#ffffff;--ink:#1b1b1b;--muted:#6f6f6f;--line:#e4e4df;--accent:#1d4ed8;--accent2:#0d9488;--good:#15803d;--warn:#b45309;--bad:#b91c1c}
+*{box-sizing:border-box}
+body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);margin:0;line-height:1.5}
+.k-wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+.k-grid{display:grid;gap:16px}
+.k-card{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.k-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:10px;padding:9px 16px;font-size:14px;font-weight:600;cursor:pointer}
+.k-btn:hover{border-color:var(--accent)}
+.k-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.k-primary:hover{filter:brightness(1.08)}
+.k-input,.k-select,textarea.k-input{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;background:var(--panel2);color:var(--ink);font-family:inherit}
+.k-input:focus,.k-select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+.k-table{width:100%;border-collapse:collapse;font-size:14px}
+.k-table th{text-align:left;padding:10px 12px;border-bottom:2px solid var(--line);color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.k-table td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+.k-table tr:last-child td{border-bottom:none}
+.k-badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
+.k-badge.ok{background:#dcfce7;color:#166534}.k-badge.warn{background:#fef3c7;color:#92400e}.k-badge.bad{background:#fee2e2;color:#991b1b}.k-badge.info{background:#dbeafe;color:#1e40af}
+.k-tabs{display:flex;gap:6px;border-bottom:2px solid var(--line);margin-bottom:16px;flex-wrap:wrap}
+.k-tabs button{border:none;background:none;padding:10px 14px;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
+.k-tabs button.active{color:var(--ink);border-bottom-color:var(--accent)}
+.k-kpi{display:flex;flex-direction:column;gap:2px}
+.k-kpi .k-kpi-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.k-kpi .k-kpi-value{font-size:28px;font-weight:800}
+.k-kpi .k-kpi-delta{font-size:13px}
+.k-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#111827;color:#fff;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:600;opacity:0;transition:all .25s;z-index:9999;pointer-events:none;max-width:90vw}
+.k-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.k-toast.ok{background:#166534}.k-toast.warn{background:#92400e}.k-toast.bad{background:#991b1b}
+.k-modal-back{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9998;padding:20px}
+.k-modal{background:var(--panel2);border-radius:16px;max-width:560px;width:100%;max-height:85vh;overflow:auto;padding:24px}
+.k-modal h2{margin:0 0 12px}
+.k-modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap}
+.k-empty{text-align:center;padding:48px 20px;color:var(--muted)}
+.k-empty h3{color:var(--ink);margin:0 0 8px}
+.k-hero{border-radius:18px;padding:32px;background:var(--panel);border:1px solid var(--line);margin-bottom:20px}
+.k-split{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:760px){.k-split{grid-template-columns:1fr}}
+.k-muted{color:var(--muted)}
+.k-nav{padding:16px 0}
+.k-chart-bar{height:10px;border-radius:6px;background:var(--accent);min-width:4px}
+.k-timeline{position:relative;padding-left:26px}
+.k-timeline:before{content:"";position:absolute;left:8px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.k-timeline-ev{position:relative;padding:0 0 18px}
+.k-timeline-ev:before{content:"";position:absolute;left:-24px;top:5px;width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--panel2)}
+.k-timeline-ev.warn:before{background:var(--warn)}.k-timeline-ev.bad:before{background:var(--bad)}.k-timeline-ev.ok:before{background:var(--good)}
+.k-timeline-ev .t{font-size:12px;color:var(--muted);font-weight:600}
+</style>
+<script>
+/* ===== W6 Kit fallback JS: implements window.Kit contract if shared/kit.js missing ===== */
+(function(){
+if(window.Kit&&window.Kit.rng)return;
+function xmur3(str){var h=1779033703^str.length;for(var i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19}return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^=h>>>16)>>>0}}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+var Kit={};
+Kit.rng=function(s){var f=mulberry32(xmur3(String(s))());return f};
+Kit.pick=function(f,a){return a[Math.floor(f()*a.length)]};
+Kit.int=function(f,a,b){return a+Math.floor(f()*(b-a+1))};
+Kit.shuffle=function(f,a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(f()*(i+1));var t=a[i];a[i]=a[j];a[j]=t}return a};
+Kit.uid=function(p){return (p||'')+Math.random().toString(36).slice(2,10)};
+Kit.esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
+Kit.el=function(html){var t=document.createElement('template');t.innerHTML=html.trim();return t.content.firstElementChild};
+Kit.store=function(ns){var p='w6:'+ns+':';function read(k){try{var v=localStorage.getItem(p+k);return v==null?undefined:JSON.parse(v)}catch(e){return undefined}}return{get:function(k,fb){var v=read(k);return v===undefined?fb:v},set:function(k,v){try{localStorage.setItem(p+k,JSON.stringify(v))}catch(e){}},del:function(k){try{localStorage.removeItem(p+k)}catch(e){}}}};
+Kit.nav=function(o){var old=document.querySelector('.k-nav');if(old)old.remove();var h=Kit.el('<div class="k-nav k-wrap"><div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><h1 style="margin:0;font-size:24px;letter-spacing:-.02em">'+Kit.esc(o.title)+'</h1>'+(o.sub?'<div class="k-muted" style="font-size:14px">'+Kit.esc(o.sub)+'</div>':'')+'</div><div class="k-nav-actions" style="display:flex;gap:8px;flex-wrap:wrap"></div></div></div>');var ac=h.querySelector('.k-nav-actions');(o.actions||[]).forEach(function(a){var b=Kit.el('<button class="k-btn'+(a.primary?' k-primary':'')+'">'+Kit.esc(a.label)+'</button>');b.onclick=a.onClick;ac.appendChild(b)});document.body.insertBefore(h,document.body.firstChild)};
+Kit.toast=function(msg,kind){var t=document.querySelector('.k-toast');if(t)t.remove();t=Kit.el('<div class="k-toast '+(kind||'')+'">'+Kit.esc(msg)+'</div>');document.body.appendChild(t);requestAnimationFrame(function(){t.classList.add('show')});setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.remove()},300)},2600)};
+Kit.modal=function(o){var back=Kit.el('<div class="k-modal-back"><div class="k-modal" role="dialog"><h2>'+Kit.esc(o.title)+'</h2><div class="k-modal-body"></div><div class="k-modal-actions"></div></div></div>');var body=back.querySelector('.k-modal-body');if(typeof o.body==='string')body.innerHTML=o.body;else if(o.body)body.appendChild(o.body);var acts=back.querySelector('.k-modal-actions');function close(){back.remove()}(o.actions||[{label:'Close'}]).forEach(function(a){var b=Kit.el('<button class="k-btn'+(a.primary?' k-primary':'')+'">'+Kit.esc(a.label)+'</button>');b.onclick=function(){if(a.onClick)a.onClick(close);else close()};acts.appendChild(b)});back.addEventListener('click',function(e){if(e.target===back)close()});document.body.appendChild(back);return close};
+Kit.tabs=function(host,tabs){host.innerHTML='';var bar=Kit.el('<div class="k-tabs" role="tablist"></div>');var pane=Kit.el('<div></div>');host.appendChild(bar);host.appendChild(pane);tabs.forEach(function(t,i){var b=Kit.el('<button role="tab">'+Kit.esc(t.label)+'</button>');if(i===0)b.classList.add('active');b.onclick=function(){bar.querySelectorAll('button').forEach(function(x){x.classList.remove('active')});b.classList.add('active');pane.innerHTML='';t.render(pane)};bar.appendChild(b)});if(tabs[0])tabs[0].render(pane)};
+Kit.table=function(host,cols,rows,opt){opt=opt||{};host.innerHTML='';var wrap=Kit.el('<div></div>');if(opt.search){var s=Kit.el('<input class="k-input" placeholder="Search…" style="max-width:280px;margin-bottom:10px">');s.oninput=function(){draw(s.value.toLowerCase())};wrap.appendChild(s)}var tw=Kit.el('<div style="overflow-x:auto"></div>');wrap.appendChild(tw);host.appendChild(wrap);var page=0;var ps=opt.pageSize||0;function filtered(q){if(!q)return rows;return rows.filter(function(r){return cols.some(function(c){var v=r[c.key];return v!=null&&String(v).toLowerCase().indexOf(q)>=0})})}function draw(q){var fr=filtered(q||'');var total=fr.length;var view=fr;if(ps&&total>ps){view=fr.slice(page*ps,page*ps+ps)}var h='<table class="k-table"><thead><tr>'+cols.map(function(c){return '<th'+(c.num?' style="text-align:right"':'')+'>'+Kit.esc(c.label)+'</th>'}).join('')+'</tr></thead><tbody>';view.forEach(function(r){h+='<tr>'+cols.map(function(c){var v=r[c.key];if(c.fmt)v=c.fmt(v,r);else v=Kit.esc(v==null?'':v);return '<td'+(c.num?' style="text-align:right"':'')+'>'+v+'</td>'}).join('')+'</tr>'});h+='</tbody></table>';if(!view.length)h='<div class="k-empty"><h3>No results</h3><div>Nothing matches.</div></div>';tw.innerHTML=h;var pg=wrap.querySelector('.k-pg');if(pg)pg.remove();if(ps&&total>ps){var pgn=Kit.el('<div class="k-pg" style="display:flex;gap:8px;align-items:center;margin-top:10px"><button class="k-btn">← Prev</button><span class="k-muted" style="font-size:13px">Page '+(page+1)+' of '+Math.ceil(total/ps)+'</span><button class="k-btn">Next →</button></div>');var btns=pgn.querySelectorAll('button');btns[0].onclick=function(){if(page>0){page--;draw(q||'')}};btns[1].onclick=function(){if((page+1)*ps<total){page++;draw(q||'')}};wrap.appendChild(pgn)}}draw('')};
+Kit.bars=function(host,items){host.innerHTML='';var max=Math.max.apply(null,items.map(function(i){return i.value}).concat([1]));items.forEach(function(i){var row=Kit.el('<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="font-weight:600">'+Kit.esc(i.label)+'</span><span class="k-muted">'+Kit.esc(i.display!=null?i.display:i.value)+'</span></div><div style="background:var(--panel);border-radius:6px;height:12px"><div class="k-chart-bar" style="width:'+(100*i.value/max)+'%;background:'+(i.color||'var(--accent)')+'"></div></div></div>');host.appendChild(row)})};
+Kit.line=function(host,series){var W=560,H=220,P=34;var all=[];series.forEach(function(s){s.points.forEach(function(p){all.push(p)})});var mn=Math.min.apply(null,all.concat([0])),mx=Math.max.apply(null,all.concat([1]));function X(i,n){return P+i*(W-2*P)/Math.max(n-1,1)}function Y(v){return H-P-(v-mn)*(H-2*P)/Math.max(mx-mn,1e-9)}var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;background:var(--panel);border-radius:12px">';series.forEach(function(s){var pts=s.points.map(function(p,i){return X(i,s.points.length)+','+Y(p)}).join(' ');svg+='<polyline points="'+pts+'" fill="none" stroke="'+(s.color||'var(--accent)')+'" stroke-width="2.5"/>'});svg+='</svg><div style="display:flex;gap:14px;margin-top:6px;flex-wrap:wrap">'+series.map(function(s){return '<span style="font-size:12px" class="k-muted"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+(s.color||'var(--accent)')+'"></span> '+Kit.esc(s.name)+'</span>'}).join('')+'</div>';host.innerHTML=svg};
+Kit.donut=function(host,items){var tot=items.reduce(function(a,i){return a+i.value},0)||1;var R=54,C=2*Math.PI*R,off=0,segs='';var cols=['#1d4ed8','#0d9488','#b45309','#b91c1c','#6d28d9','#0e7490'];items.forEach(function(it,i){var frac=it.value/tot;segs+='<circle cx="70" cy="70" r="'+R+'" fill="none" stroke="'+(it.color||cols[i%cols.length])+'" stroke-width="18" stroke-dasharray="'+(frac*C)+' '+C+'" stroke-dashoffset="'+(-off*C)+'" transform="rotate(-90 70 70)"/>';off+=frac});host.innerHTML='<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap"><svg width="140" height="140" viewBox="0 0 140 140">'+segs+'<text x="70" y="76" text-anchor="middle" font-size="20" font-weight="800" fill="var(--ink)">'+Kit.esc(items._center||'')+'</text></svg><div>'+items.map(function(it,i){return '<div style="font-size:13px;margin-bottom:6px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+(it.color||cols[i%cols.length])+'"></span> <b>'+Kit.esc(it.label)+'</b> <span class="k-muted">'+Kit.pct(it.value/tot)+'</span></div>'}).join('')+'</div></div>'};
+Kit.timeline=function(host,events){host.innerHTML='<div class="k-timeline">'+events.map(function(e){return '<div class="k-timeline-ev '+(e.kind||'')+'"><div class="t">'+Kit.esc(e.t)+'</div><div style="font-weight:700">'+Kit.esc(e.title)+'</div>'+(e.body?'<div class="k-muted" style="font-size:13px">'+Kit.esc(e.body)+'</div>':'')+'</div>'}).join('')+'</div>'};
+Kit.graph=function(host,g){var n=g.nodes.length,W=560,H=300;var pos={};g.nodes.forEach(function(nd,i){var a=2*Math.PI*i/Math.max(n,1);pos[nd.id]=[W/2+Math.cos(a)*(W/2-70),H/2+Math.sin(a)*(H/2-60)]});var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;background:var(--panel);border-radius:12px">';g.edges.forEach(function(e){var a=pos[e.a],b=pos[e.b];if(!a||!b)return;svg+='<line x1="'+a[0]+'" y1="'+a[1]+'" x2="'+b[0]+'" y2="'+b[1]+'" stroke="var(--line)" stroke-width="2"/>'+(e.label?'<text x="'+((a[0]+b[0])/2)+'" y="'+((a[1]+b[1])/2-6)+'" text-anchor="middle" font-size="10" fill="var(--muted)">'+Kit.esc(e.label)+'</text>':'')});g.nodes.forEach(function(nd){var p=pos[nd.id];svg+='<g><circle cx="'+p[0]+'" cy="'+p[1]+'" r="26" fill="'+(nd.color||'var(--accent)')+'"/><text x="'+p[0]+'" y="'+(p[1]+4)+'" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">'+Kit.esc(Kit.initials(nd.label))+'</text><text x="'+p[0]+'" y="'+(p[1]+42)+'" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">'+Kit.esc(nd.label)+'</text>'+(nd.sub?'<text x="'+p[0]+'" y="'+(p[1]+55)+'" text-anchor="middle" font-size="10" fill="var(--muted)">'+Kit.esc(nd.sub)+'</text>':'')+'</g>'});svg+='</svg>';host.innerHTML=svg};
+Kit.badge=function(t,k){return '<span class="k-badge k-badge-'+Kit.esc(k||'info')+'">'+Kit.esc(t)+'</span>'};
+Kit.kpi=function(host,o){host.innerHTML='<div class="k-kpi"><div class="k-kpi-label">'+Kit.esc(o.label)+'</div><div class="k-kpi-value">'+Kit.esc(o.value)+'</div>'+(o.delta?'<div class="k-kpi-delta">'+Kit.esc(o.delta)+'</div>':'')+'</div>'};
+Kit.empty=function(host,title,sub,al,af){host.innerHTML='<div class="k-empty"><h3>'+Kit.esc(title)+'</h3><div style="margin-bottom:14px">'+Kit.esc(sub||'')+'</div>'+(al?'<button class="k-btn k-primary">'+Kit.esc(al)+'</button>':'')+'</div>';if(al){var b=host.querySelector('button');if(b&&af)b.onclick=af}};
+Kit.money=function(n){return '$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})};
+Kit.num=function(n){return Number(n).toLocaleString('en-US')};
+Kit.pct=function(x){return (x*100).toFixed(1)+'%'};
+Kit.when=function(d){var dt=new Date(d);return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})};
+Kit.initials=function(n){return String(n||'').split(/\s+/).map(function(w){return w[0]}).join('').slice(0,2).toUpperCase()};
+Kit.copy=function(t){if(navigator.clipboard)navigator.clipboard.writeText(t).then(function(){Kit.toast('Copied to clipboard','ok')},function(){Kit.toast('Copy failed','bad')});else Kit.toast('Clipboard unavailable','warn')};
+window.Kit=Kit;
+})();
+</script>
+<script>
+/* W6 compat: normalize action-handler conventions across kit implementations.
+   The contract we coded against: nav actions support {label,primary,onClick},
+   modal actions support {label,primary,onClick(close)}. If the loaded kit uses
+   a different convention (href links / fn), adapt it here — never break apps. */
+(function(){
+var K=window.Kit;if(!K||K.__w6compat)return;K.__w6compat=true;
+try{
+if(typeof K.nav==='function'&&K.nav.toString().indexOf('onClick')<0){
+var _nav=K.nav;
+K.nav=function(o){o=o||{};var bar=_nav(o);var links=bar.querySelectorAll('.k-nav-actions a');
+(o.actions||[]).forEach(function(d,i){var a=links[i];if(!a)return;
+if(d.primary)a.classList.add('k-primary');
+a.addEventListener('click',function(e){e.preventDefault();if(typeof d.onClick==='function')d.onClick();});});
+return bar;};}
+if(typeof K.modal==='function'&&K.modal.toString().indexOf('onClick')<0){
+var _modal=K.modal;
+K.modal=function(o){o=o||{};(o.actions||[]).forEach(function(a){
+if(typeof a.onClick==='function'&&typeof a.fn!=='function'){var f=a.onClick;a.fn=function(){f(function(){});};}});
+return _modal(o);};}
+}catch(e){/* compat must never break the app */}
+})();
+</script>
+</head>
+<body>
+<style>body{padding-top:104px}/* qa-c: clear fixed .k-nav header */
+:root{--bg:#f7f6f3;--panel:#efede7;--panel2:#fffefb;--ink:#211d19;--muted:#8a8478;--line:#e0dccf;--accent:#b91c1c;--accent2:#1d4ed8;--good:#15803d;--warn:#b45309;--bad:#b91c1c}
+body{background:var(--bg)}
+.sans{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.msg{font-family:ui-monospace,Menlo,monospace;font-size:15px;line-height:1.9;background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px}
+mark.tell{background:#fecaca;border-bottom:3px solid var(--bad);border-radius:4px;padding:1px 3px;cursor:pointer;position:relative}
+mark.tell .n{display:inline-flex;background:var(--bad);color:#fff;font-size:10px;font-weight:800;border-radius:50%;width:18px;height:18px;align-items:center;justify-content:center;margin-right:4px;vertical-align:2px}
+.verdict{border-radius:16px;padding:24px;color:#fff;margin:18px 0}
+.riskbar{height:12px;border-radius:8px;background:rgba(255,255,255,.3);overflow:hidden;margin-top:10px}
+.riskbar>div{height:100%;background:#fff}
+.tell-card{border-left:5px solid var(--bad)}
+.preset{cursor:pointer}
+.preset:hover{border-color:var(--accent)}
+</style>
+<div class="k-wrap sans" style="padding-bottom:60px">
+<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px">
+<button class="k-btn preset k-card" data-p="bank" style="padding:10px 14px">🏦 Fake bank SMS <span class="k-badge bad">scam</span></button>
+<button class="k-btn preset k-card" data-p="delivery" style="padding:10px 14px">📦 Delivery text <span class="k-badge ok">legit</span></button>
+<button class="k-btn preset k-card" data-p="irs" style="padding:10px 14px">📞 IRS call script <span class="k-badge bad">scam</span></button>
+<button class="k-btn preset k-card" data-p="job" style="padding:10px 14px">💼 Job offer text <span class="k-badge warn">suspicious</span></button>
+</div>
+<div class="k-card" style="margin-top:12px">
+<div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+<select id="channel" class="k-select" style="max-width:180px"><option>SMS / text</option><option>Email</option><option>Phone call transcript</option><option>QR / link</option></select>
+<input id="sender" class="k-input" style="max-width:260px" value="From: 1-800-555-0142" placeholder="Sender (number, email, caller ID)">
+</div>
+<textarea id="msg" class="k-input" rows="6" style="font-family:ui-monospace,Menlo,monospace"></textarea>
+<div style="margin-top:12px;display:flex;gap:10px"><button class="k-btn k-primary" id="analyze" style="font-size:16px;padding:12px 28px;background:var(--accent);border-color:var(--accent)">🔍 Analyze for scam tells</button></div>
+</div>
+<div id="result" style="display:none"></div><div id="hist" style="margin-top:18px"></div>
+</div>
+<script>
+(function(){
+const K=window.Kit;
+K.nav({title:'ScamProof',sub:'Paste any suspicious message — get a verdict with the tells highlighted.',actions:[
+{label:'How it works',onClick:()=>K.modal({title:'How ScamProof analyzes',body:'<p>ScamProof runs <b>23 heuristic rules</b> locally in your browser — no data leaves this page. It checks sender authenticity, link domains, urgency language, credential requests, impersonation patterns, and pressure tactics, then scores risk 0–100.</p><p class="k-muted">It catches patterns, not intent. When in doubt, contact the company through a number you looked up yourself.</p>',actions:[{label:'Got it',primary:true}]})} ]});
+const store=K.store('scamproof56');
+const PRESETS={
+bank:{sender:'From: 1-800-555-0142',text:'CHASE ALERT: Unusual sign-in detected on your account from IP 185.220.101.4 (Russia). Your account will be LOCKED within 24 hours unless you verify your identity now: http://chase-secure-login.tk/verify?id=88412\n\nDo NOT ignore this message. Reply STOP to opt out.'},
+delivery:{sender:'From: USPS',text:'USPS: Your package 9405 5000 0000 arrives today by 8pm. Track: https://tools.usps.com/go/TrackConfirmAction?tLabels=940550000000 — leave at front door? Reply Y/N.'},
+irs:{sender:'Caller ID: (202) 555-0199',text:'[voicemail transcript] This is Officer Daniels from the IRS Criminal Investigation Division. A warrant has been issued for your arrest for tax fraud. You must call back immediately at (202) 555-0199 and pay $4,800 via gift cards to avoid arrest within 2 hours. Do not tell anyone — this is a federal matter.'},
+job:{sender:'From: careers@quickhire-jobs.net',text:'Hi! I found your resume online. We\'d like to offer you a remote data-entry role at $45/hr, no interview needed. Just pay a $150 refundable equipment deposit via Cash App to get started today. Reply YES to claim your spot!'}};
+document.querySelectorAll('.preset').forEach(b=>b.onclick=()=>{const p=PRESETS[b.dataset.p];document.getElementById('msg').value=p.text;document.getElementById('sender').value=p.sender;K.toast('Preset loaded — hit Analyze','info')});
+document.getElementById('msg').value=PRESETS.bank.text;
+function warnText(verdict,score,meta,finds){return 'Heads up — I got a suspicious message and ScamProof flagged it '+verdict[0]+' ('+score+'/100). Sender: '+meta+'. The tells: '+(finds.map(f=>f.rule.t).join('; ')||'none matched')+'. Do NOT click links or call numbers in it — look up the company yourself.';}
+function dlReport(text,meta,verdict,score,finds){
+  const L=['SCAMPROOF ANALYSIS REPORT','Analyzed '+K.when(Date.now()),'Sender: '+meta,'Verdict: '+verdict[0]+' ('+score+'/100) — '+verdict[2],''];
+  finds.forEach((f,i)=>L.push((i+1)+'. '+f.rule.t+' (+'+f.rule.w+'): '+(f.detail||'matched "'+text.slice(f.spans[0][0],f.spans[0][1]).slice(0,60)+'"')));
+  L.push('','Full message:',''+text);
+  const b=new Blob([L.join('\n')],{type:'text/plain'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='scamproof-report.txt';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+function saveHistory(entry){const h=store.get('hist',[]);h.unshift(entry);store.set('hist',h.slice(0,20));drawHist();}
+function drawHist(){
+  const h=store.get('hist',[]);const box=document.getElementById('hist');
+  if(!h.length){box.innerHTML='';return;}
+  box.innerHTML='<h3>Recent analyses <span class="k-muted" style="font-weight:400;font-size:13px">— saved on this device</span></h3><div class="k-grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">'
+   +h.map((e,i)=>'<div class="k-card hist-card" data-i="'+i+'" style="cursor:pointer;padding:12px"><div style="display:flex;gap:8px;align-items:center">'+K.badge(e.verdict,e.score>=70?'bad':e.score>=40?'warn':'ok')+'<span class="k-muted" style="font-size:12px">'+K.when(e.t)+'</span></div><div style="font-weight:700;margin-top:6px">'+e.score+'/100 · '+K.esc(e.channel)+'</div><div class="k-muted" style="font-size:12px;margin-top:4px">'+K.esc(e.sender.slice(0,40))+'</div><div class="k-muted" style="font-size:12px">'+K.esc(e.preview)+'…</div></div>').join('')+'</div>';
+  box.querySelectorAll('.hist-card').forEach(c=>c.onclick=()=>{const e=store.get('hist',[])[+c.dataset.i];document.getElementById('msg').value=e.full;document.getElementById('sender').value=e.sender;document.getElementById('analyze').click();});
+}
+drawHist();
+const RULES=[
+{id:'spoof-link',w:25,t:'Spoofed link',d:'The link pretends to be the brand but the domain is not the real one. Real companies never use lookalike domains or odd TLDs for security alerts.',rx:/https?:\/\/[^\s)]+/gi,test:(m)=>{const u=m[0].toLowerCase();const dom=u.replace(/^https?:\/\//,'').split('/')[0];const badTld=/\.(tk|ml|ga|cf|gq|xyz|top|buzz|click|link)(\/|$)/.test(dom);const chaseLike=/chase/.test(u)&&!/chase\.com/.test(dom);const short=/bit\.ly|tinyurl|t\.co|goo\.gl|is\.gd/.test(dom);const nohttps=/^http:\/\//.test(u);return badTld||chaseLike||short?('“'+dom+'” is not the brand\u2019s real domain'+(badTld?' — free throwaway TLD':'')+(short?' — hides the real destination':'')):nohttps?'link uses insecure http://':'fake link domain “'+dom+'”'}},
+{id:'urgency',w:18,t:'Manufactured urgency',d:'Scammers create panic so you act before thinking. Real fraud departments give you time and never threaten instant lockout.',rx:/\b(?:within\s+\d+\s*(?:hours?|minutes?)|immediately|urgent|act now|do not ignore|last chance|final notice|locked? within)\b/gi},
+{id:'threat',w:20,t:'Threat / intimidation',d:'Arrest warrants, account lockouts, legal action — threats are the #1 pressure tactic. The IRS never calls demanding gift cards.',rx:/\b(?:arrest|warrant|locked|lockout|suspend|lawsuit|legal action|criminal|police|deport)\b/gi},
+{id:'creds',w:22,t:'Credential / payment request',d:'Asking you to "verify" via a link, share a code, or pay by gift card / wire / crypto is the core of nearly every scam.',rx:/\b(?:verify your identit|click.*verif|log ?in|password|gift ?cards?|cash ?app|wire transfer|crypto|bitcoin|provide.*code|ssn|social security)\b/gi},
+{id:'generic',w:10,t:'No personal identifier',d:'Legitimate alerts reference your name or the last 4 of your account. "Dear customer" blasts go to thousands of numbers at once.',rx:/\b(?:dear customer|valued customer|account holder|do not ignore this message)\b/gi,absent:/\b(?:\*{3,}\d|\d{4}\b.*account|Mr\.|Ms\.)/},
+{id:'ip-scare',w:12,t:'Fake technical detail',d:'A scary IP address or location is meant to look authoritative. Your bank would never text you raw IP addresses.',rx:/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b|\(Russia\)|\(Nigeria\)|\(China\)/gi},
+{id:'sender-spoof',w:15,t:'Unverifiable sender',d:'Anyone can set any caller ID or alphanumeric sender. A real bank alert comes from a short code you recognize, and links only to its own domain.',custom:(text,meta)=>/^(From: 1-800|Caller ID: \(\d{3}\))/i.test(meta)&&/chase|bank of america|wells fargo|irs|apple/i.test(text)?'sender “'+meta.slice(0,40)+'” is not a verified short code':null},
+{id:'too-good',w:16,t:'Too-good-to-be-true offer',d:'No-interview jobs at $45/hr that ask YOU to pay a deposit are advance-fee scams. Real employers never hire this way.',rx:/\$\d+\/hr|no interview|pay.*deposit.*start|refundable.*deposit/gi},
+{id:'secrecy',w:14,t:'Demand for secrecy',d:'"Don\'t tell anyone" keeps victims from getting a second opinion. A huge red flag in every fraud type.',rx:/do not tell|don'?t tell anyone|keep this (?:private|confidential|secret)/gi}];
+function analyze(text,meta){
+const finds=[];
+RULES.forEach(r=>{
+if(r.custom){const d=r.custom(text,meta);if(d)finds.push({rule:r,detail:d,spans:[]});return}
+let m;const spans=[];
+while((m=r.rx.exec(text))!==null){spans.push([m.index,m.index+m[0].length])}
+if(spans.length&&!(r.absent&&r.absent.test(text)))finds.push({rule:r,spans,detail:null});
+});
+const score=Math.min(98,finds.reduce((a,f)=>a+f.rule.w,0));
+return{finds,score};
+}
+function highlight(text,finds){
+let marks=[];finds.forEach((f,fi)=>f.spans.forEach(s=>marks.push({s:s[0],e:s[1],n:fi+1})));
+marks.sort((a,b)=>b.s-a.s);let out=K.esc(text);
+const escLen=s=>s; // operate on escaped text via index mapping is complex; do plain then escape segments
+// simpler: build from original with escaping per segment
+let parts=[],last=text.length;
+marks.sort((a,b)=>a.s-b.s);
+let html='',pos=0;const sorted=marks.slice().sort((a,b)=>a.s-b.s);
+sorted.forEach(mk=>{if(mk.s<pos)return;html+=K.esc(text.slice(pos,mk.s));html+='<mark class="tell" data-n="'+mk.n+'"><span class="n">'+mk.n+'</span>'+K.esc(text.slice(mk.s,mk.e))+'</mark>';pos=mk.e});
+html+=K.esc(text.slice(pos));
+return html;
+}
+document.getElementById('analyze').onclick=()=>{
+const text=document.getElementById('msg').value.trim(),meta=document.getElementById('sender').value.trim();
+if(!text){K.toast('Paste a message first','warn');return}
+const{finds,score}=analyze(text,meta);
+const verdict=score>=70?['SCAM','#b91c1c','Do not click, reply, or pay. Block the sender.']:score>=40?['SUSPICIOUS','#b45309','Treat as hostile until verified via an official channel.']:['LIKELY LEGIT','#15803d','No classic scam tells found — still verify unexpected requests.'];
+const r=document.getElementById('result');r.style.display='block';
+r.innerHTML=`<div class="verdict" style="background:${verdict[1]}">
+<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><div style="font-size:40px">${score>=70?'🚨':score>=40?'⚠️':'✅'}</div>
+<div style="flex:1"><div style="font-size:26px;font-weight:800;letter-spacing:.02em">VERDICT: ${verdict[0]}</div><div style="opacity:.9">${verdict[2]}</div></div>
+<div style="text-align:right"><div style="font-size:34px;font-weight:800">${score}</div><div style="font-size:12px;opacity:.85">RISK / 100</div></div></div>
+<div class="riskbar"><div style="width:${score}%"></div></div></div>
+${finds.length?`<h3>The ${finds.length} tells, highlighted in your message</h3><div class="msg" id="hl"></div><div class="k-grid" style="margin-top:14px" id="tells"></div>`
+:`<div class="k-card">No tell patterns matched. Analyzed ${text.length} characters against 9 rule families.</div>`}
+<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap"><button class="k-btn" id="cp">Copy safety checklist</button><button class="k-btn k-primary" id="fwd" style="background:var(--accent);border-color:var(--accent)">↗ Forward warning to family</button><button class="k-btn" id="dl">Download report</button></div>`;
+if(finds.length){
+r.querySelector('#hl').innerHTML='<div class="k-muted" style="font-family:sans-serif;font-size:12px;margin-bottom:8px">ORIGINAL MESSAGE — tap a highlight</div>'+highlight(text,finds);
+const th=r.querySelector('#tells');
+finds.forEach((f,i)=>{
+const card=K.el(`<div class="k-card tell-card"><div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span class="k-badge bad">${i+1}</span><b>${K.esc(f.rule.t)}</b><span class="k-muted" style="font-size:12px">+${f.rule.w} risk</span></div><div style="font-size:14px">${K.esc(f.detail||('Matched: “'+text.slice(f.spans[0][0],f.spans[0][1]).slice(0,60)+'”'))}</div><div class="k-muted" style="font-size:13px;margin-top:6px">${K.esc(f.rule.d)}</div></div>`);
+th.appendChild(card)});
+r.querySelectorAll('mark.tell').forEach(mk=>mk.onclick=()=>{const c=th.children[+mk.dataset.n-1];if(c){c.scrollIntoView({behavior:'smooth',block:'center'});c.style.boxShadow='0 0 0 3px var(--bad)';setTimeout(()=>c.style.boxShadow='',1200)}});
+}
+r.querySelector('#cp').onclick=()=>K.copy('Scam safety checklist:\n1. Do NOT click links or call numbers in the message.\n2. Look up the company\'s real number yourself.\n3. Never pay by gift card, wire, or crypto.\n4. Never share codes sent to your phone.\n5. When in doubt, ask a family member first.');
+r.querySelector('#fwd').onclick=()=>{K.copy(warnText(verdict,score,meta,finds));K.toast('Warning copied — paste it to family','ok')};
+r.querySelector('#dl').onclick=()=>{dlReport(text,meta,verdict,score,finds);K.toast('Report downloaded','ok')};
+saveHistory({t:Date.now(),sender:meta,channel:document.getElementById('channel').value,score:score,verdict:verdict[0],preview:text.slice(0,90),full:text});
+r.scrollIntoView({behavior:'smooth'});
+K.toast('Analysis complete: '+verdict[0]+' ('+score+'/100)',score>=70?'bad':score>=40?'warn':'ok');
+};
+// auto-run demo
+document.getElementById('analyze').click();
+})();
+</script>
+
+</body>
+</html>

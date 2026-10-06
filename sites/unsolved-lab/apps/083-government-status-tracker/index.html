@@ -1,0 +1,160 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Status Board — Every government process, one timeline</title>
+<link rel="stylesheet" href="../../shared/kit.css">
+<script src="../../shared/kit.js"></script>
+<script src="../kit-fallback-w9.js"></script>
+<style>
+:root{--bg:#f4f2ec;--panel:#ffffff;--panel2:#e9e6da;--ink:#1e2a38;--muted:#6b7686;--line:#dcd8c9;--accent:#1f3a5f;--accent2:#b23b2e;--good:#2e7d4f;--warn:#b97e1c;--bad:#b23b2e;}
+body{background:var(--bg);color:var(--ink);font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;margin:0;}
+.k-nav{background:var(--accent);color:#fff;}
+.k-nav-in{display:flex;justify-content:space-between;align-items:center;padding:14px 0;}
+.k-nav-t{margin:0;font-size:24px;font-weight:700;}
+.k-nav-s{color:#c3cfdd;margin:2px 0 0;}
+.k-wrap{max-width:1180px;margin:0 auto;padding:0 20px;}
+.hero{margin:20px 0 14px;display:flex;justify-content:space-between;align-items:end;flex-wrap:wrap;gap:10px;}
+.hero h2{margin:0;font-size:28px;letter-spacing:-.5px;}
+.proc{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px;cursor:pointer;transition:border-color .15s;}
+.proc:hover{border-color:var(--accent);}
+.proc.open{border:2px solid var(--accent);}
+.p-head{display:flex;gap:14px;align-items:center;}
+.p-ico{width:52px;height:52px;border-radius:12px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;flex:none;}
+.p-ico.warn{background:var(--warn);}.p-ico.bad{background:var(--bad);}.p-ico.good{background:var(--good);}
+.p-main{flex:1;}
+.p-main h3{margin:0;font-size:18px;}
+.p-main p{margin:3px 0 0;font-size:13px;color:var(--muted);}
+.p-date{text-align:right;}
+.p-date b{font-size:20px;}
+.p-date span{display:block;font-size:12px;color:var(--muted);}
+.stages{display:flex;gap:0;margin:16px 0 6px;}
+.stage{flex:1;text-align:center;position:relative;padding-top:26px;font-size:12px;color:var(--muted);}
+.stage::before{content:'';position:absolute;top:8px;left:50%;transform:translateX(-50%);width:16px;height:16px;border-radius:50%;background:#d8d4c6;border:2px solid #fff;box-shadow:0 0 0 1px var(--line);}
+.stage.done{color:var(--ink);font-weight:600;}
+.stage.done::before{background:var(--good);}
+.stage.now{color:var(--accent);font-weight:700;}
+.stage.now::before{background:var(--accent);box-shadow:0 0 0 4px rgba(31,58,95,.18);}
+.stage::after{content:'';position:absolute;top:15px;left:-50%;width:100%;height:2px;background:var(--line);z-index:-1;}
+.stage:first-child::after{display:none;}
+.stage.done::after{background:var(--good);}
+.detail{display:none;margin-top:14px;border-top:1px dashed var(--line);padding-top:14px;}
+.proc.open .detail{display:block;}
+.kv{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;}
+.act{background:#f0ecdd;border-radius:8px;padding:10px 12px;font-size:13px;margin-top:10px;}
+.act b{color:var(--accent);}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
+@media(max-width:900px){.grid2{grid-template-columns:1fr;}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;}
+.card h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);}
+.k-btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:9px 14px;font-size:14px;cursor:pointer;color:var(--ink);}
+.k-primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+.k-input,.k-select{border:1px solid var(--line);border-radius:8px;padding:9px 12px;font-size:14px;background:#fff;color:var(--ink);width:100%;box-sizing:border-box;margin-bottom:8px;}
+.k-badge{font-size:11px;padding:2px 8px;border-radius:20px;background:#e8e2d2;color:#5a5344;}
+.k-badge.ok{background:#dcebd4;color:#2f6b3f;}.k-badge.warn{background:#f5e6c4;color:#8a5f14;}.k-badge.bad{background:#f0d2cb;color:#93342a;}.k-badge.info{background:#d7e6f2;color:#2a5f80;}
+.k-toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:#1e2a38;color:#fff;padding:10px 18px;border-radius:8px;opacity:0;transition:all .3s;z-index:999;}
+.k-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.k-tl{border-left:3px solid var(--line);margin:6px 0 6px 8px;padding-left:0;}
+.k-tl-e{position:relative;padding:8px 0 8px 20px;}
+.k-tl-e::before{content:'';position:absolute;left:-8px;top:12px;width:12px;height:12px;border-radius:50%;background:var(--accent);}
+.k-tl-e.warn::before{background:var(--warn);}.k-tl-e.bad::before{background:var(--bad);}.k-tl-e.ok::before{background:var(--good);}
+.k-tl-t{font-size:12px;color:var(--muted);font-weight:600;}
+.k-tl-b b{font-size:14px;}.k-tl-b p{margin:2px 0 0;font-size:13px;}
+footer{color:var(--muted);font-size:12px;text-align:center;padding:22px;}
+</style></head>
+<body>
+<div id="app"></div>
+<script>
+(function(){
+var K=window.Kit,app=document.getElementById('app');
+K.nav({title:'Status Board',sub:'Every government process, one timeline',actions:[]});
+var wrap=K.el('<div class="k-wrap"></div>');app.appendChild(wrap);
+
+/* ---------- deterministic date math ---------- */
+var TODAY=new Date(2026,9,3); // Oct 3 2026 — the sprint "today"
+function d(s){var p=s.split('-');return new Date(+p[0],+p[1]-1,+p[2]);}
+function addDays(dt,n){var x=new Date(dt);x.setDate(x.getDate()+n);return x;}
+function fmt(x){return K.when(x);}
+function daysUntil(x){return Math.round((x-TODAY)/86400000);}
+
+var PROCESSES=[
+ {id:'passport',name:'US Passport Renewal',agency:'Dept. of State',icon:'\u2708\uFE0F',ref:'App #82-44190',applied:'2026-09-02',
+  stages:[['Application received','2026-09-05',3],['Processing','2026-09-08',35],['Printing','',5],['Mailed','',4]],
+  notes:'Routine service. Track at travel.state.gov with application number.',
+  action:'No action needed \u2014 check back if still "Processing" after Oct 20.'},
+ {id:'license',name:'REAL ID Driver\u2019s License',agency:'California DMV',icon:'\uD83E\uDEAA',ref:'DLN X8841203',applied:'2026-10-01',
+  stages:[['In-person appointment','2026-10-01',1],['Document verification','',14],['Card production','',10],['Mailed','',7]],
+  notes:'Federal enforcement begins May 2027. Interim paper license valid 60 days.',
+  action:'Bring interim license + appointment confirmation if pulled over.'},
+ {id:'permit',name:'Home Business Permit',agency:'City of Antioch',icon:'\uD83C\uDFE0',ref:'BP-2026-1184',applied:'2026-09-18',
+  stages:[['Application filed','2026-09-19',2],['Zoning review','2026-09-24',21],['Fire inspection','',14],['Permit issued','',5]],
+  notes:'Inspector calls 24h ahead. Clear garage access for the visit.',
+  action:'Watch for the inspector\u2019s call \u2014 missed visit resets the queue.'}
+];
+function predict(p){
+  var cur=addDays(d(p.applied),0),doneIdx=-1;
+  p.stages.forEach(function(s,i){ if(s[1]){doneIdx=i;cur=addDays(d(s[1]),s[2]);} });
+  var remaining=p.stages.slice(doneIdx+1).reduce(function(a,s){return a+s[2];},0);
+  var eta=addDays(cur,remaining);
+  return{eta:eta,days:daysUntil(eta),doneIdx:doneIdx};
+}
+
+var hero=K.el('<div class="hero"><div><h2>3 processes in flight</h2><p class="k-muted" style="margin:4px 0 0">Predicted dates computed from agency-published processing windows \u2014 as of Oct 3, 2026.</p></div><div><button class="k-btn" id="copySum">\uD83D\uDCCB Copy status summary</button></div></div>');
+hero.querySelector('#copySum').onclick=function(){
+  var lines=['\uD83D\uDCCB Status Board \u2014 as of Oct 3, 2026'];
+  PROCESSES.forEach(function(p){var pr=predict(p);
+    lines.push(p.icon+' '+p.name+' \u2014 predicted '+fmt(pr.eta)+' ('+(pr.days<0?Math.abs(pr.days)+'d overdue':'~'+pr.days+'d')+')');});
+  lines.push('\u2014 via Status Board');
+  K.copy(lines.join('\n'));
+};
+wrap.appendChild(hero);
+
+var listHost=K.el('<div id="plist"></div>');wrap.appendChild(listHost);
+
+var grid=K.el('<div class="grid2"></div>');wrap.appendChild(grid);
+var tlCard=K.el('<div class="card"><h3>Combined timeline \u2014 what happens next</h3><div id="tlHost"></div></div>');grid.appendChild(tlCard);
+var addCard=K.el('<div class="card"><h3>Track a new process</h3></div>');grid.appendChild(addCard);
+var aname=K.el('<input class="k-input" placeholder="Process name (e.g. TSA PreCheck)">');
+var acat=K.el('<select class="k-select"><option value="passport">Passport-like (8 wks)</option><option value="license">License-like (5 wks)</option><option value="permit">Permit-like (6 wks)</option><option value="visa">Visa-like (4 wks)</option></select>');
+var adate=K.el('<input class="k-input" type="date" value="2026-10-03">');
+var addBtn=K.el('<button class="k-btn k-primary" id="core-action" data-core style="width:100%">Add to board</button>');
+addCard.appendChild(aname);addCard.appendChild(acat);addCard.appendChild(adate);addCard.appendChild(addBtn);
+var tmpl={passport:56,license:35,permit:42,visa:28};
+addBtn.onclick=function(){
+  var nm=aname.value.trim()||'New application';
+  PROCESSES.push({id:'c'+Date.now(),name:nm,agency:'Custom tracker',icon:'\uD83D\uDCCB',ref:'Manual entry',applied:adate.value||'2026-10-03',
+    stages:[['Filed',adate.value||'2026-10-03',3],['Under review','',tmpl[acat.value]-8],['Decision','',5]],
+    notes:'Added manually \u2014 prediction uses the category template.',action:'Keep your confirmation number handy.'});
+  aname.value='';render();K.toast('Tracking "'+nm+'"','ok');
+};
+
+function render(){
+  listHost.innerHTML='';
+  PROCESSES.forEach(function(p){
+    var pr=predict(p);
+    var cls=pr.days<0?'bad':pr.days<=14?'warn':'good';
+    var el=K.el('<div class="proc"><div class="p-head"><div class="p-ico '+cls+'">'+p.icon+'</div><div class="p-main"><h3>'+K.esc(p.name)+'</h3><p>'+K.esc(p.agency)+' \u00b7 '+K.esc(p.ref)+' \u00b7 applied '+fmt(d(p.applied))+'</p></div><div class="p-date"><b>'+fmt(pr.eta)+'</b><span>'+(pr.days<0?Math.abs(pr.days)+' days overdue':pr.days===0?'predicted today':'in ~'+pr.days+' days')+' '+K.badge(pr.days<0?'attention':pr.days<=14?'soon':'on track',pr.days<0?'bad':pr.days<=14?'warn':'ok')+'</span></div></div></div>');
+    var st=K.el('<div class="stages"></div>');
+    p.stages.forEach(function(s,i){
+      var c=i<=pr.doneIdx?'done':(i===pr.doneIdx+1?'now':'');
+      st.appendChild(K.el('<div class="stage '+c+'">'+K.esc(s[0])+(s[1]?'<br><b>'+fmt(d(s[1]))+'</b>':'<br>\u2014')+'</div>'));
+    });
+    el.appendChild(st);
+    var det=K.el('<div class="detail"><div class="kv"><span><b>Predicted completion</b></span><span><b>'+fmt(pr.eta)+'</b> ('+(pr.days<0?Math.abs(pr.days)+'d overdue':'~'+pr.days+'d')+')</span></div><div class="kv"><span>How predicted</span><span>Agency window: '+p.stages.map(function(s){return s[2]+'d';}).join(' + ')+'</span></div><div class="kv"><span>Notes</span><span style="max-width:60%;text-align:right">'+K.esc(p.notes)+'</span></div><div class="act"><b>Next action:</b> '+K.esc(p.action)+'</div></div>');
+    el.appendChild(det);
+    el.querySelector('.p-head').onclick=function(){el.classList.toggle('open');};
+    listHost.appendChild(el);
+  });
+  // combined timeline
+  var evs=[];
+  PROCESSES.forEach(function(p){
+    var pr=predict(p);
+    p.stages.forEach(function(s,i){
+      if(s[1])evs.push({dt:d(s[1]),t:fmt(d(s[1])),title:p.name+': '+s[0],body:'Completed',kind:'ok'});
+    });
+    evs.push({dt:pr.eta,t:fmt(pr.eta),title:p.name+': predicted completion',body:p.stages[pr.doneIdx+1]?('Next: '+p.stages[pr.doneIdx+1][0]):'Done',kind:pr.days<0?'bad':pr.days<=14?'warn':''});
+  });
+  evs.sort(function(a,b){return a.dt-b.dt;});
+  K.timeline(document.getElementById('tlHost'),evs.map(function(e){return{t:e.t,title:e.title,body:e.body,kind:e.kind};}));
+}
+render();
+wrap.appendChild(K.el('<footer>Status Board \u00b7 demo predictions use published processing windows \u2014 connect agency APIs for live status</footer>'));
+})();
+</script></body></html>

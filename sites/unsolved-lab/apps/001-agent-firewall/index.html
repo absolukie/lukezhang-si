@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Firewall</title>
+<link rel="stylesheet" href="../../shared/kit.css">
+<style>
+:root{
+  --bg:#0a0e13; --panel:#10161e; --panel2:#161e29; --ink:#e9f0f6; --muted:#8b98a8;
+  --line:#232d3a; --accent:#3ddc84; --accent2:#ffb224; --good:#3ddc84; --warn:#ffb224; --bad:#ff5d5d;
+  --mono:"SFMono-Regular",ui-monospace,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-padding-top:132px} /* keep scrollIntoView targets clear of the fixed nav */
+body{background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,"Segoe UI",Inter,Roboto,sans-serif;margin:0}
+.k-nav{background:#0d131b;border-bottom:1px solid var(--line)}
+.k-nav-in{max-width:1180px;margin:0 auto;padding:14px 20px;display:flex;justify-content:space-between;align-items:center}
+.k-nav-title{font-weight:800;font-size:19px;letter-spacing:.2px}
+.k-nav-title .dot{color:var(--accent)}
+.k-nav-sub{color:var(--muted);font-size:12.5px}
+.k-btn{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13.5px}
+.k-btn:hover{border-color:var(--accent)}
+.k-btn.k-primary{background:var(--accent);border-color:var(--accent);color:#06110b;font-weight:700}
+.k-btn.k-danger{background:#2a1416;border-color:var(--bad);color:#ffb3b3;font-weight:700}
+.k-btn.k-warnb{background:#2a2110;border-color:var(--warn);color:#ffd98a;font-weight:700}
+.k-wrap{max-width:1180px;margin:0 auto;padding:22px 20px 60px}
+.k-hero{background:linear-gradient(180deg,#101a24,#0c1219);border:1px solid var(--line);border-radius:14px;padding:22px 24px;display:flex;gap:20px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:18px}
+.k-hero h1{margin:0 0 6px;font-size:26px}
+.k-hero p{margin:0;color:var(--muted);max-width:640px}
+.k-grid{display:grid;gap:14px}
+.k-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.k-card h3{margin:0 0 4px;font-size:15px}
+.k-muted{color:var(--muted)}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:900px){.cols2{grid-template-columns:1fr}}
+.k-badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700;border:1px solid var(--line)}
+.k-badge.ok{background:#0e2a1c;color:var(--good);border-color:#1d4d33}
+.k-badge.warn{background:#2c2210;color:var(--warn);border-color:#5a4517}
+.k-badge.bad{background:#2c1415;color:var(--bad);border-color:#5c2226}
+.k-badge.info{background:#12263a;color:#7cc4ff;border-color:#274a6b}
+.k-kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.k-kpi-v{font-size:26px;font-weight:800}
+.k-kpi-l{color:var(--muted);font-size:12.5px}
+.k-kpi-d{font-size:12px;color:var(--muted)}
+.feed{max-height:340px;overflow:auto;display:flex;flex-direction:column;gap:8px}
+.req{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13.5px}
+.req .rh{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.req .mono{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.intercept{border:2px solid var(--warn);border-radius:12px;padding:18px;background:#151009}
+.intercept h2{margin:0 0 4px;font-size:20px}
+.rulefire{background:#0d131b;border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:8px;padding:10px 12px;margin:12px 0;font-family:var(--mono);font-size:12.5px;white-space:pre-wrap}
+.acts{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+pre.json{background:#0a0e13;border:1px solid var(--line);border-radius:8px;padding:10px;font-family:var(--mono);font-size:12px;overflow:auto;max-height:220px}
+.k-table{width:100%;border-collapse:collapse;font-size:13px}
+.k-table th,.k-table td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+.k-table th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.4px}
+.k-toasts{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:99}
+.k-toast{background:#182230;border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:13.5px;transition:opacity .3s}
+.k-toast.ok{border-color:var(--good)} .k-toast.bad{border-color:var(--bad)} .k-toast.warn{border-color:var(--warn)}
+.k-toast.out{opacity:0}
+.k-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:100}
+.k-modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:560px;width:92%;max-height:84vh;overflow:auto}
+.k-modal-h{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
+.k-modal-t{font-weight:700;font-size:16px}
+.k-modal-b{padding:16px 18px}
+.k-modal-f{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
+.k-empty{padding:28px;text-align:center;color:var(--muted)}
+.pulse{animation:pl 1.6s infinite}
+@keyframes pl{0%,100%{box-shadow:0 0 0 0 rgba(255,178,36,.5)}50%{box-shadow:0 0 0 8px rgba(255,178,36,0)}}
+
+</style>
+</head>
+<body>
+<script src="../../shared/kit.js"></script>
+<script>
+/* Kit fallback: implements the shared kit.js contract when ../../shared/kit.js is unavailable. */
+(function(){
+if(window.Kit && window.Kit.rng && window.Kit.toast && window.Kit.modal) return;
+const K={};
+K.rng=function(seed){seed=String(seed==null?'':seed);let h=2166136261;for(let i=0;i<seed.length;i++){h^=seed.charCodeAt(i);h=Math.imul(h,16777619);}return function(){h=Math.imul(h^(h>>>15),2246822507);h=Math.imul(h^(h>>>13),3266489909);h^=h>>>16;return(h>>>0)/4294967296;};}
+K.pick=function(f,a){return a[Math.floor(f()*a.length)];};
+K.int=function(f,a,b){return a+Math.floor(f()*(b-a+1));};
+K.shuffle=function(f,a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(f()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;}return a;};
+K.uid=function(p){return (p||'id')+'_'+Math.random().toString(36).slice(2,9);};
+K.esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});};
+K.el=function(html){const t=document.createElement('template');t.innerHTML=String(html).trim();return t.content.firstElementChild;};
+K.store=function(ns){try{return{get:function(k,d){const v=localStorage.getItem(ns+':'+k);return v==null?d:JSON.parse(v);},set:function(k,v){localStorage.setItem(ns+':'+k,JSON.stringify(v));},del:function(k){localStorage.removeItem(ns+':'+k);}};}catch(e){const m={};return{get:function(k,d){return(k in m)?m[k]:d;},set:function(k,v){m[k]=v;},del:function(k){delete m[k];}};}};
+K.nav=function(o){o=o||{};const h=K.el('<header class="k-nav"><div class="k-nav-in"><div><div class="k-nav-title">'+K.esc(o.title||'')+'</div>'+(o.sub?'<div class="k-nav-sub">'+K.esc(o.sub)+'</div>':'')+'</div><div class="k-nav-actions"></div></div></header>');const box=h.querySelector('.k-nav-actions');(o.actions||[]).forEach(function(a){const b=document.createElement('button');b.className='k-btn '+(a.kind||'');b.textContent=a.label;if(a.onclick)b.addEventListener('click',a.onclick);box.appendChild(b);});document.body.insertBefore(h,document.body.firstChild);return h;};
+function toastHost(){let h=document.querySelector('.k-toasts');if(!h){h=document.createElement('div');h.className='k-toasts';document.body.appendChild(h);}return h;}
+K.toast=function(msg,kind){const t=K.el('<div class="k-toast '+(kind||'')+'">'+K.esc(msg)+'</div>');toastHost().appendChild(t);setTimeout(function(){t.classList.add('out');setTimeout(function(){t.remove();},300);},3200);return t;};
+K.modal=function(o){o=o||{};const ov=K.el('<div class="k-overlay"><div class="k-modal"><div class="k-modal-h"><div class="k-modal-t">'+K.esc(o.title||'')+'</div><button class="k-btn k-x" aria-label="close">✕</button></div><div class="k-modal-b"></div><div class="k-modal-f"></div></div></div>');const b=ov.querySelector('.k-modal-b');if(typeof o.body==='string')b.innerHTML=o.body;else if(o.body)b.appendChild(o.body);const f=ov.querySelector('.k-modal-f');function close(){ov.remove();document.removeEventListener('keydown',onKey);}function onKey(e){if(e.key==='Escape')close();}document.addEventListener('keydown',onKey);ov.querySelector('.k-x').addEventListener('click',close);ov.addEventListener('mousedown',function(e){if(e.target===ov)close();});(o.actions||[]).forEach(function(a){const btn=document.createElement('button');btn.className='k-btn '+(a.kind||'');btn.textContent=a.label;btn.addEventListener('click',function(){if(a.onclick)a.onclick(close);else close();});f.appendChild(btn);});if(!(o.actions||[]).length)f.style.display='none';document.body.appendChild(ov);return close;};
+K.tabs=function(host,tabs){host=typeof host==='string'?document.querySelector(host):host;host.innerHTML='';const bar=K.el('<div class="k-tabs"></div>');const pane=K.el('<div class="k-tabpane"></div>');host.appendChild(bar);host.appendChild(pane);let active=null;function sel(t){active=t.id;Array.prototype.forEach.call(bar.children,function(x){x.classList.toggle('on',x.dataset.id===t.id);});pane.innerHTML='';t.render(pane);}tabs.forEach(function(t){const b=document.createElement('button');b.className='k-tab';b.dataset.id=t.id;b.textContent=t.label;b.addEventListener('click',function(){sel(t);});bar.appendChild(b);});if(tabs.length)sel(tabs[0]);return{select:function(id){const t=tabs.find(function(x){return x.id===id;});if(t)sel(t);},active:function(){return active;}};};
+K.table=function(host,cols,rows,opt){opt=opt||{};host=typeof host==='string'?document.querySelector(host):host;host.innerHTML='';let q='',page=0;const ps=opt.pageSize||8;const wrap=K.el('<div class="k-tablew"></div>');if(opt.search){const s=K.el('<input class="k-input k-tsearch" placeholder="Search…">');s.addEventListener('input',function(){q=s.value.toLowerCase();page=0;draw();});wrap.appendChild(s);}const tw=K.el('<div></div>');const pg=K.el('<div class="k-pager"></div>');wrap.appendChild(tw);wrap.appendChild(pg);host.appendChild(wrap);function filtered(){if(!q)return rows;return rows.filter(function(r){return cols.some(function(c){const v=r[c.key];return v!=null&&String(v).toLowerCase().indexOf(q)>-1;});});}function fmt(c,v,r){if(c.fmt)return c.fmt(v,r);if(v==null)return'';return String(v);}function draw(){const fr=filtered();const pages=Math.max(1,Math.ceil(fr.length/ps));page=Math.min(page,pages-1);const slice=fr.slice(page*ps,page*ps+ps);let h='<table class="k-table"><thead><tr>';cols.forEach(function(c){h+='<th class="'+(c.num?'num':'')+'">'+K.esc(c.label)+'</th>';});h+='</tr></thead><tbody>';if(!slice.length)h+='<tr><td colspan="'+cols.length+'" class="k-muted">No rows.</td></tr>';slice.forEach(function(r){h+='<tr>';cols.forEach(function(c){h+='<td class="'+(c.num?'num':'')+'">'+fmt(c,r[c.key],r)+'</td>';});h+='</tr>';});h+='</tbody></table>';tw.innerHTML=h;pg.innerHTML='';if(pages>1){for(let i=0;i<pages;i++){const b=document.createElement('button');b.className='k-btn k-pg'+(i===page?' on':'');b.textContent=String(i+1);(function(i){b.addEventListener('click',function(){page=i;draw();});})(i);pg.appendChild(b);}}}draw();return{redraw:draw};};
+K.bars=function(host,items){host=typeof host==='string'?document.querySelector(host):host;host.innerHTML='';const mx=Math.max.apply(null,items.map(function(i){return i.value;}).concat([1]));items.forEach(function(i){const r=K.el('<div class="k-bar-r"><div class="k-bar-l">'+K.esc(i.label)+'</div><div class="k-bar-t"><div class="k-bar-f" style="width:'+(100*i.value/mx).toFixed(1)+'%;'+(i.color?'background:'+i.color:'')+'"></div></div><div class="k-bar-v">'+K.esc(String(i.display!=null?i.display:i.value))+'</div></div>');host.appendChild(r);});};
+K.line=function(host,series){host=typeof host==='string'?document.querySelector(host):host;const W=560,H=200,P=28;host.innerHTML='';const all=[];series.forEach(function(s){s.points.forEach(function(p){all.push(p);});});const mn=Math.min.apply(null,all.concat([0])),mx=Math.max.apply(null,all.concat([1]));const X=function(i,n){return P+i*(W-2*P)/Math.max(1,n-1);},Y=function(v){return H-P-(v-mn)*(H-2*P)/Math.max(1e-9,mx-mn);};let s='<svg viewBox="0 0 '+W+' '+H+'" class="k-svg">';const steps=4;for(let g=0;g<=steps;g++){const y=P+g*(H-2*P)/steps;s+='<line x1="'+P+'" y1="'+y+'" x2="'+(W-P)+'" y2="'+y+'" class="k-grid-ln"/>';}series.forEach(function(sr){const n=sr.points.length;let d='';sr.points.forEach(function(p,i){d+=(i?'L':'M')+X(i,n).toFixed(1)+','+Y(p).toFixed(1)+' ';});s+='<path d="'+d+'" fill="none" stroke="'+(sr.color||'#888')+'" stroke-width="2"/>';sr.points.forEach(function(p,i){s+='<circle cx="'+X(i,n).toFixed(1)+'" cy="'+Y(p).toFixed(1)+'" r="3" fill="'+(sr.color||'#888')+'"><title>'+K.esc(sr.name+': '+p)+'</title></circle>';});});s+='</svg><div class="k-legend">'+series.map(function(sr){return '<span class="k-leg"><i style="background:'+(sr.color||'#888')+'"></i>'+K.esc(sr.name)+'</span>';}).join('')+'</div>';host.innerHTML=s;};
+K.donut=function(host,items){host=typeof host==='string'?document.querySelector(host):host;const R=70,C=2*Math.PI*R;const tot=items.reduce(function(a,i){return a+i.value;},0)||1;let off=0;let arcs='';items.forEach(function(i,ix){const frac=i.value/tot;arcs+='<circle r="'+R+'" cx="90" cy="90" fill="none" stroke="'+(i.color||['#5b8def','#34c77b','#f0a44b','#e05d5d','#9a6ff0'][ix%5])+'" stroke-width="26" stroke-dasharray="'+(frac*C).toFixed(2)+' '+C.toFixed(2)+'" stroke-dashoffset="'+(-off*C).toFixed(2)+'" transform="rotate(-90 90 90)"><title>'+K.esc(i.label+': '+i.value)+'</title></circle>';off+=frac;});host.innerHTML='<div class="k-donutw"><svg viewBox="0 0 180 180" class="k-svg">'+arcs+'<text x="90" y="96" text-anchor="middle" class="k-donut-t">'+K.esc(String(tot))+'</text></svg><div class="k-legend">'+items.map(function(i,ix){return '<span class="k-leg"><i style="background:'+(i.color||['#5b8def','#34c77b','#f0a44b','#e05d5d','#9a6ff0'][ix%5])+'"></i>'+K.esc(i.label)+'</span>';}).join('')+'</div></div>';};
+K.timeline=function(host,events){host=typeof host==='string'?document.querySelector(host):host;host.innerHTML='';const w=K.el('<div class="k-tl"></div>');events.forEach(function(e){const it=K.el('<div class="k-tl-it '+(e.kind||'')+'"><div class="k-tl-dot"></div><div class="k-tl-c"><div class="k-tl-h"><span class="k-tl-t">'+K.esc(e.t||'')+'</span><span class="k-tl-title">'+K.esc(e.title||'')+'</span></div>'+(e.body?'<div class="k-tl-b">'+e.body+'</div>':'')+'</div></div>');if(e.onclick)it.style.cursor='pointer',it.addEventListener('click',function(){e.onclick(e);});w.appendChild(it);});host.appendChild(w);};
+K.graph=function(host,g){host=typeof host==='string'?document.querySelector(host):host;const W=600,H=340;host.innerHTML='';const n=g.nodes.length;const pos={};g.nodes.forEach(function(nd,i){const a=2*Math.PI*i/Math.max(1,n)-Math.PI/2;pos[nd.id]={x:W/2+Math.cos(a)*(W/2-90),y:H/2+Math.sin(a)*(H/2-70)};});let s='<svg viewBox="0 0 '+W+' '+H+'" class="k-svg">';(g.edges||[]).forEach(function(e){const a=pos[e.a],b=pos[e.b];if(!a||!b)return;const mx=(a.x+b.x)/2,my=(a.y+b.y)/2-24;s+='<path d="M'+a.x+','+a.y+' Q'+mx+','+my+' '+b.x+','+b.y+'" class="k-edge"/>';if(e.label)s+='<text x="'+mx+'" y="'+(my-4)+'" text-anchor="middle" class="k-edge-l">'+K.esc(e.label)+'</text>';});g.nodes.forEach(function(nd){const p=pos[nd.id];s+='<g><circle cx="'+p.x+'" cy="'+p.y+'" r="30" fill="'+(nd.color||'#2c3a4a')+'" stroke="#888" stroke-width="1"/><text x="'+p.x+'" y="'+(p.y+4)+'" text-anchor="middle" class="k-node-l">'+K.esc(nd.label)+'</text>'+(nd.sub?'<text x="'+p.x+'" y="'+(p.y+48)+'" text-anchor="middle" class="k-node-s">'+K.esc(nd.sub)+'</text>':'')+'</g>';});s+='</svg>';host.innerHTML=s;};
+K.badge=function(txt,kind){return '<span class="k-badge '+(kind||'')+'">'+K.esc(txt)+'</span>';};
+K.kpi=function(host,o){host=typeof host==='string'?document.querySelector(host):host;host.innerHTML='';const e=K.el('<div class="k-kpi"><div class="k-kpi-v">'+K.esc(String(o.value))+'</div><div class="k-kpi-l">'+K.esc(o.label)+'</div>'+(o.delta?'<div class="k-kpi-d">'+K.esc(o.delta)+'</div>':'')+'</div>');host.appendChild(e);return e;};
+K.empty=function(host,title,sub,al,af){host=typeof host==='string'?document.querySelector(host):host;host.innerHTML='';const e=K.el('<div class="k-empty"><div class="k-empty-t">'+K.esc(title)+'</div>'+(sub?'<div class="k-muted">'+K.esc(sub)+'</div>':'')+'</div>');if(al){const b=document.createElement('button');b.className='k-btn k-primary';b.textContent=al;b.addEventListener('click',function(){if(af)af();});e.appendChild(b);}host.appendChild(e);return e;};
+K.money=function(n){return '$'+Number(n).toLocaleString('en-US',{maximumFractionDigits:0});};
+K.num=function(n){return Number(n).toLocaleString('en-US');};
+K.pct=function(x){return (Number(x)*100).toFixed(1)+'%';};
+K.when=function(d){const t=d instanceof Date?d:new Date(d);return t.toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});};
+K.initials=function(name){return String(name||'').split(/\s+/).map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();};
+K.copy=function(txt){function done(){K.toast('Copied to clipboard','ok');}if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(String(txt)).then(done,function(){K.toast('Copy failed','bad');});}else{const ta=document.createElement('textarea');ta.value=String(txt);document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done();}catch(e){K.toast('Copy failed','bad');}ta.remove();}};
+window.Kit=K;
+})();
+
+</script>
+<script>
+/* Gatekeep — Agent Firewall. A permissions layer that intercepts agent actions. */
+(function(){
+"use strict";
+const K = window.Kit;
+const R = K.rng("gatekeep-v1");
+function navBtn(label,fn){const box=document.querySelector('.k-nav-actions');if(!box||typeof fn!=='function')return;const b=document.createElement('button');b.className='k-btn';b.type='button';b.textContent=label;b.addEventListener('click',fn);box.appendChild(b);}
+
+
+// ---------- Policy engine ----------
+const RULES = [
+  {id:"R-101", name:"wire-transfer-cap", effect:"quarantine", severity:"high",
+   desc:"Wire transfers over $5,000 require explicit human approval.",
+   check:a=>a.action==="wire.transfer"&&a.amount>5000},
+  {id:"R-102", name:"new-payee-hold", effect:"quarantine", severity:"high",
+   desc:"Payments to a payee first seen < 30 days ago are held for review.",
+   check:a=>a.action==="wire.transfer"&&a.payee_age_days<30},
+  {id:"R-201", name:"no-prod-delete", effect:"deny", severity:"critical",
+   desc:"Agents may never delete production databases or buckets.",
+   check:a=>a.action==="db.delete"&&a.target_env==="prod"},
+  {id:"R-202", name:"no-secret-read", effect:"deny", severity:"critical",
+   desc:"Agents may never read plaintext secrets or private keys.",
+   check:a=>a.action==="secrets.read"},
+  {id:"R-301", name:"external-send-review", effect:"quarantine", severity:"medium",
+   desc:"Outbound email to external domains is quarantined unless the thread is customer-initiated.",
+   check:a=>a.action==="email.send"&&a.external===true&&!a.customer_initiated},
+  {id:"R-302", name:"bulk-delete-cap", effect:"quarantine", severity:"medium",
+   desc:"Deletes affecting more than 100 resources need approval.",
+   check:a=>a.action==="resources.delete"&&a.count>100},
+  {id:"R-401", name:"code-exec-allowlist", effect:"deny", severity:"high",
+   desc:"Shell execution is denied outside the /sandbox allowlist.",
+   check:a=>a.action==="exec.shell"&&!/^\/sandbox\//.test(a.path||"")},
+];
+function evaluate(req){
+  const fired = RULES.filter(r=>{try{return r.check(req);}catch(e){return false;}});
+  if(!fired.length) return {verdict:"allow", fired:[]};
+  const rank={deny:3,quarantine:2,allow:1};
+  fired.sort((a,b)=>rank[b.effect]-rank[a.effect]);
+  return {verdict:fired[0].effect, fired};
+}
+
+// ---------- Demo data ----------
+const AGENTS=["deploy-bot","research-agent","support-copilot","data-pipeline","sre-agent"];
+const feed=[];       // decided requests
+const quarantine=[]; // quarantined requests
+let pending=null;    // currently intercepted request
+
+// ---------- Anomaly detection: per-agent behavioral baseline ----------
+// finance-agent wires ~$900 regularly; a wire 3x above its own average, or an
+// action type it has never performed, is flagged as deviating from baseline.
+const baseline={"finance-agent":{acts:{"wire.transfer":14},wireSum:12600,wireCount:14}};
+function noteBaseline(a){
+  const b=baseline[a.agent]=baseline[a.agent]||{acts:{},wireSum:0,wireCount:0};
+  b.acts[a.action]=(b.acts[a.action]||0)+1;
+  if(a.action==="wire.transfer"&&typeof a.amount==="number"){b.wireSum+=a.amount;b.wireCount++;}
+}
+function anomalyCheck(a){
+  const b=baseline[a.agent];
+  if(!b||!(b.acts[a.action]||0)) return "First-seen action type for "+a.agent+" — no baseline exists";
+  if(a.action==="wire.transfer"&&b.wireCount>=3&&typeof a.amount==="number"){
+    const avg=b.wireSum/b.wireCount;
+    if(a.amount>3*avg) return "Amount "+K.money(a.amount)+" is "+(a.amount/avg).toFixed(1)+"x "+a.agent+"'s usual "+K.money(Math.round(avg))+" wire";
+  }
+  return null;
+}
+
+function mkWire(){return {
+  id:K.uid("req"), agent:"finance-agent", action:"wire.transfer", amount:8000,
+  currency:"USD", payee:"Acme Fabrication LLC", payee_age_days:4,
+  account:"****4412", memo:"Invoice INV-2026-8841", t:"just now",
+  note:"Agent parsed an emailed invoice and initiated payment automatically."
+};}
+function mkRandom(i){
+  const kinds=[
+    ()=>({action:"email.send", external:true, customer_initiated:R()>0.5, to:K.pick(R,["vendor@parts.co","user@gmail.com","team@client.io"]), subject:K.pick(R,["Re: invoice","Q3 report draft","Follow-up"])}),
+    ()=>({action:"resources.delete", count:K.int(R,5,400), target_env:"staging"}),
+    ()=>({action:"db.delete", target_env:K.pick(R,["staging","prod"]), db:K.pick(R,["analytics","users","events"])}),
+    ()=>({action:"exec.shell", path:K.pick(R,["/sandbox/build.sh","/usr/bin/rm","/tmp/cleanup.sh"])}),
+    ()=>({action:"docs.read", file:K.pick(R,["/docs/api.md","/runbooks/deploy.md"])}),
+    ()=>({action:"secrets.read", key:K.pick(R,["STRIPE_LIVE_KEY","AWS_SECRET"])}),
+  ];
+  const a=kinds[Math.floor(R()*kinds.length)]();
+  a.id=K.uid("req"); a.agent=K.pick(R,AGENTS); a.t="t-"+i;
+  return a;
+}
+function verdictBadge(v){return v==="allow"?K.badge("ALLOWED","ok"):v==="deny"?K.badge("DENIED","bad"):v==="quarantine"?K.badge("QUARANTINED","warn"):K.badge("PENDING","info");}
+function reqSummary(a){
+  switch(a.action){
+    case "wire.transfer": return "Wire "+K.money(a.amount)+" → "+a.payee;
+    case "email.send": return "Send email → "+(a.to||"external");
+    case "resources.delete": return "Delete "+K.num(a.count)+" resources ("+a.target_env+")";
+    case "db.delete": return "Delete database "+a.db+" ("+a.target_env+")";
+    case "exec.shell": return "Exec: "+a.path;
+    case "secrets.read": return "Read secret "+a.key;
+    default: return a.action+" "+(a.file||"");
+  }
+}
+
+// ---------- UI ----------
+K.nav({title:"Gatekeep — Agent Firewall",
+  sub:"Permissions layer for AI agents — read · write · buy · delete · send · execute"});
+navBtn("Simulate request",simulate);navBtn("Policy rules",showRules);
+
+const wrap=K.el('<div class="k-wrap"></div>');document.body.appendChild(wrap);
+wrap.innerHTML=
+ '<div class="k-hero"><div><h1>Every agent action passes through the gate.</h1>'+
+ '<p>Gatekeep evaluates each tool call against your policy pack in microseconds. Risky actions are denied outright; ambiguous ones are quarantined for a human. Nothing reaches production unexamined.</p></div>'+
+ '<div class="k-grid" style="grid-template-columns:repeat(3,1fr);min-width:280px" id="kpis"></div></div>'+
+ '<div id="intercept"></div>'+
+ '<div class="cols2" style="margin-top:14px"><div class="k-card"><h3>Decision feed</h3><div class="k-muted" style="font-size:12.5px;margin-bottom:8px">Newest first. Every decision cites the rule that fired.</div><div class="feed" id="feed"></div></div>'+
+ '<div class="k-card"><h3>Quarantine queue <span id="qcount"></span></h3><div class="k-muted" style="font-size:12.5px;margin-bottom:8px">Held actions awaiting a human decision.</div><div class="feed" id="qlist"></div></div></div>';
+
+const counts={allow:0,deny:0,quarantine:0,total:0};
+function renderKPIs(){
+  const h=document.getElementById("kpis");h.innerHTML="";
+  [["Actions evaluated",counts.total],["Denied",counts.deny],["Quarantined",counts.quarantine]].forEach(function(p){
+    const d=document.createElement("div");h.appendChild(d);K.kpi(d,{label:p[0],value:K.num(p[1])});
+  });
+}
+function renderFeed(){
+  const f=document.getElementById("feed");f.innerHTML="";
+  if(!feed.length){K.empty(f,"No decisions yet","Simulate a request to see the gate in action.");return;}
+  feed.slice(0,20).forEach(a=>{
+    const d=K.el('<div class="req"><div class="rh"><span><b>'+K.esc(a.agent)+'</b> · '+K.esc(reqSummary(a))+'</span>'+verdictBadge(a.verdict)+'</div>'+(a.anomaly?'<div class="mono" style="color:var(--warn)">⚠ anomaly: '+K.esc(a.anomaly)+'</div>':'')+'<div class="mono">'+K.esc(a.fired.map(r=>r.id+" "+r.name).join(" · ")||"no rules fired — default allow")+'</div></div>');
+    f.appendChild(d);
+  });
+}
+function renderQ(){
+  const q=document.getElementById("qlist");q.innerHTML="";
+  document.getElementById("qcount").textContent="("+quarantine.length+")";
+  if(!quarantine.length){K.empty(q,"Queue empty","Quarantined actions will wait here for your call.");return;}
+  quarantine.forEach(a=>{
+    const d=K.el('<div class="req"><div class="rh"><span><b>'+K.esc(a.agent)+'</b> · '+K.esc(reqSummary(a))+'</span></div><div class="acts"><button class="k-btn k-primary" data-x="allow">Allow</button><button class="k-btn k-danger" data-x="deny">Deny</button></div></div>');
+    d.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>resolveQuarantine(a,b.dataset.x)));
+    q.appendChild(d);
+  });
+}
+function resolveQuarantine(a,how){
+  const i=quarantine.indexOf(a);if(i>-1)quarantine.splice(i,1);
+  a.verdict=how;a.resolved="human";feed.unshift(a);counts[how]++;counts.total++;
+  renderAll();K.toast((how==="allow"?"Released":"Denied")+": "+reqSummary(a),how==="allow"?"ok":"bad");
+}
+
+function showIntercept(a,ev){
+  pending=a;
+  const host=document.getElementById("intercept");host.innerHTML="";
+  const card=K.el('<div class="intercept pulse"><h2>⛔ Intercepted: '+K.esc(reqSummary(a))+'</h2>'+
+    '<div class="k-muted">Agent <b style="color:var(--ink)">'+K.esc(a.agent)+'</b> attempted this action. The policy engine held it before any side effect occurred.</div>'+
+    (a.anomaly?'<div class="rulefire" style="border-left-color:var(--bad)">⚠ ANOMALY — deviates from '+K.esc(a.agent)+"'s baseline\n  "+K.esc(a.anomaly)+'</div>':'')+
+    '<div class="rulefire">'+ev.fired.map(r=>"▸ "+r.id+"  "+r.name+"  ["+r.effect.toUpperCase()+"/"+r.severity+"]\n  "+r.desc).join("\n\n")+'</div>'+
+    '<pre class="json">'+K.esc(JSON.stringify(a,null,2))+'</pre>'+
+    '<div class="acts"><button class="k-btn k-primary" id="bAllow">Allow once</button><button class="k-btn k-danger" id="bDeny">Deny</button><button class="k-btn k-warnb" id="bQ">Keep quarantined</button></div></div>');
+  host.appendChild(card);
+  card.querySelector("#bAllow").addEventListener("click",()=>decide("allow"));
+  card.querySelector("#bDeny").addEventListener("click",()=>decide("deny"));
+  card.querySelector("#bQ").addEventListener("click",()=>decide("quarantine"));
+  card.scrollIntoView({behavior:"smooth",block:"center"});
+}
+function decide(how){
+  if(!pending)return;
+  const a=pending;pending=null;
+  document.getElementById("intercept").innerHTML="";
+  if(how==="quarantine"){a.verdict="quarantine";quarantine.unshift(a);counts.quarantine++;counts.total++;renderAll();K.toast("Held in quarantine for review","warn");return;}
+  a.verdict=how;feed.unshift(a);counts[how]++;counts.total++;
+  renderAll();K.toast((how==="allow"?"Allowed":"Denied")+": "+reqSummary(a),how==="allow"?"ok":"bad");
+}
+function showRules(){
+  const rows=RULES.map(r=>({id:r.id,name:r.name,effect:r.effect,severity:r.severity,desc:r.desc}));
+  const box=document.createElement('div');
+  K.table(box,
+    [{key:"id",label:"ID"},{key:"name",label:"Rule"},{key:"effect",label:"Effect",fmt:v=>v==="deny"?K.badge("DENY","bad"):v==="quarantine"?K.badge("QUARANTINE","warn"):K.badge("ALLOW","ok")},{key:"severity",label:"Severity"},{key:"desc",label:"Description"}],
+    rows,{search:true,pageSize:10});
+  K.modal({title:"Policy pack — 7 rules",body:'<div id="mrules"></div>',actions:[{label:"Close",primary:true}]});
+  const mslot=document.querySelector('.k-modal-body #mrules');if(mslot)mslot.replaceWith(box);
+}
+
+// seed the feed with history
+for(let i=0;i<9;i++){const a=mkRandom(i);const ev=evaluate(a);a.verdict=ev.verdict;a.fired=ev.fired;a.anomaly=anomalyCheck(a);noteBaseline(a);counts[ev.verdict]++;counts.total++;if(ev.verdict==="quarantine"&&quarantine.length<2)quarantine.push(a);else feed.push(a);}
+feed.reverse();
+function renderAll(){renderKPIs();renderFeed();renderQ();}
+renderAll();
+
+// ---- DEMO: the $8,000 wire is intercepted on load ----
+const wire=mkWire();const ev=evaluate(wire);wire.fired=ev.fired;wire.suggested=ev.verdict;wire.anomaly=anomalyCheck(wire);noteBaseline(wire);
+showIntercept(wire,ev);
+K.toast("Policy engine intercepted a $8,000 wire transfer","warn");
+
+function simulate(){
+  const a=mkRandom(Date.now()%100000);const e=evaluate(a);a.fired=e.fired;a.suggested=e.verdict;a.anomaly=anomalyCheck(a);noteBaseline(a);
+  if(e.verdict==="allow"){a.verdict="allow";feed.unshift(a);counts.allow++;counts.total++;renderAll();K.toast("Allowed: "+reqSummary(a),"ok");}
+  else showIntercept(a,e);
+}
+})();
+
+</script>
+</body>
+</html>

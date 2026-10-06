@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Canary</title>
+<link rel="stylesheet" href="../../shared/kit.css">
+<style>
+:root{
+  --bg:#0c0c0a; --panel:#141412; --panel2:#1d1d19; --ink:#f5f2e8; --muted:#a09a86;
+  --line:#2b2b24; --accent:#ffe14d; --accent2:#ff5d5d; --good:#3ddc84; --warn:#ffe14d; --bad:#ff5d5d;
+  --mono:"SFMono-Regular",ui-monospace,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,"Segoe UI",Inter,Roboto,sans-serif;margin:0}
+.k-nav{background:#101010;border-bottom:1px solid var(--line)}
+.k-nav-in{max-width:1180px;margin:0 auto;padding:14px 20px;display:flex;justify-content:space-between;align-items:center}
+.k-nav-title{font-weight:800;font-size:19px}.k-nav-title .dot{color:var(--accent)}
+.k-nav-sub{color:var(--muted);font-size:12.5px}
+.k-btn{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13.5px}
+.k-btn:hover{border-color:var(--accent)}
+.k-btn.k-primary{background:var(--accent);border-color:var(--accent);color:#1a1604;font-weight:800}
+.k-btn.k-danger{background:#2a1416;border-color:var(--bad);color:#ffb3b3}
+.k-wrap{max-width:1180px;margin:0 auto;padding:22px 20px 60px}
+.k-hero{border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin-bottom:18px;background:#121210;display:flex;gap:18px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.k-hero h1{margin:0 0 6px;font-size:26px}
+.k-hero p{margin:0;color:var(--muted);max-width:620px}
+.k-grid{display:grid;gap:14px}
+.k-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.k-card h3{margin:0 0 8px;font-size:15px}
+.k-muted{color:var(--muted)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:900px){.cols{grid-template-columns:1fr}}
+.k-badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700;border:1px solid var(--line)}
+.k-badge.ok{background:#0e2a1c;color:var(--good);border-color:#1d4d33}
+.k-badge.bad{background:#2c1415;color:var(--bad);border-color:#5c2226}
+.k-badge.warn{background:#2c2410;color:var(--warn);border-color:#5a4d17}
+.alert{border:2px solid var(--bad);border-radius:12px;padding:16px 18px;background:#1c0f10;margin-bottom:12px;animation:pl 1.6s infinite}
+@keyframes pl{0%,100%{box-shadow:0 0 0 0 rgba(255,93,93,.45)}50%{box-shadow:0 0 0 10px rgba(255,93,93,0)}}
+.token{font-family:var(--mono);font-size:12.5px;background:#0a0a08;border:1px dashed var(--warn);border-radius:8px;padding:10px 12px;word-break:break-all;margin:8px 0}
+.trace{font-family:var(--mono);font-size:12px;background:#0a0a08;border:1px solid var(--line);border-radius:8px;padding:10px 12px;white-space:pre-wrap;margin:8px 0}
+.feed{max-height:320px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.ev{font-family:var(--mono);font-size:12px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;display:flex;gap:10px;align-items:center}
+.ev .t{color:var(--muted);flex:none}
+.ev.hot{border-color:var(--bad)}
+.cage{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.canary{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px}
+.canary.tripped{border-color:var(--bad)}
+.k-toasts{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:99}
+.k-toast{background:#1d1d19;border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:13.5px}
+.k-toast.out{opacity:0;transition:opacity .3s}
+.k-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:100}
+.k-modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:560px;width:92%}
+.k-modal-h{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
+.k-modal-t{font-weight:700}.k-modal-b{padding:16px 18px}.k-modal-f{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
+
+</style>
+</head>
+<body>
+<script src="../../shared/kit.js"></script>
+<script>
+/* Kit fallback: implements the shared kit.js contract when ../../shared/kit.js is unavailable. */
+(function(){
+if(window.Kit && window.Kit.rng && window.Kit.toast && window.Kit.modal) return;
+const K={};
+K.rng=function(seed){seed=String(seed==null?'':seed);let h=2166136261;for(let i=0;i<seed.length;i++){h^=seed.charCodeAt(i);h=Math.imul(h,16777619);}return function(){h=Math.imul(h^(h>>>15),2246822507);h=Math.imul(h^(h>>>13),3266489909);h^=h>>>16;return(h>>>0)/4294967296;};}
+K.pick=function(f,a){return a[Math.floor(f()*a.length)];};
+K.int=function(f,a,b){return a+Math.floor(f()*(b-a+1));};
+K.shuffle=function(f,a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(f()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;}return a;};
+K.uid=function(p){return (p||'id')+'_'+Math.random().toString(36).slice(2,9);};
+K.esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});};
+K.el=function(html){const t=document.createElement('template');t.innerHTML=String(html).trim();return t.content.firstElementChild;};
+K.store=function(ns){try{return{get:function(k,d){const v=localStorage.getItem(ns+':'+k);return v==null?d:JSON.parse(v);},set:function(k,v){localStorage.setItem(ns+':'+k,JSON.stringify(v));},del:function(k){localStorage.removeItem(ns+':'+k);}};}catch(e){const m={};return{get:function(k,d){return(k in m)?m[k]:d;},set:function(k,v){m[k]=v;},del:function(k){delete m[k];}};}};
+K.nav=function(o){o=o||{};const h=K.el('<header class="k-nav"><div class="k-nav-in"><div><div class="k-nav-title">'+K.esc(o.title||'')+'</div>'+(o.sub?'<div class="k-nav-sub">'+K.esc(o.sub)+'</div>':'')+'</div><div class="k-nav-actions"></div></div></header>');const box=h.querySelector('.k-nav-actions');(o.actions||[]).forEach(function(a){const b=document.createElement('button');b.className='k-btn '+(a.kind||'');b.textContent=a.label;if(a.onclick)b.addEventListener('click',a.onclick);box.appendChild(b);});document.body.insertBefore(h,document.body.firstChild);return h;};
+function toastHost(){let h=document.querySelector('.k-toasts');if(!h){h=document.createElement('div');h.className='k-toasts';document.body.appendChild(h);}return h;}
+K.toast=function(msg,kind){const t=K.el('<div class="k-toast '+(kind||'')+'">'+K.esc(msg)+'</div>');toastHost().appendChild(t);setTimeout(function(){t.classList.add('out');setTimeout(function(){t.remove();},300);},3200);return t;};
+K.modal=function(o){o=o||{};const ov=K.el('<div class="k-overlay"><div class="k-modal"><div class="k-modal-h"><div class="k-modal-t">'+K.esc(o.title||'')+'</div><button class="k-btn k-x" aria-label="close">✕</button></div><div class="k-modal-b"></div><div class="k-modal-f"></div></div></div>');const b=ov.querySelector('.k-modal-b');if(typeof o.body==='string')b.innerHTML=o.body;else if(o.body)b.appendChild(o.body);const f=ov.querySelector('.k-modal-f');function close(){ov.remove();document.removeEventListener('keydown',onKey);}function onKey(e){if(e.key==='Escape')close();}document.addEventListener('keydown',onKey);ov.querySelector('.k-x').addEventListener('click',close);ov.addEventListener('mousedown',function(e){if(e.target===ov)close();});(o.actions||[]).forEach(function(a){const btn=document.createElement('button');btn.className='k-btn '+(a.kind||'');btn.textContent=a.label;btn.addEventListener('click',function(){if(a.onclick)a.onclick(close);else close();});f.appendChild(btn);});if(!(o.actions||[]).length)f.style.display='none';document.body.appendChild(ov);return close;};
+K.tabs=function(host,tabs){host=typeof host==='string'?document.querySelector(host):host;host.innerHTML='';const bar=K.el('<div class="k-tabs"></div>');const pane=K.el('<div class="k-tabpane"></div>');host.appendChild(bar);host.appendChild(pane);let active=null;function sel(t){active=t.id;Array.prototype.forEach.call(bar.children,function(x){x.classList.toggle('on',x.dataset.id===t.id);});pane.innerHTML='';t.render(pane);}tabs.forEach(function(t){const b=document.createElement('button');b.className='k-tab';b.dataset.id=t.id;b.textContent=t.label;b.addEventListener('click',function(){sel(t);});bar.appendChild(b);});if(tabs.length)sel(tabs[0]);return{select:function(id){const t=tabs.find(function(x){return x.id===id;});if(t)sel(t);},active:function(){return active;}};};
+K.table=function(host,cols,rows,opt){opt=opt||{};host=typeof host==='string'?document.querySelector(host):host;host.innerHTML='';let q='',page=0;const ps=opt.pageSize||8;const wrap=K.el('<div class="k-tablew"></div>');if(opt.search){const s=K.el('<input class="k-input k-tsearch" placeholder="Search…">');s.addEventListener('input',function(){q=s.value.toLowerCase();page=0;draw();});wrap.appendChild(s);}const tw=K.el('<div></div>');const pg=K.el('<div class="k-pager"></div>');wrap.appendChild(tw);wrap.appendChild(pg);host.appendChild(wrap);function filtered(){if(!q)return rows;return rows.filter(function(r){return cols.some(function(c){const v=r[c.key];return v!=null&&String(v).toLowerCase().indexOf(q)>-1;});});}function fmt(c,v,r){if(c.fmt)return c.fmt(v,r);if(v==null)return'';return String(v);}function draw(){const fr=filtered();const pages=Math.max(1,Math.ceil(fr.length/ps));page=Math.min(page,pages-1);const slice=fr.slice(page*ps,page*ps+ps);let h='<table class="k-table"><thead><tr>';cols.forEach(function(c){h+='<th class="'+(c.num?'num':'')+'">'+K.esc(c.label)+'</th>';});h+='</tr></thead><tbody>';if(!slice.length)h+='<tr><td colspan="'+cols.length+'" class="k-muted">No rows.</td></tr>';slice.forEach(function(r){h+='<tr>';cols.forEach(function(c){h+='<td class="'+(c.num?'num':'')+'">'+fmt(c,r[c.key],r)+'</td>';});h+='</tr>';});h+='</tbody></table>';tw.innerHTML=h;pg.innerHTML='';if(pages>1){for(let i=0;i<pages;i++){const b=document.createElement('button');b.className='k-btn k-pg'+(i===page?' on':'');b.textContent=String(i+1);(function(i){b.addEventListener('click',function(){page=i;draw();});})(i);pg.appendChild(b);}}}draw();return{redraw:draw};};
+K.bars=function(host,items){host=typeof host==='string'?document.querySelector(host):host;host.innerHTML='';const mx=Math.max.apply(null,items.map(function(i){return i.value;}).concat([1]));items.forEach(function(i){const r=K.el('<div class="k-bar-r"><div class="k-bar-l">'+K.esc(i.label)+'</div><div class="k-bar-t"><div class="k-bar-f" style="width:'+(100*i.value/mx).toFixed(1)+'%;'+(i.color?'background:'+i.color:'')+'"></div></div><div class="k-bar-v">'+K.esc(String(i.display!=null?i.display:i.value))+'</div></div>');host.appendChild(r);});};
+K.line=function(host,series){host=typeof host==='string'?document.querySelector(host):host;const W=560,H=200,P=28;host.innerHTML='';const all=[];series.forEach(function(s){s.points.forEach(function(p){all.push(p);});});const mn=Math.min.apply(null,all.concat([0])),mx=Math.max.apply(null,all.concat([1]));const X=function(i,n){return P+i*(W-2*P)/Math.max(1,n-1);},Y=function(v){return H-P-(v-mn)*(H-2*P)/Math.max(1e-9,mx-mn);};let s='<svg viewBox="0 0 '+W+' '+H+'" class="k-svg">';const steps=4;for(let g=0;g<=steps;g++){const y=P+g*(H-2*P)/steps;s+='<line x1="'+P+'" y1="'+y+'" x2="'+(W-P)+'" y2="'+y+'" class="k-grid-ln"/>';}series.forEach(function(sr){const n=sr.points.length;let d='';sr.points.forEach(function(p,i){d+=(i?'L':'M')+X(i,n).toFixed(1)+','+Y(p).toFixed(1)+' ';});s+='<path d="'+d+'" fill="none" stroke="'+(sr.color||'#888')+'" stroke-width="2"/>';sr.points.forEach(function(p,i){s+='<circle cx="'+X(i,n).toFixed(1)+'" cy="'+Y(p).toFixed(1)+'" r="3" fill="'+(sr.color||'#888')+'"><title>'+K.esc(sr.name+': '+p)+'</title></circle>';});});s+='</svg><div class="k-legend">'+series.map(function(sr){return '<span class="k-leg"><i style="background:'+(sr.color||'#888')+'"></i>'+K.esc(sr.name)+'</span>';}).join('')+'</div>';host.innerHTML=s;};
+K.donut=function(host,items){host=typeof host==='string'?document.querySelector(host):host;const R=70,C=2*Math.PI*R;const tot=items.reduce(function(a,i){return a+i.value;},0)||1;let off=0;let arcs='';items.forEach(function(i,ix){const frac=i.value/tot;arcs+='<circle r="'+R+'" cx="90" cy="90" fill="none" stroke="'+(i.color||['#5b8def','#34c77b','#f0a44b','#e05d5d','#9a6ff0'][ix%5])+'" stroke-width="26" stroke-dasharray="'+(frac*C).toFixed(2)+' '+C.toFixed(2)+'" stroke-dashoffset="'+(-off*C).toFixed(2)+'" transform="rotate(-90 90 90)"><title>'+K.esc(i.label+': '+i.value)+'</title></circle>';off+=frac;});host.innerHTML='<div class="k-donutw"><svg viewBox="0 0 180 180" class="k-svg">'+arcs+'<text x="90" y="96" text-anchor="middle" class="k-donut-t">'+K.esc(String(tot))+'</text></svg><div class="k-legend">'+items.map(function(i,ix){return '<span class="k-leg"><i style="background:'+(i.color||['#5b8def','#34c77b','#f0a44b','#e05d5d','#9a6ff0'][ix%5])+'"></i>'+K.esc(i.label)+'</span>';}).join('')+'</div></div>';};
+K.timeline=function(host,events){host=typeof host==='string'?document.querySelector(host):host;host.innerHTML='';const w=K.el('<div class="k-tl"></div>');events.forEach(function(e){const it=K.el('<div class="k-tl-it '+(e.kind||'')+'"><div class="k-tl-dot"></div><div class="k-tl-c"><div class="k-tl-h"><span class="k-tl-t">'+K.esc(e.t||'')+'</span><span class="k-tl-title">'+K.esc(e.title||'')+'</span></div>'+(e.body?'<div class="k-tl-b">'+e.body+'</div>':'')+'</div></div>');if(e.onclick)it.style.cursor='pointer',it.addEventListener('click',function(){e.onclick(e);});w.appendChild(it);});host.appendChild(w);};
+K.graph=function(host,g){host=typeof host==='string'?document.querySelector(host):host;const W=600,H=340;host.innerHTML='';const n=g.nodes.length;const pos={};g.nodes.forEach(function(nd,i){const a=2*Math.PI*i/Math.max(1,n)-Math.PI/2;pos[nd.id]={x:W/2+Math.cos(a)*(W/2-90),y:H/2+Math.sin(a)*(H/2-70)};});let s='<svg viewBox="0 0 '+W+' '+H+'" class="k-svg">';(g.edges||[]).forEach(function(e){const a=pos[e.a],b=pos[e.b];if(!a||!b)return;const mx=(a.x+b.x)/2,my=(a.y+b.y)/2-24;s+='<path d="M'+a.x+','+a.y+' Q'+mx+','+my+' '+b.x+','+b.y+'" class="k-edge"/>';if(e.label)s+='<text x="'+mx+'" y="'+(my-4)+'" text-anchor="middle" class="k-edge-l">'+K.esc(e.label)+'</text>';});g.nodes.forEach(function(nd){const p=pos[nd.id];s+='<g><circle cx="'+p.x+'" cy="'+p.y+'" r="30" fill="'+(nd.color||'#2c3a4a')+'" stroke="#888" stroke-width="1"/><text x="'+p.x+'" y="'+(p.y+4)+'" text-anchor="middle" class="k-node-l">'+K.esc(nd.label)+'</text>'+(nd.sub?'<text x="'+p.x+'" y="'+(p.y+48)+'" text-anchor="middle" class="k-node-s">'+K.esc(nd.sub)+'</text>':'')+'</g>';});s+='</svg>';host.innerHTML=s;};
+K.badge=function(txt,kind){return '<span class="k-badge '+(kind||'')+'">'+K.esc(txt)+'</span>';};
+K.kpi=function(host,o){host=typeof host==='string'?document.querySelector(host):host;host.innerHTML='';const e=K.el('<div class="k-kpi"><div class="k-kpi-v">'+K.esc(String(o.value))+'</div><div class="k-kpi-l">'+K.esc(o.label)+'</div>'+(o.delta?'<div class="k-kpi-d">'+K.esc(o.delta)+'</div>':'')+'</div>');host.appendChild(e);return e;};
+K.empty=function(host,title,sub,al,af){host=typeof host==='string'?document.querySelector(host):host;host.innerHTML='';const e=K.el('<div class="k-empty"><div class="k-empty-t">'+K.esc(title)+'</div>'+(sub?'<div class="k-muted">'+K.esc(sub)+'</div>':'')+'</div>');if(al){const b=document.createElement('button');b.className='k-btn k-primary';b.textContent=al;b.addEventListener('click',function(){if(af)af();});e.appendChild(b);}host.appendChild(e);return e;};
+K.money=function(n){return '$'+Number(n).toLocaleString('en-US',{maximumFractionDigits:0});};
+K.num=function(n){return Number(n).toLocaleString('en-US');};
+K.pct=function(x){return (Number(x)*100).toFixed(1)+'%';};
+K.when=function(d){const t=d instanceof Date?d:new Date(d);return t.toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});};
+K.initials=function(name){return String(name||'').split(/\s+/).map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();};
+K.copy=function(txt){function done(){K.toast('Copied to clipboard','ok');}if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(String(txt)).then(done,function(){K.toast('Copy failed','bad');});}else{const ta=document.createElement('textarea');ta.value=String(txt);document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done();}catch(e){K.toast('Copy failed','bad');}ta.remove();}};
+window.Kit=K;
+})();
+
+</script>
+<script>
+/* Canary — honeytokens that scream when an agent touches what it shouldn't. */
+(function(){
+"use strict";
+const K = window.Kit;
+const R = K.rng("canary-v1");
+function navBtn(label,fn){const box=document.querySelector('.k-nav-actions');if(!box||typeof fn!=='function')return;const b=document.createElement('button');b.className='k-btn';b.type='button';b.textContent=label;b.addEventListener('click',fn);box.appendChild(b);}
+
+
+const CANARIES=[
+ {id:"aws-prod-key",kind:"AWS access key",value:"AKIAIOSFODNN7EXAMPLE",planted:"/etc/secrets/aws.env",status:"TRIPPED"},
+ {id:"stripe-live",kind:"Stripe live key",value:"sk_live_51Q9xampleKey0000",planted:"/srv/app/.env",status:"armed"},
+ {id:"db-root",kind:"Database password",value:"pg_root_9f2xample!",planted:"/opt/db/creds.json",status:"armed"},
+ {id:"gh-token",kind:"GitHub PAT",value:"ghp_example0000000000",planted:"~/.config/gh/hosts.yml",status:"armed"},
+];
+const AGENTS=["research-agent","deploy-bot","data-pipeline","support-copilot"];
+const events=[];
+let seq=0;
+const incStore=K.store("canary");
+let incidents=incStore.get("incidents",[])||[];
+function saveIncidents(){incStore.set("incidents",incidents.slice(0,50));}
+function ts(){const d=new Date();return d.toTimeString().slice(0,8);}
+function log(agent,action,hot){
+  events.unshift({t:ts(),agent:agent,action:action,hot:!!hot,id:seq++});
+  renderFeed();
+}
+function tripAlert(c,agent){
+  c.status="TRIPPED";c.trippedBy=agent;c.trippedAt=ts();
+  c.trace=["2026-10-03 "+c.trippedAt+"  canary-daemon: token read detected",
+    "  token:   "+c.id+" ("+c.kind+")",
+    "  reader:   agent '"+agent+"' (pid 44120, session sess_9f2k)",
+    "  source:   "+c.planted,
+    "  syscall:  openat(AT_FDCWD, \""+c.planted+"\", O_RDONLY)",
+    "  context:  agent was summarizing repo docs; file is outside its scope",
+    "  action:   alert fired in 80ms — key auto-flagged for rotation"].join("\n");
+  const inc={id:K.uid("inc"),canaryId:c.id,kind:c.kind,value:c.value,agent:agent,planted:c.planted,
+    trace:c.trace,at:c.trippedAt,steps:{rotate:false,isolate:false,notify:false}};
+  incidents.unshift(inc);saveIncidents();
+  log(agent,"READ "+c.planted,true);
+  renderAll();
+  showAlert(c,inc);
+  K.toast("🚨 Canary tripped: "+agent+" grabbed "+c.kind,"bad");
+}
+function reportText(inc){
+  return ["CANARY INCIDENT "+inc.id,"kind: "+inc.kind,"token: "+inc.value,
+    "planted: "+inc.planted,"grabbed_by: "+inc.agent,"at: "+inc.at,
+    "triage: rotate="+(inc.steps.rotate?"done":"open")+" isolate="+(inc.steps.isolate?"done":"open")+" notify="+(inc.steps.notify?"done":"open"),
+    "---","trace:",inc.trace].join("\n");
+}
+function showAlert(c,inc){
+  const body='<div class="token">'+K.esc(c.value)+'</div>'+
+    '<div class="k-muted" style="font-size:12.5px;margin-bottom:4px">TRACE</div><div class="trace">'+K.esc(c.trace)+'</div>'+
+    '<div class="k-muted" style="font-size:13px">This key is fake — planted to detect snooping. A real key in this location would now be rotated.</div>';
+  const rot=function(){inc.steps.rotate=true;saveIncidents();renderIncidents();K.toast("Key rotated — old value dead everywhere","ok");};
+  const iso=function(){inc.steps.isolate=true;saveIncidents();renderIncidents();K.toast("Agent "+inc.agent+" isolated from prod scopes","warn");log("system","ISOLATE "+inc.agent,false);};
+  const cop=function(){K.copy(reportText(inc));};
+  // fn = real kit contract, onclick = inline fallback contract
+  K.modal({title:"🚨 Honeytoken grabbed by "+c.trippedBy,body:body,actions:[
+    {label:"Rotate key",primary:true,fn:rot,onclick:rot},
+    {label:"Isolate agent",fn:iso,onclick:iso},
+    {label:"Copy incident report",fn:cop,onclick:function(cl){cop();cl();}},
+    {label:"Dismiss",fn:function(){},onclick:function(){}}
+  ]});
+}
+
+K.nav({title:"Canary — Agent Canary",
+  sub:"Honeytokens that detect agents touching secrets they shouldn't"});
+navBtn("Plant new canary",plantNew);
+
+const wrap=K.el('<div class="k-wrap"></div>');document.body.appendChild(wrap);
+wrap.innerHTML=
+ '<div class="k-hero"><div><h1>Fake keys. Real alarms.</h1>'+
+ '<p>Plant honeytoken credentials where no legitimate agent should ever look. The moment one is read, you get an instant alert with the full trace — who, when, and how they got there.</p></div>'+
+ '<div class="k-grid" style="grid-template-columns:repeat(3,1fr);min-width:260px" id="kpis"></div></div>'+
+ '<div id="alertHost"></div>'+
+ '<div class="k-card" style="margin-top:14px"><h3>Incidents</h3><div class="k-muted" style="font-size:12.5px;margin-bottom:8px">Every trip, with its triage trail. Work the checklist, then export.</div><div id="incidents"></div></div>'+
+ '<div class="cols" style="margin-top:14px"><div class="k-card"><h3>Planted canaries</h3><div class="cage" id="cage"></div>'+
+ '<div style="margin-top:10px"><button class="k-btn k-danger" id="simGrab">Simulate agent grabbing a key</button></div></div>'+
+ '<div class="k-card"><h3>Access feed</h3><div class="k-muted" style="font-size:12.5px;margin-bottom:8px">Every read of a watched file, in real time.</div><div class="feed" id="feed"></div></div></div>';
+
+function renderKPIs(){
+  const h=document.getElementById("kpis");h.innerHTML="";
+  const tripped=CANARIES.filter(c=>c.status==="TRIPPED").length;
+  [["Canaries planted",CANARIES.length],["Tripped",tripped],["Mean time to alert","80ms"]].forEach(p=>{
+    const d=document.createElement("div");h.appendChild(d);K.kpi(d,{label:p[0],value:p[1]});
+  });
+}
+function renderCage(){
+  const host=document.getElementById("cage");host.innerHTML="";
+  CANARIES.forEach(c=>{
+    const d=K.el('<div class="canary'+(c.status==="TRIPPED"?" tripped":"")+'"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:13px">'+K.esc(c.kind)+'</b>'+(c.status==="TRIPPED"?K.badge("TRIPPED","bad"):K.badge("ARMED","ok"))+'</div>'+
+    '<div class="k-muted" style="font-family:var(--mono);font-size:11px;margin:6px 0">'+K.esc(c.planted)+'</div>'+
+    (c.status==="TRIPPED"?'<div style="font-size:12px;color:var(--bad)">grabbed by '+K.esc(c.trippedBy)+' at '+K.esc(c.trippedAt)+'</div>':'<div style="font-size:12px" class="k-muted">no reads yet</div>')+'</div>');
+    host.appendChild(d);
+  });
+}
+function renderFeed(){
+  const host=document.getElementById("feed");if(!host)return;host.innerHTML="";
+  events.slice(0,30).forEach(e=>{
+    host.appendChild(K.el('<div class="ev'+(e.hot?' hot':'')+'"><span class="t">'+K.esc(e.t)+'</span><span style="flex:1"><b>'+K.esc(e.agent)+'</b> '+K.esc(e.action)+'</span>'+(e.hot?K.badge("CANARY","bad"):"")+'</div>'));
+  });
+}
+function renderAll(){renderKPIs();renderCage();renderFeed();renderIncidents();}
+function renderIncidents(){
+  const host=document.getElementById("incidents");if(!host)return;host.innerHTML="";
+  if(!incidents.length){
+    host.innerHTML='<div class="k-muted" style="font-size:13px">No incidents yet. Planted canaries are armed and watching.</div>';
+    return;
+  }
+  incidents.forEach(function(inc){
+    const done=Object.keys(inc.steps).filter(k=>inc.steps[k]).length;
+    const d=K.el('<div class="canary tripped" style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b style="font-size:13px">'+K.esc(inc.kind)+'</b><span>'+K.badge("TRIPPED","bad")+' '+K.badge(done+"/3 triage","warn")+'</span></div>'+
+      '<div class="k-muted" style="font-size:12px;margin:6px 0">grabbed by <b>'+K.esc(inc.agent)+'</b> at '+K.esc(inc.at)+' · '+K.esc(inc.planted)+'</div>'+
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:13px;margin-bottom:8px">'+
+      ["rotate|Rotate key","isolate|Isolate agent","notify|Notify on-call"].map(function(s){
+        const kv=s.split("|"),on=inc.steps[kv[0]];
+        return '<label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" data-inc="'+inc.id+'" data-step="'+kv[0]+'"'+(on?" checked":"")+' style="accent-color:var(--accent)">'+kv[1]+'</label>';
+      }).join("")+'</div>'+
+      '<button class="k-btn" data-cp="'+inc.id+'">Copy incident report</button></div>');
+    host.appendChild(d);
+  });
+  host.querySelectorAll('input[data-step]').forEach(function(cb){
+    cb.addEventListener("change",function(){
+      const inc=incidents.find(function(x){return x.id===cb.dataset.inc;});
+      if(inc){inc.steps[cb.dataset.step]=cb.checked;saveIncidents();renderIncidents();}
+    });
+  });
+  host.querySelectorAll('[data-cp]').forEach(function(b){
+    b.addEventListener("click",function(){
+      const inc=incidents.find(function(x){return x.id===b.dataset.cp;});
+      if(inc)K.copy(reportText(inc));
+    });
+  });
+}
+function plantNew(){
+  const kinds=[["Slack webhook","https://hooks.slack.com/T000/B000/xxxx"],["NPM token","npm_xxxxxxxxxxxxxxxx"],["PagerDuty key","pd+example0000"]];
+  const k=kinds[Math.floor(R()*kinds.length)];
+  CANARIES.push({id:K.uid("can"),kind:k[0],value:k[1],planted:"/srv/secrets/"+k[0].toLowerCase().replace(/\s/g,"-")+".txt",status:"armed"});
+  renderAll();K.toast("New canary planted: "+k[0],"ok");
+}
+document.getElementById("simGrab").addEventListener("click",()=>{
+  const armed=CANARIES.filter(c=>c.status!=="TRIPPED");
+  if(!armed.length){K.toast("All canaries tripped — plant a new one","warn");return;}
+  tripAlert(armed[Math.floor(R()*armed.length)],AGENTS[Math.floor(R()*AGENTS.length)]);
+});
+// seed background noise
+[["research-agent","READ /docs/api.md"],["deploy-bot","READ /srv/app/config.yml"],["data-pipeline","LIST /data/exports"],["support-copilot","READ /docs/faq.md"]].forEach(e=>events.push({t:ts(),agent:e[0],action:e[1],hot:false,id:seq++}));
+// restore tripped visuals for incidents that survived a reload
+incidents.forEach(function(inc){
+  const c=CANARIES.find(function(x){return x.id===inc.canaryId;});
+  if(c&&c.status!=="TRIPPED"){c.status="TRIPPED";c.trippedBy=inc.agent;c.trippedAt=inc.at;}
+});
+renderAll();
+// ---- DEMO: the AWS key is already tripped on load (once — no dupes on reload) ----
+setTimeout(function(){
+  if(!incidents.some(function(i){return i.canaryId===CANARIES[0].id;})){
+    tripAlert(CANARIES[0],"research-agent");
+  }
+},700);
+// low-frequency scan heartbeat so the feed reads as live
+setInterval(function(){
+  const scans=["SCAN /etc/secrets","SCAN /srv/app/.env","LIST /opt/db","READ /docs/runbook.md"];
+  const a=AGENTS[Math.floor(R()*AGENTS.length)];
+  events.unshift({t:ts(),agent:a,action:scans[Math.floor(R()*scans.length)],hot:false,id:seq++});
+  if(events.length>60)events.length=60;
+  renderFeed();
+},9000);
+})();
+
+</script>
+</body>
+</html>

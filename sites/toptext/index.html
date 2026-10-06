@@ -60,17 +60,8 @@ textarea:focus{outline:none;border-color:var(--accent)}
 /* preview */
 #stage{margin-top:16px;display:none}
 #stage.show{display:block}
-#cv{width:100%;border-radius:16px;border:1px solid var(--line);display:block;background:#000}
-#recDot{display:none;align-items:center;gap:8px;justify-content:center;margin-top:10px;
-  font-size:13px;color:#ff5f56;font-weight:700}
-#recDot.show{display:flex}
-#recDot i{width:10px;height:10px;border-radius:50%;background:#ff5f56;animation:blink 1s infinite}
-@keyframes blink{50%{opacity:.2}}
+#cv{display:none}
 .fine{font-size:12px;color:var(--faint);margin-top:10px;line-height:1.5}
-.gifbtn{width:100%;margin-top:10px;background:#1c1c24;border:1px solid var(--line);color:var(--text);
-  font-weight:800;padding:15px;border-radius:13px;font-size:16px;cursor:pointer}
-.gifbtn:disabled{opacity:.45}
-.gifbtn:active{transform:scale(.98)}
 #gifProg{display:none;margin-top:12px;background:#0c0c10;border:1px solid var(--line);
   border-radius:10px;height:36px;position:relative;overflow:hidden}
 #gifProg.show{display:block}
@@ -136,12 +127,9 @@ footer{text-align:center;color:var(--faint);font-size:12px;margin-top:44px;line-
     </div>
   </div>
 
+  <canvas id="cv" width="720" height="900" hidden></canvas>
   <div class="step" id="stage">
-    <h2><b>3.</b> PREVIEW &amp; EXPORT</h2>
-    <canvas id="cv" width="720" height="900"></canvas>
-    <button class="gifbtn" id="gifBtn" disabled>Export GIF</button>
     <div id="gifProg"><div id="gifBar"></div><span id="gifPct">0%</span></div>
-    <div id="recDot"><i></i> recording…</div>
     <div id="gifResult">
       <img id="gifImg" alt="your meme as a GIF">
       <button id="morphBtn" aria-label="Save GIF" title="Save GIF">
@@ -153,7 +141,7 @@ footer{text-align:center;color:var(--faint);font-size:12px;margin-top:44px;line-
       </button>
       <p class="fine">Save drops the GIF into your Photos — tap Save Image in the sheet. Then share it anywhere.</p>
     </div>
-    <p class="fine">No export button needed — your GIF builds itself the moment your clip loads, and again live as you type. Caption included, 360px, 10fps, up to 5 seconds.</p>
+    <p class="fine">Your GIF bakes itself the moment your clip loads and refreshes live as you type. Caption included, 360px, 10fps, up to 5 seconds.</p>
   </div>
 
   <footer>made for the group chat<br>your clips never leave your device — everything renders locally</footer>
@@ -239,8 +227,6 @@ function setMedia(el, kind, name){
   mi.style.display = "block";
   mi.innerHTML = "Loaded <b></b> — preview is live.";
   mi.querySelector("b").textContent = name;
-  var gb = document.getElementById("gifBtn");
-  gb.disabled = false; gb.textContent = "Export GIF";
   document.getElementById("stage").scrollIntoView({behavior:"smooth", block:"nearest"});
   document.getElementById("gifResult").classList.remove("show");
   setMorphMode("save");
@@ -458,8 +444,6 @@ async function runGifExport(){
   if(!media){ showToast("Add a clip first"); return; }
   if(exporting) return;
   exporting = true; pendingAuto = false;
-  var btn = document.getElementById("gifBtn");
-  btn.disabled = true;
   var prog = document.getElementById("gifProg"),
       bar = document.getElementById("gifBar"),
       pct = document.getElementById("gifPct");
@@ -522,15 +506,11 @@ async function runGifExport(){
   }catch(err){
     showToast("GIF export failed — check your connection and try again");
   }finally{
-    btn.disabled = false;
     exporting = false;
     setTimeout(function(){ prog.classList.remove("show"); }, 900);
     if(pendingAuto){ pendingAuto = false; scheduleAutoExport(1500); } // typed mid-export — run it again
   }
 }
-document.getElementById("gifBtn").addEventListener("click", function(){
-  pendingAuto = false; clearTimeout(autoTimer); runGifExport();
-});
 
 /* morph button: Save first, then Share — per the morph-button skill.
    State A (default, always): Save. Tap → save succeeds → morph to State B: Share.

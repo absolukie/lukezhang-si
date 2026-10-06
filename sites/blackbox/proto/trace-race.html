@@ -27,7 +27,8 @@
   .meta{display:flex;gap:14px;font-size:13px;font-weight:700;color:var(--dim);}
   .meta b{color:#e8e8f2;}
   #wrap{position:relative;flex:1 1 auto;min-height:0;}
-  #cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;}
+  #cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
   #panel{
     flex:0 0 auto;background:var(--panel);border-top:1px solid #1e1e2e;
     padding:10px 14px 12px;display:flex;align-items:center;gap:12px;
@@ -51,6 +52,7 @@
     flex:0 0 auto;text-align:center;color:#55556e;font-size:11px;
     padding:6px 12px 10px;background:var(--panel);line-height:1.4;
   }
+  footer .scorehow{color:#8a8aa5;}
   .overlay{
     position:fixed;inset:0;z-index:10;background:rgba(10,10,18,.96);
     display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -102,7 +104,7 @@
     <div id="status">Draw the shape in one stroke</div>
     <button id="nextBtn" class="primary hidden">Next shape &rarr;</button>
   </div>
-  <footer>Discrete Fourier Transform &mdash; any closed curve is a sum of spinning circles.</footer>
+  <footer>Discrete Fourier Transform &mdash; any closed curve is a sum of spinning circles.<br><span class="scorehow">Score: your trace is resized to match the ghost, then compared point by point. 100 is perfect &mdash; starting anywhere on the loop is fine.</span></footer>
 </div>
 
 <div id="title" class="overlay">
@@ -921,6 +923,19 @@ function endStroke(e){
 cv.addEventListener('pointerup', endStroke);
 cv.addEventListener('pointercancel', endStroke);
 cv.addEventListener('lostpointercapture', endStroke);
+
+/* iOS hardening: never let the webview steal a stroke (pull-to-refresh,
+   scroll takeover, or sheet-dismiss on a downward drag). Non-passive so
+   preventDefault actually works. Scoped to the canvas only. */
+function touchOnCanvas(e){
+  return e.target === cv && (game.phase === 'draw' || game.phase === 'reveal');
+}
+document.addEventListener('touchstart', function(e){
+  if(touchOnCanvas(e)) e.preventDefault();
+}, { passive: false });
+document.addEventListener('touchmove', function(e){
+  if(touchOnCanvas(e)) e.preventDefault();
+}, { passive: false });
 
 /* ---------- buttons ---------- */
 

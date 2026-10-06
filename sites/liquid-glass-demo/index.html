@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Liquid Glass — a real shader demo</title>
+<style>
+  :root{
+    --ink:#101418; --ink2:#4a5560; --paper:rgba(255,255,255,.72);
+    --line:rgba(16,20,24,.14); --accent:#c96f2e;
+  }
+  body.dark{ --ink:#f2ede3; --ink2:#a8a294; --paper:rgba(10,14,18,.55);
+    --line:rgba(242,237,227,.16); --accent:#e8a33d; }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;overflow-x:clip}
+  body{
+    font-family:ui-sans-serif,-apple-system,"SF Pro Text",Inter,Helvetica,Arial,sans-serif;
+    color:var(--ink); min-height:100vh; overflow-x:hidden;
+  }
+  #gl{position:fixed;inset:0;width:100%;height:100%;z-index:0;display:block}
+  .page{position:relative;z-index:2}
+  header.hero{max-width:1060px;margin:0 auto;padding:96px 24px 8px}
+  .kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink2);margin:0 0 14px}
+  h1{font-size:clamp(38px,6vw,72px);line-height:1.02;letter-spacing:-.03em;margin:0 0 16px;font-weight:700}
+  h1 em{font-style:normal;color:var(--accent)}
+  .lede{font-size:clamp(16px,2vw,20px);line-height:1.55;color:var(--ink2);max-width:34em;margin:0}
+  .lede b{color:var(--ink);font-weight:600}
+  .toolbar{max-width:1060px;margin:26px auto 0;padding:0 24px;display:flex;gap:10px;flex-wrap:wrap}
+  .pillbtn{
+    appearance:none;border:1px solid var(--line);background:var(--paper);color:var(--ink);
+    font:600 13px/1 ui-sans-serif,system-ui,sans-serif;padding:11px 16px;border-radius:999px;
+    cursor:pointer;touch-action:manipulation;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  }
+  .pillbtn[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:transparent}
+  section{max-width:1060px;margin:0 auto;padding:56px 24px 8px}
+  section h2{font-size:clamp(24px,3.4vw,34px);letter-spacing:-.02em;margin:0 0 8px}
+  section .sub{color:var(--ink2);font-size:15px;line-height:1.6;max-width:38em;margin:0 0 26px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:22px}
+
+  /* ---- glass cards: the div is invisible; the canvas draws the glass ---- */
+  .gcard{
+    position:relative;min-height:210px;border-radius:28px;cursor:grab;touch-action:none;
+    user-select:none;-webkit-user-select:none;
+  }
+  .gcard:active{cursor:grabbing}
+  .gcard .in{position:absolute;inset:0;padding:22px;display:flex;flex-direction:column;justify-content:flex-end;pointer-events:none}
+  .gcard h3{margin:0 0 6px;font-size:19px;letter-spacing:-.01em}
+  .gcard p{margin:0;font-size:13.5px;line-height:1.5;color:var(--ink2)}
+  .gcard .tag{position:absolute;top:14px;left:18px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--ink2);pointer-events:none}
+  .gcard .val{position:absolute;top:14px;right:18px;font-size:11px;color:var(--ink2);pointer-events:none;
+    font-variant-numeric:tabular-nums}
+  /* CSS-fake mode for the comparison card */
+  .gcard.cssfake{background:rgba(255,255,255,.08);backdrop-filter:blur(14px) saturate(1.4);
+    -webkit-backdrop-filter:blur(14px) saturate(1.4);
+    border:1px solid rgba(255,255,255,.35);box-shadow:0 12px 40px rgba(0,0,0,.18)}
+
+  /* ---- lab ---- */
+  .lab{display:grid;grid-template-columns:1fr;gap:22px}
+  @media(min-width:900px){.lab{grid-template-columns:340px 1fr}}
+  .sliders{background:var(--paper);border:1px solid var(--line);border-radius:20px;padding:20px;
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+  .sl{margin:0 0 16px}
+  .sl label{display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-bottom:6px}
+  .sl label output{font-weight:400;color:var(--ink2);font-variant-numeric:tabular-nums}
+  .sl input[type=range]{width:100%;accent-color:var(--accent);touch-action:manipulation}
+  .sl .hint{font-size:11.5px;color:var(--ink2);line-height:1.5;margin-top:4px}
+  .code{background:#0d1117;border-radius:20px;overflow:hidden;border:1px solid var(--line)}
+  .code header{padding:12px 18px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+    color:#8b949e;border-bottom:1px solid #21262d}
+  .code pre{margin:0;padding:18px;overflow:auto;max-height:560px;font:12.5px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#e6edf3}
+  .tok-k{color:#ff7b72}.tok-t{color:#79c0ff}.tok-n{color:#a5d6ff}.tok-c{color:#8b949e;font-style:italic}
+  .tok-p{color:#ffa657}.tok-f{color:#d2a8ff}
+
+  .compare{display:grid;grid-template-columns:1fr;gap:22px}
+  @media(min-width:760px){.compare{grid-template-columns:1fr 1fr}}
+  .cap{font-size:13px;color:var(--ink2);margin:10px 2px 0;line-height:1.5}
+  .cap b{color:var(--ink)}
+  footer{max-width:1060px;margin:0 auto;padding:64px 24px 90px;color:var(--ink2);font-size:13px;line-height:1.7}
+  footer a{color:var(--accent)}
+  #vbadge{position:fixed;right:12px;bottom:max(12px,env(safe-area-inset-bottom));z-index:40;
+    font-size:10.5px;color:var(--ink2);background:var(--paper);border:1px solid var(--line);
+    border-radius:8px;padding:4px 9px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+  #nogl{display:none;max-width:560px;margin:120px auto;padding:24px;text-align:center}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="nogl">
+  <h2>This demo needs WebGL</h2>
+  <p>Your browser couldn't create a WebGL context, so there's no glass to show. Try a recent Chrome, Safari, Firefox or Edge.</p>
+</div>
+
+<div class="page" id="page">
+  <header class="hero">
+    <p class="kicker">A real optics demo — no backdrop-filter</p>
+    <h1>Liquid <em>Glass</em>,<br>one fragment shader.</h1>
+    <p class="lede">Every panel below is refracted <b>per-pixel in GLSL</b>: a rounded-rectangle
+    signed distance field gives the surface normal, Snell's law bends the background through a
+    lens-shaped bevel, and the rim splits into chromatic aberration with a directional specular.
+    <b>Drag the panels.</b> The text floats above the canvas — exactly like iOS, only the
+    background bends.</p>
+  </header>
+
+  <div class="toolbar">
+    <button class="pillbtn" id="themeBtn" aria-pressed="false">☾ Dark scene</button>
+    <button class="pillbtn" id="motionBtn" aria-pressed="true">❚❚ Pause drift</button>
+  </div>
+
+  <section>
+    <h2>The material, five ways</h2>
+    <p class="sub">Each card isolates one optical parameter. Drag them over bright and dark parts
+    of the scene — the bevel is where the physics lives.</p>
+    <div class="grid" id="cardGrid"></div>
+  </section>
+
+  <section>
+    <h2>Shader lab</h2>
+    <p class="sub">The big panel is live. Move the sliders and watch the exact GLSL on the right —
+    that's the code running under it, syntax-highlighted.</p>
+    <div class="gcard" id="labCard" style="min-height:300px;border-radius:36px">
+      <span class="tag">Shader lab</span><span class="val" id="labVal"></span>
+      <div class="in"><h3>Drag me. Tune me.</h3>
+      <p>Every slider maps to one uniform in the fragment shader beside this panel.</p></div>
+    </div>
+    <div style="height:22px"></div>
+    <div class="lab">
+      <div class="sliders" id="sliders"></div>
+      <div class="code"><header>glass.frag — the actual shader</header><pre id="shaderView"></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Real shader vs CSS fake</h2>
+    <p class="sub">The left card is the GLSL glass. The right card is what most "liquid glass"
+    demos actually are: <b>backdrop-filter: blur()</b>. Toggle the left one to CSS mode and the
+    difference is unmistakable — uniform blur has no lensing, no dispersion, no light.</p>
+    <div class="compare">
+      <div>
+        <div class="gcard" id="cmpReal" style="min-height:240px">
+          <span class="tag">GLSL</span>
+          <div class="in"><h3>Refraction</h3><p>Per-pixel normals, Snell bend, chromatic rim.</p></div>
+        </div>
+        <p class="cap"><b>Real shader.</b> <button class="pillbtn" id="cssToggle" aria-pressed="false">Show as CSS blur instead</button></p>
+      </div>
+      <div>
+        <div class="gcard cssfake" id="cmpFake" data-noglass="1" style="min-height:240px">
+          <span class="tag">CSS</span>
+          <div class="in"><h3>backdrop-filter</h3><p>One uniform blur. No lens, no dispersion.</p></div>
+        </div>
+        <p class="cap"><b>CSS fake.</b> Flat blur — the edge tells the whole story.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Built from open research: the SDF-normal + Snell refraction approach (archisvaze/liquid-glass),
+    rim-weighted chromatic aberration (KLYNT), in-shader Poisson blur with Apple's luminosity
+    re-level, and directional rim specular (WWDC25 anatomy). Full notes in
+    <a href="SHADER-NOTES.md">SHADER-NOTES.md</a>.
+    <br>Single file. No frameworks. Draggable panels, 60fps, zero console errors.
+  </footer>
+</div>
+
+<div id="vbadge">v2026.10.03-01</div>
+
+<script>
+"use strict";
+/* ============================================================
+   LIQUID GLASS DEMO — engine
+   Two passes: (1) animated bg scene -> FBO, (2) glass composite.
+   Card <div>s are transparent hit-areas + text; the canvas draws
+   all glass. Rect uniforms update every frame from getBoundingClientRect.
+   ============================================================ */
+
+const BG_FRAG = `
+precision highp float;
+varying vec2 vUv;
+
+uniform vec2 uRes;
+uniform float uTime;
+uniform float uDark;   // 0 = light paper, 1 = dark ink
+
+float hash(vec2 p){
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+}
+float vnoise(vec2 p){
+  vec2 i = floor(p), f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+             mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+float fbm(vec2 p){
+  float v = 0.0, a = 0.5;
+  mat2 rot = mat2(0.8, 0.6, -0.6, 0.8);
+  for (int i = 0; i < 5; i++){
+    v += a * vnoise(p);
+    p = rot * p * 2.03 + vec2(1.7, 9.2);
+    a *= 0.55;
+  }
+  return v;
+}
+
+vec3 band4(float t, vec3 a, vec3 b, vec3 c, vec3 d){
+  vec3 col = mix(a, b, smoothstep(0.22, 0.46, t));
+  col = mix(col, c, smoothstep(0.46, 0.68, t));
+  col = mix(col, d, smoothstep(0.68, 0.90, t));
+  return col;
+}
+
+void main(){
+  vec2 uv = vUv;
+  vec2 asp = vec2(uRes.x / uRes.y, 1.0);
+  vec2 p = uv * asp * 2.4;
+  float t = uTime * 0.035;
+
+  // domain-warped fbm: two warps, slow drift
+  vec2 q = vec2(fbm(p + vec2(0.0, t)),
+                fbm(p + vec2(5.2, 1.3 + t * 0.7)));
+  vec2 r = vec2(fbm(p + 2.0 * q + vec2(1.7, 9.2) + 0.13 * t),
+                fbm(p + 2.0 * q + vec2(8.3, 2.8) - 0.11 * t));
+  float f = fbm(p + 2.2 * r);
+
+  // palettes: deep ink-teal vs warm paper, same band hues
+  vec3 deepD = vec3(0.039, 0.078, 0.110);   // #0a141c
+  vec3 dA = vec3(0.910, 0.639, 0.239);      // amber  #e8a33d
+  vec3 dB = vec3(0.878, 0.396, 0.290);      // coral  #e0654a
+  vec3 dC = vec3(0.247, 0.682, 0.541);      // jade   #3fae8a
+  vec3 dD = vec3(0.949, 0.831, 0.573);      // pale gold
+  vec3 deepL = vec3(0.957, 0.937, 0.902);   // paper #f4efe6
+  vec3 lA = vec3(0.851, 0.643, 0.357);
+  vec3 lB = vec3(0.851, 0.498, 0.400);
+  vec3 lC = vec3(0.498, 0.722, 0.624);
+  vec3 lD = vec3(0.910, 0.784, 0.494);
+
+  vec3 deep = mix(deepL, deepD, uDark);
+  vec3 bA = mix(lA, dA, uDark), bB = mix(lB, dB, uDark);
+  vec3 bC = mix(lC, dC, uDark), bD = mix(lD, dD, uDark);
+
+  float bandAmt = smoothstep(0.12, 0.78, f);
+  vec3 col = mix(deep, band4(f, bA, bB, bC, bD), bandAmt * 0.9);
+
+  // warp-driven luminance variation so glass has bright/dark regions to bend
+  col *= 0.82 + 0.36 * q.y;
+
+  // soft editorial glow, upper right
+  vec2 gp = (uv - vec2(0.74, 0.76)) * asp;
+  float glow = exp(-dot(gp, gp) * 5.0);
+  col += mix(vec3(1.0, 0.93, 0.78), vec3(1.0, 0.85, 0.60), uDark) * glow * mix(0.22, 0.38, uDark);
+
+  // gentle vignette
+  vec2 vg = (uv - 0.5) * asp;
+  col *= 1.0 - 0.32 * pow(clamp(length(vg) * 0.85, 0.0, 1.0), 2.0);
+
+  // film grain kills banding
+  col += (hash(uv * uRes + fract(uTime) * 7.0) - 0.5) * 0.035;
+
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
+const GLASS_FRAG = `
+precision highp float;
+varying vec2 vUv;
+
+// pixel space: px = vUv * uRes, y UP from bottom (GL convention).
+uniform vec2 uRes;
+uniform sampler2D uBg;
+uniform float uDark;
+uniform float uShadow;
+
+uniform vec4 uRect[7];    // center.xy, size.xy — physical px, y-down
+uniform float uOn[7];
+uniform float uIOR[7];    // index of refraction 1.0..3.0
+uniform float uThick[7];  // lens thickness, px
+uniform float uBezel[7];  // bevel width, px
+uniform float uBlur[7];   // diffusion radius, px
+uniform float uDisp[7];   // chromatic aberration 0..1
+uniform float uSpec[7];   // specular intensity 0..1.5
+uniform float uRadius[7]; // corner radius, px
+uniform vec3 uTint[7];
+uniform float uTintAmt[7];
+
+// iq's rounded-box SDF: negative inside, 0 on edge, positive outside
+float sdRound(vec2 p, vec2 halfSize, float r){
+  vec2 q = abs(p) - halfSize + r;
+  return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - r;
+}
+
+// surface normal = normalized gradient of the SDF (finite differences)
+vec2 sdfNormal(vec2 p, vec2 halfSize, float r, float sd){
+  float e = 0.75;
+  vec2 g = vec2(sdRound(p + vec2(e, 0.0), halfSize, r) - sd,
+                sdRound(p + vec2(0.0, e), halfSize, r) - sd);
+  float l = length(g);
+  return l > 1e-5 ? g / l : vec2(0.0);
+}
+
+// lens height field: 0 at the rim -> 1 in the flat center
+float surfH(float t){
+  return pow(1.0 - pow(1.0 - t, 4.0), 0.25);
+}
+
+vec2 clampUV(vec2 uv){
+  return clamp(uv, vec2(0.001), vec2(0.999));
+}
+
+// 12-tap Poisson-disk diffusion of the background texture
+vec3 poissonBlur(vec2 uv, float radiusPx){
+  vec2 offs[12];
+  offs[0]  = vec2(-0.94202, -0.39906);
+  offs[1]  = vec2( 0.94559, -0.76891);
+  offs[2]  = vec2(-0.09418, -0.92939);
+  offs[3]  = vec2( 0.34496,  0.29388);
+  offs[4]  = vec2(-0.91589, -0.45771);
+  offs[5]  = vec2(-0.81544,  0.48568);
+  offs[6]  = vec2(-0.38278, -0.56073);
+  offs[7]  = vec2(-0.12698,  0.84689);
+  offs[8]  = vec2( 0.89642,  0.41255);
+  offs[9]  = vec2( 0.18152, -0.30021);
+  offs[10] = vec2(-0.01445, -0.16001);
+  offs[11] = vec2( 0.59614,  0.71118);
+  if (radiusPx < 0.5) return texture2D(uBg, clampUV(uv)).rgb;
+  vec2 px = (radiusPx / uRes);
+  vec3 sum = vec3(0.0);
+  for (int i = 0; i < 12; i++){
+    sum += texture2D(uBg, clampUV(uv + offs[i] * px)).rgb;
+  }
+  return sum / 12.0;
+}
+
+// one glass rect: refracts, shades, and composites itself over accCol
+void evalRect(vec2 fragPx, vec4 r, float on, float ior, float thick, float bezel,
+              float blurPx, float disp, float spec, float radius,
+              vec3 tint, float tintAmt,
+              inout vec3 accCol, inout float shadow){
+  if (on < 0.5) return;
+  vec2 halfSize = r.zw * 0.5;
+  vec2 p = fragPx - r.xy;
+  float sd = sdRound(p, halfSize, radius);
+
+  if (sd > 0.0){
+    // soft drop shadow outside the silhouette
+    shadow += uShadow * exp(-sd * sd / 900.0);
+    return;
+  }
+
+  float dEdge = -sd;
+  float t = clamp(dEdge / max(bezel, 1.0), 0.0, 1.0);
+
+  // --- lens slope from the height field
+  float h = surfH(t);
+  float dh = (surfH(min(t + 0.004, 1.0)) - h) / 0.004;
+
+  // --- Snell's law per pixel
+  float slopeAngle = atan(dh * (thick / max(bezel, 1.0)));
+  float sinR = clamp(sin(slopeAngle) / max(ior, 1.0), -1.0, 1.0);
+  float thetaR = asin(sinR);
+  float displacement = h * thick * (tan(slopeAngle) - tan(thetaR));
+
+  vec2 n = sdfNormal(p, halfSize, radius, sd);
+  vec2 off = -n * displacement / uRes;   // UV units, along the surface normal
+
+  // --- chromatic aberration, rim-weighted (clean center)
+  float rimW = 1.0 - smoothstep(0.0, 1.0, t);
+  float ca = disp * rimW * 0.16;
+  vec3 col;
+  col.r = poissonBlur(vUv + off * (1.0 + ca), blurPx).r;
+  col.g = poissonBlur(vUv + off, blurPx).g;
+  col.b = poissonBlur(vUv + off * (1.0 - ca), blurPx).b;
+
+  // --- luminosity re-level (Apple's trick), scaled by blur amount:
+  // diffusion steals contrast, so restore punch only as blur grows
+  float bl = clamp(blurPx / 8.0, 0.0, 1.0);
+  vec3 releveled = (col - 0.5) * 1.06 + 0.5;
+  releveled *= 1.06;
+  col = mix(col, releveled, bl);
+  float luma = dot(col, vec3(0.299, 0.587, 0.114));
+  col = mix(vec3(luma), col, mix(1.0, 1.22, bl));
+
+  // --- directional specular: one virtual light, upper-left (y is up in fragPx space)
+  vec2 lightDir = normalize(vec2(-0.45, 0.62));
+  float rim = 1.0 - smoothstep(0.0, bezel * 0.45, dEdge);
+  float litSide = 0.55 + 0.45 * clamp(dot(n, lightDir) * 0.5 + 0.5, 0.0, 1.0);
+  float specHl = pow(abs(dot(n, lightDir)) * rim, 1.6) * spec * litSide;
+  col += specHl * vec3(1.0, 0.98, 0.94);
+
+  // --- faint inner rim ring: the hairline where light enters
+  float ring = smoothstep(0.0, 2.0, dEdge) * (1.0 - smoothstep(2.0, 6.0, dEdge));
+  col += ring * 0.10 * spec;
+
+  // --- inner shadow: the slab has thickness
+  float inSh = 1.0 - smoothstep(0.0, bezel * 0.7, dEdge);
+  col *= 1.0 - 0.25 * inSh * min(spec, 1.0);
+
+  // --- fresnel-ish edge lift: the silhouette must read on bright paper too
+  col += vec3(0.07) * pow(1.0 - t, 3.0);
+
+  // --- tint: stained glass, never solid
+  col = mix(col, tint, tintAmt);
+
+  // --- composite over whatever is beneath
+  float a = smoothstep(0.0, 1.5, dEdge);
+  accCol = mix(accCol, col, a);
+}
+
+void main(){
+  vec2 fragPx = vUv * uRes;
+  vec3 accCol = texture2D(uBg, vUv).rgb;
+  float shadow = 0.0;
+
+  evalRect(fragPx, uRect[0], uOn[0], uIOR[0], uThick[0], uBezel[0], uBlur[0],
+           uDisp[0], uSpec[0], uRadius[0], uTint[0], uTintAmt[0], accCol, shadow);
+  evalRect(fragPx, uRect[1], uOn[1], uIOR[1], uThick[1], uBezel[1], uBlur[1],
+           uDisp[1], uSpec[1], uRadius[1], uTint[1], uTintAmt[1], accCol, shadow);
+  evalRect(fragPx, uRect[2], uOn[2], uIOR[2], uThick[2], uBezel[2], uBlur[2],
+           uDisp[2], uSpec[2], uRadius[2], uTint[2], uTintAmt[2], accCol, shadow);
+  evalRect(fragPx, uRect[3], uOn[3], uIOR[3], uThick[3], uBezel[3], uBlur[3],
+           uDisp[3], uSpec[3], uRadius[3], uTint[3], uTintAmt[3], accCol, shadow);
+  evalRect(fragPx, uRect[4], uOn[4], uIOR[4], uThick[4], uBezel[4], uBlur[4],
+           uDisp[4], uSpec[4], uRadius[4], uTint[4], uTintAmt[4], accCol, shadow);
+  evalRect(fragPx, uRect[5], uOn[5], uIOR[5], uThick[5], uBezel[5], uBlur[5],
+           uDisp[5], uSpec[5], uRadius[5], uTint[5], uTintAmt[5], accCol, shadow);
+  evalRect(fragPx, uRect[6], uOn[6], uIOR[6], uThick[6], uBezel[6], uBlur[6],
+           uDisp[6], uSpec[6], uRadius[6], uTint[6], uTintAmt[6], accCol, shadow);
+
+  accCol *= 1.0 - clamp(shadow, 0.0, 0.55);
+  gl_FragColor = vec4(accCol, 1.0);
+}
+`;
+
+const VS = `
+attribute vec2 aPos;
+varying vec2 vUv;
+void main(){ vUv = aPos * 0.5 + 0.5; gl_Position = vec4(aPos, 0.0, 1.0); }
+`;
+
+const canvas = document.getElementById('gl');
+const gl = canvas.getContext('webgl', { antialias:false, depth:false, stencil:false,
+  powerPreference:'high-performance', premultipliedAlpha:false });
+if (!gl) {
+  document.getElementById('nogl').style.display = 'block';
+  document.getElementById('page').style.display = 'none';
+  throw new Error('no webgl');
+}
+
+function sh(type, src){
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    const log = gl.getShaderInfoLog(s);
+    console.error('shader compile failed:', log);
+    document.getElementById('nogl').style.display = 'block';
+    document.getElementById('nogl').querySelector('p').textContent = 'Shader error: ' + log;
+    document.getElementById('page').style.display = 'none';
+    throw new Error(log);
+  }
+  return s;
+}
+function prog(fsSrc){
+  const p = gl.createProgram();
+  gl.attachShader(p, sh(gl.VERTEX_SHADER, VS));
+  gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fsSrc));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  return p;
+}
+
+const bgProg = prog(BG_FRAG), glassProg = prog(GLASS_FRAG);
+const quad = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+
+function bindQuad(p){
+  const loc = gl.getAttribLocation(p, 'aPos');
+  gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+}
+function uni(p, n){ return gl.getUniformLocation(p, n); }
+
+// bg framebuffer
+const bgTex = gl.createTexture();
+const bgFbo = gl.createFramebuffer();
+let DPR = 1, W = 0, H = 0;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = Math.floor(innerWidth * DPR); H = Math.floor(innerHeight * DPR);
+  canvas.width = W; canvas.height = H;
+  gl.bindTexture(gl.TEXTURE_2D, bgTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, W, H, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, bgFbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, bgTex, 0);
+  gl.viewport(0, 0, W, H);
+}
+window.addEventListener('resize', resize); resize();
+
+/* ---------------- cards ---------------- */
+const NRECT = 7;
+const PARAMS = [
+  { id:'refraction', title:'Refraction', desc:'Index of refraction 2.6 — watch straight lines kink at the bevel.',
+    ior:2.6, thick:26, bezel:34, blur:1.5, disp:0.35, spec:0.7, radius:28, tint:[1,1,1], tintAmt:0.06 },
+  { id:'blur', title:'Blur', desc:'8px Poisson diffusion under the lens — frosted, not milky.',
+    ior:1.9, thick:22, bezel:30, blur:8, disp:0.25, spec:0.6, radius:28, tint:[1,1,1], tintAmt:0.10 },
+  { id:'chroma', title:'Chromatic aberration', desc:'Dispersion 1.0 — the rim splits into spectral fringe.',
+    ior:2.1, thick:30, bezel:40, blur:1.0, disp:1.0, spec:0.7, radius:28, tint:[1,1,1], tintAmt:0.04 },
+  { id:'edge', title:'Edge highlight', desc:'Specular 1.3 — one directional light rakes the bevel.',
+    ior:1.8, thick:24, bezel:36, blur:1.5, disp:0.4, spec:1.3, radius:28, tint:[1,1,1], tintAmt:0.05 },
+  { id:'radius', title:'Corner radius', desc:'A pill — the SDF normals stay perfect around any corner.',
+    ior:2.0, thick:24, bezel:32, blur:1.5, disp:0.35, spec:0.7, radius:999, tint:[1,1,1], tintAmt:0.06 },
+];
+const labParams = { ior:2.2, thick:26, bezel:36, blur:2.0, disp:0.5, spec:0.85, radius:36,
+  tint:[1,1,1], tintAmt:0.06 };
+
+const grid = document.getElementById('cardGrid');
+const cardEls = [];
+PARAMS.forEach((p) => {
+  const d = document.createElement('div');
+  d.className = 'gcard'; d.dataset.card = p.id;
+  d.innerHTML = `<span class="tag">${p.title}</span><span class="val"></span>
+    <div class="in"><h3>${p.title}</h3><p>${p.desc}</p></div>`;
+  grid.appendChild(d); cardEls.push(d);
+});
+const labCard = document.getElementById('labCard');
+const cmpReal = document.getElementById('cmpReal');
+
+/* ---------------- drag ---------------- */
+const dragState = new Map();
+function makeDraggable(el){
+  el.addEventListener('pointerdown', (e) => {
+    el.setPointerCapture(e.pointerId);
+    const r = el.getBoundingClientRect();
+    dragState.set(e.pointerId, { el, dx: e.clientX - r.left, dy: e.clientY - r.top, moved:false });
+  });
+  el.addEventListener('pointermove', (e) => {
+    const s = dragState.get(e.pointerId); if (!s) return;
+    s.moved = true;
+    const x = e.clientX - s.dx, y = e.clientY - s.dy;
+    s.el.style.transform = `translate(${x - s.el.offsetLeft}px, ${y - s.el.offsetTop}px)`;
+  });
+  const end = (e) => dragState.delete(e.pointerId);
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+}
+[...cardEls, labCard, cmpReal].forEach(makeDraggable);
+
+/* ---------------- lab sliders ---------------- */
+const SLIDERS = [
+  { k:'ior',    label:'Refraction (IOR)', min:1.0, max:3.0, step:0.05, fmt:v=>v.toFixed(2),
+    hint:'Snell bend strength. 1.0 = no bend, 3.0 = extreme lensing.' },
+  { k:'thick',  label:'Lens thickness', min:8, max:60, step:1, fmt:v=>v.toFixed(0)+'px',
+    hint:'Height-field scale — thicker slab, steeper bevel.' },
+  { k:'bezel',  label:'Bezel width', min:12, max:80, step:1, fmt:v=>v.toFixed(0)+'px',
+    hint:'How far the curved rim reaches inward from the edge.' },
+  { k:'blur',   label:'Blur', min:0, max:14, step:0.5, fmt:v=>v.toFixed(1)+'px',
+    hint:'Poisson-disk diffusion radius under the glass.' },
+  { k:'disp',   label:'Chromatic aberration', min:0, max:1, step:0.05, fmt:v=>v.toFixed(2),
+    hint:'Per-channel UV split at the rim — spectral fringe.' },
+  { k:'spec',   label:'Edge highlight', min:0, max:1.5, step:0.05, fmt:v=>v.toFixed(2),
+    hint:'Directional specular raking across the bevel.' },
+  { k:'radius', label:'Corner radius', min:0, max:120, step:1, fmt:v=>v.toFixed(0)+'px',
+    hint:'SDF rounded-rect corner radius.' },
+  { k:'tintAmt',label:'Tint', min:0, max:0.5, step:0.01, fmt:v=>(v*100).toFixed(0)+'%',
+    hint:'Absorption toward white — stained glass, never solid.' },
+];
+const slidersEl = document.getElementById('sliders');
+SLIDERS.forEach(s => {
+  const d = document.createElement('div'); d.className = 'sl';
+  d.innerHTML = `<label>${s.label} <output></output></label>
+    <input type="range" min="${s.min}" max="${s.max}" step="${s.step}" value="${labParams[s.k]}" aria-label="${s.label}">
+    <div class="hint">${s.hint}</div>`;
+  const input = d.querySelector('input'), out = d.querySelector('output');
+  const sync = () => { labParams[s.k] = parseFloat(input.value); out.textContent = s.fmt(labParams[s.k]); };
+  input.addEventListener('input', sync); sync();
+  slidersEl.appendChild(d);
+});
+
+/* ---------------- shader source view (syntax highlighted) ---------------- */
+function highlight(src){
+  return src
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/(\/\/[^\n]*|#[^\n]*)/g, '<span class="tok-c">$1</span>')
+    .replace(/\b(precision|uniform|varying|attribute|const|float|int|vec2|vec3|vec4|bool|void|if|else|for|return|continue|break|struct|sampler2D|highp|mediump|lowp)\b/g, '<span class="tok-k">$1</span>')
+    .replace(/\b([a-zA-Z_][a-zA-Z0-9_]*)(?=\s*\()/g, '<span class="tok-f">$1</span>')
+    .replace(/\b(\d+\.?\d*)\b/g, '<span class="tok-n">$1</span>');
+}
+document.getElementById('shaderView').innerHTML = highlight(GLASS_FRAG);
+
+/* ---------------- theme / motion / css-toggle ---------------- */
+let dark = false, motion = true, cssMode = false;
+const themeBtn = document.getElementById('themeBtn');
+themeBtn.addEventListener('click', () => {
+  dark = !dark;
+  document.body.classList.toggle('dark', dark);
+  themeBtn.textContent = dark ? '☀ Light scene' : '☾ Dark scene';
+  themeBtn.setAttribute('aria-pressed', String(dark));
+});
+const motionBtn = document.getElementById('motionBtn');
+motionBtn.addEventListener('click', () => {
+  motion = !motion;
+  motionBtn.textContent = motion ? '❚❚ Pause drift' : '▶ Resume drift';
+  motionBtn.setAttribute('aria-pressed', String(motion));
+});
+const cssToggle = document.getElementById('cssToggle');
+cssToggle.addEventListener('click', () => {
+  cssMode = !cssMode;
+  cmpReal.classList.toggle('cssfake', cssMode);
+  cssToggle.textContent = cssMode ? 'Show as real shader instead' : 'Show as CSS blur instead';
+  cssToggle.setAttribute('aria-pressed', String(cssMode));
+});
+
+/* ---------------- render ---------------- */
+const bgU = { res: uni(bgProg,'uRes'), time: uni(bgProg,'uTime'), dark: uni(bgProg,'uDark') };
+const gU = { res: uni(glassProg,'uRes'), bg: uni(glassProg,'uBg'), dark: uni(glassProg,'uDark'),
+  shadow: uni(glassProg,'uShadow') };
+const gArr = {};
+['Rect','On','IOR','Thick','Bezel','Blur','Disp','Spec','Radius','Tint','TintAmt'].forEach(n => {
+  gArr[n] = []; for (let i = 0; i < NRECT; i++) gArr[n].push(uni(glassProg, 'u'+n+'['+i+']'));
+});
+
+const rectSources = [
+  ...PARAMS.map((p, i) => ({ el: cardEls[i], p })),
+  { el: labCard, p: labParams },
+];
+// index 5: comparison card (default shader params)
+const cmpParams = { ior:2.2, thick:26, bezel:36, blur:2.0, disp:0.5, spec:0.85, radius:28,
+  tint:[1,1,1], tintAmt:0.06 };
+rectSources.push({ el: cmpReal, p: cmpParams });
+
+function setRect(i, src){
+  const r = src.el.getBoundingClientRect();
+  const cx = (r.left + r.width/2) * DPR, cy = H - (r.top + r.height/2) * DPR;
+  const w = r.width * DPR, h = r.height * DPR;
+  const p = src.p;
+  const rad = Math.min(p.radius, Math.min(w, h)/2 - 1);
+  const on = (src.el.hasAttribute('data-noglass') || (src.el === cmpReal && cssMode)) ? 0 : 1;
+  gl.uniform4f(gArr.Rect[i], cx, cy, w, h);
+  gl.uniform1f(gArr.On[i], on);
+  gl.uniform1f(gArr.IOR[i], p.ior);
+  gl.uniform1f(gArr.Thick[i], p.thick * DPR);
+  gl.uniform1f(gArr.Bezel[i], p.bezel * DPR);
+  gl.uniform1f(gArr.Blur[i], p.blur * DPR);
+  gl.uniform1f(gArr.Disp[i], p.disp);
+  gl.uniform1f(gArr.Spec[i], p.spec);
+  gl.uniform1f(gArr.Radius[i], rad);
+  gl.uniform3f(gArr.Tint[i], p.tint[0], p.tint[1], p.tint[2]);
+  gl.uniform1f(gArr.TintAmt[i], p.tintAmt);
+}
+
+let t0 = performance.now(), simT = 0;
+function frame(){
+  if (motion) simT = (performance.now() - t0) / 1000;
+  // pass 1: bg -> FBO
+  gl.bindFramebuffer(gl.FRAMEBUFFER, bgFbo);
+  gl.viewport(0, 0, W, H);
+  gl.useProgram(bgProg); bindQuad(bgProg);
+  gl.uniform2f(bgU.res, W, H); gl.uniform1f(bgU.time, simT); gl.uniform1f(bgU.dark, dark?1:0);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  // pass 2: glass -> screen
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, W, H);
+  gl.useProgram(glassProg); bindQuad(glassProg);
+  gl.uniform2f(gU.res, W, H); gl.uniform1f(gU.dark, dark?1:0); gl.uniform1f(gU.shadow, 0.5);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, bgTex);
+  gl.uniform1i(gU.bg, 0);
+  for (let i = 0; i < NRECT; i++) setRect(i, rectSources[i]);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  requestAnimationFrame(frame);
+}
+frame();
+
+// live readout of lab values
+setInterval(() => {
+  document.getElementById('labVal').textContent =
+    `IOR ${labParams.ior.toFixed(2)} · blur ${labParams.blur.toFixed(1)} · CA ${labParams.disp.toFixed(2)}`;
+}, 300);
+</script>
+</body>
+</html>

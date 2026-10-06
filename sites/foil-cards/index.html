@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Gilded — Foil Greeting Cards</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Cormorant+Garamond:ital,wght@0,500;1,500;1,600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    background: #ffffff; color: #1c2333;
+    -webkit-user-select: none; user-select: none;
+  }
+  #scene { position: fixed; inset: 0; display: block; touch-action: manipulation; cursor: pointer; }
+  .brand {
+    position: fixed; top: max(16px, env(safe-area-inset-top)); left: 18px;
+    font-size: 15px; font-weight: 700; letter-spacing: -0.2px; pointer-events: none;
+  }
+  .brand small { display: block; font-size: 11px; font-weight: 400; color: #9aa1b5; margin-top: 2px; letter-spacing: 0; }
+  .heading { position: fixed; top: 12%; left: 0; right: 0; text-align: center; pointer-events: none; padding: 0 20px; }
+  .heading h1 { font-size: clamp(30px, 6vw, 44px); font-weight: 800; letter-spacing: -1.2px; color: #232838; }
+  .heading p { font-size: 13px; color: #9aa1b5; margin-top: 6px; }
+  .pill {
+    position: fixed; bottom: max(22px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(255,255,255,0.92); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border: 1px solid #e8eaf0; border-radius: 999px; padding: 10px 14px;
+    box-shadow: 0 10px 32px rgba(30,40,70,0.14);
+  }
+  .thumb {
+    width: 40px; height: 56px; border-radius: 8px; overflow: hidden; border: 2px solid transparent;
+    padding: 0; background: #f2f3f7; cursor: pointer; touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent; transition: transform .15s, border-color .15s;
+  }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+  .thumb.active { border-color: #232838; }
+  .thumb:active { transform: scale(0.94); }
+  .sep { width: 1px; height: 34px; background: #e8eaf0; }
+  .roundbtn {
+    width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer;
+    background: #232838; color: #fff; font-size: 17px;
+    display: flex; align-items: center; justify-content: center;
+    touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+    transition: transform .15s, background .15s;
+  }
+  .roundbtn.ghost { background: #f2f3f7; color: #232838; }
+  .roundbtn:active { transform: scale(0.92); }
+  .ver {
+    position: fixed; right: 12px; bottom: max(10px, env(safe-area-inset-bottom));
+    font-size: 10px; color: #c3c8d6; pointer-events: none;
+  }
+  .hint {
+    position: fixed; bottom: max(86px, env(safe-area-inset-bottom)); left: 0; right: 0;
+    text-align: center; font-size: 12px; color: #b6bccd; pointer-events: none;
+    transition: opacity .8s;
+  }
+  #fallback {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    text-align: center; padding: 30px; font-size: 15px; color: #6b7288; line-height: 1.6;
+  }
+  button { touch-action: manipulation; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div class="brand">Gilded<small>foil greeting cards · three.js</small></div>
+<div class="heading">
+  <h1>Foil cards</h1>
+  <p id="caption">Moonrise · silver foil on dusty rose</p>
+</div>
+<div class="hint" id="hint">move to catch the light · tap the card to open</div>
+<div class="pill" id="pill">
+  <button class="thumb active" data-i="0" aria-label="Moonrise"></button>
+  <button class="thumb" data-i="1" aria-label="Wildflower"></button>
+  <button class="thumb" data-i="2" aria-label="Starlight"></button>
+  <div class="sep"></div>
+  <button class="roundbtn" id="openBtn" aria-label="Open card" title="Open card">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z"/><path d="m2 7 10 7L22 7"/></svg>
+  </button>
+  <button class="roundbtn ghost" id="playBtn" aria-label="Pause motion" title="Pause motion">
+    <svg id="pauseIcon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+    <svg id="playIcon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M8 5.5v13a1 1 0 0 0 1.53.85l10.2-6.5a1 1 0 0 0 0-1.7L9.53 4.65A1 1 0 0 0 8 5.5z"/></svg>
+  </button>
+</div>
+<div class="ver">v2026.10.01-15.52</div>
+<div id="fallback"><div>This demo needs WebGL.<br>Please try a browser with WebGL enabled.</div></div>
+
+<script type="module">
+import * as THREE from 'three';
+
+/* ============================== card data ============================== */
+const CARDS = [
+  {
+    name: 'Moonrise', caption: 'Moonrise · silver foil on dusty rose',
+    paper: '#d9a8a4', edge: '#c08f8b',
+    foilWarmth: 0.0, // 0 = silver, 1 = gold
+    title: 'Moonrise', titleY: 0.44,
+    inside: 'Wishing you skies\nfull of silver light.',
+  },
+  {
+    name: 'Wildflower', caption: 'Wildflower · gold foil on warm cream',
+    paper: '#f6efdd', edge: '#e2d5b8',
+    foilWarmth: 1.0,
+    title: 'Wildflower', titleY: 0.40,
+    inside: 'Bloom exactly\nas you are.',
+  },
+  {
+    name: 'Starlight', caption: 'Starlight · holographic foil on midnight',
+    paper: '#20263f', edge: '#161b30',
+    foilWarmth: 0.45,
+    title: 'Starlight', titleY: 0.42,
+    inside: 'For the one who lights\nup every room.',
+  },
+];
+const TEX_W = 1024, TEX_H = 1448;
+
+/* ============================== texture painters ============================== */
+function cv(w, h) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  return [c, c.getContext('2d')];
+}
+// deterministic rng so the art is stable
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function star(ctx, x, y, r, fill) {
+  ctx.save(); ctx.translate(x, y); ctx.fillStyle = fill;
+  for (let k = 0; k < 4; k++) {
+    ctx.rotate(Math.PI / 2);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(r * 0.10, -r * 0.30); ctx.lineTo(0, -r); ctx.lineTo(-r * 0.10, -r * 0.30);
+    ctx.closePath(); ctx.fill();
+  }
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.25);
+  g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r * 0.25, 0, 7); ctx.fill();
+  ctx.restore();
+}
+function vine(ctx, x, y, s, flip, style, w) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(flip ? -s : s, s);
+  ctx.strokeStyle = style; ctx.lineCap = 'round'; ctx.lineWidth = w;
+  ctx.beginPath(); ctx.moveTo(0, 0);
+  ctx.bezierCurveTo(34, -46, -22, -96, 26, -148);
+  ctx.bezierCurveTo(58, -186, 18, -228, 48, -268);
+  ctx.stroke();
+  ctx.lineWidth = w * 0.7;
+  ctx.beginPath(); ctx.moveTo(8, -60); ctx.quadraticCurveTo(52, -70, 66, -110); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(6, -120); ctx.quadraticCurveTo(-34, -132, -40, -172); ctx.stroke();
+  ctx.lineWidth = w * 0.45;
+  for (const [lx, ly, lr] of [[66, -110, 16], [-40, -172, 14], [48, -268, 18]]) {
+    ctx.beginPath(); ctx.arc(lx, ly, lr, 0.4, 5.2); ctx.stroke();
+  }
+  ctx.restore();
+}
+function shade(hex, amt) { // lighten/darken hex color
+  const n = parseInt(hex.slice(1), 16);
+  let r = (n >> 16) + amt, g = ((n >> 8) & 255) + amt, b = (n & 255) + amt;
+  r = Math.max(0, Math.min(255, r)); g = Math.max(0, Math.min(255, g)); b = Math.max(0, Math.min(255, b));
+  return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
+}
+function paperGrain(ctx, rnd, alpha) {
+  ctx.save(); ctx.globalAlpha = alpha;
+  for (let i = 0; i < 2600; i++) {
+    const v = rnd() > 0.5 ? 255 : 0;
+    ctx.fillStyle = 'rgba(' + v + ',' + v + ',' + v + ',0.5)';
+    ctx.fillRect(rnd() * TEX_W, rnd() * TEX_H, 1.4, 1.4);
+  }
+  ctx.restore();
+}
+function bouquet(ctx, cx, cy, R, rnd) {
+  const petals = ['#e88ca0', '#d96a86', '#f0a8b8', '#c94f6d'];
+  const leaves = ['#7d9b6a', '#5f7f52', '#93ad7c'];
+  const accents = ['#e9b64f', '#d98e3b'];
+  ctx.save();
+  for (let i = 0; i < 30; i++) { // leaves
+    const a = rnd() * Math.PI * 2, d = R * (0.35 + rnd() * 0.75);
+    const x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d * 0.8;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(a + Math.PI / 2);
+    ctx.globalAlpha = 0.5; ctx.fillStyle = leaves[(rnd() * leaves.length) | 0];
+    ctx.beginPath(); ctx.ellipse(0, 0, R * 0.16, R * 0.34, 0, 0, 7); ctx.fill();
+    ctx.restore();
+  }
+  for (let f = 0; f < 8; f++) { // blossoms
+    const a = rnd() * Math.PI * 2, d = R * rnd() * 0.62;
+    const x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d * 0.75;
+    const r = R * (0.16 + rnd() * 0.16), col = petals[(rnd() * petals.length) | 0];
+    for (let p = 0; p < 5; p++) {
+      ctx.save(); ctx.translate(x, y); ctx.rotate((p / 5) * Math.PI * 2 + rnd());
+      ctx.globalAlpha = 0.62; ctx.fillStyle = col;
+      ctx.beginPath(); ctx.ellipse(0, -r * 0.6, r * 0.36, r * 0.62, 0, 0, 7); ctx.fill();
+      ctx.restore();
+    }
+    ctx.globalAlpha = 0.9; ctx.fillStyle = accents[(rnd() * accents.length) | 0];
+    for (let s = 0; s < 6; s++) {
+      ctx.beginPath(); ctx.arc(x + (rnd() - 0.5) * r * 0.5, y + (rnd() - 0.5) * r * 0.5, r * 0.09, 0, 7); ctx.fill();
+    }
+  }
+  ctx.restore(); ctx.globalAlpha = 1;
+}
+function rippleBand(ctx, maskCtx, y0, h, silver) {
+  const rnd = mulberry32(77);
+  ctx.fillStyle = '#3d3347'; ctx.fillRect(0, y0, TEX_W, h);
+  maskCtx.fillStyle = '#000'; maskCtx.fillRect(0, y0, TEX_W, h);
+  for (let row = 0; row < 7; row++) {
+    const y = y0 + 24 + row * ((h - 40) / 6);
+    for (let x = -40; x < TEX_W + 40; x += 64 + rnd() * 40) {
+      const w = 60 + rnd() * 70, hh = 10 + rnd() * 8;
+      ctx.strokeStyle = 'rgba(226,232,244,' + (0.25 + rnd() * 0.3) + ')';
+      ctx.lineWidth = 3 + rnd() * 3;
+      ctx.beginPath(); ctx.ellipse(x, y, w, hh, 0, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+      maskCtx.strokeStyle = 'rgba(255,255,255,0.85)'; maskCtx.lineWidth = ctx.lineWidth;
+      maskCtx.beginPath(); maskCtx.ellipse(x, y, w, hh, 0, 0.15 * Math.PI, 0.85 * Math.PI); maskCtx.stroke();
+    }
+  }
+  // soft top edge fade into paper
+  const g = ctx.createLinearGradient(0, y0 - 30, 0, y0 + 40);
+  g.addColorStop(0, 'rgba(61,51,71,0)'); g.addColorStop(1, 'rgba(61,51,71,1)');
+  ctx.fillStyle = g; ctx.fillRect(0, y0 - 30, TEX_W, 70);
+  void silver;
+}
+
+function paintFront(card, idx) {
+  const rnd = mulberry32(1000 + idx * 131);
+  const [mapC, map] = cv(TEX_W, TEX_H);
+  const [foilC, foil] = cv(TEX_W, TEX_H);
+  const [bumpC, bump] = cv(TEX_W, TEX_H);
+  map.fillStyle = card.paper; map.fillRect(0, 0, TEX_W, TEX_H);
+  foil.fillStyle = '#000'; foil.fillRect(0, 0, TEX_W, TEX_H);
+  bump.fillStyle = '#808080'; bump.fillRect(0, 0, TEX_W, TEX_H);
+
+  const silver = card.foilWarmth < 0.5;
+  const foilGrad = (ctx, y0, y1) => {
+    const g = ctx.createLinearGradient(0, y0, 0, y1);
+    if (silver) { g.addColorStop(0, '#f7f9fc'); g.addColorStop(0.5, '#d5dbe6'); g.addColorStop(1, '#f2f4f8'); }
+    else { g.addColorStop(0, '#ffedbe'); g.addColorStop(0.5, '#ddad55'); g.addColorStop(1, '#ffedbe'); }
+    return g;
+  };
+
+  if (idx === 0) { // Moonrise — rose, vines, starbursts, ripple band
+    vine(map, 90, TEX_H - 120, 2.1, false, shade(card.paper, 26), 9);
+    vine(map, TEX_W - 90, TEX_H - 120, 2.1, true, shade(card.paper, 26), 9);
+    vine(bump, 90, TEX_H - 120, 2.1, false, '#e8e8e8', 9);
+    vine(bump, TEX_W - 90, TEX_H - 120, 2.1, true, '#e8e8e8', 9);
+    const stars = [[300, 300, 46], [560, 230, 60], [740, 330, 40], [220, 560, 52], [640, 620, 42], [830, 700, 56], [430, 900, 64], [180, 260, 34], [880, 240, 34]];
+    for (const [x, y, r] of stars) {
+      star(map, x, y, r, 'rgba(238,242,248,0.9)');
+      star(foil, x, y, r, '#fff');
+      star(bump, x, y, r, 'rgba(255,255,255,0.5)');
+    }
+    rippleBand(map, foil, TEX_H * 0.78, TEX_H * 0.22, silver);
+  } else if (idx === 1) { // Wildflower — cream, gold border, bouquet
+    map.strokeStyle = '#d9b25f'; map.lineWidth = 7;
+    map.strokeRect(42, 42, TEX_W - 84, TEX_H - 84);
+    foil.strokeStyle = '#fff'; foil.lineWidth = 7;
+    foil.strokeRect(42, 42, TEX_W - 84, TEX_H - 84);
+    bouquet(map, TEX_W / 2, TEX_H * 0.68, 300, rnd);
+  } else { // Starlight — midnight, dot stars, foil border
+    for (let i = 0; i < 130; i++) {
+      map.fillStyle = 'rgba(255,255,255,' + (0.12 + rnd() * 0.4) + ')';
+      const r = 1 + rnd() * 2.4;
+      map.beginPath(); map.arc(rnd() * TEX_W, rnd() * TEX_H, r, 0, 7); map.fill();
+    }
+    map.strokeStyle = 'rgba(230,235,245,0.75)'; map.lineWidth = 5;
+    map.strokeRect(42, 42, TEX_W - 84, TEX_H - 84);
+    foil.strokeStyle = '#fff'; foil.lineWidth = 5;
+    foil.strokeRect(42, 42, TEX_W - 84, TEX_H - 84);
+    const stars = [[240, 330, 54], [790, 300, 44], [520, 220, 38], [680, 780, 60], [300, 900, 46], [860, 640, 40]];
+    for (const [x, y, r] of stars) {
+      star(map, x, y, r, 'rgba(240,244,252,0.95)');
+      star(foil, x, y, r, '#fff');
+    }
+  }
+
+  // foil script title on both maps
+  const ty = TEX_H * card.titleY;
+  map.save(); foil.save();
+  map.textAlign = 'center'; foil.textAlign = 'center';
+  map.font = '190px "Great Vibes", "Snell Roundhand", cursive';
+  foil.font = '190px "Great Vibes", "Snell Roundhand", cursive';
+  map.shadowColor = 'rgba(60,50,40,0.35)'; map.shadowBlur = 6; map.shadowOffsetY = 3;
+  // stamped-foil bevel: dark offset under the gradient face
+  map.fillStyle = silver ? 'rgba(110,120,142,0.6)' : 'rgba(140,95,30,0.6)';
+  map.fillText(card.title, TEX_W / 2 + 3, ty + 5);
+  map.fillStyle = foilGrad(map, ty - 150, ty + 60);
+  map.fillText(card.title, TEX_W / 2, ty);
+  foil.fillStyle = '#fff';
+  foil.fillText(card.title, TEX_W / 2, ty);
+  map.restore(); foil.restore();
+
+  paperGrain(map, rnd, 0.05);
+  return { map: mapC, foil: foilC, bump: bumpC };
+}
+
+function paintInsideLeft(card, idx) {
+  const [mapC, map] = cv(TEX_W, TEX_H);
+  const [foilC, foil] = cv(TEX_W, TEX_H);
+  const [bumpC, bump] = cv(TEX_W, TEX_H);
+  map.fillStyle = card.paper; map.fillRect(0, 0, TEX_W, TEX_H);
+  foil.fillStyle = '#000'; foil.fillRect(0, 0, TEX_W, TEX_H);
+  bump.fillStyle = '#808080'; bump.fillRect(0, 0, TEX_W, TEX_H);
+  const rnd = mulberry32(500 + idx * 17);
+  if (idx === 0) {
+    vine(map, 120, TEX_H - 100, 2.4, false, shade(card.paper, 26), 9);
+    vine(bump, 120, TEX_H - 100, 2.4, false, '#e8e8e8', 9);
+    for (const [x, y, r] of [[330, 420, 56], [600, 330, 38], [520, 560, 44], [200, 620, 40]]) {
+      star(map, x, y, r, 'rgba(238,242,248,0.9)'); star(foil, x, y, r, '#fff');
+    }
+  } else if (idx === 1) {
+    bouquet(map, TEX_W * 0.5, TEX_H * 0.42, 260, rnd);
+  } else {
+    for (let i = 0; i < 90; i++) {
+      map.fillStyle = 'rgba(255,255,255,' + (0.1 + rnd() * 0.35) + ')';
+      map.beginPath(); map.arc(rnd() * TEX_W, rnd() * TEX_H, 1 + rnd() * 2.2, 0, 7); map.fill();
+    }
+    for (const [x, y, r] of [[380, 420, 52], [640, 560, 44]]) {
+      star(map, x, y, r, 'rgba(240,244,252,0.95)'); star(foil, x, y, r, '#fff');
+    }
+  }
+  paperGrain(map, rnd, 0.05);
+  return { map: mapC, foil: foilC, bump: bumpC };
+}
+
+function paintInsideRight(card) {
+  const [mapC, map] = cv(TEX_W, TEX_H);
+  const [foilC, foil] = cv(TEX_W, TEX_H);
+  const [bumpC, bump] = cv(TEX_W, TEX_H);
+  map.fillStyle = card.paper; map.fillRect(0, 0, TEX_W, TEX_H);
+  foil.fillStyle = '#000'; foil.fillRect(0, 0, TEX_W, TEX_H);
+  bump.fillStyle = '#808080'; bump.fillRect(0, 0, TEX_W, TEX_H);
+  // cream insert
+  map.save();
+  map.shadowColor = 'rgba(50,45,60,0.25)'; map.shadowBlur = 24; map.shadowOffsetY = 8;
+  map.fillStyle = '#fbf7ec';
+  const ix = 90, iy = 130, iw = TEX_W - 180, ih = TEX_H - 260;
+  map.beginPath(); map.roundRect(ix, iy, iw, ih, 26); map.fill();
+  map.restore();
+  // handwritten message
+  map.fillStyle = '#3c4252'; map.textAlign = 'center';
+  map.font = 'italic 600 72px "Cormorant Garamond", Georgia, serif';
+  const lines = card.inside.split('\n');
+  const cy = TEX_H / 2 - (lines.length - 1) * 48;
+  lines.forEach((ln, i) => map.fillText(ln, TEX_W / 2, cy + i * 96));
+  star(map, TEX_W / 2, cy + lines.length * 96 + 40, 34, 'rgba(160,168,188,0.85)');
+  star(foil, TEX_W / 2, cy + lines.length * 96 + 40, 34, 'rgba(255,255,255,0.9)');
+  const rnd = mulberry32(9);
+  paperGrain(map, rnd, 0.04);
+  return { map: mapC, foil: foilC, bump: bumpC };
+}
+
+function paintBack(card) {
+  const [mapC, map] = cv(TEX_W, TEX_H);
+  map.fillStyle = card.paper; map.fillRect(0, 0, TEX_W, TEX_H);
+  // little barcode, like a real card back
+  map.fillStyle = 'rgba(30,32,40,0.6)';
+  let bx = TEX_W / 2 - 72;
+  for (let i = 0; i < 26; i++) {
+    const wdt = 2 + ((i * 7) % 3) * 2;
+    map.fillRect(bx, TEX_H - 250, wdt, 58);
+    bx += wdt + 2 + ((i * 5) % 3);
+  }
+  map.fillStyle = 'rgba(30,32,40,0.45)'; map.textAlign = 'center';
+  map.font = '30px -apple-system, system-ui, sans-serif';
+  map.fillText('gilded · foil greeting cards', TEX_W / 2, TEX_H - 160);
+  map.fillStyle = 'rgba(0,0,0,0.14)'; map.textAlign = 'center';
+  map.font = '64px "Great Vibes", cursive';
+  map.fillText('Gilded', TEX_W / 2, TEX_H - 60);
+  const rnd = mulberry32(31);
+  paperGrain(map, rnd, 0.05);
+  const [eC, e] = cv(8, 8);
+  e.fillStyle = '#000'; e.fillRect(0, 0, 8, 8);
+  const [bC, b] = cv(8, 8);
+  b.fillStyle = '#808080'; b.fillRect(0, 0, 8, 8);
+  return { map: mapC, foil: eC, bump: bC };
+}
+
+function paintEdge(color) {
+  const [c, x] = cv(8, 8); x.fillStyle = color; x.fillRect(0, 0, 8, 8);
+  const [f, fx] = cv(8, 8); fx.fillStyle = '#000'; fx.fillRect(0, 0, 8, 8);
+  const [b, bx] = cv(8, 8); bx.fillStyle = '#808080'; bx.fillRect(0, 0, 8, 8);
+  return { map: c, foil: f, bump: b };
+}
+
+function paintShadowTex() {
+  const [c, x] = cv(256, 256);
+  const g = x.createRadialGradient(128, 128, 10, 128, 128, 128);
+  g.addColorStop(0, 'rgba(40,48,72,0.34)'); g.addColorStop(0.6, 'rgba(40,48,72,0.12)'); g.addColorStop(1, 'rgba(40,48,72,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 256, 256);
+  return c;
+}
+
+/* ============================== three.js scene ============================== */
+const canvas = document.getElementById('scene');
+const captionEl = document.getElementById('caption');
+const hintEl = document.getElementById('hint');
+let renderer = null;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+} catch (e) { renderer = null; }
+if (!renderer || !renderer.getContext()) {
+  document.getElementById('fallback').style.display = 'flex';
+  throw new Error('no webgl');
+}
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 60);
+const CAM_Z = 10.4;
+camera.position.set(0, 0.45, CAM_Z);
+camera.lookAt(0, -0.1, 0);
+
+const VERT = `
+varying vec2 vUv; varying vec3 vN; varying vec3 vWp;
+void main(){
+  vUv = uv;
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vWp = wp.xyz;
+  vN = normalize(mat3(modelMatrix) * normal);
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}`;
+const FRAG = `
+uniform sampler2D uMap;
+uniform sampler2D uFoil;
+uniform sampler2D uBump;
+uniform float uWarmth;
+uniform float uTime;
+uniform vec3 uLightDir;
+varying vec2 vUv; varying vec3 vN; varying vec3 vWp;
+vec3 hsv2rgb(vec3 c){
+  vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
+  vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float vnoise(vec2 p){
+  vec2 i = floor(p); vec2 f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+             mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+// tiny procedural studio: gradient + key softbox + rim strip + floor bounce
+vec3 envColor(vec3 R){
+  vec3 col = mix(vec3(0.15, 0.17, 0.22), vec3(0.52, 0.55, 0.62), smoothstep(-0.5, 0.9, R.y));
+  float key = pow(max(dot(R, normalize(vec3(-0.45, 0.75, 0.5))), 0.0), 16.0);
+  col += vec3(1.0, 0.97, 0.92) * key * 1.7;
+  float strip = pow(max(dot(R, normalize(vec3(0.75, 0.05, -0.35))), 0.0), 42.0);
+  col += vec3(0.75, 0.82, 1.0) * strip * 0.9;
+  float low = pow(max(dot(R, normalize(vec3(0.1, -1.0, 0.2))), 0.0), 6.0);
+  col += vec3(0.9, 0.85, 0.8) * low * 0.25;
+  return col;
+}
+void main(){
+  vec3 albedo = texture2D(uMap, vUv).rgb;
+  float e = 1.5 / 1024.0;
+  float b0 = texture2D(uBump, vUv).r;
+  float bx = texture2D(uBump, vUv + vec2(e, 0.0)).r - b0;
+  float by = texture2D(uBump, vUv + vec2(0.0, e)).r - b0;
+  // gentle paper unevenness so reflections feel physical, not CG-flat
+  vec2 wob = vec2(vnoise(vUv * 3.1) - 0.5, vnoise(vUv * 2.7 + 13.0) - 0.5);
+  vec3 N = normalize(vN + vec3(-bx * 3.0 + wob.x * 0.10, -by * 3.0 + wob.y * 0.10, 0.0));
+  vec3 V = normalize(cameraPosition - vWp);
+  vec3 L = normalize(uLightDir);
+  float ndl = max(dot(N, L), 0.0);
+  // paper: fine grain + long fibers + roughness variation
+  float grain = vnoise(vUv * vec2(700.0, 1000.0)) * 0.05;
+  float fiber = vnoise(vec2(vUv.x * 36.0, vUv.y * 900.0)) * 0.04;
+  float rough = 0.9 + vnoise(vUv * 8.0) * 0.2;
+  vec3 col = albedo * (0.72 + 0.38 * ndl * rough) - (grain + fiber);
+  // subtle edge AO, like a real cut card edge
+  float edge = min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y));
+  col *= 0.93 + 0.07 * smoothstep(0.0, 0.035, edge);
+
+  float mask = texture2D(uFoil, vUv).r;
+  if (mask > 0.004) {
+    // real foil: a mirror first, rainbow diffraction second
+    vec3 R = reflect(-V, N);
+    vec3 env = envColor(R);
+    float ndv = clamp(dot(N, V), 0.0, 1.0);
+    float diffAngle = sin(ndv * 3.14159);
+    float hue = fract(ndv * 1.9 + vnoise(vUv * 44.0) * 0.28 + uTime * 0.018);
+    vec3 irid = hsv2rgb(vec3(hue, 0.5, 1.0));
+    float sparkle = step(0.984, vnoise(vUv * vec2(1600.0, 2400.0) + vec2(uTime * 0.5, -uTime * 0.35)));
+    vec3 metal = mix(vec3(0.96, 0.97, 1.0), vec3(1.0, 0.86, 0.58), uWarmth);
+    float spec = pow(max(dot(R, L), 0.0), 70.0);
+    vec3 foilCol = env * metal * (0.5 + 0.8 * ndv);
+    foilCol += irid * (0.2 + 0.8 * diffAngle) * 0.5;
+    foilCol += vec3(1.0, 0.99, 0.97) * spec * 1.6 + sparkle * vec3(1.15);
+    float lum = dot(albedo, vec3(0.299, 0.587, 0.114));
+    foilCol *= (0.72 + 0.56 * lum);
+    col = mix(col, foilCol, clamp(mask * 1.2, 0.0, 1.0));
+  }
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+function foilMaterial(tex, warmth) {
+  const tmap = new THREE.CanvasTexture(tex.map);
+  const tfoil = new THREE.CanvasTexture(tex.foil);
+  const tbump = new THREE.CanvasTexture(tex.bump);
+  for (const t of [tmap, tfoil, tbump]) { t.anisotropy = 8; }
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uMap: { value: tmap }, uFoil: { value: tfoil }, uBump: { value: tbump },
+      uWarmth: { value: warmth }, uTime: { value: Math.random() * 10 },
+      uLightDir: { value: new THREE.Vector3(0.45, 0.75, 0.8).normalize() },
+    },
+    vertexShader: VERT, fragmentShader: FRAG,
+  });
+}
+
+const W = 3.4, H = 4.8, T = 0.035;
+const cardGroup = new THREE.Group();
+scene.add(cardGroup);
+const coverGroup = new THREE.Group();
+coverGroup.position.set(-W / 2, 0, 0);
+cardGroup.add(coverGroup);
+
+let coverMesh = null, panelMesh = null;
+let cardMats = []; // all shader materials, for uTime updates
+function buildCard(idx) {
+  const card = CARDS[idx];
+  if (coverMesh) {
+    coverGroup.remove(coverMesh); cardGroup.remove(panelMesh);
+    for (const m of cardMats) {
+      for (const k of ['uMap', 'uFoil', 'uBump']) m.uniforms[k].value.dispose();
+      m.dispose();
+    }
+  }
+  cardMats = [];
+  const front = paintFront(card, idx);
+  const inL = paintInsideLeft(card, idx);
+  const inR = paintInsideRight(card);
+  const back = paintBack(card);
+  const edge = paintEdge(card.edge);
+  const mEdge = foilMaterial(edge, 0); cardMats.push(mEdge);
+  const mFront = foilMaterial(front, card.foilWarmth); cardMats.push(mFront);
+  const mInR = foilMaterial(inR, card.foilWarmth); cardMats.push(mInR);
+  const mInL = foilMaterial(inL, card.foilWarmth); cardMats.push(mInL);
+  const mBack = foilMaterial(back, 0); cardMats.push(mBack);
+
+  const coverGeo = new THREE.BoxGeometry(W, H, T);
+  coverMesh = new THREE.Mesh(coverGeo, [mEdge, mEdge, mEdge, mEdge, mFront, mInR]);
+  coverMesh.position.set(W / 2, 0, 0);
+  coverGroup.add(coverMesh);
+  const panelGeo = new THREE.BoxGeometry(W, H, T);
+  panelMesh = new THREE.Mesh(panelGeo, [mEdge, mEdge, mEdge, mEdge, mInL, mBack]);
+  panelMesh.position.set(-W / 2, 0, -T - 0.004);
+  cardGroup.add(panelMesh);
+
+  captionEl.textContent = card.caption;
+  document.querySelectorAll('.thumb').forEach((b, i) => b.classList.toggle('active', i === idx));
+}
+
+// soft backdrop shadow
+{
+  const st = new THREE.CanvasTexture(paintShadowTex());
+  const sm = new THREE.MeshBasicMaterial({ map: st, transparent: true, depthWrite: false });
+  const sh = new THREE.Mesh(new THREE.PlaneGeometry(9, 9), sm);
+  sh.position.set(0, -0.3, -1.4);
+  scene.add(sh);
+}
+
+/* ============================== interaction ============================== */
+let targetRX = 0, targetRY = 0, curRX = 0, curRY = 0;
+let openTarget = 0, openT = 0;
+let playing = true;
+let cardIdx = 0;
+let interacted = false;
+
+function onMove(x, y) {
+  const nx = (x / window.innerWidth) * 2 - 1;
+  const ny = (y / window.innerHeight) * 2 - 1;
+  targetRY = nx * 0.38;
+  targetRX = ny * 0.22;
+  if (!interacted) { interacted = true; hintEl.style.opacity = '0'; }
+}
+window.addEventListener('pointermove', (e) => onMove(e.clientX, e.clientY), { passive: true });
+canvas.addEventListener('click', () => { openTarget = openTarget > 0.5 ? 0 : 1; });
+document.getElementById('openBtn').addEventListener('click', (e) => {
+  e.stopPropagation(); openTarget = openTarget > 0.5 ? 0 : 1;
+});
+const playBtn = document.getElementById('playBtn');
+playBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  playing = !playing;
+  document.getElementById('pauseIcon').style.display = playing ? '' : 'none';
+  document.getElementById('playIcon').style.display = playing ? 'none' : '';
+  playBtn.setAttribute('aria-label', playing ? 'Pause motion' : 'Play motion');
+});
+function selectCard(i) {
+  if (i === cardIdx) { openTarget = 0; return; }
+  cardIdx = (i + CARDS.length) % CARDS.length;
+  openTarget = 0; openT = Math.min(openT, 0.35);
+  buildCard(cardIdx);
+}
+document.querySelectorAll('.thumb').forEach((b) => {
+  b.addEventListener('click', (e) => { e.stopPropagation(); selectCard(+b.dataset.i); });
+});
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight') selectCard(cardIdx + 1);
+  if (e.key === 'ArrowLeft') selectCard(cardIdx - 1);
+  if (e.key === ' ') { e.preventDefault(); openTarget = openTarget > 0.5 ? 0 : 1; }
+});
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+
+const easeInOut = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+const clock = new THREE.Clock();
+function loop() {
+  requestAnimationFrame(loop);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = clock.elapsedTime;
+
+  curRX += (targetRX - curRX) * 0.07;
+  curRY += (targetRY - curRY) * 0.07;
+  const sway = playing ? 1 : 0;
+  cardGroup.rotation.y = curRY + Math.sin(t * 0.55) * 0.07 * sway;
+  cardGroup.rotation.x = curRX + Math.cos(t * 0.42) * 0.05 * sway;
+
+  const speed = 1.7;
+  openT += Math.sign(openTarget - openT) * Math.min(Math.abs(openTarget - openT), dt * speed);
+  const oe = easeInOut(Math.max(0, Math.min(1, openT)));
+  coverGroup.rotation.y = -Math.PI * oe;
+  cardGroup.position.x = 2.55 * oe;
+  // responsive fit: card takes ~62% of the space between heading and pill
+  const vH = THREE.MathUtils.degToRad(camera.fov / 2);
+  const hH = Math.atan(Math.tan(vH) * camera.aspect);
+  const visHW = CAM_Z * Math.tan(hH);
+  const visHH = CAM_Z * Math.tan(vH);
+  const usableHH = visHH * (1 - 0.16 - 0.15); // heading above, pill below
+  const portrait = camera.aspect < 1 ? 0.72 : 1; // extra breathing room on phones
+  const fit = Math.min(1, visHW / 2.75, usableHH / 3.9) * portrait;
+  const s = (1 - 0.16 * oe) * fit;
+  cardGroup.scale.set(s, s, 1);
+  const zOpen = (2.95 * fit + 0.3) / Math.tan(hH);
+  camera.position.z = Math.max(CAM_Z + 2.1 * oe, CAM_Z + (zOpen - CAM_Z) * oe);
+
+  if (playing) for (const m of cardMats) m.uniforms.uTime.value += dt;
+  renderer.render(scene, camera);
+}
+
+/* ============================== boot ============================== */
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+    this.moveTo(x + r, y); this.arcTo(x + w, y, x + w, y + h, r);
+    this.arcTo(x + w, y + h, x, y + h, r); this.arcTo(x, y + h, x, y, r);
+    this.arcTo(x, y, x + w, y, r); this.closePath(); return this;
+  };
+}
+function thumbURL(mapCanvas) {
+  const [c, x] = cv(96, 136);
+  x.drawImage(mapCanvas, 0, 0, 96, 136);
+  return c.toDataURL();
+}
+(async function boot() {
+  try {
+    await Promise.race([
+      Promise.all([
+        document.fonts.load('190px "Great Vibes"'),
+        document.fonts.load('italic 600 72px "Cormorant Garamond"'),
+      ]),
+      new Promise((r) => setTimeout(r, 2800)),
+    ]);
+  } catch (e) { /* fall back to system script fonts */ }
+  // thumbnails from freshly painted fronts
+  document.querySelectorAll('.thumb').forEach((b, i) => {
+    const f = paintFront(CARDS[i], i);
+    const img = document.createElement('img');
+    img.src = thumbURL(f.map); img.alt = CARDS[i].name;
+    b.appendChild(img);
+  });
+  buildCard(0);
+  resize();
+  loop();
+})();
+</script>
+</body>
+</html>

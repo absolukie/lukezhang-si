@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grok Bot — AI teammates that finish the work</title>
+<style>
+  :root{
+    --bg:#ffffff; --card:#F6F5F2; --pill:#EFEEEA;
+    --ink:#0D0D0D; --sub:#6B6B6B; --line:#E8E6E1;
+    --teal-bg:#D3EEEA; --teal-ink:#0E5F57;
+    --gold-bg:#FEF3C7; --gold-bd:#FCD34D; --gold-ink:#92400E;
+    --magenta:#EB4699;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  button{touch-action:manipulation;font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1240px;margin:0 auto;padding:0 32px}
+  h1,h2{font-weight:500;letter-spacing:-0.035em;line-height:1.08;text-wrap:balance}
+  p.sub{color:var(--sub);font-size:17px;line-height:1.65;letter-spacing:-0.01em}
+
+  /* ---------- nav ---------- */
+  nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.86);
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+  .nav-in{max-width:1240px;margin:0 auto;padding:0 32px;height:64px;display:flex;align-items:center;gap:28px}
+  .wordmark{font-weight:800;letter-spacing:.14em;font-size:15px;white-space:nowrap}
+  .wordmark .x{font-weight:400}
+  .nav-links{display:flex;gap:22px;font-size:14px;font-weight:500}
+  .nav-links a{display:flex;align-items:center;gap:4px;color:#222}
+  .nav-links a:hover{color:#000}
+  .nav-links .caret{font-size:9px;color:#999}
+  .nav-right{margin-left:auto;display:flex;gap:10px;align-items:center}
+  .btn{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 22px;
+    border-radius:999px;font-size:14.5px;font-weight:600;white-space:nowrap;transition:transform .15s ease, box-shadow .15s ease, background .2s}
+  .btn:active{transform:scale(.97)}
+  .btn-dark{background:#000;color:#fff}
+  .btn-dark:hover{box-shadow:0 6px 20px rgba(0,0,0,.22)}
+  .btn-light{background:var(--pill);color:#111}
+  .btn-light:hover{background:#E5E3DD}
+  .btn-split{display:flex;overflow:hidden;border-radius:999px}
+  .btn-split .btn-dark{border-radius:999px 0 0 999px;padding-right:16px}
+  .btn-split .chev{background:#000;color:#fff;border-radius:0 999px 999px 0;padding:0 14px 0 10px;border-left:1px solid #333;font-size:11px}
+
+  /* ---------- hero ---------- */
+  .hero{text-align:center;padding:88px 0 0}
+  .announce{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;
+    padding:8px 8px 8px 16px;border-radius:999px;background:var(--pill);margin-bottom:28px}
+  .announce .arr{width:26px;height:26px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:12px}
+  .hero h1{font-size:64px;display:flex;align-items:center;justify-content:center;gap:18px;flex-wrap:wrap}
+  .hero h1 .blob{width:76px;height:76px;flex:none}
+  .hero .sub{max-width:620px;margin:22px auto 0}
+  .hero-cta{display:flex;gap:12px;justify-content:center;margin-top:30px;flex-wrap:wrap}
+
+  /* ---------- desktop chat mockup ---------- */
+  .desk{margin:56px auto 0;max-width:1010px;background:#FBFAF8;border:1px solid var(--line);
+    border-radius:20px;overflow:hidden;box-shadow:0 30px 80px -30px rgba(0,0,0,.18);text-align:left}
+  .desk-bar{display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
+  .dots{display:flex;gap:7px}
+  .dots i{width:11px;height:11px;border-radius:50%;display:block}
+  .desk-body{display:grid;grid-template-columns:250px 1fr;min-height:380px}
+  .desk-side{border-right:1px solid var(--line);padding:12px}
+  .search{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 12px;
+    font-size:13px;color:#999;margin-bottom:10px}
+  .agent-row{display:flex;gap:10px;align-items:center;padding:9px 10px;border-radius:12px}
+  .agent-row.sel{background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+  .avatar{width:32px;height:32px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;position:relative}
+  .avatar .nub{position:absolute;top:-2px;right:-2px;width:10px;height:10px;border-radius:50%;background:#FF5A5A;border:2px solid #FBFAF8}
+  .agent-row .nm{font-size:13.5px;font-weight:600}
+  .agent-row .tm{margin-left:auto;font-size:11px;color:#999}
+  .agent-row .pv{font-size:12px;color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}
+  .desk-main{padding:18px 22px;position:relative}
+  .desk-main .ttl{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;margin-bottom:18px}
+  .spawn{color:#B9B5AC;font-size:14px;display:flex;align-items:center;gap:8px}
+  .spawn .pulse{display:flex;gap:4px}
+  .spawn .pulse i{width:7px;height:7px;border-radius:50%;background:#EB9E23;animation:pl 1.2s infinite}
+  .spawn .pulse i:nth-child(2){animation-delay:.2s}.spawn .pulse i:nth-child(3){animation-delay:.4s}
+  @keyframes pl{0%,100%{opacity:.25}50%{opacity:1}}
+  .msg{max-width:430px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px;
+    font-size:13.5px;line-height:1.55;margin:10px 0;box-shadow:0 4px 14px rgba(0,0,0,.05)}
+  .msg .who{font-size:12px;font-weight:700;color:var(--sub);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+  .msg .row{display:flex;gap:8px;margin-top:10px}
+  .chipbtn{font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:999px}
+  .chipbtn.dark{background:#000;color:#fff}
+  .chipbtn.line{border:1px solid var(--line);background:#fff}
+  .me-bubble{background:#000;color:#fff;border-radius:14px;padding:10px 14px;font-size:13.5px;max-width:300px;margin:14px 0 0 auto}
+  .desk-input{margin:18px 4px 0;background:#fff;border:1px solid var(--line);border-radius:999px;
+    padding:10px 8px 10px 16px;display:flex;align-items:center;gap:10px;font-size:13.5px;color:#999}
+  .desk-input .mic{margin-left:auto;width:30px;height:30px;border-radius:50%;background:#000;color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:13px;flex:none}
+  .desk-input .plus{font-size:18px;color:#999}
+
+  /* ---------- sections ---------- */
+  section.block{padding:110px 0 0}
+  .card{background:var(--card);border-radius:24px;padding:56px;overflow:hidden;position:relative}
+  .h2{font-size:40px;margin-bottom:18px}
+  .center{text-align:center}
+  .center .sub{max-width:560px;margin:0 auto}
+
+  /* teammates card */
+  .team-card{display:grid;grid-template-columns:1fr 1fr;align-items:center;min-height:340px}
+  .team-card .txt{max-width:420px}
+  .blob-huge{position:absolute;right:-140px;top:50%;transform:translateY(-50%);width:520px;height:520px;pointer-events:none}
+
+  /* feature grid */
+  .feat-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:56px}
+  .feat{background:var(--card);border-radius:24px;padding:40px;overflow:hidden;position:relative;min-height:420px;display:flex;flex-direction:column}
+  .feat h3{font-size:22px;font-weight:600;letter-spacing:-0.02em;margin-bottom:10px}
+  .feat p{color:var(--sub);font-size:15px;line-height:1.6;max-width:340px}
+  .feat .demo{margin-top:auto;padding-top:30px}
+  .mem{background:linear-gradient(135deg,#EDE9FE,#FDF3E7);border-radius:16px;padding:20px;box-shadow:0 12px 30px rgba(0,0,0,.08)}
+  .mem .mrow{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.75);border-radius:12px;
+    padding:10px 12px;font-size:13px;margin-bottom:8px;transition:opacity .3s ease-out}
+  .mem .mrow:last-child{margin-bottom:0}
+  .mem .tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;background:#fff}
+  .conn-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .conn{background:#fff;border-radius:14px;padding:16px 8px;text-align:center;font-size:12px;font-weight:600;
+    box-shadow:0 4px 12px rgba(0,0,0,.05);transition:opacity .3s ease-out}
+  .conn .ic{font-size:20px;display:block;margin-bottom:6px}
+  .spin{width:16px;height:16px;border:2px solid #D8D4CB;border-top-color:#000;border-radius:50%;
+    display:inline-block;animation:sp 1s linear infinite;vertical-align:-3px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .status-pill{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;
+    background:#E7F6EF;color:#0E6B3C;padding:6px 12px;border-radius:999px;transition:opacity .3s ease-out}
+
+  /* roles */
+  .roles{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:start;margin-top:20px}
+  .role-tabs{display:flex;flex-wrap:wrap;gap:10px;margin:26px 0}
+  .role-tab{border:1px solid var(--line);background:#fff;border-radius:999px;padding:9px 18px;
+    font-size:14px;font-weight:500;display:flex;align-items:center;gap:8px;transition:background .2s,border-color .2s}
+  .role-tab .dot{width:14px;height:14px;border-radius:50%}
+  .role-tab.on{background:var(--teal-bg);border-color:transparent;color:var(--teal-ink);font-weight:600}
+  .role-desc{font-size:16.5px;line-height:1.65;color:var(--sub);max-width:460px;min-height:110px;transition:opacity .3s ease-out}
+  .role-desc b{color:var(--ink);font-weight:600}
+  .phone{width:300px;margin:0 auto;background:#fff;border:10px solid #111;border-radius:48px;overflow:hidden;
+    box-shadow:0 30px 70px -20px rgba(0,0,0,.25)}
+  .phone .notch{height:26px;display:flex;justify-content:center;padding-top:8px}
+  .phone .notch i{width:96px;height:22px;background:#111;border-radius:999px;display:block}
+  .phone-body{padding:6px 14px 14px;min-height:480px;display:flex;flex-direction:column}
+  .phone-head{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:700;padding:8px 0 12px}
+  .phone-head .back{color:#999;font-size:16px}
+  .chat{flex:1;transition:opacity .3s ease-out}
+  .bubble{background:#F1EFEA;border-radius:14px;padding:10px 12px;font-size:13px;line-height:1.5;margin-bottom:10px;max-width:250px}
+  .bubble.dark{background:#111;color:#fff;margin-left:auto}
+  .phone-input{border:1px solid var(--line);border-radius:999px;padding:9px 14px;font-size:12.5px;color:#999;
+    display:flex;align-items:center;gap:8px}
+
+  /* video */
+  .video{border-radius:24px;overflow:hidden;position:relative;margin-top:48px;
+    background:linear-gradient(120deg,#2B2620,#4A4238 45%,#23272E);aspect-ratio:21/9;
+    display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .video .play{width:84px;height:84px;border-radius:50%;background:rgba(255,255,255,.92);
+    display:flex;align-items:center;justify-content:center;font-size:26px;color:#111;transition:transform .2s}
+  .video:hover .play{transform:scale(1.08)}
+  .video .cap{position:absolute;bottom:22px;left:28px;color:#fff;font-size:15px;font-weight:500;
+    text-shadow:0 2px 12px rgba(0,0,0,.5)}
+
+  /* pricing */
+  .price-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:52px}
+  .price{background:var(--card);border-radius:24px;padding:34px 30px}
+  .price .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+  .price .pname{font-size:15px;font-weight:600;color:var(--sub)}
+  .seg{display:flex;background:#ECEAE5;border-radius:999px;padding:3px;gap:2px}
+  .seg button{font-size:12px;font-weight:600;padding:6px 12px;border-radius:999px;color:#777;transition:all .2s}
+  .seg button.on{background:#fff;color:#111;box-shadow:0 2px 6px rgba(0,0,0,.08)}
+  .amount{font-size:44px;font-weight:500;letter-spacing:-0.03em}
+  .amount small{font-size:15px;color:var(--sub);font-weight:400;letter-spacing:0}
+  .billed{font-size:13.5px;color:var(--sub);margin:6px 0 22px}
+  .price .btn{width:100%}
+  .inc{margin-top:26px;font-size:14px}
+  .inc .t{font-weight:600;margin-bottom:12px}
+  .inc li{list-style:none;color:var(--sub);padding:6px 0 6px 26px;position:relative;line-height:1.45}
+  .inc li::before{content:"✓";position:absolute;left:2px;color:#111;font-weight:700}
+  .price-fade{transition:opacity .3s ease-out}
+  .inc-banner{margin-top:22px;background:var(--card);border-radius:24px;padding:30px 34px;
+    display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  .inc-banner .t{font-size:16.5px;font-weight:500}
+  .inc-banner .btn{margin-left:auto;border:1px solid #111;background:transparent}
+  .inc-banner .btn:hover{background:#111;color:#fff}
+
+  /* download */
+  .dl-row{display:flex;align-items:center;gap:18px;background:var(--card);border-radius:18px;
+    padding:22px 28px;margin-top:14px;font-size:16px;font-weight:500}
+  .dl-row .ic{width:44px;height:44px;border-radius:12px;background:#fff;display:flex;align-items:center;
+    justify-content:center;font-size:22px;flex:none;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+  .dl-row .meta{font-size:13px;color:var(--sub);font-weight:400;display:block;margin-top:3px}
+  .dl-row .chev{margin-left:auto;color:#999;font-size:18px}
+
+  /* guides */
+  .guide-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:44px}
+  .guide{background:var(--card);border-radius:20px;padding:30px;transition:transform .2s}
+  .guide:hover{transform:translateY(-4px)}
+  .guide .k{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--sub);text-transform:uppercase;margin-bottom:12px}
+  .guide h3{font-size:19px;font-weight:600;letter-spacing:-0.02em;margin-bottom:8px}
+  .guide p{font-size:14px;color:var(--sub);line-height:1.6}
+
+  /* faq */
+  .faq{display:grid;grid-template-columns:1fr 2fr;gap:60px;margin-top:20px}
+  .qa{border-top:1px solid var(--line)}
+  .qa:last-child{border-bottom:1px solid var(--line)}
+  .qa button{width:100%;display:flex;align-items:center;justify-content:space-between;gap:20px;
+    padding:24px 4px;font-size:17px;font-weight:500;text-align:left;letter-spacing:-0.01em}
+  .qa .plus{font-size:22px;font-weight:300;color:#666;transition:transform .25s;flex:none}
+  .qa.open .plus{transform:rotate(45deg)}
+  .qa .a{max-height:0;overflow:hidden;transition:max-height .35s ease;color:var(--sub);
+    font-size:15.5px;line-height:1.65}
+  .qa .a p{padding:0 4px 26px;max-width:640px}
+
+  /* cta */
+  .cta{text-align:center;padding:130px 0 0;position:relative;overflow:hidden}
+  .cta h2{font-size:44px;margin-bottom:14px}
+  .cta .btn-row{display:flex;gap:12px;justify-content:center;margin-top:30px;position:relative;z-index:2}
+  .blob-line{width:1100px;max-width:160vw;margin:40px auto -260px;display:block}
+
+  /* footer */
+  footer{border-top:1px solid var(--line);margin-top:120px;padding:56px 0 40px}
+  .f-grid{display:grid;grid-template-columns:1.2fr repeat(5,1fr);gap:32px}
+  .f-col h4{font-size:13.5px;font-weight:700;margin-bottom:14px}
+  .f-col a{display:block;font-size:13.5px;color:var(--sub);padding:5px 0}
+  .f-col a:hover{color:#000}
+  .f-brand .wordmark{font-size:17px}
+  .f-brand .copy{font-size:12.5px;color:var(--sub);margin-top:10px}
+  .f-sub{display:grid;grid-template-columns:1.2fr repeat(5,1fr);gap:32px;margin-top:44px}
+  .f-bottom{display:flex;align-items:center;gap:14px;margin-top:44px}
+  .moon{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:15px}
+  .built{font-size:12.5px;font-weight:600;border:1px solid var(--line);border-radius:999px;padding:8px 16px;color:var(--sub)}
+
+  @media (max-width:900px){
+    .wrap,.nav-in{padding:0 20px}
+    .nav-links{display:none}
+    .hero h1{font-size:42px}
+    .hero h1 .blob{width:52px;height:52px}
+    .desk-body{grid-template-columns:1fr}
+    .desk-side{display:none}
+    .card{padding:32px 24px}
+    .team-card{grid-template-columns:1fr}
+    .blob-huge{position:relative;right:auto;top:auto;transform:none;width:280px;height:280px;margin:20px auto -40px}
+    .feat-grid,.roles,.price-grid,.guide-grid{grid-template-columns:1fr}
+    .faq{grid-template-columns:1fr;gap:20px}
+    .f-grid,.f-sub{grid-template-columns:1fr 1fr}
+    section.block{padding:70px 0 0}
+    .h2{font-size:30px}
+    .inc-banner .btn{margin-left:0}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-in">
+    <a class="wordmark" href="#">SPACEX<span class="x">AI</span></a>
+    <div class="nav-links">
+      <a href="#">Products <span class="caret">▼</span></a>
+      <a href="#">Solutions <span class="caret">▼</span></a>
+      <a href="#">Developer <span class="caret">▼</span></a>
+      <a href="#">Company <span class="caret">▼</span></a>
+      <a href="#pricing">Pricing</a>
+      <a href="#">News</a>
+    </div>
+    <div class="nav-right">
+      <a class="btn btn-light" href="#">Contact Sales</a>
+      <span class="btn-split">
+        <a class="btn btn-dark" href="#download">Download</a><button class="chev" aria-label="More download options">▼</button>
+      </span>
+    </div>
+  </div>
+</nav>
+
+<header class="hero wrap">
+  <a class="announce" href="#">Grok Bot is here · Read the launch post <span class="arr">↗</span></a>
+  <h1>Meet
+    <svg class="blob" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="48" fill="#0D0D0D"/><rect x="28" y="26" width="15" height="32" rx="7.5" fill="#fff" transform="rotate(-16 35 42)"/><rect x="57" y="26" width="15" height="32" rx="7.5" fill="#fff" transform="rotate(-16 64 42)"/></svg>
+    Grok Bot</h1>
+  <p class="sub">AI teammates you can give real work to. Bots can sign in to your tools, use them just like you do, and come back with finished work.</p>
+  <div class="hero-cta">
+    <a class="btn btn-dark" href="#download">🐧&nbsp; Download for Linux</a>
+    <a class="btn btn-light" href="#">Contact sales</a>
+  </div>
+
+  <div class="desk">
+    <div class="desk-bar"><div class="dots"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i></div></div>
+    <div class="desk-body">
+      <div class="desk-side">
+        <div class="search">⌕&nbsp; Search</div>
+        <div class="agent-row"><span class="avatar" style="background:#7FD1C0"></span><span><span class="nm">Chief</span><br><span class="pv">booked the venue and sent the c…</span></span><span class="tm">2:36 AM</span></div>
+        <div class="agent-row sel"><span class="avatar" style="background:#F5A623"></span><span><span class="nm">New agent</span><br><span class="pv">Typing…</span></span><span class="tm">10:36 PM</span></div>
+        <div class="agent-row"><span class="avatar" style="background:#7C6FF0"><span class="nub"></span></span><span><span class="nm">Inbox Manager</span><br><span class="pv">sent. inbox at zero, 5 drafts parke…</span></span><span class="tm">7:36 PM</span></div>
+        <div class="agent-row"><span class="avatar" style="background:#9B7BF5"></span><span><span class="nm">Account Manager</span><br><span class="pv">invite's out to vicky. globex note …</span></span><span class="tm">5:36 PM</span></div>
+        <div class="agent-row"><span class="avatar" style="background:#4A9FF5"></span><span><span class="nm">Talent Scout</span><br><span class="pv">3 intros drafted in your voice, hel…</span></span><span class="tm">2:36 PM</span></div>
+        <div class="agent-row"><span class="avatar" style="background:#F06423"></span><span><span class="nm">Expense Manager</span><br><span class="pv">report filed. 9 receipts, nothing o…</span></span><span class="tm">6:36 PM</span></div>
+        <div class="agent-row"><span class="avatar" style="background:#5BBF8A"></span><span><span class="nm">Offsite crew</span><br><span class="pv">that leaves the pipeline. i'd spin u…</span></span><span class="tm">4:36 PM</span></div>
+      </div>
+      <div class="desk-main">
+        <div class="ttl"><span class="avatar" style="background:#F5A623;width:26px;height:26px"></span> New agent</div>
+        <div class="spawn"><span class="pulse"><i></i><i></i><i></i></span> Spawning</div>
+        <div class="msg" style="margin-top:22px">
+          <div class="who">✦ Sales Outbound</div>
+          Hi Dana,<br><br>Saw Northwind opened three infra roles this month. Usually that means the migration you mentioned in March is finally moving.<br><br>We cut the same work in half for two teams your size. Worth fifteen minutes next week?<br><br>Sam
+          <div class="row"><button class="chipbtn dark">Send email</button><button class="chipbtn line">Discard</button></div>
+        </div>
+        <div class="me-bubble">send the top 10 emails, they look good</div>
+        <div class="msg">top 10 sending. rest stay queued.</div>
+        <div class="desk-input"><span class="plus">＋</span> Message Sales Outbound <span class="mic">🎙</span></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="block wrap">
+  <div class="card team-card">
+    <div class="txt">
+      <h2 class="h2">Message Bots like teammates</h2>
+      <p class="sub">Give tasks to Bots like you would a teammate on desktop or iOS. Your AI teammates take projects from start to end, keep context on how you work and get smarter over time, and come back when your approval is needed.</p>
+    </div>
+    <svg class="blob-huge" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="48" fill="#0D0D0D"/><rect x="28" y="26" width="15" height="32" rx="7.5" fill="#fff" transform="rotate(-16 35 42)"/><rect x="57" y="26" width="15" height="32" rx="7.5" fill="#fff" transform="rotate(-16 64 42)"/></svg>
+  </div>
+</section>
+
+<section class="block wrap">
+  <div class="center">
+    <h2 class="h2">Work with many Bots at once</h2>
+    <p class="sub">Spin up a whole team. Each Bot holds its own context, works in parallel, and reports back when there's something for you.</p>
+  </div>
+  <div class="feat-grid">
+    <div class="feat">
+      <h3>Bots get smarter over time</h3>
+      <p>Every Bot builds a memory of how you work — your voice, your tools, your preferences — so the tenth task needs less explaining than the first.</p>
+      <div class="demo">
+        <div class="mem" id="memDemo">
+          <div class="mrow"><span class="tag">LEARNED</span> You prefer short intros, no flattery <span class="status-pill" style="margin-left:auto"><span class="spin"></span> Working</span></div>
+          <div class="mrow"><span class="tag">LEARNED</span> Expense reports go out Friday 4pm</div>
+          <div class="mrow"><span class="tag">LEARNED</span> Drafts in your voice, sends nothing unapproved</div>
+        </div>
+      </div>
+    </div>
+    <div class="feat">
+      <h3>Connect the Bots</h3>
+      <p>Bots sign in to the tools you already use and operate them like a teammate would — no plugins to babysit, no copy-paste between tabs.</p>
+      <div class="demo">
+        <div class="conn-grid" id="connDemo">
+          <div class="conn"><span class="ic">✉️</span>Email</div>
+          <div class="conn"><span class="ic">📅</span>Calendar</div>
+          <div class="conn"><span class="ic">💬</span>Slack</div>
+          <div class="conn"><span class="ic">📊</span>Sheets</div>
+          <div class="conn"><span class="ic">💻</span>GitHub</div>
+          <div class="conn"><span class="ic">🎫</span>Linear</div>
+          <div class="conn"><span class="ic">📝</span>Notion</div>
+          <div class="conn"><span class="ic">☁️</span>Drive</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="block wrap">
+  <div class="roles">
+    <div>
+      <h2 class="h2">Give each Bot a job</h2>
+      <div class="role-tabs" id="roleTabs"></div>
+      <p class="role-desc" id="roleDesc"></p>
+      <div style="margin-top:26px"><a class="btn btn-light" href="#">Explore more bots</a></div>
+    </div>
+    <div>
+      <div class="phone">
+        <div class="notch"><i></i></div>
+        <div class="phone-body">
+          <div class="phone-head"><span class="back">‹</span><span class="avatar" id="phoneAvatar" style="background:#2EB5A5;width:26px;height:26px"></span><span id="phoneName">Sales Outbound</span></div>
+          <div class="chat" id="phoneChat"></div>
+          <div class="phone-input">＋&nbsp; <span id="phoneHint">Message Sales Outbound…</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="block wrap">
+  <div class="center">
+    <h2 class="h2">The SpaceXAI team runs on Grok Bot</h2>
+    <p class="sub">Engineers, recruiters, and ops — everyone gets a team of Bots doing the busywork.</p>
+  </div>
+  <div class="video" id="videoPoster" role="button" aria-label="Play video" tabindex="0">
+    <span class="play">▶</span>
+    <span class="cap">We recently hired a new teammate</span>
+  </div>
+</section>
+
+<section class="block wrap" id="pricing">
+  <div class="center">
+    <h2 class="h2">Pricing</h2>
+    <div style="margin-top:22px"><a class="btn btn-light" href="#">Contact sales</a></div>
+  </div>
+  <div class="price-grid" id="priceGrid"></div>
+  <div class="inc-banner">
+    <span style="font-size:22px">⊘</span>
+    <span class="t">Already on an eligible Cursor, SuperGrok, or Teams plan? Grok Bot is included.</span>
+    <a class="btn" href="#">Sign in with your plan</a>
+  </div>
+</section>
+
+<section class="block wrap" id="download">
+  <h2 class="h2">Download Grok Bot</h2>
+  <p class="sub" style="max-width:520px">One app for desktop and mobile. Your Bots go where you go.</p>
+  <div class="dl-row"><span class="ic">🐧</span><span>Linux<span class="meta">.deb · AppImage · .rpm — x64 + arm64</span></span><span class="chev">›</span></div>
+  <div class="dl-row"><span class="ic">▦</span><span>More downloads<span class="meta">macOS · Windows · iOS · Android</span></span><span class="chev">›</span></div>
+</section>
+
+<section class="block wrap">
+  <div class="center">
+    <h2 class="h2">Grok Bot Guides</h2>
+    <div style="margin-top:22px"><a class="btn btn-light" href="#">Read the guides</a></div>
+  </div>
+  <div class="guide-grid">
+    <a class="guide" href="#"><div class="k">Getting started</div><h3>Meet your first Bot</h3><p>Spin up a Bot in under a minute, give it its first job, and watch it report back.</p></a>
+    <a class="guide" href="#"><div class="k">Connections</div><h3>Connect your tools</h3><p>Sign Bots in to email, calendar, and chat once — they handle the rest securely.</p></a>
+    <a class="guide" href="#"><div class="k">Teamwork</div><h3>Run a team of Bots</h3><p>Hand off multi-step projects, set approval rules, and review finished work.</p></a>
+  </div>
+</section>
+
+<section class="block wrap">
+  <div class="faq">
+    <div><h2 class="h2">FAQs</h2></div>
+    <div id="faqList">
+      <div class="qa open">
+        <button>How is Grok Bot different from AI assistants?<span class="plus">+</span></button>
+        <div class="a"><p>Assistants answer questions; Bots finish work. A Bot signs in to your tools, holds context across days, works in the background, and comes back with completed work — or pings you when it needs a decision only you can make.</p></div>
+      </div>
+      <div class="qa">
+        <button>What can I give a Bot to do?<span class="plus">+</span></button>
+        <div class="a"><p>Anything a teammate could do with a computer: research accounts and draft outreach, clear your inbox to zero, file expenses, reproduce bugs, prep for meetings, chase down answers across your tools. If it takes clicks, a Bot can take it.</p></div>
+      </div>
+      <div class="qa">
+        <button>How does Grok Bot handle my data &amp; privacy?<span class="plus">+</span></button>
+        <div class="a"><p>Your data stays yours. Bots act with the permissions you grant, every action is logged and reviewable, and nothing is used to train models without your consent. Enterprise plans add SSO, audit logs, and data-processing agreements.</p></div>
+      </div>
+      <div class="qa">
+        <button>Can Bots work together?<span class="plus">+</span></button>
+        <div class="a"><p>Yes — message several Bots at once like a group chat. They keep their own context, hand work to each other, and report back as one team.</p></div>
+      </div>
+      <div class="qa">
+        <button>Which platforms are supported?<span class="plus">+</span></button>
+        <div class="a"><p>Desktop apps for Linux, macOS, and Windows, plus native iOS and Android. Your Bots and their context follow you across all of them.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="cta wrap">
+  <h2>Meet your first Bot</h2>
+  <p class="sub" style="text-align:center">An AI teammate you can trust to get work done</p>
+  <div class="btn-row">
+    <a class="btn btn-dark" href="#download">Get started for free</a>
+    <a class="btn btn-light" href="#">Contact sales</a>
+  </div>
+  <svg class="blob-line" viewBox="0 0 100 60" aria-hidden="true"><circle cx="50" cy="52" r="46" fill="none" stroke="#D8D4CB" stroke-width="0.5"/><rect x="30" y="30" width="13" height="28" rx="6.5" fill="none" stroke="#D8D4CB" stroke-width="0.5" transform="rotate(-16 36 44)"/><rect x="57" y="30" width="13" height="28" rx="6.5" fill="none" stroke="#D8D4CB" stroke-width="0.5" transform="rotate(-16 63 44)"/></svg>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="f-grid">
+      <div class="f-brand"><span class="wordmark">SPACEX<span class="x">AI</span></span><div class="copy">© 2026 SpaceXAI LLC</div></div>
+      <div class="f-col"><h4>Products</h4><a href="#">Chat</a><a href="#">Build</a><a href="#">Imagine</a><a href="#">Voice</a><a href="#">Bot</a><a href="#">Grokipedia</a></div>
+      <div class="f-col"><h4>Solutions</h4><a href="#">Business</a><a href="#">Government</a><a href="#">Customer Support</a><a href="#">Legal</a><a href="#">Security</a><a href="#">Use Cases</a></div>
+      <div class="f-col"><h4>Developers</h4><a href="#">API Overview</a><a href="#">Pricing</a><a href="#">Models</a><a href="#">Console</a><a href="#">Changelog</a><a href="#">Docs</a><a href="#">Status</a></div>
+      <div class="f-col"><h4>Company</h4><a href="#">About</a><a href="#">Colossus</a><a href="#">Careers</a><a href="#">News</a><a href="#">Contact</a></div>
+      <div class="f-col"><h4>Legal</h4><a href="#">Terms</a><a href="#">Enterprise Terms</a><a href="#">Privacy</a><a href="#">Cookies</a><a href="#">AUP</a><a href="#">Brand</a><a href="#">Privacy choices</a></div>
+    </div>
+    <div class="f-sub">
+      <div></div>
+      <div class="f-col"><h4>Download</h4><a href="#">grok.com</a><a href="#">iOS</a><a href="#">Android</a><a href="#">Grok on X</a></div>
+      <div class="f-col"><h4>Grok Bot</h4><a href="#">Overview</a><a href="#">Marketplace</a><a href="#">Guides</a><a href="#">Use Cases</a></div>
+      <div class="f-col"><h4>Enterprise</h4><a href="#">Contact Sales</a><a href="#">FAQs</a><a href="#">BAA</a><a href="#">DPA</a></div>
+      <div class="f-col"><h4>Trust</h4><a href="#">Safety</a><a href="#">Security</a><a href="#">Privacy Portal</a><a href="#">Subprocessors</a><a href="#">Help Center</a></div>
+      <div class="f-col"><h4>Social</h4><a href="#">@SpaceXAI</a><a href="#">@grok</a><a href="#">Discord</a></div>
+    </div>
+    <div class="f-bottom">
+      <button class="moon" aria-label="Toggle dark mode">🌙</button>
+      <span class="built">⌁&nbsp; Built with Grok</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
+  // 300ms opacity cross-fade, mirroring the real page's in-card transitions
+  function fadeSwap(el, render){
+    el.style.transition = "opacity .3s ease-out";
+    el.style.opacity = "0";
+    setTimeout(function(){ render(); el.style.opacity = "1"; }, 300);
+  }
+
+  /* ---------- roles ---------- */
+  var ROLES = [
+    { name:"Sales Outbound", color:"#2EB5A5",
+      desc:"<b>Generate pipeline overnight.</b> Researches accounts, scores contacts with intent, drafts email and LinkedIn in your voice, and leaves a review list for you to approve.",
+      chat:[["Hi Dana,<br><br>Saw Northwind opened three infra roles this month. Usually that means the migration you mentioned in March is finally moving.<br><br>We cut the same work in half for two teams your size. Worth fifteen minutes next week?<br><br>Sam",""],["send the top 10 emails, they look good","dark"],["top 10 sending. rest stay queued.",""]] },
+    { name:"Talent Scout", color:"#4A9FF5",
+      desc:"<b>Fill your pipeline with people, not profiles.</b> Sources candidates, checks them against your bar, and drafts intros in your voice.",
+      chat:[["Found 3 senior infra engineers who match your bar. Drafted intros — want me to send?",""],["yes, send all three","dark"],["sent. I'll follow up in 4 days if they don't reply.",""]] },
+    { name:"Paid Media", color:"#F5A623",
+      desc:"<b>Ads that manage themselves.</b> Watches spend, kills losers, scales winners, and reports ROAS every Monday.",
+      chat:[["Paused 2 ad sets burning $340/day at 0.4 ROAS. Moved budget to the winner.",""],["nice. cap daily at 2k","dark"],["capped at $2k/day. I'll ping you if ROAS drops below 2.",""]] },
+    { name:"Expense Manager", color:"#F06423",
+      desc:"<b>Expenses filed before you remember them.</b> Collects receipts, categorizes everything, and files the report Friday at 4pm.",
+      chat:[["Report filed. 9 receipts, nothing out of policy.",""],["anything over $500?","dark"],["one — the team dinner, $612. already flagged for you.",""]] },
+    { name:"Product Performance", color:"#9B7BF5",
+      desc:"<b>Your metrics, watched 24/7.</b> Tracks the dashboards, investigates dips, and tells you why before standup.",
+      chat:[["Signup conversion dipped 8% overnight. Traced it to the new paywall step.",""],["roll it back?","dark"],["rolled back. conversion recovering — I'll confirm in an hour.",""]] },
+    { name:"Bug Reproduction", color:"#7C6FF0",
+      desc:"<b>Repros before you've finished coffee.</b> Takes a bug report, reproduces it, and hands engineering a failing test.",
+      chat:[["Reproduced #4821 on staging. It's the timezone offset in the scheduler.",""],["open a PR with the fix","dark"],["PR open with a regression test. assigned to you for review.",""]] },
+    { name:"Account Health", color:"#5BBF8A",
+      desc:"<b>Churn risks, spotted early.</b> Watches usage, flags quiet accounts, and drafts the save before they slip.",
+      chat:[["Globex usage dropped 40% this week. Drafted a check-in for Vicky.",""],["send it","dark"],["sent. I'll watch for a reply and escalate Thursday.",""]] },
+    { name:"Chief of Staff", color:"#7FD1C0",
+      desc:"<b>Your second brain for the day.</b> Preps briefs, books the venue, sends the calendar holds — the glue work, handled.",
+      chat:[["Booked the venue and sent the calendar holds for the offsite.",""],["add a dinner reservation for 12","dark"],["reserved for 12 at 7:30pm. confirmations in your inbox.",""]] }
+  ];
+  var tabsEl = $("roleTabs"), descEl = $("roleDesc"), chatEl = $("phoneChat"),
+      nameEl = $("phoneName"), avEl = $("phoneAvatar"), hintEl = $("phoneHint"), cur = 0;
+  function renderRole(i){
+    var r = ROLES[i];
+    nameEl.textContent = r.name;
+    avEl.style.background = r.color;
+    hintEl.textContent = "Message " + r.name + "…";
+    descEl.innerHTML = r.desc;
+    chatEl.innerHTML = r.chat.map(function(m){
+      return '<div class="bubble' + (m[1] ? " " + m[1] : "") + '">' + m[0] + "</div>";
+    }).join("");
+  }
+  ROLES.forEach(function(r, i){
+    var b = document.createElement("button");
+    b.className = "role-tab" + (i === 0 ? " on" : "");
+    b.innerHTML = '<span class="dot" style="background:' + r.color + '"></span>' + r.name;
+    b.addEventListener("click", function(){
+      if (i === cur) return;
+      cur = i;
+      Array.prototype.forEach.call(tabsEl.children, function(c, j){ c.classList.toggle("on", j === i); });
+      fadeSwap(descEl, function(){ descEl.innerHTML = r.desc; });
+      fadeSwap(chatEl, function(){
+        nameEl.textContent = r.name; avEl.style.background = r.color;
+        hintEl.textContent = "Message " + r.name + "…";
+        chatEl.innerHTML = r.chat.map(function(m){
+          return '<div class="bubble' + (m[1] ? " " + m[1] : "") + '">' + m[0] + "</div>";
+        }).join("");
+      });
+    });
+    tabsEl.appendChild(b);
+  });
+  renderRole(0);
+
+  /* ---------- pricing ---------- */
+  var PLANS = [
+    { name:"Cursor", tabs:[
+      { t:"Pro", price:"$20", per:"/ month", billed:"Billed monthly", cta:"Get Pro",
+        inc:["Everything in Hobby, plus:","Unlimited tab completions","Advanced models","Priority support"] },
+      { t:"Pro+", price:"$60", per:"/ month", billed:"Billed monthly", cta:"Get Pro+",
+        inc:["Everything in Pro, plus:","5× usage limits","Background agents","Team analytics"] },
+      { t:"Ultra", price:"$200", per:"/ month", billed:"Billed monthly", cta:"Get Ultra",
+        inc:["Everything in Pro+, plus:","20× usage limits","Dedicated capacity","White-glove onboarding"] } ] },
+    { name:"Grok", tabs:[
+      { t:"SuperGrok", price:"$30", per:"/ month", billed:"Billed monthly", cta:"Get SuperGrok",
+        inc:["Everything in Free, plus:","Higher rate limits","Grok 4 Heavy access","Early features"] },
+      { t:"Plus", price:"$30", per:"/ month", billed:"Billed monthly", cta:"Get Plus",
+        inc:["Everything in SuperGrok, plus:","API credits included","Priority rendering"] },
+      { t:"Heavy", price:"$300", per:"/ month", billed:"Billed monthly", cta:"Get Heavy",
+        inc:["Everything in SuperGrok, plus:","Maximum reasoning","Multi-agent orchestration","Dedicated support"] } ] },
+    { name:"Cursor Teams", tabs:[
+      { t:"Standard", price:"$40", per:"/ seat / month", billed:"Billed monthly", cta:"Get Standard Teams", gray:true,
+        inc:["Everything in Cursor Pro+, plus:","Centralized billing","Admin controls","SSO"] },
+      { t:"Premium", price:"$60", per:"/ seat / month", billed:"Billed monthly", cta:"Get Premium Teams", gray:true,
+        inc:["Everything in Standard, plus:","Audit logs","SCIM provisioning","99.99% uptime SLA"] } ] }
+  ];
+  var grid = $("priceGrid");
+  PLANS.forEach(function(p){
+    var card = document.createElement("div");
+    card.className = "price";
+    var sel = 0;
+    var segHtml = p.tabs.map(function(x, i){
+      return '<button class="' + (i === 0 ? "on" : "") + '" data-i="' + i + '">' + x.t + "</button>";
+    }).join("");
+    function bodyHtml(){
+      var x = p.tabs[sel];
+      return '<div class="amount">' + x.price + ' <small>' + x.per + "</small></div>" +
+        '<div class="billed">' + x.billed + "</div>" +
+        '<a class="btn ' + (x.gray ? "btn-light" : "btn-dark") + '" href="#">' + x.cta + "</a>" +
+        '<ul class="inc"><div class="t">Includes:</div>' +
+        x.inc.map(function(li){ return "<li>" + li + "</li>"; }).join("") + "</ul>";
+    }
+    card.innerHTML = '<div class="top"><span class="pname">' + p.name + '</span><div class="seg">' + segHtml + "</div></div>" +
+      '<div class="price-fade">' + bodyHtml() + "</div>";
+    var fade = card.querySelector(".price-fade");
+    var btns = card.querySelectorAll(".seg button");
+    Array.prototype.forEach.call(btns, function(b){
+      b.addEventListener("click", function(){
+        var i = +b.getAttribute("data-i");
+        if (i === sel) return;
+        sel = i;
+        Array.prototype.forEach.call(btns, function(x, j){ x.classList.toggle("on", j === i); });
+        fadeSwap(fade, function(){ fade.innerHTML = bodyHtml(); });
+      });
+    });
+    grid.appendChild(card);
+  });
+
+  /* ---------- faq ---------- */
+  Array.prototype.forEach.call(document.querySelectorAll(".qa"), function(qa){
+    var btn = qa.querySelector("button"), ans = qa.querySelector(".a");
+    function set(open){
+      qa.classList.toggle("open", open);
+      ans.style.maxHeight = open ? ans.scrollHeight + "px" : "0px";
+    }
+    if (qa.classList.contains("open")) setTimeout(function(){ set(true); }, 50);
+    btn.addEventListener("click", function(){
+      var willOpen = !qa.classList.contains("open");
+      Array.prototype.forEach.call(document.querySelectorAll(".qa"), function(o){
+        o.classList.remove("open"); o.querySelector(".a").style.maxHeight = "0px";
+      });
+      if (willOpen) set(true);
+    });
+  });
+
+  /* ---------- video poster (placeholder toggle) ---------- */
+  var vp = $("videoPoster"), playing = false;
+  vp.addEventListener("click", function(){
+    playing = !playing;
+    vp.querySelector(".play").textContent = playing ? "⏸" : "▶";
+    vp.querySelector(".cap").textContent = playing ? "Playing — We recently hired a new teammate" : "We recently hired a new teammate";
+  });
+
+  /* ---------- in-card micro cross-fades (badge cycling) ---------- */
+  var memRows = document.querySelectorAll("#memDemo .mrow");
+  setInterval(function(){
+    memRows.forEach(function(r){ r.style.opacity = "0.35"; });
+    setTimeout(function(){ memRows.forEach(function(r){ r.style.opacity = "1"; }); }, 300);
+  }, 6000);
+})();
+</script>
+</body>
+</html>

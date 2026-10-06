@@ -43,10 +43,6 @@
   .demo h3 { color: #ffd9a8; font-size: 19px; margin-bottom: 6px; }
   .demo p { margin: 0; font-size: 15px; color: rgba(243,226,205,0.75); }
   .demo .go { display: inline-block; margin-top: 10px; color: #e8a15c; font-weight: 700; font-size: 15px; }
-  figure { margin: 20px 0 24px; }
-  figure img { width: 100%; border-radius: 12px; border: 1px solid rgba(232,161,92,0.2); display: block; background: #0d0a09; }
-  figcaption { font-size: 14px; color: rgba(243,226,205,0.6); margin-top: 8px; line-height: 1.5; }
-  .credit { display: block; margin-top: 4px; font-size: 12.5px; color: rgba(243,226,205,0.45); }
   footer { margin-top: 60px; font-size: 13px; color: rgba(243,226,205,0.35); }
   footer a { color: rgba(243,226,205,0.6); }
 </style>
@@ -57,7 +53,7 @@
   <h1>Black Holes Are Buggy</h1>
   <div class="meta">October 5, 2026 · webgl · shaders</div>
 
-  <p class="verdict">The thin rings on my black hole page are a known graphics bug: the disk spins at different speeds at different distances, which smears its pattern into ultra-thin rings within minutes. Every graphics programmer treats this as a bug to fix. I decided it looks awesome, so I kept it on purpose. In real life it wouldn't look like this at all: a real disk is streaky, churned-up gas spiraling around the hole, not neat grooves. Here's everything I learned building it.</p>
+  <p class="verdict">The thin rings on my black hole page are a known graphics bug: the disk spins at different speeds at different distances, which smears its pattern into ultra-thin rings within minutes. Every graphics programmer treats this as a bug to fix. I decided it looks sick, so I kept it on purpose. Here's everything I learned building it.</p>
 
   <a class="demo" href="https://projects.lukezhang.si/ergosphere/">
     <h3>Ergosphere: the live black hole</h3>
@@ -66,33 +62,15 @@
   </a>
 
   <h2>1. The bug</h2>
-  <p>Jonas Javier <a href="https://dev.to/jonasjavier/how-i-built-a-black-hole-in-webgl-2gc1">wrote it up</a> while building his own black hole for the web: give the disk realistic spin and "within minutes the disk turned into concentric rings thinner than a pixel." The inner part of the disk orbits faster than the outer part, so any pattern on it gets stretched into thinner and thinner streaks until they blur into perfect rings. Graphics programmers add extra code specifically to kill this. I kept it in, and I'll tell you why.</p>
-  <figure>
-    <img src="winding.gif" alt="A blotchy disk pattern winding into thin concentric rings as the inner part orbits faster than the outer part" loading="lazy">
-    <figcaption>Watch the inner disk lap the outer, stretching the pattern into thinner and thinner streaks until they blur into rings.</figcaption>
-  </figure>
+  <p>Jonas Javier <a href="https://dev.to/jonasjavier/how-i-built-a-black-hole-in-webgl-2gc1">wrote it up</a> while building his own black hole for the web: give the disk realistic spin and "within minutes the disk turned into concentric rings thinner than a pixel." The inner part of the disk orbits faster than the outer part, so any pattern on it gets stretched into thinner and thinner streaks until they blur into perfect rings. Graphics programmers add extra code specifically to kill this. Their loss.</p>
   <p>Real science pictures don't look like this either. NASA's famous black hole renders show the gas churned into <strong>spiral light-and-dark lanes</strong>: streaky, not grooved. The black hole in Interstellar is smooth, fading from hot to cool colors. The vinyl-record look is pure style. Which is exactly why it belongs on my page.</p>
-  <figure>
-    <img src="nasa-bh.jpg" alt="NASA scientific visualization of a black hole: churned spiral lanes of gas around a black shadow, brighter on one side" loading="lazy">
-    <figcaption>What it's actually supposed to look like: NASA's scientific visualization shows churned spiral lanes, not neat grooves. Interstellar's Gargantua went the other way: smooth, fading from hot to cool. <span class="credit">Image: NASA's Goddard Space Flight Center / Jeremy Schnittman (public domain).</span></figcaption>
-  </figure>
 
   <h2>2. How the disk actually moves</h2>
   <p>The one thing worth getting right is the spin. A real black hole disk doesn't spin like a record. The inner edge orbits way faster than the outer edge. There's a physics rule (Kepler's third law) that says orbit speed drops off as <code>r^(-3/2)</code>, so the code draws the disk's pattern in <strong>coordinates that spin along with the gas itself</strong>:</p>
-  <figure>
-    <img src="record-vs-hole.gif" alt="Side by side: a record spinning as one rigid piece versus a black hole disk with the inner markers orbiting faster than the outer ones" loading="lazy">
-    <figcaption>Left: a record, spinning as one piece. Right: a black hole disk, where the inner edge orbits way faster than the outer edge.</figcaption>
-  </figure>
-  <pre><code>// Where to look up the pattern: this pixel's angle, minus how far its ring has spun
-angle = atan(z, x) - t * OMEGA(r)
-// How fast each ring spins: inner rings lap the outer ones (Kepler's rule)
+  <pre><code>angle = atan(z, x) - t * OMEGA(r)
 OMEGA(r) = OMEGA_IN * (rIn / r)^1.5</code></pre>
-  <p>Each ring of the disk effectively has its own clock. The pattern is also stretched so it keeps the same look at every distance, from the blazing inner edge to the faint outer edge. Get this wrong and the disk looks like a spinning sticker; get it right and it feels like orbiting gas even before you add any detail. Nobody wants a spinning sticker. Stickers are for water bottles and the back of laptops.</p>
+  <p>Each ring of the disk effectively has its own clock. The pattern is also stretched so it keeps the same look at every distance, from the blazing inner edge to the faint outer edge. Get this wrong and the disk looks like a spinning sticker; get it right and it feels like orbiting gas even before you add any detail. Nobody wants a spinning sticker. Stickers are for laptops.</p>
   <p>One catch: perfectly round bands can't show spin at all. They look the same from every angle by design. So the disk also has <strong>bright knots and spiral streaks</strong> that move with the spinning gas. Those are what your eye actually follows as the inner disk laps the outer.</p>
-  <figure>
-    <img src="knots.gif" alt="Two disks side by side, both rotating: the left has plain rings and looks frozen, the right has bright knots that make the spin obvious" loading="lazy">
-    <figcaption>Rings alone can't show spin: the left disk is rotating, but you'd never know it. Add bright knots that ride the gas, and the motion reads instantly.</figcaption>
-  </figure>
 
   <h2>3. The trick that keeps it spinning forever</h2>
   <p>You can't just let <code>t * OMEGA(r)</code> grow forever. The uneven spin keeps piling up and the rings melt into blurry mush: exactly Javier's bug. The fix, found independently by several graphics programmers:</p>
@@ -101,26 +79,14 @@ OMEGA(r) = OMEGA_IN * (rIn / r)^1.5</code></pre>
     <li><strong>Cross-fade</strong> between them with a smooth sine-squared blend.</li>
     <li>Each layer fades to exactly <strong>zero</strong> right when its clock resets, so the restart is invisible. The disk spins forever with no loading screen. Take notes, YouTube.</li>
   </ul>
-  <figure>
-    <img src="crossfade.gif" alt="Animated chart of two crossfading sine-squared weight curves over one 20 second cycle, with a sweeping time cursor" loading="lazy">
-    <figcaption>Two copies of the disk, half a cycle apart. The weights crossfade on sine-squared curves, and each layer hits exactly zero when its own clock resets.</figcaption>
-  </figure>
   <p>Total twist never builds up past one 20-second cycle, so the bands stay crisp forever. A separate shimmer layer runs on the <strong>real</strong> clock (not each layer's own clock), which glues the two layers together during the fade instead of showing the seam.</p>
 
   <h2>4. The step bug that deleted the sky</h2>
   <p>The nastiest bug in the whole build wasn't in how things looked. It was in the structure. The renderer draws the scene by walking light rays forward in fixed steps (<code>dt = 0.14</code>), 96 steps max, covering about 13 units. But the default camera sits 20+ units out. Rays aimed above the shadow <strong>ran out of steps</strong> while looping around the photon sphere (the zone where light itself orbits the hole). Never caught, never crossing the disk, just giving up. The arcs of bent light above the shadow, the signature Interstellar look, were never drawn at all. My black hole had a blind spot exactly where its best feature should be. The disk looked like a separate lump floating under the shadow.</p>
-  <figure>
-    <img src="rays.png" alt="Diagram: with fixed steps the ray's evenly spaced dots run out halfway around the black hole; with adaptive steps the dots finish the trip" loading="lazy">
-    <figcaption>Fixed steps run out of road before the ray finishes its trip. Adaptive steps take big strides far away and tiny steps near the hole, so every ray finishes.</figcaption>
-  </figure>
   <p>The fix is <strong>steps that adapt</strong>: <code>dt = clamp(0.09 * r, 0.035, 0.9)</code>. Long strides cover the empty far regions where gravity barely matters; tiny steps handle the intense light-bending near the hole. Same number of steps, but now the bent rays finish their journey, and the arcs appeared. Lesson: when your lighting looks wrong, check whether your rays are even finishing the trip.</p>
 
   <h2>5. The hidden seam in the texture</h2>
   <p>There was a sharp diagonal seam across the disk where fine rings suddenly met coarse marbling. Root cause: <code>atan</code>'s branch cut. <code>atan</code> measures angles, and it jumps from +180° back to -180° along one line. Any angle multiplier that isn't a whole number (<code>a * 2.2</code>, <code>a * 3.4</code>…) makes the pattern jump at that line, and the line shows up on screen as a diagonal. The fix: build all the angular pattern from <strong>smooth looping coordinates</strong>, <code>vec2(cos(a), sin(a))</code>, which glide around the full circle with no jump, and keep spiral tilts at whole numbers. If your generated texture has a mysterious straight seam, check your angle math for jumps like this.</p>
-  <figure>
-    <img src="seam.png" alt="Two disks: the left shows a sharp diagonal seam where the angle math jumps, the right is smooth with no seam" loading="lazy">
-    <figcaption>Left: a jump in the angle math draws a visible seam across the disk (highlighted). Right: smooth (cos, sin) coordinates, no seam.</figcaption>
-  </figure>
 
   <h2>6. Making it look hot</h2>
   <p>Motion does half the work; light does the other half:</p>

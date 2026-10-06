@@ -298,7 +298,7 @@ document.getElementById("capIn").addEventListener("input", function(){
 });
 
 /* GIF export (for Photos / iMessage / group chats) */
-var gifBlob = null;
+var gifBlob = null, lastGifUrl = null;
 function loadScript(src){
   return new Promise(function(res, rej){
     if(document.querySelector('script[src="' + src + '"]')) return res();
@@ -448,7 +448,7 @@ async function runGifExport(){
       bar = document.getElementById("gifBar"),
       pct = document.getElementById("gifPct");
   prog.classList.add("show");
-  document.getElementById("gifResult").classList.remove("show");
+  // keep the old GIF on screen while the new one bakes — it swaps in when ready
   function setP(p){ p = Math.max(0, Math.min(1, p));
     bar.style.width = Math.round(p * 100) + "%"; pct.textContent = Math.round(p * 100) + "%"; }
   setP(0.02);
@@ -498,11 +498,17 @@ async function runGifExport(){
     gifBlob = await new Promise(function(res){ gif.on("finished", res); gif.render(); });
     setP(1);
     var gurl = URL.createObjectURL(gifBlob);
+    if(lastGifUrl) URL.revokeObjectURL(lastGifUrl);
+    lastGifUrl = gurl;
+    var resEl = document.getElementById("gifResult");
+    var firstShow = !resEl.classList.contains("show");
     document.getElementById("gifImg").src = gurl;
-    document.getElementById("gifResult").classList.add("show");
+    resEl.classList.add("show");
     setMorphMode("save"); // fresh export = back to the primary action
-    showToast("GIF ready");
-    document.getElementById("gifResult").scrollIntoView({behavior: "smooth", block: "nearest"});
+    if(firstShow){
+      showToast("GIF ready");
+      resEl.scrollIntoView({behavior: "smooth", block: "nearest"});
+    }
   }catch(err){
     showToast("GIF export failed — check your connection and try again");
   }finally{

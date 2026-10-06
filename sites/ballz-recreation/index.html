@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Aboinga</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden; background: #070b1d;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", "Helvetica Neue", sans-serif;
+    overscroll-behavior: none; position: fixed; inset: 0;
+    -webkit-user-select: none; user-select: none;
+  }
+  #game { position: fixed; inset: 0; display: block; touch-action: none; }
+  #topbar {
+    position: fixed; top: 0; left: 0; right: 0; height: 60px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: calc(8px + env(safe-area-inset-top)) 16px 0;
+    pointer-events: none; z-index: 5;
+  }
+  #topbar .stat { color: #8b93b8; font-size: 11px; letter-spacing: 2px; font-weight: 700; }
+  #topbar .stat b { display: block; color: #ffffff; font-size: 22px; letter-spacing: 0; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  #topbar .mid { text-align: center; }
+  #topbar .btns { display: flex; gap: 10px; pointer-events: auto; }
+  .iconbtn {
+    width: 40px; height: 40px; border-radius: 12px; border: 1px solid rgba(120,150,255,.22);
+    background: rgba(20,28,60,.6); color: #cfe0ff; font-size: 18px;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    touch-action: manipulation; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  }
+  .iconbtn:active { transform: scale(.92); background: rgba(30,40,80,.8); }
+  .iconbtn svg { display: block; }
+  #hint {
+    position: fixed; left: 0; right: 0; bottom: calc(120px + env(safe-area-inset-bottom));
+    text-align: center; color: #9aa6d0; font-size: 15px; font-weight: 600;
+    letter-spacing: .4px; z-index: 4; pointer-events: none;
+    transition: opacity .6s; text-shadow: 0 1px 8px rgba(0,0,0,.6);
+  }
+  #hint.gone { opacity: 0; }
+  .overlay {
+    position: fixed; inset: 0; z-index: 10; display: none;
+    align-items: center; justify-content: center; flex-direction: column;
+    background: rgba(7,11,29,.8); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    cursor: pointer; touch-action: manipulation;
+  }
+  .overlay.show { display: flex; }
+  .wordmark {
+    font-size: 64px; font-weight: 800; letter-spacing: 1px; color: #ffffff;
+    text-shadow: 0 0 28px rgba(70,150,255,.6), 0 4px 0 rgba(10,20,60,.8);
+    margin-bottom: 4px;
+  }
+  .wordmark.small { font-size: 30px; margin-bottom: 14px; }
+  .tagline { color: #8b93b8; font-size: 15px; font-weight: 600; letter-spacing: .5px; margin-bottom: 34px; }
+  .tapcue {
+    color: #dff1ff; font-size: 17px; font-weight: 700; letter-spacing: 1px;
+    background: rgba(30,50,120,.5); border: 1px solid rgba(90,180,255,.4); border-radius: 999px;
+    padding: 14px 34px; box-shadow: 0 6px 24px rgba(50,120,255,.25);
+    animation: breathe 1.8s ease-in-out infinite;
+  }
+  @keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+  #over h1 { color: #ffffff; font-size: 40px; font-weight: 800; letter-spacing: 3px; margin-bottom: 6px; text-shadow: 0 0 24px rgba(70,150,255,.5); }
+  #over .sub { color: #8b93b8; font-size: 13px; letter-spacing: 3px; font-weight: 700; margin-bottom: 22px; }
+  #over .score { color: #ffffff; font-size: 64px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  #over .best { color: #ffc93d; font-size: 16px; font-weight: 700; margin: 8px 0 30px; letter-spacing: 1px; }
+  #again {
+    touch-action: manipulation; border: none; cursor: pointer;
+    background: linear-gradient(180deg, #3b82f6, #2563eb); color: #f2f7ff;
+    font-size: 19px; font-weight: 800; letter-spacing: 1px;
+    padding: 16px 46px; border-radius: 18px;
+    box-shadow: 0 8px 24px rgba(59,130,246,.45), inset 0 1px 0 rgba(255,255,255,.35);
+  }
+  #again:active { transform: scale(.95); }
+  #ver {
+    position: fixed; left: 10px; bottom: calc(8px + env(safe-area-inset-bottom));
+    color: rgba(150,170,230,.4); font-size: 10px; z-index: 5; pointer-events: none;
+    font-variant-numeric: tabular-nums;
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="topbar">
+  <div class="stat">SCORE<b id="score">0</b></div>
+  <div class="stat mid">ROUND<b id="round">1</b></div>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <div class="stat" style="text-align:right;">BEST<b id="best">0</b></div>
+    <div class="btns">
+      <button class="iconbtn" id="muteBtn" aria-label="mute">&#x1F50A;</button>
+      <button class="iconbtn" id="restartBtn" aria-label="restart">&#x21BB;</button>
+    </div>
+  </div>
+</div>
+
+<div id="hint" class="gone">drag to aim &mdash; release to shoot</div>
+
+<div id="start" class="overlay show">
+  <div class="wordmark" id="wordmark">Aboinga</div>
+  <div class="tagline">a cozy little ball game</div>
+  <div class="tapcue">tap to play</div>
+</div>
+
+<div id="over" class="overlay">
+  <div class="wordmark small" id="overWordmark">Aboinga</div>
+  <h1>GAME OVER</h1>
+  <div class="sub">THE BLOCKS REACHED THE LINE</div>
+  <div class="score" id="finalScore">0</div>
+  <div class="best" id="finalBest"></div>
+  <button id="again">PLAY AGAIN</button>
+</div>
+
+<div id="ver">v2026.10.04.4</div>
+
+<script>
+"use strict";
+/* ============================================================
+   ABOINGA (working title) — feel pass.
+   Cozy kinetic minimalism: warm paper, chunky soft blocks,
+   squash & stretch, woody layered sound, weakness spots,
+   Perfect Bank, escalating danger cues.
+   Single file, canvas 2D, touch-first.
+   ============================================================ */
+
+const GAME_NAME = 'Aboinga';   // working title — swap here to rename everywhere
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+const COLS = 7;
+const BALL_R = 7;
+const BALL_SPEED = 980;          // px per second (logical)
+const FIRE_GAP = 0.075;          // seconds between balls
+const MAX_FLIGHT = 30;           // safety: seconds before a stray ball is dropped
+
+let W = 0, H = 0, DPR = 1, cell = 0;
+let playTop = 0, launchY = 0, returnY = 0, dangerY = 0;
+
+function resize() {
+  DPR = Math.min(2.5, window.devicePixelRatio || 1);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = Math.round(W * DPR);
+  canvas.height = Math.round(H * DPR);
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  cell = W / COLS;
+  playTop = 76;
+  launchY = H - 132;
+  returnY = H - 52;
+  dangerY = H - 66;
+  G.launchX = clamp(G.launchX || W / 2, BALL_R + 4, W - BALL_R - 4);
+}
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+
+function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+function rand(a, b) { return a + Math.random() * (b - a); }
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+/* ---------------- warm audio: woody, layered, no harsh waves ---------------- */
+let AC = null, master = null, muted = localStorage.getItem('ballz_muted') === '1';
+function ac() {
+  if (!AC) {
+    try {
+      AC = new (window.AudioContext || window.webkitAudioContext)();
+      master = AC.createGain();
+      master.gain.value = 0.85;
+      master.connect(AC.destination);
+    } catch (e) { return null; }
+  }
+  if (AC && AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function tone(freq, dur, o) {
+  if (muted) return;
+  const a = ac(); if (!a) return;
+  o = o || {};
+  const t = a.currentTime + (o.delay || 0);
+  const osc = a.createOscillator(), g = a.createGain();
+  osc.type = o.type || 'sine';
+  osc.frequency.setValueAtTime(Math.max(30, freq), t);
+  if (o.slideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(30, o.slideTo), t + dur);
+  g.gain.setValueAtTime(o.vol || 0.07, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  osc.connect(g); g.connect(master);
+  osc.start(t); osc.stop(t + dur + 0.03);
+}
+/* The hit sound: low sine thump + triangle knock + soft click, pitch ladders
+   with consecutive hits inside a volley. */
+function knock(streak) {
+  const base = 250 * Math.pow(2, Math.min(streak, 18) / 30);
+  tone(base * 0.5, 0.14, { vol: 0.11 });                          // thump
+  tone(base, 0.10, { type: 'triangle', vol: 0.085 });              // knock
+  tone(base * 2.03, 0.035, { type: 'triangle', vol: 0.035 });     // click
+}
+function smashThump() {
+  tone(120, 0.2, { vol: 0.10, slideTo: 55 });
+  tone(90, 0.24, { vol: 0.08, slideTo: 45, delay: 0.02 });
+}
+function perfectChime() {
+  tone(523.25, 0.14, { type: 'triangle', vol: 0.075 });
+  tone(659.25, 0.14, { type: 'triangle', vol: 0.075, delay: 0.06 });
+  tone(783.99, 0.22, { type: 'triangle', vol: 0.08, delay: 0.12 });
+  tone(1568, 0.06, { type: 'sine', vol: 0.04, delay: 0.02 });      // pop sparkle
+}
+let lastWallT = 0;
+const sfx = {
+  wall()   { const n = performance.now(); if (n - lastWallT < 60) return; lastWallT = n; tone(150, 0.07, { vol: 0.028 }); },
+  hit(st)  { knock(st); },
+  smash()  { smashThump(); },
+  perfect(){ perfectChime(); },
+  pickup() { tone(520, 0.1, { vol: 0.06 }); tone(780, 0.14, { vol: 0.06, delay: 0.08 }); },
+  fire()   { tone(200, 0.09, { vol: 0.022, slideTo: 340 }); },
+  heart()  { tone(64, 0.13, { vol: 0.13 }); tone(58, 0.13, { vol: 0.11, delay: 0.19 }); },
+  over()   { tone(220, 0.55, { type: 'triangle', vol: 0.09, slideTo: 82 }); },
+  best()   { [392, 523.25, 659.25, 783.99].forEach((f, i) => tone(f, 0.16, { vol: 0.07, delay: i * 0.1 })); },
+};
+
+/* ---------------- game state ---------------- */
+const G = {
+  mode: 'title',          // title | aim | firing | over
+  round: 1,
+  score: 0,
+  best: parseInt(localStorage.getItem('ballz_best') || '0', 10),
+  blocks: [],             // {c,r,hp,max,pop,sqD,sqV,sqAng,hasWeak,edge,et,phase}
+  pickups: [],            // {c,r,phase,ox,oy}
+  rings: [],              // shockwave rings {x,y,life,maxLife,color,maxR}
+  pickStreak: 0,          // consecutive pickups this volley (pitch ladder)
+  pickPop: 0,             // ball-count pulse on pickup
+  balls: 1,               // base balls for next volley
+  hitStreak: 0,           // consecutive hits this volley (pitch ladder)
+  flying: [],             // {x,y,vx,vy,age}
+  queue: 0,
+  fireT: 0,
+  launchX: 0,
+  firstReturnX: null,
+  aiming: false,
+  aimAng: -Math.PI / 2,
+  particles: [],          // {x,y,vx,vy,life,maxLife,color,size,rot,vr,shape,grav}
+  floaters: [],           // {x,y,text,life,color,size}
+  shake: 0,
+  volleys: 0,
+  newBest: false,
+  dangerRows: 99,         // rows of clearance to the line
+  heartT: 0,
+  holding: false,         // finger held during flight = fast-forward
+  holdT: 0,               // seconds held
+  timeScale: 1,           // 1 | 2 | 4
+};
+
+function blockXY(c, r) { return { x: c * cell + 4, y: playTop + r * cell + 4, s: cell - 8 }; }
+function blockCX(c) { return c * cell + cell / 2; }
+// chip geometry: two triangular bites taken out of one edge (jagged).
+// canonical frame: u along the edge, v into the block. left V shallower, right V deeper.
+function notchGeom(size) {
+  const nw = Math.max(22, size * 0.58);
+  const nd = nw * 0.5;
+  return { nw: nw, nd: nd, ndA: nd * 0.72, ndB: nd };
+}
+function chipCanonical(b, s) {
+  const ng = notchGeom(s), p = b.et * s;
+  const u0 = p - ng.nw / 2, um = p, u1 = p + ng.nw / 2;
+  return { u0: u0, um: um, u1: u1, ua: p - ng.nw / 4, ub: p + ng.nw / 4, ndA: ng.ndA, ndB: ng.ndB, nw: ng.nw };
+}
+// absolute-coords chip for block b: two triangular pockets, the apexes are the kill spots,
+// the four zigzag walls give real concave bounces.
+function notchZone(b) {
+  const g = blockXY(b.c, b.r), s = g.s;
+  const L = chipCanonical(b, s);
+  const M = (u, v) => {
+    if (b.edge === 0) return { x: g.x + u, y: g.y + v };
+    if (b.edge === 1) return { x: g.x + s - v, y: g.y + u };
+    if (b.edge === 2) return { x: g.x + s - u, y: g.y + s - v };
+    return { x: g.x + v, y: g.y + s - u };
+  };
+  const S = (u1, v1, u2, v2) => { const a = M(u1, v1), c = M(u2, v2); return { x1: a.x, y1: a.y, x2: c.x, y2: c.y }; };
+  const corners = [M(L.u0, 0), M(L.u1, 0), M(L.u0, L.ndB), M(L.u1, L.ndB)];
+  const xs = corners.map(c => c.x), ys = corners.map(c => c.y);
+  const x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs);
+  const y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ys);
+  return {
+    cav: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 },
+    tris: [
+      [M(L.u0, 0), M(L.ua, L.ndA), M(L.um, 0)],
+      [M(L.um, 0), M(L.ub, L.ndB), M(L.u1, 0)],
+    ],
+    apexes: [M(L.ua, L.ndA), M(L.ub, L.ndB)],
+    sides: [
+      S(L.u0, 0, L.ua, L.ndA), S(L.ua, L.ndA, L.um, 0),
+      S(L.um, 0, L.ub, L.ndB), S(L.ub, L.ndB, L.u1, 0),
+    ],
+  };
+}
+function inTri(px, py, t) {
+  const a = t[0], b = t[1], c = t[2];
+  const d1 = (px - b.x) * (a.y - b.y) - (a.x - b.x) * (py - b.y);
+  const d2 = (px - c.x) * (b.y - c.y) - (b.x - c.x) * (py - c.y);
+  const d3 = (px - a.x) * (c.y - a.y) - (c.x - a.x) * (py - a.y);
+  const neg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+  const pos = (d1 > 0) || (d2 > 0) || (d3 > 0);
+  return !(neg && pos);
+}
+// true when the closest point sits on the chip's open mouth (not its corners)
+function onMouth(nx, ny, nz, b, g) {
+  const cv = nz.cav, m = 1.5, s = g.s;
+  if (b.edge === 0) return Math.abs(ny - g.y) < 0.5 && nx > cv.x + m && nx < cv.x + cv.w - m;
+  if (b.edge === 1) return Math.abs(nx - (g.x + s)) < 0.5 && ny > cv.y + m && ny < cv.y + cv.h - m;
+  if (b.edge === 2) return Math.abs(ny - (g.y + s)) < 0.5 && nx > cv.x + m && nx < cv.x + cv.w - m;
+  return Math.abs(nx - g.x) < 0.5 && ny > cv.y + m && ny < cv.y + cv.h - m;
+}
+// circle vs segment; returns {hit, d, nx, ny} with outward normal
+function circleSeg(bx, by, sg) {
+  const dx = sg.x2 - sg.x1, dy = sg.y2 - sg.y1;
+  const len2 = dx * dx + dy * dy;
+  let t = len2 > 0 ? ((bx - sg.x1) * dx + (by - sg.y1) * dy) / len2 : 0;
+  t = clamp(t, 0, 1);
+  const px = sg.x1 + dx * t, py = sg.y1 + dy * t;
+  const ox = bx - px, oy = by - py;
+  const d = Math.sqrt(ox * ox + oy * oy);
+  if (d < BALL_R) return { hit: true, d: d, nx: d > 0.001 ? ox / d : 0, ny: d > 0.001 ? oy / d : 1 };
+  return { hit: false };
+}
+
+function spawnHp() {
+  const n = G.round;
+  return Math.max(1, Math.round((n + Math.random() * n * 0.9) * 1.25));
+}
+function newBlock(c, r) {
+  const hp = spawnHp();
+  return {
+    c, r, hp, max: hp, pop: 0, sqD: 0, sqV: 0, sqAng: 0,
+    hasWeak: hp >= 10,                        // chip only on tough blocks, never starters
+    edge: (Math.random() * 4) | 0,             // which edge the chip is bitten from
+    et: rand(0.24, 0.76),                      // position along that edge (fraction)
+    phase: Math.random() * Math.PI * 2,
+  };
+}
+
+function spawnRow() {
+  for (const b of G.blocks) b.r++;
+  for (const p of G.pickups) p.r++;
+  G.pickups = G.pickups.filter(p => playTop + (p.r + 1) * cell < dangerY + cell);
+  const cols = [];
+  for (let c = 0; c < COLS; c++) cols.push(c);
+  for (let i = cols.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [cols[i], cols[j]] = [cols[j], cols[i]]; }
+  const blockCols = new Set();
+  for (const c of cols) {
+    if (Math.random() < 0.44) { G.blocks.push(newBlock(c, 0)); blockCols.add(c); }
+  }
+  if (blockCols.size === 0) { G.blocks.push(newBlock(cols[0], 0)); blockCols.add(cols[0]); }
+  const free = cols.filter(c => !blockCols.has(c));
+  const nPick = Math.min(free.length, 1 + (Math.random() < 0.45 ? 1 : 0));
+  for (let i = 0; i < nPick; i++) G.pickups.push({ c: free[i], r: 0, phase: Math.random() * Math.PI * 2, ox: 0, oy: 0 });
+}
+
+function reset(toTitle) {
+  G.mode = toTitle ? 'title' : 'aim';
+  G.round = 1; G.score = 0;
+  G.blocks = []; G.pickups = [];
+  G.balls = 1; G.hitStreak = 0;
+  G.flying = []; G.queue = 0;
+  G.launchX = W / 2; G.firstReturnX = null;
+  G.aiming = false; G.aimAng = -Math.PI / 2;
+  G.particles = []; G.floaters = []; G.rings = [];
+  G.pickStreak = 0; G.pickPop = 0;
+  G.shake = 0; G.volleys = 0; G.newBest = false;
+  G.holding = false; G.holdT = 0; G.timeScale = 1;
+  G.dangerRows = 99; G.heartT = 0;
+  document.getElementById('over').classList.remove('show');
+  document.getElementById('start').classList.toggle('show', !!toTitle);
+  document.getElementById('hint').classList.add('gone');
+  spawnRow();
+  syncHud();
+}
+
+function syncHud() {
+  document.getElementById('score').textContent = G.score;
+  document.getElementById('round').textContent = G.round;
+  document.getElementById('best').textContent = G.best;
+}
+
+/* ---------------- aiming / firing ---------------- */
+function pointerAngle(px, py) {
+  const a = Math.atan2(py - launchY, px - G.launchX);
+  return clamp(a, -Math.PI + 0.28, -0.28);
+}
+
+function startFire() {
+  G.mode = 'firing';
+  G.queue = G.balls;
+  G.fireT = 0;
+  G.firstReturnX = null;
+  G.hitStreak = 0;                       // pitch ladder resets each volley
+  G.pickStreak = 0;
+  G.volleys++;
+  if (G.volleys >= 2) document.getElementById('hint').classList.add('gone');
+  else document.getElementById('hint').classList.remove('gone');
+  sfx.fire();
+}
+
+function endTurn() {
+  G.round++;
+  spawnRow();
+  for (const b of G.blocks) {
+    const { y, s } = blockXY(b.c, b.r);
+    if (y + s >= dangerY) { gameOver(); return; }
+  }
+  G.launchX = clamp(G.firstReturnX !== null ? G.firstReturnX : G.launchX, BALL_R + 4, W - BALL_R - 4);
+  G.mode = 'aim';
+  G.aimAng = -Math.PI / 2;
+  syncHud();
+}
+
+function gameOver() {
+  G.mode = 'over';
+  sfx.over();
+  G.shake = 8;
+  G.newBest = G.score > G.best;
+  if (G.newBest) {
+    G.best = G.score;
+    localStorage.setItem('ballz_best', String(G.best));
+    setTimeout(() => sfx.best(), 400);
+  }
+  document.getElementById('finalScore').textContent = G.score;
+  document.getElementById('finalBest').textContent = G.newBest ? 'NEW BEST' : 'BEST ' + G.best;
+  setTimeout(() => document.getElementById('over').classList.add('show'), 650);
+  syncHud();
+}
+
+/* ---------------- particles / floaters ---------------- */
+const CONFETTI = ['#46e0ff', '#7b8cff', '#ffffff', '#ffc93d', '#3dffa0', '#2e9bff'];
+function burst(x, y, colors, n, spd, big) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, v = rand(spd * 0.3, spd);
+    G.particles.push({
+      x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - spd * 0.35,
+      life: 0, maxLife: rand(0.45, 0.9),
+      color: colors[(Math.random() * colors.length) | 0],
+      size: big ? rand(4, 8) : rand(2.5, 5.5),
+      rot: Math.random() * Math.PI * 2, vr: rand(-9, 9),
+      shape: Math.random() < 0.7 ? 'rect' : 'circle', grav: 620,
+    });
+  }
+}
+function puff(x, y, color, n, spd) {  // soft round puffs (dust, landings)
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, v = rand(spd * 0.3, spd);
+    G.particles.push({
+      x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v,
+      life: 0, maxLife: rand(0.25, 0.5), color,
+      size: rand(3, 6), rot: 0, vr: 0, shape: 'circle', grav: 60,
+    });
+  }
+}
+function floater(x, y, text, color, size) {
+  G.floaters.push({ x, y, text, life: 0, maxLife: 1.0, color: color || '#dfe8ff', size: size || 20 });
+}
+
+/* ---------------- cozy palette ---------------- */
+// peach -> honey -> terracotta -> berry as HP rises
+const STOPS = [
+  [56, 225, 255], [46, 155, 255], [64, 110, 255], [124, 63, 242],
+];
+function mixc(a, b, t) {
+  return 'rgb(' + Math.round(lerp(a[0], b[0], t)) + ',' + Math.round(lerp(a[1], b[1], t)) + ',' + Math.round(lerp(a[2], b[2], t)) + ')';
+}
+function blockColor(hp, dark) {
+  const t = clamp(hp / 70, 0, 1) * (STOPS.length - 1);
+  const i = Math.min(STOPS.length - 2, Math.floor(t)), f = t - i;
+  const c = [lerp(STOPS[i][0], STOPS[i + 1][0], f), lerp(STOPS[i][1], STOPS[i + 1][1], f), lerp(STOPS[i][2], STOPS[i + 1][2], f)];
+  if (dark) return 'rgb(' + Math.round(c[0] * 0.78) + ',' + Math.round(c[1] * 0.72) + ',' + Math.round(c[2] * 0.72) + ')';
+  return mixc(c, c, 0);
+}
+
+/* ---------------- hits ---------------- */
+function destroyBlock(b, perfect) {
+  const { x: bx, y: by, s } = blockXY(b.c, b.r);
+  const cx = bx + s / 2, cy = by + s / 2;
+  G.blocks.splice(G.blocks.indexOf(b), 1);
+  G.score++;
+  if (perfect) {
+    burst(cx, cy, CONFETTI, 26, 300, true);
+    puff(cx, cy, '#cfe8ff', 8, 120);
+    floater(cx, cy - 8, 'PERFECT', '#ffc93d', 22);
+    G.shake = Math.max(G.shake, 4);
+    sfx.perfect();
+  } else {
+    burst(cx, cy, CONFETTI, 14, 240, false);
+    floater(cx, cy - 6, '+1', '#9fd8ff', 18);
+    G.shake = Math.max(G.shake, 2.5);
+    sfx.smash();
+  }
+  document.getElementById('score').textContent = G.score;
+}
+
+function damageBlock(b, x, y, nxn, nyn) {
+  G.hitStreak++;
+  b.hp--;
+  b.pop = 1;
+  b.sqD = 1; b.sqV = 0; b.sqAng = Math.atan2(nyn, nxn);   // spring squash along impact normal
+  if (b.hp <= 0) {
+    destroyBlock(b, false);
+  } else {
+    puff(x, y, '#8fb8ff', 4, 110);
+    sfx.hit(G.hitStreak);
+  }
+}
+
+function stepBall(b, dt) {
+  b.age += dt;
+  if (b.age > MAX_FLIGHT) { b.vx = 0; b.vy = Math.abs(b.vy) || BALL_SPEED; }
+  const sub = 2, sdt = dt / sub;
+  for (let s = 0; s < sub; s++) {
+    b.x += b.vx * sdt;
+    b.y += b.vy * sdt;
+    if (b.x < BALL_R) { b.x = BALL_R; b.vx = Math.abs(b.vx); sfx.wall(); }
+    else if (b.x > W - BALL_R) { b.x = W - BALL_R; b.vx = -Math.abs(b.vx); sfx.wall(); }
+    if (b.y < playTop + BALL_R) { b.y = playTop + BALL_R; b.vy = Math.abs(b.vy); sfx.wall(); }
+    for (let i = G.blocks.length - 1; i >= 0; i--) {
+      const blk = G.blocks[i];
+      const g = blockXY(blk.c, blk.r);
+      const nx = clamp(b.x, g.x, g.x + g.s), ny = clamp(b.y, g.y, g.y + g.s);
+      const dx = b.x - nx, dy = b.y - ny;
+      const d2 = dx * dx + dy * dy;
+      if (d2 >= BALL_R * BALL_R) continue;
+      // chip: two jagged triangular pockets — apexes break the block, zigzag walls bounce
+      if (blk.hasWeak) {
+        const nz = notchZone(blk), cv = nz.cav;
+        const inCavity = b.x >= cv.x && b.x <= cv.x + cv.w && b.y >= cv.y && b.y <= cv.y + cv.h &&
+          (inTri(b.x, b.y, nz.tris[0]) || inTri(b.x, b.y, nz.tris[1]));
+        if (inCavity) {
+          // the chip's inner walls are the weak point: touching the bite breaks the block
+          let killed = false;
+          for (const sg of nz.sides) {
+            if (circleSeg(b.x, b.y, sg).hit) {
+              blk.sqD = 1; blk.sqV = 0; blk.sqAng = Math.atan2(b.vy, b.vx);
+              destroyBlock(blk, true);
+              killed = true;
+              break;
+            }
+          }
+          if (killed) break;
+          continue; // inside a pocket, touching nothing yet — no collision this substep
+        }
+        if (onMouth(nx, ny, nz, blk, g)) continue; // open bite: let the ball enter
+      }
+      {
+        let d = Math.sqrt(d2), nxn, nyn;
+        if (d > 0.001) { nxn = dx / d; nyn = dy / d; }
+        else {
+          const l = b.x - g.x, r = g.x + g.s - b.x, t = b.y - g.y, bo = g.y + g.s - b.y;
+          const m = Math.min(l, r, t, bo);
+          if (m === l) { nxn = -1; nyn = 0; } else if (m === r) { nxn = 1; nyn = 0; }
+          else if (m === t) { nxn = 0; nyn = -1; } else { nxn = 0; nyn = 1; }
+          d = 0;
+        }
+        b.x = nx + nxn * BALL_R; b.y = ny + nyn * BALL_R;
+        const dot = b.vx * nxn + b.vy * nyn;
+        if (dot < 0) { b.vx -= 2 * dot * nxn; b.vy -= 2 * dot * nyn; }
+        if (Math.abs(b.vy) < BALL_SPEED * 0.12) b.vy = (b.vy < 0 ? -1 : 1) * BALL_SPEED * 0.12;
+        damageBlock(blk, b.x, b.y, nxn, nyn);
+        break;
+      }
+    }
+    for (let i = G.pickups.length - 1; i >= 0; i--) {
+      const p = G.pickups[i];
+      const px = blockCX(p.c) + p.ox, py = playTop + p.r * cell + cell / 2 + p.oy;
+      const dx = b.x - px, dy = b.y - py;
+      if (dx * dx + dy * dy < (BALL_R + 13) * (BALL_R + 13)) {
+        G.pickups.splice(i, 1);
+        G.balls++;
+        G.pickStreak++;
+        G.pickPop = 1;
+        floater(px, py - 10, '+1 BALL', '#3dffa0', 19);
+        burst(px, py, ['#3dffa0', '#cfe8ff', '#ffffff'], 16, 220, false);
+        G.rings.push({ x: px, y: py, life: 0, maxLife: 0.45, color: '#3dffa0', maxR: 36 });
+        // pitch climbs with consecutive pickups in the volley
+        const semis = Math.min(G.pickStreak - 1, 10);
+        const f0 = 620 * Math.pow(2, semis / 12);
+        tone(f0, 0.1, { vol: 0.07 });
+        tone(f0 * 1.5, 0.14, { vol: 0.06, delay: 0.07 });
+      }
+    }
+  }
+  if (b.vy > 0 && b.y >= returnY) {
+    if (G.firstReturnX === null) {
+      G.firstReturnX = clamp(b.x, BALL_R + 4, W - BALL_R - 4);
+      puff(b.x, returnY, '#8fb8ff', 6, 90);
+    }
+    return false;
+  }
+  return true;
+}
+
+/* ---------------- trajectory preview ---------------- */
+function previewPath() {
+  const pts = [{ x: G.launchX, y: launchY }];
+  let x = G.launchX, y = launchY;
+  let dx = Math.cos(G.aimAng), dy = Math.sin(G.aimAng);
+  for (let seg = 0; seg < 3; seg++) {
+    let tHit = 2600, hitBlock = false;
+    if (dx > 0.001) tHit = Math.min(tHit, (W - BALL_R - x) / dx);
+    else if (dx < -0.001) tHit = Math.min(tHit, (BALL_R - x) / dx);
+    if (dy < -0.001) tHit = Math.min(tHit, (playTop + BALL_R - y) / dy);
+    const steps = Math.ceil(tHit / 7);
+    for (let i = 1; i <= steps; i++) {
+      const px = x + dx * i * 7, py = y + dy * i * 7;
+      let inBlock = false;
+      for (const blk of G.blocks) {
+        const g = blockXY(blk.c, blk.r);
+        // expanded by the ball radius: the preview traces the ball's center
+        if (px >= g.x - BALL_R && px <= g.x + g.s + BALL_R && py >= g.y - BALL_R && py <= g.y + g.s + BALL_R) { inBlock = true; break; }
+      }
+      if (inBlock) { tHit = i * 7; hitBlock = true; break; }
+    }
+    x += dx * tHit; y += dy * tHit;
+    pts.push({ x, y });
+    if (hitBlock) break;
+    const hitV = (x <= BALL_R + 1 || x >= W - BALL_R - 1);
+    const hitH = (y <= playTop + BALL_R + 1);
+    if (hitV) dx = -dx;
+    if (hitH) dy = -dy;
+    if (!hitV && !hitH) break;
+    x = clamp(x, BALL_R, W - BALL_R);
+    y = Math.max(y, playTop + BALL_R);
+  }
+  return pts;
+}
+
+/* ---------------- update ---------------- */
+let lastT = 0;
+function update(dt) {
+  const tNow = performance.now() / 1000;
+  for (let i = G.particles.length - 1; i >= 0; i--) {
+    const p = G.particles[i];
+    p.life += dt;
+    if (p.life >= p.maxLife) { G.particles.splice(i, 1); continue; }
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vy += p.grav * dt;
+    p.vx *= (1 - 1.6 * dt);
+    p.rot += p.vr * dt;
+  }
+  for (let i = G.floaters.length - 1; i >= 0; i--) {
+    const f = G.floaters[i];
+    f.life += dt;
+    if (f.life >= f.maxLife) { G.floaters.splice(i, 1); continue; }
+    f.y -= 42 * dt;
+  }
+  for (let i = G.rings.length - 1; i >= 0; i--) {
+    const rg = G.rings[i];
+    rg.life += dt;
+    if (rg.life >= rg.maxLife) { G.rings.splice(i, 1); continue; }
+  }
+  if (G.pickPop > 0) G.pickPop = Math.max(0, G.pickPop - dt * 4);
+  // pickup magnet: orbs drift toward nearby balls — collecting feels inevitable
+  if (G.flying.length) {
+    for (const p of G.pickups) {
+      const px = blockCX(p.c) + p.ox, py = playTop + p.r * cell + cell / 2 + p.oy;
+      let best = null, bestD2 = 70 * 70;
+      for (const b of G.flying) {
+        const dx = b.x - px, dy = b.y - py, d2 = dx * dx + dy * dy;
+        if (d2 < bestD2) { bestD2 = d2; best = b; }
+      }
+      if (best) {
+        const d = Math.sqrt(bestD2) || 1;
+        const pull = 420 * dt;
+        p.ox += (best.x - px) / d * pull;
+        p.oy += (best.y - py) / d * pull;
+      }
+    }
+  }
+  for (const b of G.blocks) {
+    if (b.pop > 0) b.pop = Math.max(0, b.pop - dt * 5);
+    // Cheng Lou style spring: underdamped, overshoots into a stretch before settling
+    if (Math.abs(b.sqD) > 0.002 || Math.abs(b.sqV) > 0.002) {
+      const acc = -220 * b.sqD - 15 * b.sqV;
+      b.sqV += acc * dt;
+      b.sqD += b.sqV * dt;
+    } else { b.sqD = 0; b.sqV = 0; }
+  }
+  if (G.shake > 0) G.shake = Math.max(0, G.shake - dt * 24);
+
+  // danger escalation: rows of clearance to the line
+  let minRows = 99;
+  for (const b of G.blocks) {
+    const { y, s } = blockXY(b.c, b.r);
+    minRows = Math.min(minRows, (dangerY - (y + s)) / cell);
+  }
+  G.dangerRows = minRows;
+  if ((G.mode === 'aim' || G.mode === 'firing') && minRows < 1) {
+    G.heartT -= dt;
+    if (G.heartT <= 0) { sfx.heart(); G.heartT = 1.15; }
+  }
+
+  if (G.mode === 'firing') {
+    if (G.queue > 0) {
+      G.fireT -= dt;
+      if (G.fireT <= 0) {
+        G.fireT = FIRE_GAP;
+        G.queue--;
+        G.flying.push({ x: G.launchX, y: launchY - 4, vx: Math.cos(G.aimAng) * BALL_SPEED, vy: Math.sin(G.aimAng) * BALL_SPEED, age: 0 });
+      }
+    }
+    for (let i = G.flying.length - 1; i >= 0; i--) {
+      if (!stepBall(G.flying[i], dt)) G.flying.splice(i, 1);
+    }
+    if (G.queue === 0 && G.flying.length === 0) endTurn();
+  }
+}
+
+/* ---------------- render ---------------- */
+function rr(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// canonical chip point (u along edge, v into block) -> drawBlock's centered local frame
+function chipLocalPt(b, u, v, ps) {
+  const h = ps / 2;
+  if (b.edge === 0) return [u - h, v - h];
+  if (b.edge === 1) return [h - v, u - h];
+  if (b.edge === 2) return [h - u, h - v];
+  return [v - h, h - u];
+}
+// builds the block's path in local coords (centered): a full square with the two
+// triangular bites cut out of the chipped edge
+function blockPath(b, ps) {
+  const h = ps / 2;
+  ctx.beginPath();
+  if (!b.hasWeak) { ctx.rect(-h, -h, ps, ps); return; }
+  const L = chipCanonical(b, ps);
+  const line = (u, v) => { const q = chipLocalPt(b, u, v, ps); ctx.lineTo(q[0], q[1]); };
+  const p0 = chipLocalPt(b, 0, 0);
+  ctx.moveTo(p0[0], p0[1]);
+  line(L.u0, 0); line(L.ua, L.ndA); line(L.um, 0); line(L.ub, L.ndB); line(L.u1, 0);
+  line(ps, 0); line(ps, ps); line(0, ps);
+  ctx.closePath();
+}
+
+function drawBlock(b, tNow) {
+  const g = blockXY(b.c, b.r), s = g.s;
+  const cx = g.x + s / 2, cy = g.y + s / 2;
+  const nearLine = (dangerY - (g.y + s)) / cell < 1;
+  ctx.save();
+  ctx.translate(cx, cy);
+  if (nearLine && G.mode !== 'over') ctx.rotate(Math.sin(tNow * 9 + b.phase) * 0.045);  // warning wobble
+  // squash & stretch along impact normal (spring value; negative = overshoot stretch)
+  const e = b.sqD;
+  if (Math.abs(e) > 0.02) {
+    ctx.rotate(b.sqAng);
+    ctx.scale(1 + 0.3 * e, 1 - 0.3 * e);
+    ctx.rotate(-b.sqAng);
+  }
+  const ps = s * (1 + b.pop * 0.1);
+  const h = ps / 2;
+  const grad = ctx.createLinearGradient(0, -h, 0, h);
+  grad.addColorStop(0, blockColor(b.hp, false));
+  grad.addColorStop(1, blockColor(b.hp, true));
+  ctx.shadowColor = 'rgba(20,60,180,.4)';
+  ctx.shadowBlur = 14; ctx.shadowOffsetY = 5;
+  ctx.fillStyle = grad;
+  blockPath(b, ps);
+  ctx.fill();
+  ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+  // chip interior: dark triangular recesses + pulsing gold apex markers
+  if (b.hasWeak) {
+    const L = chipCanonical(b, ps);
+    const tri = (u1, v1, u2, v2, u3, v3) => {
+      const a = chipLocalPt(b, u1, v1, ps), c = chipLocalPt(b, u2, v2, ps), e = chipLocalPt(b, u3, v3, ps);
+      ctx.beginPath();
+      ctx.moveTo(a[0], a[1]); ctx.lineTo(c[0], c[1]); ctx.lineTo(e[0], e[1]);
+      ctx.closePath(); ctx.fill();
+    };
+    ctx.fillStyle = 'rgba(4,8,24,.55)';
+    tri(L.u0, 0, L.ua, L.ndA, L.um, 0);
+    tri(L.um, 0, L.ub, L.ndB, L.u1, 0);
+    const pulse = 0.55 + 0.45 * Math.sin(tNow * 5 + b.phase);
+    ctx.fillStyle = 'rgba(255,201,61,' + pulse.toFixed(3) + ')';
+    const dots = [[L.ua, L.ndA], [L.ub, L.ndB]];
+    for (let di = 0; di < dots.length; di++) {
+      const q = chipLocalPt(b, dots[di][0], dots[di][1], ps);
+      ctx.beginPath(); ctx.arc(q[0], q[1], 3.2, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  // top highlight, clipped to the block shape
+  ctx.save();
+  blockPath(b, ps);
+  ctx.clip();
+  ctx.fillStyle = 'rgba(255,255,255,.20)';
+  ctx.fillRect(-h, -h, ps, 5);
+  ctx.restore();
+  // number rides the squash: drawn inside the deformed frame so it stretches with the block
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '800 ' + Math.round(cell * 0.32) + 'px -apple-system, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(b.hp > 999 ? '999+' : b.hp, 0, 1);
+  ctx.restore();
+}
+
+function draw() {
+  ctx.save();
+  if (G.shake > 0) ctx.translate(rand(-G.shake, G.shake) * 0.5, rand(-G.shake, G.shake) * 0.5);
+
+  // midnight arcade background
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#0b1128'); bg.addColorStop(1, '#1a2450');
+  ctx.fillStyle = bg;
+  ctx.fillRect(-20, -20, W + 40, H + 40);
+  const vg = ctx.createRadialGradient(W / 2, H * 0.42, H * 0.2, W / 2, H * 0.42, H * 0.85);
+  vg.addColorStop(0, 'rgba(70,140,255,.07)'); vg.addColorStop(1, 'rgba(2,4,12,.32)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(-20, -20, W + 40, H + 40);
+
+  // danger line: escalates as blocks approach
+  const r = G.dangerRows;
+  let lc = 'rgba(130,160,255,.35)', lw = 2, dash = [10, 8], pulseA = 0;
+  if (r < 3) { lc = '#ffb02e'; lw = 2.5; pulseA = 0.15; }
+  if (r < 2) { lc = '#ff7847'; lw = 3; pulseA = 0.3; }
+  if (r < 1) { lc = '#ff3b5c'; lw = 4; pulseA = 0.45; }
+  const tNow = performance.now() / 1000;
+  ctx.save();
+  ctx.strokeStyle = lc;
+  ctx.globalAlpha = 1 - pulseA / 2 + Math.sin(tNow * (r < 1 ? 7 : 3.5)) * pulseA / 2;
+  ctx.lineWidth = lw;
+  ctx.setLineDash(dash);
+  ctx.beginPath(); ctx.moveTo(0, dangerY); ctx.lineTo(W, dangerY); ctx.stroke();
+  ctx.restore();
+
+  // pickups (sage)
+  for (const p of G.pickups) {
+    const px = blockCX(p.c) + p.ox, py = playTop + p.r * cell + cell / 2 + p.oy;
+    const pulse = 1 + Math.sin(tNow * 4 + p.phase) * 0.12;
+    ctx.save();
+    ctx.shadowColor = 'rgba(61,255,160,.6)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 0;
+    ctx.strokeStyle = '#3dffa0'; ctx.lineWidth = 3.5;
+    ctx.beginPath(); ctx.arc(px, py, 13 * pulse, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = 'rgba(10,30,22,.85)';
+    ctx.beginPath(); ctx.arc(px, py, 13 * pulse, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#3dffa0';
+    ctx.beginPath(); ctx.arc(px, py, 4.5 * pulse, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  // shockwave rings
+  for (const rg of G.rings) {
+    const t = rg.life / rg.maxLife;
+    ctx.save();
+    ctx.globalAlpha = 1 - t;
+    ctx.strokeStyle = rg.color;
+    ctx.lineWidth = 3.5 * (1 - t) + 1;
+    ctx.beginPath(); ctx.arc(rg.x, rg.y, 6 + (rg.maxR - 6) * t, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+
+  for (const b of G.blocks) drawBlock(b, tNow);
+
+  // aim preview
+  if (G.mode === 'aim' && G.aiming) {
+    const pts = previewPath();
+    ctx.save();
+    ctx.shadowColor = 'rgba(70,224,255,.8)'; ctx.shadowBlur = 8;
+    ctx.strokeStyle = 'rgba(70,224,255,.85)';
+    ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.setLineDash([1, 14]);
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // launch ball + count
+  if (G.mode === 'aim') {
+    ctx.save();
+    ctx.shadowColor = 'rgba(90,180,255,.6)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 0;
+    const bg2 = ctx.createLinearGradient(0, launchY - BALL_R - 2, 0, launchY + BALL_R + 2);
+    bg2.addColorStop(0, '#ffffff'); bg2.addColorStop(1, '#bfe3ff');
+    ctx.fillStyle = bg2;
+    ctx.beginPath(); ctx.arc(G.launchX, launchY, BALL_R + 2, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    ctx.beginPath(); ctx.arc(G.launchX - 3, launchY - 3, 2.4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#aeb9e4';
+    ctx.font = '700 15px -apple-system, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const label = '× ' + G.balls;
+    ctx.fillStyle = '#aeb9e4';
+    ctx.font = '700 ' + Math.round(15 * (1 + G.pickPop * 0.5)) + 'px -apple-system, sans-serif';
+    ctx.fillText(label, G.launchX, launchY + 14);
+  }
+
+  // fast-forward indicator
+  if (G.timeScale > 1) {
+    const fl = G.timeScale + '×';
+    ctx.font = '800 13px -apple-system, sans-serif';
+    const fw = ctx.measureText(fl).width;
+    ctx.fillStyle = 'rgba(70,224,255,.16)';
+    rr(W / 2 - fw / 2 - 11, 92, fw + 22, 25, 12.5);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(70,224,255,.5)'; ctx.lineWidth = 1.5;
+    rr(W / 2 - fw / 2 - 11, 92, fw + 22, 25, 12.5);
+    ctx.stroke();
+    ctx.fillStyle = '#7de9ff';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(fl, W / 2, 105);
+  }
+
+  // flying balls
+  for (const b of G.flying) {
+    ctx.save();
+    ctx.shadowColor = 'rgba(90,180,255,.55)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 0;
+    const bg3 = ctx.createLinearGradient(0, b.y - BALL_R, 0, b.y + BALL_R);
+    bg3.addColorStop(0, '#ffffff'); bg3.addColorStop(1, '#bfe3ff');
+    ctx.fillStyle = bg3;
+    ctx.beginPath(); ctx.arc(b.x, b.y, BALL_R, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = 'rgba(255,255,255,.9)';
+    ctx.beginPath(); ctx.arc(b.x - 2.5, b.y - 2.5, 2, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // particles (cool confetti + puffs)
+  for (const p of G.particles) {
+    const a = 1 - p.life / p.maxLife;
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rot);
+    ctx.fillStyle = p.color;
+    if (p.shape === 'circle') { ctx.beginPath(); ctx.arc(0, 0, p.size / 2, 0, Math.PI * 2); ctx.fill(); }
+    else ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.7);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+
+  // floaters
+  for (const f of G.floaters) {
+    const a = 1 - f.life / f.maxLife;
+    const pop = f.life < 0.18 ? 1 + (0.18 - f.life) * 2.2 : 1;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, a * 1.6);
+    ctx.translate(f.x, f.y);
+    ctx.scale(pop, pop);
+    ctx.fillStyle = f.color;
+    ctx.font = '800 ' + f.size + 'px -apple-system, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(f.text, 0, 0);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.restore();
+}
+
+function loop(t) {
+  const dt = Math.min(0.033, (t - lastT) / 1000 || 0.016);
+  lastT = t;
+  // hold-to-fast-forward during flight: 2x while held, 4x after 5s.
+  // multi-step (not bigger dt) keeps the physics stable at speed.
+  let steps = 1;
+  if (G.mode === 'firing' && G.holding) {
+    G.holdT += dt;
+    steps = G.holdT >= 5 ? 4 : 2;
+  } else {
+    G.holdT = 0;
+  }
+  G.timeScale = steps;
+  for (let i = 0; i < steps; i++) update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+/* ---------------- input ---------------- */
+function onDown(e) {
+  ac();
+  e.preventDefault();
+  const t = e.touches ? e.touches[0] : e;
+  if (G.mode === 'aim') {
+    G.aiming = true;
+    G.aimAng = pointerAngle(t.clientX, t.clientY);
+  } else if (G.mode === 'firing') {
+    // hold finger during flight: fast-forward the volley
+    G.holding = true;
+    G.holdT = 0;
+  }
+}
+function onMove(e) {
+  if (!G.aiming || G.mode !== 'aim') return;
+  e.preventDefault();
+  const t = e.touches ? e.touches[0] : e;
+  G.aimAng = pointerAngle(t.clientX, t.clientY);
+}
+function onUp(e) {
+  e.preventDefault();
+  G.holding = false; G.holdT = 0;
+  if (!G.aiming || G.mode !== 'aim') return;
+  G.aiming = false;
+  startFire();
+}
+canvas.addEventListener('pointerdown', onDown, { passive: false });
+window.addEventListener('pointermove', onMove, { passive: false });
+window.addEventListener('pointerup', onUp, { passive: false });
+window.addEventListener('pointercancel', () => { G.aiming = false; G.holding = false; G.holdT = 0; }, { passive: true });
+
+document.getElementById('start').addEventListener('click', () => {
+  ac();
+  document.getElementById('start').classList.remove('show');
+  document.getElementById('hint').classList.remove('gone');
+  G.mode = 'aim';
+});
+document.getElementById('again').addEventListener('click', (e) => { e.stopPropagation(); ac(); reset(false); });
+document.getElementById('restartBtn').addEventListener('click', () => { ac(); reset(false); });
+const muteBtn = document.getElementById('muteBtn');
+// bespoke sound icons (see ~/workspace/design-assets/icons/): 24px grid, round caps, currentColor
+const ICON_SOUND_ON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.2L12 18.6V5.4L7.2 9.5H4z" fill="currentColor" stroke="none"/><path d="M15 9.2a4.2 4.2 0 0 1 0 5.6"/><path d="M17.8 6.8a7.6 7.6 0 0 1 0 10.4"/></svg>';
+const ICON_SOUND_OFF = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.2L12 18.6V5.4L7.2 9.5H4z" fill="currentColor" stroke="none"/><path d="M15.5 9.7l4.6 4.6"/><path d="M20.1 9.7l-4.6 4.6"/></svg>';
+function syncMute() { muteBtn.innerHTML = muted ? ICON_SOUND_OFF : ICON_SOUND_ON; }
+muteBtn.addEventListener('click', () => {
+  muted = !muted;
+  localStorage.setItem('ballz_muted', muted ? '1' : '0');
+  syncMute();
+});
+syncMute();
+
+/* ---------------- boot ---------------- */
+document.title = GAME_NAME;
+document.getElementById('wordmark').textContent = GAME_NAME;
+document.getElementById('overWordmark').textContent = GAME_NAME;
+resize();
+reset(true);
+syncHud();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

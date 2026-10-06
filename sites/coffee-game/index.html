@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>Pour Decisions — coffee barista game</title>
+<style>
+  :root{
+    --cream:#FAF6EE; --paper:#FFFDF8; --ink:#3B2A20; --ink-soft:#6B5847;
+    --caramel:#C68A3C; --caramel-d:#9A6823; --esp:#2E1F16;
+    --gold:#D9A441; --red:#B4443C; --green:#5F8F5B; --line:#E7DCC8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:var(--cream); color:var(--ink);
+    display:flex; justify-content:center; min-height:100vh;
+    overscroll-behavior:none;
+  }
+  #stage{width:100%;max-width:480px;min-height:100vh;position:relative;
+    background:var(--cream); display:flex; flex-direction:column;
+    padding-bottom:env(safe-area-inset-bottom);}
+  @media(min-width:520px){
+    body{background:#EFE6D3}
+    #stage{box-shadow:0 0 40px rgba(59,42,32,.15);border-left:1px solid var(--line);border-right:1px solid var(--line)}
+  }
+  .serif{font-family:Georgia,"Times New Roman",serif}
+  button{touch-action:manipulation;font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+  /* ---------- header ---------- */
+  #hud{display:flex;align-items:center;gap:10px;padding:12px 14px 8px}
+  #hud .logo{font-family:Georgia,serif;font-weight:700;font-size:19px;letter-spacing:.3px}
+  #hud .logo em{color:var(--caramel-d);font-style:normal}
+  #hud .sp{flex:1}
+  .pill{background:var(--paper);border:1px solid var(--line);border-radius:999px;
+    padding:5px 11px;font-size:13px;font-weight:600;white-space:nowrap}
+  #streakPill.hot{background:#FFF3D6;border-color:var(--gold)}
+  .iconbtn{width:38px;height:38px;border-radius:12px;background:var(--paper);
+    border:1px solid var(--line);font-size:18px;display:flex;align-items:center;justify-content:center}
+  /* ---------- customer ---------- */
+  #custWrap{padding:6px 14px 0}
+  #custCard{background:var(--paper);border:1px solid var(--line);border-radius:18px;
+    padding:12px 14px;display:flex;gap:12px;align-items:center;position:relative;overflow:hidden}
+  #custFace{font-size:42px;line-height:1;flex:0 0 auto;transition:transform .2s}
+  #custCard.happy #custFace{transform:scale(1.15) rotate(-6deg)}
+  #custCard.mad #custFace{transform:scale(.92)}
+  #custInfo{flex:1;min-width:0}
+  #custName{font-weight:700;font-size:14px}
+  #orderBubble{font-family:Georgia,serif;font-size:17px;margin-top:2px}
+  #orderBubble .hint{font-family:system-ui;font-size:11.5px;color:var(--ink-soft);display:block;margin-top:2px}
+  #patBar{height:6px;background:#EFE6D3;border-radius:99px;margin-top:8px;overflow:hidden}
+  #patFill{height:100%;width:100%;background:var(--green);border-radius:99px;transition:width .5s linear}
+  #patFill.low{background:var(--red)}
+  #queueRow{display:flex;gap:6px;margin-top:8px;align-items:center;font-size:12px;color:var(--ink-soft)}
+  #queueRow .qface{font-size:20px;opacity:.75}
+  /* ---------- recipe card ---------- */
+  #recipe{margin:10px 14px 0;background:#FFF8EA;border:1px dashed var(--caramel);
+    border-radius:14px;padding:9px 12px;font-size:13px;line-height:1.65}
+  #recipe b{font-family:Georgia,serif}
+  #recipe .rstep{display:flex;gap:8px;align-items:baseline}
+  #recipe .rstep.done{color:var(--ink-soft);text-decoration:line-through}
+  #recipe .rstep.now{font-weight:700;color:var(--ink)}
+  #recipe .rstep.now::before{content:"▶";color:var(--caramel-d);font-size:10px}
+  /* ---------- cup ---------- */
+  #barWrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
+    padding:10px 14px 4px;position:relative;min-height:230px}
+  #steamZone{position:absolute;bottom:185px;left:0;right:0;height:70px;pointer-events:none;overflow:hidden}
+  .steam{position:absolute;bottom:0;width:8px;height:44px;border-radius:99px;
+    background:linear-gradient(to top,rgba(255,255,255,0),rgba(255,255,255,.85));
+    animation:rise 2.2s ease-in infinite;opacity:0}
+  @keyframes rise{0%{transform:translateY(10px) scaleX(1);opacity:0}30%{opacity:.8}100%{transform:translateY(-46px) translateX(8px) scaleX(1.6);opacity:0}}
+  #cup{width:150px;height:170px;position:relative;transition:transform .3s}
+  #cup.tipped{transform:rotate(72deg) translateY(26px)}
+  #cupBody{position:absolute;inset:0;clip-path:polygon(6% 0,94% 0,80% 100%,20% 100%);
+    background:#E9DCC4;border:2px solid #D8C6A4;overflow:hidden}
+  #cupInner{position:absolute;left:8%;right:8%;top:6%;bottom:4%;display:flex;flex-direction:column-reverse;
+    clip-path:polygon(0 0,100% 0,88% 100%,12% 100%)}
+  .layer{width:100%;transition:height .35s ease;position:relative}
+  .layer .shine{position:absolute;left:12%;top:15%;width:10%;height:60%;background:rgba(255,255,255,.25);border-radius:99px}
+  #cupRim{position:absolute;top:-7px;left:2%;right:2%;height:14px;border-radius:50%;
+    background:#F4EAD2;border:2px solid #D8C6A4}
+  #cupHandle{position:absolute;right:-24px;top:34px;width:44px;height:64px;
+    border:11px solid #D8C6A4;border-left:none;border-radius:0 30px 30px 0}
+  #buildLabel{margin-top:10px;font-size:12.5px;color:var(--ink-soft);min-height:20px;text-align:center;padding:0 10px}
+  #hint{font-size:13px;font-weight:600;color:var(--caramel-d);min-height:22px;text-align:center;
+    padding:2px 16px;transition:opacity .2s}
+  #hint.shake{animation:shk .4s}
+  @keyframes shk{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}50%{transform:translateX(6px)}75%{transform:translateX(-3px)}}
+  /* ---------- action bar ---------- */
+  #actions{padding:6px 14px 4px}
+  #actGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .act{background:var(--paper);border:1px solid var(--line);border-radius:14px;
+    padding:10px 4px;display:flex;flex-direction:column;align-items:center;gap:3px;
+    font-size:11px;font-weight:600;min-height:64px;justify-content:center;transition:transform .08s}
+  .act:active{transform:scale(.94)}
+  .act .e{font-size:22px}
+  .act.dim{opacity:.45}
+  .act.now{border:2px solid var(--caramel-d);background:#FFF6E3;box-shadow:0 0 0 3px rgba(198,138,60,.18)}
+  .act.bad{animation:shk .4s;border-color:var(--red)}
+  #serveRow{display:flex;gap:8px;margin-top:8px}
+  #serveBtn{flex:1;background:var(--caramel);color:#fff;font-weight:800;font-size:17px;
+    border-radius:16px;padding:14px;letter-spacing:.4px;box-shadow:0 3px 0 var(--caramel-d)}
+  #serveBtn:active{transform:translateY(2px);box-shadow:none}
+  #serveBtn.ready{background:var(--green);box-shadow:0 3px 0 #476B45;animation:pulse 1.4s infinite}
+  @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
+  #dumpBtn{background:var(--paper);border:1px solid var(--line);border-radius:16px;
+    padding:14px 16px;font-weight:700;font-size:14px;color:var(--ink-soft)}
+  #chaosBtn{margin-top:8px;width:100%;background:#3A2A1E;color:#F5D98B;font-weight:800;
+    border-radius:14px;padding:10px;font-size:13px;letter-spacing:.6px;border:1px dashed #F5D98B}
+  #chaosBtn:disabled{opacity:.35}
+  /* ---------- overlays ---------- */
+  .overlay{position:absolute;inset:0;background:rgba(46,31,22,.55);display:none;
+    align-items:center;justify-content:center;z-index:40;padding:20px;touch-action:none}
+  .overlay.show{display:flex}
+  .card{background:var(--paper);border-radius:22px;padding:22px;width:100%;max-width:380px;
+    max-height:88%;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.3);text-align:center}
+  .card h2{font-family:Georgia,serif;font-size:24px;margin-bottom:6px}
+  .card p{font-size:14px;color:var(--ink-soft);line-height:1.55}
+  .bigbtn{background:var(--caramel);color:#fff;font-weight:800;font-size:17px;border-radius:16px;
+    padding:14px 26px;margin-top:14px;box-shadow:0 3px 0 var(--caramel-d)}
+  .bigbtn:active{transform:translateY(2px);box-shadow:none}
+  .ghostbtn{margin-top:10px;font-weight:700;color:var(--ink-soft);font-size:14px;padding:10px}
+  /* extraction */
+  #gauge{height:34px;background:#EFE6D3;border-radius:99px;position:relative;margin:18px 0 6px;overflow:hidden}
+  #zone{position:absolute;top:0;bottom:0;background:rgba(95,143,91,.55);border-left:2px solid var(--green);border-right:2px solid var(--green)}
+  #needle{position:absolute;top:-2px;bottom:-2px;width:5px;background:var(--esp);border-radius:3px}
+  #extRead{font-family:Georgia,serif;font-size:30px;margin:6px 0}
+  #extTarget{font-size:13px;color:var(--ink-soft)}
+  /* results */
+  .statRow{display:flex;justify-content:space-between;padding:9px 4px;border-bottom:1px solid var(--line);font-size:14px}
+  .statRow b{font-family:Georgia,serif;font-size:16px}
+  #starRow{font-size:40px;letter-spacing:6px;margin:8px 0}
+  .masterGrid{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:10px}
+  .masterChip{background:#FFF6E3;border:1px solid var(--gold);border-radius:99px;
+    padding:5px 11px;font-size:12px;font-weight:700}
+  .masterChip.locked{opacity:.4;border-color:var(--line);background:var(--cream)}
+  /* toast */
+  #toast{position:absolute;left:50%;transform:translateX(-50%) translateY(20px);bottom:210px;
+    background:var(--esp);color:#FFF6E3;padding:11px 18px;border-radius:14px;font-size:14px;font-weight:600;
+    opacity:0;transition:all .25s;z-index:60;max-width:88%;text-align:center;pointer-events:none}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #unlockBadge{position:absolute;top:74px;left:50%;transform:translateX(-50%) scale(.6);z-index:55;
+    background:linear-gradient(135deg,#D9A441,#B97F26);color:#fff;font-weight:800;border-radius:16px;
+    padding:12px 20px;font-size:15px;opacity:0;transition:all .3s;box-shadow:0 8px 24px rgba(0,0,0,.25);
+    text-align:center;pointer-events:none;white-space:nowrap}
+  #unlockBadge.show{opacity:1;transform:translateX(-50%) scale(1)}
+  #unlockBadge small{display:block;font-weight:600;font-size:11px;opacity:.9}
+  #ver{position:absolute;right:8px;bottom:calc(6px + env(safe-area-inset-bottom));font-size:10px;color:#B9A98C;z-index:30}
+  #menuList{text-align:left;font-size:13.5px;line-height:1.9}
+  #menuList .locked{opacity:.45}
+  .kbd-hint{display:none}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="hud">
+    <div class="logo">Pour <em>Decisions</em></div>
+    <div class="sp"></div>
+    <div class="pill" id="tipPill">💰 $0</div>
+    <div class="pill" id="streakPill">🔥 0</div>
+    <button class="iconbtn" id="bookBtn" aria-label="Recipe book">📖</button>
+    <button class="iconbtn" id="soundBtn" aria-label="Sound">🔊</button>
+  </div>
+
+  <div id="custWrap">
+    <div id="custCard">
+      <div id="custFace">🙂</div>
+      <div id="custInfo">
+        <div id="custName">—</div>
+        <div id="orderBubble">—</div>
+        <div id="patBar"><div id="patFill"></div></div>
+      </div>
+    </div>
+    <div id="queueRow" style="display:none"></div>
+  </div>
+
+  <div id="recipe"></div>
+
+  <div id="barWrap">
+    <div id="steamZone"></div>
+    <div id="cup">
+      <div id="cupHandle"></div>
+      <div id="cupBody"><div id="cupInner"></div></div>
+      <div id="cupRim"></div>
+    </div>
+    <div id="buildLabel"></div>
+  </div>
+  <div id="hint"></div>
+
+  <div id="actions">
+    <div id="actGrid"></div>
+    <div id="serveRow">
+      <button id="dumpBtn">🗑 Dump</button>
+      <button id="serveBtn">SERVE →</button>
+    </div>
+    <button id="chaosBtn">🎲 CAUSE CHAOS</button>
+  </div>
+
+  <div id="toast"></div>
+  <div id="unlockBadge"></div>
+
+  <!-- start overlay -->
+  <div class="overlay show" id="startOv">
+    <div class="card">
+      <div style="font-size:52px">☕</div>
+      <h2>Pour Decisions</h2>
+      <p>You are the barista. Twelve drinks, one espresso machine, and a line of customers who <i>will</i> judge you.<br><br>
+      Pull shots in the sweet zone. Build each drink the right way. Survive the chaos.</p>
+      <label style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;font-size:14px;font-weight:600">
+        <input type="checkbox" id="chaosChk" style="width:20px;height:20px;accent-color:#B4443C"> Chaos mode <span style="color:var(--ink-soft);font-weight:400">(things break)</span>
+      </label>
+      <button class="bigbtn" id="startBtn">OPEN THE SHOP →</button>
+    </div>
+  </div>
+
+  <!-- extraction overlay -->
+  <div class="overlay" id="extOv">
+    <div class="card">
+      <div style="font-size:40px" id="extMachine">🔧</div>
+      <h2 id="extTitle">Pulling shot</h2>
+      <p id="extTarget"></p>
+      <div id="gauge"><div id="zone"></div><div id="needle"></div></div>
+      <div id="extRead">0.0s</div>
+      <button class="bigbtn" id="extStop">STOP</button>
+      <p style="margin-top:10px;font-size:12px" id="extNote"></p>
+    </div>
+  </div>
+
+  <!-- recipe book overlay -->
+  <div class="overlay" id="bookOv">
+    <div class="card">
+      <h2>📖 Recipe book</h2>
+      <p>Drinks you've unlocked. Study up, barista.</p>
+      <div id="menuList" style="margin-top:12px"></div>
+      <button class="bigbtn" id="bookClose">BACK TO BAR</button>
+    </div>
+  </div>
+
+  <!-- results overlay -->
+  <div class="overlay" id="resOv">
+    <div class="card">
+      <div style="font-size:48px" id="resEmoji">🌟</div>
+      <h2 id="resTitle">Shift complete!</h2>
+      <div id="starRow"></div>
+      <div id="resStats"></div>
+      <div class="masterGrid" id="masterGrid"></div>
+      <button class="bigbtn" id="nextBtn">NEXT SHIFT →</button>
+      <button class="ghostbtn" id="againBtn">replay this shift</button>
+    </div>
+  </div>
+
+  <div id="ver">v2026.10.03-01</div>
+</div>
+<script>
+"use strict";
+/* ================= DATA ================= */
+const ING = {
+  shot:  {label:'Espresso',       oz:1,   color:'#4A2C17', emoji:'☕'},
+  water: {label:'Hot water',      oz:2,   color:'#CFE3E8', emoji:'💧'},
+  milk:  {label:'Steamed milk',   oz:2,   color:'#EFDDBE', emoji:'🥛'},
+  foam:  {label:'Foam',           oz:1,   color:'#FFFFFF', emoji:'☁️'},
+  choc:  {label:'Chocolate',      oz:0.5, color:'#5A2E18', emoji:'🍫'},
+  whip:  {label:'Whipped cream',  oz:0.5, color:'#FFF8F0', emoji:'🍦'},
+  gelato:{label:'Gelato scoop',   oz:2,   color:'#F6E7C8', emoji:'🍨'},
+};
+const SHOT_ZONES = { // seconds on the gauge
+  ristretto:{lo:15, hi:20, label:'Ristretto — stop in the 15–20s zone'},
+  normale:  {lo:25, hi:30, label:'Normale — stop in the 25–30s sweet zone'},
+  lungo:    {lo:35, hi:42, label:'Lungo — stop in the 35–42s zone'},
+};
+// steps: {k:'shot',type,n} or {k:'add',ing,taps}
+const DRINKS = [
+  {id:'espresso', name:'Espresso',   steps:[{k:'shot',type:'normale',n:1}], blurb:'The pure one. One perfect shot.'},
+  {id:'doppio',   name:'Doppio',     steps:[{k:'shot',type:'normale',n:2}], blurb:'Double or nothing.'},
+  {id:'americano',name:'Americano',  steps:[{k:'shot',type:'normale',n:2},{k:'add',ing:'water',taps:2}], blurb:'Espresso lengthened with hot water.'},
+  {id:'macchiato',name:'Macchiato', steps:[{k:'shot',type:'normale',n:2},{k:'add',ing:'foam',taps:1}], blurb:'"Stained" with a cloud of foam.'},
+  {id:'cortado',  name:'Cortado',    steps:[{k:'shot',type:'normale',n:2},{k:'add',ing:'milk',taps:1}], blurb:'Equal parts espresso and steamed milk.'},
+  {id:'latte',    name:'Latte',      steps:[{k:'shot',type:'normale',n:2},{k:'add',ing:'milk',taps:3},{k:'add',ing:'foam',taps:1}], blurb:'Milky, mellow, crowned with foam.'},
+  {id:'cappuccino',name:'Cappuccino',steps:[{k:'shot',type:'normale',n:2},{k:'add',ing:'milk',taps:1},{k:'add',ing:'foam',taps:2}], blurb:'Thirds: espresso, milk, airy foam.'},
+  {id:'flatwhite',name:'Flat White',steps:[{k:'shot',type:'ristretto',n:2},{k:'add',ing:'milk',taps:2}], blurb:'Double ristretto under velvet milk.'},
+  {id:'mocha',    name:'Mocha',      steps:[{k:'shot',type:'normale',n:2},{k:'add',ing:'choc',taps:1},{k:'add',ing:'milk',taps:2},{k:'add',ing:'whip',taps:1}], blurb:'Chocolate meets espresso. Dangerous.'},
+  {id:'ristretto',name:'Ristretto', steps:[{k:'shot',type:'ristretto',n:1}], blurb:'Short, sweet, intense.'},
+  {id:'lungo',    name:'Lungo',      steps:[{k:'shot',type:'lungo',n:1}], blurb:'Long pull, bold and bitter.'},
+  {id:'affogato', name:'Affogato',   steps:[{k:'add',ing:'gelato',taps:1},{k:'shot',type:'normale',n:2}], blurb:'"Drowned" — gelato under hot espresso.'},
+];
+const CUSTOMERS = [
+  ['Maya','👩🏽‍💼'],['Dev','🧑🏻‍🎤'],['Rosa','👵🏼'],['Kenji','🧑🏻‍💻'],['Priya','👩🏻‍🔬'],
+  ['Sam','🧔🏽'],['Lena','👱‍♀️'],['Marcus','🧑🏿‍🦱'],['Ana','👩🏻‍🦰'],['Theo','🧑🏼‍🎨'],
+  ['June','👩🏻‍🦳'],['Omar','🧑🏽‍🚀'],['Ivy','👧🏻'],['Rex','🧑🏼‍🍳'],['Nadia','🧕🏽'],
+  ['Finn','🧑🏻‍🌾'],['Zoe','👩🏼‍🎤'],['Kai','🧑🏽‍🏋️'],['Elif','👩🏻‍💼'],['Noah','🧑🏻‍✈️'],
+];
+const HAPPY = ['Perfect.','You get me. ☕','Marry me.','Five stars!','This SLAPS.','Best barista alive.'];
+const MAD = ['This is... wrong.','I ordered a {d}?!','My grandma pulls better shots.','Nope.','*sigh*'];
+const CHAOS_MSGS = {
+  gremlin:['🐒 Gremlin hand! It dumped {ing} in your cup!','🐒 Oops — wild {ing} appeared!'],
+  knock:['💥 Cup knocked over! Rebuild this step!','💥 Butterfingers! The cup went flying!'],
+  jam:['🔧 Machine jam! Tap the machine 5× to unjam!','🔧 The espresso machine is choking! Tap it 5×!'],
+};
+
+/* ================= AUDIO ================= */
+let AC=null, muted = localStorage.getItem('pd-muted')==='1';
+function ac(){ if(!AC){ AC = new (window.AudioContext||window.webkitAudioContext)(); } if(AC.state==='suspended')AC.resume(); return AC; }
+function tone(f,d=0.12,type='sine',v=0.16,when=0){
+  if(muted) return; try{
+    const a=ac(),o=a.createOscillator(),g=a.createGain();
+    o.type=type;o.frequency.value=f;
+    g.gain.setValueAtTime(0.0001,a.currentTime+when);
+    g.gain.exponentialRampToValueAtTime(v,a.currentTime+when+0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+when+d);
+    o.connect(g).connect(a.destination);o.start(a.currentTime+when);o.stop(a.currentTime+when+d+0.05);
+  }catch(e){}
+}
+const SFX = {
+  pop(){tone(520,0.07,'triangle',0.14);tone(780,0.06,'triangle',0.1,0.05);},
+  pull(){tone(180,0.25,'sawtooth',0.06);tone(240,0.2,'sawtooth',0.05,0.1);},
+  good(){tone(660,0.1,'sine',0.16);tone(880,0.14,'sine',0.16,0.09);},
+  perfect(){[523,659,784,1047].forEach((f,i)=>tone(f,0.14,'sine',0.15,i*0.07));},
+  bad(){tone(220,0.18,'square',0.08);tone(160,0.25,'square',0.08,0.14);},
+  serve(){tone(784,0.12,'sine',0.16);tone(1175,0.2,'sine',0.16,0.1);},
+  sad(){tone(330,0.16,'triangle',0.12);tone(262,0.16,'triangle',0.12,0.15);tone(196,0.3,'triangle',0.12,0.3);},
+  unlock(){[392,523,659,784].forEach((f,i)=>tone(f,0.16,'triangle',0.15,i*0.09));},
+  chaos(){tone(300,0.3,'sawtooth',0.1);tone(210,0.35,'sawtooth',0.1,0.12);},
+  clunk(){tone(140,0.08,'square',0.12);},
+  streak(){[660,740,830,990].forEach((f,i)=>tone(f,0.1,'sine',0.13,i*0.06));},
+  tick(){tone(1200,0.03,'square',0.05);},
+};
+
+/* ================= STATE ================= */
+const S = {
+  phase:'start',            // start | play | results
+  shift:1, rush:false,
+  custIdx:0, unlocked:1,    // drinks unlocked count
+  tips:0, streak:0, bestStreak:0, stars:0,
+  mastered:{}, chaosSurvived:0, served:0, failed:0,
+  customer:null, patience:1, patTimer:null,
+  queue:[],                 // rush mode waiting customers
+  build:null,               // current drink build (state machine)
+  chaosMode:false, chaosTimer:null, chaosCooldown:0,
+  jamTaps:0, jammed:false,
+  startTime:0,
+};
+function unlockedDrinks(){ return DRINKS.slice(0,S.unlocked); }
+function newBuild(drink){
+  return {drink, stepIdx:0, shotGot:0, addGot:0, shots:[], adds:{}, extra:{}, state:'building', t0:Date.now()};
+}
+function curStep(b){ return b.drink.steps[b.stepIdx]; }
+function buildDone(b){ return b.stepIdx >= b.drink.steps.length; }
+/* ================= RENDER ================= */
+const $ = id => document.getElementById(id);
+function toast(msg,ms=2200){
+  const t=$('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),ms);
+}
+function setHint(msg, bad){
+  const h=$('hint'); h.textContent=msg||'';
+  if(bad){ h.classList.remove('shake'); void h.offsetWidth; h.classList.add('shake'); }
+}
+function renderHUD(){
+  $('tipPill').textContent='💰 $'+S.tips;
+  $('streakPill').textContent='🔥 '+S.streak;
+  $('streakPill').classList.toggle('hot',S.streak>=3);
+}
+function renderCustomer(){
+  const c=S.customer; if(!c) return;
+  $('custFace').textContent=c.face;
+  $('custName').textContent=c.name+(S.rush?' • RUSH':'')+' — shift '+S.shift;
+  $('orderBubble').innerHTML='“One <b>'+c.drink.name+'</b>, please.”<span class="hint">'+c.drink.blurb+'</span>';
+  $('custCard').classList.remove('happy','mad');
+  renderQueue();
+}
+function renderQueue(){
+  const q=$('queueRow');
+  if(S.rush && S.queue.length){ q.style.display='flex';
+    q.innerHTML='Next up: '+S.queue.map(c=>'<span class="qface">'+c.face+'</span>').join('')+'<span>('+S.queue.length+' waiting)</span>';
+  } else q.style.display='none';
+}
+function stepLabel(st){
+  if(st.k==='shot') return 'Pull '+st.n+'× '+st.type+' shot'+(st.n>1?'s':'');
+  return 'Add '+ING[st.ing].label+(st.taps>1?' ×'+st.taps+' ('+(ING[st.ing].oz*st.taps)+'oz)':'');
+}
+function renderRecipe(){
+  const b=S.build; if(!b){$('recipe').innerHTML='';return;}
+  let h='<b>'+b.drink.name+'</b> — '+b.drink.blurb+'<br>';
+  b.drink.steps.forEach((st,i)=>{
+    const cls=i<b.stepIdx?'done':(i===b.stepIdx?'now':'');
+    let prog='';
+    if(i===b.stepIdx){
+      prog = st.k==='shot' ? ' ('+b.shotGot+'/'+st.n+')' : ' ('+b.addGot+'/'+st.taps+')';
+    }
+    h+='<div class="rstep '+cls+'">'+stepLabel(st)+prog+'</div>';
+  });
+  $('recipe').innerHTML=h;
+}
+/* cup layers */
+function renderCup(animate){
+  const b=S.build, inner=$('cupInner'); inner.innerHTML='';
+  if(!b) return;
+  const layers=[];
+  // order: completed steps in order, then extras
+  b.drink.steps.forEach((st,si)=>{
+    if(si>b.stepIdx) return;
+    if(st.k==='shot'){
+      const n = si<b.stepIdx ? st.n : b.shotGot;
+      for(let i=0;i<n;i++) layers.push({ing:'shot'});
+    } else {
+      const n = si<b.stepIdx ? st.taps : b.addGot;
+      for(let i=0;i<n;i++) layers.push({ing:st.ing});
+    }
+  });
+  Object.keys(b.extra).forEach(ing=>{ for(let i=0;i<b.extra[ing];i++) layers.push({ing, bad:true}); });
+  const totalOz = layers.reduce((s,l)=>s+ING[l.ing].oz,0) || 1;
+  layers.forEach(l=>{
+    const d=document.createElement('div'); d.className='layer';
+    d.style.height=(ING[l.ing].oz/totalOz*100)+'%';
+    d.style.background=ING[l.ing].color;
+    if(l.bad) d.style.outline='2px dashed var(--red)';
+    d.innerHTML='<div class="shine"></div>';
+    inner.appendChild(d);
+  });
+  const names = b.shots.length? b.shots.length+' shot'+(b.shots.length>1?'s':'') : '';
+  const adds = Object.keys(b.adds).map(k=>ING[k].label+' '+(b.adds[k]*ING[k].oz)+'oz').join(' · ');
+  $('buildLabel').textContent=[names,adds].filter(Boolean).join(' · ')||'Empty cup — start building!';
+  if(animate) steamBurst();
+}
+function steamBurst(n=3){
+  const z=$('steamZone'); z.innerHTML='';
+  for(let i=0;i<n;i++){ const s=document.createElement('div');s.className='steam';
+    s.style.left=(30+Math.random()*40)+'%';s.style.animationDelay=(i*0.35)+'s';z.appendChild(s); }
+  setTimeout(()=>z.innerHTML='',3200);
+}
+/* action buttons: the state machine made visible */
+const ACTS=[
+  {id:'pull', e:'⚙️', t:'Pull shot'},
+  {id:'water',e:'💧', t:'Water'},
+  {id:'milk', e:'🥛', t:'Milk'},
+  {id:'foam', e:'☁️', t:'Foam'},
+  {id:'choc', e:'🍫', t:'Choc'},
+  {id:'gelato',e:'🍨',t:'Gelato'},
+  {id:'whip', e:'🍦', t:'Whip'},
+];
+function validAct(b){
+  if(!b||b.state!=='building') return b&&buildDone(b)?'serve':'none';
+  const st=curStep(b);
+  return st.k==='shot' ? 'pull' : st.ing;
+}
+function renderActions(){
+  const b=S.build, g=$('actGrid'); g.innerHTML='';
+  const v=validAct(b);
+  ACTS.forEach(a=>{
+    const btn=document.createElement('button');
+    btn.className='act'+(a.id===v?' now':(v!=='none'?' dim':''));
+    btn.dataset.act=a.id;
+    btn.innerHTML='<span class="e">'+a.e+'</span><span>'+a.t+'</span>';
+    btn.onclick=()=>onAct(a.id,btn);
+    g.appendChild(btn);
+  });
+  const sb=$('serveBtn');
+  sb.classList.toggle('ready', v==='serve');
+  sb.textContent = v==='serve' ? 'SERVE → ☕' : 'SERVE →';
+}
+function badTap(btn,msg){
+  btn.classList.remove('bad'); void btn.offsetWidth; btn.classList.add('bad');
+  setHint(msg,true); SFX.bad();
+}
+/* The state machine: only the current step's action is valid.
+   Anything else → playful shake + teaching hint, state unchanged. */
+function onAct(id,btn){
+  const b=S.build;
+  if(!b||S.phase!=='play'||b._served) return;
+  if(S.jammed && id==='pull'){ setHint('Machine is jammed! Tap the machine card 5× 🔧',true); SFX.bad(); return; }
+  const v=validAct(b);
+  if(v==='serve'){
+    if(id==='pull'||['water','milk','foam','choc','gelato','whip'].includes(id)){ badTap(btn,'Drink is done — hit SERVE! ☕'); return; }
+  }
+  if(id!==v){
+    const st = b.state==='building' ? curStep(b) : null;
+    let msg='Not yet! ';
+    if(st){
+      msg += st.k==='shot'
+        ? 'Pull the shot'+(st.n>1?'s':'')+' first — espresso before anything.'
+        : 'Now: '+ING[st.ing].label+' ('+b.addGot+'/'+st.taps+'). One thing at a time!';
+    } else msg+='Hit SERVE!';
+    badTap(btn,msg); return;
+  }
+  if(id==='pull') openExtraction();
+  else addIngredient(id);
+  setHint('');
+}
+function addIngredient(ing){
+  const b=S.build, st=curStep(b);
+  b.addGot++;
+  b.adds[ing]=(b.adds[ing]||0)+1;
+  SFX.pop();
+  noteProgress();
+  if(b.addGot>=st.taps){ b.stepIdx++; b.addGot=0; advanceCheck(); }
+  renderCup(true); renderRecipe(); renderActions();
+}
+function advanceCheck(){
+  const b=S.build;
+  if(buildDone(b)){ b.state='ready'; setHint('Beautiful. Serve it! ☕'); steamBurst(5); }
+  else { const st=curStep(b); setHint(st.k==='shot'?'Next: pull '+st.n+'× '+st.type+' shot'+(st.n>1?'s':''):'Next: '+ING[st.ing].label+' ×'+st.taps); }
+}
+/* ================= EXTRACTION MINI-GAME ================= */
+let extRAF=null, extT0=0, extType='normale';
+function openExtraction(){
+  const b=S.build, st=curStep(b);
+  extType=st.type;
+  const z=SHOT_ZONES[extType];
+  $('extTitle').textContent='Pulling '+extType+' shot '+(b.shotGot+1)+'/'+st.n;
+  $('extTarget').textContent=z.label;
+  $('zone').style.left=(z.lo/45*100)+'%';
+  $('zone').style.width=((z.hi-z.lo)/45*100)+'%';
+  $('extNote').textContent='Tap STOP inside the green zone. Center = perfect.';
+  $('extMachine').textContent = S.jammed ? '🔧💨' : '⚙️';
+  $('extOv').classList.add('show');
+  $('extRead').textContent='0.0s';
+  SFX.pull();
+  extT0=performance.now();
+  cancelAnimationFrame(extRAF);
+  const tick=()=>{
+    const t=(performance.now()-extT0)/1000;
+    const tt=Math.min(t,4.2), secs=tt/4.2*45;
+    $('needle').style.left='calc('+(secs/45*100)+'% - 2px)';
+    $('extRead').textContent=secs.toFixed(1)+'s';
+    if(tt<4.2) extRAF=requestAnimationFrame(tick); else stopExtraction();
+  };
+  tick();
+}
+function stopExtraction(){
+  cancelAnimationFrame(extRAF);
+  if(!$('extOv').classList.contains('show')) return;
+  $('extOv').classList.remove('show');
+  const t=Math.min((performance.now()-extT0)/1000,4.2), secs=t/4.2*45;
+  const z=SHOT_ZONES[extType], mid=(z.lo+z.hi)/2, d=Math.abs(secs-mid);
+  let q,qlabel;
+  if(d<=1){q=1;qlabel='PERFECT';SFX.perfect();}
+  else if(secs>=z.lo&&secs<=z.hi){q=0.85;qlabel='Great';SFX.good();}
+  else if(d<=4){q=0.6;qlabel=secs<z.lo?'Sour…':'Bitter…';SFX.bad();}
+  else{q=0.3;qlabel=secs<z.lo?'Way sour 😖':'Burnt 😖';SFX.bad();}
+  const b=S.build, st=curStep(b);
+  b.shots.push({type:extType,q});
+  b.shotGot++;
+  noteProgress();
+  toast('Shot: '+qlabel+' ('+secs.toFixed(1)+'s)');
+  if(b.shotGot>=st.n){ b.stepIdx++; b.shotGot=0; advanceCheck(); }
+  else setHint('Shot '+(b.shotGot+1)+'/'+st.n+' — pull again!');
+  renderCup(true); renderRecipe(); renderActions();
+  maybeChaosSoon();
+}
+$('extStop').onclick=stopExtraction;
+
+/* ================= CHAOS MODE ================= */
+function armChaos(){
+  clearTimeout(S.chaosTimer);
+  if(!S.chaosMode||S.phase!=='play') return;
+  S.chaosTimer=setTimeout(()=>{
+    if(S.phase==='play'&&S.build&&S.build.state==='building'&&S.chaosCooldown<=0) fireChaos();
+    armChaos();
+  }, 12000+Math.random()*14000);
+}
+function maybeChaosSoon(){ /* nudge: small chance right after a shot */ 
+  if(S.chaosMode&&Math.random()<0.18&&S.chaosCooldown<=0) setTimeout(fireChaos,2500);
+}
+function fireChaos(kind){
+  const b=S.build; if(!b||b.state!=='building') return;
+  const kinds=['gremlin','knock','jam'].filter(k=>{
+    if(k==='jam' && curStep(b).k!=='shot') return false;
+    if(k==='jam' && S.jammed) return false;
+    return true;
+  });
+  kind = kind || kinds[Math.floor(Math.random()*kinds.length)];
+  if(!kind) return;
+  S.chaosCooldown=15;
+  const t0=Date.now();
+  SFX.chaos();
+  if(kind==='gremlin'){
+    const pool=Object.keys(ING).filter(i=>i!=='shot'&&!(b.adds[i]>0));
+    const ing=pool[Math.floor(Math.random()*pool.length)]||'water';
+    b.extra[ing]=(b.extra[ing]||0)+2;
+    b._chaosT0=t0; b._chaosKind='gremlin';
+    toast(pick(CHAOS_MSGS.gremlin).replace('{ing}',ING[ing].label),3000);
+    setHint('Wrong stuff in the cup! 🗑 Dump it fast for a recovery bonus!',true);
+  }else if(kind==='knock'){
+    const cup=$('cup'); cup.classList.add('tipped');
+    setTimeout(()=>cup.classList.remove('tipped'),1200);
+    // lose current step progress
+    const st=curStep(b);
+    if(st.k==='shot'){ b.shots.splice(b.shots.length-b.shotGot,b.shotGot); b.shotGot=0; }
+    else { b.adds[st.ing]=Math.max(0,(b.adds[st.ing]||0)-b.addGot); b.addGot=0; }
+    b._chaosT0=t0; b._chaosKind='knock';
+    toast(pick(CHAOS_MSGS.knock),3000);
+    setHint('Rebuild the step — fast recovery earns a bonus!',true);
+  }else if(kind==='jam'){
+    S.jammed=true; S.jamTaps=0;
+    b._chaosT0=t0; b._chaosKind='jam';
+    toast(pick(CHAOS_MSGS.jam),3200);
+    setHint('Tap the ⚙️ Pull button area… no — tap THIS hint 5×! Just kidding: tap the machine card.',true);
+  }
+  renderCup(); renderRecipe(); renderActions();
+}
+// unjam: tap the extraction machine card (the pull button when jammed)
+document.addEventListener('click',e=>{
+  if(!S.jammed) return;
+  const b=S.build;
+  if(e.target.closest('#extOv')) return;
+  S.jamTaps++; SFX.clunk();
+  setHint('Unjamming… '+S.jamTaps+'/5 🔧');
+  if(S.jamTaps>=5){
+    S.jammed=false;
+    const dt=(Date.now()-b._chaosT0)/1000;
+    toast(dt<8?'🔧 Fixed in '+dt.toFixed(0)+'s! Cool under pressure +$2':'🔧 Machine unjammed.');
+    if(dt<8){ S.tips+=2; S.chaosSurvived++; }
+    setHint('Machine clear! Pull that shot.');
+    renderHUD(); renderActions();
+  }
+});
+$('chaosBtn').onclick=()=>{
+  if(S.chaosCooldown>0){ toast('Chaos recharging… '+S.chaosCooldown+'s'); return; }
+  if(!S.build||S.build.state!=='building'){ toast('Start building a drink first!'); return; }
+  fireChaos(); SFX.chaos();
+};
+setInterval(()=>{ if(S.chaosCooldown>0){S.chaosCooldown--;
+  $('chaosBtn').disabled=S.chaosCooldown>0;
+  $('chaosBtn').textContent=S.chaosCooldown>0?('🎲 CHAOS ('+S.chaosCooldown+'s)'):('🎲 CAUSE CHAOS');
+}},1000);
+function pick(a){return a[Math.floor(Math.random()*a.length)];}
+
+/* ================= SERVE & SCORE ================= */
+function needMap(drink){
+  const m={};
+  drink.steps.forEach(st=>{
+    if(st.k==='shot'){ const k='shot:'+st.type; m[k]=(m[k]||0)+st.n; }
+    else { m[st.ing]=(m[st.ing]||0)+st.taps*ING[st.ing].oz; }
+  });
+  return m;
+}
+function builtMap(b){
+  const m={};
+  b.shots.forEach(s=>{ const k='shot:'+s.type; m[k]=(m[k]||0)+1; });
+  Object.keys(b.adds).forEach(ing=>{ m[ing]=(m[ing]||0)+b.adds[ing]*ING[ing].oz; });
+  Object.keys(b.extra).forEach(ing=>{ m[ing]=(m[ing]||0)+b.extra[ing]*ING[ing].oz; });
+  return m;
+}
+function scoreBuild(b){
+  const need=needMap(b.drink), got=builtMap(b);
+  const keys=new Set([...Object.keys(need),...Object.keys(got)]);
+  let acc=0,n=0,over=0,needOz=0;
+  Object.keys(need).forEach(k=>{ needOz+= (k.startsWith('shot:')? need[k]*1 : need[k]); });
+  keys.forEach(k=>{
+    const nd=need[k]||0, gd=got[k]||0;
+    if(nd>0){ acc+=Math.min(gd,nd)/nd; n++; if(gd>nd) over+=(gd-nd); }
+    else { over+=gd; } // entirely wrong ingredient
+  });
+  acc = n? acc/n : 0;
+  acc -= Math.min(0.35, 0.12*(over/Math.max(1,needOz)));
+  acc = Math.max(0,acc);
+  const q = b.shots.length? b.shots.reduce((s,s2)=>s+s2.q,0)/b.shots.length : 1;
+  const score = Math.max(0,Math.min(1, 0.65*acc + 0.35*q));
+  return {score,acc,q};
+}
+$('serveBtn').onclick=()=>{
+  const b=S.build; if(!b||S.phase!=='play') return;
+  if(!buildDone(b)){
+    const st=curStep(b);
+    setHint('Not yet! Still needs: '+(st.k==='shot'?'shot '+(b.shotGot+1)+'/'+st.n:ING[st.ing].label+' '+(b.addGot+1)+'/'+st.taps),true);
+    SFX.bad(); return;
+  }
+  serveDrink();
+};
+function serveDrink(){
+  const b=S.build; if(b._served) return; b._served=true;
+  const {score}=scoreBuild(b);
+  stopPatience();
+  const c=S.customer;
+  const perfectish = score>=0.85;
+  let tip=Math.round(2*score*10)/10;
+  let stars = score>=0.95?3 : score>=0.8?2 : score>=0.6?1 : 0;
+  if(perfectish){
+    S.streak++; S.bestStreak=Math.max(S.bestStreak,S.streak);
+    if(S.streak>=2){ tip+=1; toast('🔥 Streak x'+S.streak+'! +$1'); }
+    if(S.streak>=3) SFX.streak();
+  } else { S.streak=0; }
+  S.tips=Math.round((S.tips+tip)*10)/10;
+  S.stars+=stars; S.served++;
+  if(score>=0.9) S.mastered[b.drink.id]=true;
+  // customer reaction
+  const card=$('custCard');
+  if(score>=0.6){
+    card.classList.add('happy'); SFX.serve();
+    $('custFace').textContent='😍';
+    toast(pick(HAPPY)+' +$'+tip.toFixed(0)+'  '+'★'.repeat(stars)+'☆'.repeat(3-stars));
+  } else {
+    card.classList.add('mad'); SFX.sad(); S.failed++;
+    $('custFace').textContent='😤';
+    toast(pick(MAD).replace('{d}',b.drink.name)+'  (accuracy '+Math.round(score*100)+'%)');
+  }
+  steamBurst(6);
+  renderHUD();
+  setTimeout(nextCustomer, 1600);
+}
+$('dumpBtn').onclick=()=>{
+  const b=S.build; if(!b||S.phase!=='play'||b._served) return;
+  const t0=b._chaosT0, kind=b._chaosKind;
+  S.build=newBuild(b.drink); S.jammed=false;
+  if(t0 && kind==='gremlin'){
+    const dt=(Date.now()-t0)/1000;
+    if(dt<7){ S.tips+=2; S.chaosSurvived++; toast('⚡ Recovery! +$2 tip — the crowd saw that.'); SFX.streak(); }
+    else toast('🗑 Dumped. Fresh cup!');
+    renderHUD();
+  }
+  else toast('🗑 Dumped. Fresh cup!');
+  SFX.bad();
+  $('cup').classList.remove('tipped');
+  renderCup(); renderRecipe(); renderActions();
+  setHint('Fresh cup. '+stepLabel(curStep(S.build)));
+};
+/* recovery for knock: first successful step progress after the mishap */
+function noteProgress(){
+  const b=S.build;
+  if(b && b._chaosKind==='knock' && b._chaosT0){
+    const dt=(Date.now()-b._chaosT0)/1000;
+    if(dt<8){ S.tips+=2; S.chaosSurvived++; toast('⚡ Back on the horse! +$2'); SFX.streak(); renderHUD(); }
+    b._chaosT0=0;
+  }
+}
+
+/* ================= CUSTOMERS / SHIFT ================= */
+function makeCustomer(drink){
+  const [name,face]=pick(CUSTOMERS);
+  return {name,face,drink};
+}
+function startShift(n, rush){
+  S.shift=n; S.rush=rush; S.custIdx=0; S.unlocked=rush?12:1;
+  S.tips=0;S.streak=0;S.bestStreak=0;S.stars=0;S.mastered={};S.chaosSurvived=0;S.served=0;S.failed=0;
+  S.queue=[];
+  if(rush){ for(let i=0;i<3;i++) S.queue.push(makeCustomer(pick(unlockedDrinks()))); }
+  S.phase='play';
+  $('startOv').classList.remove('show'); $('resOv').classList.remove('show');
+  nextCustomer(true);
+  armChaos();
+}
+function nextCustomer(first){
+  if(S.rush){
+    S.customer = S.queue.shift() || makeCustomer(pick(unlockedDrinks()));
+    while(S.queue.length<3) S.queue.push(makeCustomer(pick(unlockedDrinks())));
+  } else {
+    if(S.custIdx>=12){ endShift(); return; }
+    const drink=DRINKS[S.custIdx];
+    if(S.custIdx+1>S.unlocked){
+      S.unlocked=S.custIdx+1;
+      const ub=$('unlockBadge');
+      ub.innerHTML='<small>📣 NEW DRINK UNLOCKED</small>'+drink.name;
+      ub.classList.add('show'); SFX.unlock();
+      setTimeout(()=>ub.classList.remove('show'),2600);
+    }
+    S.customer=makeCustomer(drink);
+    S.custIdx++;
+  }
+  S.build=newBuild(S.customer.drink); S.jammed=false;
+  S.startTime=Date.now();
+  renderCustomer(); renderCup(); renderRecipe(); renderActions(); renderHUD();
+  setHint(first?('First order: '+S.customer.drink.name+'. Follow the recipe card!'):'');
+  startPatience();
+}
+function startPatience(){
+  stopPatience();
+  const total=S.rush?40:75;
+  S.patience=1;
+  const fill=$('patFill');
+  fill.style.width='100%'; fill.classList.remove('low');
+  S.patTimer=setInterval(()=>{
+    S.patience-=1/(total*2);
+    fill.style.width=Math.max(0,S.patience*100)+'%';
+    fill.classList.toggle('low',S.patience<0.3);
+    if(S.patience<=0){ customerStormsOut(); }
+  },500);
+}
+function stopPatience(){ clearInterval(S.patTimer); S.patTimer=null; }
+function customerStormsOut(){
+  stopPatience();
+  const c=S.customer;
+  $('custCard').classList.add('mad'); $('custFace').textContent='😡';
+  SFX.sad(); S.streak=0; S.failed++;
+  toast(c.name+' stormed out! Too slow…');
+  renderHUD();
+  setTimeout(nextCustomer,1500);
+}
+function endShift(){
+  S.phase='results'; stopPatience(); clearTimeout(S.chaosTimer);
+  const maxStars=S.served*3;
+  $('resEmoji').textContent = S.stars>=maxStars*0.8?'🌟':(S.stars>=maxStars*0.5?'👏':'💪');
+  $('resTitle').textContent = S.rush?('Rush shift '+S.shift+' done!'):('Shift '+S.shift+' complete!');
+  const sr=$('starRow'); sr.textContent='';
+  const earned=Math.round(S.stars/Math.max(1,maxStars)*5);
+  for(let i=0;i<5;i++){ const sp=document.createElement('span'); sp.textContent=i<earned?'★':'☆';
+    sp.style.color=i<earned?'var(--gold)':'#D8C6A4'; sr.appendChild(sp); }
+  const mCount=Object.keys(S.mastered).length;
+  $('resStats').innerHTML=
+    stat('Drinks served',S.served)+stat('Tips earned','$'+S.tips.toFixed(0))+
+    stat('Best streak','🔥 '+S.bestStreak)+stat('Drinks mastered',mCount+' / '+S.unlocked)+
+    stat('Chaos survived','🎲 '+S.chaosSurvived)+stat('Walkouts',S.failed);
+  const mg=$('masterGrid'); mg.innerHTML='';
+  DRINKS.slice(0,S.unlocked).forEach(d=>{
+    const c=document.createElement('span');
+    c.className='masterChip'+(S.mastered[d.id]?'':' locked');
+    c.textContent=(S.mastered[d.id]?'★ ':'🔒 ')+d.name;
+    mg.appendChild(c);
+  });
+  $('nextBtn').textContent = S.rush?('RUSH SHIFT '+(S.shift+1)+' →'):('RUSH MODE → 🌪️');
+  $('resOv').classList.add('show');
+  SFX.unlock();
+}
+function stat(k,v){return '<div class="statRow"><span>'+k+'</span><b>'+v+'</b></div>';}
+$('nextBtn').onclick=()=>{ startShift(S.shift+1, true); };
+$('againBtn').onclick=()=>{ startShift(S.shift, S.rush); };
+
+/* ================= RECIPE BOOK ================= */
+function renderBook(){
+  const ml=$('menuList'); ml.innerHTML='';
+  DRINKS.forEach((d,i)=>{
+    const un=i<S.unlocked;
+    const div=document.createElement('div');
+    div.className=un?'':'locked';
+    div.innerHTML='<b>'+(un?'':'🔒 ')+d.name+'</b> — '+(un?d.steps.map(stepLabel).join(' → '):'???');
+    ml.appendChild(div);
+  });
+}
+$('bookBtn').onclick=()=>{ renderBook(); $('bookOv').classList.add('show'); };
+$('bookClose').onclick=()=>$('bookOv').classList.remove('show');
+
+/* ================= MISC UI ================= */
+function renderSound(){ $('soundBtn').textContent=muted?'🔇':'🔊'; }
+$('soundBtn').onclick=()=>{ muted=!muted; localStorage.setItem('pd-muted',muted?'1':'0'); renderSound(); if(!muted)SFX.pop(); };
+$('startBtn').onclick=()=>{ S.chaosMode=$('chaosChk').checked; try{ac()}catch(e){} SFX.unlock(); startShift(1,false); };
+// keyboard: 1-7 ingredients, space serve
+document.addEventListener('keydown',e=>{
+  if(S.phase!=='play') return;
+  const map={'1':'pull','2':'water','3':'milk','4':'foam','5':'choc','6':'gelato','7':'whip'};
+  if(map[e.key]){ const b=document.querySelector('[data-act="'+map[e.key]+'"]'); if(b) b.click(); }
+  if(e.key===' '){ e.preventDefault(); $('serveBtn').click(); }
+});
+renderSound(); renderHUD();
+</script>
+</body>
+</html>

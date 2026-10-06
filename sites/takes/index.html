@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>TakeTemp — post a take, get judged</title>
+<meta name="description" content="Post your hottest takes. Everyone else votes them up or down.">
+<style>
+:root{
+  --bg:#0c0c10; --card:#14141b; --card2:#101016; --line:#23232c;
+  --text:#f2f2f5; --muted:#9b9ba6; --faint:#63636e;
+  --up:#3ddc84; --down:#ff5f56; --brand1:#f74c00; --brand2:#ff2e88;
+  --sans:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.55;
+  -webkit-font-smoothing:antialiased;min-height:100vh}
+button{touch-action:manipulation;font-family:inherit}
+.wrap{max-width:620px;margin:0 auto;padding:0 16px 80px}
+/* header */
+header{padding:26px 0 6px;text-align:center}
+.logo{font-weight:900;font-size:34px;letter-spacing:-.02em;
+  background:linear-gradient(100deg,var(--brand1),var(--brand2));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.tag{color:var(--muted);font-size:14px;margin-top:2px}
+.room{display:inline-block;margin-top:10px;font-size:12px;color:var(--faint);
+  border:1px solid var(--line);border-radius:999px;padding:4px 14px;letter-spacing:.06em}
+.room b{color:var(--muted)}
+/* sort toggle */
+.sort{display:flex;background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:4px;margin:18px 0 14px}
+.sort button{flex:1;border:none;background:none;color:var(--muted);font-weight:800;
+  padding:10px;border-radius:9px;font-size:14px;cursor:pointer;letter-spacing:.04em}
+.sort button.on{background:var(--line);color:var(--text)}
+/* composer */
+.composer{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:18px}
+.composer textarea{width:100%;background:var(--card2);border:1px solid var(--line);border-radius:10px;
+  color:var(--text);font-family:inherit;font-size:16px;padding:12px;min-height:76px;resize:vertical}
+.composer textarea:focus{outline:none;border-color:var(--brand1)}
+.composer .row{display:flex;gap:10px;margin-top:10px}
+.composer input{flex:1;background:var(--card2);border:1px solid var(--line);border-radius:10px;
+  color:var(--text);font-family:inherit;font-size:16px;padding:11px 12px;min-width:0}
+.composer input:focus{outline:none;border-color:var(--brand1)}
+.postbtn{background:linear-gradient(100deg,var(--brand1),var(--brand2));border:none;color:#fff;
+  font-weight:800;padding:11px 22px;border-radius:10px;font-size:15px;cursor:pointer;white-space:nowrap}
+.postbtn:disabled{opacity:.5}
+.count{font-size:12px;color:var(--faint);text-align:right;margin-top:6px;font-family:var(--mono)}
+/* feed */
+#feed{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 14px 10px;
+  animation:pop .25s ease}
+@keyframes pop{from{transform:scale(.98);opacity:.4}to{transform:scale(1);opacity:1}}
+.card .text{font-size:16.5px;line-height:1.5;overflow-wrap:anywhere;white-space:pre-wrap}
+.card .meta{font-size:12.5px;color:var(--faint);margin-top:8px}
+.card .meta b{color:var(--muted);font-weight:600}
+.votes{display:flex;align-items:center;gap:6px;margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
+.vbtn{display:flex;align-items:center;gap:7px;background:var(--card2);border:1px solid var(--line);
+  color:var(--muted);border-radius:10px;padding:9px 14px;font-size:14px;font-weight:700;cursor:pointer;min-height:44px}
+.vbtn svg{width:18px;height:18px}
+.vbtn .n{font-family:var(--mono);min-width:20px;text-align:center}
+.vbtn.up.on{background:rgba(61,220,132,.12);border-color:var(--up);color:var(--up)}
+.vbtn.down.on{background:rgba(255,95,86,.12);border-color:var(--down);color:var(--down)}
+.vbtn:active{transform:scale(.96)}
+.score{margin-left:auto;font-family:var(--mono);font-weight:800;font-size:18px;color:var(--faint)}
+.score.pos{color:var(--up)} .score.neg{color:var(--down)}
+.empty{text-align:center;color:var(--faint);padding:60px 20px;font-size:15px}
+.empty .big{font-size:40px;display:block;margin-bottom:12px;
+  background:linear-gradient(100deg,var(--brand1),var(--brand2));
+  -webkit-background-clip:text;background-clip:text;color:transparent;font-weight:900}
+/* toast */
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);
+  background:var(--card);border:1px solid var(--line);color:var(--text);padding:12px 22px;
+  border-radius:12px;font-size:14px;transition:transform .3s ease;z-index:50;max-width:90vw;text-align:center}
+#toast.show{transform:translateX(-50%) translateY(0)}
+footer{text-align:center;color:var(--faint);font-size:12px;margin-top:40px}
+footer a{color:var(--faint)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">TakeTemp</div>
+    <div class="tag">post a take, get judged</div>
+    <div class="room">room&nbsp;·&nbsp;<b id="roomName">lobby</b></div>
+  </header>
+
+  <div class="sort">
+    <button id="sortTop" class="on">HOTTEST</button>
+    <button id="sortNew">NEWEST</button>
+  </div>
+
+  <div class="composer">
+    <textarea id="takeText" maxlength="280" placeholder="Drop your hottest take…"></textarea>
+    <div class="count"><span id="charCount">0</span>/280</div>
+    <div class="row">
+      <input id="takeName" maxlength="24" placeholder="name (optional)">
+      <button class="postbtn" id="postBtn">Post it</button>
+    </div>
+  </div>
+
+  <div id="feed"></div>
+
+  <footer>One vote per take per device · be kind, be spicy<br>
+  <a href="/takes/lobby/">lobby</a> · make your own room: /takes/<i>anything</i>/</footer>
+</div>
+<div id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+/* room from path /takes/<room>/, fallback ?room= */
+var m = location.pathname.match(/^\/takes\/([a-z0-9-]{1,32})/i);
+var ROOM = (m && m[1] || new URLSearchParams(location.search).get("room") || "lobby").toLowerCase();
+document.getElementById("roomName").textContent = ROOM;
+var API = "/api/takes/" + ROOM;
+
+var voter = localStorage.getItem("tt_voter");
+if(!voter){ voter = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2)+Date.now()); localStorage.setItem("tt_voter", voter); }
+var myVotes = JSON.parse(localStorage.getItem("tt_votes_"+ROOM) || "{}"); // id -> 1|-1
+var sort = "top", posts = [], lastPostAt = 0;
+
+var feed = document.getElementById("feed"),
+    ta = document.getElementById("takeText"),
+    nm = document.getElementById("takeName"),
+    btn = document.getElementById("postBtn"),
+    cc = document.getElementById("charCount"),
+    toast = document.getElementById("toast"), toastT = null;
+
+function showToast(msg){ toast.textContent = msg; toast.classList.add("show");
+  clearTimeout(toastT); toastT = setTimeout(function(){toast.classList.remove("show")}, 2200); }
+function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function ago(ts){ var s=(Date.now()-ts)/1000;
+  if(s<60) return "just now"; if(s<3600) return Math.floor(s/60)+"m ago";
+  if(s<86400) return Math.floor(s/3600)+"h ago"; return Math.floor(s/86400)+"d ago"; }
+
+var UP_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg>';
+var DOWN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/></svg>';
+
+function render(){
+  if(!posts.length){ feed.innerHTML = '<div class="empty"><span class="big">ghost town</span>No takes yet in #'+esc(ROOM)+'.<br>Be the first to get judged.</div>'; return; }
+  feed.innerHTML = posts.map(function(p){
+    var v = myVotes[p.id] || 0, score = p.likes - p.dislikes;
+    var cls = score>0 ? "pos" : score<0 ? "neg" : "";
+    return '<div class="card" data-id="'+p.id+'">'
+      + '<div class="text">'+esc(p.text)+'</div>'
+      + '<div class="meta"><b>'+esc(p.author)+'</b> · '+ago(p.createdAt)+'</div>'
+      + '<div class="votes">'
+      + '<button class="vbtn up'+(v===1?' on':'')+'" data-v="1">'+UP_SVG+'<span class="n">'+p.likes+'</span></button>'
+      + '<button class="vbtn down'+(v===-1?' on':'')+'" data-v="-1">'+DOWN_SVG+'<span class="n">'+p.dislikes+'</span></button>'
+      + '<span class="score '+cls+'">'+(score>0?'+':'')+score+'</span>'
+      + '</div></div>';
+  }).join("");
+}
+
+async function load(){
+  try{
+    var r = await fetch(API + "/posts?sort=" + sort, {cache:"no-store"});
+    if(!r.ok) throw 0;
+    var d = await r.json();
+    posts = d.posts || [];
+    render();
+  }catch(e){ if(!posts.length) feed.innerHTML = '<div class="empty">Couldn\'t reach the server.<br>Pull to refresh, or check your connection.</div>'; }
+}
+
+ta.addEventListener("input", function(){ cc.textContent = ta.value.length; });
+
+btn.addEventListener("click", async function(){
+  var text = ta.value.trim();
+  if(!text){ showToast("Write a take first"); return; }
+  if(Date.now() - lastPostAt < 15000){ showToast("Easy — one take every 15 seconds"); return; }
+  btn.disabled = true;
+  try{
+    var r = await fetch(API + "/posts", {method:"POST",
+      headers:{"content-type":"application/json"},
+      body: JSON.stringify({text:text, author:nm.value.trim()})});
+    if(r.status === 429){ showToast("Slow down a little"); return; }
+    if(!r.ok) throw 0;
+    var d = await r.json();
+    ta.value = ""; cc.textContent = "0"; lastPostAt = Date.now();
+    posts.unshift(d.post); sort = "top"; syncSortUI(); render();
+    showToast("Take posted. Awaiting judgment.");
+  }catch(e){ showToast("Couldn't post — try again"); }
+  finally{ btn.disabled = false; }
+});
+
+feed.addEventListener("click", async function(e){
+  var b = e.target.closest(".vbtn"); if(!b) return;
+  var card = e.target.closest(".card"); if(!card) return;
+  var id = card.dataset.id, dir = parseInt(b.dataset.v, 10);
+  var prev = myVotes[id] || 0;
+  var next = (prev === dir) ? 0 : dir; // tap again to undo, tap other side to switch
+  var p = posts.find(function(x){return x.id===id}); if(!p) return;
+  // optimistic
+  if(prev===1) p.likes--; if(prev===-1) p.dislikes--;
+  if(next===1) p.likes++; if(next===-1) p.dislikes++;
+  if(next===0) delete myVotes[id]; else myVotes[id]=next;
+  localStorage.setItem("tt_votes_"+ROOM, JSON.stringify(myVotes));
+  render();
+  try{
+    var r = await fetch(API + "/vote", {method:"POST",
+      headers:{"content-type":"application/json"},
+      body: JSON.stringify({id:id, dir:next, voter:voter})});
+    if(!r.ok) throw 0;
+    var d = await r.json();
+    var i = posts.findIndex(function(x){return x.id===id});
+    if(i>-1){ posts[i]=d.post; if(sort==="top") sortPosts(); render(); }
+  }catch(err){ load(); } // rollback via refresh
+});
+
+function sortPosts(){ posts.sort(function(a,b){ return (b.likes-b.dislikes)-(a.likes-a.dislikes) || b.createdAt-a.createdAt; }); }
+function syncSortUI(){
+  document.getElementById("sortTop").classList.toggle("on", sort==="top");
+  document.getElementById("sortNew").classList.toggle("on", sort==="new");
+}
+document.getElementById("sortTop").addEventListener("click", function(){ sort="top"; syncSortUI(); load(); });
+document.getElementById("sortNew").addEventListener("click", function(){ sort="new"; syncSortUI(); load(); });
+
+load();
+setInterval(load, 15000);
+})();
+</script>
+</body>
+</html>

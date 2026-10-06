@@ -43,6 +43,23 @@ project is ever needed per site (the account hit the 100-project soft cap).
 - `/_worker.js` is never served (returns 404) so the source isn't exposed.
 - Unknown site names and path-traversal attempts get a styled 404 page.
 
+## Adding an API + KV (TakeTemp pattern)
+
+Some sites need server logic, not just static files. Pattern (see TakeTemp):
+
+1. Inline the API handler into `worker.js` (don't import a separate file — it
+   would be served publicly as an asset). It reads its KV via `env.<BINDING>`.
+2. Route `/api/<name>/*` to it near the top of `fetch()`, gated on the
+   projects host (and the site's launch subdomain if one exists).
+3. For SPA-style client routing (`/takes/<room>/` → `index.html`), special-case
+   the site in the projects-host branch: every path serves `sites/<name>/index.html`
+   (with the usual trailing-slash 301).
+4. Create the KV namespace + binding in the dashboard: Workers & Pages →
+   Storage & Databases → KV → create namespace, then the worker's Settings →
+   Bindings → Add binding (e.g. variable `TAKES_KV`). The API must 500 with a
+   clear "not configured" error when the binding is missing — never crash the
+   whole worker.
+
 ## Adding a new site
 
 1. Put the site's files in `sites/<name>/` with `index.html` at its root.

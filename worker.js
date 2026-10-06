@@ -18,7 +18,7 @@
  * to SITES below, push. See ROUTER.md.
  */
 
-const SITES = ["ergosphere", "illusion-bowling", "shotgrep", "ui-candy"];
+const SITES = ["ergosphere", "illusion-bowling", "shotgrep", "ui-candy", "takes"];
 const PROJECTS_HOST = "projects.lukezhang.si";
 const SITE_HOST_RE = /^([a-z0-9-]+)\.lukezhang\.si$/;
 
@@ -77,6 +77,102 @@ async function fetchAsset(request, env, path) {
   return res;
 }
 
+// ---- TakeTemp API (inlined from absolukie/take-temp/worker-api.js) ----
+// Needs the TAKES_KV namespace binding on the Worker.
+function json(data, status) {
+  return new Response(JSON.stringify(data), {
+    status: status || 200,
+    headers: { "content-type": "application/json", "cache-control": "no-store" },
+  });
+}
+function err(msg, status) { return json({ error: msg }, status || 400); }
+
+async function rateLimit(kv, key, limit, windowSec) {
+  var now = Date.now();
+  var raw = await kv.get("tt:rl:" + key);
+  var rec = raw ? JSON.parse(raw) : { count: 0, reset: now + windowSec * 1000 };
+  if (now > rec.reset) rec = { count: 0, reset: now + windowSec * 1000 };
+  rec.count++;
+  await kv.put("tt:rl:" + key, JSON.stringify(rec), { expirationTtl: windowSec + 60 });
+  return rec.count <= limit;
+}
+
+var ROOM_RE = /^[a-z0-9-]{1,32}$/;
+var VOTER_RE = /^[a-zA-Z0-9-]{8,64}$/;
+
+async function handleTakeTemp(request, env) {
+  var kv = env.TAKES_KV;
+  if (!kv) return err("KV not configured", 500);
+  var url = new URL(request.url);
+  var parts = url.pathname.split("/").filter(Boolean); // ["api","takes",room,action]
+  var room = (parts[2] || "lobby").toLowerCase();
+  if (!ROOM_RE.test(room)) return err("bad room", 400);
+  var action = parts[3];
+
+  // ---- list posts ----
+  if (request.method === "GET" && action === "posts") {
+    var sort = url.searchParams.get("sort") === "new" ? "new" : "top";
+    var idx = JSON.parse((await kv.get("tt:room:" + room + ":index")) || "[]");
+    var posts = [];
+    for (var i = 0; i < Math.min(idx.length, 200); i++) {
+      var p = await kv.get("tt:post:" + room + ":" + idx[i], "json");
+      if (p) posts.push(p);
+    }
+    posts.sort(function (a, b) {
+      var sa = a.likes - a.dislikes, sb = b.likes - b.dislikes;
+      return sort === "new" ? b.createdAt - a.createdAt : sb - sa || b.createdAt - a.createdAt;
+    });
+    return json({ posts: posts });
+  }
+
+  // ---- create post ----
+  if (request.method === "POST" && action === "posts") {
+    var ip = request.headers.get("cf-connecting-ip") || "unknown";
+    if (!(await rateLimit(kv, "post:" + ip, 10, 3600))) return err("slow down — 10 posts/hour", 429);
+    var body = await request.json().catch(function () { return null; });
+    var text = ((body && body.text) || "").trim().slice(0, 280);
+    var author = ((body && body.author) || "").trim().slice(0, 24) || "anon";
+    if (!text) return err("empty take", 400);
+    var id = (typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID().slice(0, 8)
+      : Math.random().toString(36).slice(2, 10));
+    var post = { id: id, text: text, author: author, likes: 0, dislikes: 0, createdAt: Date.now() };
+    await kv.put("tt:post:" + room + ":" + id, JSON.stringify(post));
+    var list = JSON.parse((await kv.get("tt:room:" + room + ":index")) || "[]");
+    list.unshift(id);
+    await kv.put("tt:room:" + room + ":index", JSON.stringify(list.slice(0, 500)));
+    return json({ post: post }, 201);
+  }
+
+  // ---- vote ----
+  if (request.method === "POST" && action === "vote") {
+    var vip = request.headers.get("cf-connecting-ip") || "unknown";
+    if (!(await rateLimit(kv, "vote:" + vip, 120, 60))) return err("slow down", 429);
+    var vbody = await request.json().catch(function () { return null; });
+    var vid = vbody && vbody.id, dir = vbody && vbody.dir, voter = vbody && vbody.voter;
+    if (!vid || (dir !== 1 && dir !== -1 && dir !== 0) || !voter || !VOTER_RE.test(voter))
+      return err("bad vote", 400);
+    var pkey = "tt:post:" + room + ":" + vid;
+    var existing = await kv.get(pkey, "json");
+    if (!existing) return err("not found", 404);
+    var vkey = "tt:voter:" + voter;
+    var votes = JSON.parse((await kv.get(vkey)) || "{}");
+    var vprop = room + ":" + vid;
+    var prev = votes[vprop] || 0;
+    if (prev === dir) return json({ post: existing }); // no-op
+    if (prev === 1) existing.likes--;
+    if (prev === -1) existing.dislikes--;
+    if (dir === 1) existing.likes++;
+    if (dir === -1) existing.dislikes++;
+    if (dir === 0) delete votes[vprop]; else votes[vprop] = dir;
+    await kv.put(pkey, JSON.stringify(existing));
+    await kv.put(vkey, JSON.stringify(votes));
+    return json({ post: existing });
+  }
+
+  return err("not found", 404);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -85,6 +181,14 @@ export default {
     // Never expose the worker source as a static file. (worker.js lives inside
     // the assets directory, so the router itself must refuse to serve it.)
     if (url.pathname === "/_worker.js" || url.pathname === "/worker.js") return notFound();
+
+    // TakeTemp API: /api/takes/* → handleTakeTemp (needs the TAKES_KV binding).
+    if (
+      url.pathname.startsWith("/api/takes/") &&
+      (host === PROJECTS_HOST || host === "takes.lukezhang.si")
+    ) {
+      return handleTakeTemp(request, env);
+    }
 
     let site = null;      // sites/<site>/… to serve
     let sitePath = null;  // path inside the site folder, always starts with "/"
@@ -99,7 +203,14 @@ export default {
       site = segs[0].toLowerCase();
       if (!SITES.includes(site)) return notFound();
       const rest = segs.slice(1).join("/");
-      if (!rest) {
+      if (site === "takes") {
+        // SPA: every /takes/* path serves the app shell; the client reads the
+        // room from the URL path.
+        if (!url.pathname.endsWith("/")) {
+          return Response.redirect(url.origin + url.pathname + "/" + url.search, 301);
+        }
+        sitePath = "/index.html";
+      } else if (!rest) {
         if (!url.pathname.endsWith("/")) {
           // /<site> → /<site>/ so relative asset URLs (./logic.mjs etc.) resolve.
           return Response.redirect(url.origin + "/" + site + "/" + url.search, 301);
@@ -112,7 +223,13 @@ export default {
       const m = host.match(SITE_HOST_RE);
       if (m && SITES.includes(m[1])) {
         site = m[1];
-        sitePath = url.pathname.endsWith("/") ? url.pathname + "index.html" : url.pathname;
+        // SPA on the launch domain too.
+        sitePath =
+          site === "takes"
+            ? "/index.html"
+            : url.pathname.endsWith("/")
+              ? url.pathname + "index.html"
+              : url.pathname;
       } else {
         // Main domain and every other host: today's behavior, untouched.
         return env.ASSETS.fetch(request);

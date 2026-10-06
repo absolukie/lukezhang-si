@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ghosts of Departed Proofs — the lab</title>
+<meta name="description" content="Can the TypeScript compiler catch your authorization bugs? An interactive tour of gdp-ts: name it, prove it, demand it.">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg0: #100d0e; --bg1: #2a1d18; --bg2: #4a3226;
+    --ink: #f3e2cd; --ink-dim: rgba(243,226,205,0.68); --ink-faint: rgba(243,226,205,0.42);
+    --acc: #e8a15c; --acc-soft: #ffd9a8;
+    --card: rgba(255,255,255,0.028); --line: rgba(232,161,92,0.16);
+    --good: #7fd08a; --bad: #e05252;
+    --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  }
+  body {
+    background: radial-gradient(circle at 50% 0%, var(--bg2) 0%, var(--bg1) 42%, var(--bg0) 100%);
+    background-attachment: fixed; color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.7; -webkit-tap-highlight-color: transparent; overflow-x: hidden;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 0 22px; }
+  nav.top { padding: 26px 0 8px; font-size: 14px; }
+  nav.top a { color: var(--ink-faint); text-decoration: none; margin-right: 18px; }
+  nav.top a:hover { color: var(--acc); }
+  header.hero { padding: 30px 0 10px; }
+  .eyebrow { font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--acc); margin-bottom: 12px; }
+  h1 { font-size: clamp(34px, 6.4vw, 54px); line-height: 1.06; letter-spacing: -0.025em; margin-bottom: 14px; }
+  h1 .ghostly { color: var(--acc-soft); }
+  .lede { font-size: clamp(16px, 2.4vw, 19px); color: var(--ink-dim); max-width: 36em; }
+  .lede strong { color: var(--ink); }
+  section { padding: 40px 0 6px; }
+  h2 { font-size: clamp(24px, 4vw, 32px); letter-spacing: -0.02em; margin-bottom: 6px; }
+  h2 .n { color: var(--acc); font-family: var(--mono); font-size: 0.7em; vertical-align: 0.15em; margin-right: 8px; }
+  .secsub { color: var(--ink-dim); margin-bottom: 22px; max-width: 38em; font-size: 16px; }
+
+  .verdict { border: 1px solid rgba(232,161,92,0.4); background: rgba(232,161,92,0.07);
+    border-radius: 16px; padding: 22px 24px; margin: 26px 0 8px; }
+  .verdict b.t { display: block; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--acc); margin-bottom: 8px; }
+  .verdict p { font-size: 17px; }
+  .verdict p strong { color: var(--acc-soft); }
+
+  pre.code { background: #171310; border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px; overflow-x: auto; font-family: var(--mono); font-size: 13.5px; line-height: 1.65;
+    margin: 16px 0; color: #e8dcc8; }
+  pre.code .k { color: #e8a15c; } pre.code .s { color: #9fd08a; } pre.code .c { color: #8a7a68; font-style: italic; }
+  pre.code .hl-bad { background: rgba(224,82,82,0.16); border-radius: 4px; }
+  pre.code .hl-good { background: rgba(127,208,138,0.13); border-radius: 4px; }
+
+  /* step-through */
+  .stage { border: 1px solid var(--line); border-radius: 16px; background: var(--card); padding: 24px; }
+  .stage .chips { display: flex; flex-direction: column; gap: 0; }
+  .stepnum { font-family: var(--mono); font-size: 13px; color: var(--acc); margin-bottom: 10px; }
+  .caption { font-size: 16px; color: var(--ink-dim); margin-top: 14px; }
+  .caption strong { color: var(--ink); }
+  .prog { height: 6px; background: rgba(255,255,255,0.07); border-radius: 4px; margin-top: 18px; overflow: hidden; }
+  .prog i { display: block; height: 100%; width: 0; background: var(--acc); border-radius: 4px; transition: width 400ms ease; }
+  .controls { display: flex; gap: 12px; margin-top: 18px; }
+  .controls button { font-family: inherit; font-size: 16px; font-weight: 700; border-radius: 999px;
+    padding: 14px 30px; cursor: pointer; touch-action: manipulation; border: 1px solid transparent;
+    transition: transform 160ms ease-out; }
+  #backBtn { background: transparent; color: var(--ink-dim); border-color: var(--line); }
+  #backBtn:disabled { opacity: 0.35; }
+  #nextBtn { background: var(--acc); color: #241610; flex: 1; }
+  #nextBtn.pressed, #backBtn.pressed { transform: scale(0.96); }
+
+  /* compiler playground */
+  .scen-btns { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 18px; }
+  .scen-btns button { font-family: inherit; font-size: 14px; font-weight: 600; color: var(--ink);
+    background: rgba(255,255,255,0.04); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 16px; cursor: pointer; touch-action: manipulation; }
+  .scen-btns button:active { transform: scale(0.97); }
+  .scen-btns button[aria-pressed="true"] { border-color: var(--acc); color: var(--acc-soft); }
+  .verdictline { border-radius: 12px; padding: 16px 18px; font-family: var(--mono); font-size: 14px;
+    margin-top: 14px; line-height: 1.6; }
+  .verdictline.ok { background: rgba(127,208,138,0.08); border: 1px solid rgba(127,208,138,0.4); color: #bfe8c6; }
+  .verdictline.no { background: rgba(224,82,82,0.08); border: 1px solid rgba(224,82,82,0.45); color: #f0b9b9; }
+  .verdictline .big { display: block; font-family: inherit; font-weight: 800; font-size: 16px; margin-bottom: 6px; }
+  .verdictline.ok .big { color: var(--good); } .verdictline.no .big { color: var(--bad); }
+  .simnote { font-size: 13px; color: var(--ink-faint); margin-top: 12px; }
+
+  /* ghost layer toggle */
+  .layertoggle { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 999px; overflow: hidden;
+    width: max-content; margin: 0 0 20px; }
+  .layertoggle button { font-family: inherit; font-size: 14px; font-weight: 700; padding: 10px 22px;
+    background: transparent; color: var(--ink-dim); border: 0; cursor: pointer; touch-action: manipulation; }
+  .layertoggle button[aria-pressed="true"] { background: var(--acc); color: #241610; }
+  .ghoststage { position: relative; border: 1px solid var(--line); border-radius: 16px; background: #171310;
+    min-height: 300px; padding: 26px; overflow: hidden; }
+  .ghoststage .layer-label { font-family: var(--mono); font-size: 12px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--acc); margin-bottom: 16px; }
+  .g-row { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; font-family: var(--mono); font-size: 14px; }
+  .g-chip { background: rgba(255,255,255,0.05); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; }
+  .ghost { width: 34px; height: 40px; flex: none; opacity: 1; transition: opacity 500ms, transform 500ms; animation: hover 2.6s ease-in-out infinite; }
+  @keyframes hover { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+  .ghoststage.runtime .ghost { opacity: 0; transform: translateY(-30px) scale(0.6); animation: none; }
+  .ghoststage.runtime .g-gone { display: block; }
+  .g-gone { display: none; color: var(--ink-faint); font-size: 14px; margin-top: 6px; }
+  .g-note { font-size: 15px; color: var(--ink-dim); margin-top: 16px; max-width: 36em; }
+
+  /* slider */
+  .vfs-slider { width: 100%; height: 44px; background: transparent; cursor: pointer; touch-action: pan-y;
+    margin: 6px 0 2px; -webkit-appearance: none; appearance: none; }
+  .vfs-slider::-webkit-slider-runnable-track { height: 10px; border-radius: 6px;
+    background: linear-gradient(90deg, #3a2c20, var(--acc)); border: 1px solid var(--line); }
+  .vfs-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 30px; height: 30px; border-radius: 50%;
+    background: var(--acc); border: 3px solid #141311; margin-top: -11px; box-shadow: 0 2px 10px rgba(0,0,0,.5); }
+  .vfs-slider::-moz-range-track { height: 10px; border-radius: 6px; background: linear-gradient(90deg,#3a2c20,var(--acc)); border: 1px solid var(--line); }
+  .vfs-slider::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50%; background: var(--acc); border: 3px solid #141311; }
+  .vfs-read { text-align: center; font-size: 15px; color: var(--ink-dim); margin-bottom: 16px; }
+  .vfs-read .vfs-pct { font-family: var(--mono); font-size: 22px; color: var(--ink); }
+  .rigor-out { border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; background: var(--card); }
+  .rigor-out b { color: var(--acc-soft); }
+  .rigor-out .cost { font-family: var(--mono); font-size: 13px; color: var(--ink-faint); margin-top: 8px; }
+  .vfs-insight { background: rgba(232,161,92,.08); border: 1px solid rgba(232,161,92,.35); border-radius: 12px;
+    padding: 14px 16px; margin: 16px 0 4px; font-size: 15px; min-height: 3.4em; }
+  .vfs-insight b { color: var(--acc); }
+
+  .caveat { border: 1px solid rgba(224,82,82,.45); background: rgba(224,82,82,.06); border-radius: 14px;
+    padding: 22px; margin: 24px 0 4px; }
+  .caveat > b { color: var(--bad); font-size: 16px; }
+  .caveat p, .caveat li { font-size: 15px; color: var(--ink-dim); }
+  .caveat ul { margin: 10px 0 0 20px; }
+  .caveat li { margin-bottom: 6px; }
+
+  footer.page { margin: 56px 0 0; border-top: 1px solid rgba(232,161,92,0.12); padding: 26px 0 60px;
+    font-size: 14px; color: var(--ink-faint); }
+  footer.page a { color: var(--ink-dim); }
+  footer.page .credit { margin-top: 14px; font-size: 13px; max-width: 40em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="top"><a href="/">← lukezhang.si</a><a href="/lab/">the lab</a><a href="/blog/">writing</a></nav>
+
+  <header class="hero">
+    <p class="eyebrow">The Lab · interactive explainer</p>
+    <h1>Ghosts of <span class="ghostly">Departed Proofs</span></h1>
+    <p class="lede">Your authorization check is a line of code sitting next to the dangerous call — and <strong>nothing connects them</strong>. One missed <span style="font-family:var(--mono)">await</span>, one stale rule, and the hole is silent. This is an interactive tour of <strong>gdp-ts</strong>, the tiny TypeScript library that makes the dangerous function <strong>demand proof</strong> — a compile-time token only a trusted checker can mint. No proof, no compile.</p>
+    <div class="verdict">
+      <b class="t">The verdict</b>
+      <p><strong>Stop checking authorization near the call. Make the call impossible without the check.</strong> Proofs are ghosts: they do everything at compile time and nothing at runtime — about 0.3&nbsp;ms of typechecking per call site, zero extra queries, zero dependencies.</p>
+    </div>
+  </header>
+
+  <section>
+    <h2><span class="n">01</span>The bug</h2>
+    <p class="secsub">Walk through the exact failure, one tap at a time. This is the code the library's README opens with — an Express-style handler, paraphrased.</p>
+    <div class="stage">
+      <div class="chips" id="bugChips"></div>
+      <p class="caption" id="bugCaption"></p>
+      <div class="prog"><i id="bugProg"></i></div>
+    </div>
+    <div class="controls">
+      <button id="bugBack" type="button">← Back</button>
+      <button id="bugNext" type="button">Next →</button>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">02</span>The trick, in three moves</h2>
+    <p class="secsub">The fix isn't a bigger check. It's a connection the compiler can see.</p>
+
+    <h3 style="font-size:19px;margin:22px 0 4px;color:var(--acc-soft)">Move 1 — Name it</h3>
+    <p style="color:var(--ink-dim)">Give the runtime value a <strong style="color:var(--ink)">compile-time-only name</strong>. Two project IDs that are both <span style="font-family:var(--mono)">string</span> at runtime become distinguishable to the compiler — it can now tell <em>which</em> project you mean, not just <em>what kind</em> of value it is.</p>
+<pre class="code"><span class="k">name</span>(viewer.id, ProjectId(req.params.id), <span class="k">async</span> (user, project) =&gt; {
+  <span class="c">// inside here, `user` and `project` carry unique compile-time names.</span>
+  <span class="c">// project-A and project-B are no longer interchangeable.</span>
+});</pre>
+
+    <h3 style="font-size:19px;margin:22px 0 4px;color:var(--acc-soft)">Move 2 — Prove it</h3>
+    <p style="color:var(--ink-dim)">One <strong style="color:var(--ink)">trusted module</strong> does the check and mints the proof — or returns null. Nobody else can mint one. At runtime a proof is a frozen <span style="font-family:var(--mono)">{ kind }</span> object: a ghost.</p>
+<pre class="code"><span class="c">// proofs/user-is-project-admin.ts — the ONLY place that can mint this proof</span>
+<span class="k">export async function</span> <span class="k">userIsProjectAdmin</span>(user, project) {
+  <span class="k">const</span> role = <span class="k">await</span> db.roleInProjectTeam(user.value, project.value);
+  <span class="k">return</span> (role === <span class="s">"owner"</span> || role === <span class="s">"member"</span>)
+    ? UserIsProjectAdmin.prove(user, project)
+    : <span class="k">null</span>;
+}</pre>
+
+    <h3 style="font-size:19px;margin:22px 0 4px;color:var(--acc-soft)">Move 3 — Demand it</h3>
+    <p style="color:var(--ink-dim)">The sensitive function takes the proof <strong style="color:var(--ink)">as a parameter</strong>. Call it with the wrong proof, a proof about a different project, or no proof at all — <strong style="color:var(--ink)">compile error</strong>. The data layer never performs the check; it just demands the receipt.</p>
+<pre class="code"><span class="k">export function</span> <span class="k">disablePasswordProtection</span>(
+  project,                          <span class="c">// Named&lt;P, ProjectId&gt;</span>
+  _proof: UserIsProjectAdmin&lt;U, P&gt;  <span class="c">// proof about THIS user, THIS project</span>
+) { ... }</pre>
+  </section>
+
+  <section>
+    <h2><span class="n">03</span>Try to break it</h2>
+    <p class="secsub">Pick a way to call the sensitive function. The simulated compiler rules on each one — this is the whole idea, compressed into a button.</p>
+    <div class="scen-btns" id="brkBtns" role="group" aria-label="Attack scenarios"></div>
+    <pre class="code" id="brkCode" style="margin-top:0"></pre>
+    <div class="verdictline" id="brkVerdict" style="display:none"></div>
+    <p class="simnote">Simulated verdicts, but the rules are the library's real ones: the type checker rejects wrong/missing proofs; the lint preset rejects forgeries. Real thing: <a href="https://github.com/rauchg/gdp-ts" style="color:var(--acc)">rauchg/gdp-ts</a> (MIT).</p>
+  </section>
+</div>
+<div class="wrap">
+  <section>
+    <h2><span class="n">04</span>Why they're called ghosts</h2>
+    <p class="secsub">Flip between the two layers. The proofs are real to the compiler — and gone by the time your code runs.</p>
+    <div class="layertoggle" role="group" aria-label="Layer view">
+      <button type="button" id="layCompile" aria-pressed="true">Compile time</button>
+      <button type="button" id="layRuntime" aria-pressed="false">Runtime</button>
+    </div>
+    <div class="ghoststage" id="ghostStage">
+      <p class="layer-label" id="layerLabel">compile time — proofs exist</p>
+      <div class="g-row">
+        <span class="g-chip">project: Named&lt;P, ProjectId&gt;</span>
+        <svg class="ghost" viewBox="0 0 34 40" aria-hidden="true"><path d="M17 2C9 2 4 9 4 17v18l4.5-4 4.5 4 4-4 4 4 4.5-4 4.5 4V17c0-8-5-15-13-15z" fill="rgba(232,161,92,0.25)" stroke="#e8a15c" stroke-width="1.8"/><circle cx="12" cy="16" r="2.2" fill="#e8a15c"/><circle cx="22" cy="16" r="2.2" fill="#e8a15c"/></svg>
+        <span class="g-chip">proof: UserIsProjectAdmin&lt;U,&nbsp;P&gt;</span>
+      </div>
+      <div class="g-row">
+        <span class="g-chip">disablePasswordProtection(project, proof)</span>
+        <span style="color:var(--good);font-family:var(--mono);font-size:13px">✓ compiles</span>
+      </div>
+      <p class="g-gone">The proofs evaporated. What shipped is just the values and one tiny wrapper — no extra queries, no dependencies, no runtime checks to forget.</p>
+      <p class="g-note" id="ghostNote">Right now you're looking at what the <strong style="color:var(--ink)">compiler</strong> sees: every value carries its name, every sensitive call carries its proof. The ghosts do all their work here.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">05</span>How much proof do you need?</h2>
+    <p class="secsub">Rigor is a slider, not a switch. The library is built to be adopted one sensitive function at a time — you choose how much gets exhaustively proven.</p>
+    <input type="range" class="vfs-slider" id="rigor" min="0" max="100" step="1" value="55" aria-label="How much of the codebase carries proofs">
+    <div class="vfs-read"><b class="vfs-pct" id="rigorPct">55%</b> of sensitive call sites carry proofs</div>
+    <div class="rigor-out">
+      <div id="rigorText"></div>
+      <div class="cost" id="rigorCost"></div>
+    </div>
+    <div class="vfs-insight" id="rigorInsight" aria-live="polite"></div>
+  </section>
+
+  <section>
+    <h2><span class="n">06</span>What it doesn't promise</h2>
+    <p class="secsub">Every sharp tool has an edge. The library is honest about its limits — so is this page.</p>
+    <div class="caveat">
+      <b>Proofs are only as honest as the code around them.</b>
+      <ul>
+        <li><strong style="color:var(--ink)">Forged proofs</strong> — nothing in TypeScript stops <span style="font-family:var(--mono)">{} as UserIsProjectAdmin&lt;U,P&gt;</span>. That's what the bundled ESLint/oxlint preset is for: it bans forging and bans minting outside <span style="font-family:var(--mono)">proofs/</span>. The type system is half the system; the linter is the other half.</li>
+        <li><strong style="color:var(--ink)">Stale proofs</strong> — a proof says the check passed <em>when it ran</em>. If the user's role changes a millisecond later, the proof doesn't know. Keep proof lifetimes short and checks close to use.</li>
+        <li><strong style="color:var(--ink)">TypeScript's ceiling</strong> — this is the pragmatic version of an idea from Haskell and Rust, languages with stronger guarantees. In TS, discipline + linting get you most of the way, not all of it.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer class="page">
+    <div>
+      <a href="/lab/">← the lab</a> · <a href="/">lukezhang.si</a>
+      <p class="credit">An original interactive explanation of the idea behind <a href="https://github.com/rauchg/gdp-ts">rauchg/gdp-ts</a> (MIT) — Ghosts of Departed Proofs for TypeScript, by Guillermo Rauch. Code snippets are short paraphrases of the README's examples. Not affiliated; go star the real thing.</p>
+    </div>
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  /* ============ Act 1: step-through — the bug ============ */
+  var STEPS = [
+    { code:
+'<span class="c">// the handler, as written. looks fine.</span>\n' +
+'<span class="k">async function</span> handler(req, res) {\n' +
+'  <span class="hl-good">await assertProjectAdmin(req.user.id, req.params.projectId)</span>; <span class="c">// throws 403</span>\n' +
+'  <span class="hl-good">await setPasswordProtection(req.params.projectId, req.body.password)</span>;\n' +
+'  res.sendStatus(204);\n}',
+      cap: 'Two lines. The first <strong>checks</strong>, the second <strong>acts</strong>. Looks airtight — keep tapping.' },
+    { code:
+'<span class="k">async function</span> handler(req, res) {\n' +
+'  <span class="hl-bad">await assertProjectAdmin(req.user.id, req.params.projectId)</span>; <span class="c">// line 1: the check</span>\n' +
+'  <span class="hl-bad">await setPasswordProtection(req.params.projectId, req.body.password)</span>; <span class="c">// line 2: the action</span>\n' +
+'  res.sendStatus(204);\n}',
+      cap: 'Now look closer: <strong>nothing connects them</strong>. Line 2 doesn\'t know line 1 ran. They\'re two strangers who happen to stand next to each other.' },
+    { code:
+'<span class="k">async function</span> handler(req, res) {\n' +
+'  <span class="hl-bad">assertProjectAdmin(req.user.id, req.params.projectId)</span>; <span class="c">// ← the await slipped away in a refactor</span>\n' +
+'  <span class="hl-good">await setPasswordProtection(req.params.projectId, req.body.password)</span>;\n' +
+'  res.sendStatus(204);\n}',
+      cap: 'Break it, way #1: someone drops the <strong><span style="font-family:var(--mono)">await</span></strong> in a late-night refactor. The check now returns a promise nobody waits for. <strong>It still compiles.</strong> The 403 never fires. Nobody notices.' },
+    { code:
+'<span class="c">// business rule changed: password protection is now Owners-only.</span>\n' +
+'<span class="k">async function</span> handler(req, res) {\n' +
+'  <span class="hl-bad">await assertProjectAdmin</span>(req.user.id, req.params.projectId); <span class="c">// ← still the OLD check: owners AND members</span>\n' +
+'  <span class="hl-good">await setPasswordProtection(req.params.projectId, req.body.password)</span>;\n' +
+'  res.sendStatus(204);\n}',
+      cap: 'Break it, way #2: the rule changes to owners-only, but this call site keeps running the old check. <strong>It still compiles.</strong> Members can now change what only owners should touch.' },
+    { code:
+'<span class="k">async function</span> handler(req, res) {\n' +
+'  <span class="c">// what if line 2 DEMANDED the receipt from line 1?</span>\n' +
+'  <span class="k">const</span> admin = <span class="k">await</span> userIsProjectAdmin(user, project);\n' +
+'  <span class="k">if</span> (!admin) <span class="k">throw</span> <span class="k">new</span> HttpError(403);\n' +
+'  <span class="hl-good">await setPasswordProtection(project, admin)</span>; <span class="c">// ← proof required. no proof, no compile.</span>\n' +
+'  res.sendStatus(204);\n}',
+      cap: 'The insight: <strong>the check and the action need a connection the compiler can see</strong>. A proof — minted by the check, demanded by the action, verified at compile time. That\'s the whole trick. Next: how it works.' }
+  ];
+  var chips = document.getElementById('bugChips'),
+      caption = document.getElementById('bugCaption'),
+      prog = document.getElementById('bugProg'),
+      backBtn = document.getElementById('bugBack'),
+      nextBtn = document.getElementById('bugNext'),
+      idx = 0;
+
+  function renderStep(){
+    chips.innerHTML = '<div class="stepnum">step ' + (idx+1) + ' / ' + STEPS.length + '</div><pre class="code" style="margin:0">' + STEPS[idx].code + '</pre>';
+    caption.innerHTML = STEPS[idx].cap;
+    prog.style.width = ((idx+1) / STEPS.length * 100) + '%';
+    backBtn.disabled = idx === 0;
+    nextBtn.textContent = idx === STEPS.length - 1 ? 'Replay ↺' : 'Next →';
+  }
+  function press(btn, fn){
+    btn.addEventListener('pointerdown', function(e){
+      e.preventDefault();
+      btn.classList.add('pressed');
+      var once = function(){
+        btn.classList.remove('pressed');
+        window.removeEventListener('pointerup', once);
+        window.removeEventListener('pointercancel', once);
+        fn();
+      };
+      window.addEventListener('pointerup', once);
+      window.addEventListener('pointercancel', once);
+    });
+    btn.addEventListener('keydown', function(e){
+      if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); fn(); }
+    });
+  }
+  press(nextBtn, function(){ idx = (idx + 1) % STEPS.length; renderStep(); });
+  press(backBtn, function(){ if(idx > 0){ idx--; renderStep(); } });
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'ArrowRight'){ idx = (idx + 1) % STEPS.length; renderStep(); }
+    if(e.key === 'ArrowLeft' && idx > 0){ idx--; renderStep(); }
+  });
+  // pin the stage height so the Next button never moves (skill rule #1)
+  function pinHeights(){
+    var probe = document.createElement('div');
+    probe.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;';
+    probe.className = 'stage';
+    var w = chips.parentElement.getBoundingClientRect().width;
+    probe.style.width = w + 'px';
+    var maxC = 0, maxCap = 0;
+    STEPS.forEach(function(s){
+      probe.innerHTML = '<div class="chips"><div class="stepnum">x</div><pre class="code" style="margin:0">' + s.code + '</pre></div><p class="caption">' + s.cap + '</p>';
+      document.body.appendChild(probe);
+      var c = probe.querySelector('.chips'), p = probe.querySelector('.caption');
+      maxC = Math.max(maxC, c.getBoundingClientRect().height);
+      maxCap = Math.max(maxCap, p.getBoundingClientRect().height);
+      document.body.removeChild(probe);
+    });
+    chips.style.minHeight = Math.ceil(maxC) + 1 + 'px';
+    caption.style.minHeight = Math.ceil(maxCap) + 1 + 'px';
+  }
+  renderStep();
+  pinHeights();
+  window.addEventListener('resize', pinHeights);
+
+  /* ============ Act 3: try to break it ============ */
+  var SCEN = [
+    { id:'good', label:'The right proof',
+      code: '<span class="k">const</span> admin = <span class="k">await</span> userIsProjectAdmin(user, project);\n' +
+            '<span class="k">if</span> (!admin) <span class="k">throw</span> <span class="k">new</span> HttpError(403);\n' +
+            '<span class="hl-good">await setPasswordProtection(project, admin)</span>;',
+      ok: true, verdict: 'Compiles.',
+      detail: 'Proof is about this user (U) and this project (P). Types line up. Ship it.' },
+    { id:'none', label:'No check at all',
+      code: '<span class="hl-bad">await setPasswordProtection(projectId, req.body.password)</span>;  <span class="c">// raw string, no proof</span>',
+      ok: false, verdict: 'Compile error.',
+      detail: "error TS2345: Argument of type 'string' is not assignable to parameter of type 'Named<P, ProjectId>'." },
+    { id:'wrong', label:'Proof for the wrong project',
+      code: '<span class="k">const</span> adminA = <span class="k">await</span> userIsProjectAdmin(user, projectA);\n' +
+            '<span class="hl-bad">await setPasswordProtection(projectB, adminA)</span>;  <span class="c">// admin of A, acting on B</span>',
+      ok: false, verdict: 'Compile error.',
+      detail: "error TS2345: Type 'UserIsProjectAdmin<U, PA>' is not assignable to type 'UserIsProjectAdmin<U, PB>'. The compiler knows which project is which." },
+    { id:'stale', label:'Skipped the null check',
+      code: '<span class="k">const</span> admin = <span class="k">await</span> userIsProjectAdmin(user, project);\n' +
+            '<span class="hl-bad">await setPasswordProtection(project, admin)</span>;  <span class="c">// admin can be null!</span>',
+      ok: false, verdict: 'Compile error.',
+      detail: "error TS2345: Type 'UserIsProjectAdmin<U, P> | null' is not assignable. Handle the null — the 403 lives here now, not in middleware." },
+    { id:'forge', label:'Forge a proof with `as`',
+      code: '<span class="k">const</span> fake = {} <span class="k">as</span> UserIsProjectAdmin&lt;U, P&gt;;\n' +
+            '<span class="hl-bad">await setPasswordProtection(project, fake)</span>;',
+      ok: false, verdict: 'Compiles… but the linter kills it.',
+      detail: "gdp-ts lint: forging a proof with 'as' is banned (and minting outside proofs/ is banned). The type system is half the system — the lint preset is the other half." }
+  ];
+  var btnWrap = document.getElementById('brkBtns'),
+      brkCode = document.getElementById('brkCode'),
+      brkVerdict = document.getElementById('brkVerdict');
+  function runScen(id){
+    var s = SCEN[0];
+    SCEN.forEach(function(x){ if(x.id === id) s = x; });
+    brkCode.innerHTML = s.code;
+    brkVerdict.style.display = 'block';
+    brkVerdict.className = 'verdictline ' + (s.ok ? 'ok' : 'no');
+    brkVerdict.innerHTML = '<span class="big">' + (s.ok ? '✓ ' : '✗ ') + s.verdict + '</span>' + s.detail;
+    btnWrap.querySelectorAll('button').forEach(function(b){
+      b.setAttribute('aria-pressed', b.getAttribute('data-id') === s.id ? 'true' : 'false');
+    });
+  }
+  SCEN.forEach(function(s){
+    var b = document.createElement('button');
+    b.type = 'button'; b.textContent = s.label; b.setAttribute('data-id', s.id);
+    b.setAttribute('aria-pressed', 'false');
+    btnWrap.appendChild(b);
+  });
+  btnWrap.addEventListener('click', function(e){
+    var b = e.target.closest('button');
+    if(b) runScen(b.getAttribute('data-id'));
+  });
+  runScen('good');
+
+  /* ============ Act 4: ghost layer toggle ============ */
+  var stage = document.getElementById('ghostStage'),
+      layC = document.getElementById('layCompile'),
+      layR = document.getElementById('layRuntime'),
+      layerLabel = document.getElementById('layerLabel'),
+      ghostNote = document.getElementById('ghostNote');
+  function setLayer(runtime){
+    stage.classList.toggle('runtime', runtime);
+    layC.setAttribute('aria-pressed', runtime ? 'false' : 'true');
+    layR.setAttribute('aria-pressed', runtime ? 'true' : 'false');
+    layerLabel.textContent = runtime ? 'runtime — proofs are gone' : 'compile time — proofs exist';
+    ghostNote.innerHTML = runtime
+      ? 'And here\'s the punchline: <strong style="color:var(--ink)">nothing changed at runtime</strong>. The same values flow, the same DB write happens. The safety was all negotiated before the code ever ran — that\'s why it costs ~0.3&nbsp;ms of typechecking and zero queries.'
+      : 'Right now you\'re looking at what the <strong style="color:var(--ink)">compiler</strong> sees: every value carries its name, every sensitive call carries its proof. The ghosts do all their work here.';
+  }
+  layC.addEventListener('click', function(){ setLayer(false); });
+  layR.addEventListener('click', function(){ setLayer(true); });
+
+  /* ============ Act 5: rigor slider ============ */
+  var rigor = document.getElementById('rigor'),
+      rigorPct = document.getElementById('rigorPct'),
+      rigorText = document.getElementById('rigorText'),
+      rigorCost = document.getElementById('rigorCost'),
+      rigorInsight = document.getElementById('rigorInsight');
+  function renderRigor(){
+    var v = parseInt(rigor.value, 10);
+    rigorPct.textContent = v + '%';
+    var text, cost, insight;
+    if(v < 20){
+      text = 'Just the <b>crown jewels</b>: the two or three calls that would end the company if they broke — billing changes, admin grants.';
+      cost = 'cost: one afternoon of proof-writing';
+      insight = 'Even a <b>toe in the water</b> kills the scariest bugs. The slider starts here for a reason.';
+    } else if(v < 45){
+      text = 'All <b>authorization boundaries</b>: every route that mutates someone else\'s data demands its proof.';
+      cost = 'cost: ~0.3 ms typecheck per call site · one proofs/ module per fact';
+      insight = 'This is the <b>sweet spot</b> the library was designed for — the checks that already exist, now compiler-enforced.';
+    } else if(v < 75){
+      text = '<b>Every sensitive call</b>, plus entitlement facts: does this workspace pay for this feature, is this token scoped to this URL.';
+      cost = 'cost: proof functions compose — unions of policies, reused proofs';
+      insight = 'Past the halfway mark, proofs start <b>composing</b>: one proof feeds three calls, policies become unions.';
+    } else {
+      text = '<b>Everything, including non-auth facts</b>: this string is a validated email, this number is a positive amount, this date is in the future.';
+      cost = 'cost: real discipline — every new fact needs a trusted minter';
+      insight = 'Full rigor is a <b>lifestyle choice</b>. Powerful, but the library itself says: match rigor to the stakes.';
+    }
+    rigorText.innerHTML = text;
+    rigorCost.textContent = cost;
+    rigorInsight.innerHTML = insight;
+  }
+  rigor.addEventListener('input', renderRigor);
+  renderRigor();
+})();
+</script>
+</body>
+</html>

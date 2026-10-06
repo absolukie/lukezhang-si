@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SPF 30 vs 50 vs 60: the number is the least interesting part — luke's blog</title>
+<meta name="description" content="What SPF actually measures, the blocked-% math behind 30/50/60, why application amount beats the number — with four interactive visualizers. Verdict: SPF 30 for daily, 50 for the beach, 60 is marketing.">
+<style>
+  :root{
+    --bg:#0e100e; --panel:#151815; --panel2:#1b1f1b; --line:#292e29;
+    --ink:#ece9df; --muted:#a09c8e; --faint:#6e6b60;
+    --accent:#e8a33d; --accent-ink:#201404;
+    --uv:#e05252; --uv-dim:rgba(224,82,82,.16);
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans); line-height:1.7; font-size:16.5px;}
+  a{color:var(--accent);}
+  .wrap{max-width:760px; margin:0 auto; padding:0 22px 90px;}
+  header.hero{padding:56px 0 6px;}
+  .kicker{font-family:var(--mono); font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); margin:0 0 14px;}
+  h1{font-size:clamp(32px,5.4vw,48px); line-height:1.08; margin:0 0 14px; letter-spacing:-.02em;}
+  .lede{color:var(--muted); font-size:17px; max-width:640px; margin:0 0 18px;}
+  .lede strong{color:var(--ink);}
+  .badges{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px;}
+  .badge{font-family:var(--mono); font-size:12px; border:1px solid var(--line); border-radius:999px; padding:5px 12px; color:var(--muted); background:var(--panel);}
+  .badge b{color:var(--ink);}
+  .meta{font-size:13.5px; color:var(--faint); margin-bottom:8px;}
+  .meta a{color:var(--muted); text-decoration:none;}
+  h2{font-size:26px; letter-spacing:-.01em; margin:52px 0 14px;}
+  h2 .k{font-family:var(--mono); font-size:12px; letter-spacing:.14em; color:var(--accent); display:block; margin-bottom:8px; text-transform:uppercase;}
+  p{margin:0 0 16px; color:#d8d4c8;}
+  p strong{color:var(--ink);}
+  code{font-family:var(--mono); font-size:.88em; background:var(--panel2); border:1px solid var(--line); padding:2px 7px; border-radius:6px; color:var(--ink);}
+  table.math{width:100%; border-collapse:collapse; margin:18px 0; font-size:15px;}
+  table.math th{font-family:var(--mono); font-size:11.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); text-align:left; padding:8px 10px; border-bottom:1px solid var(--line);}
+  table.math td{padding:9px 10px; border-bottom:1px solid var(--line); font-variant-numeric:tabular-nums;}
+  table.math tr.hl td{color:var(--accent); font-weight:700;}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:22px; margin:20px 0;}
+  .card.warn{border-color:rgba(224,82,82,.45); background:rgba(224,82,82,.06);}
+  .card.warn b{color:var(--uv);}
+  .card .cap{font-size:13px; color:var(--faint); margin:10px 0 0;}
+  .play{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:22px; margin:26px 0 8px;}
+  .play h3{margin:0 0 4px; font-size:19px; letter-spacing:-.01em;}
+  .play .sub{font-size:14px; color:var(--muted); margin:0 0 18px;}
+  .pbtns{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 16px;}
+  .pbtns button{font-family:var(--sans); font-size:14px; font-weight:600; background:var(--panel2); color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:9px 14px; cursor:pointer; touch-action:manipulation;}
+  .pbtns button:active{transform:scale(.97);}
+  .pbtns button.on{border-color:var(--accent); color:var(--accent);}
+  .vizcap{font-family:var(--mono); font-size:13px; color:var(--muted); margin:14px 0 0; font-variant-numeric:tabular-nums;}
+  .vizcap b{color:var(--ink);}
+  .rough{font-size:13px; color:var(--faint); margin:12px 0 0;}
+  /* ---- V1: blocked bars ---- */
+  .spfrow{margin:0 0 22px;}
+  .spfrow:last-child{margin-bottom:4px;}
+  .spflab{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px;}
+  .spflab b{font-size:16px;}
+  .spflab span{font-family:var(--mono); font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums;}
+  .spflab span b{color:var(--accent); font-size:13px;}
+  .bar{position:relative; height:26px; background:var(--panel2); border:1px solid var(--line); border-radius:8px; overflow:hidden;}
+  .bar .fill{position:absolute; inset:0 auto 0 0; width:0; background:linear-gradient(90deg,#c98a2e,var(--accent)); border-radius:7px 0 0 7px; transition:width 1.1s cubic-bezier(.2,.7,.2,1);}
+  .bar .sliver{position:absolute; top:0; bottom:0; right:0; width:0; background:var(--uv); transition:width 1.1s cubic-bezier(.2,.7,.2,1);}
+  .go .bar .fill{width:var(--w);}
+  .go .bar .sliver{width:var(--t);}
+  .zoom{margin-top:8px;}
+  .zoomtag{font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); margin-bottom:6px;}
+  .zbar{position:relative; height:20px; background:var(--panel2); border:1px solid var(--line); border-radius:7px; overflow:hidden;}
+  .zbar .zfill{position:absolute; inset:0 auto 0 0; width:0; background:linear-gradient(90deg,#c98a2e,var(--accent)); transition:width 1.1s cubic-bezier(.2,.7,.2,1);}
+  .zbar .zsliver{position:absolute; top:0; bottom:0; right:0; width:0; background:var(--uv); transition:width 1.1s cubic-bezier(.2,.7,.2,1);}
+  .go .zbar .zfill{width:var(--zw);}
+  .go .zbar .zsliver{width:var(--zt);}
+  .zoomcap{font-size:13.5px; color:var(--muted); margin-top:6px; font-variant-numeric:tabular-nums;}
+  .zoomcap b{color:var(--uv);}
+  /* ---- V2: photons ---- */
+  .pgrid{display:grid; grid-template-columns:repeat(10,1fr); gap:7px; max-width:420px; margin:4px auto 6px;}
+  .ph{aspect-ratio:1; border-radius:50%; background:#333832; transition:background 160ms, box-shadow 160ms, opacity 160ms;}
+  .ph.blocked{background:var(--accent); opacity:.75;}
+  .ph.through{background:var(--uv); box-shadow:0 0 10px rgba(224,82,82,.9);}
+  .plegend{display:flex; justify-content:center; gap:18px; font-size:13px; color:var(--muted); margin:10px 0 2px;}
+  .plegend i{display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:6px; vertical-align:-1px;}
+  .plegend .lb{background:var(--accent); opacity:.75;}
+  .plegend .lt{background:var(--uv); box-shadow:0 0 8px rgba(224,82,82,.9);}
+  /* ---- V3: application slider ---- */
+  input[type=range]{width:100%; height:44px; background:transparent; cursor:pointer; touch-action:pan-y; margin:6px 0 2px; -webkit-appearance:none; appearance:none;}
+  input[type=range]::-webkit-slider-runnable-track{height:10px; border-radius:6px; background:linear-gradient(90deg,var(--uv-dim),var(--accent)); border:1px solid var(--line);}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; appearance:none; width:30px; height:30px; border-radius:50%; background:var(--accent); border:3px solid var(--accent-ink); margin-top:-11px; box-shadow:0 2px 10px rgba(0,0,0,.5);}
+  input[type=range]::-moz-range-track{height:10px; border-radius:6px; background:linear-gradient(90deg,var(--uv-dim),var(--accent)); border:1px solid var(--line);}
+  input[type=range]::-moz-range-thumb{width:24px; height:24px; border-radius:50%; background:var(--accent); border:3px solid var(--accent-ink);}
+  .appread{text-align:center; font-size:15px; color:var(--muted); margin-bottom:16px;}
+  .appread b{font-family:var(--mono); font-size:22px; color:var(--ink); font-variant-numeric:tabular-nums;}
+  .effgrid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
+  .eff{background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:14px 8px; text-align:center;}
+  .eff b{display:block; font-size:14px; margin-bottom:4px;}
+  .eff .effnum{display:block; font-family:var(--mono); font-size:30px; color:var(--accent); font-variant-numeric:tabular-nums; line-height:1.2;}
+  .eff em{display:block; font-style:normal; font-size:11.5px; color:var(--faint); margin-top:2px;}
+  .insight{background:rgba(232,163,61,.08); border:1px solid rgba(232,163,61,.35); border-radius:12px; padding:14px 16px; margin:16px 0 4px; font-size:15px; color:var(--ink);}
+  .insight b{color:var(--accent);}
+  /* ---- V4: burn time ---- */
+  .burnrow{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:4px 0 16px;}
+  .burnrow label{font-size:15px; color:var(--muted);}
+  input[type=number]{font-family:var(--mono); font-size:16px; width:88px; background:var(--bg); color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:10px 12px;}
+  input[type=number]:focus{outline:none; border-color:var(--accent);}
+  .burnout{display:grid; gap:10px;}
+  .brow{display:flex; justify-content:space-between; align-items:baseline; background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:13px 16px;}
+  .brow b{font-size:15px;}
+  .brow .bt{font-family:var(--mono); font-size:15px; color:var(--accent); font-variant-numeric:tabular-nums;}
+  .brow .bt small{color:var(--faint); font-size:12px;}
+  /* ---- verdict ---- */
+  .verdict{display:grid; gap:10px; margin:18px 0;}
+  .vrow{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px 18px;}
+  .vrow b{color:var(--accent);}
+  .vrow p{margin:6px 0 0; font-size:15px;}
+  footer{border-top:1px solid var(--line); margin-top:56px; padding-top:22px; font-size:14px;}
+  footer a{color:var(--muted); text-decoration:none;}
+  @media (max-width:640px){
+    header.hero{padding:40px 0 4px;}
+    .play{padding:16px;}
+    .eff .effnum{font-size:24px;}
+    .pgrid{gap:5px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <p class="kicker">Skincare · sunscreen · the math</p>
+    <h1>SPF 30 vs 50 vs 60:<br>the number is the least interesting part</h1>
+    <p class="lede"><strong>Verdict:</strong> SPF 30 is the sweet spot for daily use. SPF 50 earns its keep on beach days and long exposure. SPF 60 over 50 is mostly marketing. And <strong>how much you apply beats all three numbers</strong> — four interactive visualizers below, the math is real.</p>
+    <div class="badges">
+      <span class="badge"><b>4</b> interactive visualizers</span>
+      <span class="badge">real formulas</span>
+      <span class="badge">verdict-first</span>
+    </div>
+    <p class="meta">October 5, 2026 · skincare · sunscreen · <a href="/lab/">← all experiments</a></p>
+  </header>
+
+  <main>
+    <p>I was picking a morning sunscreen and fell down this rabbit hole. The SPF number on the bottle looks like a score — bigger must be better, right? The math says something more interesting: the difference between 30 and 50 is real, the difference between 50 and 60 is nearly nothing, and the thing that actually decides your protection isn't on the label at all.</p>
+
+    <h2><span class="k">The definition</span>What SPF actually measures</h2>
+    <p>SPF is a ratio: the UVB dose needed to redden your skin <strong>with</strong> sunscreen divided by the dose needed <strong>without</strong> it. SPF 30 means, under lab conditions, it takes 30 times more UVB to redden protected skin.</p>
+    <p>Two things the number doesn't tell you:</p>
+    <p><strong>It's UVB-only.</strong> SPF measures protection against UVB — the burning rays. UVA rays are the aging ones, and they need the words <strong>"broad spectrum"</strong> on the label. The number says nothing about UVA. Always buy broad spectrum.</p>
+    <p><strong>It's a lab number.</strong> SPF is measured at 2 mg/cm² of product — about a shot glass (1 oz) for a full body, a nickel-sized dollop for your face. Almost nobody applies that much. We'll come back to this, because it's the whole game.</p>
+
+    <h2><span class="k">The math</span>What each number actually blocks</h2>
+    <p>The percentage of UVB blocked is <code>(SPF − 1) / SPF</code>. Run the numbers and the marketing falls apart:</p>
+    <table class="math">
+      <tr><th>SPF</th><th>UVB blocked</th><th>UVB that gets through</th></tr>
+      <tr><td>15</td><td>93.3%</td><td>6.7%</td></tr>
+      <tr class="hl"><td>30</td><td>96.7%</td><td>3.3%</td></tr>
+      <tr class="hl"><td>50</td><td>98.0%</td><td>2.0%</td></tr>
+      <tr class="hl"><td>60</td><td>98.3%</td><td>1.7%</td></tr>
+      <tr><td>100</td><td>99.0%</td><td>1.0%</td></tr>
+    </table>
+    <p>Notice the trick: the interesting column isn't "blocked" — it's <strong>"gets through."</strong> Going from 30 to 50 cuts the transmitted UVB roughly in half (3.3% → 2.0%). Going from 50 to 60 shaves off 0.3 points. That's the whole story of diminishing returns.</p>
+
+    <section class="play" id="viz1">
+      <h3>Visualizer 1 — the transmitted sliver</h3>
+      <p class="sub">Each bar is 100% of UVB. The amber is blocked; the red tip is what reaches your skin. Then a 20× zoom on the last 5% so you can feel the gap.</p>
+      <div class="spfrow" id="row30">
+        <div class="spflab"><b>SPF 30</b><span><b>96.7%</b> blocked</span></div>
+        <div class="bar"><div class="fill" style="--w:96.7%"></div><div class="sliver" style="--t:3.3%"></div></div>
+        <div class="zoom">
+          <div class="zoomtag">zoomed 20× · the last 5%</div>
+          <div class="zbar"><div class="zfill" style="--zw:33.3%"></div><div class="zsliver" style="--zt:66.7%"></div></div>
+          <div class="zoomcap"><b>3.3</b> of every 100 UVB photons get through</div>
+        </div>
+      </div>
+      <div class="spfrow" id="row50">
+        <div class="spflab"><b>SPF 50</b><span><b>98.0%</b> blocked</span></div>
+        <div class="bar"><div class="fill" style="--w:98%"></div><div class="sliver" style="--t:2%"></div></div>
+        <div class="zoom">
+          <div class="zoomtag">zoomed 20× · the last 5%</div>
+          <div class="zbar"><div class="zfill" style="--zw:60%"></div><div class="zsliver" style="--zt:40%"></div></div>
+          <div class="zoomcap"><b>2.0</b> of every 100 UVB photons get through</div>
+        </div>
+      </div>
+      <div class="spfrow" id="row60">
+        <div class="spflab"><b>SPF 60</b><span><b>98.3%</b> blocked</span></div>
+        <div class="bar"><div class="fill" style="--w:98.3%"></div><div class="sliver" style="--t:1.7%"></div></div>
+        <div class="zoom">
+          <div class="zoomtag">zoomed 20× · the last 5%</div>
+          <div class="zbar"><div class="zfill" style="--zw:66.7%"></div><div class="zsliver" style="--zt:33.3%"></div></div>
+          <div class="zoomcap"><b>1.7</b> of every 100 UVB photons get through</div>
+        </div>
+      </div>
+      <p class="vizcap">The 30→50 jump visibly shrinks the red. The 50→60 jump? Squint.</p>
+    </section>
+
+    <h2><span class="k">Diminishing returns</span>Each step up buys less</h2>
+    <p>Think of it in photons. Out of 100 UVB photons hitting your skin, SPF 30 lets ~3 through, SPF 50 lets ~2 through, SPF 60 lets ~1.7 through. The first upgrade halves your exposure. The second is a rounding error wearing a bigger number.</p>
+
+    <section class="play" id="viz2">
+      <h3>Visualizer 2 — 100 photons vs your sunscreen</h3>
+      <p class="sub">100 dots, 100 UVB photons. Amber dots get absorbed. Red glowing dots get through to skin.</p>
+      <div class="pbtns" id="phBtns">
+        <button data-spf="0">No sunscreen</button>
+        <button data-spf="30" class="on">SPF 30</button>
+        <button data-spf="50">SPF 50</button>
+        <button data-spf="60">SPF 60</button>
+      </div>
+      <div class="pgrid" id="pgrid" aria-hidden="true"></div>
+      <div class="plegend"><span><i class="lb"></i>absorbed</span><span><i class="lt"></i>reaches skin</span></div>
+      <p class="vizcap" id="phCap"></p>
+    </section>
+
+    <h2><span class="k">The real variable</span>How much you actually apply</h2>
+    <p>Here's the part nobody puts on the bottle. Lab SPF is measured at 2 mg/cm². Studies consistently find most people apply <strong>a quarter to a half</strong> of that — a pea-sized dab instead of a nickel-sized dollop, a thin smear instead of a shot glass.</p>
+    <p>Protection falls off fast when you under-apply. A common rough model: <code>effective SPF ≈ labeled SPF ^ (fraction applied)</code>. It's an approximation, not a lab measurement — but it shows the shape of the problem. Half a coat of SPF 30 doesn't give you SPF 15. It gives you roughly <strong>SPF 5.5</strong>.</p>
+
+    <section class="play" id="viz3">
+      <h3>Visualizer 3 — the application slider</h3>
+      <p class="sub">Drag to set how much of the recommended amount you actually apply. Watch what happens to each SPF.</p>
+      <input type="range" id="appSlider" min="25" max="100" step="1" value="50" aria-label="Percent of recommended sunscreen amount applied">
+      <div class="appread"><b id="appPct">50%</b> of the recommended amount</div>
+      <div class="effgrid">
+        <div class="eff"><b>SPF 30</b><span class="effnum" id="eff30">5.5</span><em>effective SPF*</em></div>
+        <div class="eff"><b>SPF 50</b><span class="effnum" id="eff50">7.1</span><em>effective SPF*</em></div>
+        <div class="eff"><b>SPF 60</b><span class="effnum" id="eff60">7.7</span><em>effective SPF*</em></div>
+      </div>
+      <div class="insight" id="appInsight"></div>
+      <p class="rough">*Rough illustrative model — effective ≈ labeled<sup>fraction applied</sup>. Real skin, sweat, and uneven coverage make it messier. The point is the shape: thin coats collapse every number.</p>
+    </section>
+
+    <p>This is why "apply more beats a bigger number" isn't a slogan, it's arithmetic. A <strong>full</strong> coat of SPF 30 (effective 30) lets through about <strong>4× less UVB</strong> than a <strong>half</strong> coat of SPF 60 (effective ~7.7). The slider above proves it — drag it and watch the expensive number lose to the cheap one applied properly.</p>
+
+    <h2><span class="k">The other rule</span>Reapplication beats the number</h2>
+    <p>No sunscreen survives the day on one coat. The protective film breaks down in UV, rubs off on clothes and towels, and mixes with sweat. The rule is <strong>every 2 hours</strong>, and immediately after swimming or heavy sweating — regardless of what number is on the bottle.</p>
+
+    <section class="play" id="viz4">
+      <h3>Visualizer 4 — burn-time estimator</h3>
+      <p class="sub">How long until your unprotected skin reddens? The lab math multiplies it by the SPF. Theoretical — see the caveat.</p>
+      <div class="burnrow">
+        <label for="burnIn">Minutes to redden, no sunscreen:</label>
+        <input type="number" id="burnIn" value="10" min="1" max="180" inputmode="numeric">
+      </div>
+      <div class="burnout">
+        <div class="brow"><b>SPF 30</b><span class="bt" id="b30"></span></div>
+        <div class="brow"><b>SPF 50</b><span class="bt" id="b50"></span></div>
+        <div class="brow"><b>SPF 60</b><span class="bt" id="b60"></span></div>
+      </div>
+      <div class="card warn" style="margin:16px 0 4px;">
+        <b>Don't trust these numbers past 2 hours.</b>
+        <p style="margin:8px 0 0;">"SPF 60 × 10 minutes = 10 hours" is lab arithmetic on a perfect, undisturbed film. In real life the film is never perfect and never undisturbed. Reapply every 2 hours no matter what the bottle promises — the clock that matters is the reapplication clock, not the SPF clock.</p>
+      </div>
+    </section>
+
+    <h2><span class="k">The verdict</span>What to actually buy</h2>
+    <div class="verdict">
+      <div class="vrow"><b>Daily / office days → SPF 30.</b><p>Applied at the full amount and reapplied if you're out midday, it's the sweet spot. I fell down this rabbit hole picking a morning sunscreen — SPF 30 is the number I'd default to for everyday use.</p></div>
+      <div class="vrow"><b>Beach / hiking / long exposure → SPF 50.</b><p>When you're in direct sun for hours, halving the transmitted UVB (3.3% → 2.0%) is worth paying for. I grabbed the 3 oz travel size for exactly these days.</p></div>
+      <div class="vrow"><b>Burn-prone or very fair skin → SPF 50.</b><p>Smaller margin for error means the extra headroom matters.</p></div>
+      <div class="vrow"><b>SPF 60 over 50 → skip it.</b><p>A 0.3-point gain that vanishes the moment you apply slightly less than the lab amount. It's a bigger number on the bottle, not meaningfully more protection on your face.</p></div>
+    </div>
+    <p>And the two rules that outrank every number: <strong>broad spectrum, always</strong> (the SPF number says nothing about UVA aging rays), and <strong>the best sunscreen is the one you'll actually reapply.</strong> A cheap SPF 30 you wear every day beats an SPF 60 that lives in a drawer.</p>
+    <p>I compared seven small SPF lotions while picking mine — the full breakdown is here: <a href="https://spf-showdown.pages.dev">SPF Showdown</a>.</p>
+  </main>
+
+  <footer><a href="/lab/">← all experiments</a></footer>
+</div>
+<script>
+/* ---------- shared math (pure, testable) ---------- */
+function blockedPct(spf){ return (spf - 1) / spf * 100; }
+function transmittedPct(spf){ return 100 / spf; }
+function photonsThrough(spf){ return spf <= 0 ? 100 : Math.round(100 / spf); }
+function effectiveSPF(labeled, frac){ return Math.pow(labeled, frac); }
+function fmtEff(x){ return x >= 10 ? x.toFixed(1) : x.toFixed(1); }
+function fmtMins(mins){
+  if(mins < 60) return mins + ' min';
+  var h = Math.floor(mins / 60), m = Math.round(mins % 60);
+  return m === 0 ? h + ' hr' : h + ' hr ' + m + ' min';
+}
+
+/* ---------- V1: animate bars on scroll ---------- */
+(function(){
+  var rows = document.querySelectorAll('.spfrow');
+  if(!('IntersectionObserver' in window)){ rows.forEach(function(r){ r.classList.add('go'); }); return; }
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('go'); io.unobserve(e.target); } });
+  }, {threshold: 0.35});
+  rows.forEach(function(r){ io.observe(r); });
+})();
+
+/* ---------- V2: photon simulator ---------- */
+(function(){
+  var grid = document.getElementById('pgrid');
+  var cap = document.getElementById('phCap');
+  var btns = document.getElementById('phBtns');
+  var dots = [];
+  for(var i = 0; i < 100; i++){
+    var d = document.createElement('span');
+    d.className = 'ph';
+    grid.appendChild(d);
+    dots.push(d);
+  }
+  var timers = [];
+  function run(spf){
+    timers.forEach(clearTimeout); timers = [];
+    var through = photonsThrough(spf);
+    dots.forEach(function(d){ d.className = 'ph'; });
+    for(var i = 0; i < 100; i++){
+      (function(i){
+        timers.push(setTimeout(function(){
+          dots[i].className = 'ph ' + (i < through ? 'through' : 'blocked');
+        }, 60 + i * 7));
+      })(i);
+    }
+    if(spf <= 0){
+      cap.innerHTML = 'No sunscreen: <b>100 of 100</b> UVB photons reach your skin.';
+    }else{
+      var exact = transmittedPct(spf).toFixed(1);
+      cap.innerHTML = 'SPF ' + spf + ': <b>' + through + ' of 100</b> get through (expected ' + exact + '). The rest never touch skin.';
+    }
+  }
+  btns.addEventListener('click', function(e){
+    var b = e.target.closest('button');
+    if(!b) return;
+    btns.querySelectorAll('button').forEach(function(x){ x.classList.remove('on'); });
+    b.classList.add('on');
+    run(parseInt(b.getAttribute('data-spf'), 10));
+  });
+  run(30);
+})();
+
+/* ---------- V3: application slider ---------- */
+(function(){
+  var slider = document.getElementById('appSlider');
+  var pct = document.getElementById('appPct');
+  var e30 = document.getElementById('eff30');
+  var e50 = document.getElementById('eff50');
+  var e60 = document.getElementById('eff60');
+  var insight = document.getElementById('appInsight');
+  function render(){
+    var frac = parseInt(slider.value, 10) / 100;
+    pct.textContent = slider.value + '%';
+    var v30 = effectiveSPF(30, frac), v50 = effectiveSPF(50, frac), v60 = effectiveSPF(60, frac);
+    e30.textContent = v30.toFixed(1);
+    e50.textContent = v50.toFixed(1);
+    e60.textContent = v60.toFixed(1);
+    if(frac >= 0.999){
+      insight.innerHTML = 'At the full lab amount, the numbers work as advertised: <b>30 → 50 → 60</b>. Almost nobody applies this much.';
+    }else{
+      var ratio = (30 / v60);
+      var rTxt = ratio >= 10 ? Math.round(ratio) + '×' : ratio.toFixed(1) + '×';
+      insight.innerHTML = 'At ' + slider.value + '% application, SPF 60 behaves like SPF <b>' + v60.toFixed(1) + '</b> — while a full coat of SPF 30 lets through about <b>' + rTxt + ' less UVB</b>. Apply more beats a bigger number.';
+    }
+  }
+  slider.addEventListener('input', render);
+  render();
+})();
+
+/* ---------- V4: burn-time estimator ---------- */
+(function(){
+  var inp = document.getElementById('burnIn');
+  var b30 = document.getElementById('b30'), b50 = document.getElementById('b50'), b60 = document.getElementById('b60');
+  function render(){
+    var base = parseFloat(inp.value);
+    if(!(base > 0)) base = 10;
+    if(base > 180) base = 180;
+    function cell(spf){
+      var mins = Math.round(base * spf);
+      return '<b style="font-size:17px">' + fmtMins(mins) + '</b> <small>theoretical · ' + mins + ' min</small>';
+    }
+    b30.innerHTML = cell(30);
+    b50.innerHTML = cell(50);
+    b60.innerHTML = cell(60);
+  }
+  inp.addEventListener('input', render);
+  render();
+})();
+</script>
+</body>
+</html>

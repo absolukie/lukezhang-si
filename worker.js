@@ -28,7 +28,7 @@ const SITES = ["leetcode-games", "ergosphere", "illusion-bowling", "shotgrep", "
   "hairball",
   "peggie",
   "get-clocked",
-  "blog-decision-doc",
+  "redemption-post-doc",
   "wikimari",
   "draw-guess",
   "liverpool-rummy"];

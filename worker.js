@@ -28,7 +28,7 @@ const SITES = ["leetcode-games", "ergosphere", "illusion-bowling", "shotgrep", "
   "hairball",
   "peggie",
   "get-clocked",
-  "redemption-post-doc"];
+  "redemption-post-doc", "black-hole-post-doc"];
 const PROJECTS_HOST = "projects.lukezhang.si";
 const SITE_HOST_RE = /^([a-z0-9-]+)\.lukezhang\.si$/;
 

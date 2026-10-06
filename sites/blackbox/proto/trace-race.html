@@ -29,6 +29,9 @@
   #wrap{position:relative;flex:1 1 auto;min-height:0;}
   #cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;
     -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
+  #mag{position:absolute;width:150px;height:150px;border-radius:50%;display:none;
+    border:2px solid rgba(0,229,255,.8);box-shadow:0 4px 24px rgba(0,0,0,.6);
+    pointer-events:none;z-index:5;background:#0a0a12;}
   #panel{
     flex:0 0 auto;background:var(--panel);border-top:1px solid #1e1e2e;
     padding:10px 14px 12px;display:flex;align-items:center;gap:12px;
@@ -95,7 +98,7 @@
     <div class="brand">TRACE RACE</div>
     <div class="meta"><span id="roundLbl">Round <b>1</b>/5</span><span id="totalLbl"><b>0</b> pts</span></div>
   </header>
-  <div id="wrap"><canvas id="cv"></canvas></div>
+  <div id="wrap"><canvas id="cv"></canvas><canvas id="mag"></canvas></div>
   <div id="panel">
     <div id="status">Draw the shape in one stroke</div>
     <button id="nextBtn" class="primary hidden">Next shape &rarr;</button>
@@ -706,6 +709,7 @@ function startRound(){
   game.shapeLabel = sh.label;
   layoutTarget();
   game.raw = [];
+  hideMag();
   game.phase = 'draw';
   roundLbl.innerHTML = 'Round <b>' + (game.roundIdx + 1) + '</b>/5';
   totalLbl.innerHTML = '<b>' + game.total + '</b> pts';
@@ -902,6 +906,7 @@ function resize(){
   W = Math.max(1, r.width); H = Math.max(1, r.height);
   cv.width = Math.round(W * DPR);
   cv.height = Math.round(H * DPR);
+  sizeMag();
   if(game.design && (game.phase === 'draw' || game.phase === 'reveal')) layoutTarget();
 }
 window.addEventListener('resize', resize);
@@ -964,6 +969,49 @@ function posOf(e){
   return [e.clientX - r.left, e.clientY - r.top];
 }
 
+/* magnifying loupe: your finger covers the canvas, so show a zoomed
+   view in a circle floating above the touch point while drawing */
+var mag = document.getElementById('mag');
+var magCtx = mag.getContext('2d');
+var MAG_CSS = 150, MAG_ZOOM = 2.2;
+function sizeMag(){
+  mag.width = Math.round(MAG_CSS * DPR);
+  mag.height = Math.round(MAG_CSS * DPR);
+  magCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+function showMag(x, y){
+  var mx = Math.max(8, Math.min(W - MAG_CSS - 8, x - MAG_CSS / 2));
+  var my = y - MAG_CSS - 70;
+  if(my < 8) my = Math.min(y + 70, H - MAG_CSS - 8);
+  mag.style.left = mx + 'px';
+  mag.style.top = Math.max(8, my) + 'px';
+  mag.style.display = 'block';
+  var srcSize = MAG_CSS / MAG_ZOOM;
+  var sx = (x - srcSize / 2) * DPR, sy = (y - srcSize / 2) * DPR;
+  var ss = srcSize * DPR;
+  magCtx.clearRect(0, 0, MAG_CSS, MAG_CSS);
+  magCtx.save();
+  magCtx.beginPath();
+  magCtx.arc(MAG_CSS / 2, MAG_CSS / 2, MAG_CSS / 2 - 1, 0, 7);
+  magCtx.clip();
+  magCtx.fillStyle = '#0a0a12';
+  magCtx.fillRect(0, 0, MAG_CSS, MAG_CSS);
+  magCtx.drawImage(cv, sx, sy, ss, ss, 0, 0, MAG_CSS, MAG_CSS);
+  magCtx.strokeStyle = 'rgba(0,229,255,.9)';
+  magCtx.lineWidth = 1.5;
+  magCtx.beginPath();
+  magCtx.arc(MAG_CSS / 2, MAG_CSS / 2, 6, 0, 7);
+  magCtx.stroke();
+  magCtx.beginPath();
+  magCtx.moveTo(MAG_CSS / 2 - 12, MAG_CSS / 2);
+  magCtx.lineTo(MAG_CSS / 2 + 12, MAG_CSS / 2);
+  magCtx.moveTo(MAG_CSS / 2, MAG_CSS / 2 - 12);
+  magCtx.lineTo(MAG_CSS / 2, MAG_CSS / 2 + 12);
+  magCtx.stroke();
+  magCtx.restore();
+}
+function hideMag(){ mag.style.display = 'none'; }
+
 cv.addEventListener('pointerdown', function(e){
   if(game.phase !== 'draw') return;
   if(!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0) || activePointer !== null) return;
@@ -972,7 +1020,9 @@ cv.addEventListener('pointerdown', function(e){
   drawing = true;
   game.raw = [];
   try{ cv.setPointerCapture(e.pointerId); }catch(err){}
-  game.raw.push(posOf(e));
+  var p0 = posOf(e);
+  game.raw.push(p0);
+  showMag(p0[0], p0[1]);
 });
 cv.addEventListener('pointermove', function(e){
   if(!drawing || e.pointerId !== activePointer) return;
@@ -982,11 +1032,13 @@ cv.addEventListener('pointermove', function(e){
   if(!last || Math.hypot(p[0] - last[0], p[1] - last[1]) > 2){
     game.raw.push(p);
   }
+  showMag(p[0], p[1]);
 });
 function endStroke(e){
   if(!drawing || e.pointerId !== activePointer) return;
   drawing = false;
   activePointer = null;
+  hideMag();
   if(e.type === 'pointercancel' || e.type === 'lostpointercapture'){
     statusEl.textContent = 'Interrupted — draw the ' + game.shapeLabel + ' again';
     game.raw = [];

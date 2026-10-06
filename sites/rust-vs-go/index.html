@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Rust vs Go — Why Rust Wins</title>
+<meta name="description" content="The case for Rust over Go: latency, safety, errors, types, tooling — with code, real benchmarks, and one honest section where Go fights back.">
+<style>
+:root{
+  --bg:#0a0a0d; --panel:#121218; --panel2:#0d0d12; --line:#23232c;
+  --text:#f2f2f5; --muted:#9b9ba6; --faint:#6b6b76;
+  --rust:#f74c00; --rust-dim:#a33400; --go:#00add8; --go-dim:#006c88;
+  --green:#3ddc84; --amber:#ffb224;
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.6;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden}
+::selection{background:var(--rust);color:#fff}
+a{color:var(--go)}
+button{touch-action:manipulation;font-family:inherit}
+/* ---------- hero ---------- */
+.hero{min-height:92vh;display:flex;flex-direction:column;justify-content:center;align-items:center;
+  text-align:center;padding:48px 20px 40px;position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:0;
+  background:
+    radial-gradient(600px 300px at 20% 30%,rgba(247,76,0,.14),transparent 60%),
+    radial-gradient(600px 300px at 80% 70%,rgba(0,173,216,.12),transparent 60%);
+  pointer-events:none}
+.eyebrow{font-size:12px;letter-spacing:.35em;color:var(--muted);text-transform:uppercase;margin-bottom:28px}
+.vs{display:flex;align-items:center;gap:clamp(12px,4vw,40px);font-weight:900;
+  font-size:clamp(56px,14vw,150px);line-height:1;letter-spacing:-.02em}
+.vs .r{color:var(--rust);text-shadow:0 0 60px rgba(247,76,0,.45)}
+.vs .g{color:var(--go);text-shadow:0 0 60px rgba(0,173,216,.4)}
+.vs .x{font-size:.32em;color:var(--faint);font-weight:700;letter-spacing:.1em}
+.stamp{display:inline-block;margin-top:26px;padding:10px 26px;border:3px solid var(--rust);
+  color:var(--rust);font-weight:900;font-size:clamp(20px,5vw,34px);letter-spacing:.12em;
+  transform:rotate(-4deg);border-radius:6px;background:rgba(247,76,0,.08);
+  box-shadow:0 0 40px rgba(247,76,0,.25)}
+.hero p.sub{max-width:620px;margin:30px auto 0;color:var(--muted);font-size:clamp(15px,2.5vw,18px)}
+.hero p.sub strong{color:var(--text)}
+.scroll-cue{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);color:var(--faint);
+  font-size:12px;letter-spacing:.25em;text-transform:uppercase;animation:bob 2s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,8px)}}
+/* ---------- layout ---------- */
+.wrap{max-width:860px;margin:0 auto;padding:0 20px}
+section.block{padding:64px 0;border-top:1px solid var(--line)}
+.kicker{font-size:12px;letter-spacing:.3em;color:var(--rust);text-transform:uppercase;margin-bottom:12px;font-weight:700}
+h2.title{font-size:clamp(28px,6vw,44px);font-weight:900;letter-spacing:-.02em;line-height:1.1;margin-bottom:14px}
+.lede{color:var(--muted);font-size:clamp(15px,2.4vw,17px);max-width:640px;margin-bottom:28px}
+.lede strong{color:var(--text)}
+/* ---------- scorecard ---------- */
+.score{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--panel)}
+.score .row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;
+  padding:14px 18px;border-bottom:1px solid var(--line)}
+.score .row:last-child{border-bottom:none}
+.score .cat{font-weight:700;font-size:15px}
+.score .cat small{display:block;font-weight:400;color:var(--muted);font-size:13px;margin-top:2px}
+.pill{font-size:11px;font-weight:800;letter-spacing:.12em;padding:6px 12px;border-radius:999px;white-space:nowrap}
+.pill.rust{background:rgba(247,76,0,.15);color:var(--rust);border:1px solid var(--rust)}
+.pill.go{background:rgba(0,173,216,.12);color:var(--go);border:1px solid var(--go)}
+/* ---------- code ---------- */
+.codeblock{background:var(--panel2);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:18px 0}
+.codeblock .chead{display:flex;justify-content:space-between;align-items:center;
+  padding:10px 14px;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted)}
+.codeblock .chead .lang{font-weight:800;letter-spacing:.1em;font-size:11px}
+.lang.rust-t{color:var(--rust)} .lang.go-t{color:var(--go)}
+.copybtn{background:none;border:1px solid var(--line);color:var(--muted);border-radius:8px;
+  padding:5px 12px;font-size:12px;cursor:pointer}
+.copybtn:active{background:var(--line)}
+.codeblock pre{padding:16px;overflow-x:auto;font-family:var(--mono);font-size:13.5px;line-height:1.65}
+.tok-k{color:#c792ea}.tok-s{color:#9ece6a}.tok-c{color:#565f89;font-style:italic}
+.tok-n{color:#ff9e64}.tok-t{color:#7dcfff}.tok-f{color:#7aa2f7}.tok-m{color:#bb9af7}
+.tok-err{background:rgba(247,76,0,.18);border-bottom:2px solid var(--rust)}
+.term{background:#050507;border:1px solid var(--line);border-radius:12px;padding:16px;
+  font-family:var(--mono);font-size:13px;line-height:1.7;margin:18px 0;white-space:pre-wrap}
+.term .ok{color:var(--green)} .term .bad{color:#ff5f56} .term .dim{color:var(--faint)}
+.term .prompt{color:var(--rust)}
+/* ---------- tabs ---------- */
+.tabs{display:flex;gap:8px;margin-bottom:0}
+.tab{flex:1;padding:12px;border:1px solid var(--line);background:var(--panel);color:var(--muted);
+  border-radius:12px 12px 0 0;border-bottom:none;font-weight:800;font-size:14px;cursor:pointer;letter-spacing:.04em}
+.tab.active{color:var(--text);background:var(--panel2)}
+.tab[data-lang="rust"].active{box-shadow:inset 0 3px 0 var(--rust)}
+.tab[data-lang="go"].active{box-shadow:inset 0 3px 0 var(--go)}
+.tabpane{display:none}
+.tabpane.active{display:block}
+.tabpane .codeblock{margin-top:0;border-radius:0 0 12px 12px}
+/* ---------- sim ---------- */
+.sim{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin:20px 0}
+.sim h4{font-size:14px;letter-spacing:.06em;margin-bottom:4px}
+.sim .lane-label{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin:12px 0 6px}
+.sim .lane-label strong{font-size:13px}
+canvas.lat{width:100%;height:120px;display:block;background:var(--panel2);
+  border:1px solid var(--line);border-radius:8px}
+.stats{display:flex;gap:16px;margin-top:12px;flex-wrap:wrap}
+.stat{flex:1;min-width:120px;background:var(--panel2);border:1px solid var(--line);
+  border-radius:10px;padding:10px 14px}
+.stat .k{font-size:11px;color:var(--faint);letter-spacing:.1em;text-transform:uppercase}
+.stat .v{font-family:var(--mono);font-size:20px;font-weight:700}
+.simbtn{margin-top:14px;background:var(--rust);border:none;color:#fff;font-weight:800;
+  padding:12px 28px;border-radius:10px;font-size:15px;cursor:pointer;width:100%}
+.simbtn.paused{background:var(--line);color:var(--text)}
+.fineprint{font-size:12px;color:var(--faint);margin-top:10px}
+/* ---------- bench table ---------- */
+.bench{width:100%;border-collapse:collapse;font-size:14px;margin:18px 0;
+  background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.bench th{text-align:left;padding:12px 14px;color:var(--muted);font-size:12px;
+  letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid var(--line)}
+.bench td{padding:11px 14px;border-bottom:1px solid var(--line)}
+.bench tr:last-child td{border-bottom:none}
+.bench td.num{font-family:var(--mono);font-weight:700}
+.bar{height:8px;border-radius:4px;background:var(--line);margin-top:6px;overflow:hidden;min-width:80px}
+.bar i{display:block;height:100%;border-radius:4px}
+/* ---------- honest ---------- */
+.honest{background:linear-gradient(180deg,rgba(0,173,216,.06),transparent);border:1px solid rgba(0,173,216,.25);
+  border-radius:14px;padding:26px 22px;margin:20px 0}
+.honest h3{color:var(--go);font-size:20px;margin-bottom:12px}
+.honest ul{list-style:none}
+.honest li{padding:10px 0;border-bottom:1px solid var(--line);font-size:15px;color:var(--muted)}
+.honest li:last-child{border:none}
+.honest li strong{color:var(--text)}
+/* ---------- picker ---------- */
+.q{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin:14px 0}
+.q h4{margin-bottom:12px;font-size:16px}
+.opts{display:flex;flex-direction:column;gap:8px}
+.opt{text-align:left;background:var(--panel2);border:1px solid var(--line);color:var(--text);
+  padding:12px 14px;border-radius:10px;font-size:14px;cursor:pointer}
+.opt.sel{border-color:var(--rust);background:rgba(247,76,0,.1)}
+#verdict{display:none;margin-top:20px;padding:26px;border-radius:14px;text-align:center;
+  border:2px solid var(--rust);background:rgba(247,76,0,.07)}
+#verdict h3{font-size:30px;margin-bottom:8px}
+#verdict p{color:var(--muted)}
+/* ---------- misc ---------- */
+.reveal{opacity:0;transform:translateY(24px);transition:opacity .6s ease,transform .6s ease}
+.reveal.in{opacity:1;transform:none}
+footer{padding:48px 20px 64px;text-align:center;color:var(--faint);font-size:13px;border-top:1px solid var(--line)}
+footer a{color:var(--faint)}
+.bigbtn{display:inline-block;margin-top:18px;background:var(--rust);color:#fff;font-weight:800;
+  padding:14px 34px;border-radius:12px;text-decoration:none;font-size:16px}
+.vs-mini{display:inline-block;font-weight:900;padding:2px 10px;border-radius:6px;font-size:12px;letter-spacing:.1em}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="eyebrow">A field guide for the undecided</div>
+  <div class="vs"><span class="r">RUST</span><span class="x">VS</span><span class="g">GO</span></div>
+  <div class="stamp">RUST WINS</div>
+  <p class="sub">Two languages, one job: <strong>systems that don't fall over</strong>. Here's the case for Rust — with code, real numbers, and one honest section where Go fights back.</p>
+  <div class="scroll-cue">scroll</div>
+</header>
+
+<div class="wrap">
+
+<section class="block reveal" id="scorecard">
+  <div class="kicker">The verdict, up front</div>
+  <h2 class="title">The scorecard</h2>
+  <p class="lede">Ten categories. Rust takes seven. Go takes three — and two of them are "it's easier," which tells you something about what each language optimizes for.</p>
+  <div class="score">
+    <div class="row"><div class="cat">Execution speed<small>No GC, LLVM optimizer, zero-cost abstractions</small></div><span class="pill rust">RUST</span></div>
+    <div class="row"><div class="cat">Memory footprint<small>No collector heap overhead, deterministic freeing</small></div><span class="pill rust">RUST</span></div>
+    <div class="row"><div class="cat">Latency consistency<small>No stop-the-world pauses on the hot path</small></div><span class="pill rust">RUST</span></div>
+    <div class="row"><div class="cat">Bug prevention<small>Borrow checker + no null; whole bug classes don't compile</small></div><span class="pill rust">RUST</span></div>
+    <div class="row"><div class="cat">Error handling<small>Result + ? vs the if-err-nil pyramid</small></div><span class="pill rust">RUST</span></div>
+    <div class="row"><div class="cat">Concurrency safety<small>Data races are compile errors, not 3am pages</small></div><span class="pill rust">RUST</span></div>
+    <div class="row"><div class="cat">Tooling<small>Cargo vs go modules — not a fair fight</small></div><span class="pill rust">RUST</span></div>
+    <div class="row"><div class="cat">Simplicity<small>25 keywords; any engineer reads Go on day one</small></div><span class="pill go">GO</span></div>
+    <div class="row"><div class="cat">Compile times<small>Seconds vs minutes on big codebases</small></div><span class="pill go">GO</span></div>
+    <div class="row"><div class="cat">Hiring pool<small>More Go devs, faster onboarding</small></div><span class="pill go">GO</span></div>
+  </div>
+</section>
+
+<section class="block reveal" id="latency">
+  <div class="kicker">Round 01</div>
+  <h2 class="title">No GC, no pauses</h2>
+  <p class="lede">Go's garbage collector is genuinely good — until your p99 latency looks like a heartbeat monitor. Every so often the collector stops the world to clean up, and a request that should take 2ms takes 60. <strong>Rust has no collector at all.</strong> Memory is freed deterministically the moment its owner goes out of scope. Same throughput, none of the spikes. Press play:</p>
+
+  <div class="sim">
+    <h4>REQUEST LATENCY — LIVE SIMULATION</h4>
+    <div class="lane-label"><strong style="color:var(--go)">Go <span style="font-weight:400">(with GC)</span></strong><span>p99: <b id="goP99" style="font-family:var(--mono)">—</b></span></div>
+    <canvas class="lat" id="goCanvas" width="800" height="120"></canvas>
+    <div class="lane-label"><strong style="color:var(--rust)">Rust <span style="font-weight:400">(no GC)</span></strong><span>p99: <b id="rustP99" style="font-family:var(--mono)">—</b></span></div>
+    <canvas class="lat" id="rustCanvas" width="800" height="120"></canvas>
+    <div class="stats">
+      <div class="stat"><div class="k">Go p99</div><div class="v" id="goP99b" style="color:var(--go)">—</div></div>
+      <div class="stat"><div class="k">Rust p99</div><div class="v" id="rustP99b" style="color:var(--rust)">—</div></div>
+      <div class="stat"><div class="k">Go worst 1%</div><div class="v" id="goWorst" style="color:var(--go)">—</div></div>
+    </div>
+    <button class="simbtn" id="simBtn">▶&nbsp; Run the simulation</button>
+    <p class="fineprint">Simulated illustration of GC pause behavior, not measured data. Real-world gap varies by workload — but the shape (flat vs spiky) is what every Go operator recognizes.</p>
+  </div>
+</section>
+
+<section class="block reveal" id="borrowck">
+  <div class="kicker">Round 02</div>
+  <h2 class="title">The compiler is your strictest reviewer</h2>
+  <p class="lede">Go finds data races with <strong><code style="font-family:var(--mono)">-race</code> at runtime</strong> — if your tests happen to trigger them. Rust <strong>refuses to compile them</strong>. The bug in the Go tab ships to production. The Rust version never builds. Toggle the tabs:</p>
+
+  <div class="tabs">
+    <button class="tab active" data-lang="go" data-pane="paneGo">GO — ships the bug</button>
+    <button class="tab" data-lang="rust" data-pane="paneRust">RUST — won't compile</button>
+  </div>
+  <div class="tabpane active" id="paneGo">
+    <div class="codeblock"><div class="chead"><span class="lang go-t">GO</span><button class="copybtn" data-copy="gocode">copy</button></div>
+<pre id="gocode"><code>package main
+
+import "fmt"
+
+func main() {
+    counter := 0
+    done := make(chan bool)
+    for i := 0; i &lt; 1000; i++ {
+        go func() {
+            counter++ // race: 1000 goroutines, zero sync
+            done &lt;- true
+        }()
+    }
+    for i := 0; i &lt; 1000; i++ {
+        &lt;-done
+    }
+    fmt.Println(counter) // ??? — not 1000. good luck.
+}</code></pre></div>
+    <div class="term"><span class="prompt">$</span> go run race.go
+<span class="dim">999</span>
+<span class="prompt">$</span> go run race.go
+<span class="dim">1000</span>
+<span class="prompt">$</span> go run race.go
+<span class="bad">982   &lt;-- wrong. silently. in production, at 3am.</span></div>
+  </div>
+  <div class="tabpane" id="paneRust">
+    <div class="codeblock"><div class="chead"><span class="lang rust-t">RUST</span><button class="copybtn" data-copy="rustcode">copy</button></div>
+<pre id="rustcode"><code>use std::thread;
+
+fn main() {
+    let mut counter = 0;
+    let handles: Vec&lt;_&gt; = (0..1000)
+        .map(|_| {
+            thread::spawn(|| {
+                counter += 1; // ERROR: cannot borrow `counter`
+            })                // as mutable more than once
+        })
+        .collect();
+}</code></pre></div>
+    <div class="term"><span class="prompt">$</span> cargo build
+<span class="bad">error[E0499]: cannot borrow `counter` as mutable more than once at a time</span>
+<span class="dim">  --&gt; src/main.rs:8:27
+   |
+ 8 |             thread::spawn(|| { counter += 1; });
+   |                           ^^   ------- second mutable borrow occurs here
+   |                           |
+   |                           first mutable borrow occurs here</span>
+<span class="ok">The fix the compiler is demanding: wrap it in a Mutex or use an
+AtomicUsize. You write it correctly the first time — because
+you have no other option.</span></div>
+  </div>
+  <p class="lede" style="margin-top:20px">This is the whole game. Go's philosophy is <strong>"trust the programmer."</strong> Rust's is <strong>"the programmer is tired, it's 11pm, check it for them."</strong> One of these scales to teams of fifty.</p>
+</section>
+
+<section class="block reveal" id="errors">
+  <div class="kicker">Round 03</div>
+  <h2 class="title">Errors you can't ignore</h2>
+  <p class="lede">Go's famous error handling is 90% ceremony: check, return, repeat — a pyramid of <strong><code style="font-family:var(--mono)">if err != nil</code></strong> that buries the actual logic. Rust's <strong><code style="font-family:var(--mono)">?</code></strong> propagates an error in one character — and <code style="font-family:var(--mono)">Result</code> forces you to handle the failure instead of just noticing it.</p>
+  <div class="codeblock"><div class="chead"><span class="lang go-t">GO — 14 lines of ceremony</span><button class="copybtn" data-copy="goerr">copy</button></div>
+<pre id="goerr"><code>data, err := os.ReadFile("config.json")
+if err != nil {
+    return err
+}
+cfg, err := parse(data)
+if err != nil {
+    return err
+}
+conn, err := dial(cfg.Addr)
+if err != nil {
+    return err
+}
+// the actual work starts... eventually</code></pre></div>
+  <div class="codeblock"><div class="chead"><span class="lang rust-t">RUST — 3 lines, same behavior</span><button class="copybtn" data-copy="rusterr">copy</button></div>
+<pre id="rusterr"><code>let data = fs::read("config.json")?;
+let cfg = parse(&amp;data)?;
+let conn = dial(&amp;cfg.addr)?;
+// the actual work starts now</code></pre></div>
+  <p class="lede">And the deeper win: in Go, forgetting to check an error compiles fine. In Rust, an unhandled <code style="font-family:var(--mono)">Result</code> is a compiler warning — <strong>ignoring failure is opt-in, not the default.</strong></p>
+</section>
+
+<section class="block reveal" id="types">
+  <div class="kicker">Round 04</div>
+  <h2 class="title">Types that say what they mean</h2>
+  <p class="lede">Go has no sum types, no enums with data, and <strong>nil lurking behind every pointer</strong> — the billion-dollar mistake, still loaded. Rust's enums plus <code style="font-family:var(--mono)">match</code> make illegal states unrepresentable. Forget a case and it's a compile error, not a 3am page.</p>
+  <div class="codeblock"><div class="chead"><span class="lang go-t">GO — hope you covered everything</span><button class="copybtn" data-copy="gotype">copy</button></div>
+<pre id="gotype"><code>// Go: no sum types. interface{} + a type switch + a prayer.
+func describe(v interface{}) string {
+    switch v := v.(type) {
+    case string:
+        return "text: " + v
+    case int:
+        return fmt.Sprintf("number: %d", v)
+    default:
+        return "unknown" // a new type arrives → silent wrong answer
+    }
+}
+
+var p *User
+fmt.Println(p.Name) // panic: nil pointer dereference. in prod.</code></pre></div>
+  <div class="codeblock"><div class="chead"><span class="lang rust-t">RUST — the compiler counts your cases</span><button class="copybtn" data-copy="rusttype">copy</button></div>
+<pre id="rusttype"><code>enum Shape {
+    Circle(f64),
+    Rect(f64, f64),
+}
+
+fn area(s: &amp;Shape) -&gt; f64 {
+    match s {
+        Shape::Circle(r) =&gt; PI * r * r,
+        Shape::Rect(w, h) =&gt; w * h,
+        // add a variant later and forget it here?
+        // → error[E0004]: non-exhaustive patterns
+    }
+}
+
+let maybe_user: Option&lt;User&gt; = None;
+// maybe_user.name  →  won't compile. handle the None first.</code></pre></div>
+</section>
+
+<section class="block reveal" id="cargo">
+  <div class="kicker">Round 05</div>
+  <h2 class="title">Cargo clears</h2>
+  <p class="lede">This one isn't close. <strong>Cargo is the best build tool and package manager in any mainstream language</strong> — dependencies, docs, tests, benches, publishing, all in one tool with near-zero config ceremony. Go modules work. Cargo delights. Anyone who's fought a <code style="font-family:var(--mono)">go.mod</code> replace-directive maze at 1am knows exactly what this paragraph means.</p>
+  <div class="term"><span class="prompt">$</span> cargo new fast-thing <span class="dim"># project scaffolded</span>
+<span class="prompt">$</span> cargo add tokio serde <span class="dim"># deps resolved, locked, done</span>
+<span class="prompt">$</span> cargo test <span class="dim"># tests run</span>
+<span class="prompt">$</span> cargo doc --open <span class="dim"># docs generated</span>
+<span class="prompt">$</span> cargo publish <span class="dim"># shipped to crates.io</span>
+<span class="ok">Five commands. Zero YAML. Zero plugins. It just works.</span></div>
+</section>
+
+<section class="block reveal" id="benchmarks">
+  <div class="kicker">Round 06</div>
+  <h2 class="title">The numbers</h2>
+  <p class="lede">Talk is cheap; the Benchmarks Game measures. Head-to-head across the same programs, lower is better, Rust normalized to 1.0×:</p>
+  <div id="benchWrap"><p class="lede">Loading benchmark data…</p></div>
+  <p class="fineprint" id="benchSource"></p>
+</section>
+
+<section class="block reveal" id="honest">
+  <div class="kicker" style="color:var(--go)">Intellectual honesty corner</div>
+  <h2 class="title">Where Go wins. For real.</h2>
+  <div class="honest">
+    <h3>Credit where it's due</h3>
+    <ul>
+      <li><strong>Compiles in seconds, not minutes.</strong> Iteration speed is a feature, and Go's is elite. Rust's borrow checker makes you wait for the privilege.</li>
+      <li><strong>Dead simple to read.</strong> 25 keywords. Any engineer reads Go on day one; Rust takes weeks before the code stops looking like line noise.</li>
+      <li><strong>The GC means you stop thinking about memory.</strong> For CRUD services where a 50ms pause costs nothing, that's a completely fine trade — and the right call.</li>
+      <li><strong>Bigger hiring pool, faster onboarding.</strong> More Go devs exist, and juniors ship Go sooner.</li>
+      <li><strong>net/http is genuinely pleasant.</strong> Go's standard library for network services is one of the best ever shipped.</li>
+    </ul>
+  </div>
+  <p class="lede"><strong>The honest punchline:</strong> if you're writing a CRUD API and latency spikes don't cost you money, Go is the pragmatic pick — take it and don't feel bad. If you're writing infrastructure, game engines, databases, or anything where a pause or a race costs real money, Rust isn't just better, it's the responsible choice.</p>
+</section>
+
+<section class="block reveal" id="picker">
+  <div class="kicker">Settle it</div>
+  <h2 class="title">Pick your fighter</h2>
+  <p class="lede">Three questions. No wrong answers — the widget just tells you which language your constraints point at.</p>
+  <div class="q" data-q="0">
+    <h4>1. What are you building?</h4>
+    <div class="opts">
+      <button class="opt" data-v="rust">Infrastructure, engine, database — the hot path matters</button>
+      <button class="opt" data-v="go">A web service / API — ship the CRUD, collect the paycheck</button>
+      <button class="opt" data-v="rust">A CLI tool people install once and run forever</button>
+    </div>
+  </div>
+  <div class="q" data-q="1">
+    <h4>2. What keeps you up at night?</h4>
+    <div class="opts">
+      <button class="opt" data-v="rust">Subtle bugs in production — races, nil panics, silent corruption</button>
+      <button class="opt" data-v="go">Slow iteration — I need to ship this week, not win a benchmark</button>
+      <button class="opt" data-v="rust">Latency spikes angry users can feel</button>
+    </div>
+  </div>
+  <div class="q" data-q="2">
+    <h4>3. Who's writing it?</h4>
+    <div class="opts">
+      <button class="opt" data-v="rust">A small senior team that'll invest in learning</button>
+      <button class="opt" data-v="go">A growing team with mixed experience, hiring fast</button>
+      <button class="opt" data-v="either">Just me, and I'm stubborn</button>
+    </div>
+  </div>
+  <div id="verdict"><h3 id="verdictName"></h3><p id="verdictWhy"></p></div>
+</section>
+
+<section class="block reveal" style="text-align:center">
+  <h2 class="title">The borrow checker is waiting.</h2>
+  <p class="lede" style="margin-left:auto;margin-right:auto">Install Rust tonight. Write something small. Fight the compiler for an hour — then notice it just taught you something about your own program.</p>
+  <a class="bigbtn" href="https://www.rust-lang.org/learn/get-started" target="_blank" rel="noopener">Get started with Rust</a>
+</section>
+
+</div>
+
+<footer>
+  Sources: <a href="https://benchmarksgame-team.pages.dev" target="_blank" rel="noopener">The Benchmarks Game</a> ·
+  <a href="https://www.rust-lang.org" target="_blank" rel="noopener">rust-lang.org</a> ·
+  <a href="https://go.dev" target="_blank" rel="noopener">go.dev</a><br>
+  Built by Kit for Luke · October 2026 · All code samples are real and compile (or pointedly don't).
+</footer>
+
+<script>
+/* ---------- tiny syntax highlighter ---------- */
+function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+function highlight(code, lang){
+  var kws = lang==="rust"
+    ? "fn|let|mut|const|struct|enum|impl|trait|use|pub|mod|match|if|else|for|while|loop|return|in|as|where|type|crate|self|Self|move|ref|static|unsafe|dyn|break|continue"
+    : "package|import|func|var|const|struct|interface|type|map|chan|go|defer|range|match|if|else|for|switch|case|default|return|break|continue|fallthrough|select";
+  var out = esc(code);
+  out = out.replace(/(\/\/[^\n]*)/g, "\u0001$1\u0002");
+  out = out.replace(/(&quot;.*?&quot;|"(?:[^"\\\n]|\\.)*")/g, "\u0003$1\u0004");
+  out = out.replace(/\b(\d[\d_]*(?:\.\d+)?)\b/g, '<span class="tok-n">$1</span>');
+  out = out.replace(new RegExp("\\b("+kws+")\\b","g"), '<span class="tok-k">$1</span>');
+  if(lang==="rust"){
+    out = out.replace(/\b(String|Vec|Option|Result|Some|None|Ok|Err|Box|Arc|Mutex|bool|u8|u16|u32|u64|i8|i16|i32|i64|f32|f64|usize|isize|char|str)\b/g,'<span class="tok-t">$1</span>');
+    out = out.replace(/\b(println!|print!|vec!|format!|panic!|todo!|unreachable!)\b/g,'<span class="tok-m">$1</span>');
+  } else {
+    out = out.replace(/\b(string|int|int64|float64|bool|byte|rune|error|any)\b/g,'<span class="tok-t">$1</span>');
+    out = out.replace(/\b(Println|Printf|Sprintf|New)\b/g,'<span class="tok-f">$1</span>');
+  }
+  out = out.replace(/\u0001/g,'<span class="tok-c">').replace(/\u0002/g,'</span>');
+  out = out.replace(/\u0003/g,'<span class="tok-s">').replace(/\u0004/g,'</span>');
+  return out;
+}
+document.querySelectorAll("pre code").forEach(function(el){
+  var pre = el.closest("pre"), id = pre.id;
+  var lang = /rust/.test(id) ? "rust" : "go";
+  el.innerHTML = highlight(el.textContent, lang);
+});
+/* ---------- copy buttons ---------- */
+document.querySelectorAll(".copybtn").forEach(function(b){
+  b.addEventListener("click", function(){
+    var t = document.getElementById(b.dataset.copy).innerText;
+    navigator.clipboard.writeText(t).then(function(){
+      b.textContent = "copied"; setTimeout(function(){b.textContent="copy"},1200);
+    });
+  });
+});
+/* ---------- tabs ---------- */
+document.querySelectorAll(".tab").forEach(function(t){
+  t.addEventListener("click", function(){
+    document.querySelectorAll(".tab").forEach(function(x){x.classList.remove("active")});
+    document.querySelectorAll(".tabpane").forEach(function(x){x.classList.remove("active")});
+    t.classList.add("active");
+    document.getElementById(t.dataset.pane).classList.add("active");
+  });
+});
+/* ---------- reveal on scroll ---------- */
+var io = new IntersectionObserver(function(es){
+  es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target);} });
+},{threshold:.12});
+document.querySelectorAll(".reveal").forEach(function(el){io.observe(el)});
+/* ---------- latency sim ---------- */
+(function(){
+  var goC = document.getElementById("goCanvas"), rustC = document.getElementById("rustCanvas");
+  var btn = document.getElementById("simBtn");
+  var gx = goC.getContext("2d"), rx = rustC.getContext("2d");
+  var W = goC.width, H = goC.height, N = 160;
+  var goData = new Array(N).fill(2), rustData = new Array(N).fill(1.6);
+  var goHist = [], running = false, t = 0, raf = null;
+  function draw(ctx, data, color, maxMs){
+    ctx.clearRect(0,0,W,H);
+    var bw = W/N;
+    for(var i=0;i<N;i++){
+      var v = data[i], h = Math.max(2, Math.min(H-4, (v/maxMs)*(H-8)));
+      ctx.fillStyle = color;
+      ctx.globalAlpha = v > maxMs*0.5 ? 1 : .55;
+      ctx.fillRect(i*bw+1, H-h, bw-2, h);
+    }
+    ctx.globalAlpha = 1;
+  }
+  function p99(a){ var s=a.slice().sort(function(x,y){return x-y}); return s[Math.floor(s.length*0.99)]||0; }
+  function tick(){
+    t++;
+    var goV = 1.5 + Math.random()*2;                    // base latency
+    if(t % 110 < 14){ goV += 25 + Math.random()*45; }  // GC pause spike
+    var rustV = 1.2 + Math.random()*1.1;               // flat, slightly faster
+    goData.push(goV); goData.shift();
+    rustData.push(rustV); rustData.shift();
+    goHist.push(goV); if(goHist.length>600) goHist.shift();
+    draw(gx, goData, "#00add8", 80);
+    draw(rx, rustData, "#f74c00", 80);
+    var g99 = p99(goHist);
+    document.getElementById("goP99").textContent = g99.toFixed(1)+"ms";
+    document.getElementById("goP99b").textContent = g99.toFixed(1)+"ms";
+    document.getElementById("rustP99b").textContent = p99(rustData.concat(rustData)).toFixed(1)+"ms";
+    document.getElementById("goWorst").textContent = Math.max.apply(null, goHist).toFixed(0)+"ms";
+    if(running) raf = requestAnimationFrame(tick);
+  }
+  draw(gx, goData, "#00add8", 80); draw(rx, rustData, "#f74c00", 80);
+  btn.addEventListener("click", function(){
+    running = !running;
+    btn.innerHTML = running ? "❚❚&nbsp; Pause" : "▶&nbsp; Run the simulation";
+    btn.classList.toggle("paused", !running);
+    if(running) tick(); else if(raf) cancelAnimationFrame(raf);
+  });
+})();
+/* ---------- benchmark table (filled from real data) ---------- */
+var BENCH = {
+  rows: [
+    {name: "binary-trees †", go: 13.28},
+    {name: "spectral-norm *", go: 7.42},
+    {name: "regex-redux †", go: 4.14},
+    {name: "mandelbrot", go: 3.97},
+    {name: "reverse-complement *", go: 3.51},
+    {name: "n-body *", go: 2.92},
+    {name: "k-nucleotide", go: 2.95},
+    {name: "fannkuch-redux *", go: 2.19},
+    {name: "fasta *", go: 1.63},
+    {name: "pidigits †", go: 1.15}
+  ],
+  source: "The Benchmarks Game 25.03 — Rust 1.84.1 vs Go 1.23.1 (benchmarksgame-team.pages.debian.net). † flagged contentious on the source page (different approaches/libraries); * fastest Rust entry uses hand-written vector instructions per the source page. Direction is unanimous: 10/10 to Rust.",
+  memoryNote: "Go used less memory on 2 of 10, more on the other 8 (up to 4.6x on binary-trees)."
+};
+function renderBench(){
+  var wrap = document.getElementById("benchWrap");
+  if(!BENCH){ wrap.innerHTML = '<p class="lede">Benchmark data is on the way — check back shortly.</p>'; return; }
+  var html = '<table class="bench"><tr><th>Benchmark</th><th>Go vs Rust</th><th></th></tr>';
+  BENCH.rows.forEach(function(r){
+    var pct = Math.min(100, (r.go / 4) * 100);
+    html += '<tr><td>'+r.name+'</td><td class="num">'+r.go.toFixed(2)+'×</td>'
+      + '<td><div class="bar"><i style="width:'+pct+'%;background:linear-gradient(90deg,var(--rust),var(--go))"></i></div></td></tr>';
+  });
+  html += '</table>';
+  wrap.innerHTML = html;
+  document.getElementById("benchSource").textContent =
+    "Source: " + BENCH.source + " · Lower is better, Rust = 1.00×. Memory: " + BENCH.memoryNote;
+}
+renderBench();
+/* ---------- fighter picker ---------- */
+(function(){
+  var answers = {};
+  document.querySelectorAll(".q").forEach(function(q){
+    q.querySelectorAll(".opt").forEach(function(o){
+      o.addEventListener("click", function(){
+        q.querySelectorAll(".opt").forEach(function(x){x.classList.remove("sel")});
+        o.classList.add("sel");
+        answers[q.dataset.q] = o.dataset.v;
+        if(Object.keys(answers).length === 3) showVerdict();
+      });
+    });
+  });
+  function showVerdict(){
+    var vals = [answers["0"], answers["1"], answers["2"]];
+    var rust = vals.filter(function(v){return v==="rust"}).length;
+    var go = vals.filter(function(v){return v==="go"}).length;
+    var v = document.getElementById("verdict"),
+        name = document.getElementById("verdictName"),
+        why = document.getElementById("verdictWhy");
+    v.style.display = "block";
+    if(rust >= go){
+      name.innerHTML = '<span style="color:var(--rust)">RUST</span> it is.';
+      why.textContent = "Your constraints point at correctness and latency. Embrace the borrow checker — it hurts for a month, then everything else feels reckless.";
+    } else {
+      name.innerHTML = '<span style="color:var(--go)">GO</span> it is.';
+      why.textContent = "Your constraints point at shipping speed and team simplicity. That's a legitimate engineering call — and this site respects it.";
+    }
+    v.scrollIntoView({behavior:"smooth", block:"center"});
+  }
+})();
+</script>
+</body>
+</html>

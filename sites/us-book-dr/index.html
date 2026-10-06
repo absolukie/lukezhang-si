@@ -39,6 +39,8 @@
   .metarow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
   .steptext { flex: 1; text-align: center; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .copybtn { background: none; border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; font-size: 13px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+  .submitbtn { background: var(--accent); border: none; border-radius: 999px; padding: 6px 14px; font-size: 13px; font-weight: 700; color: #fff; cursor: pointer; white-space: nowrap; }
+  .submitbtn:disabled { opacity: .7; }
   .navrow { display: flex; gap: 10px; }
   .navbtn { flex: 1; border: 2px solid var(--line); background: #fff; border-radius: 14px; padding: 14px 0; font-weight: 800; font-size: 17px; cursor: pointer; color: var(--ink); }
   .navbtn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -76,6 +78,7 @@
     <div class="pill"><span class="dot" id="saveDot"></span><span id="saveTxt">Saved</span></div>
     <div class="steptext" id="stepText"></div>
     <button class="copybtn" id="copyBtn">Copy</button>
+    <button class="submitbtn" id="quickSubmit">Submit</button>
   </div>
   <div class="navrow">
     <button class="navbtn" id="backBtn">‹ Back</button>
@@ -324,12 +327,14 @@ const stepText = document.getElementById("stepText");
 const dotsEl = document.getElementById("dots");
 const backBtn = document.getElementById("backBtn");
 const nextBtn = document.getElementById("nextBtn");
+const quickSubmit = document.getElementById("quickSubmit");
 
 function renderChrome(){
   barFill.style.width = ((step + 1) / STEPS.length * 100) + "%";
   stepText.textContent = stepLabel();
   const last = step === STEPS.length - 1;
   nextBtn.innerHTML = step === 0 ? "Start \u203a" : last ? "Submit \u2713" : "Next \u203a";
+  quickSubmit.style.display = last ? "none" : "";
   backBtn.disabled = step === 0;
   let dh = "";
   STEPS.forEach((s, i) => {
@@ -375,13 +380,13 @@ function goTo(n){
 
 backBtn.addEventListener("click", () => goTo(step - 1));
 nextBtn.addEventListener("click", () => {
-  if (step === STEPS.length - 1) doSubmit();
+  if (step === STEPS.length - 1) doSubmit(nextBtn);
   else goTo(step + 1);
 });
 document.addEventListener("keydown", e => {
   const tag = (e.target.tagName || "").toLowerCase();
   if (tag === "textarea" || tag === "input") return;
-  if (e.key === "ArrowRight") { if (step === STEPS.length - 1) doSubmit(); else goTo(step + 1); }
+  if (e.key === "ArrowRight") { if (step === STEPS.length - 1) doSubmit(nextBtn); else goTo(step + 1); }
   else if (e.key === "ArrowLeft") goTo(step - 1);
 });
 
@@ -393,18 +398,20 @@ document.getElementById("undoBtn").addEventListener("click", () => {
   save(); render();
 });
 
-async function doSubmit(){
-  nextBtn.disabled = true;
-  nextBtn.innerHTML = '<span class="spinner"></span>Submitting\u2026';
+async function doSubmit(btn){
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Submitting\u2026';
   try {
     const r = await fetch("/api/decision/submit", { method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({ slug: SLUG, picks: state.picks, notes: state.notes, final: state.final, otherNotes: state.otherNotes }) });
     if (r.ok) toast("Submitted \u2014 Kit can read it now");
     else toast("Submit failed \u2014 answers are saved here");
   } catch(e){ toast("Submit failed \u2014 answers are saved here"); }
-  nextBtn.disabled = false;
-  renderChrome();
+  btn.disabled = false;
+  btn.innerHTML = orig;
 }
+quickSubmit.addEventListener("click", () => doSubmit(quickSubmit));
 
 render();
 </script>

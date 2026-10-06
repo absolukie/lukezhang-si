@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>TopText — caption any clip like the meme</title>
+<meta name="description" content="Drop in a video or GIF, add your caption, export the meme.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0e0e12; --card:#16161d; --line:#26262f;
+  --text:#f4f2ec; --muted:#a09aa8; --faint:#5f5b66;
+  --cream:#f6f1e7; --accent:#ffb35c;
+  --sans:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,sans-serif;
+  --round:"Baloo 2",var(--sans);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.55;
+  -webkit-font-smoothing:antialiased;min-height:100vh}
+button{touch-action:manipulation;font-family:inherit}
+.wrap{max-width:640px;margin:0 auto;padding:0 16px 90px}
+header{padding:30px 0 8px;text-align:center}
+.logo{font-family:var(--round);font-weight:800;font-size:38px;letter-spacing:-.01em}
+.logo span{color:var(--accent)}
+.tag{color:var(--muted);font-size:14px;margin-top:2px}
+.step{background:var(--card);border:1px solid var(--line);border-radius:16px;
+  padding:18px;margin-top:16px}
+.step h2{font-size:13px;letter-spacing:.22em;color:var(--muted);font-weight:700;margin-bottom:12px}
+.step h2 b{color:var(--accent)}
+/* source */
+.srcbtns{display:flex;gap:10px}
+.upload{flex:1;border:2px dashed var(--line);border-radius:12px;background:none;color:var(--text);
+  padding:22px 10px;font-size:15px;font-weight:700;cursor:pointer;text-align:center}
+.upload:active{border-color:var(--accent)}
+.upload small{display:block;font-weight:400;color:var(--faint);font-size:12px;margin-top:4px}
+.linkrow{display:flex;gap:8px;margin-top:10px}
+.linkrow input{flex:1;background:#0c0c10;border:1px solid var(--line);border-radius:10px;
+  color:var(--text);font-size:16px;padding:11px 12px;min-width:0;font-family:inherit}
+.linkrow input:focus{outline:none;border-color:var(--accent)}
+.linkrow button{background:var(--line);border:none;color:var(--text);font-weight:700;
+  padding:11px 18px;border-radius:10px;font-size:14px;cursor:pointer}
+.linkrow button:active{transform:scale(.96)}
+#mediaInfo{font-size:13px;color:var(--muted);margin-top:10px;display:none}
+#mediaInfo b{color:var(--text)}
+/* caption */
+textarea{width:100%;background:#0c0c10;border:1px solid var(--line);border-radius:12px;
+  color:var(--text);font-family:var(--round);font-weight:700;font-size:19px;padding:14px;
+  min-height:110px;resize:vertical;line-height:1.4}
+textarea:focus{outline:none;border-color:var(--accent)}
+.styles{display:flex;gap:10px;margin-top:12px;align-items:center;flex-wrap:wrap}
+.styles .lbl{font-size:12px;color:var(--faint);letter-spacing:.08em;text-transform:uppercase}
+.sw{width:38px;height:38px;border-radius:50%;border:2px solid var(--line);cursor:pointer;padding:0}
+.sw.on{border-color:var(--accent);box-shadow:0 0 0 2px rgba(255,179,92,.35)}
+.sizes{display:flex;gap:8px}
+.sizebtn{background:#0c0c10;border:1px solid var(--line);color:var(--muted);border-radius:9px;
+  padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer}
+.sizebtn.on{border-color:var(--accent);color:var(--text)}
+/* preview */
+#stage{margin-top:16px;display:none}
+#stage.show{display:block}
+#cv{width:100%;border-radius:16px;border:1px solid var(--line);display:block;background:#000}
+.exportrow{display:flex;gap:10px;margin-top:12px}
+#exportBtn{flex:1;background:var(--accent);border:none;color:#171106;font-weight:800;
+  padding:15px;border-radius:13px;font-size:16px;cursor:pointer}
+#exportBtn:disabled{opacity:.45}
+#exportBtn:active{transform:scale(.98)}
+#dlLink{display:none;flex:1;background:#1d2b22;border:1px solid #2c4a38;color:#7ee2a8;
+  font-weight:800;padding:15px;border-radius:13px;font-size:16px;text-align:center;text-decoration:none;
+  align-items:center;justify-content:center}
+#dlLink.show{display:flex}
+#recDot{display:none;align-items:center;gap:8px;justify-content:center;margin-top:10px;
+  font-size:13px;color:#ff5f56;font-weight:700}
+#recDot.show{display:flex}
+#recDot i{width:10px;height:10px;border-radius:50%;background:#ff5f56;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.2}}
+.fine{font-size:12px;color:var(--faint);margin-top:10px;line-height:1.5}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);
+  background:var(--card);border:1px solid var(--line);color:var(--text);padding:12px 22px;
+  border-radius:12px;font-size:14px;transition:transform .3s ease;z-index:50;max-width:92vw;text-align:center}
+#toast.show{transform:translateX(-50%) translateY(0)}
+footer{text-align:center;color:var(--faint);font-size:12px;margin-top:44px;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">Top<span>Text</span></div>
+    <div class="tag">caption any clip like the meme</div>
+  </header>
+
+  <div class="step">
+    <h2><b>1.</b> THE CLIP</h2>
+    <div class="srcbtns">
+      <button class="upload" id="uploadBtn">Upload<small>video or GIF from your device</small></button>
+      <input type="file" id="fileIn" accept="video/*,image/gif" hidden>
+    </div>
+    <div class="linkrow">
+      <input id="linkIn" inputmode="url" placeholder="…or paste a direct .mp4 / .gif link">
+      <button id="loadLink">Load</button>
+    </div>
+    <div id="mediaInfo"></div>
+  </div>
+
+  <div class="step">
+    <h2><b>2.</b> THE CAPTION</h2>
+    <textarea id="capIn" maxlength="220" placeholder="Me thinking if i should buy a product after reading 2 bad reviews and ignoring 1568 good ones"></textarea>
+    <div class="styles">
+      <span class="lbl">Panel</span>
+      <button class="sw on" data-bg="#f6f1e7" data-fg="#141414" style="background:#f6f1e7" aria-label="cream"></button>
+      <button class="sw" data-bg="#ffffff" data-fg="#141414" style="background:#ffffff" aria-label="white"></button>
+      <button class="sw" data-bg="#141414" data-fg="#f6f1e7" style="background:#141414" aria-label="black"></button>
+      <span class="lbl" style="margin-left:8px">Size</span>
+      <div class="sizes">
+        <button class="sizebtn" data-s="56">S</button>
+        <button class="sizebtn on" data-s="68">M</button>
+        <button class="sizebtn" data-s="82">L</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="step" id="stage">
+    <h2><b>3.</b> PREVIEW &amp; EXPORT</h2>
+    <canvas id="cv" width="720" height="900"></canvas>
+    <div class="exportrow">
+      <button id="exportBtn" disabled>Add a clip first</button>
+      <a id="dlLink" download="toptext-meme.webm">Download</a>
+    </div>
+    <div id="recDot"><i></i> recording…</div>
+    <p class="fine">Exports as .webm video (plays everywhere, easy to share). GIF uploads keep their animation. Tip: X and TikTok links won't load — those sites hide the raw file. Use a direct link or upload the file.</p>
+  </div>
+
+  <footer>made for the group chat<br>your clips never leave your device — everything renders locally</footer>
+</div>
+<div id="toast"></div>
+<input type="file" id="noop" hidden>
+<script>
+(function(){
+"use strict";
+var cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+var W = 720, PAD = 54;
+var media = null, mediaKind = null, mediaName = "";
+var bg = "#f6f1e7", fg = "#141414", fontSize = 68;
+var playing = false;
+
+var toast = document.getElementById("toast"), toastT = null;
+function showToast(m){ toast.textContent = m; toast.classList.add("show");
+  clearTimeout(toastT); toastT = setTimeout(function(){toast.classList.remove("show")}, 2600); }
+function font(){ return '800 ' + fontSize + 'px "Baloo 2", sans-serif'; }
+
+function wrap(text, maxW){
+  ctx.font = font();
+  var words = text.split(/\s+/).filter(Boolean), lines = [], line = "";
+  words.forEach(function(w){
+    var t = line ? line + " " + w : w;
+    if(ctx.measureText(t).width > maxW && line){ lines.push(line); line = w; }
+    else line = t;
+  });
+  if(line) lines.push(line);
+  return lines.length ? lines : [""];
+}
+function headerH(lines){
+  var lh = fontSize * 1.22;
+  return PAD * 1.4 + lines.length * lh + PAD * 0.9;
+}
+function mediaBox(){
+  if(!media || !media.videoWidth && !media.naturalWidth) return null;
+  var vw = mediaKind === "video" ? media.videoWidth : media.naturalWidth;
+  var vh = mediaKind === "video" ? media.videoHeight : media.naturalHeight;
+  if(!vw || !vh) return null;
+  var h = Math.round(W * vh / vw);
+  return {w: W, h: h};
+}
+function draw(){
+  var text = document.getElementById("capIn").value.trim() || "your caption here";
+  var lines = wrap(text, W - PAD * 2);
+  var hh = headerH(lines);
+  var mb = mediaBox();
+  var mh = mb ? mb.h : Math.round(W * 0.75);
+  var H = Math.round(hh + mh);
+  if(cv.height !== H){ cv.height = H; }
+  // panel
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, hh);
+  ctx.fillStyle = fg; ctx.font = font(); ctx.textAlign = "center"; ctx.textBaseline = "top";
+  var lh = fontSize * 1.22, y = PAD * 1.15;
+  lines.forEach(function(l){ ctx.fillText(l, W / 2, y); y += lh; });
+  // media
+  ctx.fillStyle = "#000"; ctx.fillRect(0, hh, W, mh);
+  if(media && mb){
+    if(mediaKind === "video"){
+      try{ ctx.drawImage(media, 0, hh, W, mh); }catch(e){}
+    } else {
+      ctx.drawImage(media, 0, hh, W, mh);
+    }
+  } else {
+    ctx.fillStyle = "#3a3a44"; ctx.font = '600 28px "Baloo 2", sans-serif';
+    ctx.fillText("your clip plays here", W / 2, hh + mh / 2 - 14);
+  }
+  return H;
+}
+function loop(){ draw(); requestAnimationFrame(loop); }
+
+function setMedia(el, kind, name){
+  media = el; mediaKind = kind; mediaName = name;
+  document.getElementById("stage").classList.add("show");
+  var mi = document.getElementById("mediaInfo");
+  mi.style.display = "block";
+  mi.innerHTML = "Loaded <b></b> — preview is live.";
+  mi.querySelector("b").textContent = name;
+  var eb = document.getElementById("exportBtn");
+  eb.disabled = false; eb.textContent = "Export meme video";
+  document.getElementById("dlLink").classList.remove("show");
+  document.getElementById("stage").scrollIntoView({behavior:"smooth", block:"nearest"});
+}
+
+document.getElementById("uploadBtn").addEventListener("click", function(){
+  document.getElementById("fileIn").click();
+});
+document.getElementById("fileIn").addEventListener("change", function(e){
+  var f = e.target.files[0]; if(!f) return;
+  var url = URL.createObjectURL(f);
+  if(f.type.indexOf("video") === 0){
+    var v = document.createElement("video");
+    v.muted = true; v.loop = true; v.playsInline = true; v.src = url;
+    v.onloadeddata = function(){ v.play(); setMedia(v, "video", f.name); };
+    v.onerror = function(){ showToast("Couldn't read that file"); };
+  } else if(f.type === "image/gif"){
+    var img = new Image();
+    img.onload = function(){ setMedia(img, "gif", f.name); };
+    img.onerror = function(){ showToast("Couldn't read that file"); };
+    img.src = url;
+  } else showToast("That file type won't work — video or GIF");
+});
+
+document.getElementById("loadLink").addEventListener("click", async function(){
+  var url = document.getElementById("linkIn").value.trim();
+  if(!url){ showToast("Paste a link first"); return; }
+  if(!/^https?:\/\//i.test(url)) url = "https://" + url;
+  showToast("Fetching…");
+  try{
+    var res = await fetch(url);
+    if(!res.ok) throw 0;
+    var blob = await res.blob();
+    var ourl = URL.createObjectURL(blob);
+    var name = url.split("/").pop().split("?")[0] || "clip";
+    if(blob.type.indexOf("video") === 0 || /\.(mp4|webm|mov)(\?|$)/i.test(url)){
+      var v = document.createElement("video");
+      v.muted = true; v.loop = true; v.playsInline = true; v.src = ourl;
+      v.onloadeddata = function(){ v.play(); setMedia(v, "video", name); };
+      v.onerror = function(){ showToast("That link didn't give us a video"); };
+    } else if(blob.type === "image/gif" || /\.gif(\?|$)/i.test(url)){
+      var img = new Image();
+      img.onload = function(){ setMedia(img, "gif", name); };
+      img.onerror = function(){ showToast("That link didn't give us a GIF"); };
+      img.src = ourl;
+    } else showToast("That link wasn't a video or GIF (" + (blob.type || "unknown") + ")");
+  }catch(e){ showToast("Couldn't fetch that link — the host may block downloads. Try uploading the file instead."); }
+});
+
+/* style controls */
+document.querySelectorAll(".sw").forEach(function(b){
+  b.addEventListener("click", function(){
+    document.querySelectorAll(".sw").forEach(function(x){x.classList.remove("on")});
+    b.classList.add("on"); bg = b.dataset.bg; fg = b.dataset.fg;
+  });
+});
+document.querySelectorAll(".sizebtn").forEach(function(b){
+  b.addEventListener("click", function(){
+    document.querySelectorAll(".sizebtn").forEach(function(x){x.classList.remove("on")});
+    b.classList.add("on"); fontSize = parseInt(b.dataset.s, 10);
+  });
+});
+document.getElementById("capIn").addEventListener("input", function(){
+  document.getElementById("dlLink").classList.remove("show");
+});
+
+/* export */
+document.getElementById("exportBtn").addEventListener("click", async function(){
+  if(!media){ showToast("Add a clip first"); return; }
+  try{ await document.fonts.load('800 68px "Baloo 2"'); }catch(e){}
+  var dur = mediaKind === "video" && media.duration && isFinite(media.duration)
+    ? Math.min(media.duration, 30) : 5;
+  if(mediaKind === "video"){ try{ media.currentTime = 0; await media.play(); }catch(e){} }
+  var stream = cv.captureStream(30);
+  var mime = "video/webm;codecs=vp9";
+  if(!window.MediaRecorder || !MediaRecorder.isTypeSupported(mime)) mime = "video/webm";
+  var rec;
+  try{ rec = new MediaRecorder(stream, {mimeType: mime, videoBitsPerSecond: 8000000}); }
+  catch(e){ showToast("Export isn't supported in this browser"); return; }
+  var chunks = [];
+  rec.ondataavailable = function(e){ if(e.data.size) chunks.push(e.data); };
+  rec.onstop = function(){
+    document.getElementById("recDot").classList.remove("show");
+    var blob = new Blob(chunks, {type: "video/webm"});
+    var url = URL.createObjectURL(blob);
+    var a = document.getElementById("dlLink");
+    a.href = url; a.classList.add("show");
+    document.getElementById("exportBtn").textContent = "Export again";
+    showToast("Done — hit Download");
+    a.scrollIntoView({behavior:"smooth", block:"nearest"});
+  };
+  // ensure first frames are the composed meme, then record
+  draw();
+  await new Promise(function(r){ setTimeout(r, 400); });
+  document.getElementById("recDot").classList.add("show");
+  rec.start(250);
+  await new Promise(function(r){ setTimeout(r, dur * 1000); });
+  rec.stop();
+});
+
+if(document.fonts && document.fonts.ready){ document.fonts.ready.then(function(){ draw(); }); }
+loop();
+})();
+</script>
+</body>
+</html>

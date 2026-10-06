@@ -32,6 +32,7 @@
   .q { font-weight: 700; margin: 14px 0 4px; font-size: 15.5px; }
   textarea.notes { width: 100%; min-height: 64px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-top: 8px; resize: vertical; font-family: inherit; }
   textarea.notes::placeholder { color: #b3a897; }
+  .clearnotes { background: none; border: none; color: var(--muted); font-size: 13.5px; padding: 6px 2px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; display: block; margin-left: auto; }
   .footer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; background: rgba(250,247,241,.97); border-top: 1px solid var(--line); padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 10px; }
   .pill { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); white-space: nowrap; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: #2fa84f; }
@@ -208,7 +209,8 @@ function render(){
         '<button class="opt" data-q="' + c.key + '" data-v="' + o.v + '" aria-pressed="' + (state.picks[c.key]===o.v) + '">' +
         '<span class="ot">' + o.t + '</span><span class="od">' + o.d + '</span></button>').join("") + '</div>' +
       '<div class="q">' + c.q + '</div>' +
-      '<textarea class="notes" data-q="' + c.key + '" placeholder="My wording / notes\u2026">' + esc(state.notes[c.key]) + '</textarea>';
+      '<textarea class="notes" data-q="' + c.key + '" placeholder="My wording / notes\u2026">' + esc(state.notes[c.key]) + '</textarea>' +
+      '<button class="clearnotes" data-q="' + c.key + '">Clear notes</button>';
     cardsEl.appendChild(sec);
   });
   const f = document.createElement("section");
@@ -222,13 +224,20 @@ function render(){
   const o = document.createElement("section");
   o.className = "card";
   o.innerHTML = '<div class="qnum">Anything else</div><h2>Other notes</h2>' +
-    '<textarea class="notes" id="otherNotes" placeholder="Anything the questions didn\u2019t cover\u2026">' + esc(state.otherNotes) + '</textarea>';
+    '<textarea class="notes" id="otherNotes" placeholder="Anything the questions didn\u2019t cover\u2026">' + esc(state.otherNotes) + '</textarea>' +
+    '<button class="clearnotes" data-q="other">Clear notes</button>';
   cardsEl.appendChild(o);
 
   cardsEl.querySelectorAll(".opt").forEach(b => b.addEventListener("click", () => {
     const q = b.dataset.q, v = b.dataset.v;
     if (q === "final") { state.final = (state.final === v) ? null : v; }
     else { state.picks[q] = (state.picks[q] === v) ? null : v; }
+    save(); render();
+  }));
+  cardsEl.querySelectorAll(".clearnotes").forEach(b => b.addEventListener("click", () => {
+    const q = b.dataset.q;
+    if (q === "other") state.otherNotes = "";
+    else state.notes[q] = "";
     save(); render();
   }));
   cardsEl.querySelectorAll("textarea.notes").forEach(t => {

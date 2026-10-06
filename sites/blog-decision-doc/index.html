@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+<title>Blog Decision Doc</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { background: #0c1014; color: #eef2f6; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", sans-serif; }
+  body { padding: 20px 16px 120px; max-width: 720px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 24px; }
+  header h1 { font-size: 28px; font-weight: 800; letter-spacing: .5px; }
+  header h1 span { color: #5b8def; }
+  header p { color: #9aa4b2; font-size: 14px; margin-top: 8px; line-height: 1.55; }
+  .backlink { display: inline-block; color: #5b8def; font-size: 14px; font-weight: 700; text-decoration: none; margin-bottom: 12px; touch-action: manipulation; }
+  .savebar { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 14px 0 4px; font-size: 13px; color: #9aa4b2; }
+  .savebar .dot { width: 8px; height: 8px; border-radius: 50%; background: #3dffa0; }
+  .savebar.saving .dot { background: #ffc93d; }
+  .card { background: rgba(24,30,40,.6); border: 1px solid rgba(91,141,239,.18); border-radius: 18px; padding: 18px; margin-bottom: 16px; }
+  .card h2 { font-size: 19px; font-weight: 800; letter-spacing: .4px; margin-bottom: 4px; }
+  .card h2 .pick { display: inline-block; font-size: 11px; font-weight: 800; color: #0c1014; background: #5b8def;
+                   border-radius: 99px; padding: 2px 10px; margin-left: 8px; vertical-align: middle; letter-spacing: .06em; }
+  .card .qsub { color: #9aa4b2; font-size: 13.5px; margin-bottom: 12px; line-height: 1.5; }
+  .feats { list-style: none; margin: 0 0 12px; display: grid; gap: 7px; }
+  .feats li { font-size: 13.5px; line-height: 1.5; color: #d2d9e2; background: rgba(12,16,20,.55); border-radius: 10px; padding: 9px 12px; }
+  .feats li b { color: #5b8def; }
+  .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .opts.one { grid-template-columns: 1fr; }
+  .opt { touch-action: manipulation; -webkit-user-select: none; user-select: none; border: 1px solid rgba(91,141,239,.25);
+         background: rgba(12,16,20,.55); color: #d2d9e2; border-radius: 12px; padding: 13px 12px;
+         font-size: 14px; font-weight: 700; cursor: pointer; text-align: left; font-family: inherit; }
+  .opt small { display: block; font-weight: 400; font-size: 12px; color: #6b7482; margin-top: 3px; line-height: 1.4; }
+  .opt.sel { background: rgba(91,141,239,.14); border-color: #5b8def; color: #fff; box-shadow: 0 0 14px rgba(91,141,239,.22); }
+  .opt.sel small { color: #5b8def; }
+  .trow { touch-action: manipulation; display: flex; align-items: center; gap: 10px;
+          border: 1px solid rgba(91,141,239,.25); background: rgba(12,16,20,.55);
+          border-radius: 12px; padding: 5px 12px 5px 5px; cursor: pointer; }
+  .trow.sel { background: rgba(91,141,239,.14); border-color: #5b8def; box-shadow: 0 0 14px rgba(91,141,239,.22); }
+  .tlabel { flex: none; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+            border-radius: 9px; background: rgba(91,141,239,.12); color: #5b8def; font-weight: 800; font-size: 14px; }
+  .tinput { flex: 1; min-width: 0; background: transparent; border: none; color: #eef2f6;
+            font-size: 16px; font-family: inherit; padding: 11px 0; touch-action: manipulation; }
+  .tinput::placeholder { color: #6b7482; }
+  .tinput:focus { outline: none; }
+  .notes, input.notes { width: 100%; touch-action: manipulation; background: rgba(12,16,20,.6); border: 1px solid rgba(91,141,239,.18);
+           border-radius: 12px; color: #eef2f6; font-size: 16px; padding: 11px 12px; font-family: inherit; resize: vertical; }
+  .notes::placeholder { color: #6b7482; }
+  .notes:focus { outline: none; border-color: #5b8def; }
+  input.notes { margin-bottom: 8px; }
+  input.notes:last-child { margin-bottom: 0; }
+  footer { position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; background: #11161c;
+           border-top: 1px solid rgba(91,141,239,.22); padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+           display: flex; gap: 10px; align-items: center; }
+  footer .prog { flex: 1; font-size: 13px; color: #9aa4b2; }
+  footer button { touch-action: manipulation; -webkit-user-select: none; user-select: none; border: none; border-radius: 12px;
+                  padding: 13px 18px; font-size: 15px; font-weight: 800; cursor: pointer; font-family: inherit; }
+  #copyBtn { background: #5b8def; color: #0c1014; }
+  #clearBtn { background: rgba(91,141,239,.12); color: #9aa4b2; }
+  .toast { position: fixed; left: 50%; bottom: calc(88px + env(safe-area-inset-bottom));
+           transform: translateX(-50%) translateY(12px) scale(.95);
+           background: rgba(17,22,28,.96); color: #fff; border: 1px solid #5b8def; border-radius: 99px;
+           padding: 12px 22px; font-size: 14px; font-weight: 700; z-index: 100; opacity: 0;
+           pointer-events: none; white-space: nowrap; transition: opacity .25s ease, transform .25s ease;
+           box-shadow: 0 14px 36px rgba(0,0,0,.5); }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  .toast .tick { color: #5b8def; margin-right: 8px; font-weight: 800; }
+</style>
+</head>
+<body>
+<header>
+  <a class="backlink" href="../design-docs/">← All design docs</a>
+  <h1>Blog <span>Decision Doc</span></h1>
+  <p>No post ships until it passes the board. Verdict-first check, title pick, voice check,
+     make-it-mine pass, parallels &amp; proof, public-safety screen, ship decision.
+     Tap through — everything autosaves in this browser.</p>
+  <div class="savebar" id="savebar"><span class="dot"></span><span id="savetxt">Saved</span></div>
+</header>
+
+<section class="card" id="q-meta">
+  <h2>1 · Post being vetted</h2>
+  <p class="qsub">Labels every copied vetting with the right post.</p>
+  <input class="notes" data-meta="title" placeholder="Post title…" autocomplete="off">
+  <input class="notes" data-meta="url" placeholder="Draft URL…" inputmode="url" autocomplete="off">
+</section>
+
+<section class="card" id="q-verdict">
+  <h2>2 · Verdict first <span class="pick" data-pickfor="verdict"></span></h2>
+  <p class="qsub">Does the top of the post state the takeaway up front?</p>
+  <div class="opts" role="radiogroup" aria-label="Verdict first">
+    <button class="opt" data-q="verdict" data-v="Yes, verdict leads">Yes, verdict leads<small>The takeaway hits in the first screen.</small></button>
+    <button class="opt" data-q="verdict" data-v="Needs rewrite">Needs rewrite<small>The payoff is buried — say what the rewrite is below.</small></button>
+  </div>
+  <textarea class="notes" data-notes="verdict" placeholder="The rewrite (optional)…" rows="2"></textarea>
+</section>
+
+<section class="card" id="q-title">
+  <h2>3 · Title <span class="pick" data-pickfor="title"></span></h2>
+  <p class="qsub">Tap the winner. Edit the options inline — they're starting points, not final.</p>
+  <div class="opts one" role="radiogroup" aria-label="Title options">
+    <div class="trow" data-q="title" data-v="title1"><span class="tlabel">A</span><input class="tinput" data-tinput="title1" placeholder="Option A — paste a title idea" autocomplete="off" aria-label="Title option A"></div>
+    <div class="trow" data-q="title" data-v="title2"><span class="tlabel">B</span><input class="tinput" data-tinput="title2" placeholder="Option B — paste a title idea" autocomplete="off" aria-label="Title option B"></div>
+    <div class="trow" data-q="title" data-v="title3"><span class="tlabel">C</span><input class="tinput" data-tinput="title3" placeholder="Option C — paste a title idea" autocomplete="off" aria-label="Title option C"></div>
+    <div class="trow" data-q="title" data-v="titleOwn"><span class="tlabel">✎</span><input class="tinput" data-tinput="titleOwn" placeholder="Write my own…" autocomplete="off" aria-label="Write my own title"></div>
+  </div>
+  <textarea class="notes" data-notes="title" placeholder="Title thoughts (optional)…" rows="2"></textarea>
+</section>
+
+<section class="card" id="q-voice">
+  <h2>4 · Voice <span class="pick" data-pickfor="voice"></span></h2>
+  <p class="qsub">Does it sound like Luke? Plain, direct, verdict-first, no AI-feel.</p>
+  <div class="opts" role="radiogroup" aria-label="Voice check">
+    <button class="opt" data-q="voice" data-v="Sounds like me">Sounds like me<small>Reads like something I'd actually say.</small></button>
+    <button class="opt" data-q="voice" data-v="Needs a pass">Needs a pass<small>Flag the lines that need rewriting below.</small></button>
+  </div>
+  <textarea class="notes" data-notes="voice" placeholder="Lines to fix (optional)…" rows="2"></textarea>
+</section>
+
+<section class="card" id="q-mine">
+  <h2>5 · Make it mine</h2>
+  <p class="qsub">The big one — the take only you'd have. What to add, what to cut.</p>
+  <textarea class="notes" data-notes="mine" placeholder="My personal angle… what to add… what to cut…" rows="5"></textarea>
+</section>
+
+<section class="card" id="q-parallels">
+  <h2>6 · Parallels &amp; proof <span class="pick" data-pickfor="parallels"></span></h2>
+  <p class="qsub">Check each one that holds up. Tap again to uncheck.</p>
+  <div class="opts one">
+    <button class="opt" data-q="parallels" data-v="Parallels land">Parallels land<small>The comparisons illuminate, not just decorate.</small></button>
+    <button class="opt" data-q="parallels" data-v="Quotes are brief and attributed">Quotes are brief and attributed<small>Short quotes, named sources — never walls of transcript.</small></button>
+    <button class="opt" data-q="parallels" data-v="Sources linked">Sources linked<small>Every claim that needs one has a link.</small></button>
+  </div>
+  <textarea class="notes" data-notes="parallels" placeholder="Notes on parallels / proof (optional)…" rows="2"></textarea>
+</section>
+
+<section class="card" id="q-safety">
+  <h2>7 · Public safety <span class="pick" data-pickfor="safety"></span></h2>
+  <p class="qsub">The standing rules — no exceptions, no softening.</p>
+  <ul class="feats">
+    <li><b>No PII</b> — no names, addresses, phone numbers, or emails that aren't already public.</li>
+    <li><b>No financial details</b> — no balances, trades, or account specifics.</li>
+    <li><b>No credential / security-practice disclosures</b> — nothing about how accounts are secured.</li>
+    <li><b>Never Gabrielle by name</b> — not on any public page, ever.</li>
+  </ul>
+  <div class="opts" role="radiogroup" aria-label="Public safety">
+    <button class="opt" data-q="safety" data-v="Clean">Clean<small>Nothing sensitive anywhere in the post.</small></button>
+    <button class="opt" data-q="safety" data-v="Flag">Flag<small>Something needs scrubbing — say what below.</small></button>
+  </div>
+  <textarea class="notes" data-notes="safety" placeholder="Flags (optional)…" rows="2"></textarea>
+</section>
+
+<section class="card" id="q-ship">
+  <h2>8 · Ship decision <span class="pick" data-pickfor="ship"></span></h2>
+  <p class="qsub">The final call.</p>
+  <div class="opts" role="radiogroup" aria-label="Ship decision">
+    <button class="opt" data-q="ship" data-v="Ship it">Ship it<small>Ready to publish.</small></button>
+    <button class="opt" data-q="ship" data-v="Revise">Revise<small>Good bones — needs the notes above first.</small></button>
+    <button class="opt" data-q="ship" data-v="Kill">Kill<small>Not worth the rewrite. Move on.</small></button>
+  </div>
+</section>
+
+<section class="card" id="q-other">
+  <h2>9 · Other notes</h2>
+  <p class="qsub" style="margin-bottom:10px">Anything the questions didn't cover.</p>
+  <textarea class="notes" data-notes="other" placeholder="Anything else…" rows="4"></textarea>
+</section>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<footer>
+  <div class="prog" id="prog">0 of 6 decided</div>
+  <button id="clearBtn">Clear</button>
+  <button id="copyBtn">Copy my vetting</button>
+</footer>
+<script>
+const KEY = 'blog-decision-doc-v1';
+const RADIO_QS = ["verdict", "title", "voice", "safety", "ship"];
+const DECIDED_QS = ["verdict", "title", "voice", "parallels", "safety", "ship"];
+const TITLE_LABELS = { title1: "Option A", title2: "Option B", title3: "Option C", titleOwn: "Write my own" };
+let toastT = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.innerHTML = '<span class="tick">✓</span>' + msg;
+  t.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => t.classList.remove('show'), 2200);
+}
+let state = { meta: { title: "", url: "" },
+              opts: { verdict: null, title: null, voice: null, parallels: [], safety: null, ship: null },
+              titleInputs: { title1: "", title2: "", title3: "", titleOwn: "" },
+              notes: {} };
+try { const raw = localStorage.getItem(KEY); if (raw) { state = Object.assign(state, JSON.parse(raw)); } } catch (e) {}
+let saveT = null;
+const savebar = document.getElementById('savebar'), savetxt = document.getElementById('savetxt');
+function persist(immediate) {
+  savebar.classList.add('saving'); savetxt.textContent = 'Saving…';
+  const write = () => {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    savebar.classList.remove('saving'); savetxt.textContent = 'Saved';
+    updateProg();
+  };
+  if (immediate) { write(); return; }
+  clearTimeout(saveT); saveT = setTimeout(write, 400);
+}
+function updateProg() {
+  const n = DECIDED_QS.filter(q => {
+    const v = state.opts[q];
+    return Array.isArray(v) ? v.length > 0 : !!v;
+  }).length;
+  document.getElementById('prog').textContent = n + ' of ' + DECIDED_QS.length + ' decided';
+}
+function titlePickText() {
+  const k = state.opts.title;
+  if (!k) return "";
+  const t = (state.titleInputs[k] || "").trim();
+  return t || TITLE_LABELS[k];
+}
+function updatePicks() {
+  document.querySelectorAll('.pick[data-pickfor]').forEach(el => {
+    const q = el.dataset.pickfor;
+    let label = "";
+    if (q === "parallels") {
+      const n = (state.opts.parallels || []).length;
+      if (n) label = n + "/3 CHECKED";
+    } else if (q === "title") {
+      const t = titlePickText();
+      if (t) label = "PICKED: " + (t.length > 26 ? t.slice(0, 26) + "…" : t).toUpperCase();
+    } else if (state.opts[q]) {
+      label = "PICKED: " + String(state.opts[q]).toUpperCase();
+    }
+    el.textContent = label;
+    el.style.display = label ? "" : "none";
+  });
+}
+function selectOpt(q, v, el) {
+  if (q === "parallels") {
+    const arr = state.opts.parallels || [];
+    const i = arr.indexOf(v);
+    if (i >= 0) { arr.splice(i, 1); el.classList.remove('sel'); }
+    else { arr.push(v); el.classList.add('sel'); }
+    state.opts.parallels = arr;
+  } else {
+    document.querySelectorAll('[data-q="' + q + '"]').forEach(b => b.classList.remove('sel'));
+    el.classList.add('sel');
+    state.opts[q] = v;
+  }
+  updatePicks(); persist();
+}
+// restore selections
+RADIO_QS.forEach(q => {
+  const v = state.opts[q];
+  if (!v) return;
+  document.querySelectorAll('[data-q="' + q + '"]').forEach(el => {
+    if (el.dataset.v === v) el.classList.add('sel');
+  });
+});
+(state.opts.parallels || []).forEach(v => {
+  document.querySelectorAll('[data-q="parallels"]').forEach(el => {
+    if (el.dataset.v === v) el.classList.add('sel');
+  });
+});
+// option + checkbox taps
+document.querySelectorAll('.opt').forEach(btn => {
+  btn.addEventListener('click', () => selectOpt(btn.dataset.q, btn.dataset.v, btn));
+});
+// title rows: tap selects, typing edits (and selects)
+document.querySelectorAll('.trow').forEach(row => {
+  row.addEventListener('click', () => selectOpt(row.dataset.q, row.dataset.v, row));
+});
+document.querySelectorAll('.tinput').forEach(inp => {
+  const k = inp.dataset.tinput;
+  if (state.titleInputs[k]) inp.value = state.titleInputs[k];
+  inp.addEventListener('input', () => {
+    state.titleInputs[k] = inp.value;
+    const row = inp.closest('.trow');
+    document.querySelectorAll('[data-q="title"]').forEach(b => b.classList.remove('sel'));
+    row.classList.add('sel');
+    state.opts.title = row.dataset.v;
+    updatePicks(); persist();
+  });
+});
+// meta fields
+document.querySelectorAll('[data-meta]').forEach(inp => {
+  const k = inp.dataset.meta;
+  if (state.meta[k]) inp.value = state.meta[k];
+  inp.addEventListener('input', () => { state.meta[k] = inp.value; persist(); });
+});
+// notes
+document.querySelectorAll('.notes[data-notes]').forEach(ta => {
+  const q = ta.dataset.notes;
+  if (state.notes[q]) ta.value = state.notes[q];
+  ta.addEventListener('input', () => { state.notes[q] = ta.value; persist(); });
+});
+document.getElementById('clearBtn').addEventListener('click', () => {
+  if (!confirm('Clear this vetting — all picks and notes?')) return;
+  state = { meta: { title: "", url: "" },
+            opts: { verdict: null, title: null, voice: null, parallels: [], safety: null, ship: null },
+            titleInputs: { title1: "", title2: "", title3: "", titleOwn: "" },
+            notes: {} };
+  document.querySelectorAll('.sel').forEach(b => b.classList.remove('sel'));
+  document.querySelectorAll('input.notes[data-meta], .tinput').forEach(t => t.value = '');
+  document.querySelectorAll('.notes[data-notes]').forEach(t => t.value = '');
+  updatePicks(); persist(true);
+});
+function sec(label, pick, note) {
+  let out = label + '\n  Pick: ' + (pick || '(unanswered)') + '\n';
+  if (note) out += '  Notes: ' + note + '\n';
+  return out + '\n';
+}
+document.getElementById('copyBtn').addEventListener('click', async () => {
+  const m = state.meta, n = state.notes, o = state.opts;
+  let out = 'BLOG POST VETTING\n';
+  out += 'Post: ' + (m.title.trim() || '(untitled)') + '\n';
+  out += 'Draft: ' + (m.url.trim() || '(no link)') + '\n\n';
+  out += sec('1 · VERDICT FIRST', o.verdict, n.verdict);
+  out += sec('2 · TITLE', titlePickText(), n.title);
+  out += sec('3 · VOICE', o.voice, n.voice);
+  out += '4 · MAKE IT MINE\n' + (n.mine ? n.mine : '(empty)') + '\n\n';
+  const pc = o.parallels || [];
+  out += '5 · PARALLELS & PROOF\n  Checked: ' + (pc.length ? pc.join('; ') : '(none)') + '\n';
+  if (n.parallels) out += '  Notes: ' + n.parallels + '\n';
+  out += '\n';
+  out += sec('6 · PUBLIC SAFETY', o.safety, n.safety);
+  out += sec('7 · SHIP DECISION', o.ship, n.ship).replace(/Pick: \(unanswered\)/, 'Pick: (undecided)');
+  if (n.other) out += 'OTHER NOTES\n' + n.other + '\n';
+  try { await navigator.clipboard.writeText(out); showToast('Vetting copied'); }
+  catch (e) {
+    const ta = document.createElement('textarea'); ta.value = out; document.body.appendChild(ta);
+    ta.select(); try { document.execCommand('copy'); showToast('Vetting copied'); } catch (e2) { showToast('Copy failed'); }
+    ta.remove();
+  }
+});
+updatePicks(); updateProg(); persist(true);
+</script>
+</body>
+</html>

@@ -2,108 +2,93 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
-<title>DR: The black hole's rings are a bug</title>
-<meta name="description" content="Decision doc for the black hole shader blog post: title pick, wording calls, ship/revise/kill.">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DR: Black Holes Are Buggy</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body {
-    min-height: 100%;
-    background: radial-gradient(circle at 50% 0%, #3a2718 0%, #1c130e 45%, #0d0a09 100%);
-    background-attachment: fixed;
-    color: #f3e2cd;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    line-height: 1.6;
-    -webkit-tap-highlight-color: transparent;
-  }
-  body { padding-bottom: 120px; }
-  .wrap { max-width: 720px; margin: 0 auto; padding: 28px 18px 40px; }
-  nav.top { margin-bottom: 18px; font-size: 14px; }
-  nav.top a { color: rgba(243,226,205,0.55); text-decoration: none; touch-action: manipulation; }
+  html, body { min-height: 100%; background: #141010; color: #f3e2cd;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.6;
+    -webkit-tap-highlight-color: transparent; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 40px 18px 170px; }
+  nav.top { margin-bottom: 28px; font-size: 14px; }
+  nav.top a { color: rgba(243,226,205,0.55); text-decoration: none; }
   .eyebrow { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: #e8a15c; margin-bottom: 8px; }
-  h1 { font-size: 30px; letter-spacing: -0.01em; line-height: 1.2; margin-bottom: 6px; }
-  .sub { color: rgba(243,226,205,0.6); font-size: 15px; margin-bottom: 26px; }
+  h1 { font-size: 30px; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 6px; }
+  .meta-line { color: rgba(243,226,205,0.5); font-size: 14px; margin-bottom: 14px; }
+  .sub { font-size: 15px; color: rgba(243,226,205,0.7); margin-bottom: 26px; }
   .sub a { color: #e8a15c; }
-  .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(232,161,92,0.2);
-    border-radius: 18px; padding: 20px 18px; margin-bottom: 16px; }
-  .kicker { font-size: 12px; font-weight: 800; letter-spacing: 0.14em; color: #e8a15c;
-    text-transform: uppercase; margin-bottom: 10px; }
-  .kicker .n { color: rgba(243,226,205,0.4); font-weight: 400; margin-left: 8px; letter-spacing: 0; }
-  .current { background: rgba(0,0,0,0.3); border: 1px solid rgba(232,161,92,0.14);
-    border-radius: 12px; padding: 14px 15px; font-size: 15px; color: rgba(243,226,205,0.92);
-    margin-bottom: 12px; line-height: 1.65; }
-  .current code { font-family: ui-monospace, Menlo, monospace; font-size: 13px;
-    background: rgba(232,161,92,0.12); border-radius: 5px; padding: 1px 6px; color: #ffd9a8; }
-  .current a { color: #e8a15c; }
-  .current ul { margin: 8px 0 0 18px; }
+  .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(232,161,92,0.22);
+    border-radius: 16px; padding: 20px 18px; margin-bottom: 16px; }
+  .card .kicker { font-size: 11px; letter-spacing: 0.14em; color: #e8a15c; margin-bottom: 4px; }
+  .card .q { font-size: 16px; font-weight: 700; color: #ffd9a8; margin-bottom: 12px; }
+  .card .count { float: right; font-size: 12px; color: rgba(243,226,205,0.4); font-weight: 400; }
+  .current { background: rgba(0,0,0,0.3); border: 1px solid rgba(232,161,92,0.18); border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 12px; font-size: 15px; color: rgba(243,226,205,0.92); }
+  .current pre { margin: 0; overflow-x: auto; }
+  .current pre code { background: none; border: none; padding: 0; font-size: 13.5px; }
+  .current ul { margin: 0 0 0 18px; }
   .current li { margin-bottom: 6px; }
-  .opt { display: flex; gap: 12px; align-items: flex-start; width: 100%;
-    text-align: left; background: rgba(255,255,255,0.02); border: 1px solid rgba(232,161,92,0.16);
-    border-radius: 14px; padding: 13px 14px; margin-bottom: 8px; color: #f3e2cd;
-    font-size: 16px; line-height: 1.55; cursor: pointer; touch-action: manipulation;
-    font-family: inherit; }
-  .opt:active { transform: scale(0.99); }
-  .opt .radio { flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%;
-    border: 2px solid rgba(232,161,92,0.5); margin-top: 2px; position: relative; }
-  .opt.sel { border-color: #e8a15c; background: rgba(232,161,92,0.1); }
-  .opt.sel .radio::after { content: ""; position: absolute; inset: 4px; border-radius: 50%;
-    background: #e8a15c; }
-  .opt .tag { display: block; font-size: 12px; font-weight: 800; letter-spacing: 0.08em;
-    text-transform: uppercase; color: #e8a15c; margin-bottom: 3px; }
-  .kitnote { font-size: 13.5px; color: rgba(243,226,205,0.55); border-left: 2px solid rgba(232,161,92,0.35);
-    padding-left: 12px; margin: 12px 0 4px; line-height: 1.6; }
-  .kitnote b { color: #e8a15c; }
-  .myword label { display: block; font-size: 13px; font-weight: 700; color: rgba(243,226,205,0.6);
-    margin: 12px 0 6px; }
-  textarea, input[type="text"] { width: 100%; font-size: 16px; font-family: inherit;
-    background: rgba(0,0,0,0.3); border: 1px solid rgba(232,161,92,0.25); border-radius: 12px;
-    color: #f3e2cd; padding: 12px 14px; touch-action: manipulation; }
-  textarea { min-height: 76px; resize: vertical; }
-  textarea:focus, input:focus, .opt:focus-visible { outline: 2px solid #e8a15c; outline-offset: 1px; }
+  .current a { color: #e8a15c; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
+    background: rgba(232,161,92,0.12); border: 1px solid rgba(232,161,92,0.25);
+    border-radius: 6px; padding: 1px 6px; color: #ffd9a8; }
+  .opt { display: flex; gap: 10px; align-items: flex-start; width: 100%; text-align: left;
+    background: rgba(232,161,92,0.06); border: 1px solid rgba(232,161,92,0.25); color: #f3e2cd;
+    border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; font-size: 16px; font-family: inherit;
+    cursor: pointer; touch-action: manipulation; }
+  .opt .radio { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%;
+    border: 2px solid rgba(232,161,92,0.6); margin-top: 2px; }
+  .opt.sel { background: rgba(232,161,92,0.18); border-color: #e8a15c; }
+  .opt.sel .radio { background: #e8a15c; box-shadow: inset 0 0 0 3px #241610; }
+  .opt .tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+    color: #e8a15c; border: 1px solid rgba(232,161,92,0.4); border-radius: 6px;
+    padding: 1px 7px; margin-right: 8px; vertical-align: 1px; }
+  .kit { font-size: 14px; color: rgba(243,226,205,0.65); background: rgba(232,161,92,0.07);
+    border-radius: 10px; padding: 10px 14px; margin: 12px 0; }
+  .myword-label { font-size: 13px; font-weight: 700; color: rgba(243,226,205,0.6); margin: 12px 0 6px; }
+  textarea { width: 100%; font-size: 16px; font-family: inherit; color: #f3e2cd;
+    background: rgba(0,0,0,0.3); border: 1px solid rgba(232,161,92,0.25); border-radius: 10px;
+    padding: 12px 14px; min-height: 76px; resize: vertical; touch-action: manipulation; }
+  textarea:focus { outline: 2px solid #e8a15c; outline-offset: 1px; }
+  .done { text-align: center; color: rgba(243,226,205,0.45); font-size: 14px; margin-top: 26px; }
   .footer { position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
     background: rgba(20,13,10,0.96); border-top: 1px solid rgba(232,161,92,0.25);
     padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-    display: flex; gap: 10px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+    display: flex; gap: 10px; align-items: center;
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
   .footer button { flex: 1; font-size: 17px; font-weight: 700; border-radius: 14px;
     padding: 14px 10px; cursor: pointer; touch-action: manipulation; font-family: inherit;
     border: 1px solid rgba(232,161,92,0.4); }
   #btnCopy { background: rgba(232,161,92,0.14); color: #ffd9a8; }
-  #btnSubmit { background: #e8a15c; color: #241610; border-color: #e8a15c; }
-  #btnCopy:active, #btnSubmit:active { transform: scale(0.98); }
+  #btnSubmit { background: #e8a15c; color: #241610; border-color: #e8a15c;
+    display: flex; align-items: center; justify-content: center; }
+  #btnSubmit:disabled { opacity: 0.8; }
+  #btnSubmit .spin { display: inline-block; width: 16px; height: 16px; flex: 0 0 auto;
+    border: 2px solid rgba(36,22,16,0.35); border-top-color: #241610; border-radius: 50%;
+    animation: rot 0.7s linear infinite; margin-right: 8px; }
+  @keyframes rot { to { transform: rotate(360deg); } }
   .savepill { flex: 0 0 auto; display: flex; align-items: center; font-size: 12px;
     color: rgba(243,226,205,0.6); white-space: nowrap; padding: 0 2px; }
   .savepill .dot { width: 7px; height: 7px; border-radius: 50%; background: #7fd08a; margin-right: 6px; flex: 0 0 auto; }
   .savepill.saving .dot { background: #e8a15c; animation: pulse 0.8s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: 0.3; } }
-  #btnSubmit .spin { display: inline-block; width: 16px; height: 16px; flex: 0 0 auto;
-    border: 2px solid rgba(36,22,16,0.35); border-top-color: #241610; border-radius: 50%;
-    animation: rot 0.7s linear infinite; vertical-align: -3px; margin-right: 8px; }
-  @keyframes rot { to { transform: rotate(360deg); } }
-  #btnSubmit:disabled { opacity: 0.8; }
-  #btnSubmit:disabled:active { transform: none; }
   #toast { position: fixed; left: 50%; transform: translateX(-50%) translateY(20px);
     bottom: calc(96px + env(safe-area-inset-bottom)); z-index: 60;
     background: #e8a15c; color: #241610; font-weight: 700; font-size: 15px;
     padding: 12px 22px; border-radius: 999px; opacity: 0; pointer-events: none;
     transition: opacity 0.25s, transform 0.25s; white-space: nowrap; }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-  .meta-line { color: rgba(243,226,205,0.5); font-size: 14px; margin-bottom: 18px; }
-  .current pre { background: rgba(0,0,0,0.35); border: 1px solid rgba(232,161,92,0.2);
-    border-radius: 10px; padding: 12px 14px; margin-top: 10px; overflow-x: auto; }
-  .current pre code { background: none; border: none; padding: 0; font-size: 13px; white-space: pre; }
-  .q { font-size: 14px; font-weight: 700; color: #ffd9a8; margin-bottom: 10px; }
-  .done { text-align: center; color: rgba(243,226,205,0.45); font-size: 14px; margin-top: 26px; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <nav class="top"><a href="../design-docs/">← design docs</a></nav>
-  <div class="eyebrow">DR · Design Review</div>
-  <h1>The black hole's rings are a bug</h1>
-  <p class="meta-line">October 5, 2026 · webgl · shaders</p>
-  <p class="sub">Tap through the post paragraph by paragraph: pick the wording you want, or write your own. Read the live post <a href="https://lukezhang.si/blog/black-hole-disk-animation/">here</a>. Everything autosaves.</p>
+  <nav class="top"><a href="../design-docs/">&#8592; design docs</a></nav>
+  <div class="eyebrow">DR &middot; Design Review</div>
+  <h1>Black Holes Are Buggy</h1>
+  <p class="meta-line">October 5, 2026 &middot; blog post DR</p>
+  <p class="sub">Walk through the post piece by piece. Tap the wording you want, or write your own. Read the live post <a href="https://lukezhang.si/blog/black-hole-disk-animation/">here</a>. Everything autosaves. Six new humor lines are flagged for your keep-or-kill verdict.</p>
   <div id="cards"></div>
-  <p class="done">That's the whole post. Hit Copy or Submit below.</p>
+  <p class="done">That is the whole post. Hit Copy or Submit below.</p>
 </div>
 <div class="footer">
   <div class="savepill" id="savePill" role="status"><span class="dot"></span><span id="saveTxt">Saved</span></div>
@@ -112,128 +97,7 @@
 </div>
 <div id="toast" role="status"></div>
 <script>
-/* ============ data: one card per paragraph, in reading order ============ */
-const BLOCKS = [
-{ id: "title", kicker: "TITLE", n: "1/17", q: "Which title ships?",
-  current: `The black hole's rings are a bug`,
-  kit: `<b>Kit's take:</b> This is the strongest asset of the post, punchy, specific, makes you click. Only change it if you want a different angle, not a better version of the same one.`,
-  alts: [
-    `I kept the bug that makes my black hole beautiful`,
-    `How to animate a black hole (and the bug I refused to fix)`,
-    `The vinyl-record black hole`
-  ] },
-{ id: "lede", kicker: "VERDICT LEDE", n: "2/17",
-  current: `The fine vinyl-record striations on my black hole page are a documented WebGL shader artifact: differential rotation winds the disk texture into sub-pixel rings within minutes, and every shader author treats it as a bug to suppress. I decided it looks sick, so I kept it on purpose. Here's everything I learned building it.`,
-  kit: `<b>Kit's take:</b> Verdict is up front, good. The middle sentence runs long, Alt 1 splits it. "looks sick" is your voice, keep that energy somewhere.`,
-  alts: [
-    `My black hole's disk has vinyl-record grooves. That's a documented shader bug, differential rotation winds any disk texture into sub-pixel rings, and every graphics programmer suppresses it. I kept it. Here's everything I learned.`,
-    `Every black hole shader tutorial warns about the winding artifact: rotate a disk differentially and your texture shears into rings thinner than a pixel. I read the warning and did it anyway, on purpose. Here's what it taught me.`
-  ] },
-{ id: "demo", kicker: "DEMO CARD", n: "3/17", q: "Keep this card, or reword it?",
-  current: `<b>Ergosphere: the live black hole</b><br>Ray-marched Schwarzschild black hole with the striated animated disk. Pinch to zoom. Open it on your phone.<br><span style="color:#e8a15c;font-weight:700;">Open the black hole &rarr;</span>`,
-  kit: `<b>Kit's take:</b> It's a CTA card, not prose, fine as-is. Alt 1 only if you want it warmer.`,
-  alts: [
-    `Ergosphere, the black hole this post is about. Ray-marched, striated, animated. Open it on your phone and pinch to zoom.`
-  ] },
-{ id: "s1p1", kicker: "1. The bug · ¶1", n: "4/17",
-  current: `Jonas Javier <a href="https://dev.to/jonasjavier/how-i-built-a-black-hole-in-webgl-2gc1">wrote it up</a> while building his own WebGL Gargantua: apply real differential rotation to a noise-textured disk and "within minutes the disk turned into concentric rings thinner than a pixel." The inner disk orbits faster than the outer disk, so any texture gets sheared into ever-finer filaments until it aliases into perfect rings. Shader authors add machinery specifically to kill this.`,
-  kit: `<b>Kit's take:</b> Solid. The quote does the heavy lifting. Alt 1 is just tighter; Alt 2 leads with the person instead of the mechanism.`,
-  alts: [
-    `Jonas Javier documented it building his own WebGL Gargantua: give a disk real differential rotation and "within minutes the disk turned into concentric rings thinner than a pixel." Inner orbits faster than outer, so any texture shears into filaments until it aliases into rings. Everyone treats this as a bug to kill.`,
-    `The bug has a name and a discoverer. Jonas Javier, building a WebGL Gargantua: real differential rotation turns any disk texture into "concentric rings thinner than a pixel" within minutes. The standard response is suppression machinery. Mine was: that looks awesome.`
-  ] },
-{ id: "s1p2", kicker: "1. The bug · ¶2", n: "5/17",
-  current: `Real science visualizations don't look like this either. NASA Goddard's famous black hole renders show turbulence sheared into <strong>spiral light-and-dark lanes</strong>: streaky, not grooved. Interstellar's Gargantua is smooth with a temperature gradient. The vinyl look is pure stylization. Which is exactly why it belongs on my page.`,
-  kit: `<b>Kit's take:</b> The kicker last line ("exactly why it belongs on my page") is the whole point of the section, don't lose it in a rewrite.`,
-  alts: [
-    `The real ones don't look like this either. NASA Goddard's renders show turbulence sheared into spiral lanes, streaky, not grooved. Interstellar's Gargantua is smooth. The vinyl look is pure style. That's exactly why it's on my page.`,
-    `For the record: this isn't what real black holes look like. NASA's renders are streaky spiral lanes; Interstellar's is smooth. Mine is a stylistic choice, and I'd rather own that than fake realism.`
-  ] },
-{ id: "s2p1", kicker: "2. How the disk actually moves · ¶1", n: "6/17",
-  current: `The one thing worth getting right is the rotation. A real accretion disk doesn't spin like a record: the inner edge orbits far faster than the rim. Kepler's third law says orbital speed falls off as <code>r^(-3/2)</code>, so the shader samples its noise texture in <strong>co-rotating material coordinates</strong>:` +
-  `<pre><code>angle = atan(z, x) - t * OMEGA(r)
-OMEGA(r) = OMEGA_IN * (rIn / r)^1.5</code></pre>`,
-  kit: `<b>Kit's take:</b> "The one thing worth getting right" is a great stakes-setter. Alts just vary the directness.`,
-  alts: [
-    `One thing has to be right: the rotation. Real disks don't spin like records, the inner edge laps the rim, Kepler's third law, speed falls as r^(-3/2). So the shader samples noise in co-rotating coordinates:`,
-    `The non-negotiable part is the motion. An accretion disk's inner edge orbits way faster than its rim (Kepler: v ∝ r^-3/2). Fake that and nothing else matters. The shader handles it with co-rotating material coordinates:`
-  ] },
-{ id: "s2p2", kicker: "2. How the disk actually moves · ¶2", n: "7/17",
-  current: `Each radius of the disk effectively has its own clock. The noise is also sampled in <strong>log-radius space</strong>, so the banding stays scale-invariant from the blazing inner rim to the faint outer edge. Get this wrong and the disk looks like a spinning sticker; get it right and it feels like orbiting gas even before you add any detail.`,
-  kit: `<b>Kit's take:</b> "spinning sticker vs orbiting gas" is the most quotable line in §2, protect it.`,
-  alts: [
-    `Every radius gets its own clock, and the noise lives in log-radius space so the banding scales from the blazing rim to the faint edge. Wrong: spinning sticker. Right: orbiting gas.`,
-    `Translation: each ring of the disk has its own time. Sample in log-radius and the pattern holds together from rim to edge. This is the difference between a sticker rotating and gas orbiting.`
-  ] },
-{ id: "s2p3", kicker: "2. How the disk actually moves · ¶3", n: "8/17",
-  current: `One subtlety: perfectly concentric bands can't show rotation at all. They're radially symmetric by construction. So the disk also carries <strong>bright knots and spiral streaks</strong> sampled purely in the advected angle. Those are what your eye actually tracks as the inner disk laps the outer.`,
-  kit: `<b>Kit's take:</b> This is the honest "here's what I actually learned" beat, the kind of detail that makes the post worth reading. Don't cut it.`,
-  alts: [
-    `Catch: perfect rings can't show rotation, they're symmetric, so spinning them is invisible. The visible motion comes from bright knots and spiral streaks riding the advected angle. That's what your eye actually follows.`,
-    `Here's the catch nobody tells you: concentric bands are rotation-proof. Spin a perfect ring and nothing visibly moves. So the disk carries bright knots in the flow, those are the things you actually watch orbit.`
-  ] },
-{ id: "s3", kicker: "3. The trick that keeps it spinning forever", n: "9/17",
-  current: `You can't just let <code>t * OMEGA(r)</code> grow forever. The differential winding accumulates and the rings collapse into aliasing mush, exactly Javier's artifact. The fix, independently documented by multiple shader authors:<ul><li>Run <strong>two copies</strong> of the disk texture, half a cycle apart (my cycle is 20 seconds).</li><li><strong>Cross-fade</strong> between them with a sine-squared weight.</li><li>Each layer's weight hits exactly <strong>zero</strong> at the moment its local time wraps, so the restart is invisible.</li></ul>`,
-  kit: `<b>Kit's take:</b> The list is doing real explanatory work, keep the three beats even if you reword. "exactly Javier's artifact" ties §3 back to §1 nicely.`,
-  alts: [
-    `Letting t·Ω(r) grow forever is how you get the mush. The fix every shader author lands on: two texture layers, half a cycle apart (mine: 20s), sine-squared crossfade between them. Each layer's weight hits zero exactly when its clock wraps, the restart is invisible. Winding never exceeds one cycle; bands stay crisp forever.`
-  ] },
-{ id: "s3p2", kicker: "3. The trick that keeps it spinning forever · flicker", n: "10/17",
-  current: `Total winding never exceeds one 20-second cycle, so the bands stay crisp forever. A separate flicker octave runs on <strong>absolute</strong> time (not per-layer time) so it glues the two layers together during the crossfade instead of revealing the seam.`,
-  kit: `<b>Kit's take:</b> Small paragraph, big credibility, this is the "I actually built this" detail. Keep it.`,
-  alts: [
-    `The flicker runs on absolute time, not per-layer time, that's what hides the crossfade seam instead of exposing it.`,
-    `Detail that matters: the brightness flicker uses absolute time. Tie it to layer time and you'd see the crossfade happen.`
-  ] },
-{ id: "s4p1", kicker: "4. The step-budget bug that deleted the sky · ¶1", n: "11/17",
-  current: `The nastiest bug in the whole build wasn't visual, it was architectural. The raymarcher used a fixed step size (<code>dt = 0.14</code>) with 96 steps, for a maximum path length of ~13 units. But the default camera sits 20+ units out. Rays aimed above the shadow <strong>exhausted their step budget</strong> looping near the photon sphere: never captured, never crossing the disk, just… giving up. The lensed arcs above the shadow, the signature Interstellar look, were never computed at all. The disk read as a separate mound floating under the shadow.`,
-  kit: `<b>Kit's take:</b> Best-written section in the post. "just… giving up" is your voice at its best. I'd keep this one as-is.`,
-  alts: [
-    `My favorite bug: the renderer never drew the lensed arcs because the rays literally ran out of road. Fixed step 0.14, 96 steps, 13 units of travel, camera at 20+. The bent rays died mid-flight. No arcs, disk floating like a separate object.`
-  ] },
-{ id: "s4p2", kicker: "4. The step-budget bug that deleted the sky · ¶2", n: "12/17",
-  current: `The fix is <strong>adaptive steps</strong>: <code>dt = clamp(0.09 * r, 0.035, 0.9)</code>. Long strides cruise the empty far field where gravity is negligible; fine steps resolve the strong-field lensing near the hole. Same step budget, but the bent rays finally complete their paths, and the arcs appeared. Lesson: when your lighting looks wrong, check whether your rays are even finishing the trip.`,
-  kit: `<b>Kit's take:</b> The closing lesson ("check whether your rays are even finishing the trip") generalizes beyond shaders, it's the takeaway readers will remember. Keep it attached to the fix.`,
-  alts: [
-    `Fix: adaptive steps, dt = clamp(0.09·r, 0.035, 0.9). Big strides where space is empty and gravity is weak, tiny steps where the lensing happens. Same budget, finished rays, arcs appeared. Debugging rule I'm keeping: when the lighting looks wrong, check whether your rays finished the trip.`,
-    `Adaptive stepping fixed it: stride far, tiptoe near. Same 96-step budget, but now the bent rays complete their paths and the arcs showed up. New debugging instinct: if the light looks wrong, the rays might not be arriving.`
-  ] },
-{ id: "s5", kicker: "5. The branch cut hiding in the texture", n: "13/17",
-  current: `There was a sharp diagonal seam across the disk where fine striations abruptly met coarse marbling. Root cause: <code>atan</code>'s branch cut. Any angular multiplier that isn't an integer (<code>a * 2.2</code>, <code>a * 3.4</code>…) makes the noise jump discontinuously across the cut, and the cut's screen projection is a diagonal line. The fix: sample all angular noise in <strong>periodic coordinates</strong>, <code>vec2(cos(a), sin(a))</code>, which are continuous around the full circle, and keep spiral leans at integer values. If your procedural texture has a mysterious straight seam, check your angle math for branch cuts.`,
-  kit: `<b>Kit's take:</b> Dense but earns it, the generalizable rule at the end ("mysterious straight seam → check your angle math") is why this paragraph belongs. Could split into two sentences if it feels heavy.`,
-  alts: [
-    `Then the seam: a hard diagonal line where fine bands met coarse marble. Cause: atan's branch cut. Non-integer angle multipliers (a·2.2, a·3.4) go discontinuous across the cut, and the cut projects as a diagonal on screen. Fix: sample angular noise as vec2(cos a, sin a), continuous all the way around, and keep spiral leans integer. Mysterious straight seam in a procedural texture? Check your angles.`,
-    `A diagonal seam split the disk, fine striations on one side, marble on the other. It was atan's branch cut: fractional angle multipliers tear across it. Periodic coordinates (cos a, sin a) fixed it. Rule of thumb: straight seams mean angle math.`
-  ] },
-{ id: "s6", kicker: "6. Making it look hot", n: "14/17",
-  current: `Motion is half the sell; the other half is light:<ul><li><strong>Temperature gradient:</strong> white-hot inner rim <code>(1.00, 0.96, 0.88)</code> falling off through vivid amber to deep red-orange at the rim.</li><li><strong>Doppler beaming:</strong> the side of the disk rotating toward you gets boosted by roughly <code>pow(g, 3)</code>, more than twice as bright, tinted hot amber-white against the receding side's deep red ember. This is real physics and it's the single biggest contributor to the "that's a black hole" read. (Careful: push the tint too blue and the whole disk goes pastel, I learned that one the ugly way.)</li><li><strong>Thin photon ring:</strong> a tight Gaussian on the shadow's impact parameter, bright but narrow, a thick one reads as a glowing donut.</li></ul>`,
-  kit: `<b>Kit's take:</b> Honest flag: the intro line ("Motion is half the sell…") is the most salesy sentence in the post, the one spot the voice slips toward marketing. Alt 1 fixes just that line and tightens the bullets. The parenthetical about learning it "the ugly way" is a keeper.`,
-  alts: [
-    `The other half is light: white-hot rim (1.00, 0.96, 0.88) → amber → deep red-orange at the edge. Doppler beaming ≈ pow(g,3): approaching side 2×+ brighter, amber-white vs deep red ember, real physics, and the biggest single "that's a black hole" cue. (Too blue and the disk goes pastel, learned the ugly way.) Photon ring: tight Gaussian on the shadow's edge. Thick = glowing donut.`
-  ] },
-{ id: "s7", kicker: "7. What the math gives you for free", n: "15/17",
-  current: `The photon ring and the arcs of disk lensed above and below the shadow aren't painted on anywhere. They fall out of the geodesic light-bending integration itself, march the rays through curved spacetime and the lensing just shows up. That's the best kind of graphics programming: you implement the physics and the beauty is a side effect.`,
-  kit: `<b>Kit's take:</b> "the beauty is a side effect" is the thesis of the whole post in one line. Strong closer to the technical sections.`,
-  alts: [
-    `Nobody paints the photon ring or the lensed arcs. They drop out of the geodesic integration, bend light through curved spacetime and the greatest-hits visuals come free. Implement the physics; the beauty is a side effect.`,
-    `The best part: the photon ring and lensed arcs are emergent. No one draws them, they fall out of marching rays through curved spacetime. Get the physics right and the money shots are side effects.`
-  ] },
-{ id: "sources", kicker: "What I stole and from where", n: "16/17", q: "Keep the full credit list, or trim it?",
-  current: `<ul><li><a href="https://github.com/kartikkabadi/blackhole">kartikkabadi/blackhole</a> (MIT): the closest single-file WebGL reference; best starting point if you want to build your own.</li><li><a href="https://dev.to/jonasjavier/how-i-built-a-black-hole-in-webgl-2gc1">Jonas Javier's build notes</a>: the winding-artifact writeup and the crossfade fix.</li><li><a href="https://www.shadertoy.com/view/ltBGWh">Koiava's Shadertoy black hole</a> and <a href="https://github.com/sirxemic/Interstellar">sirxemic/Interstellar</a>: more stylized takes worth studying.</li><li>NASA Goddard / Jeremy Schnittman's visualizations: the scientific reference for what a real disk looks like (sheared lanes, not grooves).</li></ul>`,
-  kit: `<b>Kit's take:</b> It's a credit list, fine as-is. Only cut it if you want the post to end on the meta-lesson instead.`,
-  alts: [
-    `Trim to the two that mattered most (kartikkabadi/blackhole + Javier's notes), link the rest inline.`,
-    `Cut the list, the links already appear where they're referenced in the text.`
-  ] },
-{ id: "closer", kicker: "CLOSER", n: "17/17",
-  current: `The meta-lesson: sometimes the artifact <em>is</em> the aesthetic. The difference between a bug and a style is whether you understand it well enough to control it.`,
-  kit: `<b>Kit's take:</b> Echoes the lede, but earned by now. Alt 2 is the tightest version of the thought if you want to sharpen it.`,
-  alts: [
-    `Sometimes the artifact is the aesthetic. Bug vs. style is just a question of whether you understand it well enough to steer it.`,
-    `A bug you understand is a style. A bug you don't is just a bug.`
-  ] }
-];
-
+const BLOCKS = [{"id": "title", "kicker": "TITLE", "q": "Which title ships?", "current": "Black Holes Are Buggy", "kit": "<b>Kit's take:</b> You picked this one yourself last round. It is punchy, it sounds like you, and it matches the post's thesis. Only switch if you want a different angle, not a safer version of the same one.", "alts": ["The black hole's rings are a bug", "Black Holes Are Buggy (and I Kept It That Way)", "My Black Hole Runs on Bugs"], "n": "1/20"}, {"id": "lede", "kicker": "LEDE", "q": "Does the lede ship as is?", "current": "The thin rings on my black hole page are a known graphics bug: the disk spins at different speeds at different distances, which smears its pattern into ultra-thin rings within minutes. Every graphics programmer treats this as a bug to fix. I decided it looks sick, so I kept it on purpose. Here’s everything I learned building it.", "kit": "<b>Kit's take:</b> This is the plain-language version you asked for. “Looks sick” is your voice, protect it. The middle sentence is the longest in the lede; the alts trim it if you want it tighter.", "alts": ["My black hole page has thin vinyl-like rings. They are a known graphics bug, and I kept them on purpose because they look sick. Here is everything I learned building it.", "The rings on my black hole are a bug. Every graphics programmer would fix them. I kept them because they look sick. Here is what I learned."], "n": "2/20"}, {"id": "demo", "kicker": "DEMO CARD", "q": "Demo card wording: keep as is?", "current": "<b>Ergosphere: the live black hole</b><br>A black hole you can orbit, with the animated ringed disk. Pinch to zoom. Open it on your phone.<br><b>Open the black hole →</b>", "kit": "<b>Kit's take:</b> This card is the post's best conversion asset: readers go play with the hole. Keep it high on the page. The only real question is whether the blurb is the right pitch.", "alts": ["Same card, blurb reads: “The live black hole this post is about. Drag to orbit, pinch to zoom.”", "Cut the card. The post already links Ergosphere in the footer."], "n": "3/20"}, {"id": "s1p1", "kicker": "§1 · PARA 1", "q": "Keep the “Their loss.” punchline?", "current": "Jonas Javier <a href=\"https://dev.to/jonasjavier/how-i-built-a-black-hole-in-webgl-2gc1\">wrote it up</a> while building his own black hole for the web: give the disk realistic spin and “within minutes the disk turned into concentric rings thinner than a pixel.” The inner part of the disk orbits faster than the outer part, so any pattern on it gets stretched into thinner and thinner streaks until they blur into perfect rings. Graphics programmers add extra code specifically to kill this. Their loss.", "kit": "<b>Kit's take:</b> Humor line 1 of 6, flagged for your verdict. “Their loss.” is dry and short, very much your register. If it stays, it sets the tone for every joke after it. Keep or kill?", "alts": ["Same paragraph, punchline cut (ends at “...specifically to kill this.”)", "Punchline swapped: “...specifically to kill this. I kept it anyway.”"], "n": "4/20"}, {"id": "s1p2", "kicker": "§1 · PARA 2", "q": "Keep this paragraph as is?", "current": "Real science pictures don’t look like this either. NASA’s famous black hole renders show the gas churned into <strong>spiral light-and-dark lanes</strong>: streaky, not grooved. The black hole in Interstellar is smooth, fading from hot to cool colors. The vinyl-record look is pure style. Which is exactly why it belongs on my page.", "kit": "<b>Kit's take:</b> This paragraph proves the vinyl look is a choice, not ignorance. The NASA name-drop earns credibility. I would keep it.", "alts": ["Trim the Interstellar sentence: “Real science pictures don’t look like this either. NASA’s famous renders show the gas churned into spiral light-and-dark lanes: streaky, not grooved. The vinyl-record look is pure style, which is exactly why it belongs on my page.”", "Cut the paragraph. The Javier quote already makes the point."], "n": "5/20"}, {"id": "s2p1", "kicker": "§2 · PARA 1", "q": "Keep this paragraph as is?", "current": "The one thing worth getting right is the spin. A real black hole disk doesn’t spin like a record. The inner edge orbits way faster than the outer edge. There’s a physics rule (Kepler’s third law) that says orbit speed drops off as <code>r^(-3/2)</code>, so the code draws the disk’s pattern in <strong>coordinates that spin along with the gas itself</strong>:", "kit": "<b>Kit's take:</b> The Kepler parenthetical is the paragraph's one physics credential, and it earns the code block that follows. Keep unless you want it even plainer.", "alts": ["Simpler open: “The spin is the one thing worth getting right. A real black hole disk doesn’t spin like a record: the inner edge orbits way faster than the outer edge.”", "Cut the Kepler name-drop, just state the rule."], "n": "6/20"}, {"id": "code", "kicker": "§2 · CODE", "q": "Keep the code block?", "current": "<pre><code>angle = atan(z, x) - t * OMEGA(r)\nOMEGA(r) = OMEGA_IN * (rIn / r)^1.5</code></pre>", "kit": "<b>Kit's take:</b> Two lines, and they are the whole section's credibility. Readers who code will check it; readers who don’t will skip it. Keep.", "alts": ["Keep it. It is the proof.", "Cut it. The paragraph already explains the idea."], "n": "7/20"}, {"id": "s2p2", "kicker": "§2 · PARA 2", "q": "Keep the sticker joke?", "current": "Each ring of the disk effectively has its own clock. The pattern is also stretched so it keeps the same look at every distance, from the blazing inner edge to the faint outer edge. Get this wrong and the disk looks like a spinning sticker; get it right and it feels like orbiting gas even before you add any detail. Nobody wants a spinning sticker. Stickers are for laptops.", "kit": "<b>Kit's take:</b> Humor line 2 of 6, flagged for your verdict. “Stickers are for laptops” is the best laugh in the post, in my opinion. But two joke sentences back to back is the densest humor in the piece. Keep both, keep one, or kill?", "alts": ["Same paragraph, joke cut (ends at “...even before you add any detail.”)", "Keep the first joke line only: “...even before you add any detail. Nobody wants a spinning sticker.”"], "n": "8/20"}, {"id": "s2p3", "kicker": "§2 · PARA 3", "q": "Keep this paragraph as is?", "current": "One catch: perfectly round bands can’t show spin at all. They look the same from every angle by design. So the disk also has <strong>bright knots and spiral streaks</strong> that move with the spinning gas. Those are what your eye actually follows as the inner disk laps the outer.", "kit": "<b>Kit's take:</b> This is the “why are there blobs” explainer. Without it, a careful reader wonders why the disk is not just rings. Keep.", "alts": ["Tighter: “One catch: perfectly round bands can’t show spin. They look the same from every angle. So the disk also has bright knots and spiral streaks that move with the gas, which is what your eye actually follows.”", "Cut it. A detail most readers won’t miss."], "n": "9/20"}, {"id": "s3p1", "kicker": "§3 · PARA 1", "q": "Keep this paragraph as is?", "current": "You can’t just let <code>t * OMEGA(r)</code> grow forever. The uneven spin keeps piling up and the rings melt into blurry mush: exactly Javier’s bug. The fix, found independently by several graphics programmers:", "kit": "<b>Kit's take:</b> Sets up the bullets. “Blurry mush” is vivid and plain. Keep.", "alts": ["Plainer: “You can’t let t * OMEGA(r) grow forever. The uneven spin piles up until the rings melt into blurry mush. That is Javier’s bug, and several graphics programmers found the same fix:”", "Cut the paragraph, go straight to the bullet list."], "n": "10/20"}, {"id": "s3bullets", "kicker": "§3 · STEPS", "q": "Keep the “Take notes, YouTube.” joke?", "current": "<ul><li>Draw <strong>two copies</strong> of the disk pattern, half a cycle apart (my cycle is 20 seconds).</li><li><strong>Cross-fade</strong> between them with a smooth sine-squared blend.</li><li>Each layer fades to exactly <strong>zero</strong> right when its clock resets, so the restart is invisible. The disk spins forever with no loading screen. Take notes, YouTube.</li></ul>", "kit": "<b>Kit's take:</b> Humor line 3 of 6, flagged for your verdict. “Take notes, YouTube” is the most outward-punching joke in the post: it punches at YouTube, not at yourself. Funny, but it is the one joke that could read as snarky. Keep, kill, or soften?", "alts": ["Same bullets, joke cut (third bullet ends at “...the restart is invisible.”)", "Softer joke: “...the restart is invisible. No loading screen required.”"], "n": "11/20"}, {"id": "s3p2", "kicker": "§3 · PARA 2", "q": "Keep this paragraph as is?", "current": "Total twist never builds up past one 20-second cycle, so the bands stay crisp forever. A separate shimmer layer runs on the <strong>real</strong> clock (not each layer’s own clock), which glues the two layers together during the fade instead of showing the seam.", "kit": "<b>Kit's take:</b> The shimmer-layer detail answers “but wouldn’t you see the seam?” before anyone asks. Keep.", "alts": ["Simpler: “The twist never builds up past one 20-second cycle, so the bands stay crisp forever. A separate shimmer layer on the real clock glues the two layers together during the fade.”", "Fold it into the bullets above, cut the paragraph."], "n": "12/20"}, {"id": "s4p1", "kicker": "§4 · PARA 1", "q": "Keep the “blind spot” line?", "current": "The nastiest bug in the whole build wasn’t in how things looked. It was in the structure. The renderer draws the scene by walking light rays forward in fixed steps (<code>dt = 0.14</code>), 96 steps max, covering about 13 units. But the default camera sits 20+ units out. Rays aimed above the shadow <strong>ran out of steps</strong> while looping around the photon sphere (the zone where light itself orbits the hole). Never caught, never crossing the disk, just giving up. The arcs of bent light above the shadow, the signature Interstellar look, were never drawn at all. My black hole had a blind spot exactly where its best feature should be. The disk looked like a separate lump floating under the shadow.", "kit": "<b>Kit's take:</b> Humor line 4 of 6, flagged for your verdict. This one is self-deprecating, which fits the post’s voice better than the YouTube jab. It is also doing real work: it tells the reader why the bug mattered.", "alts": ["Same paragraph, line cut (goes straight from “...were never drawn at all.” to “The disk looked like...”)", "Softer: “...were never drawn at all. The hole was blind exactly where it should have looked best.”"], "n": "13/20"}, {"id": "s4p2", "kicker": "§4 · PARA 2", "q": "Keep this paragraph as is?", "current": "The fix is <strong>steps that adapt</strong>: <code>dt = clamp(0.09 * r, 0.035, 0.9)</code>. Long strides cover the empty far regions where gravity barely matters; tiny steps handle the intense light-bending near the hole. Same number of steps, but now the bent rays finish their journey, and the arcs appeared. Lesson: when your lighting looks wrong, check whether your rays are even finishing the trip.", "kit": "<b>Kit's take:</b> Best-written paragraph in the post. The closing lesson (“check whether your rays are even finishing the trip”) is the most quotable practical line. Protect it.", "alts": ["Tighter: “The fix is steps that adapt: dt = clamp(0.09 * r, 0.035, 0.9). Long strides for empty space, tiny steps near the hole. Same step count, but the rays finish, and the arcs appeared.”", "Cut the closing lesson sentence."], "n": "14/20"}, {"id": "s5", "kicker": "§5", "q": "Keep this paragraph as is?", "current": "There was a sharp diagonal seam across the disk where fine rings suddenly met coarse marbling. Root cause: <code>atan</code>’s branch cut. <code>atan</code> measures angles, and it jumps from +180° back to -180° along one line. Any angle multiplier that isn’t a whole number (<code>a * 2.2</code>, <code>a * 3.4</code>…) makes the pattern jump at that line, and the line shows up on screen as a diagonal. The fix: build all the angular pattern from <strong>smooth looping coordinates</strong>, <code>vec2(cos(a), sin(a))</code>, which glide around the full circle with no jump, and keep spiral tilts at whole numbers. If your generated texture has a mysterious straight seam, check your angle math for jumps like this.", "kit": "<b>Kit's take:</b> The +180/-180 explanation is the plainest version of a branch cut I have seen. The closing advice (“check your angle math”) gives the reader something to take home. Keep.", "alts": ["Shorter: “A sharp diagonal seam crossed the disk. Root cause: atan jumps from +180° back to -180° along one line, and any non-whole-number multiplier makes the pattern jump there. The fix: build the angular pattern from vec2(cos(a), sin(a)), which loops with no jump.”", "Cut the last advice sentence."], "n": "15/20"}, {"id": "s6", "kicker": "§6", "q": "Keep the donut joke?", "current": "Motion does half the work; light does the other half:<ul><li><strong>Heat colors:</strong> white-hot inner edge <code>(1.00, 0.96, 0.88)</code> cooling through vivid amber to deep red-orange at the outer edge.</li><li><strong>Doppler beaming:</strong> the side of the disk spinning toward you gets boosted by roughly <code>pow(g, 3)</code>: more than twice as bright, glowing hot amber-white against the far side’s deep red ember. This is real physics, and it’s the biggest reason it reads as a black hole. (Careful: push the tint too blue and the whole disk goes pastel. I learned that one the ugly way.)</li><li><strong>Thin photon ring:</strong> a tight glow hugging the shadow’s edge, bright but narrow. A thick one looks like a glowing donut, and nobody is afraid of a donut.</li></ul>", "kit": "<b>Kit's take:</b> Humor line 5 of 6, flagged for your verdict. “Nobody is afraid of a donut” is a great kicker for the list. The “learned the ugly way” parenthetical in the Doppler bullet is doing comic work too. Both earn their keep, in my opinion.", "alts": ["Same list, joke cut (third bullet ends at “...bright but narrow.”)", "Split the difference: keep “nobody is afraid of a donut”, cut the “learned the ugly way” parenthetical."], "n": "16/20"}, {"id": "s7", "kicker": "§7", "q": "Keep this paragraph as is?", "current": "The photon ring and the arcs of disk bent above and below the shadow aren’t drawn on anywhere. They come straight out of the light-bending math itself. Trace the rays through curved spacetime and the lensing just shows up. That’s the best kind of graphics programming: you build the physics and the beauty is a side effect.", "kit": "<b>Kit's take:</b> This is the thesis paragraph: the whole post argues that understanding the physics gives you the beauty for free. Don’t cut it.", "alts": ["Tighter: “Nobody painted the photon ring on. It falls out of the light-bending math: trace rays through curved spacetime and the lensing just shows up. You build the physics and the beauty is a side effect.”", "Cut it. The post already made this point in §4."], "n": "17/20"}, {"id": "sources", "kicker": "SOURCES", "q": "Keep the sources list as is?", "current": "<ul><li><a href=\"https://github.com/kartikkabadi/blackhole\">kartikkabadi/blackhole</a> (MIT): the closest single-file WebGL starting point; best place to begin if you want to build your own.</li><li><a href=\"https://dev.to/jonasjavier/how-i-built-a-black-hole-in-webgl-2gc1\">Jonas Javier’s build notes</a>: the writeup on the ring bug and the crossfade fix.</li><li><a href=\"https://www.shadertoy.com/view/ltBGWh\">Koiava’s Shadertoy black hole</a> and <a href=\"https://github.com/sirxemic/Interstellar\">sirxemic/Interstellar</a>: more stylized versions worth studying.</li><li>NASA Goddard / Jeremy Schnittman’s visualizations: the science reference for what a real disk looks like (streaky lanes, not grooves).</li></ul>", "kit": "<b>Kit's take:</b> The “What I stole and from where” heading is honest and funny. The list is short and every link earns its place. Keep.", "alts": ["Keep the list, drop the descriptions (links only).", "Cut the section. The links already appear in the body."], "n": "18/20"}, {"id": "closing", "kicker": "CLOSING", "q": "Keep the kicker?", "current": "The bigger lesson: sometimes the bug <em>is</em> the look. The difference between a bug and a style is whether you understand it well enough to control it. Bugs you understand are called features. Bugs you understand <em>and</em> like are called style.", "kit": "<b>Kit's take:</b> Humor line 6 of 6, flagged for your verdict. The kicker (“Bugs you understand are called features...”) is the line people will quote. It is the thesis in joke form. Strong keep, in my opinion, but it is your call.", "alts": ["End one sentence earlier (cut the “Bugs you understand...” kicker).", "Softer kicker: “...well enough to control it. That is the whole post, really.”"], "n": "19/20"}, {"id": "final", "kicker": "FINAL CALL", "q": "Final call: what happens to this post?", "final": true, "current": "", "kit": "<b>Kit's take:</b> Round 1 (title plus simple language) is already applied and live. This round is the humor verdict: six jokes, each flagged above. If they all survive, I would ship.", "alts": ["Ship it", "Revise (leave notes above)", "Kill it"], "n": "20/20"}];
 /* ============ state, autosave ============ */
 const KEY = "dd-black-hole-post";
 const SLUG = "black-hole-post-doc";
@@ -248,7 +112,7 @@ function setSaveState(mode) {
   const txt = document.getElementById("saveTxt");
   if (!pill || !txt) return;
   pill.classList.toggle("saving", mode === "saving");
-  txt.textContent = mode === "saving" ? "Saving…" :
+  txt.textContent = mode === "saving" ? "Saving\u2026" :
     "Saved " + new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 function save() {
@@ -266,81 +130,81 @@ function esc(s) {
 }
 function optRow(blockId, idx, tag, text) {
   const sel = state.picks[blockId] === idx ? " sel" : "";
-  return `<button type="button" class="opt${sel}" data-b="${blockId}" data-i="${idx}" aria-pressed="${sel ? "true" : "false"}">
-    <span class="radio"></span>
-    <span><span class="tag">${tag}</span>${esc(text)}</span>
-  </button>`;
+  return `<button type="button" class="opt${sel}" data-b="${blockId}" data-i="${idx}" aria-pressed="${sel ? "true" : "false"}">`
+    + `<span class="radio"></span>`
+    + `<span><span class="tag">${tag}</span>${esc(text)}</span></button>`;
 }
 function render() {
   const host = document.getElementById("cards");
   let html = "";
   BLOCKS.forEach(b => {
     const note = state.notes[b.id] || "";
-    const tags = ["Keep as is"].concat(b.alts.map((_, i) => "Alt " + (i + 1)));
-    let opts = `<button type="button" class="opt${state.picks[b.id] === 0 ? " sel" : ""}" data-b="${b.id}" data-i="0" aria-pressed="${state.picks[b.id] === 0}">
-      <span class="radio"></span><span><span class="tag">Keep as is</span>Current wording stays.</span></button>`;
-    b.alts.forEach((a, i) => { opts += optRow(b.id, i + 1, "Alt " + (i + 1), a); });
-    html += `<div class="card" id="card-${b.id}">
-      <div class="kicker">${b.kicker}<span class="n">${b.n}</span></div>
-      <div class="current">${b.current}</div>
-      <div class="q">Your call: ${b.q || "which wording ships?"}</div>
-      ${opts}
-      <div class="kitnote">${b.kit}</div>
-      <div class="myword"><label for="mw-${b.id}">My wording</label>
-      <textarea id="mw-${b.id}" data-n="${b.id}" placeholder="Your rewrite, or leave blank…">${esc(note)}</textarea></div>
-    </div>`;
+    html += `<div class="card" id="card-${b.id}">`;
+    html += `<div class="kicker">${esc(b.kicker)}<span class="count">${esc(b.n)}</span></div>`;
+    html += `<div class="q">${esc(b.q)}</div>`;
+    if (b.current) html += `<div class="current">${b.current}</div>`;
+    if (b.final) {
+      b.alts.forEach((t, i) => { html += optRow(b.id, i, ["SHIP", "REVISE", "KILL"][i], t); });
+    } else {
+      html += optRow(b.id, 0, "KEEP", "Keep as is");
+      b.alts.forEach((t, i) => { html += optRow(b.id, i + 1, "ALT " + (i + 1), t); });
+    }
+    html += `<div class="kit">${b.kit}</div>`;
+    if (!b.final) {
+      html += `<div class="myword-label">My wording</div>`;
+      html += `<textarea data-note="${b.id}" placeholder="Write your own version here\u2026">${esc(note)}</textarea>`;
+    }
+    html += `</div>`;
   });
-  // final call card
-  const finals = ["Keep live", "Revise then ship", "Unpublish"];
-  let fhtml = "";
-  finals.forEach((f, i) => {
-    const sel = state.final === f ? " sel" : "";
-    fhtml += `<button type="button" class="opt${sel}" data-final="${f}" aria-pressed="${sel ? "true" : "false"}">
-      <span class="radio"></span><span>${f}</span></button>`;
-  });
-  html += `<div class="card" id="card-final">
-    <div class="kicker">FINAL CALL<span class="n">18/18</span></div>
-    <div class="current">The post is already live at <a href="https://lukezhang.si/blog/black-hole-disk-animation/">lukezhang.si/blog/black-hole-disk-animation/</a>. What's the call?</div>
-    ${fhtml}
-  </div>`;
-  html += `<div class="card" id="card-other">
-    <div class="kicker">OTHER NOTES</div>
-    <div class="myword" style="margin-top:0"><label for="otherNotes">Anything the cards didn't cover</label>
-    <textarea id="otherNotes" placeholder="Anything else…">${esc(state.otherNotes || "")}</textarea></div>
-  </div>`;
+  const on = (state.otherNotes || "");
+  html += `<div class="card"><div class="kicker">OTHER NOTES</div>`
+    + `<div class="q">Anything the cards did not cover?</div>`
+    + `<textarea id="otherNotes" placeholder="Anything else\u2026">${esc(on)}</textarea></div>`;
   host.innerHTML = html;
 }
-render();
-
-/* ============ interactions (delegated, survives re-render) ============ */
-document.getElementById("cards").addEventListener("click", e => {
-  const opt = e.target.closest(".opt");
-  if (!opt) return;
-  if (opt.hasAttribute("data-final")) {
-    state.final = opt.getAttribute("data-final");
-  } else {
-    state.picks[opt.getAttribute("data-b")] = parseInt(opt.getAttribute("data-i"), 10);
+document.addEventListener("click", e => {
+  const btn = e.target.closest(".opt");
+  if (!btn) return;
+  const b = btn.getAttribute("data-b"), i = parseInt(btn.getAttribute("data-i"), 10);
+  if (b === "final") {
+    state.final = (state.picks[b] === i) ? null : ["Ship it", "Revise (leave notes above)", "Kill it"][i];
   }
+  state.picks[b] = (state.picks[b] === i) ? undefined : i;
+  if (state.picks[b] === undefined) delete state.picks[b];
   save(); render();
 });
-document.getElementById("cards").addEventListener("input", e => {
+document.addEventListener("input", e => {
   const t = e.target;
-  if (t.id === "otherNotes") { state.otherNotes = t.value; }
-  else if (t.hasAttribute("data-n")) { state.notes[t.getAttribute("data-n")] = t.value; }
-  else return;
-  save();
+  if (t.hasAttribute("data-note")) { state.notes[t.getAttribute("data-note")] = t.value; save(); }
+  if (t.id === "otherNotes") { state.otherNotes = t.value; save(); }
 });
+// keep focus while re-rendering on option tap: restore by id
+document.addEventListener("click", e => {
+  const btn = e.target.closest(".opt");
+  if (!btn) return;
+  const active = document.activeElement;
+  if (active && active.tagName === "TEXTAREA") {
+    const key = active.getAttribute("data-note") || active.id;
+    setTimeout(() => {
+      const el = key === "otherNotes" ? document.getElementById("otherNotes")
+        : document.querySelector(`textarea[data-note="${key}"]`);
+      if (el) { el.focus({ preventScroll: true }); el.setSelectionRange(el.value.length, el.value.length); }
+    }, 0);
+  }
+});
+render();
 
 /* ============ summary, copy, submit ============ */
 function pickLabel(b) {
   const p = state.picks[b.id];
-  if (p === undefined || p === null) return ", no pick ,";
+  if (p === undefined || p === null) return "(no pick)";
+  if (b.final) return b.alts[p];
   if (p === 0) return "Keep as is";
   return "Alt " + p + ": " + b.alts[p - 1];
 }
 function summary() {
   const L = [];
-  L.push("DR: The black hole's rings are a bug");
+  L.push("DR: Black Holes Are Buggy");
   L.push("Post: https://lukezhang.si/blog/black-hole-disk-animation/");
   L.push("");
   BLOCKS.forEach(b => {
@@ -349,9 +213,8 @@ function summary() {
     if (n) L.push("  My wording: " + n);
   });
   L.push("");
-  L.push("FINAL CALL: " + (state.final || ", no pick ,"));
   const o = (state.otherNotes || "").trim();
-  if (o) { L.push(""); L.push("OTHER NOTES: " + o); }
+  if (o) { L.push("OTHER NOTES: " + o); }
   return L.join("\n");
 }
 let toastT = null;
@@ -372,14 +235,14 @@ document.getElementById("btnCopy").addEventListener("click", async () => {
     try { document.execCommand("copy"); } catch (_) {}
     ta.remove();
   }
-  toast("✓ Answers copied");
+  toast("\u2713 Answers copied");
 });
 document.getElementById("btnSubmit").addEventListener("click", async () => {
   const btn = document.getElementById("btnSubmit");
   if (btn.disabled) return;
   btn.disabled = true;
   const orig = btn.innerHTML;
-  btn.innerHTML = '<span class="spin"></span>Submitting…';
+  btn.innerHTML = '<span class="spin"></span>Submitting\u2026';
   const payload = { slug: SLUG, picks: state.picks, notes: state.notes, final: state.final, otherNotes: state.otherNotes };
   try {
     const r = await fetch("/api/decision/submit", {

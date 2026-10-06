@@ -59,7 +59,7 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   .toast { position: fixed; left: 50%; bottom: 185px; transform: translateX(-50%) translateY(10px); background: var(--accent); color: #fff; padding: 10px 18px; border-radius: 999px; font-size: 14.5px; font-weight: 600; opacity: 0; transition: all .25s; z-index: 60; pointer-events: none; white-space: nowrap; }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-  #undoToast { background: #2b2620; }
+  #undoToast { background: #2b2620; pointer-events: auto; }
   #undoBtn { background: none; border: none; color: #ffd9a8; font-weight: 800; font-size: 14.5px; text-decoration: underline; text-underline-offset: 2px; margin-left: 10px; padding: 4px 2px; cursor: pointer; }
   .finalopts .opt { text-align: center; }
 </style>
@@ -216,6 +216,57 @@ try { const s = JSON.parse(localStorage.getItem(STORE_KEY) || "null"); if (s) st
 
 const cardsEl = document.getElementById("cards");
 function esc(s){ return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
+
+const dot = document.getElementById("saveDot"), saveTxt = document.getElementById("saveTxt");
+function setPill(mode, txt){
+  dot.className = "dot" + (mode === "busy" ? " busy" : "");
+  saveTxt.textContent = txt;
+}
+let saveTimer = null;
+function save(){
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch(e) {}
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(doServerSave, 1200);
+}
+function doServerSave(){
+  const now = new Date();
+  const hm = now.toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
+  setPill("busy", "Saving\u2026");
+  fetch("/api/decision/autosave", { method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ slug: SLUG, picks: state.picks, notes: state.notes, final: state.final, otherNotes: state.otherNotes })
+  }).then(r => { if (r.ok) setPill("", "Autosaved " + hm); else setPill("", "Saved on this device"); })
+    .catch(() => setPill("", "Saved on this device"));
+}
+
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+let undoTimer = null, undoPrev = null, undoQ = null;
+function showUndoToast(msg, q, prev){
+  undoQ = q; undoPrev = prev;
+  document.getElementById("undoMsg").textContent = msg;
+  const t = document.getElementById("undoToast");
+  t.classList.add("show");
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(() => { t.classList.remove("show"); undoQ = null; }, 5000);
+}
+
+document.getElementById("copyBtn").addEventListener("click", async () => {
+  const lines = ["DR: The Us Book \u2014 answers"];
+  CARDS.forEach(c => {
+    const o = c.opts.find(x => x.v === state.picks[c.key]);
+    lines.push(c.num + ". " + c.h + ": " + (o ? o.t : "(no pick)"));
+    if (state.notes[c.key]) lines.push("   notes: " + state.notes[c.key]);
+  });
+  const fo = FINAL_Q.opts.find(x => x.v === state.final);
+  lines.push("Final: " + (fo ? fo.t : "(no pick)"));
+  if (state.otherNotes) lines.push("Other: " + state.otherNotes);
+  try { await navigator.clipboard.writeText(lines.join("\n")); toast("\u2713 Answers copied"); }
+  catch(e){ toast("Copy failed"); }
+});
 
 const STEPS = [{t:"intro"}].concat(CARDS.map(c => ({t:"q", card:c})), [{t:"other"}, {t:"final"}]);
 let step = 0;

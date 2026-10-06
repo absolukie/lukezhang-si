@@ -144,7 +144,7 @@ footer{text-align:center;color:var(--faint);font-size:12px;margin-top:44px;line-
       <a id="gifDl" download="toptext-meme.gif">download the .gif file instead</a>
       <p class="fine">On iPhone, Save to Photos opens the share sheet — tap Save Image and it's in your library. Or long-press the GIF above → Add to Photos.</p>
     </div>
-    <p class="fine">Export gives you a real GIF of just your clip — no caption — at 360px and 10fps, up to 5 seconds. Best for Photos, iMessage, and group chats. Encoding takes a few seconds.</p>
+    <p class="fine">No button needed — your GIF builds itself a couple seconds after you stop typing or load a clip. Export is just your clip, no caption, at 360px and 10fps for up to 5 seconds. Best for Photos, iMessage, and group chats.</p>
   </div>
 
   <footer>made for the group chat<br>your clips never leave your device — everything renders locally</footer>
@@ -233,6 +233,7 @@ function setMedia(el, kind, name){
   var gb = document.getElementById("gifBtn");
   gb.disabled = false; gb.textContent = "Export GIF";
   document.getElementById("stage").scrollIntoView({behavior:"smooth", block:"nearest"});
+  scheduleAutoExport(2000); // no clicks needed — the GIF builds itself
 }
 
 document.getElementById("uploadBtn").addEventListener("click", function(){
@@ -294,7 +295,10 @@ document.querySelectorAll(".sizebtn").forEach(function(b){
     b.classList.add("on"); fontSize = parseInt(b.dataset.s, 10);
   });
 });
-document.getElementById("capIn").addEventListener("input", function(){ draw(); });
+document.getElementById("capIn").addEventListener("input", function(){
+  draw();
+  scheduleAutoExport(2500); // export a few seconds after he stops typing
+});
 
 /* GIF export (for Photos / iMessage / group chats) */
 var gifBlob = null;
@@ -404,9 +408,22 @@ async function gifFromDecodedFrames(gif, off, octx, gw, fps, setP){
     return true;
   }catch(e){ return false; }
 }
-document.getElementById("gifBtn").addEventListener("click", async function(){
+/* zero-click export: builds the GIF itself after he stops typing / loads a clip */
+var exporting = false, pendingAuto = false, autoTimer = null;
+function scheduleAutoExport(ms){
+  clearTimeout(autoTimer);
+  autoTimer = setTimeout(function(){ autoExport(); }, ms);
+}
+async function autoExport(){
+  if(!media) return;
+  if(exporting){ pendingAuto = true; return; }
+  await runGifExport();
+}
+async function runGifExport(){
   if(!media){ showToast("Add a clip first"); return; }
-  var btn = this;
+  if(exporting) return;
+  exporting = true; pendingAuto = false;
+  var btn = document.getElementById("gifBtn");
   btn.disabled = true;
   var prog = document.getElementById("gifProg"),
       bar = document.getElementById("gifBar"),
@@ -473,8 +490,13 @@ document.getElementById("gifBtn").addEventListener("click", async function(){
     showToast("GIF export failed — check your connection and try again");
   }finally{
     btn.disabled = false;
+    exporting = false;
     setTimeout(function(){ prog.classList.remove("show"); }, 900);
+    if(pendingAuto){ pendingAuto = false; scheduleAutoExport(1500); } // typed mid-export — run it again
   }
+}
+document.getElementById("gifBtn").addEventListener("click", function(){
+  pendingAuto = false; clearTimeout(autoTimer); runGifExport();
 });
 document.getElementById("shareBtn").addEventListener("click", async function(){
   if(!gifBlob) return;

@@ -169,6 +169,27 @@
   }
   .st-readout b { color: #e8ecf3; }
   .st-cap { color: #f5a623; }
+  .st-detail {
+    position: absolute; z-index: 6; min-width: 172px; max-width: 232px;
+    background: rgba(15,19,28,0.97); border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 14px; padding: 12px 13px 13px;
+    box-shadow: 0 12px 34px rgba(0,0,0,0.55);
+    touch-action: manipulation;
+  }
+  .st-detail h4 { font-size: 15px; font-weight: 800; letter-spacing: -0.2px; margin: 0 24px 2px 0; color: #f2f5fa; }
+  .st-detail .x {
+    position: absolute; top: 6px; right: 6px; width: 30px; height: 30px;
+    border: 0; border-radius: 9px; background: transparent; color: #98a1b5;
+    font-size: 16px; font-weight: 700; font-family: inherit;
+    touch-action: manipulation; cursor: pointer;
+  }
+  .st-detail .lv { font-size: 12px; font-weight: 700; color: #a78bfa; margin-top: 2px; }
+  .st-detail .xpbar { height: 8px; border-radius: 999px; background: #0c0f16; margin-top: 7px; overflow: hidden; }
+  .st-detail .xpbar i { display: block; height: 100%; border-radius: 999px; background: #8b5cf6; }
+  .st-detail .xpfrac { font-size: 11px; color: #98a1b5; margin-top: 4px; font-weight: 600; }
+  .st-detail .q { font-size: 13px; line-height: 1.5; margin-top: 8px; color: #dfe4ee; }
+  .st-detail .q b { color: #ffd479; }
+  .st-detail .kc { font-size: 11.5px; color: #6b7488; margin-top: 7px; font-weight: 600; }
   .ver {
     position: fixed; right: 10px; bottom: calc(8px + env(safe-area-inset-bottom));
     font-size: 10.5px; color: #5b6579; background: rgba(14,17,22,0.8);
@@ -202,7 +223,7 @@
   <div class="sheet hint" id="sheet"><p>Tap any node above to see its level,<br>XP, and next quest.</p></div>
   <section class="stress" id="stress">
     <h2>Stress test</h2>
-    <p class="stress-sub">How big can a tree get before it breaks? Generate synthetic trees, then drag to pan and pinch or scroll to zoom. Labels appear when you zoom in close, like a real game map.</p>
+    <p class="stress-sub">How big can a tree get before it breaks? Generate synthetic trees, then drag to pan and pinch or scroll to zoom. Zoom in to dive deeper: labels, then levels and XP, then full node detail. Tap a node at max zoom for its card.</p>
     <div class="st-controls">
       <div class="st-presets" id="st-presets" role="group" aria-label="Depth presets">
         <button data-d="10">10</button>
@@ -231,6 +252,7 @@
     </div>
     <div class="st-canvaswrap">
       <canvas id="st-canvas" aria-label="Stress test tree canvas. Drag to pan, pinch or scroll to zoom, double-tap to reset."></canvas>
+      <div class="st-detail" id="st-detail" hidden></div>
       <div class="st-zoom">
         <button id="st-zin" aria-label="Zoom in">+</button>
         <button id="st-zout" aria-label="Zoom out">&minus;</button>
@@ -1012,8 +1034,45 @@ var STHEMES = [
 ];
 var STCAP = 2000;
 var ST = { depth: 25, shape: "spine", theme: 0, nodes: [], edges: [],
-  maxX: 0, maxDepth: 0, cam: { x: 0, y: 0, k: 1 },
+  maxX: 0, maxDepth: 0, cam: { x: 0, y: 0, k: 1 }, dk: 1, rafOn: false,
   count: 0, capped: false, layoutMs: 0, renderMs: 0 };
+
+/* richer synthetic node data: ~60 generic micro-skill words + quest templates,
+   assigned deterministically so the same tree always shows the same names */
+var STWORDS = "Balance Timing Footwork Breath Grip Rhythm Focus Flow Precision Stamina Posture Cadence Tempo Control Release Follow Setup Reset Scan Track Anticipate React Commit Recover Align Anchor Center Extend Compress Rotate Shift Glide Strike Catch Throw Climb Crawl Sprint Endure Warm Cool Drill Rep Set Rest Fuel Hydrate Sleep Stretch Mobilize Stabilize Isolate Chain Layer Blend Contrast Accent Frame Crop Sketch Draft Edit Polish Ship".split(" ");
+var STQUESTS = [
+  "Log 5 focused sessions", "Teach it to someone once", "Do it slow 10 times",
+  "Film one rep and review it", "Write down what breaks", "Ask someone better for one tip",
+  "Practice it tired, once", "Chain it into the full flow", "Do it with eyes closed",
+  "Beat yesterday's count by one", "Explain it in one sentence", "Try it for real once"
+];
+var _stSeed = 1;
+function _sr(){ var r = Math.abs(j(_stSeed * 3.71)); _stSeed++; return r; }
+function stMkNode(){
+  var wi = Math.floor(_sr() * STWORDS.length);
+  var lv = 1 + Math.floor(_sr() * 5);
+  var xp = 5 + Math.floor(_sr() * 95);
+  var qi = Math.floor(_sr() * STQUESTS.length);
+  return { n: STWORDS[wi], kids: [], lv: lv, xp: xp, xpMax: 100, q: STQUESTS[qi] };
+}
+/* semantic zoom tiers: 0 dots, 1 dots+, 2 labels, 3 level pill + xp bar, 4 full detail */
+function stTierOf(k){ return k < 1.0 ? 0 : k < 1.8 ? 1 : k < 3.0 ? 2 : k < 5.0 ? 3 : 4; }
+var STTIERNAMES = ["dots", "dots+", "labels", "stats", "full detail"];
+function sstep(a, b, x){ var t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
+function stNeedRaf(){
+  if (ST.rafOn) return;
+  ST.rafOn = true;
+  requestAnimationFrame(function(){ ST.rafOn = false; stDraw(); });
+}
+function rr4(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
 var stCanvas = document.getElementById("st-canvas");
 var stCtx = stCanvas.getContext("2d");
 var stDpr = 1;
@@ -1027,20 +1086,22 @@ function stMix(h1, h2, t){
    reaches extreme depths cheaply. branch: 1-3 kids per node, capped. */
 function stGen(depth, shape){
   var count = 0, capped = false;
-  function mk(n){ count++; return { n: n, kids: [] }; }
-  var root = mk("root"), d, t, q;
+  _stSeed = 1;
+  function mk(){ count++; return stMkNode(); }
+  var root = mk(); root.n = "Seed"; root.lv = 1; root.xp = 10; root.q = "Grow the whole tree.";
+  var d, t, q;
   if (shape === "spine"){
     var cur = root;
     for (d = 1; d < depth && count < STCAP; d++){
-      var nxt = mk("s" + d);
+      var nxt = mk();
       cur.kids.push(nxt);
       var tw = Math.floor(Math.random() * 3);
       for (t = 0; t < tw && count < STCAP; t++){
-        var twig = mk("");
+        var twig = mk();
         nxt.kids.push(twig);
         var tl = 1 + Math.floor(Math.random() * 2), tc = twig;
         for (q = 0; q < tl && count < STCAP; q++){
-          var nn = mk("");
+          var nn = mk();
           tc.kids.push(nn); tc = nn;
         }
       }
@@ -1051,7 +1112,7 @@ function stGen(depth, shape){
       if (dd >= depth || count >= STCAP) return;
       var kids = 1 + Math.floor(Math.random() * 3), i;
       for (i = 0; i < kids && count < STCAP; i++){
-        var c = mk(dd < 4 ? ("b" + dd + "." + i) : "");
+        var c = mk();
         nd.kids.push(c);
         grow(c, dd + 1);
       }
@@ -1061,6 +1122,7 @@ function stGen(depth, shape){
   return { root: root, count: count, capped: capped };
 }
 function stRegen(){
+  stHideDetail();
   var t0 = performance.now();
   var g = stGen(ST.depth, ST.shape);
   ST.count = g.count; ST.capped = g.capped;
@@ -1070,7 +1132,8 @@ function stRegen(){
   (function walk(nd, pi){
     var x = nd._x - info.minX, y = nd._depth * 30;
     var idx = nodes.length;
-    nodes.push({ x: x, y: y, depth: nd._depth, n: nd.n, pi: pi });
+    nodes.push({ x: x, y: y, depth: nd._depth, n: nd.n, pi: pi,
+      lv: nd.lv, xp: nd.xp, xpMax: nd.xpMax, q: nd.q, kc: (nd.kids || []).length });
     if (pi >= 0) edges.push([pi, idx]);
     var k = nd.kids || [], i;
     for (i = 0; i < k.length; i++) walk(k[i], idx);
@@ -1101,6 +1164,14 @@ function stDraw(){
   var th = STHEMES[ST.theme];
   var w = stCanvas.clientWidth, h = stCanvas.clientHeight;
   if (!w || !h) return;
+  /* detail-zoom easing: dk chases the real zoom, so each tier crossing
+     fades in like a small dive instead of snapping */
+  var zk = ST.cam.k;
+  if (Math.abs(zk - ST.dk) < 0.02) ST.dk = zk;
+  else { ST.dk += (zk - ST.dk) * 0.22; stNeedRaf(); }
+  var labelA = sstep(1.8, 2.6, ST.dk);
+  var pillA = sstep(3.0, 3.8, ST.dk);
+  var questA = sstep(5.0, 5.8, ST.dk);
   var ctx = stCtx;
   ctx.setTransform(stDpr, 0, 0, stDpr, 0, 0);
   ctx.fillStyle = th.bg;
@@ -1120,21 +1191,66 @@ function stDraw(){
     ctx.quadraticCurveTo(x1, y2, x2, y2);
   }
   ctx.stroke();
-  var showLabels = k >= 1.8;
   var md = Math.max(1, ST.maxDepth);
+  var rBase = Math.max(1.1, 3.6 * Math.min(k, 2.2));
+  var rMul = 1 + 0.35 * sstep(1.0, 3.0, ST.dk);
+  /* label collision guard: one label per screen cell, sized for the tier's stack */
+  var occ = {};
+  var stackH = questA > 0.03 ? 76 : (pillA > 0.03 ? 54 : 22);
   for (i = 0; i < ST.nodes.length; i++){
     var nd = ST.nodes[i];
     var sx = X(nd.x), sy = Y(nd.y);
-    if (sx < -24 || sx > w+24 || sy < -24 || sy > h+24) continue;
+    if (sx < -40 || sx > w+40 || sy < -60 || sy > h+60) continue;
     ctx.fillStyle = stMix(th.n0, th.n1, nd.depth / md);
-    var r = Math.max(1.1, 3.6 * Math.min(k, 2.2));
+    var r = rBase * rMul;
     ctx.beginPath(); ctx.arc(sx, sy, r, 0, 6.2832); ctx.fill();
-    if (showLabels && nd.n){
-      ctx.fillStyle = th.label;
-      ctx.font = "600 11px system-ui, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(nd.n, sx, sy + r + 13);
+    if (questA > 0.03){
+      /* progress ring at full detail */
+      ctx.globalAlpha = questA;
+      ctx.strokeStyle = th.n0; ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.arc(sx, sy, r + 5, -Math.PI / 2, -Math.PI / 2 + 6.2832 * (nd.xp / nd.xpMax));
+      ctx.stroke();
+      ctx.lineWidth = Math.max(0.5, 1.3);
+      ctx.globalAlpha = 1;
     }
+    if (labelA < 0.03) continue;
+    var ck = Math.floor(sx / 78) + ":" + Math.floor(sy / Math.max(26, stackH));
+    if (occ[ck]) continue;
+    occ[ck] = 1;
+    ctx.textAlign = "center";
+    var ly = sy + r + 13;
+    ctx.globalAlpha = labelA;
+    ctx.fillStyle = th.label;
+    ctx.font = "600 11px system-ui, sans-serif";
+    ctx.fillText(nd.n, sx, ly);
+    if (pillA > 0.03){
+      /* level pill */
+      ctx.globalAlpha = pillA;
+      var pt = "Lv " + nd.lv;
+      ctx.font = "700 9px system-ui, sans-serif";
+      var pw = ctx.measureText(pt).width + 14;
+      var py = ly + 7;
+      ctx.fillStyle = th.n0;
+      rr4(ctx, sx - pw / 2, py, pw, 16, 8); ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(pt, sx, py + 11.5);
+      /* xp bar */
+      var bw = 46, bx = sx - bw / 2, by = py + 22;
+      ctx.fillStyle = "rgba(140,140,150,0.35)";
+      rr4(ctx, bx, by, bw, 3.5, 2); ctx.fill();
+      var fw = bw * (nd.xp / nd.xpMax);
+      if (fw > 0.6){ ctx.fillStyle = th.n0; rr4(ctx, bx, by, Math.max(fw, 3.5), 3.5, 2); ctx.fill(); }
+    }
+    if (questA > 0.03){
+      /* quest line at full detail */
+      ctx.globalAlpha = questA * 0.8;
+      ctx.fillStyle = th.label;
+      ctx.font = "500 10px system-ui, sans-serif";
+      var qt = nd.q.length > 30 ? nd.q.slice(0, 29) + "..." : nd.q;
+      ctx.fillText(qt, sx, ly + 66);
+    }
+    ctx.globalAlpha = 1;
   }
   ST.renderMs = performance.now() - t0;
   stReadout();
@@ -1145,7 +1261,8 @@ function stReadout(){
   if (now - stLastReadout < 250) return;
   stLastReadout = now;
   var h = "<b>" + ST.count + "</b> nodes &middot; <b>" + ST.maxDepth + "</b> levels deep &middot; layout <b>" +
-    ST.layoutMs.toFixed(1) + "ms</b> &middot; render <b>" + ST.renderMs.toFixed(1) + "ms</b>";
+    ST.layoutMs.toFixed(1) + "ms</b> &middot; render <b>" + ST.renderMs.toFixed(1) + "ms</b> &middot; detail <b>" +
+    STTIERNAMES[stTierOf(ST.cam.k)] + "</b>";
   if (ST.capped) h += '<br><span class="st-cap">Hit the ' + STCAP + ' node cap, stopped growing new branches. Honest depth is what fit.</span>';
   if (ST.shape === "branch" && ST.depth > 15 && !ST.capped)
     h += '<br><span class="st-cap">Tip: branching explodes exponentially. Try Spine + twigs for deep trees.</span>';
@@ -1180,6 +1297,48 @@ stCanvas.addEventListener("pointermove", function(e){
     stPinch0 = dist;
   }
 });
+/* tap a node at full detail: nearest node within touch radius opens a card */
+function stTapNode(mx, my){
+  var k = ST.cam.k, ox = ST.cam.x, oy = ST.cam.y;
+  var w = stCanvas.clientWidth, h = stCanvas.clientHeight;
+  var best = null, bestD = 1e9, i;
+  for (i = 0; i < ST.nodes.length; i++){
+    var nd = ST.nodes[i];
+    var sx = nd.x * k + ox, sy = nd.y * k + oy;
+    if (sx < -20 || sx > w + 20 || sy < -20 || sy > h + 20) continue;
+    var d = Math.hypot(mx - sx, my - sy);
+    if (d < bestD){ bestD = d; best = nd; }
+  }
+  var rr = Math.max(1.1, 3.6 * Math.min(k, 2.2)) * 1.35 + 12;
+  return (best && bestD <= Math.max(18, rr)) ? best : null;
+}
+function stHideDetail(){
+  document.getElementById("st-detail").hidden = true;
+}
+function stShowDetail(nd, mx, my){
+  var el = document.getElementById("st-detail");
+  var frac = Math.round(nd.xp / nd.xpMax * 100);
+  el.innerHTML =
+    '<button class="x" id="st-dx" aria-label="Close node detail">&times;</button>' +
+    "<h4>" + esc(nd.n) + "</h4>" +
+    '<div class="lv">Lv ' + nd.lv + " &middot; depth " + nd.depth + "</div>" +
+    '<div class="xpbar"><i style="width:' + frac + '%"></i></div>' +
+    '<div class="xpfrac">' + nd.xp + " / " + nd.xpMax + " XP</div>" +
+    '<div class="q"><b>Next:</b> ' + esc(nd.q) + "</div>" +
+    '<div class="kc">' + nd.kc + (nd.kc === 1 ? " child" : " children") + " below</div>";
+  el.hidden = false;
+  var wrap = el.parentElement.getBoundingClientRect();
+  el.style.maxWidth = Math.min(232, wrap.width - 24) + "px";
+  var ch = el.offsetHeight || 170;
+  var x = Math.max(8, Math.min(mx + 16, wrap.width - Math.min(232, wrap.width - 24) - 8));
+  var y = Math.max(8, Math.min(my - 24, wrap.height - ch - 8));
+  el.style.left = x + "px";
+  el.style.top = y + "px";
+  document.getElementById("st-dx").addEventListener("click", function(ev){
+    ev.stopPropagation();
+    stHideDetail();
+  });
+}
 function stEndPtr(e){
   var wasSingle = Object.keys(stPtrs).length === 1 && stPtrs[e.pointerId];
   delete stPtrs[e.pointerId];
@@ -1189,8 +1348,17 @@ function stEndPtr(e){
     var moved = Math.hypot(e.clientX - stDownXY.x, e.clientY - stDownXY.y);
     if (dt < 260 && moved < 12){
       var now = Date.now();
-      if (now - stLastTapAt < 350){ stFrame(); stLastTapAt = 0; }
-      else stLastTapAt = now;
+      if (now - stLastTapAt < 350){ stFrame(); stHideDetail(); stLastTapAt = 0; }
+      else {
+        stLastTapAt = now;
+        if (ST.cam.k >= 5.0){
+          var r = stCanvas.getBoundingClientRect();
+          var mx = e.clientX - r.left, my = e.clientY - r.top;
+          var hit = stTapNode(mx, my);
+          if (hit) stShowDetail(hit, mx, my);
+          else stHideDetail();
+        }
+      }
     }
   }
 }

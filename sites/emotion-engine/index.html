@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Emotion Engine</title>
+<style>
+  /* ============ Emotion Engine — single-file ComfyUI-style node editor ============ */
+  :root {
+    --bg: #0b0e14;
+    --panel: #131822;
+    --panel2: #171d2a;
+    --line: #232b3d;
+    --txt: #e6eaf2;
+    --dim: #8b94a7;
+    --accent: #a78bfa;
+    --c-conditioning: #a78bfa;
+    --c-noise: #22d3ee;
+    --c-sampler: #fbbf24;
+    --danger: #f87171;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    height: 100%; overflow: hidden;
+    background: var(--bg); color: var(--txt);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none; -webkit-user-select: none;
+    overscroll-behavior: none;
+  }
+  button { touch-action: manipulation; font-family: inherit; }
+
+  /* ---------- top bar ---------- */
+  #topbar {
+    position: fixed; top: 0; left: 0; right: 0; height: 54px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 10px 0 14px;
+    background: rgba(13, 16, 24, 0.92);
+    border-bottom: 1px solid var(--line);
+    z-index: 40; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  }
+  .tb-title { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 16px; letter-spacing: 0.02em; }
+  .tb-title svg { width: 24px; height: 24px; color: var(--accent); }
+  .tb-actions { display: flex; align-items: center; gap: 6px; position: relative; }
+  .icon-btn {
+    width: 40px; height: 40px; border-radius: 12px; border: 1px solid transparent;
+    background: transparent; color: var(--txt);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; touch-action: manipulation;
+    transition: background 140ms ease, transform 120ms ease, opacity 140ms ease;
+  }
+  .icon-btn svg { width: 24px; height: 24px; }
+  .icon-btn:active { transform: scale(0.9); }
+  .icon-btn:hover { background: var(--panel2); }
+  .icon-btn:disabled { opacity: 0.3; pointer-events: none; }
+  .icon-btn.accent { color: #0b0e14; background: var(--accent); }
+  .icon-btn.accent:hover { background: #b79dfc; }
+
+  /* add-node dropdown */
+  #addMenu {
+    position: absolute; top: 48px; right: 0;
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 14px;
+    padding: 6px; min-width: 170px; z-index: 60;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.55);
+  }
+  #addMenu.hidden { display: none; }
+  #addMenu button {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    padding: 10px 12px; border: 0; border-radius: 9px;
+    background: transparent; color: var(--txt); font-size: 15px; font-weight: 600;
+    cursor: pointer; touch-action: manipulation; text-align: left;
+  }
+  #addMenu button:active { background: var(--line); }
+  #addMenu .dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+
+  /* ---------- canvas ---------- */
+  #canvasWrap {
+    position: fixed; inset: 54px 0 0 0; overflow: hidden;
+    background-color: var(--bg);
+    background-image: radial-gradient(circle, #1c2333 1.1px, transparent 1.1px);
+    background-size: 26px 26px;
+    touch-action: none;
+  }
+  #world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  #edges { position: absolute; left: 0; top: 0; width: 10px; height: 10px; overflow: visible; pointer-events: none; }
+  #edges path.edge {
+    fill: none; stroke-width: 2.5; stroke-linecap: round;
+    filter: drop-shadow(0 0 5px currentColor);
+  }
+  #edges path.edge.live { stroke-dasharray: 8 7; animation: dashflow 0.55s linear infinite; }
+  @keyframes dashflow { to { stroke-dashoffset: -15; } }
+  #edges text.edge-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-anchor: middle;
+    paint-order: stroke; stroke: #0b0e14; stroke-width: 3px; pointer-events: none;
+  }
+  #edges path.temp { fill: none; stroke-width: 2.5; stroke-dasharray: 7 6; stroke: #c7cede; opacity: 0.85; }
+  #nodes { position: absolute; left: 0; top: 0; }
+
+  /* ---------- nodes ---------- */
+  .node {
+    position: absolute; width: 260px;
+    background: linear-gradient(180deg, var(--panel2), var(--panel));
+    border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    touch-action: none;
+  }
+  .node.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), 0 10px 30px rgba(0,0,0,0.5); }
+  .node.shake { animation: nshake 0.4s ease; }
+  @keyframes nshake {
+    0%,100% { transform: translate(var(--nx), var(--ny)); }
+    20% { transform: translate(calc(var(--nx) - 9px), var(--ny)); }
+    40% { transform: translate(calc(var(--nx) + 8px), var(--ny)); }
+    60% { transform: translate(calc(var(--nx) - 6px), var(--ny)); }
+    80% { transform: translate(calc(var(--nx) + 4px), var(--ny)); }
+  }
+  .node-header {
+    height: 38px; display: flex; align-items: center; gap: 8px;
+    padding: 0 12px; font-weight: 700; font-size: 14px; letter-spacing: 0.03em;
+    border-bottom: 1px solid var(--line); border-radius: 14px 14px 0 0;
+    cursor: grab; touch-action: none;
+    background: rgba(255,255,255,0.025);
+  }
+  .node-header:active { cursor: grabbing; }
+  .node-header .hdot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+  .node-body { padding: 10px 12px 12px; position: relative; }
+  .io-row {
+    position: relative; min-height: 26px;
+    display: flex; align-items: center;
+    font-size: 12.5px; font-weight: 600; color: var(--dim);
+  }
+  .io-row .io-label.right { margin-left: auto; }
+  .port {
+    position: absolute; top: 0; width: 15px; height: 15px; border-radius: 50%;
+    background: var(--bg); border: 2.5px solid var(--dim);
+    cursor: pointer; touch-action: none; z-index: 5;
+    transition: transform 120ms ease, box-shadow 140ms ease;
+  }
+  .port.in { left: -19px; }
+  .port.out { right: -19px; }
+  .port.t-conditioning { border-color: var(--c-conditioning); }
+  .port.t-noise { border-color: var(--c-noise); }
+  .port.t-sampler { border-color: var(--c-sampler); }
+  .port.connected.t-conditioning { background: var(--c-conditioning); }
+  .port.connected.t-noise { background: var(--c-noise); }
+  .port.connected.t-sampler { background: var(--c-sampler); }
+  .port.armed { box-shadow: 0 0 0 4px rgba(255,255,255,0.22), 0 0 14px currentColor; transform: scale(1.25); }
+  .port.pshake { animation: pshake 0.35s ease; }
+  @keyframes pshake {
+    0%,100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    50% { transform: translateX(5px); }
+    75% { transform: translateX(-3px); }
+  }
+
+  /* prompt node */
+  .prompt-text {
+    width: 100%; height: 88px; resize: none;
+    background: #0d1119; color: var(--txt);
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 9px 10px; font-size: 16px; line-height: 1.45; font-family: inherit;
+    margin-bottom: 8px; touch-action: auto;
+  }
+  .prompt-text:focus { outline: none; border-color: var(--accent); }
+
+  /* noise node */
+  .seed-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .seed-num { font-size: 30px; font-weight: 800; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+  .dice-btn {
+    width: 40px; height: 40px; border-radius: 11px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--txt);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .dice-btn svg { width: 24px; height: 24px; }
+  .dice-btn:active { transform: scale(0.9); }
+
+  /* sampler node */
+  .sampler-name {
+    width: 100%; padding: 9px 10px; margin-bottom: 10px;
+    background: #0d1119; border: 1px solid var(--line); border-radius: 10px;
+    color: var(--c-sampler); font-size: 16px; font-weight: 700; letter-spacing: 0.04em;
+    cursor: pointer; touch-action: manipulation; text-align: center;
+  }
+  .sampler-name:active { transform: scale(0.97); }
+  .steps-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .steps-row input[type="range"] { flex: 1 1 auto; accent-color: var(--c-sampler); height: 28px; }
+  .steps-val { font-size: 15px; font-weight: 700; min-width: 30px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* generate node */
+  .gen-play {
+    width: 100%; margin-top: 10px; padding: 12px;
+    border: 0; border-radius: 12px; background: var(--accent); color: #0b0e14;
+    font-size: 16px; font-weight: 800; letter-spacing: 0.03em;
+    display: flex; align-items: center; justify-content: center; gap: 9px;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .gen-play svg { width: 22px; height: 22px; }
+  .gen-play:active { transform: scale(0.97); }
+  .gen-status { margin-top: 9px; font-size: 13px; color: var(--dim); font-weight: 600; min-height: 18px; }
+  .gen-status.busy { color: var(--accent); }
+
+  /* ---------- result sheet ---------- */
+  #sheet {
+    position: fixed; left: 50%; bottom: 12px;
+    width: min(470px, calc(100vw - 24px));
+    max-height: calc(100dvh - 90px); overflow-y: auto;
+    transform: translate(-50%, calc(100% + 24px));
+    transition: transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 20px;
+    padding: 14px 14px calc(14px + env(safe-area-inset-bottom));
+    z-index: 50; box-shadow: 0 -8px 50px rgba(0,0,0,0.6);
+  }
+  #sheet.open { transform: translate(-50%, 0); }
+  .sheet-grip { width: 44px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto 12px; }
+  #art { width: 100%; aspect-ratio: 1; border-radius: 14px; display: block; background: #05070c; }
+  #caption { margin-top: 11px; font-style: italic; font-size: 15px; line-height: 1.5; color: var(--txt); }
+  #metaLine { margin-top: 6px; font-size: 12.5px; color: var(--dim); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .sheet-btns { display: flex; gap: 8px; margin-top: 12px; }
+  .sheet-btns .icon-btn { border: 1px solid var(--line); background: var(--panel); flex: 0 0 auto; }
+  .sheet-btns .grow { flex: 1 1 auto; width: auto; font-size: 15px; font-weight: 700; gap: 8px; }
+
+  /* ---------- toast ---------- */
+  #toast {
+    position: fixed; left: 50%; bottom: 26px;
+    transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+    background: rgba(20, 25, 38, 0.96); border: 1px solid var(--line);
+    color: var(--txt); font-size: 14px; font-weight: 600;
+    padding: 11px 18px; border-radius: 999px; z-index: 70;
+    transition: opacity 220ms ease, transform 220ms ease;
+    max-width: calc(100vw - 40px); text-align: center;
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  /* ---------- coach overlay ---------- */
+  #coach {
+    position: fixed; inset: 0; z-index: 80;
+    background: rgba(4, 6, 10, 0.72);
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  #coach.hidden { display: none; }
+  .coach-card {
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 20px;
+    padding: 26px 24px; max-width: 340px; text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+  .coach-card h2 { font-size: 19px; margin-bottom: 12px; }
+  .coach-card p { font-size: 15px; line-height: 1.65; color: var(--dim); margin-bottom: 8px; }
+  .coach-card p b { color: var(--txt); }
+  .coach-card .gen-play { margin-top: 14px; }
+</style>
+</head>
+<body>
+
+  <div id="topbar">
+    <div class="tb-title"><span id="logoSpot"></span>Emotion Engine</div>
+    <div class="tb-actions">
+      <button class="icon-btn" id="btnAdd" aria-label="Add node" title="Add node"></button>
+      <button class="icon-btn accent" id="btnPlay" aria-label="Play" title="Generate"></button>
+      <button class="icon-btn" id="btnDelete" aria-label="Delete node" title="Delete selected node" disabled></button>
+      <button class="icon-btn" id="btnHelp" aria-label="Help" title="Help"></button>
+      <div id="addMenu" class="hidden"></div>
+    </div>
+  </div>
+
+  <div id="canvasWrap">
+    <div id="world">
+      <svg id="edges"></svg>
+      <div id="nodes"></div>
+    </div>
+  </div>
+
+  <div id="sheet" aria-hidden="true">
+    <div class="sheet-grip"></div>
+    <canvas id="art" width="1024" height="1024"></canvas>
+    <p id="caption"></p>
+    <p id="metaLine"></p>
+    <div class="sheet-btns">
+      <button class="icon-btn grow" id="btnSeed" aria-label="New seed"></button>
+      <button class="icon-btn" id="btnDownload" aria-label="Download PNG" title="Download PNG"></button>
+      <button class="icon-btn" id="btnClose" aria-label="Close" title="Close"></button>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <div id="coach" class="hidden">
+    <div class="coach-card">
+      <h2>Emotion Engine</h2>
+      <p><b>Drag nodes</b> by their headers to arrange the graph.</p>
+      <p><b>Tap an output port</b>, then tap an input port, to wire an edge. Tap a wired input to unplug it.</p>
+      <p><b>Hit play</b> — the engine dreams up art from your prompt words and seed.</p>
+      <button class="gen-play" id="btnGotIt">Got it</button>
+    </div>
+  </div>
+
+<script>
+"use strict";
+/* =====================================================================
+   Emotion Engine — a playful ComfyUI-style node graph that dreams up
+   generative art from prompt words + a seed. All state lives here;
+   no network, no dependencies.
+   ===================================================================== */
+
+/* ---------- tiny helpers ---------- */
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const SVGNS = "http://www.w3.org/2000/svg";
+
+function hashStr(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/* ---------- bespoke SVG icons (24px grid, 1.9px stroke, round caps) ---------- */
+function icon(paths, extra) {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" ` +
+    `stroke-linecap="round" stroke-linejoin="round" ${extra || ""}>${paths}</svg>`;
+}
+const ICONS = {
+  play: icon('<path d="M8 5.5v13l10.5-6.5z"/>'),
+  plus: icon('<path d="M12 5v14M5 12h14"/>'),
+  trash: icon('<path d="M4 7h16"/><path d="M9.5 7V5.2A1.2 1.2 0 0 1 10.7 4h2.6a1.2 1.2 0 0 1 1.2 1.2V7"/><path d="M6.2 7l.9 12.2a1.5 1.5 0 0 0 1.5 1.3h6.8a1.5 1.5 0 0 0 1.5-1.3L17.8 7"/><path d="M10 11v6M14 11v6"/>'),
+  download: icon('<path d="M12 4v10.5"/><path d="M7.5 10.5L12 15l4.5-4.5"/><path d="M4.5 19.5h15"/>'),
+  close: icon('<path d="M6 6l12 12M18 6L6 18"/>'),
+  help: icon('<path d="M9.3 9.2a2.7 2.7 0 1 1 3.9 2.5c-.8.4-1.2 1-1.2 1.9"/><path d="M12 17.2v.1"/>'),
+  dice: icon('<rect x="4" y="4" width="16" height="16" rx="4.5"/>') .replace('</svg>',
+    '<circle cx="9" cy="9" r="1.15" fill="currentColor" stroke="none"/>' +
+    '<circle cx="15" cy="9" r="1.15" fill="currentColor" stroke="none"/>' +
+    '<circle cx="12" cy="12" r="1.15" fill="currentColor" stroke="none"/>' +
+    '<circle cx="9" cy="15" r="1.15" fill="currentColor" stroke="none"/>' +
+    '<circle cx="15" cy="15" r="1.15" fill="currentColor" stroke="none"/></svg>'),
+  spark: icon('<path d="M12 3v5M12 16v5M3 12h5M16 12h5"/><circle cx="12" cy="12" r="2.6"/>'),
+};
+$('#logoSpot').innerHTML = ICONS.spark;
+$('#btnAdd').innerHTML = ICONS.plus;
+$('#btnPlay').innerHTML = ICONS.play;
+$('#btnDelete').innerHTML = ICONS.trash;
+$('#btnHelp').innerHTML = ICONS.help;
+$('#btnSeed').innerHTML = ICONS.dice + '<span>New seed</span>';
+$('#btnDownload').innerHTML = ICONS.download;
+$('#btnClose').innerHTML = ICONS.close;
+
+/* ================= view (pan / zoom) ================= */
+const canvasWrap = $('#canvasWrap');
+const world = $('#world');
+const edgesSvg = $('#edges');
+const nodesLayer = $('#nodes');
+
+const view = { x: 0, y: 0, k: 1 };
+function applyView() {
+  world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.k})`;
+  renderEdges();
+}
+function screenToWorld(sx, sy) {
+  const r = canvasWrap.getBoundingClientRect();
+  return { x: (sx - r.left - view.x) / view.k, y: (sy - r.top - view.y) / view.k };
+}
+function zoomAt(cx, cy, factor) {
+  const r = canvasWrap.getBoundingClientRect();
+  const px = cx - r.left, py = cy - r.top;
+  const wx = (px - view.x) / view.k, wy = (py - view.y) / view.k;
+  view.k = clamp(view.k * factor, 0.3, 2.2);
+  view.x = px - wx * view.k;
+  view.y = py - wy * view.k;
+  applyView();
+}
+canvasWrap.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0012));
+}, { passive: false });
+
+/* pan + pinch on empty canvas */
+const bgPointers = new Map();
+let pinchD0 = 0, pinchK0 = 1, bgMoved = false, bgStart = null;
+canvasWrap.addEventListener('pointerdown', (e) => {
+  if (e.target.closest('.node') || e.target.closest('.port')) return; // nodes/ports handle themselves
+  canvasWrap.setPointerCapture(e.pointerId);
+  bgPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  bgMoved = false;
+  bgStart = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
+  if (bgPointers.size === 2) {
+    const p = [...bgPointers.values()];
+    pinchD0 = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
+    pinchK0 = view.k;
+  }
+});
+canvasWrap.addEventListener('pointermove', (e) => {
+  if (!bgPointers.has(e.pointerId)) return;
+  bgPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (bgPointers.size === 2) {
+    const p = [...bgPointers.values()];
+    const d = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
+    if (pinchD0 > 0) {
+      const mx = (p[0].x + p[1].x) / 2, my = (p[0].y + p[1].y) / 2;
+      const wx = ((mx - canvasWrap.getBoundingClientRect().left) - view.x) / view.k;
+      const wy = ((my - canvasWrap.getBoundingClientRect().top) - view.y) / view.k;
+      view.k = clamp(pinchK0 * (d / pinchD0), 0.3, 2.2);
+      const r = canvasWrap.getBoundingClientRect();
+      view.x = (mx - r.left) - wx * view.k;
+      view.y = (my - r.top) - wy * view.k;
+      applyView();
+    }
+    bgMoved = true;
+    return;
+  }
+  const dx = e.clientX - bgStart.x, dy = e.clientY - bgStart.y;
+  if (Math.hypot(dx, dy) > 4) bgMoved = true;
+  view.x = bgStart.vx + dx;
+  view.y = bgStart.vy + dy;
+  applyView();
+});
+function bgPointerUp(e) {
+  const wasBg = bgPointers.has(e.pointerId); // ignore pointerups bubbling from node/port gestures
+  bgPointers.delete(e.pointerId);
+  if (bgPointers.size < 2) pinchD0 = 0;
+  if (!wasBg) return;
+  if (bgPointers.size === 1) {
+    // pinch ended with one finger still down: re-anchor pan to avoid a jump
+    const p = [...bgPointers.values()][0];
+    bgStart = { x: p.x, y: p.y, vx: view.x, vy: view.y };
+    return;
+  }
+  if (!bgMoved) {
+    disarm();          // tap on empty canvas: cancel arming…
+    selectNode(null);  // …and deselect
+  }
+}
+canvasWrap.addEventListener('pointerup', bgPointerUp);
+canvasWrap.addEventListener('pointercancel', (e) => bgPointers.delete(e.pointerId));
+
+/* ================= nodes ================= */
+const TYPE_COLORS = { conditioning: '#a78bfa', noise: '#22d3ee', sampler: '#fbbf24' };
+const PORT_LABELS = { conditioning: 'conditioning', noise: 'noise', sampler: 'sampler' };
+const SAMPLERS = ['euler', 'heun', 'dpm++'];
+
+let nodeSeq = 0;
+const nodes = new Map();   // id -> node
+const edges = new Map();   // id -> {id, fromNode, fromPort, toNode, toPort, type}
+let edgeSeq = 0;
+let selectedNode = null;
+let generating = false;
+
+const DEFAULT_PROMPT = 'A quiet world in vivid color. Soft light, subtle textures, a little unexpected magic.';
+
+const NODE_DEFS = {
+  prompt: {
+    title: 'Prompt', hdot: '#a78bfa', w: 264, deletable: true,
+    inputs: [], outputs: [{ id: 'conditioning', type: 'conditioning' }],
+    bodyHTML: () =>
+      `<textarea class="prompt-text" spellcheck="false">${DEFAULT_PROMPT}</textarea>
+       <div class="io-row" data-port="conditioning"><span class="io-label right">conditioning</span></div>`,
+  },
+  noise: {
+    title: 'random noise', hdot: '#22d3ee', w: 196, deletable: true,
+    inputs: [], outputs: [{ id: 'noise', type: 'noise' }],
+    bodyHTML: (node) =>
+      `<div class="seed-row"><span class="seed-num">${node.data.seed}</span>` +
+      `<button class="dice-btn" aria-label="Randomize seed">${ICONS.dice}</button></div>
+       <div class="io-row" data-port="noise"><span class="io-label right">noise</span></div>`,
+    wire(node) {
+      $('.dice-btn', node.el).addEventListener('click', (e) => {
+        e.stopPropagation();
+        node.data.seed = Math.floor(Math.random() * 900000) + 100000;
+        $('.seed-num', node.el).textContent = node.data.seed;
+      });
+    },
+  },
+  sampler: {
+    title: 'Sampler', hdot: '#fbbf24', w: 214, deletable: true,
+    inputs: [], outputs: [{ id: 'sampler', type: 'sampler' }],
+    bodyHTML: (node) =>
+      `<button class="sampler-name">${node.data.sampler}</button>
+       <div class="steps-row"><input type="range" min="4" max="50" step="1" value="${node.data.steps}" aria-label="Steps">` +
+       `<span class="steps-val">${node.data.steps}</span></div>
+       <div class="io-row" data-port="sampler"><span class="io-label right">sampler</span></div>`,
+    wire(node) {
+      const nameBtn = $('.sampler-name', node.el);
+      nameBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const i = (SAMPLERS.indexOf(node.data.sampler) + 1) % SAMPLERS.length;
+        node.data.sampler = SAMPLERS[i];
+        nameBtn.textContent = node.data.sampler;
+      });
+      const slider = $('input[type="range"]', node.el);
+      const val = $('.steps-val', node.el);
+      slider.addEventListener('input', () => {
+        node.data.steps = parseInt(slider.value, 10);
+        val.textContent = node.data.steps;
+      });
+      // interactive controls must not start a node drag
+      $$('button, input, textarea', node.el).forEach(elm =>
+        elm.addEventListener('pointerdown', (e) => e.stopPropagation()));
+    },
+  },
+  generate: {
+    title: 'Processing', hdot: '#a78bfa', w: 252, deletable: false,
+    inputs: [
+      { id: 'conditioning', type: 'conditioning' },
+      { id: 'noise', type: 'noise' },
+      { id: 'sampler', type: 'sampler' },
+    ],
+    outputs: [],
+    bodyHTML: () =>
+      `<div class="io-row" data-port="conditioning"><span class="io-label">conditioning</span></div>
+       <div class="io-row" data-port="noise"><span class="io-label">noise</span></div>
+       <div class="io-row" data-port="sampler"><span class="io-label">sampler</span></div>
+       <button class="gen-play">${ICONS.play}<span>Generate</span></button>
+       <div class="gen-status">Awaiting inputs</div>`,
+    wire(node) {
+      $('.gen-play', node.el).addEventListener('click', (e) => {
+        e.stopPropagation();
+        runGeneration();
+      });
+      $$('button', node.el).forEach(elm =>
+        elm.addEventListener('pointerdown', (e) => e.stopPropagation()));
+    },
+  },
+};
+
+function createNode(type, wx, wy, data) {
+  const def = NODE_DEFS[type];
+  const node = {
+    id: 'n' + (++nodeSeq), type, x: wx, y: wy,
+    data: Object.assign({ seed: 432512, sampler: 'euler', steps: 24 }, data || {}),
+    inputs: [], outputs: [],
+  };
+  const el = document.createElement('div');
+  el.className = 'node';
+  el.style.width = def.w + 'px';
+  el.innerHTML =
+    `<div class="node-header"><span class="hdot" style="background:${def.hdot}"></span>${def.title}</div>` +
+    `<div class="node-body">${def.bodyHTML(node)}</div>`;
+  node.el = el;
+
+  // create ports, vertically centered on their io-rows (ports need layout first)
+  nodesLayer.appendChild(el);
+  const bodyEl = $('.node-body', el);
+  const placePorts = (list, side, cls) => {
+    def[side === 'in' ? 'inputs' : 'outputs'].forEach((p) => {
+      const row = $(`.io-row[data-port="${p.id}"]`, el);
+      const port = document.createElement('div');
+      port.className = `port ${cls} t-${p.type}`;
+      port.dataset.node = node.id; port.dataset.port = p.id; port.dataset.type = p.type; port.dataset.side = side;
+      // row.offsetTop is relative to .node-body; add the body's offset for node-relative y
+      const py = bodyEl.offsetTop + row.offsetTop + row.offsetHeight / 2 - 7.5;
+      port.style.top = py + 'px';
+      if (side === 'in') port.style.left = '-19px'; else port.style.right = '-19px';
+      el.appendChild(port);
+      wirePort(port);
+      list.push({ id: p.id, type: p.type, el: port, ox: side === 'in' ? -11.5 : def.w + 11.5, oy: py + 7.5 });
+    });
+  };
+  placePorts(node.inputs, 'in', 'in');
+  placePorts(node.outputs, 'out', 'out');
+
+  if (def.wire) def.wire(node);
+  wireNodeDrag(node);
+  nodes.set(node.id, node);
+  positionNode(node);
+  return node;
+}
+
+function positionNode(node) {
+  const sx = node.x * 1, sy = node.y * 1; // world coords; #world transform handles pan/zoom
+  node.el.style.setProperty('--nx', sx + 'px');
+  node.el.style.setProperty('--ny', sy + 'px');
+  node.el.style.transform = `translate(${sx}px, ${sy}px)`;
+}
+
+/* node dragging by header (tap without drag = select) */
+function wireNodeDrag(node) {
+  const header = $('.node-header', node.el);
+  let dragging = false, moved = 0, sx = 0, sy = 0, ox = 0, oy = 0, pid = null;
+  header.addEventListener('pointerdown', (e) => {
+    if (generating) return;
+    e.stopPropagation(); e.preventDefault();
+    try { header.setPointerCapture(e.pointerId); } catch (err) {}
+    pid = e.pointerId; dragging = true; moved = 0;
+    const w = screenToWorld(e.clientX, e.clientY);
+    sx = w.x; sy = w.y; ox = node.x; oy = node.y;
+  });
+  header.addEventListener('pointermove', (e) => {
+    if (!dragging || e.pointerId !== pid) return;
+    const w = screenToWorld(e.clientX, e.clientY);
+    const dx = w.x - sx, dy = w.y - sy;
+    moved = Math.max(moved, Math.hypot(dx, dy));
+    if (moved > 3) {
+      node.x = ox + dx; node.y = oy + dy;
+      positionNode(node); renderEdges();
+    }
+  });
+  const up = (e) => {
+    if (!dragging || (e.pointerId !== undefined && e.pointerId !== pid)) return;
+    dragging = false;
+    if (moved <= 3) selectNode(node); // treat as tap → select
+  };
+  header.addEventListener('pointerup', up);
+  header.addEventListener('pointercancel', () => { dragging = false; });
+  // tapping the body also selects
+  $('.node-body', node.el).addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button, input, textarea, .port')) return;
+    selectNode(node);
+  });
+}
+
+function selectNode(node) {
+  if (selectedNode) selectedNode.el.classList.remove('selected');
+  selectedNode = node;
+  if (node) node.el.classList.add('selected');
+  const del = $('#btnDelete');
+  del.disabled = !(node && NODE_DEFS[node.type].deletable);
+}
+
+function deleteSelected() {
+  const node = selectedNode;
+  if (!node || !NODE_DEFS[node.type].deletable) return;
+  for (const [id, e] of [...edges]) {
+    if (e.fromNode === node.id || e.toNode === node.id) edges.delete(id);
+  }
+  node.el.remove();
+  nodes.delete(node.id);
+  selectNode(null);
+  disarm();
+  renderEdges();
+  refreshGenStatus();
+}
+
+/* ================= edges ================= */
+function edgePathD(x1, y1, x2, y2) {
+  const dx = Math.max(48, Math.abs(x2 - x1) * 0.5);
+  return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+}
+function portWorld(node, port) {
+  return { x: node.x + port.ox, y: node.y + port.oy };
+}
+function renderEdges() {
+  edgesSvg.innerHTML = '';
+  // temp edge (while arming/dragging) is re-added by its own updater
+  for (const e of edges.values()) {
+    const a = nodes.get(e.fromNode), b = nodes.get(e.toNode);
+    if (!a || !b) continue;
+    const pa = a.outputs.find(p => p.id === e.fromPort);
+    const pb = b.inputs.find(p => p.id === e.toPort);
+    if (!pa || !pb) continue;
+    const p1 = portWorld(a, pa), p2 = portWorld(b, pb);
+    const path = document.createElementNS(SVGNS, 'path');
+    path.setAttribute('d', edgePathD(p1.x, p1.y, p2.x, p2.y));
+    path.setAttribute('class', 'edge' + (generating ? ' live' : ''));
+    path.style.stroke = TYPE_COLORS[e.type];
+    path.style.color = TYPE_COLORS[e.type];
+    edgesSvg.appendChild(path);
+    // small type label at the curve midpoint
+    const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2 - 8;
+    const label = document.createElementNS(SVGNS, 'text');
+    label.setAttribute('x', mx); label.setAttribute('y', my);
+    label.setAttribute('class', 'edge-label');
+    label.style.fill = TYPE_COLORS[e.type];
+    label.textContent = PORT_LABELS[e.type];
+    edgesSvg.appendChild(label);
+  }
+  updateTempEdge();
+  refreshPortStates();
+}
+function refreshPortStates() {
+  const wired = new Set();
+  for (const e of edges.values()) wired.add(e.toNode + ':' + e.toPort);
+  for (const n of nodes.values()) {
+    for (const p of n.inputs) p.el.classList.toggle('connected', wired.has(n.id + ':' + p.id));
+    for (const p of n.outputs) {
+      const has = [...edges.values()].some(e => e.fromNode === n.id && e.fromPort === p.id);
+      p.el.classList.toggle('connected', has);
+    }
+  }
+}
+function edgeInto(nodeId, portId) {
+  for (const e of edges.values()) if (e.toNode === nodeId && e.toPort === portId) return e;
+  return null;
+}
+function addEdge(fromNode, fromPort, toNode, toPort, type) {
+  const old = edgeInto(toNode, toPort);
+  if (old) edges.delete(old.id);
+  const e = { id: 'e' + (++edgeSeq), fromNode, fromPort, toNode, toPort, type };
+  edges.set(e.id, e);
+  renderEdges();
+  refreshGenStatus();
+  return e;
+}
+function removeEdgeInto(nodeId, portId) {
+  const e = edgeInto(nodeId, portId);
+  if (e) { edges.delete(e.id); renderEdges(); refreshGenStatus(); }
+}
+
+/* ================= port connect interactions ================= */
+let armed = null; // {nodeId, portId, type}
+function disarm() {
+  armed = null;
+  $$('.port.armed').forEach(p => p.classList.remove('armed'));
+  updateTempEdge();
+}
+function armOutput(nodeId, portId, type) {
+  disarm();
+  armed = { nodeId, portId, type };
+  const n = nodes.get(nodeId);
+  const p = n.outputs.find(p => p.id === portId);
+  if (p) p.el.classList.add('armed');
+  updateTempEdge();
+}
+function shakePort(portEl) {
+  portEl.classList.remove('pshake');
+  void portEl.offsetWidth;
+  portEl.classList.add('pshake');
+  setTimeout(() => portEl.classList.remove('pshake'), 400);
+}
+function shakeNode(node) {
+  node.el.classList.remove('shake');
+  void node.el.offsetWidth;
+  node.el.classList.add('shake');
+  setTimeout(() => node.el.classList.remove('shake'), 450);
+}
+
+/* temp edge follows the pointer while arming / drag-connecting */
+let tempTarget = null; // world coords or null
+function updateTempEdge() {
+  const old = $('#tempEdgePath');
+  if (old) old.remove();
+  if (!armed || !tempTarget) return;
+  const n = nodes.get(armed.nodeId);
+  if (!n) return;
+  const p = n.outputs.find(p => p.id === armed.portId);
+  if (!p) return;
+  const p1 = portWorld(n, p);
+  const path = document.createElementNS(SVGNS, 'path');
+  path.id = 'tempEdgePath';
+  path.setAttribute('class', 'temp');
+  path.setAttribute('d', edgePathD(p1.x, p1.y, tempTarget.x, tempTarget.y));
+  edgesSvg.appendChild(path);
+}
+
+function tryConnect(fromNodeId, fromPortId, toNodeId, toPortId) {
+  const fromN = nodes.get(fromNodeId), toN = nodes.get(toNodeId);
+  if (!fromN || !toN) return false;
+  const outP = fromN.outputs.find(p => p.id === fromPortId);
+  const inP = toN.inputs.find(p => p.id === toPortId);
+  if (!outP || !inP) return false;
+  if (outP.type !== inP.type) {
+    shakePort(inP.el);
+    toast(`That port wants ${PORT_LABELS[inP.type]}`);
+    return false;
+  }
+  addEdge(fromNodeId, fromPortId, toNodeId, toPortId, outP.type);
+  return true;
+}
+
+function wirePort(portEl) {
+  let sx = 0, sy = 0, moved = 0, pid = null;
+  let fromInfo = null;
+  portEl.addEventListener('pointerdown', (e) => {
+    if (generating) return;
+    e.stopPropagation(); e.preventDefault();
+    try { portEl.setPointerCapture(e.pointerId); } catch (err) {}
+    pid = e.pointerId; moved = 0; sx = e.clientX; sy = e.clientY;
+    fromInfo = {
+      nodeId: portEl.dataset.node, portId: portEl.dataset.port,
+      type: portEl.dataset.type, side: portEl.dataset.side,
+    };
+    if (fromInfo.side === 'out') {
+      const w = screenToWorld(e.clientX, e.clientY);
+      tempTarget = w;
+      // pre-arm visually only once we know it's a drag; tap handled on up
+    }
+  });
+  portEl.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== pid || !fromInfo) return;
+    moved = Math.max(moved, Math.hypot(e.clientX - sx, e.clientY - sy));
+    if (moved > 9 && fromInfo.side === 'out') {
+      if (!armed || armed.portId !== fromInfo.portId || armed.nodeId !== fromInfo.nodeId) {
+        armOutput(fromInfo.nodeId, fromInfo.portId, fromInfo.type);
+      }
+      tempTarget = screenToWorld(e.clientX, e.clientY);
+      updateTempEdge();
+    }
+  });
+  const up = (e) => {
+    if (e.pointerId !== pid || !fromInfo) return;
+    const info = fromInfo;
+    fromInfo = null; pid = null;
+    tempTarget = null;
+    const wasDrag = moved > 9;
+    // find port under the pointer (pointer capture retargets events, so use elementFromPoint)
+    let target = null;
+    if (wasDrag) {
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const pel = el && el.closest ? el.closest('.port') : null;
+      if (pel && pel !== portEl) target = pel;
+    }
+    if (target && info.side === 'out' && target.dataset.side === 'in') {
+      const ok = tryConnect(info.nodeId, info.portId, target.dataset.node, target.dataset.port);
+      disarm();
+      if (!ok) { /* mismatch already shook + toasted */ }
+      return;
+    }
+    if (!wasDrag) {
+      // ---- tap semantics ----
+      if (info.side === 'out') {
+        if (armed && armed.nodeId === info.nodeId && armed.portId === info.portId) disarm();
+        else armOutput(info.nodeId, info.portId, info.type);
+      } else {
+        if (armed) {
+          // complete an armed connection
+          const ok = tryConnect(armed.nodeId, armed.portId, info.nodeId, info.portId);
+          disarm();
+        } else {
+          // tap a wired input with nothing armed → unplug it
+          const existing = edgeInto(info.nodeId, info.portId);
+          if (existing) {
+            edges.delete(existing.id);
+            renderEdges(); refreshGenStatus();
+            toast('Edge removed');
+          }
+        }
+      }
+    } else {
+      // dragged to empty space: leave the output armed for a follow-up tap
+      if (!(armed && armed.nodeId === info.nodeId && armed.portId === info.portId) && info.side === 'out') {
+        armOutput(info.nodeId, info.portId, info.type);
+      }
+    }
+    updateTempEdge();
+  };
+  portEl.addEventListener('pointerup', up);
+  portEl.addEventListener('pointercancel', () => { fromInfo = null; pid = null; tempTarget = null; updateTempEdge(); });
+}
+</script>
+<script>
+
+/* ================= top bar ================= */
+function toast(msg, ms) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), ms || 2200);
+}
+
+const ADDABLE = [
+  { type: 'prompt', label: 'Prompt', color: '#a78bfa' },
+  { type: 'noise', label: 'random noise', color: '#22d3ee' },
+  { type: 'sampler', label: 'Sampler', color: '#fbbf24' },
+];
+function buildAddMenu() {
+  const menu = $('#addMenu');
+  menu.innerHTML = '';
+  ADDABLE.forEach(a => {
+    const b = document.createElement('button');
+    b.innerHTML = `<span class="dot" style="background:${a.color}"></span>${a.label}`;
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const r = canvasWrap.getBoundingClientRect();
+      const wx = (r.width / 2 - view.x) / view.k - NODE_DEFS[a.type].w / 2;
+      const wy = (r.height / 2 - view.y) / view.k - 60;
+      const n = createNode(a.type, wx + (Math.random() * 60 - 30), wy + (Math.random() * 60 - 30));
+      selectNode(n);
+      menu.classList.add('hidden');
+      refreshGenStatus();
+    });
+    menu.appendChild(b);
+  });
+}
+$('#btnAdd').addEventListener('click', (e) => {
+  e.stopPropagation();
+  $('#addMenu').classList.toggle('hidden');
+});
+document.addEventListener('pointerdown', (e) => {
+  if (!e.target.closest('#addMenu') && !e.target.closest('#btnAdd')) $('#addMenu').classList.add('hidden');
+});
+$('#btnPlay').addEventListener('click', () => runGeneration());
+$('#btnDelete').addEventListener('click', deleteSelected);
+$('#btnHelp').addEventListener('click', () => $('#coach').classList.remove('hidden'));
+$('#btnGotIt').addEventListener('click', () => {
+  $('#coach').classList.add('hidden');
+  try { localStorage.setItem('emotion-engine-coach', '1'); } catch (e) {}
+});
+
+/* ================= execution ================= */
+function findGenerate() {
+  for (const n of nodes.values()) if (n.type === 'generate') return n;
+  return null;
+}
+function promptText() {
+  for (const n of nodes.values()) if (n.type === 'prompt') {
+    const t = $('.prompt-text', n.el);
+    if (t) return t.value;
+  }
+  return DEFAULT_PROMPT;
+}
+function refreshGenStatus() {
+  const g = findGenerate();
+  if (!g || generating) return;
+  const st = $('.gen-status', g.el);
+  const need = ['conditioning', 'noise', 'sampler'];
+  const missing = need.filter(id => !edgeInto(g.id, id));
+  st.classList.remove('busy');
+  st.textContent = missing.length ? 'Awaiting inputs' : 'Ready';
+}
+function gatherInputs() {
+  const g = findGenerate();
+  if (!g) return { missing: ['generate node'] };
+  const need = [
+    { id: 'conditioning', label: 'conditioning' },
+    { id: 'noise', label: 'noise' },
+    { id: 'sampler', label: 'sampler' },
+  ];
+  const missing = [];
+  const src = {};
+  for (const nd of need) {
+    const e = edgeInto(g.id, nd.id);
+    if (!e) { missing.push(nd.label); continue; }
+    src[nd.id] = nodes.get(e.fromNode);
+  }
+  if (missing.length) return { missing, gen: g };
+  const noiseNode = src.noise;
+  const samplerNode = src.sampler;
+  return {
+    gen: g,
+    prompt: promptText(),
+    seed: noiseNode.data.seed,
+    sampler: samplerNode.data.sampler,
+    steps: samplerNode.data.steps,
+  };
+}
+
+let lastRun = null; // {prompt, seed, sampler, steps}
+function runGeneration() {
+  if (generating) return;
+  const inp = gatherInputs();
+  if (inp.missing) {
+    if (inp.gen) shakeNode(inp.gen);
+    toast('Connect the ' + inp.missing.join(' + ') + ' input' + (inp.missing.length > 1 ? 's' : ''));
+    return;
+  }
+  lastRun = inp;
+  generating = true;
+  disarm(); selectNode(null);
+  renderEdges(); // adds .live animated dashes
+  const st = $('.gen-status', inp.gen.el);
+  st.classList.add('busy');
+  const total = inp.steps;
+  let n = 0;
+  const per = Math.max(30, 2500 / total);
+  st.textContent = `Dreaming… 0/${total}`;
+  const timer = setInterval(() => {
+    n++;
+    st.textContent = `Dreaming… ${n}/${total}`;
+    if (n >= total) {
+      clearInterval(timer);
+      generating = false;
+      renderArt(inp.prompt, inp.seed);
+      st.classList.remove('busy');
+      st.textContent = 'Done';
+      renderEdges(); // drop .live dashes
+      openSheet();
+      setTimeout(refreshGenStatus, 2500);
+    }
+  }, per);
+}
+
+/* ================= generative art ================= */
+const artCanvas = $('#art');
+const ART_SIZE = 1024;
+
+function renderArt(prompt, seed) {
+  const ctx = artCanvas.getContext('2d');
+  const W = ART_SIZE, H = ART_SIZE;
+  const rnd = mulberry32(((seed >>> 0) ^ hashStr(prompt)) >>> 0);
+  const kw = prompt.toLowerCase();
+  const vivid = /vivid|color|colour|saturated|bright/.test(kw);
+  const quiet = /quiet|calm|still|silent|serene/.test(kw);
+  const glow = /soft light|softlight|light|glow|luminous|radiant/.test(kw);
+  const magic = /magic|unexpected|enchant|dream|mystery|wonder/.test(kw);
+  const textured = /texture|grain|film|noise/.test(kw);
+
+  const sat = vivid ? 68 + rnd() * 28 : 42 + rnd() * 22;
+  const baseHue = Math.floor(rnd() * 360);
+  const hue2 = (baseHue + 30 + Math.floor(rnd() * 70)) % 360;
+  const hue3 = (baseHue + 170 + Math.floor(rnd() * 70)) % 360;
+  const lBase = quiet ? 7 + rnd() * 6 : 11 + rnd() * 8;
+
+  /* --- layered night-sky gradient --- */
+  const sky = ctx.createLinearGradient(0, 0, W * 0.25, H);
+  sky.addColorStop(0.0, `hsl(${baseHue}, ${sat}%, ${lBase}%)`);
+  sky.addColorStop(0.55, `hsl(${hue2}, ${sat}%, ${lBase + 5}%)`);
+  sky.addColorStop(1.0, `hsl(${hue3}, ${sat * 0.92}%, ${lBase + 9}%)`);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, H);
+
+  /* --- broad nebula washes --- */
+  ctx.globalCompositeOperation = 'screen';
+  const washes = 2 + Math.floor(rnd() * 2);
+  for (let i = 0; i < washes; i++) {
+    const wx = rnd() * W, wy = rnd() * H * 0.7, wr = 260 + rnd() * 320;
+    const hue = [baseHue, hue2, hue3][Math.floor(rnd() * 3)];
+    const g = ctx.createRadialGradient(wx, wy, 0, wx, wy, wr);
+    g.addColorStop(0, `hsla(${hue}, ${sat}%, ${lBase + 22}%, ${0.20 + rnd() * 0.14})`);
+    g.addColorStop(1, `hsla(${hue}, ${sat}%, ${lBase + 22}%, 0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  /* --- big soft radial glows ("soft light") --- */
+  const glowCount = glow ? 5 : 3;
+  for (let i = 0; i < glowCount; i++) {
+    const gx = W * (0.15 + rnd() * 0.7), gy = H * (0.12 + rnd() * 0.55);
+    const gr = 130 + rnd() * 300;
+    const hue = rnd() < 0.6 ? hue2 : baseHue;
+    const warm = rnd() < 0.35;
+    const g = ctx.createRadialGradient(gx, gy, 0, gx, gy, gr);
+    const col = warm ? `hsla(45, 90%, 72%` : `hsla(${hue}, ${sat}%, 68%`;
+    g.addColorStop(0, `${col}, ${0.16 + rnd() * 0.16})`);
+    g.addColorStop(1, `${col}, 0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  /* --- magic orbs with halos --- */
+  const orbCount = magic ? 2 + (rnd() < 0.5 ? 1 : 0) : 1;
+  for (let i = 0; i < orbCount; i++) {
+    const ox = W * (0.2 + rnd() * 0.6), oy = H * (0.25 + rnd() * 0.5);
+    const r = 26 + rnd() * 46;
+    const hue = (baseHue + 140 + rnd() * 120) % 360;
+    // halo
+    let halo = ctx.createRadialGradient(ox, oy, r * 0.4, ox, oy, r * 3.4);
+    halo.addColorStop(0, `hsla(${hue}, 95%, 65%, 0.35)`);
+    halo.addColorStop(1, `hsla(${hue}, 95%, 65%, 0)`);
+    ctx.fillStyle = halo;
+    ctx.fillRect(ox - r * 3.4, oy - r * 3.4, r * 6.8, r * 6.8);
+    // body
+    let orb = ctx.createRadialGradient(ox - r * 0.25, oy - r * 0.25, 0, ox, oy, r);
+    orb.addColorStop(0, 'hsla(0, 0%, 100%, 0.95)');
+    orb.addColorStop(0.45, `hsla(${hue}, 90%, 72%, 0.85)`);
+    orb.addColorStop(1, `hsla(${hue}, 90%, 55%, 0)`);
+    ctx.fillStyle = orb;
+    ctx.beginPath(); ctx.arc(ox, oy, r, 0, Math.PI * 2); ctx.fill();
+  }
+
+  /* --- star sparkles --- */
+  const sparkCount = Math.floor(magic ? 90 + rnd() * 50 : 40 + rnd() * 40);
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < sparkCount; i++) {
+    const sx = rnd() * W, sy = rnd() * H;
+    const sr = 0.8 + rnd() * 1.9;
+    const a = 0.25 + rnd() * 0.75;
+    const warm = rnd() < 0.3;
+    ctx.fillStyle = warm ? `rgba(255, 236, 200, ${a})` : `rgba(235, 242, 255, ${a})`;
+    ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI * 2); ctx.fill();
+    if (rnd() < 0.16) { // cross flare on the brightest
+      const fl = sr * (4 + rnd() * 5);
+      ctx.strokeStyle = `rgba(255,255,255,${a * 0.7})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(sx - fl, sy); ctx.lineTo(sx + fl, sy);
+      ctx.moveTo(sx, sy - fl); ctx.lineTo(sx, sy + fl);
+      ctx.stroke();
+    }
+  }
+  ctx.globalCompositeOperation = 'source-over';
+
+  /* --- film grain --- */
+  const grainAmt = textured ? 20 : 10;
+  const img = ctx.getImageData(0, 0, W, H);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const nse = (rnd() - 0.5) * grainAmt;
+    d[i] += nse; d[i + 1] += nse; d[i + 2] += nse;
+  }
+  ctx.putImageData(img, 0, 0);
+
+  /* --- gentle vignette --- */
+  const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.32, W / 2, H / 2, H * 0.74);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(2,3,8,0.5)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, W, H);
+}
+
+/* ================= result sheet ================= */
+function openSheet() {
+  if (!lastRun) return;
+  $('#caption').textContent = '“' + lastRun.prompt + '”';
+  $('#metaLine').textContent =
+    `seed ${lastRun.seed} · ${lastRun.sampler} · ${lastRun.steps} steps`;
+  const sheet = $('#sheet');
+  sheet.classList.add('open');
+  sheet.setAttribute('aria-hidden', 'false');
+}
+function closeSheet() {
+  const sheet = $('#sheet');
+  sheet.classList.remove('open');
+  sheet.setAttribute('aria-hidden', 'true');
+}
+$('#btnClose').addEventListener('click', closeSheet);
+$('#btnSeed').addEventListener('click', () => {
+  if (!lastRun) return;
+  lastRun.seed = Math.floor(Math.random() * 900000) + 100000;
+  // keep the Noise node in sync if one exists
+  for (const n of nodes.values()) {
+    if (n.type === 'noise') {
+      n.data.seed = lastRun.seed;
+      const sn = $('.seed-num', n.el);
+      if (sn) sn.textContent = lastRun.seed;
+    }
+  }
+  renderArt(lastRun.prompt, lastRun.seed);
+  $('#metaLine').textContent =
+    `seed ${lastRun.seed} · ${lastRun.sampler} · ${lastRun.steps} steps`;
+});
+$('#btnDownload').addEventListener('click', () => {
+  artCanvas.toBlob((blob) => {
+    if (!blob) { toast('Could not export the image'); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `emotion-engine-seed${lastRun ? lastRun.seed : 'art'}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    toast('Saved PNG');
+  }, 'image/png');
+});
+
+/* ================= init ================= */
+function init() {
+  buildAddMenu();
+  const r = canvasWrap.getBoundingClientRect();
+  const k0 = clamp(Math.min(r.width / 1150, r.height / 820), 0.5, 1);
+  view.k = k0;
+  // pre-placed nodes matching the reference layout (world coords)
+  let promptN, genN, noiseN, sampN;
+  if (r.width < 700) {
+    // compact vertical flow for phones: everything visible without panning
+    promptN = createNode('prompt', 24, 24);
+    genN = createNode('generate', 24, 240);
+    noiseN = createNode('noise', 24, 490);
+    sampN = createNode('sampler', 292, 490);
+  } else {
+    promptN = createNode('prompt', 48, 64);
+    genN = createNode('generate', Math.max(560, r.width / k0 - 320), 130);
+    noiseN = createNode('noise', 60, Math.max(300, r.height / k0 - 260));
+    sampN = createNode('sampler', Math.max(300, r.width / k0 / 2 - 107), Math.max(330, r.height / k0 - 230));
+  }
+  // pre-wire: prompt→conditioning, noise→noise, sampler→sampler
+  addEdge(promptN.id, 'conditioning', genN.id, 'conditioning', 'conditioning');
+  addEdge(noiseN.id, 'noise', genN.id, 'noise', 'noise');
+  addEdge(sampN.id, 'sampler', genN.id, 'sampler', 'sampler');
+  applyView();
+  refreshGenStatus();
+  // first-run coach hint
+  let seen = false;
+  try { seen = !!localStorage.getItem('emotion-engine-coach'); } catch (e) {}
+  if (!seen) $('#coach').classList.remove('hidden');
+  window.addEventListener('resize', applyView);
+}
+init();
+</script>
+</body>
+</html>

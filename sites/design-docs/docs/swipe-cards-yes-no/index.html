@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Swipe Cards — Yes/No Decisions</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { background: #0e100e; color: #f2efe6; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", sans-serif; }
+  body { padding: 20px 16px 120px; max-width: 720px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 24px; }
+  header h1 { font-size: 28px; font-weight: 800; letter-spacing: .5px; }
+  header h1 span { color: #e8a33d; }
+  header p { color: #a8a396; font-size: 14px; margin-top: 8px; line-height: 1.55; }
+  header p a { color: #e8a33d; font-weight: 700; text-decoration: none; }
+  .backlink { display: inline-block; color: #e8a33d; font-size: 14px; font-weight: 700; text-decoration: none; margin-bottom: 12px; touch-action: manipulation; }
+  .savebar { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 14px 0 4px; font-size: 13px; color: #a8a396; }
+  .savebar .dot { width: 8px; height: 8px; border-radius: 50%; background: #3dffa0; }
+  .savebar.saving .dot { background: #ffc93d; }
+  .card { background: rgba(28,33,28,.6); border: 1px solid rgba(232,163,61,.18); border-radius: 18px; padding: 18px; margin-bottom: 16px; }
+  .card h2 { font-size: 19px; font-weight: 800; letter-spacing: .4px; margin-bottom: 4px; }
+  .card h2 .pick { display: inline-block; font-size: 11px; font-weight: 800; color: #14100a; background: #e8a33d;
+                   border-radius: 99px; padding: 2px 10px; margin-left: 8px; vertical-align: middle; letter-spacing: .06em; }
+  .card .qsub { color: #a8a396; font-size: 13.5px; margin-bottom: 12px; line-height: 1.5; }
+  .feats { list-style: none; margin: 0; display: grid; gap: 7px; }
+  .feats li { font-size: 13.5px; line-height: 1.5; color: #d8d4c8; background: rgba(14,16,14,.55); border-radius: 10px; padding: 9px 12px; }
+  .feats li b { color: #e8a33d; }
+  .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .opts.one { grid-template-columns: 1fr; }
+  .opt { touch-action: manipulation; -webkit-user-select: none; user-select: none; border: 1px solid rgba(232,163,61,.25);
+         background: rgba(14,16,14,.55); color: #d8d4c8; border-radius: 12px; padding: 13px 12px;
+         font-size: 14px; font-weight: 700; cursor: pointer; text-align: left; font-family: inherit; }
+  .opt small { display: block; font-weight: 400; font-size: 12px; color: #6f6b60; margin-top: 3px; line-height: 1.4; }
+  .opt.sel { background: rgba(232,163,61,.14); border-color: #e8a33d; color: #fff; box-shadow: 0 0 14px rgba(232,163,61,.22); }
+  .opt.sel small { color: #e8a33d; }
+  .notes { width: 100%; touch-action: manipulation; background: rgba(14,16,14,.6); border: 1px solid rgba(232,163,61,.18);
+           border-radius: 12px; color: #f2efe6; font-size: 16px; padding: 11px 12px; font-family: inherit; resize: vertical; }
+  .notes::placeholder { color: #6f6b60; }
+  .notes:focus { outline: none; border-color: #e8a33d; }
+  footer { position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; background: #141610;
+           border-top: 1px solid rgba(232,163,61,.22); padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+           display: flex; gap: 10px; align-items: center; }
+  footer .prog { flex: 1; font-size: 13px; color: #a8a396; }
+  footer button { touch-action: manipulation; -webkit-user-select: none; user-select: none; border: none; border-radius: 12px;
+                  padding: 13px 18px; font-size: 15px; font-weight: 800; cursor: pointer; font-family: inherit; }
+  #copyBtn { background: #e8a33d; color: #14100a; }
+  #clearBtn { background: rgba(232,163,61,.12); color: #a8a396; }
+  .toast { position: fixed; left: 50%; bottom: calc(88px + env(safe-area-inset-bottom));
+           transform: translateX(-50%) translateY(12px) scale(.95);
+           background: rgba(20,22,20,.96); color: #fff; border: 1px solid #e8a33d; border-radius: 99px;
+           padding: 12px 22px; font-size: 14px; font-weight: 700; z-index: 100; opacity: 0;
+           pointer-events: none; white-space: nowrap; transition: opacity .25s ease, transform .25s ease;
+           box-shadow: 0 14px 36px rgba(0,0,0,.5); }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  .toast .tick { color: #e8a33d; margin-right: 8px; font-weight: 800; }
+</style>
+</head>
+<body>
+<header>
+  <a class="backlink" href="../../">← All design docs</a>
+  <h1>Swipe Cards <span>Yes/No Decisions</span></h1>
+  <p>The Tinder-style yes/no triage pattern — right to keep, left to skip — as a reusable decision UI.
+     Live lab: <a href="https://swipe-cards-lab.pages.dev">swipe-cards-lab.pages.dev</a><br>
+     Tap a verdict per question, add notes, everything autosaves in this browser.</p>
+  <div class="savebar" id="savebar"><span class="dot"></span><span id="savetxt">Saved</span></div>
+</header>
+
+<section class="card">
+  <h2>Shipped features</h2>
+  <p class="qsub">Everything currently live in the lab, as of 2026-10-04.</p>
+  <ul class="feats">
+    <li><b>3 fling feels</b> — Snappy (200ms, straight off), Buttery (320ms spring, slight arc), Floaty (500ms, big rotation).</li>
+    <li><b>Spammable ✕ / ♥ buttons</b> — decisions commit instantly, no input lock; every tap registers, even mid-fling.</li>
+    <li><b>KEEP / SKIP stamps</b> flash on the card for button and keyboard decisions, not just drags.</li>
+    <li><b>Drag with flick detection</b> — a fast flick counts as a decision even under the 120px distance threshold.</li>
+    <li><b>Undo</b> — the card slides back in from the side it exited; ↺ button, always live when there's history.</li>
+    <li><b>Arrow keys</b> — ← skip, → keep.</li>
+    <li><b>Progress + kept count</b> with progress bar, persisted in localStorage across sessions.</li>
+    <li><b>End-of-deck results</b> — kept/skipped stats, the full kept list, copy-to-clipboard.</li>
+    <li><b>Numbered, batch-tagged cards</b> — #N plus batch letter on every card.</li>
+    <li><b>iOS hardened</b> — no double-tap zoom while spamming, no text-selection loupe on the emoji buttons, JS press feedback instead of sticky :active, card drag never scrolls the page.</li>
+  </ul>
+</section>
+
+<section class="card" id="q-feel">
+  <h2>1 · Fling feel <span class="pick">PICKED: BUTTERY</span></h2>
+  <p class="qsub">Your call from the lab — Buttery is preselected. Change it here if you want.</p>
+  <div class="opts one" role="radiogroup" aria-label="Fling feel">
+    <button class="opt" data-q="feel" data-v="Snappy">Snappy<small>200ms fling, straight off the screen. Rotation tracks the drag 1:1.</small></button>
+    <button class="opt" data-q="feel" data-v="Buttery">Buttery<small>320ms fling with a slight arc and overshoot on spring-back.</small></button>
+    <button class="opt" data-q="feel" data-v="Floaty">Floaty<small>500ms floaty fling, big rotation. Dramatic, slower.</small></button>
+  </div>
+  <textarea class="notes" data-notes="feel" placeholder="Notes on the feel (optional)…" rows="2"></textarea>
+</section>
+
+<section class="card" id="q-undo">
+  <h2>2 · Undo scope</h2>
+  <p class="qsub">Undo currently works within a session only — closing the page clears the undo stack (decisions themselves persist).</p>
+  <div class="opts" role="radiogroup" aria-label="Undo scope">
+    <button class="opt" data-q="undo" data-v="Session-only undo">Session-only undo<small>Keep it as is.</small></button>
+    <button class="opt" data-q="undo" data-v="Persist undo across sessions">Persist undo<small>Undo stack survives reloads.</small></button>
+    <button class="opt" data-q="undo" data-v="Multi-undo button">Multi-undo button<small>Hold ↺ to rewind several cards.</small></button>
+    <button class="opt" data-q="undo" data-v="Drop undo">Drop undo<small>No undo at all.</small></button>
+  </div>
+  <textarea class="notes" data-notes="undo" placeholder="Notes on undo (optional)…" rows="2"></textarea>
+</section>
+
+<section class="card" id="q-end">
+  <h2>3 · After the last card</h2>
+  <p class="qsub">What happens when the deck runs out?</p>
+  <div class="opts" role="radiogroup" aria-label="After the last card">
+    <button class="opt" data-q="end" data-v="Results screen">Results screen<small>Kept/skipped stats + kept list, as now.</small></button>
+    <button class="opt" data-q="end" data-v="Loop the undecided">Loop the deck<small>Reshuffle and go again.</small></button>
+    <button class="opt" data-q="end" data-v="Review skips">Review skips<small>Second pass over skipped cards only.</small></button>
+    <button class="opt" data-q="end" data-v="Stop quietly">Stop quietly<small>Just show a done state.</small></button>
+  </div>
+  <textarea class="notes" data-notes="end" placeholder="Notes (optional)…" rows="2"></textarea>
+</section>
+
+<section class="card" id="q-stack">
+  <h2>4 · Visible stack depth</h2>
+  <p class="qsub">How many cards peek out behind the top card?</p>
+  <div class="opts" role="radiogroup" aria-label="Visible stack depth">
+    <button class="opt" data-q="stack" data-v="3 cards">3 cards<small>Current look.</small></button>
+    <button class="opt" data-q="stack" data-v="5 cards">5 cards<small>Deeper peek.</small></button>
+    <button class="opt" data-q="stack" data-v="1 card only">1 card only<small>Maximum focus.</small></button>
+    <button class="opt" data-q="stack" data-v="Fan layout">Fan layout<small>Cards fanned like a hand.</small></button>
+  </div>
+  <textarea class="notes" data-notes="stack" placeholder="Notes (optional)…" rows="2"></textarea>
+</section>
+
+<section class="card" id="q-reuse">
+  <h2>5 · Reuse this pattern for</h2>
+  <p class="qsub">Where should the yes/no card UI go next?</p>
+  <div class="opts" role="radiogroup" aria-label="Reuse this pattern for">
+    <button class="opt" data-q="reuse" data-v="App-idea sifter">App-idea sifter<small>Triage the idea parking lot.</small></button>
+    <button class="opt" data-q="reuse" data-v="LeetCode 100 ideas">LeetCode 100<small>Swipe the 100 game ideas.</small></button>
+    <button class="opt" data-q="reuse" data-v="Date-night picker">Date-night picker<small>Yes/no the date options.</small></button>
+    <button class="opt" data-q="reuse" data-v="Keep it on todos">Keep it on todos<small>Don't spread it yet.</small></button>
+  </div>
+  <textarea class="notes" data-notes="reuse" placeholder="Notes (optional)…" rows="2"></textarea>
+</section>
+
+<section class="card" id="q-other">
+  <h2>Other notes</h2>
+  <p class="qsub" style="margin-bottom:10px">Anything the questions didn't cover.</p>
+  <textarea class="notes" data-notes="other" placeholder="Anything else…" rows="4"></textarea>
+</section>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<footer>
+  <div class="prog" id="prog">0 of 5 answered</div>
+  <button id="clearBtn">Clear</button>
+  <button id="copyBtn">Copy answers</button>
+</footer>
+<script>
+const KEY = 'swipe-cards-yesno-v1';
+const QS = ["feel", "undo", "end", "stack", "reuse"];
+let toastT = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.innerHTML = '<span class="tick">✓</span>' + msg;
+  t.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => t.classList.remove('show'), 2200);
+}
+let state = { opts: { feel: "Buttery" }, notes: {} };
+let hadSaved = false;
+try { const raw = localStorage.getItem(KEY); if (raw) { state = JSON.parse(raw); hadSaved = true; } } catch (e) {}
+let saveT = null;
+const savebar = document.getElementById('savebar'), savetxt = document.getElementById('savetxt');
+function persist(immediate) {
+  savebar.classList.add('saving'); savetxt.textContent = 'Saving…';
+  const write = () => {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    savebar.classList.remove('saving'); savetxt.textContent = 'Saved';
+    updateProg();
+  };
+  if (immediate) { write(); return; }
+  clearTimeout(saveT); saveT = setTimeout(write, 400);
+}
+function updateProg() {
+  const n = QS.filter(q => state.opts[q]).length;
+  document.getElementById('prog').textContent = n + ' of 5 answered';
+}
+document.querySelectorAll('.opt').forEach(btn => {
+  const q = btn.dataset.q;
+  if (state.opts[q] === btn.dataset.v) btn.classList.add('sel');
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.opt[data-q="' + q + '"]').forEach(b => b.classList.remove('sel'));
+    btn.classList.add('sel');
+    state.opts[q] = btn.dataset.v;
+    persist();
+  });
+});
+document.querySelectorAll('.notes').forEach(ta => {
+  const q = ta.dataset.notes;
+  if (state.notes[q]) ta.value = state.notes[q];
+  ta.addEventListener('input', () => { state.notes[q] = ta.value; persist(); });
+});
+document.getElementById('clearBtn').addEventListener('click', () => {
+  if (!confirm('Clear all answers and notes?')) return;
+  state = { opts: {}, notes: {} };
+  document.querySelectorAll('.opt.sel').forEach(b => b.classList.remove('sel'));
+  document.querySelectorAll('.notes').forEach(t => t.value = '');
+  persist(true);
+});
+const NAMES = {"feel": "1 · Fling feel", "undo": "2 · Undo scope", "end": "3 · After the last card",
+               "stack": "4 · Visible stack depth", "reuse": "5 · Reuse this pattern for"};
+document.getElementById('copyBtn').addEventListener('click', async () => {
+  let out = 'SWIPE CARDS YES/NO — DECISIONS\n\n';
+  for (const q of QS) {
+    out += NAMES[q] + '\n  Verdict: ' + (state.opts[q] || '(unanswered)') + '\n';
+    if (state.notes[q]) out += '  Notes: ' + state.notes[q] + '\n';
+    out += '\n';
+  }
+  if (state.notes.other) out += 'OTHER NOTES\n' + state.notes.other + '\n';
+  try { await navigator.clipboard.writeText(out); showToast('Answers copied'); }
+  catch (e) {
+    const ta = document.createElement('textarea'); ta.value = out; document.body.appendChild(ta);
+    ta.select(); try { document.execCommand('copy'); showToast('Answers copied'); } catch (e2) { showToast('Copy failed'); }
+    ta.remove();
+  }
+});
+if (!hadSaved) persist(true); // record his stated Buttery pick
+updateProg();
+</script>
+</body>
+</html>

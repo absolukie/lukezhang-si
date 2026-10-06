@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Comeback Kit</title>
+<style>
+  :root{
+    --bg:#0e0f13; --card:#171923; --card2:#1e2130; --line:#2a2e42;
+    --txt:#f2f3f7; --muted:#9aa0b5; --accent:#ffb020; --accent2:#ff7847;
+    --good:#3ddc84; --radius:16px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg); color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,Roboto,Helvetica,Arial,sans-serif;
+    min-height:100vh; padding-bottom:92px;
+  }
+  button{font-family:inherit; touch-action:manipulation;}
+  input{font-family:inherit;}
+  header{
+    position:sticky; top:0; z-index:20;
+    background:rgba(14,15,19,.92); backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);
+    padding:14px 16px 10px;
+  }
+  .title-row{display:flex; align-items:center; justify-content:space-between;}
+  h1{font-size:22px; margin:0; letter-spacing:.3px;}
+  h1 .bolt{color:var(--accent);}
+  .badge{
+    font-size:11px; color:var(--muted); border:1px solid var(--line);
+    padding:3px 8px; border-radius:999px; white-space:nowrap;
+  }
+  .subtitle{color:var(--muted); font-size:13px; margin:4px 0 0;}
+  nav.tabs{
+    display:flex; gap:6px; margin-top:12px;
+    position:sticky; top:0;
+  }
+  .tabs button{
+    flex:1; border:1px solid var(--line); background:var(--card);
+    color:var(--muted); border-radius:12px; padding:10px 4px;
+    font-size:13px; font-weight:600; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:6px;
+  }
+  .tabs button svg{width:16px;height:16px;flex:none;}
+  .tabs button.active{background:var(--accent); border-color:var(--accent); color:#141414;}
+  .tabs button.active svg{stroke:#141414;}
+  main{padding:16px; max-width:720px; margin:0 auto;}
+  .view{display:none;}
+  .view.active{display:block; animation:fade .18s ease;}
+  @keyframes fade{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;}}
+
+  /* Shuffle */
+  .hitme{
+    width:100%; border:none; cursor:pointer;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    color:#141414; font-size:20px; font-weight:800;
+    padding:20px; border-radius:var(--radius);
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    box-shadow:0 6px 24px rgba(255,176,32,.25);
+  }
+  .hitme:active{transform:scale(.98);}
+  .hitme svg{width:24px;height:24px;stroke:#141414;}
+  .hint{color:var(--muted); font-size:13px; text-align:center; margin:10px 0 0;}
+
+  /* Cards */
+  .card{
+    background:var(--card); border:1px solid var(--line);
+    border-radius:var(--radius); padding:16px; margin:12px 0;
+  }
+  .card.big{padding:22px; margin-top:16px; border-color:#3a3f58;}
+  .meta{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:10px;}
+  .tag{
+    font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.6px;
+    background:rgba(255,176,32,.14); color:var(--accent);
+    padding:4px 10px; border-radius:999px; white-space:nowrap;
+  }
+  .trigger{font-size:12px; color:var(--muted);}
+  .ctext{font-size:18px; line-height:1.45; margin:0 0 14px; font-weight:600;}
+  .card.big .ctext{font-size:22px;}
+  .actions{display:flex; gap:8px;}
+  .iconbtn{
+    display:inline-flex; align-items:center; gap:7px;
+    background:var(--card2); border:1px solid var(--line); color:var(--txt);
+    border-radius:10px; padding:9px 14px; font-size:14px; font-weight:600; cursor:pointer;
+  }
+  .iconbtn:active{transform:scale(.96);}
+  .iconbtn svg{width:16px;height:16px;}
+  .iconbtn.faved{border-color:var(--accent); color:var(--accent);}
+  .iconbtn.faved svg{fill:var(--accent); stroke:var(--accent);}
+  .copied-note{font-size:12px; color:var(--good); margin-left:4px; align-self:center; display:none;}
+  .copied-note.show{display:inline;}
+
+  /* Browse */
+  .search{
+    width:100%; background:var(--card); border:1px solid var(--line);
+    color:var(--txt); border-radius:12px; padding:13px 14px; font-size:16px; margin-bottom:12px;
+    touch-action:manipulation;
+  }
+  .search::placeholder{color:#5b6076;}
+  .chips{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:6px;}
+  .chip{
+    border:1px solid var(--line); background:var(--card); color:var(--muted);
+    border-radius:999px; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer;
+  }
+  .chip.active{background:var(--txt); color:#141414; border-color:var(--txt);}
+  .count{color:var(--muted); font-size:12px; margin:10px 2px;}
+  .empty{color:var(--muted); text-align:center; padding:40px 20px; font-size:15px;}
+
+  /* Roast me */
+  .bubble{
+    border-radius:var(--radius); padding:16px; margin:12px 0; font-size:17px; line-height:1.45;
+  }
+  .bubble.them{background:#251a20; border:1px solid #4a2c3a;}
+  .bubble .who{font-size:11px; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); margin-bottom:8px; font-weight:700;}
+  .bubble.you{background:#14231c; border:1px solid #2c5a40;}
+  .roast-actions{display:flex; gap:8px; margin-top:4px;}
+  .btn-primary{
+    flex:1; border:none; cursor:pointer; border-radius:12px; padding:15px;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    color:#141414; font-size:16px; font-weight:800;
+  }
+  .btn-primary:active{transform:scale(.98);}
+  .btn-ghost{
+    border:1px solid var(--line); background:var(--card); color:var(--txt);
+    border-radius:12px; padding:15px 18px; font-size:15px; font-weight:700; cursor:pointer;
+  }
+  .btn-ghost:active{transform:scale(.97);}
+  svg.ic{stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;}
+</style>
+</head>
+<body>
+<header>
+  <div class="title-row">
+    <h1><span class="bolt">Comeback</span> Kit</h1>
+    <span class="badge">build v2026.10.02-07.01</span>
+  </div>
+  <p class="subtitle">304 witty comebacks. Never be speechless again.</p>
+  <nav class="tabs" id="tabs">
+    <button data-tab="shuffle" class="active">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+      Shuffle</button>
+    <button data-tab="browse">
+      <svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      Browse</button>
+    <button data-tab="roast">
+      <svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>
+      Roast Me</button>
+    <button data-tab="favs">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg>
+      Saved</button>
+  </nav>
+</header>
+
+<main>
+  <!-- SHUFFLE -->
+  <section class="view active" id="view-shuffle">
+    <button class="hitme" id="hitme">
+      <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.4" fill="#141414" stroke="none"/><circle cx="15.5" cy="15.5" r="1.4" fill="#141414" stroke="none"/><circle cx="15.5" cy="8.5" r="1.4" fill="#141414" stroke="none"/><circle cx="8.5" cy="15.5" r="1.4" fill="#141414" stroke="none"/></svg>
+      Hit me
+    </button>
+    <p class="hint">Tap for a random comeback. Read the trigger, deliver the line.</p>
+    <div id="shuffle-card"></div>
+  </section>
+
+  <!-- BROWSE -->
+  <section class="view" id="view-browse">
+    <input class="search" id="search" type="search" placeholder="Search comebacks or situations..." autocomplete="off">
+    <div class="chips" id="chips"></div>
+    <div class="count" id="count"></div>
+    <div id="browse-list"></div>
+  </section>
+
+  <!-- ROAST ME -->
+  <section class="view" id="view-roast">
+    <p class="hint" style="margin-top:0">Practice mode. Read the roast, then reveal your comeback.</p>
+    <div class="bubble them" id="roast-bubble" style="display:none">
+      <div class="who">They say</div>
+      <div id="roast-text"></div>
+    </div>
+    <div class="bubble you" id="comeback-bubble" style="display:none">
+      <div class="who">You say</div>
+      <div class="ctext" id="roast-comeback" style="margin-bottom:12px"></div>
+      <div class="actions">
+        <button class="iconbtn" id="roast-copy">
+          <svg class="ic" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+          Copy</button>
+        <button class="iconbtn" id="roast-fav">
+          <svg class="ic" viewBox="0 0 24 24"><path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg>
+          Save</button>
+        <span class="copied-note" id="roast-copied">Copied!</span>
+      </div>
+    </div>
+    <div class="roast-actions">
+      <button class="btn-ghost" id="new-roast">New roast</button>
+      <button class="btn-primary" id="reveal">Reveal comeback</button>
+    </div>
+  </section>
+
+  <!-- FAVORITES -->
+  <section class="view" id="view-favs">
+    <div id="fav-list"></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+/* ============ data ============ */
+let DATA = [];
+let favs = new Set();
+try { favs = new Set(JSON.parse(localStorage.getItem("ck_favs") || "[]")); } catch (e) { favs = new Set(); }
+function saveFavs(){ try { localStorage.setItem("ck_favs", JSON.stringify([...favs])); } catch (e) {} }
+
+const ROASTS = {
+  "Chess": [
+    "Your chess game is a tragedy in 40 moves.",
+    "I've seen better strategy in a coin flip.",
+    "Do you even know how the horsey moves?",
+    "Blundering is your love language.",
+    "Your opening is called the 'please beat me' defense."
+  ],
+  "Coding & Tech": [
+    "Your code has more bugs than a motel mattress.",
+    "It doesn't work on MY machine either.",
+    "My grandma debugs faster than you.",
+    "That pull request is a cry for help.",
+    "You couldn't code your way out of a paper bag."
+  ],
+  "Work & Career": [
+    "You treat deadlines like suggestions.",
+    "Your productivity is a myth.",
+    "HR has a file on you. It's thick.",
+    "You call that a job? Scarecrows work harder.",
+    "Your inbox has 10,000 unread emails."
+  ],
+  "Looks & Style": [
+    "Nice haircut. Did you lose a bet?",
+    "That outfit is... a choice.",
+    "Is that bedhead or a cry for help?",
+    "You got dressed in the dark, didn't you?",
+    "Your mirror just filed for overtime."
+  ],
+  "Gym & Sports": [
+    "Do you even lift? Yeah, I can tell.",
+    "Your gym membership is just a donation.",
+    "I've seen more muscle on a chicken wing.",
+    "You get winded walking to the fridge.",
+    "Your six-pack is a keg."
+  ],
+  "Gaming": [
+    "Your K/D ratio is a tragedy.",
+    "Skill issue.",
+    "My grandma clutches harder than you.",
+    "You're the reason we lose.",
+    "Do you play with your monitor off?"
+  ],
+  "Money & Ambition": [
+    "Your wallet is emptier than my patience.",
+    "Your bank account is a desert.",
+    "You couldn't afford to pay attention.",
+    "Your crypto went to zero. Like your hopes.",
+    "Broke is a lifestyle for you."
+  ],
+  "Everyday Roasts": [
+    "You're slower than dial-up.",
+    "Thinking isn't your strong suit.",
+    "You're the reason for warning labels.",
+    "If brains were money, you'd be broke.",
+    "You're not the sharpest tool in the shed."
+  ],
+  "Classic Clapbacks": [
+    "You're bad at this.",
+    "Nobody likes you.",
+    "Shut up.",
+    "You're cringe.",
+    "Touch grass."
+  ],
+  "Smooth Deflections": [
+    "You're embarrassing yourself.",
+    "That was terrible.",
+    "Nobody invited you.",
+    "You're so weird.",
+    "Stop trying so hard."
+  ]
+};
+
+/* ============ helpers ============ */
+const $ = (id) => document.getElementById(id);
+function esc(s){
+  return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function copyText(text, noteEl){
+  const done = () => { if (noteEl){ noteEl.classList.add("show"); setTimeout(()=>noteEl.classList.remove("show"), 1200); } };
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done).catch(()=>fallbackCopy(text, done));
+  } else { fallbackCopy(text, done); }
+}
+function fallbackCopy(text, done){
+  const ta = document.createElement("textarea");
+  ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand("copy"); } catch (e) {}
+  document.body.removeChild(ta); done();
+}
+const copySVG = '<svg class="ic" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+const starSVG = '<svg class="ic" viewBox="0 0 24 24"><path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg>';
+
+function cardHTML(entry, idx, big){
+  const faved = favs.has(idx);
+  return '<article class="card' + (big ? ' big' : '') + '">' +
+    '<div class="meta"><span class="tag">' + esc(entry.category) + '</span>' +
+    '<span class="trigger">When ' + esc(entry.trigger) + '</span></div>' +
+    '<p class="ctext">' + esc(entry.text) + '</p>' +
+    '<div class="actions">' +
+      '<button class="iconbtn copy-btn" data-i="' + idx + '">' + copySVG + 'Copy</button>' +
+      '<button class="iconbtn fav-btn' + (faved ? ' faved' : '') + '" data-i="' + idx + '">' + starSVG + (faved ? 'Saved' : 'Save') + '</button>' +
+      '<span class="copied-note" id="cn-' + idx + '">Copied!</span>' +
+    '</div></article>';
+}
+
+/* ============ tabs ============ */
+function showTab(name){
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + name));
+  if (name === "favs") renderFavs();
+}
+document.querySelectorAll("#tabs button").forEach(b => {
+  b.addEventListener("click", () => showTab(b.dataset.tab));
+});
+
+/* ============ shuffle ============ */
+let currentIdx = -1;
+function shuffle(){
+  if (!DATA.length) return;
+  let i;
+  do { i = Math.floor(Math.random() * DATA.length); } while (DATA.length > 1 && i === currentIdx);
+  currentIdx = i;
+  $("shuffle-card").innerHTML = cardHTML(DATA[i], i, true);
+}
+$("hitme").addEventListener("click", shuffle);
+
+/* ============ browse ============ */
+let browseCat = "All", query = "";
+let CATS = [];
+function renderChips(){
+  $("chips").innerHTML = CATS.map(c =>
+    '<button class="chip' + (c === browseCat ? ' active' : '') + '" data-c="' + esc(c) + '">' + esc(c) + '</button>'
+  ).join("");
+  document.querySelectorAll("#chips .chip").forEach(ch =>
+    ch.addEventListener("click", () => { browseCat = ch.dataset.c; renderChips(); renderBrowse(); }));
+}
+function filtered(){
+  const q = query.trim().toLowerCase();
+  return DATA.map((e, i) => ({e, i})).filter(({e}) => {
+    if (browseCat !== "All" && e.category !== browseCat) return false;
+    if (q && !(e.text.toLowerCase().includes(q) || e.trigger.toLowerCase().includes(q) || e.category.toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+function renderBrowse(){
+  const list = filtered();
+  $("count").textContent = list.length + " of " + DATA.length + " comebacks";
+  $("browse-list").innerHTML = list.length
+    ? list.map(({e, i}) => cardHTML(e, i, false)).join("")
+    : '<div class="empty">No comebacks match. Try another search.</div>';
+}
+$("search").addEventListener("input", (ev) => { query = ev.target.value; renderBrowse(); });
+
+/* ============ favorites ============ */
+function toggleFav(idx){
+  if (favs.has(idx)) favs.delete(idx); else favs.add(idx);
+  saveFavs();
+  document.querySelectorAll('.fav-btn[data-i="' + idx + '"]').forEach(b => {
+    const on = favs.has(idx);
+    b.classList.toggle("faved", on);
+    b.innerHTML = starSVG + (on ? "Saved" : "Save");
+  });
+  if ($("view-favs").classList.contains("active")) renderFavs();
+}
+function renderFavs(){
+  const list = [...favs].filter(i => DATA[i]).sort((a,b)=>a-b);
+  $("fav-list").innerHTML = list.length
+    ? list.map(i => cardHTML(DATA[i], i, false)).join("")
+    : '<div class="empty">No saved comebacks yet.<br>Tap Save on any card to build your arsenal.</div>';
+}
+
+/* card button delegation (works for shuffle, browse, favs) */
+document.addEventListener("click", (ev) => {
+  const cp = ev.target.closest(".copy-btn");
+  if (cp){
+    const i = +cp.dataset.i;
+    const note = document.getElementById("cn-" + i);
+    copyText(DATA[i].text, note);
+    return;
+  }
+  const fv = ev.target.closest(".fav-btn");
+  if (fv){ toggleFav(+fv.dataset.i); }
+});
+
+/* ============ roast me ============ */
+let roastCat = null, roastIdx = -1;
+function newRoast(){
+  const cats = Object.keys(ROASTS);
+  roastCat = cats[Math.floor(Math.random() * cats.length)];
+  const lines = ROASTS[roastCat];
+  roastIdx = Math.floor(Math.random() * lines.length);
+  $("roast-text").textContent = lines[roastIdx];
+  $("roast-bubble").style.display = "block";
+  $("comeback-bubble").style.display = "none";
+  $("reveal").style.display = "";
+}
+function reveal(){
+  if (!roastCat) { newRoast(); }
+  const pool = DATA.map((e, i) => ({e, i})).filter(({e}) => e.category === roastCat);
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  roastIdx = pick.i;
+  $("roast-comeback").textContent = pick.e.text;
+  $("comeback-bubble").style.display = "block";
+  $("reveal").style.display = "none";
+  const fb = $("roast-fav");
+  const on = favs.has(pick.i);
+  fb.classList.toggle("faved", on);
+  fb.innerHTML = starSVG + (on ? "Saved" : "Save");
+}
+$("new-roast").addEventListener("click", newRoast);
+$("reveal").addEventListener("click", reveal);
+$("roast-copy").addEventListener("click", () => {
+  if (roastIdx >= 0) copyText(DATA[roastIdx].text, $("roast-copied"));
+});
+$("roast-fav").addEventListener("click", () => { if (roastIdx >= 0) toggleFav(roastIdx); });
+
+/* ============ init ============ */
+fetch("comebacks.json")
+  .then(r => r.json())
+  .then(d => {
+    DATA = d;
+    CATS = ["All", ...new Set(DATA.map(e => e.category))];
+    renderChips();
+    renderBrowse();
+    shuffle();
+    newRoast();
+  })
+  .catch(() => {
+    $("shuffle-card").innerHTML = '<div class="empty">Could not load comebacks.json</div>';
+  });
+</script>
+</body>
+</html>

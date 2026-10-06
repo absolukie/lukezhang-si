@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Design Docs</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { background: #070b1d; color: #e8edff; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", sans-serif; }
+  body { padding: 32px 18px 60px; max-width: 680px; margin: 0 auto; }
+  header { margin-bottom: 28px; }
+  header h1 { font-size: 32px; font-weight: 800; letter-spacing: .5px; }
+  header h1 span { color: #46e0ff; }
+  header p { color: #8b93b8; font-size: 14px; margin-top: 8px; line-height: 1.55; }
+  .doc { display: block; text-decoration: none; color: inherit; background: rgba(20,28,60,.55);
+         border: 1px solid rgba(120,150,255,.16); border-radius: 18px; padding: 20px; margin-bottom: 14px; }
+  .doc:active { transform: scale(.98); }
+  .doc .date { font-size: 12px; color: #5a648c; text-transform: uppercase; letter-spacing: 1px; }
+  .doc h2 { font-size: 20px; font-weight: 800; margin: 6px 0 4px; }
+  .doc .sub { font-size: 14px; color: #8b93b8; line-height: 1.5; margin-bottom: 12px; }
+  .bar { height: 8px; background: rgba(7,11,29,.8); border-radius: 99px; overflow: hidden; margin-bottom: 8px; }
+  .bar i { display: block; height: 100%; background: linear-gradient(90deg, #38e1ff, #2e9bff, #7b3ff2); border-radius: 99px; transition: width .4s; }
+  .prog { font-size: 13px; color: #8b93b8; }
+  .prog b { color: #46e0ff; }
+  .cta { margin-top: 12px; display: inline-block; font-size: 14px; font-weight: 800; color: #fff;
+         background: linear-gradient(180deg, #3b82f6, #2563eb); padding: 11px 20px; border-radius: 12px; touch-action: manipulation; }
+  .empty { color: #5a648c; font-size: 14px; text-align: center; padding: 30px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Design <span>Docs</span></h1>
+  <p>Every open design decision, in one place. Tap a doc to review it — answers autosave in this browser as you go.</p>
+</header>
+<div id="list"></div>
+<script>
+async function main() {
+  const list = document.getElementById('list');
+  let docs = [];
+  try {
+    const res = await fetch('docs.json');
+    docs = (await res.json()).docs || [];
+  } catch (e) {}
+  if (!docs.length) {
+    list.innerHTML = '<div class="empty">No design docs yet.</div>';
+    return;
+  }
+  docs.forEach(d => {
+    let answered = 0;
+    try {
+      const raw = localStorage.getItem(d.storageKey);
+      if (raw) {
+        const s = JSON.parse(raw);
+        answered = Object.keys(s.opts || {}).length;
+      }
+    } catch (e) {}
+    const pct = d.questions ? Math.round(answered / d.questions * 100) : 0;
+    const a = document.createElement('a');
+    a.className = 'doc';
+    a.href = 'docs/' + d.slug + '/';
+    a.innerHTML =
+      '<div class="date">' + d.date + '</div>' +
+      '<h2>' + d.title + '</h2>' +
+      '<div class="sub">' + d.subtitle + '</div>' +
+      '<div class="bar"><i style="width:' + pct + '%"></i></div>' +
+      '<div class="prog"><b>' + answered + '</b> of ' + d.questions + ' questions answered</div>' +
+      '<span class="cta">' + (answered > 0 ? 'Continue' : 'Start') + ' review →</span>';
+    list.appendChild(a);
+  });
+}
+main();
+</script>
+</body>
+</html>

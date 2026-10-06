@@ -291,7 +291,7 @@ uniform int   uSteps;
 const float CYCLE_T  = 20.0; // winding-cap cycle, seconds
 const float OMEGA_IN = 1.0;  // inner-edge angular speed, rad/s (~6 s per orbit)
 const float BANDS    = 30.0; // striation count across the disk radius
-const float SPIRAL   = 2.2;  // spiral lean of the bands (higher = more sheared arcs)
+const float SPIRAL   = 2.0;  // spiral lean, integer: keeps bands 2PI-periodic (no atan seam)
 
 float hash13(vec3 p){
   p = fract(p * 0.1031);
@@ -363,21 +363,29 @@ float diskTex(float r, float ang, float lt, float rIn, float lrMax){
   float lr = log(max(r / rIn, 0.001));
   float om = OMEGA_IN * pow(rIn / max(r, 0.001), 1.5);
   float a = ang + lt * om;
+  // 2PI-periodic angular coords: the raw angle carries atan's branch cut, and
+  // non-integer multipliers made sin/noise jump across it -- a sharp straight
+  // seam on the disk. cos/sin are seamless and still co-rotate with the flow.
+  vec2 ap = vec2(cos(a), sin(a));
 
   // organic wobble at two scales, co-rotating: wavy gas, not machined grooves
-  float wobL = fbm3(vec2(lr * 1.6, a * 1.2) + vec2(0.0, lt * 0.030)) - 0.5;
-  float wobF = fbm3(vec2(lr * 4.5, a * 3.4) + vec2(4.7, lt * 0.045)) - 0.5;
+  float wobL = fbm3(vec2(lr * 1.6, ap.x * 1.3 + ap.y * 0.9) + vec2(0.0, lt * 0.030)) - 0.5;
+  float wobF = fbm3(vec2(lr * 4.5, ap.x * 2.2 - ap.y * 1.6) + vec2(4.7, lt * 0.045)) - 0.5;
   // band spacing varies with azimuth -> bands merge and split like turbulence
   float spacing = 1.0 + 1.1 * wobL;
+  // calm the outer disk a notch: fine bands dominate out there, swirls stay inner
+  float outerCalm = 1.0 - 0.30 * (lr / lrMax);
   float ph = (lr / lrMax) * BANDS * 6.2831853 * spacing
-           + wobL * 10.0 + wobF * 5.0 + a * SPIRAL;
+           + (wobL * 10.0 + wobF * 5.0) * outerCalm + a * SPIRAL;
   float stri = smoothstep(-0.55, 0.90, sin(mod(ph, 6.2831853)));
 
   // brightness lanes running along each band
-  float lanes = fbm3(vec2(lr * 2.6, a * 2.6) + vec2(lt * 0.020, 3.7));
+  float lanes = fbm3(vec2(lr * 2.6, ap.x * 1.8 + ap.y * 1.4) + vec2(lt * 0.020, 3.7));
   // bright knots/streaks: sparse, high-contrast, advected with the flow so
-  // the rotation is unmistakable (concentric bands alone can't show motion)
-  float knots = smoothstep(0.60, 0.92, fbm3(vec2(a * 2.2, lr * 5.5) + vec2(8.2, 1.3)));
+  // the rotation is unmistakable (concentric bands alone can't show motion).
+  // Faded toward the outer disk so the foreground stays fine-banded.
+  float rfade = 1.0 - 0.55 * (lr / lrMax);
+  float knots = smoothstep(0.60, 0.92, fbm3(vec2(ap.x * 1.7 + ap.y * 1.1, lr * 5.5) + vec2(8.2, 1.3))) * rfade;
 
   float bandPart = stri * (0.30 + 0.70 * lanes);
   return 0.10 + 1.20 * bandPart + 1.50 * knots * (0.45 + 0.55 * stri);
@@ -434,7 +442,7 @@ void main(){
   vec3 rd = normalize(uCamFwd + uTanHalfFov * (ndc.x * uCamRight + ndc.y * uCamUp));
   vec3 ro = uCamPos;
 
-  float rIn = mix(3.0, 1.35, uSpin);
+  float rIn = mix(2.4, 1.05, uSpin); // inner rim hugs the horizon: the disk touches the shadow
   float rOut = 9.0;
   float b0 = length(cross(rd, ro));
 
@@ -449,6 +457,10 @@ void main(){
     if (i >= uSteps) break;
     float r = length(p);
     if (r < 1.0) { captured = true; break; }
+    // Adaptive stride: long steps cruise the empty far field, fine steps
+    // resolve the strong-field lensing. A fixed dt starved the lensed rays
+    // of steps at large orbit radii, deleting the arcs over the shadow.
+    dt = clamp(0.09 * r, 0.035, 0.45);
     vec3 pPrev = p;
     float r3 = r * r * r;
     dir = normalize(dir - (p / r3) * 1.5 * dt);

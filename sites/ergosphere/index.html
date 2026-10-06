@@ -287,6 +287,13 @@ uniform float uDiskBright;
 uniform float uRingB;
 uniform int   uSteps;
 
+// Striated-disk animation params (see diskTex/diskShade below).
+const float CYCLE_T  = 20.0; // winding-cap cycle, seconds
+const float OMEGA_IN = 0.8;  // inner-edge angular speed, rad/s (~8 s per orbit)
+const float BANDS    = 30.0; // striation count across the disk radius
+const float SPIRAL   = 1.5;  // spiral lean of the bands
+const float WOB_AMP  = 7.0;  // band waviness, radians of phase
+
 float hash13(vec3 p){
   p = fract(p * 0.1031);
   p += dot(p, p.zyx + 31.32);
@@ -335,26 +342,66 @@ float vnoise(vec2 p){
   return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 
+float fbm3(vec2 p){
+  float v = 0.0;
+  float a = 0.5;
+  for (int i = 0; i < 3; i++){
+    v += a * vnoise(p);
+    p = p * 2.03 + 11.7;
+    a *= 0.5;
+  }
+  return v;
+}
+
+// Striated disk texture in co-rotating material coordinates.
+// a = ang + lt*Om shears with Keplerian differential rotation (inner orbits
+// faster); the sense matches the doppler tangent in diskShade below.
+// lt is the layer-local time; two layers half a cycle apart are cross-faded by
+// the caller so differential winding never exceeds one cycle (bands stay crisp,
+// never alias into mush).
+float diskTex(float r, float ang, float lt, float rIn, float lrMax){
+  float lr = log(max(r / rIn, 0.001));
+  float om = OMEGA_IN * pow(rIn / max(r, 0.001), 1.5);
+  float a = ang + lt * om;
+
+  // large-scale wobble, co-rotating and radially stretched: wavy, not circular, bands
+  float wob = fbm3(vec2(lr * 1.7, a * 1.3) + vec2(0.0, lt * 0.03)) - 0.5;
+  // fine striations: BANDS bright/dark rings across log-radius, phase-wobbled
+  float ph = lr / lrMax * BANDS * 6.2831853 + wob * WOB_AMP + a * SPIRAL;
+  float bands = sin(mod(ph, 6.2831853));
+  float stri = smoothstep(-0.45, 0.85, bands);
+  // brightness lanes running along each band
+  float lanes = fbm3(vec2(lr * 2.6, a * 2.6) + vec2(lt * 0.02, 3.7));
+  return 0.30 + 0.90 * stri * (0.45 + 0.55 * lanes);
+}
+
 vec3 diskShade(vec3 hit, vec3 rayDir, float rIn, float rOut){
   float r = max(length(hit.xz), 0.001);
   float rn = clamp((r - rIn) / (rOut - rIn), 0.0, 1.0);
+  float ang = atan(hit.z, hit.x);
+  float lrMax = log(rOut / rIn);
 
-  // Gargantua palette: white-hot rim -> vivid amber -> deep ember.
-  // uTemp slides the mid/outer disk between icy blue and ember orange.
-  vec3 cHot = vec3(1.00, 0.97, 0.90);
-  vec3 cMid = mix(vec3(0.38, 0.55, 1.00), vec3(1.00, 0.50, 0.15), uTemp);
-  vec3 cOut = mix(vec3(0.08, 0.14, 0.42), vec3(0.60, 0.16, 0.04), uTemp);
+  // Winding-capped animation: two texture layers half a cycle apart, cross-faded.
+  // Each layer's weight hits zero exactly when its local time wraps, so the
+  // restart is invisible and differential winding never exceeds one cycle.
+  float cyc = fract(uTime / CYCLE_T);
+  float ta = cyc * CYCLE_T;
+  float tb = fract(cyc + 0.5) * CYCLE_T;
+  float wa = sin(3.14159265 * cyc);
+  wa *= wa;
+  float tex = diskTex(r, ang, ta, rIn, lrMax) * wa
+            + diskTex(r, ang, tb, rIn, lrMax) * (1.0 - wa);
+
+  // flicker octave on absolute time: glues the two layers during crossfade
+  tex *= 0.86 + 0.28 * vnoise(vec2(mod(uTime, 600.0) * 0.33, r * 0.8));
+
+  // Striated ember palette: white-hot rim -> vivid amber -> deep red-orange.
+  // uTemp slides the mid/outer disk between icy blue and ember.
+  vec3 cHot = vec3(1.00, 0.98, 0.94);
+  vec3 cMid = mix(vec3(0.38, 0.55, 1.00), vec3(1.00, 0.52, 0.16), uTemp);
+  vec3 cOut = mix(vec3(0.08, 0.14, 0.42), vec3(0.55, 0.13, 0.03), uTemp);
   vec3 base = rn < 0.38 ? mix(cHot, cMid, rn / 0.38)
                         : mix(cMid, cOut, (rn - 0.38) / 0.62);
-
-  // Smooth large-scale turbulence, seamless around the ring (no striations).
-  float ang = atan(hit.z, hit.x);
-  float omega = 2.0 / (r * sqrt(r));
-  float t = uTime * omega;
-  vec2 pc = vec2(cos(ang), sin(ang));
-  float n1 = vnoise(pc * 1.8 + vec2(-t * 1.6, r * 0.9));
-  float n2 = vnoise(pc * 3.9 + vec2(t * 0.9, r * 2.1) + 4.2);
-  float tex = 0.80 + 0.35 * (n1 * 0.65 + n2 * 0.35);
 
   vec3 radial = vec3(hit.x, 0.0, hit.z) / r;
   vec3 tangent = normalize(cross(vec3(0.0, 1.0, 0.0), radial));
@@ -364,7 +411,7 @@ vec3 diskShade(vec3 hit, vec3 rayDir, float rIn, float rOut){
   float beam = pow(dop, 3.0);
 
   float grav = sqrt(clamp(1.0 - 1.0 / r, 0.02, 1.0));
-  float bright = pow(1.0 - rn, 1.35) * 3.2 + 0.10;
+  float bright = pow(1.0 - rn, 1.5) * 3.6 + 0.08;
 
   // Doppler color shift: approaching -> electric blue-white, receding -> deep ember.
   float ds = clamp((dop - 1.0) * 1.6 + 0.5, 0.0, 1.0);

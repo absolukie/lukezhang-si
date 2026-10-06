@@ -70,6 +70,25 @@
     background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
     border-radius:10px;padding:8px 14px;}
   .rrow b{color:var(--cyan);}
+  #challengeLbl{font-size:14px;color:var(--magenta);font-weight:700;letter-spacing:1px;}
+  #friendBtn{margin-top:4px;}
+  #shareRow{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;margin-top:6px;}
+  #nameInput{font-size:16px;font-family:inherit;color:#e8e8f2;background:#181826;
+    border:1px solid #2c2c44;border-radius:10px;padding:10px 12px;min-height:44px;
+    width:150px;touch-action:manipulation;}
+  #boardWrap{margin-top:10px;min-width:250px;max-width:330px;}
+  .boardTitle{font-size:12px;letter-spacing:2px;color:var(--magenta);font-weight:800;margin-bottom:8px;text-align:center;}
+  #boardRows{display:flex;flex-direction:column;gap:6px;}
+  .brow{display:flex;justify-content:space-between;align-items:center;font-size:14px;color:#c9c9dd;
+    background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+    border-radius:10px;padding:8px 14px;}
+  .brow b{color:var(--cyan);}
+  .brow .rk{color:var(--dim);min-width:28px;}
+  .brow.me{border-color:rgba(0,229,255,.6);background:rgba(0,229,255,.06);}
+  .brow .vs{font-size:11px;color:var(--dim);display:block;}
+  .rowbtns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:4px;}
+  #postMsg{min-height:18px;}
+  .overlay{overflow-y:auto;}
 </style>
 </head>
 <body>
@@ -89,8 +108,10 @@
 <div id="title" class="overlay">
   <h1>TRACE RACE</h1>
   <p class="how">5 rounds. Each round shows a ghost shape &mdash; redraw it in <b>one</b> stroke. Closest trace wins.</p>
+  <div class="bestline" id="challengeLbl"></div>
   <div class="bestline" id="titleBest"></div>
   <button id="startBtn" class="primary">Start</button>
+  <button id="friendBtn">Challenge a friend</button>
 </div>
 
 <div id="results" class="overlay hidden">
@@ -99,7 +120,19 @@
   <div id="newBest" class="hidden">NEW BEST!</div>
   <div id="resRows"></div>
   <div class="bestline" id="resBest"></div>
-  <button id="againBtn" class="primary">Play again</button>
+  <div id="shareRow">
+    <input id="nameInput" maxlength="16" placeholder="Your name" autocomplete="off" autocapitalize="words">
+    <button id="postBtn" class="primary">Post score</button>
+  </div>
+  <div class="bestline" id="postMsg"></div>
+  <div id="boardWrap" class="hidden">
+    <div class="boardTitle">LEADERBOARD &middot; <span id="boardChallenge"></span></div>
+    <div id="boardRows"></div>
+  </div>
+  <div class="rowbtns">
+    <button id="shareBtn">Share this race</button>
+    <button id="againBtn" class="primary">Play again</button>
+  </div>
 </div>
 
 <script>
@@ -297,14 +330,111 @@ function boltPts(){
     [-0.25, -1.0], [0.35, -0.12], [0.08, -0.12]
   ];
 }
+function starPts(){
+  var P = [], i;
+  for(i = 0; i < 10; i++){
+    var rad = (i % 2 === 0) ? 1 : 0.45;
+    var a = -Math.PI / 2 + i * Math.PI / 5;
+    P.push([Math.cos(a) * rad, Math.sin(a) * rad]);
+  }
+  return smoothClosed(P);
+}
+function lemniscatePts(){
+  // figure-8
+  var P = [], i;
+  for(i = 0; i < 220; i++){
+    var t = i / 220 * 2 * Math.PI;
+    var d = 1 + Math.sin(t) * Math.sin(t);
+    P.push([Math.cos(t) / d, Math.sin(t) * Math.cos(t) / d]);
+  }
+  return P;
+}
+function leafPts(){
+  var P = [], i, t, x, y;
+  for(i = 0; i <= 60; i++){
+    t = i / 60;
+    x = -1 + 2 * t;
+    y = 0.55 * Math.sin(Math.PI * t);
+    P.push([x, y]);
+  }
+  for(i = 60; i >= 0; i--){
+    t = i / 60;
+    x = -1 + 2 * t;
+    y = -0.55 * Math.sin(Math.PI * t);
+    P.push([x, y]);
+  }
+  return P;
+}
 
 var SHAPES = [
   { label: 'heart',    pts: heartPts() },
   { label: 'fish',     pts: fishPts() },
   { label: 'flower',   pts: flowerPts() },
   { label: 'crescent', pts: crescentPts() },
-  { label: 'lightning', pts: boltPts() }
+  { label: 'lightning', pts: boltPts() },
+  { label: 'star',     pts: starPts() },
+  { label: 'figure-8', pts: lemniscatePts() },
+  { label: 'leaf',     pts: leafPts() }
 ];
+
+/* ---------- seeded challenges (same link = same 5 shapes, same order) ---------- */
+
+function hashStr(s){
+  var h = 2166136261;
+  for(var i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function mulberry32(seed){
+  var a = seed >>> 0;
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    var t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function seededShuffle(a, rand){
+  for(var i = a.length - 1; i > 0; i--){
+    var j = Math.floor(rand() * (i + 1));
+    var t = a[i]; a[i] = a[j]; a[j] = t;
+  }
+  return a;
+}
+function todayStr(){
+  var d = new Date();
+  function p2(n){ return String(n).padStart(2, '0'); }
+  return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
+}
+function getChallenge(){
+  var q = {};
+  try{
+    window.location.search.replace(/^\?/, '').split('&').forEach(function(kv){
+      var p = kv.split('=');
+      if(p[0]) q[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || '');
+    });
+  }catch(e){}
+  if(q.c && /^[A-Za-z0-9]{4,12}$/.test(q.c)) return { id: 'c' + q.c, kind: 'friend' };
+  if(q.d && /^\d{4}-\d{2}-\d{2}$/.test(q.d)) return { id: 'd' + q.d, kind: 'daily' };
+  return { id: 'd' + todayStr(), kind: 'daily' };
+}
+function randomSeed(){
+  var chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789', s = '';
+  for(var i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+function challengeURL(id){
+  var base = window.location.href.split('?')[0].split('#')[0];
+  if(id.charAt(0) === 'd') return base + '?d=' + id.slice(1);
+  return base + '?c=' + id.slice(1);
+}
+var CH = getChallenge();
+function challengeLabel(){
+  if(CH.kind === 'daily'){
+    var ds = CH.id.slice(1);
+    return ds === todayStr() ? "Today's race" : 'Race of ' + ds;
+  }
+  return 'Friend challenge';
+}
 
 /* ---------- dom ---------- */
 
@@ -332,7 +462,9 @@ var game = {
   raw: [],          // player stroke
   lastRMS: NaN,
   lastScore: 0,
-  best: loadBest()
+  best: loadBest(),
+  posted: false,
+  myId: null
 };
 
 function loadBest(){
@@ -366,10 +498,15 @@ function quip(s){
 /* ---------- game flow ---------- */
 
 function startGame(){
-  game.order = shuffle([0, 1, 2, 3, 4]);
+  var rand = mulberry32(hashStr(CH.id));
+  var pool = [];
+  for(var i = 0; i < SHAPES.length; i++) pool.push(i);
+  game.order = seededShuffle(pool, rand).slice(0, 5);
   game.roundIdx = 0;
   game.total = 0;
   game.scores = [];
+  game.posted = false;
+  game.myId = null;
   titleEl.classList.add('hidden');
   resultsEl.classList.add('hidden');
   startRound();
@@ -441,7 +578,121 @@ function showResults(){
     rows.appendChild(d);
   });
   document.getElementById('resBest').innerHTML = 'best: <b>' + game.best + '</b> / 500';
+  // reset the share/post UI, then pull the shared board
+  document.getElementById('postBtn').disabled = false;
+  document.getElementById('postMsg').textContent = '';
+  document.getElementById('boardWrap').classList.add('hidden');
+  document.getElementById('nameInput').value = playerName();
   resultsEl.classList.remove('hidden');
+  loadBoard();
+}
+
+/* ---------- shared challenges: share links + leaderboard ---------- */
+
+var API = '/api/trace-race';
+
+function escHtml(s){
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function fallbackCopy(t){
+  try{
+    var ta = document.createElement('textarea');
+    ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    var r = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return r;
+  }catch(e){ return false; }
+}
+function copyText(t, done){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(function(){ done(true); }, function(){
+      done(fallbackCopy(t));
+    });
+  }else{ done(fallbackCopy(t)); }
+}
+function playerName(){
+  try{ return window.localStorage.getItem('bb-proto-trace-race-name') || ''; }catch(e){ return ''; }
+}
+function savePlayerName(n){
+  try{ window.localStorage.setItem('bb-proto-trace-race-name', n); }catch(e){}
+}
+
+async function postScore(){
+  var msg = document.getElementById('postMsg');
+  var input = document.getElementById('nameInput');
+  var raw = (input.value || '').trim().slice(0, 16);
+  var name = raw || 'Player';
+  if(raw) savePlayerName(raw);
+  msg.textContent = 'Posting…';
+  try{
+    var res = await fetch(API + '/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        challenge: CH.id,
+        name: name,
+        total: game.total,
+        scores: game.scores.map(function(s){ return s.score; })
+      })
+    });
+    if(res.status === 429){ msg.textContent = 'Slow down — try again in a bit.'; return; }
+    if(!res.ok){ msg.textContent = 'Could not post. Try again.'; return; }
+    var data = await res.json();
+    game.posted = true; game.myId = data.id;
+    document.getElementById('postBtn').disabled = true;
+    msg.textContent = 'Posted! You are on the board.';
+    loadBoard();
+  }catch(e){
+    msg.textContent = 'Network hiccup — try again.';
+  }
+}
+
+async function loadBoard(){
+  var wrap = document.getElementById('boardWrap');
+  try{
+    var res = await fetch(API + '/scores?challenge=' + encodeURIComponent(CH.id));
+    if(!res.ok) return;
+    var data = await res.json();
+    renderBoard(data);
+    wrap.classList.remove('hidden');
+  }catch(e){ /* board is optional; stay hidden on failure */ }
+}
+
+function renderBoard(data){
+  document.getElementById('boardChallenge').textContent = challengeLabel();
+  var rows = document.getElementById('boardRows');
+  rows.innerHTML = '';
+  var list = data.scores || [];
+  var rb = data.roundBest || [];
+  if(!list.length){
+    rows.innerHTML = '<div class="brow"><span>No scores yet — be the first.</span></div>';
+    return;
+  }
+  list.forEach(function(s, i){
+    var d = document.createElement('div');
+    d.className = 'brow' + (game.myId && s.id === game.myId ? ' me' : '');
+    var sub = '';
+    if(rb.length === 5 && s.scores && s.scores.length === 5){
+      var beats = 0, k;
+      for(k = 0; k < 5; k++) if(rb[k] > 0 && s.scores[k] >= rb[k]) beats++;
+      if(beats > 0) sub = '<span class="vs">round best x' + beats + '</span>';
+    }
+    d.innerHTML = '<span class="rk">' + (i + 1) + '</span><span>' +
+      escHtml(s.name) + sub + '</span><b>' + s.total + '</b>';
+    rows.appendChild(d);
+  });
+  if(rb.length === 5 && game.scores.length === 5){
+    var cmp = document.createElement('div');
+    cmp.className = 'brow';
+    var parts = [], k2;
+    for(k2 = 0; k2 < 5; k2++) parts.push(game.scores[k2].score + '/' + rb[k2]);
+    cmp.innerHTML = '<span class="rk">YOU</span><span>you vs best<span class="vs">' +
+      escHtml(parts.join(' · ')) + '</span></span><b></b>';
+    rows.appendChild(cmp);
+  }
 }
 
 /* ---------- canvas ---------- */
@@ -549,8 +800,23 @@ cv.addEventListener('lostpointercapture', endStroke);
 document.getElementById('startBtn').addEventListener('click', startGame);
 document.getElementById('againBtn').addEventListener('click', startGame);
 nextBtn.addEventListener('click', nextRound);
+document.getElementById('postBtn').addEventListener('click', postScore);
+document.getElementById('shareBtn').addEventListener('click', function(){
+  var msg = document.getElementById('postMsg');
+  copyText(challengeURL(CH.id), function(ok){
+    msg.textContent = ok ? 'Link copied — same 5 shapes for everyone.' : 'Copy this link: ' + challengeURL(CH.id);
+  });
+});
+document.getElementById('friendBtn').addEventListener('click', function(){
+  var url = challengeURL('c' + randomSeed());
+  var el = document.getElementById('challengeLbl');
+  copyText(url, function(ok){
+    el.textContent = ok ? 'Link copied — send it to a friend.' : 'Copy this link: ' + url;
+  });
+});
 
-(function initBest(){
+(function initMeta(){
+  document.getElementById('challengeLbl').textContent = challengeLabel();
   var el = document.getElementById('titleBest');
   el.innerHTML = game.best > 0 ? 'best: <b>' + game.best + '</b> / 500' : '';
 })();
@@ -566,6 +832,9 @@ window.__test = {
   lastScore: function(){ return game.lastScore; },
   scores: function(){ return game.scores.map(function(s){ return s.score; }); },
   next: function(){ nextRound(); },
+  challenge: function(){ return CH.id; },
+  order: function(){ return game.order.slice(); },
+  challengeURL: function(id){ return challengeURL(id); },
   targetClient: function(){
     var r = cv.getBoundingClientRect();
     return game.targetPx.map(function(p){ return [p[0] + r.left, p[1] + r.top]; });

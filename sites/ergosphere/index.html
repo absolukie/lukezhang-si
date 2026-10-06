@@ -164,8 +164,8 @@ body.cinema #restore{display:flex}
   </button>
 </div>
 
-<section id="panel" aria-label="Black hole controls">
-  <button id="panelHead" aria-expanded="true">
+<section id="panel" class="collapsed" aria-label="Black hole controls">
+  <button id="panelHead" aria-expanded="false">
     <span class="t">CONTROLS</span>
     <svg viewBox="0 0 24 24"><path d="m6 14 6-6 6 6"/></svg>
   </button>
@@ -666,15 +666,42 @@ $('btnAbout').addEventListener('click', () => $('about').classList.add('open'));
 $('btnCloseAbout').addEventListener('click', () => $('about').classList.remove('open'));
 $('about').addEventListener('click', e => { if (e.target === $('about')) $('about').classList.remove('open'); });
 
-/* drag to orbit */
+/* drag to orbit, pinch to zoom */
 let dragging = false, lx = 0, ly = 0;
+const ptrs = new Map();
+let pinching = false, pinchD0 = 0, pinchR0 = 0;
 canvas.addEventListener('pointerdown', e => {
-  dragging = true; lx = e.clientX; ly = e.clientY;
-  canvas.classList.add('dragging');
+  ptrs.set(e.pointerId, {x: e.clientX, y: e.clientY});
+  if (ptrs.size === 2) {
+    const p = [...ptrs.values()];
+    pinchD0 = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
+    pinchR0 = state.orbitR;
+    pinching = true; dragging = false;
+    canvas.classList.remove('dragging');
+  } else {
+    dragging = true; lx = e.clientX; ly = e.clientY;
+    canvas.classList.add('dragging');
+  }
   canvas.setPointerCapture(e.pointerId);
   state.lastInteract = performance.now();
 });
 canvas.addEventListener('pointermove', e => {
+  if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, {x: e.clientX, y: e.clientY});
+  if (pinching) {
+    if (ptrs.size === 2 && pinchD0 > 10) {
+      const p = [...ptrs.values()];
+      const d = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
+      if (d > 10) {
+        const r = Math.min(60, Math.max(6, pinchR0 * d / pinchD0));
+        state.orbitR = r;
+        $('sOrbit').value = Math.round(r * 10);
+        $('vOrbit').textContent = r.toFixed(1) + ' Rs';
+        updateMiller();
+      }
+    }
+    state.lastInteract = performance.now();
+    return;
+  }
   if (!dragging) return;
   const dx = e.clientX - lx, dy = e.clientY - ly;
   lx = e.clientX; ly = e.clientY;
@@ -685,7 +712,17 @@ canvas.addEventListener('pointermove', e => {
   $('vTilt').textContent = Math.round(state.tiltDeg) + '\u00B0';
   state.lastInteract = performance.now();
 });
-const endDrag = () => { dragging = false; canvas.classList.remove('dragging'); };
+const endDrag = e => {
+  if (e && e.pointerId !== undefined) ptrs.delete(e.pointerId);
+  if (ptrs.size < 2) pinching = false;
+  if (ptrs.size === 1) {
+    const p = [...ptrs.values()][0];
+    lx = p.x; ly = p.y; dragging = true;
+    canvas.classList.add('dragging');
+  } else {
+    dragging = false; canvas.classList.remove('dragging');
+  }
+};
 canvas.addEventListener('pointerup', endDrag);
 canvas.addEventListener('pointercancel', endDrag);
 

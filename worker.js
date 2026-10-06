@@ -392,6 +392,70 @@ async function handleDecision(request, env) {
   return err("not found", 404);
 }
 
+// ---- TRACE RACE shared leaderboards ----
+// POST /api/trace-race/submit {challenge, name, total, scores[5]} → stores in KV (rate-limited)
+// GET  /api/trace-race/scores?challenge=X → public top-20 + per-round bests
+var TR_CHALLENGE_RE = /^[cd][A-Za-z0-9-]{1,31}$/;
+async function handleTraceRace(request, env) {
+  var kv = env.TAKES_KV;
+  if (!kv) return err("KV not configured", 500);
+  var url = new URL(request.url);
+  var parts = url.pathname.split("/").filter(Boolean); // ["api","trace-race",action]
+  var action = parts[2];
+
+  if (request.method === "POST" && action === "submit") {
+    var ip = request.headers.get("cf-connecting-ip") || "unknown";
+    if (!(await rateLimit(kv, "tr:sub:" + ip, 20, 3600))) return err("slow down", 429);
+    var body = await request.json().catch(function () { return null; });
+    var challenge = body && body.challenge;
+    var name = body && typeof body.name === "string" ? body.name.trim().slice(0, 16) : "";
+    var total = body && body.total;
+    var scores = body && body.scores;
+    if (!challenge || !TR_CHALLENGE_RE.test(challenge)) return err("bad challenge", 400);
+    if (!name) return err("bad name", 400);
+    if (!Number.isInteger(total) || total < 0 || total > 500) return err("bad total", 400);
+    if (!Array.isArray(scores) || scores.length !== 5 ||
+        !scores.every(function (s) { return Number.isInteger(s) && s >= 0 && s <= 100; }))
+      return err("bad scores", 400);
+    if (scores.reduce(function (a, b) { return a + b; }, 0) !== total) return err("bad total", 400);
+    var id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    var rec = { id: id, challenge: challenge, name: name, total: total, scores: scores, createdAt: Date.now() };
+    await kv.put("tr:sub:" + challenge + ":" + id, JSON.stringify(rec).slice(0, 2000));
+    var idx = JSON.parse((await kv.get("tr:idx:" + challenge)) || "[]");
+    idx.unshift(id);
+    await kv.put("tr:idx:" + challenge, JSON.stringify(idx.slice(0, 200)));
+    return json({ ok: true, id: id }, 201);
+  }
+
+  if (request.method === "GET" && action === "scores") {
+    var ch = url.searchParams.get("challenge") || "";
+    if (!TR_CHALLENGE_RE.test(ch)) return err("bad challenge", 400);
+    var ridx = JSON.parse((await kv.get("tr:idx:" + ch)) || "[]");
+    var out = [];
+    for (var i = 0; i < Math.min(ridx.length, 60); i++) {
+      var r = await kv.get("tr:sub:" + ch + ":" + ridx[i], "json");
+      if (r && r.id && typeof r.total === "number") out.push(r);
+    }
+    out.sort(function (a, b) { return b.total - a.total; });
+    var roundBest = [0, 0, 0, 0, 0], k;
+    out.forEach(function (s) {
+      for (k = 0; k < 5; k++) {
+        if (s.scores && s.scores[k] > roundBest[k]) roundBest[k] = s.scores[k];
+      }
+    });
+    return json({
+      challenge: ch,
+      count: out.length,
+      roundBest: roundBest,
+      scores: out.slice(0, 20).map(function (s) {
+        return { id: s.id, name: s.name, total: s.total, scores: s.scores };
+      })
+    });
+  }
+
+  return err("not found", 404);
+}
+
 // ---- Game backend proxies ----
 // Lets backend-backed games live on projects.lukezhang.si with same-origin
 // API calls. The backends keep running where they are; the router forwards.
@@ -482,6 +546,14 @@ export default {
       host === PROJECTS_HOST
     ) {
       return handleDecision(request, env);
+    }
+
+    // TRACE RACE leaderboards: /api/trace-race/* → handleTraceRace (uses TAKES_KV).
+    if (
+      url.pathname.startsWith("/api/trace-race/") &&
+      host === PROJECTS_HOST
+    ) {
+      return handleTraceRace(request, env);
     }
 
     // Trade Compass: /trade-compass/api/quotes -> Yahoo Finance proxy.

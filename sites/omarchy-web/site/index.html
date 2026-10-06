@@ -1,0 +1,1466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>omarchy-web — unofficial concept</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #1a1b26; --bg2: #24283b; --fg: #c0caf5; --muted: #565f89;
+  --accent: #7aa2f7; --accent2: #bb9af7;
+  --bar-bg: #16161ed9; --bar-fg: #c0caf5;
+  --win-bg: #1a1b26; --win-fg: #c0caf5; --titlebar-bg: #24283b;
+  --border: #3b4261; --term-bg: #101018; --term-fg: #9eceff; --radius: 10px;
+  --bar-height: 54px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--bg); color: var(--fg);
+}
+* { box-sizing: border-box; }
+html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+body { font-size: 14px; line-height: 1.5; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button, a, input, select, textarea, label, summary, [role="button"], [tabindex], .window {
+  touch-action: manipulation;
+}
+button { cursor: pointer; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg2); padding: 9px 14px; }
+button:hover { border-color: var(--accent); color: var(--accent); }
+button:active { transform: translateY(1px); }
+button:disabled { cursor: default; opacity: .5; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 3px;
+}
+input:not([type="range"]):not([type="checkbox"]), select, textarea {
+  max-width: 100%; background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 12px 14px; caret-color: var(--accent);
+}
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
+input[type="range"], input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
+a { color: var(--accent); }
+svg { width: 20px; height: 20px; flex-shrink: 0; vertical-align: middle; }
+[hidden] { display: none !important; }
+::selection { background: var(--accent); color: var(--bg); }
+* { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.muted { color: var(--muted); }
+.eyebrow { color: var(--accent); text-transform: uppercase; letter-spacing: .2em; font-size: 11px; }
+.icon-button { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; }
+.primary-button { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 700; }
+.primary-button:hover { background: var(--accent2); border-color: var(--accent2); color: var(--bg); }
+#boot { position: fixed; inset: 0; z-index: 10000; background: var(--term-bg); color: var(--term-fg); padding: clamp(24px, 7vw, 90px); overflow: auto; transition: opacity .35s ease; }
+#boot.leaving { opacity: 0; pointer-events: none; }
+.boot-heading { color: var(--accent); margin: 0 0 30px; font-size: 14px; font-weight: 500; }
+.boot-line { margin: 5px 0; font-size: clamp(11px, 2vw, 14px); white-space: pre-wrap; overflow-wrap: anywhere; }
+.boot-ok { color: var(--accent2); }
+.boot-cursor { display: inline-block; margin-top: 12px; color: var(--accent); animation: blink 1s steps(2, start) infinite; }
+@keyframes blink { to { opacity: 0; } }
+#login { position: fixed; inset: 0; z-index: 9000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; padding: 24px; overflow: auto; background: radial-gradient(ellipse at 50% 20%, var(--bg2), var(--bg) 75%); }
+.login-card { width: min(100%, 360px); text-align: center; padding: 34px 30px; border: 1px solid var(--border); border-radius: calc(var(--radius) + 10px); background: var(--bar-bg); box-shadow: 0 24px 80px #0003; }
+.avatar { width: 78px; height: 78px; border: 1px solid var(--accent); color: var(--accent); background: var(--bg2); border-radius: 50%; display: grid; place-items: center; margin: 0 auto 20px; }
+.avatar svg { width: 38px; height: 38px; }
+.login-card h1 { margin: 0; font-size: 25px; font-weight: 500; }
+.login-caption { color: var(--muted); font-size: 12px; margin: 7px 0 25px; }
+.login-card label { display: block; text-align: left; margin-bottom: 7px; font-size: 12px; }
+.login-card input, .login-card button { width: 100%; min-height: 46px; }
+.login-card button { margin-top: 12px; }
+.login-hint { margin: 15px 0 0; color: var(--muted); font-size: 11px; }
+.login-footer { text-align: center; max-width: 480px; font-size: 11px; color: var(--fg); opacity: .7; }
+#desktop { position: absolute; inset: 0; isolation: isolate; background: var(--bg); overflow: hidden; }
+#topbar { position: absolute; inset: 0 0 auto; height: var(--bar-height); z-index: 100; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; padding: 0 14px; color: var(--bar-fg); background: var(--bar-bg); border-bottom: 1px solid var(--border); backdrop-filter: blur(18px); }
+.workspaces { display: flex; gap: 5px; align-items: center; min-width: 0; }
+.workspace-pill { position: relative; min-width: 34px; height: 34px; padding: 0; border-color: transparent; background: transparent; font-size: 12px; }
+.workspace-pill.active { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 700; }
+.workspace-pill.occupied::after { content: ''; position: absolute; bottom: 3px; left: calc(50% - 2px); width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
+#clock { font-size: 13px; font-variant-numeric: tabular-nums; letter-spacing: .06em; }
+.tray { display: flex; justify-self: end; align-items: center; gap: 5px; }
+.tray button { background: transparent; border-color: transparent; }
+.tray button:hover, .tray button[aria-expanded="true"] { background: var(--bg2); color: var(--accent); }
+.tray-status { display: inline-flex; gap: 12px; align-items: center; height: 40px; padding: 0 10px; }
+.tray-status svg { width: 17px; height: 17px; }
+.tray-status .offline { opacity: .35; }
+#ws-area { position: absolute; top: var(--bar-height); bottom: 26px; left: 0; right: 0; margin: 12px; }
+.desktop-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 16px; padding: 24px; pointer-events: none; }
+.desktop-empty .empty-mark { display: grid; grid-template-columns: repeat(3, 13px); gap: 7px; transform: rotate(-12deg); margin-bottom: 14px; }
+.empty-mark span { width: 13px; height: 13px; border: 1px solid var(--accent); opacity: .6; }
+.empty-mark span:nth-child(3n + 1) { background: var(--accent); opacity: .2; }
+.desktop-empty h1 { font-size: clamp(22px, 3vw, 36px); font-weight: 400; margin: 0; letter-spacing: -.05em; }
+.desktop-empty p { max-width: 400px; margin: 0; font-size: 12px; opacity: .7; }
+.desktop-empty button { pointer-events: auto; margin-top: 9px; background: var(--bar-bg); }
+.window { position: absolute; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; background: var(--win-bg); color: var(--win-fg); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 12px 32px #0003; }
+.window.focused { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 16px 44px #0003; }
+.titlebar, .window-titlebar { flex: 0 0 42px; min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 5px 0 14px; background: var(--titlebar-bg); border-bottom: 1px solid var(--border); user-select: none; }
+.window-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.window-close { flex: 0 0 34px; width: 34px; height: 34px; padding: 0; background: transparent; border-color: transparent; color: var(--muted); font-size: 23px; line-height: 1; }
+.window-close:hover { background: var(--bg); color: var(--accent2); }
+.window-body { flex: 1 1 0%; min-width: 0; min-height: 0; overflow: auto; position: relative; }
+.app-error { padding: 24px; }
+.overlay { position: fixed; inset: 0; z-index: 500; background: var(--bar-bg); backdrop-filter: blur(24px); overflow: auto; overscroll-behavior: contain; }
+#launcher { display: flex; align-items: flex-start; justify-content: center; padding: clamp(32px, 12vh, 130px) 24px 45px; }
+.launcher-content { width: min(100%, 750px); }
+.overlay-heading { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-bottom: 24px; }
+.overlay-heading h2 { margin: 0; font-size: 20px; font-weight: 500; }
+#launcher-search { width: 100%; font-size: clamp(18px, 3vw, 28px); padding: 20px 22px; background: var(--bg); box-shadow: 0 12px 40px #0002; }
+.launcher-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; margin-top: 26px; }
+.launcher-app { min-height: 145px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 16px; padding: 22px 12px; background: var(--win-bg); }
+.launcher-app:first-child { border-color: var(--accent); }
+.launcher-app:hover { background: var(--bg2); }
+.app-icon { display: grid; place-items: center; font-size: 34px; min-height: 42px; color: var(--accent); }
+.app-icon svg { width: 36px; height: 36px; }
+.launcher-title { font-size: 13px; }
+.launcher-help { margin-top: 24px; font-size: 11px; color: var(--fg); opacity: .65; }
+.launcher-no-results { grid-column: 1 / -1; text-align: center; padding: 35px 10px; }
+#shortcuts { display: grid; place-items: center; padding: 24px; }
+.shortcuts-panel { width: min(100%, 490px); padding: 28px; background: var(--win-bg); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 24px 70px #0004; }
+.shortcut-list { margin: 0; }
+.shortcut-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 0; border-top: 1px solid var(--border); }
+.shortcut-row dt { font-size: 12px; }
+.shortcut-row dd { margin: 0; white-space: nowrap; }
+kbd { font: inherit; font-size: 11px; display: inline-block; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; padding: 3px 7px; background: var(--bg2); }
+.shortcuts-note { margin: 20px 0 0; font-size: 11px; color: var(--muted); }
+#quicksettings { position: fixed; z-index: 500; top: calc(var(--bar-height) + 9px); right: 12px; width: min(330px, calc(100% - 24px)); max-height: calc(100% - var(--bar-height) - 30px); overflow: auto; padding: 20px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--win-bg); box-shadow: 0 18px 60px #0005; }
+#quicksettings .overlay-heading { margin-bottom: 16px; }
+#quicksettings h2 { font-size: 15px; }
+.quick-toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 22px; }
+.quick-toggle { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; font-size: 12px; }
+.quick-toggle[aria-pressed="true"] { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.slider-control { display: block; margin-top: 15px; }
+.slider-heading { display: flex; justify-content: space-between; font-size: 12px; }
+.slider-control input { display: block; width: 100%; min-height: 34px; margin: 4px 0 0; }
+.quick-note { border-top: 1px solid var(--border); margin: 16px 0 0; padding-top: 12px; font-size: 10px; color: var(--muted); }
+#toast { position: fixed; z-index: 11000; left: 50%; bottom: 42px; transform: translateX(-50%); max-width: min(90vw, 520px); padding: 12px 20px; border: 1px solid var(--accent); border-radius: var(--radius); background: var(--win-bg); color: var(--win-fg); box-shadow: 0 8px 35px #0005; font-size: 12px; text-align: center; overflow-wrap: anywhere; pointer-events: none; opacity: 0; transition: opacity .18s ease; }
+#toast.visible { opacity: 1; }
+#ver { position: fixed; z-index: 9500; right: max(12px, env(safe-area-inset-right)); bottom: max(7px, env(safe-area-inset-bottom)); font-size: 10px; color: var(--fg); opacity: .55; pointer-events: none; }
+/* Shared app primitives inherit the same theme as window chrome. */
+.window-body h1, .window-body h2, .window-body h3 { color: var(--win-fg); }
+.window-body pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.window-body table { width: 100%; border-collapse: collapse; }
+.window-body th, .window-body td { text-align: left; padding: 10px; border-bottom: 1px solid var(--border); }
+.app-content { min-width: 0; min-height: 100%; }
+.app-toolbar { display: flex; align-items: center; gap: 8px; padding: 12px; background: var(--bg2); border-bottom: 1px solid var(--border); }
+.app-toolbar button { min-height: 38px; white-space: nowrap; font-size: 12px; }
+.files-app, .browser-app { display: flex; flex-direction: column; height: 100%; }
+.files-toolbar { flex: 0 0 auto; }
+.files-breadcrumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.files-breadcrumbs .breadcrumb { padding: 4px 6px; min-height: 32px; border-color: transparent; background: transparent; }
+.breadcrumb-separator { color: var(--muted); }
+.files-layout { display: flex; min-height: 0; flex: 1; }
+.files-sidebar { display: flex; flex-direction: column; gap: 5px; width: 150px; flex: 0 0 150px; padding: 16px 10px; border-right: 1px solid var(--border); overflow: auto; }
+.files-place { text-align: left; font-size: 12px; background: transparent; border-color: transparent; min-height: 42px; }
+.files-place.active { background: var(--bg2); color: var(--accent); }
+.files-main { min-width: 0; flex: 1; padding: 18px; overflow: auto; }
+.files-summary { color: var(--muted); font-size: 11px; margin: 0 0 14px; }
+.files-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
+.file-item { display: flex; flex-direction: column; align-items: center; gap: 10px; min-height: 104px; padding: 14px 8px; background: transparent; border-color: transparent; }
+.file-item:hover { background: var(--bg2); }
+.file-icon { font-size: 28px; }
+.file-name { font-size: 11px; overflow-wrap: anywhere; }
+.files-viewer h2 { font-size: 17px; overflow-wrap: anywhere; }
+.files-content { background: var(--term-bg); color: var(--term-fg); padding: 20px; border-radius: var(--radius); font-size: 12px; line-height: 1.8; }
+.settings-app { padding: clamp(18px, 3vw, 34px); }
+.settings-app h1 { font-size: 23px; font-weight: 500; margin: 0 0 10px; }
+.settings-app p { font-size: 12px; line-height: 1.8; }
+.settings-app h2 { margin: 27px 0 12px; font-size: 14px; font-weight: 500; }
+.settings-grid, .browser-theme-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+.theme-card, .wallpaper-card { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 14px; text-align: left; font-size: 12px; overflow: hidden; }
+.theme-card svg, .browser-theme-card svg { width: 120px; max-width: 100%; height: 28px; }
+.theme-card[aria-pressed="true"], .wallpaper-card[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.wallpaper-preview { width: 100%; height: 70px; border-radius: calc(var(--radius) / 2); }
+.settings-toggle { min-height: 44px; }
+.settings-version { color: var(--muted); }
+.browser-toolbar { flex: 0 0 auto; flex-wrap: wrap; }
+.browser-address { flex: 1 1 130px; min-width: 0; width: 0; font-size: 12px; }
+.browser-page { flex: 1; min-height: 0; padding: clamp(20px, 4vw, 48px); overflow: auto; line-height: 1.8; }
+.browser-nav { font-size: 12px; display: flex; flex-wrap: wrap; gap: 10px; }
+.browser-link { text-underline-offset: 5px; }
+.browser-notice { font-size: 10px; color: var(--muted); margin-bottom: 36px; }
+.browser-eyebrow { color: var(--accent); font-size: 11px; }
+.browser-headline { max-width: 650px; font-size: clamp(28px, 4vw, 54px); font-weight: 500; line-height: 1.15; letter-spacing: -.05em; }
+.browser-description { max-width: 650px; }
+.browser-page p { font-size: 13px; }
+.browser-page .browser-notice { font-size: 10px; }
+.browser-page h2 { margin-top: 30px; font-size: 18px; font-weight: 500; }
+.browser-theme-grid { margin: 24px 0; }
+.browser-theme-card { padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg2); }
+.browser-theme-card h2 { font-size: 13px; margin: 12px 0 0; }
+body.no-animations *, body.no-animations *::before, body.no-animations *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+@media (max-width: 720px) {
+  :root { --bar-height: 54px; }
+  #topbar { gap: 3px; padding: 0 5px; }
+  .workspaces { gap: 0; }
+  .workspace-pill { min-width: 27px; width: 27px; height: 42px; }
+  #clock { font-size: 11px; letter-spacing: 0; }
+  .tray { gap: 0; }
+  .tray .icon-button { width: 32px; height: 44px; }
+  .tray-status { padding: 0 5px; gap: 5px; height: 44px; }
+  .tray-status svg { width: 14px; height: 14px; }
+  #ws-area { margin: 0; bottom: 0; }
+  .window { top: 0 !important; left: 0 !important; width: 100% !important; height: 100% !important; border-radius: 0; border: 0; box-shadow: none !important; }
+  .window:not(.focused) { display: none; }
+  .titlebar, .window-titlebar { flex-basis: 46px; min-height: 46px; padding-left: 12px; }
+  .window-close { height: 42px; width: 44px; flex-basis: 44px; }
+  .window-body { padding-bottom: env(safe-area-inset-bottom); }
+  #launcher { padding: 24px 18px 40px; }
+  .launcher-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .launcher-app { min-height: 150px; }
+  #launcher-search { font-size: 18px; padding: 16px; }
+  .shortcuts-panel { padding: 22px 18px; }
+  .shortcut-row { gap: 8px; }
+  #quicksettings { right: 8px; }
+  .login-card { padding: 28px 24px; }
+  #ver { font-size: 9px; }
+  .files-layout { flex-direction: column; }
+  .files-sidebar { flex: 0 0 auto; width: 100%; flex-direction: row; padding: 6px; border-right: 0; border-bottom: 1px solid var(--border); }
+  .files-place { flex-shrink: 0; padding: 8px 10px; }
+  .files-main { padding: 14px; }
+  .browser-toolbar { gap: 5px; padding: 8px; }
+  .browser-toolbar button { padding: 8px; font-size: 11px; }
+  .browser-address { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* omarchy-web data: themes, wallpapers, fake filesystem. Read-only for app workers. */
+window.THEMES = {
+  "tokyo-night": { label: "Tokyo Night", vars: {
+    "--bg":"#1a1b26","--bg2":"#24283b","--fg":"#c0caf5","--muted":"#565f89",
+    "--accent":"#7aa2f7","--accent2":"#bb9af7","--bar-bg":"#16161ed9","--bar-fg":"#c0caf5",
+    "--win-bg":"#1a1b26","--win-fg":"#c0caf5","--titlebar-bg":"#24283b",
+    "--border":"#3b4261","--term-bg":"#101018","--term-fg":"#9eceff","--radius":"10px" }},
+  "catppuccin": { label: "Catppuccin Mocha", vars: {
+    "--bg":"#1e1e2e","--bg2":"#313244","--fg":"#cdd6f4","--muted":"#6c7086",
+    "--accent":"#cba6f7","--accent2":"#f5c2e7","--bar-bg":"#11111bd9","--bar-fg":"#cdd6f4",
+    "--win-bg":"#1e1e2e","--win-fg":"#cdd6f4","--titlebar-bg":"#313244",
+    "--border":"#45475a","--term-bg":"#11111b","--term-fg":"#a6e3a1","--radius":"12px" }},
+  "gruvbox": { label: "Gruvbox Dark", vars: {
+    "--bg":"#282828","--bg2":"#3c3836","--fg":"#ebdbb2","--muted":"#928374",
+    "--accent":"#fabd2f","--accent2":"#fe8019","--bar-bg":"#1d2021d9","--bar-fg":"#ebdbb2",
+    "--win-bg":"#282828","--win-fg":"#ebdbb2","--titlebar-bg":"#3c3836",
+    "--border":"#504945","--term-bg":"#1d2021","--term-fg":"#b8bb26","--radius":"6px" }},
+  "nord": { label: "Nord", vars: {
+    "--bg":"#2e3440","--bg2":"#3b4252","--fg":"#eceff4","--muted":"#616e88",
+    "--accent":"#88c0d0","--accent2":"#81a1c1","--bar-bg":"#242933d9","--bar-fg":"#eceff4",
+    "--win-bg":"#2e3440","--win-fg":"#eceff4","--titlebar-bg":"#3b4252",
+    "--border":"#4c566a","--term-bg":"#242933","--term-fg":"#8fbcbb","--radius":"8px" }},
+  "dracula": { label: "Dracula", vars: {
+    "--bg":"#282a36","--bg2":"#44475a","--fg":"#f8f8f2","--muted":"#6272a4",
+    "--accent":"#bd93f9","--accent2":"#ff79c6","--bar-bg":"#21222cd9","--bar-fg":"#f8f8f2",
+    "--win-bg":"#282a36","--win-fg":"#f8f8f2","--titlebar-bg":"#44475a",
+    "--border":"#6272a4","--term-bg":"#21222c","--term-fg":"#50fa7b","--radius":"10px" }},
+  "rose-pine": { label: "Rosé Pine", vars: {
+    "--bg":"#191724","--bg2":"#1f1d2e","--fg":"#e0def4","--muted":"#6e6a86",
+    "--accent":"#ebbcba","--accent2":"#c4a7e7","--bar-bg":"#12111ad9","--bar-fg":"#e0def4",
+    "--win-bg":"#191724","--win-fg":"#e0def4","--titlebar-bg":"#1f1d2e",
+    "--border":"#403d52","--term-bg":"#12111a","--term-fg":"#9ccfd8","--radius":"14px" }}
+};
+
+window.WALLPAPERS = [
+  { name: "Aurora",   css: "radial-gradient(1200px 800px at 20% 10%, #3b2f6b 0%, transparent 60%), radial-gradient(1000px 700px at 85% 80%, #0f4c5c 0%, transparent 55%), linear-gradient(160deg, #141422, #1d1b2e)" },
+  { name: "Ember",    css: "radial-gradient(900px 600px at 80% 20%, #7c2d12 0%, transparent 60%), radial-gradient(700px 500px at 15% 85%, #3b1d5e 0%, transparent 55%), linear-gradient(160deg, #1c1214, #241a20)" },
+  { name: "Abyss",    css: "radial-gradient(1100px 750px at 50% 0%, #123a5e 0%, transparent 60%), linear-gradient(180deg, #0b1220, #101a2c)" },
+  { name: "Meadow",   css: "radial-gradient(1000px 700px at 15% 15%, #1d5e3a 0%, transparent 60%), radial-gradient(800px 600px at 90% 90%, #5e4a12 0%, transparent 55%), linear-gradient(160deg, #101a12, #16241a)" },
+  { name: "Mono",     css: "linear-gradient(160deg, #1a1a1e, #232328)" }
+];
+
+/* Fake filesystem. content = plain text shown by cat / Files viewer. */
+function __F(content){ return { type:"file", content }; }
+function __D(children){ return { type:"dir", children }; }
+window.FS = __D({
+  home: __D({ omakase: __D({
+    "README.md": __F("# omarchy-web\n\nA fan-made concept of the Omarchy desktop, running in your browser.\n\n- Press Super (or click the grid) to open the launcher\n- Super+1..5 switches workspaces\n- Try `omarchyfetch` in the terminal\n- Settings lets you re-skin the whole desktop live\n\nUnofficial concept. Not affiliated with DHH or the Omarchy project.\n"),
+    ".config": __D({
+      "omarchy": __D({
+        "theme.conf": __F("# current theme\ntheme=tokyo-night\nwallpaper=aurora\n"),
+        "bindings.conf": __F("# keybindings (concept)\nSUPER        = launcher\nSUPER+1..5   = workspace\nSUPER+RETURN = terminal\nSUPER+/      = shortcuts\n")
+      }),
+      "hypr": __D({ "hyprland.conf": __F("# hyprland, but make it web\nmaster {\n  new_status = master\n  new_on_top = true\n}\n") })
+    }),
+    "Documents": __D({
+      "manifesto.txt": __F("The malleable OS for the age of agents.\n\nYour computer should bend to you, not the other way around.\nOmarchy starts opinionated and stays hackable: every default\nis a suggestion, every config is yours to change.\n\n(This is a fan-made concept demo. Dream big, theme bigger.)\n"),
+      "todo.txt": __F("[ ] pick a theme (Settings)\n[x] open the terminal\n[ ] run omarchyfetch\n[ ] tile three windows like a pro\n[ ] tell a friend this is a web page\n")
+    }),
+    "Downloads": __D({ "omarchy-iso.torrent": __F("(imagine a 2.4 GB iso here)") }),
+    "Pictures": __D({ "wallpapers": __D({ "aurora.png": __F("(gradient, but in your mind)") }) }),
+    ".agents": __D({ "SKILLS.md": __F("# agent skills\n\n- theme-switching (instant)\n- window-tiling (master-stack)\n- omarchyfetch (mandatory)\n") })
+  })})
+});
+
+/* Desktop shell for an unofficial, entirely simulated Omarchy web concept. */
+(function () {
+  'use strict';
+
+  const app = document.getElementById('app');
+  if (!app) return;
+  const own = (object, key) => Object.prototype.hasOwnProperty.call(object || {}, key);
+  const themes = window.THEMES || {};
+  const wallpapers = window.WALLPAPERS || [];
+  const wins = [];
+  const workspaceFocus = new Map();
+  const overlays = [];
+  let workspace = 1, serial = 0, focusOrder = 0, overlayOrder = 500;
+  let loggedIn = false, toastTimer, metaPressed = false, metaUsed = false;
+
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+  function button(label, className, action) {
+    const node = el('button', className, label);
+    node.type = 'button';
+    if (action) node.addEventListener('click', action);
+    return node;
+  }
+  const paths = {
+    wifi: '<path d="M3 8a15 15 0 0 1 18 0M6 12a10 10 0 0 1 12 0M9 16a5 5 0 0 1 6 0"/><circle cx="12" cy="20" r="1"/>',
+    volume: '<path d="M11 4 6 8H3v8h3l5 4V4Zm4 4a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/>',
+    battery: '<rect x="2" y="7" width="18" height="10" rx="2"/><path d="M23 10v4M5 10h10v4H5z"/>',
+    grid: '<rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><rect x="15" y="15" width="6" height="6" rx="1"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>',
+    bluetooth: '<path d="m7 7 10 10-5 4V3l5 4L7 17"/>'
+  };
+  function icon(name) {
+    const wrapper = el('span');
+    wrapper.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths[name] + '</svg>';
+    return wrapper.firstElementChild;
+  }
+  function readSetting(key) {
+    try { return localStorage.getItem('omarchy-' + key); } catch (_) { return null; }
+  }
+  function saveSetting(key, value) {
+    try { localStorage.setItem('omarchy-' + key, value); } catch (_) { /* Storage can be disabled. */ }
+  }
+
+  const desktop = el('main');
+  desktop.id = 'desktop';
+  desktop.hidden = true;
+  desktop.setAttribute('aria-label', 'Simulated Omarchy desktop');
+  const topbar = el('header');
+  topbar.id = 'topbar';
+  const workspaces = el('nav', 'workspaces');
+  workspaces.setAttribute('aria-label', 'Workspaces');
+  const workspaceButtons = Array.from({ length: 5 }, (_, i) => {
+    const node = button(String(i + 1), 'workspace-pill', () => gotoWS(i + 1));
+    node.setAttribute('aria-label', 'Workspace ' + (i + 1));
+    node.title = 'Workspace ' + (i + 1) + ' · Super+' + (i + 1);
+    workspaces.append(node);
+    return node;
+  });
+  const clock = el('time');
+  clock.id = 'clock';
+  function updateClock() {
+    const now = new Date();
+    clock.textContent = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+    clock.dateTime = now.toISOString();
+    clock.title = now.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  }
+  updateClock();
+  window.setInterval(updateClock, 10000);
+  const tray = el('nav', 'tray');
+  tray.setAttribute('aria-label', 'Desktop controls');
+  const trayButton = button('', 'tray-status', () => toggleOverlay(quicksettings));
+  trayButton.setAttribute('aria-label', 'Quick settings');
+  trayButton.title = 'Quick settings';
+  const wifiIcon = icon('wifi');
+  trayButton.append(wifiIcon, icon('volume'), icon('battery'));
+  const shortcutsButton = button('?', 'icon-button', () => toggleOverlay(shortcuts));
+  shortcutsButton.setAttribute('aria-label', 'Keyboard shortcuts');
+  shortcutsButton.title = 'Keyboard shortcuts · Super+/';
+  const launcherButton = button('', 'icon-button', () => toggleOverlay(launcher));
+  launcherButton.append(icon('grid'));
+  launcherButton.setAttribute('aria-label', 'Open launcher');
+  launcherButton.title = 'Applications · Super';
+  tray.append(trayButton, shortcutsButton, launcherButton);
+  topbar.append(workspaces, clock, tray);
+  const area = el('section');
+  area.id = 'ws-area';
+  area.setAttribute('aria-label', 'Workspace 1 windows');
+  const empty = el('div', 'desktop-empty');
+  const mark = el('div', 'empty-mark');
+  mark.setAttribute('aria-hidden', 'true');
+  for (let i = 0; i < 9; i++) mark.append(el('span'));
+  empty.append(mark, el('span', 'eyebrow', 'A desktop, reimagined in the browser'), el('h1', '', 'Make room for your next idea.'), el('p', '', 'Five workspaces. A few familiar tools. Your own little corner of the web.'), button('Open applications', '', () => toggleOverlay(launcher)));
+  area.append(empty);
+  desktop.append(topbar, area);
+
+  function panel(id, className, title) {
+    const node = el('section', className);
+    node.id = id;
+    node.hidden = true;
+    node.tabIndex = -1;
+    node.setAttribute('role', 'dialog');
+    node.setAttribute('aria-label', title);
+    return node;
+  }
+  function heading(title, node) {
+    const row = el('div', 'overlay-heading');
+    const close = button('×', 'icon-button', () => closeOverlay(node));
+    close.setAttribute('aria-label', 'Close ' + title.toLowerCase());
+    row.append(el('h2', '', title), close);
+    return row;
+  }
+  const launcher = panel('launcher', 'overlay', 'Applications');
+  const launcherContent = el('div', 'launcher-content');
+  const search = el('input');
+  search.id = 'launcher-search';
+  search.type = 'search';
+  search.placeholder = 'Find an application…';
+  search.autocomplete = 'off';
+  search.spellcheck = false;
+  search.setAttribute('aria-label', 'Search applications');
+  const grid = el('div', 'launcher-grid');
+  grid.setAttribute('aria-label', 'Applications');
+  launcherContent.append(heading('Applications', launcher), search, grid, el('p', 'launcher-help', 'Enter to launch · Esc to return to your workspace'));
+  launcher.append(launcherContent);
+  search.addEventListener('input', renderLauncher);
+  search.addEventListener('keydown', event => {
+    if (event.key === 'Enter' && !event.isComposing) {
+      event.preventDefault();
+      const first = grid.querySelector('button');
+      if (first) first.click();
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      const first = grid.querySelector('button');
+      if (first) first.focus();
+    }
+  });
+  function renderLauncher() {
+    const query = search.value.trim().toLowerCase();
+    grid.replaceChildren();
+    Object.entries(window.Omarchy.Apps).forEach(([id, entry]) => {
+      if (!entry || typeof entry.render !== 'function') return;
+      const title = String(entry.title || id);
+      if (!(title + ' ' + id).toLowerCase().includes(query)) return;
+      const tile = button('', 'launcher-app', () => {
+        closeOverlay(launcher, false);
+        open(id);
+      });
+      tile.dataset.app = id;
+      tile.append(el('span', 'app-icon', entry.icon || '◇'), el('span', 'launcher-title', title));
+      grid.append(tile);
+    });
+    if (!grid.childElementCount) grid.append(el('p', 'launcher-no-results', 'No applications found. Try another search.'));
+  }
+
+  const shortcuts = panel('shortcuts', 'overlay', 'Keyboard shortcuts');
+  const shortcutsPanel = el('div', 'shortcuts-panel');
+  const shortcutList = el('dl', 'shortcut-list');
+  [ ['Switch workspaces', 'Super+1..5'], ['Open launcher', 'Super'], ['Close overlay', 'Esc'], ['This panel', 'Super+/'], ['Open terminal', 'Ctrl+Alt+T'] ].forEach(([label, keys]) => {
+    const row = el('div', 'shortcut-row');
+    const definition = el('dd');
+    definition.append(el('kbd', '', keys));
+    row.append(el('dt', '', label), definition);
+    shortcutList.append(row);
+  });
+  shortcutsPanel.append(heading('Keyboard shortcuts', shortcuts), shortcutList, el('p', 'shortcuts-note', 'Super is the Windows or Command key. Some shortcuts may be reserved by your browser or operating system.'));
+  shortcuts.append(shortcutsPanel);
+  const quicksettings = panel('quicksettings', '', 'Quick settings');
+  quicksettings.append(heading('Quick settings', quicksettings));
+  const toggles = el('div', 'quick-toggles');
+  function toggle(label, iconName, initial, onChange) {
+    let enabled = initial;
+    const node = button('', 'quick-toggle', () => {
+      enabled = !enabled;
+      node.setAttribute('aria-pressed', String(enabled));
+      if (onChange) onChange(enabled);
+    });
+    node.setAttribute('aria-pressed', String(enabled));
+    node.append(icon(iconName), el('span', '', label));
+    return node;
+  }
+  toggles.append(toggle('Wi-Fi', 'wifi', true, enabled => wifiIcon.classList.toggle('offline', !enabled)), toggle('Bluetooth', 'bluetooth', false));
+  quicksettings.append(toggles);
+  function slider(label, value, min, onChange) {
+    const wrapper = el('label', 'slider-control');
+    const row = el('span', 'slider-heading');
+    const output = el('output', '', value + '%');
+    const input = el('input');
+    input.type = 'range';
+    input.min = String(min);
+    input.max = '100';
+    input.value = String(value);
+    input.setAttribute('aria-label', label);
+    input.addEventListener('input', () => {
+      output.value = input.value + '%';
+      onChange(Number(input.value));
+    });
+    row.append(el('span', '', label), output);
+    wrapper.append(row, input);
+    return wrapper;
+  }
+  quicksettings.append(slider('Volume', 65, 0, value => {
+    trayButton.setAttribute('aria-label', 'Quick settings · Volume ' + value + '%');
+  }), slider('Brightness', 100, 20, value => {
+    desktop.style.filter = 'brightness(' + value / 100 + ')';
+  }), el('p', 'quick-note', 'Simulated controls · changes stay in this desktop.'));
+  const overlayTriggers = new Map([[launcher, launcherButton], [shortcuts, shortcutsButton], [quicksettings, trayButton]]);
+  overlayTriggers.forEach((trigger, node) => {
+    trigger.setAttribute('aria-controls', node.id);
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.setAttribute('aria-haspopup', 'dialog');
+    node.addEventListener('click', event => {
+      if (event.target === node && node !== quicksettings) closeOverlay(node);
+    });
+  });
+  function openOverlay(node) {
+    if (!loggedIn || !node.hidden) return;
+    if (node === launcher) { search.value = ''; renderLauncher(); }
+    node._returnFocus = document.activeElement;
+    node.hidden = false;
+    node.style.zIndex = String(++overlayOrder);
+    overlays.push(node);
+    overlayTriggers.get(node).setAttribute('aria-expanded', 'true');
+    (node === launcher ? search : node.querySelector('button') || node).focus();
+  }
+  function closeOverlay(node, restoreFocus = true) {
+    if (node.hidden) return;
+    node.hidden = true;
+    const index = overlays.indexOf(node);
+    if (index !== -1) overlays.splice(index, 1);
+    overlayTriggers.get(node).setAttribute('aria-expanded', 'false');
+    if (restoreFocus) {
+      const target = node._returnFocus;
+      if (target && target.isConnected && !target.closest('[hidden]')) target.focus();
+      else focusCurrentWindow();
+    }
+  }
+  function toggleOverlay(node) { if (node.hidden) openOverlay(node); else closeOverlay(node); }
+  document.addEventListener('pointerdown', event => {
+    if (overlays[overlays.length - 1] === quicksettings && !quicksettings.contains(event.target) && !trayButton.contains(event.target)) closeOverlay(quicksettings, false);
+  });
+
+  const toast = el('div');
+  toast.id = 'toast';
+  toast.setAttribute('role', 'status');
+  toast.setAttribute('aria-live', 'polite');
+  function notify(message) {
+    clearTimeout(toastTimer);
+    toast.textContent = String(message);
+    toast.classList.add('visible');
+    toastTimer = window.setTimeout(() => { toast.classList.remove('visible'); toast.textContent = ''; }, 3500);
+  }
+  function setTheme(name) {
+    if (!own(themes, name) || !themes[name].vars) return false;
+    Object.entries(themes[name].vars).forEach(([key, value]) => document.documentElement.style.setProperty(key, value));
+    document.documentElement.dataset.theme = name;
+    saveSetting('theme', name);
+    return true;
+  }
+  function setWallpaper(name) {
+    const entries = Array.isArray(wallpapers) ? wallpapers : Object.values(wallpapers);
+    const wallpaper = entries.find(entry => entry.name.toLowerCase() === String(name).toLowerCase());
+    if (!wallpaper) return false;
+    desktop.style.background = wallpaper.css;
+    desktop.dataset.wallpaper = wallpaper.name;
+    saveSetting('wallpaper', wallpaper.name);
+    return true;
+  }
+  function resolve(path) {
+    if (typeof path !== 'string' || !path) return null;
+    path = path.replace(/^~(?=\/|$)/, '/home/omakase');
+    if (!path.startsWith('/')) return null;
+    let node = window.FS;
+    const parents = [];
+    for (const part of path.split('/').filter(Boolean)) {
+      if (!node || node.type !== 'dir') return null;
+      if (part === '.') continue;
+      if (part === '..') { node = parents.length ? parents.pop() : node; continue; }
+      if (!own(node.children, part)) return null;
+      parents.push(node);
+      node = node.children[part];
+    }
+    if (path.endsWith('/') && node && node.type !== 'dir') return null;
+    return node || null;
+  }
+  function listDir(node) {
+    return node && node.type === 'dir' ? Object.entries(node.children || {}).map(([name, child]) => ({ name, node: child })) : [];
+  }
+  function focusWindow(win) {
+    if (!wins.includes(win) || win.ws !== workspace) return;
+    workspaceFocus.set(workspace, win.id);
+    wins.forEach(item => item.el.classList.toggle('focused', item.ws === workspace && item.id === win.id));
+    win.el.style.zIndex = String(++focusOrder);
+  }
+  function focusCurrentWindow() {
+    const win = wins.find(item => item.id === workspaceFocus.get(workspace));
+    if (!win) return;
+    const target = win.el.querySelector('.window-body input:not([disabled]), .window-body textarea:not([disabled]), .window-body button:not([disabled])');
+    (target || win.el).focus({ preventScroll: true });
+  }
+  function tile() {
+    const visible = wins.filter(win => win.ws === workspace);
+    if (!visible.some(win => win.id === workspaceFocus.get(workspace)) && visible.length) workspaceFocus.set(workspace, visible[visible.length - 1].id);
+    wins.forEach(win => {
+      win.el.hidden = win.ws !== workspace;
+      win.el.classList.toggle('focused', win.ws === workspace && win.id === workspaceFocus.get(workspace));
+    });
+    visible.forEach((win, index) => {
+      const style = win.el.style;
+      if (visible.length === 1) Object.assign(style, { left: '0', top: '0', width: '100%', height: '100%' });
+      else if (index === 0) Object.assign(style, { left: '0', top: '0', width: 'calc(62% - 6px)', height: '100%' });
+      else {
+        const count = visible.length - 1;
+        Object.assign(style, {
+          left: 'calc(62% + 6px)', width: 'calc(38% - 6px)',
+          top: 'calc(' + ((index - 1) * 100 / count) + '% + ' + ((index - 1) * 12 / count) + 'px)',
+          height: 'calc(' + (100 / count) + '% - ' + ((count - 1) * 12 / count) + 'px)'
+        });
+      }
+    });
+    empty.hidden = visible.length > 0;
+    workspaceButtons.forEach((node, i) => {
+      node.classList.toggle('active', i + 1 === workspace);
+      node.classList.toggle('occupied', wins.some(win => win.ws === i + 1));
+      node.setAttribute('aria-current', i + 1 === workspace ? 'true' : 'false');
+    });
+    area.setAttribute('aria-label', 'Workspace ' + workspace + ' windows');
+  }
+  function gotoWS(n) {
+    n = Number(n);
+    if (!Number.isInteger(n) || n < 1 || n > 5) return;
+    workspace = n;
+    tile();
+    if (!overlays.length) focusCurrentWindow();
+  }
+  function open(appId) {
+    if (!own(window.Omarchy.Apps, appId)) { notify('Application not found: ' + appId); return null; }
+    const entry = window.Omarchy.Apps[appId];
+    if (!entry || typeof entry.render !== 'function') { notify('This application is unavailable.'); return null; }
+    const node = el('article', 'window');
+    node.tabIndex = -1;
+    const id = 'window-' + (++serial);
+    node.id = id;
+    const titlebar = el('header', 'titlebar window-titlebar');
+    const title = el('span', 'window-title', entry.title || appId);
+    title.id = id + '-title';
+    node.setAttribute('aria-labelledby', title.id);
+    const body = el('div', 'window-body');
+    const win = { id, appId, el: node, ws: workspace };
+    function close() {
+      const index = wins.indexOf(win);
+      if (index === -1) return;
+      wins.splice(index, 1);
+      node.remove();
+      tile();
+      if (!overlays.length) focusCurrentWindow();
+    }
+    const closeButton = button('×', 'window-close', close);
+    closeButton.setAttribute('aria-label', 'Close ' + (entry.title || appId));
+    titlebar.append(title, closeButton);
+    node.append(titlebar, body);
+    node.addEventListener('pointerdown', () => focusWindow(win));
+    node.addEventListener('focusin', () => focusWindow(win));
+    wins.push(win);
+    area.append(node);
+    focusWindow(win);
+    tile();
+    try {
+      entry.render(body, { close, setTitle(text) { title.textContent = String(text); }, winEl: node, notify });
+    } catch (_) {
+      body.replaceChildren(el('p', 'app-error', 'This application could not start. Close it and try again.'));
+      notify('Could not open ' + (entry.title || appId) + '.');
+    }
+    if (!overlays.length && !node.contains(document.activeElement)) focusCurrentWindow();
+    return win;
+  }
+  window.Omarchy = { setTheme, setWallpaper, notify, Apps: {}, WM: { open, gotoWS, wins }, resolve, listDir };
+
+  const login = el('section');
+  login.id = 'login';
+  login.hidden = true;
+  const loginForm = el('form', 'login-card');
+  const avatar = el('div', 'avatar');
+  avatar.append(icon('user'));
+  const passwordLabel = el('label', '', 'Password');
+  passwordLabel.htmlFor = 'login-password';
+  const password = el('input');
+  password.id = 'login-password';
+  password.type = 'password';
+  password.autocomplete = 'current-password';
+  password.placeholder = 'Enter any password';
+  const submit = button('Sign in →', 'primary-button');
+  submit.type = 'submit';
+  loginForm.append(avatar, el('h1', '', 'omakase'), el('p', 'login-caption', 'Your browser desktop awaits.'), passwordLabel, password, submit, el('p', 'login-hint', 'A simulation. Any password works.'));
+  login.append(loginForm, el('footer', 'login-footer', 'Unofficial fan concept — not affiliated with DHH or the Omarchy project.'));
+  loginForm.addEventListener('submit', event => {
+    event.preventDefault();
+    password.value = '';
+    login.hidden = true;
+    desktop.hidden = false;
+    loggedIn = true;
+    tile();
+    launcherButton.focus();
+  });
+  const boot = el('section');
+  boot.id = 'boot';
+  boot.setAttribute('aria-label', 'Starting simulated desktop');
+  boot.append(el('h1', 'boot-heading', 'omarchy-web / simulated startup'));
+  const bootLog = el('div', 'boot-log');
+  boot.append(bootLog, el('span', 'boot-cursor', '▌'));
+  const version = el('span', '', 'v2026.10.04');
+  version.id = 'ver';
+  app.replaceChildren(desktop, launcher, shortcuts, quicksettings, login, boot, toast, version);
+  if (!setTheme(readSetting('theme'))) setTheme(own(themes, 'tokyo-night') ? 'tokyo-night' : Object.keys(themes)[0]);
+  if (!setWallpaper(readSetting('wallpaper'))) setWallpaper(Array.isArray(wallpapers) && wallpapers[0] ? wallpapers[0].name : 'Aurora');
+  tile();
+  const bootLines = [
+    'Reached target Local File Systems.', 'Started Virtual Device Manager.',
+    'Mounted /home/omakase.', 'Started Simulated Network Service.',
+    'Loaded desktop color palette.', 'Started User Session Manager.',
+    'Prepared five virtual workspaces.', 'Started Browser Compositor.',
+    'Reached target Graphical Interface.', 'Ready. Welcome, omakase.'
+  ];
+  bootLines.forEach((line, i) => window.setTimeout(() => {
+    const row = el('div', 'boot-line');
+    row.append(el('span', 'boot-ok', '[  OK  ] '), document.createTextNode(line));
+    bootLog.append(row);
+  }, i * 220));
+  window.setTimeout(() => {
+    login.hidden = false;
+    boot.classList.add('leaving');
+    window.setTimeout(() => { boot.remove(); password.focus(); }, 350);
+  }, 2200);
+
+  document.addEventListener('keydown', event => {
+    if (!loggedIn || event.isComposing) return;
+    if (event.key === 'Meta') {
+      if (!event.repeat) { metaPressed = true; metaUsed = event.ctrlKey || event.altKey || event.shiftKey; }
+      return;
+    }
+    if (metaPressed || event.metaKey) metaUsed = true;
+    if (event.metaKey && /^[1-5]$/.test(event.key)) {
+      event.preventDefault();
+      if (!event.repeat) gotoWS(Number(event.key));
+    } else if (event.metaKey && (event.key === '/' || event.code === 'Slash')) {
+      event.preventDefault();
+      if (!event.repeat) toggleOverlay(shortcuts);
+    } else if (event.ctrlKey && event.altKey && event.key.toLowerCase() === 't') {
+      event.preventDefault();
+      if (!event.repeat) {
+        overlays.slice().reverse().forEach(node => closeOverlay(node, false));
+        open('terminal');
+      }
+    } else if (event.key === 'Escape' && overlays.length) {
+      event.preventDefault();
+      closeOverlay(overlays[overlays.length - 1]);
+    } else if (event.key === 'Tab' && overlays.length) {
+      const top = overlays[overlays.length - 1];
+      const focusable = Array.from(top.querySelectorAll('button:not([disabled]), input:not([disabled]), [tabindex="0"]'));
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !top.contains(document.activeElement))) {
+        event.preventDefault();
+        if (last) last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !top.contains(document.activeElement))) {
+        event.preventDefault();
+        if (first) first.focus();
+      }
+    }
+  });
+  document.addEventListener('keyup', event => {
+    if (event.key !== 'Meta') return;
+    if (loggedIn && metaPressed && !metaUsed) { event.preventDefault(); toggleOverlay(launcher); }
+    metaPressed = false;
+    metaUsed = false;
+  });
+  window.addEventListener('blur', () => { metaPressed = false; metaUsed = false; });
+})();
+
+/* omash: a small, read-only shell for the simulated desktop. */
+(function () {
+  'use strict';
+
+  const HOME = '/home/omakase';
+  const startedAt = Date.now();
+  const commands = [
+    'help', 'omarchyfetch', 'neofetch', 'ls', 'cd', 'pwd', 'cat', 'echo',
+    'whoami', 'date', 'theme', 'clear', 'sudo', 'vim', 'nvim', 'rm',
+    'exit', 'hack', 'about', 'motd'
+  ];
+
+  // Parse words without evaluating JavaScript, shell substitutions, or HTML.
+  function words(source) {
+    const result = [];
+    let word = '', quote = '', escaped = false, active = false;
+    for (const character of source) {
+      if (escaped) {
+        word += character;
+        escaped = false;
+      } else if (character === '\\' && quote !== "'") {
+        escaped = true;
+        active = true;
+      } else if (quote) {
+        if (character === quote) quote = '';
+        else word += character;
+      } else if (character === '"' || character === "'") {
+        quote = character;
+        active = true;
+      } else if (/\s/.test(character)) {
+        if (active) result.push(word);
+        word = '';
+        active = false;
+      } else {
+        word += character;
+        active = true;
+      }
+    }
+    if (quote) throw new Error('Unclosed quote — close it and try again.');
+    if (escaped) throw new Error('Trailing backslash — finish the escape and try again.');
+    if (active) result.push(word);
+    return result;
+  }
+
+  Omarchy.Apps.terminal = {
+    title: 'Terminal',
+    icon: '⌨️',
+    render(body, api) {
+      let cwd = HOME, previous = HOME, historyIndex = 0, draft = '';
+      let busy = false;
+      const history = [], timers = [];
+
+      function element(tag, className, text, style) {
+        const el = document.createElement(tag);
+        el.className = className;
+        if (text !== undefined) el.textContent = text;
+        if (style) Object.assign(el.style, style);
+        return el;
+      }
+
+      // Keep this app's layout local; desktop/window styling belongs to core.
+      const terminal = element('div', 'terminal', undefined, {
+        display: 'flex', flexDirection: 'column', height: '100%', width: '100%',
+        flex: '1 1 0%', minHeight: '0', minWidth: '0', boxSizing: 'border-box',
+        background: 'var(--term-bg)', color: 'var(--term-fg)',
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '13px', lineHeight: '1.65', padding: '16px',
+        overflow: 'hidden', touchAction: 'manipulation'
+      });
+      terminal.setAttribute('aria-label', 'Terminal running omash, a simulated shell');
+      const screen = element('div', 'terminal-screen', undefined, {
+        flex: '1 1 auto', minHeight: '0', overflow: 'auto',
+        overscrollBehavior: 'contain', scrollbarWidth: 'thin'
+      });
+      const output = element('div', 'terminal-output');
+      output.setAttribute('role', 'log');
+      output.setAttribute('aria-label', 'Terminal output');
+      output.setAttribute('aria-live', 'polite');
+      output.setAttribute('aria-relevant', 'additions');
+      const form = element('form', 'terminal-input-line', undefined, {
+        display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '0 8px',
+        padding: '4px 0 8px', margin: '0', minHeight: '32px'
+      });
+      const prompt = element('span', 'terminal-prompt', undefined, {
+        whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxWidth: '100%'
+      });
+      const input = element('input', 'terminal-input', undefined, {
+        flex: '1 1 120px', width: '120px', minWidth: '80px', minHeight: '32px',
+        padding: '0', margin: '0', border: '0', borderRadius: '0', outline: 'none',
+        background: 'transparent', color: 'var(--term-fg)',
+        caretColor: 'var(--accent)', fontFamily: 'inherit', fontSize: '16px',
+        lineHeight: 'inherit', boxShadow: 'none', touchAction: 'manipulation'
+      });
+      input.type = 'text';
+      input.autocomplete = 'off';
+      input.spellcheck = false;
+      input.setAttribute('autocapitalize', 'off');
+      input.setAttribute('autocorrect', 'off');
+      input.setAttribute('enterkeyhint', 'send');
+      input.setAttribute('aria-label', 'Shell command');
+      form.append(prompt, input);
+      screen.append(output, form);
+      terminal.append(screen);
+      body.replaceChildren(terminal);
+
+      const shortPath = () => cwd === HOME ? '~' : cwd.startsWith(HOME + '/') ? '~' + cwd.slice(HOME.length) : cwd;
+      function fillPrompt(target) {
+        target.replaceChildren(
+          element('span', 'terminal-user', 'omakase@omarchy', { color: 'var(--accent)', fontWeight: '600' }),
+          document.createTextNode(':'),
+          element('span', 'terminal-path', shortPath(), { color: 'var(--muted)' }),
+          document.createTextNode('$')
+        );
+      }
+      function refreshPrompt() {
+        fillPrompt(prompt);
+        input.setAttribute('aria-label', 'Shell command in ' + shortPath());
+        if (api && typeof api.setTitle === 'function') api.setTitle('Terminal — ' + shortPath());
+      }
+      function scroll() { screen.scrollTop = screen.scrollHeight; }
+      function append(node) {
+        output.append(node);
+        while (output.childElementCount > 800) output.firstElementChild.remove();
+        scroll();
+        return node;
+      }
+      function print(text, color) {
+        return append(element('div', 'terminal-line', String(text), {
+          whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', minHeight: '1.65em',
+          ...(color ? { color: color } : {})
+        }));
+      }
+      const fail = text => print(text, 'var(--accent2)');
+      function record(command) {
+        const line = element('div', 'terminal-command', undefined, {
+          whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', marginTop: '6px'
+        });
+        fillPrompt(line);
+        line.append(document.createTextNode(' ' + command));
+        append(line);
+      }
+      function absolute(path) {
+        let value = path;
+        if (value === '~' || value.startsWith('~/')) value = HOME + value.slice(1);
+        if (!value.startsWith('/')) value = cwd + '/' + value;
+        const parts = [];
+        for (const part of value.split('/')) {
+          if (part === '..') parts.pop();
+          else if (part && part !== '.') parts.push(part);
+        }
+        return '/' + parts.join('/');
+      }
+      function lookup(path, command) {
+        if (!path) { fail(command + ': No such file or directory'); return null; }
+        const node = Omarchy.resolve(absolute(path));
+        if (!node) fail(command + ': ' + path + ': No such file or directory');
+        else if (path.endsWith('/') && node.type !== 'dir') {
+          fail(command + ': ' + path + ': Not a directory');
+          return null;
+        }
+        return node;
+      }
+      function currentTheme() {
+        const style = window.getComputedStyle(document.documentElement);
+        const keys = ['--term-bg', '--accent', '--bg'];
+        const found = Object.entries(window.THEMES).find(([, theme]) =>
+          keys.every(key => style.getPropertyValue(key).trim().toLowerCase() === theme.vars[key].trim().toLowerCase())
+        );
+        return found ? found[0] : 'custom';
+      }
+      function uptime() {
+        const seconds = Math.floor((Date.now() - startedAt) / 1000);
+        return Math.floor(seconds / 3600) + 'h ' + Math.floor(seconds % 3600 / 60) + 'm ' + seconds % 60 + 's';
+      }
+      function fetch() {
+        const card = element('div', 'terminal-fetch', undefined, {
+          display: 'flex', flexWrap: 'wrap', gap: '12px 28px', margin: '10px 0 14px', alignItems: 'center'
+        });
+        // Original offset crystal lattice: drawn specifically for this demo.
+        card.append(element('pre', 'terminal-logo', [
+          '       +-----+',
+          '      /     /|',
+          '  +--+-----+ |',
+          ' /  /|     | +',
+          '+--+ |  +--+/ ',
+          '|  | +--+  /  ',
+          '|  |/   | /   ',
+          '+--+----+/    '
+        ].join('\n'), {
+          margin: '0', font: 'inherit', lineHeight: '1.25', color: 'var(--accent)', userSelect: 'text'
+        }));
+        const specs = element('div', 'terminal-specs', undefined, { minWidth: '0', overflowWrap: 'anywhere' });
+        specs.append(element('div', '', 'omakase@omarchy', { color: 'var(--accent)', fontWeight: '700' }));
+        const theme = currentTheme();
+        const entries = [
+          ['OS', 'Omarchy Web'], ['Kernel', 'Linux 6.14-web (simulated)'],
+          ['Shell', 'omash'], ['DE', 'Hyprland (simulated)'],
+          ['Theme', window.THEMES[theme] ? window.THEMES[theme].label + ' (' + theme + ')' : theme],
+          ['Uptime', uptime()], ['CPU', '1 × imagination @ 5.0 GHz (simulated)'],
+          ['Memory', '128 MiB / unlimited possibility (simulated)']
+        ];
+        for (const [label, value] of entries) {
+          const row = element('div', '');
+          row.append(element('span', '', label + ': ', { color: 'var(--accent2)' }), document.createTextNode(value));
+          specs.append(row);
+        }
+        const palette = element('div', 'terminal-palette', undefined, { display: 'flex', gap: '4px', marginTop: '8px' });
+        palette.setAttribute('aria-hidden', 'true');
+        for (const color of ['--accent', '--accent2', '--term-fg', '--muted', '--fg', '--border']) {
+          palette.append(element('span', '', '  ', { background: 'var(' + color + ')', width: '22px', height: '8px' }));
+        }
+        specs.append(palette);
+        card.append(specs);
+        append(card);
+      }
+      function motd() {
+        print('Welcome to omash. Small shell. Big desktop energy.', 'var(--accent)');
+        print("Try 'help', 'ls -a', or 'theme list'. Tab completes; ↑/↓ recall; Ctrl+L clears.", 'var(--muted)');
+      }
+      function stopHack() {
+        timers.forEach(timer => window.clearTimeout(timer));
+        timers.length = 0;
+        busy = false;
+        input.readOnly = false;
+        input.placeholder = '';
+        input.removeAttribute('aria-busy');
+      }
+      function hack() {
+        const lines = [
+          '[simulated] Locating the mainframe…',
+          '[████░░░░░░] Negotiating with the coffee machine…',
+          '[███████░░░] Bypassing absolutely no security…',
+          '[██████████] ACCESS GRANTED: the coffee is decaf.',
+          'Hack complete. No packets sent. One illusion shattered.'
+        ];
+        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          lines.forEach(line => print(line));
+          return;
+        }
+        busy = true;
+        input.readOnly = true;
+        input.placeholder = 'Working… Ctrl+C to cancel';
+        input.setAttribute('aria-busy', 'true');
+        print(lines[0], 'var(--accent)');
+        lines.slice(1).forEach((line, index) => {
+          timers.push(window.setTimeout(() => {
+            if (!terminal.isConnected) { stopHack(); return; }
+            print(line, index === 3 ? 'var(--accent2)' : undefined);
+            if (index === 3) stopHack();
+          }, 300 * (index + 1)));
+        });
+      }
+      function run(source) {
+        let tokens;
+        try { tokens = words(source); }
+        catch (error) { fail('omash: ' + error.message); return; }
+        if (!tokens.length) return;
+        const [command, ...args] = tokens;
+        switch (command) {
+          case 'help':
+            print([
+              'omash — a friendly simulated shell',
+              '',
+              'EXPLORE  ls [-a] [path] · cd [dir] · pwd · cat <file>…',
+              'DESKTOP  theme [list|name] · omarchyfetch (or neofetch)',
+              'BASICS   echo <text> · whoami · date · clear',
+              'EXTRAS   about · motd · hack · sudo · vim / nvim · rm · exit',
+              '',
+              '↑/↓ history · Tab completion · Ctrl+L clear · Ctrl+C cancel',
+              'Paths support ~, .., and quotes. cd - returns to the last directory.',
+              'This tiny shell has no pipes, redirects, or real system access.'
+            ].join('\n'));
+            break;
+          case 'omarchyfetch': case 'neofetch': fetch(); break;
+          case 'motd': motd(); break;
+          case 'about':
+            print('Omarchy Web — an unofficial fan-made desktop concept.');
+            print('Not affiliated with DHH or the Omarchy project. Everything here runs in your browser.');
+            break;
+          case 'pwd': print(cwd); break;
+          case 'whoami': print('omakase'); break;
+          case 'date': print(new Date().toString()); break;
+          case 'echo': print(args.join(' ')); break;
+          case 'clear': output.replaceChildren(); break;
+          case 'cd': {
+            if (args.length > 1) { fail('cd: too many arguments'); break; }
+            const path = args.length ? args[0] === '-' ? previous : args[0] : HOME;
+            const node = lookup(path, 'cd');
+            if (!node) break;
+            if (node.type !== 'dir') { fail('cd: ' + path + ': Not a directory'); break; }
+            previous = cwd;
+            cwd = absolute(path);
+            if (args[0] === '-') print(cwd);
+            refreshPrompt();
+            break;
+          }
+          case 'ls': {
+            let hidden = false, options = true;
+            const paths = [];
+            for (const arg of args) {
+              if (options && arg === '--') options = false;
+              else if (options && (arg === '-a' || arg === '-A' || arg === '--all')) hidden = true;
+              else if (options && arg.startsWith('-')) { fail('ls: unsupported option ' + arg + ' — try ls -a'); return; }
+              else paths.push(arg);
+            }
+            if (!paths.length) paths.push('.');
+            paths.forEach((path, index) => {
+              if (index) print('');
+              const node = lookup(path, 'ls');
+              if (!node) return;
+              if (paths.length > 1) print(path + ':', 'var(--muted)');
+              if (node.type === 'file') { print(path); return; }
+              const entries = Omarchy.listDir(node).filter(entry => hidden || !entry.name.startsWith('.'));
+              entries.sort((a, b) => (a.node.type === 'dir' ? 0 : 1) - (b.node.type === 'dir' ? 0 : 1) || a.name.localeCompare(b.name));
+              const listing = element('div', 'terminal-listing', undefined, { display: 'flex', flexWrap: 'wrap', gap: '0 20px' });
+              entries.forEach(entry => listing.append(element('span', '', entry.name + (entry.node.type === 'dir' ? '/' : ''), {
+                color: entry.node.type === 'dir' ? 'var(--accent)' : 'var(--term-fg)', overflowWrap: 'anywhere'
+              })));
+              if (entries.length) append(listing);
+            });
+            break;
+          }
+          case 'cat':
+            if (!args.length) { fail('cat: usage: cat <file>…'); break; }
+            args.forEach(path => {
+              const node = lookup(path, 'cat');
+              if (!node) return;
+              if (node.type === 'dir') fail('cat: ' + path + ': Is a directory');
+              else print(node.content == null ? '' : node.content);
+            });
+            break;
+          case 'theme': {
+            if (args.length > 1) { fail('theme: usage: theme [list|name]'); break; }
+            if (!args.length || args[0] === 'list') {
+              const current = currentTheme();
+              Object.entries(window.THEMES).forEach(([name, theme]) =>
+                print((name === current ? '● ' : '  ') + name.padEnd(14) + theme.label, name === current ? 'var(--accent)' : undefined)
+              );
+              print('Apply with: theme <name>', 'var(--muted)');
+            } else if (Object.prototype.hasOwnProperty.call(window.THEMES, args[0])) {
+              Omarchy.setTheme(args[0]);
+              print('Theme set to ' + window.THEMES[args[0]].label + '. Looking sharp.', 'var(--accent)');
+            } else fail('theme: ' + args[0] + ": unknown theme — try 'theme list'");
+            break;
+          }
+          case 'sudo': fail('omakase is not in the sudoers file. This incident has been reported to the houseplant.'); break;
+          case 'vim': case 'nvim':
+            print(command + ': You have entered the editor in spirit. For once, :q actually works.');
+            print('Your files are safe. Your muscle memory is confused.');
+            break;
+          case 'rm': fail('rm: refused. This filesystem is a museum; please leave the exhibits attached.'); break;
+          case 'exit': print('There is no escape. There is, however, a close button.'); break;
+          case 'hack': hack(); break;
+          default: fail(command + ": command not found — try 'help'");
+        }
+      }
+
+      function setInput(value) {
+        input.value = value;
+        input.setSelectionRange(value.length, value.length);
+      }
+      function complete() {
+        // Leave quoted/escaped input intact; simple paths cover the built-in FS.
+        const prefix = input.value.slice(0, input.selectionStart);
+        if (input.selectionStart !== input.value.length || /["'\\]/.test(prefix)) return;
+        const parts = prefix.split(/\s+/);
+        const partial = parts.pop();
+        let choices = [];
+        if (!parts.length) choices = commands.filter(command => command.startsWith(partial));
+        else if (parts[0] === 'theme') choices = ['list', ...Object.keys(window.THEMES)].filter(name => name.startsWith(partial));
+        else {
+          const slash = partial.lastIndexOf('/');
+          const base = slash < 0 ? '' : partial.slice(0, slash + 1);
+          const leaf = partial.slice(slash + 1);
+          const node = Omarchy.resolve(absolute(base || '.'));
+          if (node && node.type === 'dir') choices = Omarchy.listDir(node)
+            .filter(entry => entry.name.startsWith(leaf) && (!entry.name.startsWith('.') || leaf.startsWith('.')) && (parts[0] !== 'cd' || entry.node.type === 'dir'))
+            .map(entry => base + entry.name + (entry.node.type === 'dir' ? '/' : ''));
+        }
+        choices.sort();
+        if (!choices.length) return;
+        let common = choices[0];
+        while (!choices.every(choice => choice.startsWith(common))) common = common.slice(0, -1);
+        if (choices.length === 1 || common.length > partial.length) {
+          setInput(prefix.slice(0, prefix.length - partial.length) + common + (choices.length === 1 && !common.endsWith('/') ? ' ' : ''));
+        } else {
+          record(input.value);
+          print(choices.join('  '), 'var(--muted)');
+        }
+        scroll();
+      }
+      form.addEventListener('submit', event => {
+        event.preventDefault();
+        if (busy) return;
+        const source = input.value;
+        record(source);
+        input.value = '';
+        if (source.trim() && history[history.length - 1] !== source) {
+          history.push(source);
+          if (history.length > 300) history.shift();
+        }
+        historyIndex = history.length;
+        draft = '';
+        run(source);
+        scroll();
+      });
+      input.addEventListener('keydown', event => {
+        if (event.isComposing) return;
+        if (event.ctrlKey && !event.altKey && !event.metaKey && event.key.toLowerCase() === 'l') {
+          event.preventDefault();
+          event.stopPropagation();
+          output.replaceChildren();
+          scroll();
+        } else if (event.ctrlKey && !event.altKey && !event.metaKey && event.key.toLowerCase() === 'c') {
+          if (window.getSelection().toString() || input.selectionStart !== input.selectionEnd) return;
+          event.preventDefault();
+          stopHack();
+          record(input.value + '^C');
+          input.value = '';
+          historyIndex = history.length;
+          draft = '';
+        } else if (!busy && !event.ctrlKey && !event.altKey && !event.metaKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+          event.preventDefault();
+          if (historyIndex === history.length) draft = input.value;
+          historyIndex = Math.max(0, Math.min(history.length, historyIndex + (event.key === 'ArrowUp' ? -1 : 1)));
+          setInput(historyIndex === history.length ? draft : history[historyIndex]);
+        } else if (!busy && event.key === 'Tab' && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
+          event.preventDefault();
+          complete();
+        }
+      });
+      terminal.addEventListener('click', event => {
+        if (event.target !== input && !window.getSelection().toString()) input.focus({ preventScroll: true });
+      });
+      refreshPrompt();
+      fetch();
+      motd();
+      input.focus({ preventScroll: true });
+      scroll();
+    }
+  };
+})();
+
+/* App layout belongs to styles.css. Dynamic previews use the supplied theme data. */
+(function () {
+  'use strict';
+  const O = window.Omarchy;
+  const HOME = '/home/omakase';
+  const VERSION = 'v2026.10.04';
+
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+  function button(text, action, className) {
+    const node = el('button', className || 'app-button', text);
+    node.type = 'button';
+    node.style.touchAction = 'manipulation';
+    node.addEventListener('click', action);
+    return node;
+  }
+  function mount(body, name) {
+    body.replaceChildren();
+    const root = el('section', 'app-content ' + name + '-app');
+    body.append(root);
+    return root;
+  }
+  function palette(theme) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 120 28');
+    svg.setAttribute('width', '120');
+    svg.setAttribute('height', '28');
+    svg.setAttribute('aria-hidden', 'true');
+    ['--bg', '--fg', '--accent', '--accent2'].forEach((key, i) => {
+      const dot = document.createElementNS(svg.namespaceURI, 'circle');
+      dot.setAttribute('cx', String(15 + i * 30));
+      dot.setAttribute('cy', '14');
+      dot.setAttribute('r', '10');
+      dot.setAttribute('fill', theme.vars[key]);
+      svg.append(dot);
+    });
+    return svg;
+  }
+
+  O.Apps.files = {
+    title: 'Files', icon: '📁',
+    render(body, api) {
+      const root = mount(body, 'files');
+      const toolbar = el('div', 'files-toolbar app-toolbar');
+      const crumbs = el('nav', 'files-breadcrumbs');
+      crumbs.setAttribute('aria-label', 'Folder path');
+      const up = button('↑ Up', () => open(parent(path)));
+      toolbar.append(up, crumbs);
+      const layout = el('div', 'files-layout');
+      const sidebar = el('nav', 'files-sidebar');
+      sidebar.setAttribute('aria-label', 'Places');
+      const main = el('div', 'files-main');
+      const places = [];
+      let path = HOME;
+      function parent(value) { return value.slice(0, value.lastIndexOf('/')) || '/'; }
+      ['Home', 'Documents', 'Downloads', 'Pictures', '.config'].forEach(name => {
+        const target = name === 'Home' ? HOME : HOME + '/' + name;
+        const entry = button(name, () => open(target), 'files-place');
+        places.push({ entry, target });
+        sidebar.append(entry);
+      });
+      layout.append(sidebar, main);
+      root.append(toolbar, layout);
+      function open(target) {
+        const node = O.resolve(target);
+        if (!node) { api.notify('That path is unavailable.'); return; }
+        path = target;
+        api.setTitle('Files — ' + path);
+        up.disabled = path === '/';
+        crumbs.replaceChildren(button('/', () => open('/'), 'breadcrumb'));
+        let cumulative = '';
+        path.split('/').filter(Boolean).forEach(part => {
+          cumulative += '/' + part;
+          const destination = cumulative;
+          crumbs.append(el('span', 'breadcrumb-separator', ' / '),
+            button(part, () => open(destination), 'breadcrumb'));
+        });
+        places.forEach(({ entry, target: place }) => {
+          const active = path === place || (place !== HOME && path.startsWith(place + '/'));
+          entry.classList.toggle('active', active);
+          entry.setAttribute('aria-current', active ? 'location' : 'false');
+        });
+        main.replaceChildren();
+        if (node.type === 'file') {
+          const viewer = el('section', 'files-viewer');
+          const back = button('← Back to folder', () => open(parent(target)));
+          viewer.append(back, el('h2', '', target.split('/').pop()),
+            el('pre', 'files-content', String(node.content == null ? '' : node.content)));
+          main.append(viewer);
+          return;
+        }
+        const entries = O.listDir(node).slice().sort((a, b) =>
+          Number(b.node.type === 'dir') - Number(a.node.type === 'dir') || a.name.localeCompare(b.name));
+        main.append(el('p', 'files-summary', entries.length + ' items'));
+        const grid = el('div', 'files-grid');
+        entries.forEach(entry => {
+          const targetPath = (path === '/' ? '' : path) + '/' + entry.name;
+          const item = button('', () => open(targetPath), 'file-item');
+          const icon = el('span', 'file-icon', entry.node.type === 'dir' ? '📁' : '📄');
+          icon.setAttribute('aria-hidden', 'true');
+          item.append(icon, el('span', 'file-name', entry.name));
+          item.title = (entry.node.type === 'dir' ? 'Open folder: ' : 'Read file: ') + entry.name;
+          grid.append(item);
+        });
+        if (!entries.length) grid.append(el('p', 'empty-state', 'This folder is empty.'));
+        main.append(grid);
+      }
+      open(HOME);
+    }
+  };
+
+  O.Apps.settings = {
+    title: 'Settings', icon: '⚙️',
+    render(body, api) {
+      const root = mount(body, 'settings');
+      root.append(el('h1', '', 'Make room for your taste'),
+        el('p', '', 'A different mood is one click away. Changes apply across the desktop.'));
+      root.append(el('h2', '', 'Themes'));
+      const themes = el('div', 'theme-grid settings-grid');
+      Object.entries(window.THEMES).forEach(([name, theme]) => {
+        const card = button('', () => {
+          O.setTheme(name);
+          themes.querySelectorAll('button').forEach(item => item.setAttribute('aria-pressed', String(item === card)));
+          api.notify(theme.label + ' applied');
+        }, 'theme-card');
+        card.append(palette(theme), el('span', 'theme-name', theme.label));
+        themes.append(card);
+      });
+      root.append(themes, el('h2', '', 'Wallpapers'));
+      const wallpapers = el('div', 'wallpaper-grid settings-grid');
+      window.WALLPAPERS.forEach(wallpaper => {
+        const card = button('', () => {
+          O.setWallpaper(wallpaper.name);
+          wallpapers.querySelectorAll('button').forEach(item => item.setAttribute('aria-pressed', String(item === card)));
+        }, 'wallpaper-card');
+        const preview = el('div', 'wallpaper-preview', '\u00a0');
+        preview.style.background = wallpaper.css;
+        preview.setAttribute('aria-hidden', 'true');
+        card.append(preview, el('span', '', wallpaper.name));
+        wallpapers.append(card);
+      });
+      root.append(wallpapers, el('h2', '', 'Motion'));
+      // Shared stylesheet hook: body.no-animations disables animations/transitions.
+      const motion = button('', () => {
+        document.body.classList.toggle('no-animations');
+        updateMotion();
+      }, 'settings-toggle');
+      motion.setAttribute('role', 'switch');
+      function updateMotion() {
+        const enabled = !document.body.classList.contains('no-animations');
+        motion.setAttribute('aria-checked', String(enabled));
+        motion.textContent = 'Animations: ' + (enabled ? 'on' : 'off');
+      }
+      updateMotion();
+      root.append(motion, el('h2', '', 'About'),
+        el('p', '', 'omarchy-web — unofficial fan-made concept demo. Not affiliated with DHH or the Omarchy project.'),
+        el('p', 'settings-version', VERSION));
+    }
+  };
+
+  O.Apps.browser = {
+    title: 'Browser', icon: '🌐',
+    render(body, api) {
+      const root = mount(body, 'browser');
+      const toolbar = el('form', 'browser-toolbar app-toolbar');
+      const history = [];
+      let current = null;
+      const back = button('← Back', () => {
+        if (history.length) navigate(history.pop(), false);
+      });
+      const home = button('⌂ Home', () => navigate('home'));
+      const address = el('input', 'browser-address');
+      address.type = 'text';
+      address.setAttribute('aria-label', 'Demo address');
+      address.autocomplete = 'off';
+      address.spellcheck = false;
+      address.style.touchAction = 'manipulation';
+      const go = button('Go', () => navigate(address.value));
+      toolbar.append(back, home, address, go);
+      toolbar.addEventListener('submit', event => { event.preventDefault(); navigate(address.value); });
+      const page = el('article', 'browser-page');
+      root.append(toolbar, page);
+      function route(input) {
+        const value = String(input).trim();
+        if (['home', 'themes', 'download'].includes(value)) return value;
+        try {
+          const url = new URL(value.startsWith('/') ? 'https://omarchy.local' + value :
+            (/^[a-z][a-z\d+.-]*:/i.test(value) ? value : 'https://' + value));
+          if (!['http:', 'https:'].includes(url.protocol) || !['omarchy.local', 'omarchy.org', 'www.omarchy.org'].includes(url.hostname)) return 'missing';
+          const pathname = url.pathname.replace(/^\/+|\/+$/g, '');
+          return pathname === '' ? 'home' : ['home', 'themes', 'download'].includes(pathname) ? pathname : 'missing';
+        } catch (_) { return 'missing'; }
+      }
+      function link(text, destination) {
+        const anchor = el('a', 'browser-link', text);
+        anchor.href = 'https://omarchy.local/' + (destination === 'home' ? '' : destination);
+        anchor.style.touchAction = 'manipulation';
+        anchor.addEventListener('click', event => { event.preventDefault(); navigate(destination); });
+        return anchor;
+      }
+      function navigate(input, push = true) {
+        const next = route(input);
+        if (push && current !== null && current !== next) history.push(current);
+        current = next;
+        address.value = next === 'missing' ? String(input) : 'https://omarchy.local/' + (next === 'home' ? '' : next);
+        back.disabled = !history.length;
+        api.setTitle('Browser — ' + ({ home: 'A desktop of your own', themes: 'Themes', download: 'Download', missing: 'Page unavailable' }[next]));
+        page.replaceChildren();
+        const nav = el('nav', 'browser-nav');
+        nav.setAttribute('aria-label', 'Demo website');
+        nav.append(link('omarchy-web', 'home'), document.createTextNode(' · '), link('Themes', 'themes'), document.createTextNode(' · '), link('Download', 'download'));
+        page.append(nav, el('p', 'browser-notice', 'Unofficial concept · simulated website · no external browsing'));
+        if (next === 'home') {
+          page.append(el('p', 'browser-eyebrow', 'A little order. A lot of possibility.'),
+            el('h1', 'browser-headline', 'A desktop that leaves room for you.'),
+            el('p', 'browser-description', 'Arrange a few windows. Find your favorite colors. Follow a thought from a blank terminal to something worth keeping. This browser-sized playground imagines a day on an Omarchy-inspired desktop.'),
+            link('Find your colors →', 'themes'), el('h2', '', 'Small defaults, open possibilities'),
+            el('p', '', 'Files you can explore, windows that fall into place, and a new atmosphere whenever you feel like it.'),
+            link('Get the imaginary edition →', 'download'));
+        } else if (next === 'themes') {
+          page.append(el('h1', '', 'Six ways to set the mood'), el('p', '', 'Preview the collection here. Open Settings to dress the whole desktop in your favorite palette.'));
+          const grid = el('div', 'browser-theme-grid theme-grid');
+          Object.values(window.THEMES).forEach(theme => {
+            const card = el('section', 'browser-theme-card');
+            card.append(palette(theme), el('h2', '', theme.label));
+            grid.append(card);
+          });
+          page.append(grid, button('Open Settings', () => O.WM.open('settings')));
+        } else if (next === 'download') {
+          page.append(el('h1', '', 'Your download is already here.'),
+            el('p', '', 'The imaginary ISO weighs exactly zero bytes. We compressed it by leaving out the operating system.'),
+            el('p', '', 'This is a web demo, so there is nothing to install. Your real disks can enjoy the afternoon off.'),
+            button('Download 0 bytes of possibility', () => api.notify('Download complete: one fresh idea. No files were saved.')));
+        } else {
+          page.append(el('h1', '', 'That address is beyond this little world.'),
+            el('p', '', 'Try omarchy.local, omarchy.local/themes, or omarchy.local/download.'), link('Return home', 'home'));
+        }
+        page.scrollTop = 0;
+      }
+      navigate('home');
+    }
+  };
+})();
+
+</script>
+</body>
+</html>

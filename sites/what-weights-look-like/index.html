@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Are neural net weights literally billions of numbers? An interactive tour from one weight to fourteen billion — inside a real model.">
+<title>What does a billion numbers look like?</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2314110d'/%3E%3Ccircle cx='11' cy='11' r='3' fill='%235aa9ff'/%3E%3Ccircle cx='21' cy='11' r='3' fill='%23ff6b5e'/%3E%3Ccircle cx='11' cy='21' r='3' fill='%23ff6b5e'/%3E%3Ccircle cx='21' cy='21' r='3' fill='%23ffb224'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#14110d; --card:#1e1a14; --card2:#242019; --line:#332c21;
+  --ink:#f5efe3; --muted:#b7ab93; --faint:#857a63;
+  --amber:#ffb224; --blue:#5aa9ff; --red:#ff6b5e; --green:#5fd68a; --teal:#4fd1c5;
+  --mono:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,Roboto,sans-serif;
+  font-size:17px;line-height:1.6;-webkit-text-size-adjust:100%}
+button,input,canvas,[data-tap]{touch-action:manipulation}
+h1,h2,h3{line-height:1.2;margin:0 0 .5em;letter-spacing:-.01em}
+h2{font-size:27px}
+p{margin:0 0 1em}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+#progress{position:fixed;top:0;left:0;height:3px;width:0;background:var(--amber);z-index:60}
+.wrap{max-width:680px;margin:0 auto;padding:0 20px}
+section.block{padding:64px 0;border-top:1px solid var(--line)}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--amber);text-transform:uppercase;margin-bottom:10px}
+/* hero */
+.hero{min-height:92vh;display:flex;flex-direction:column;justify-content:center;position:relative;overflow:hidden;padding:72px 0 48px}
+#heroCanvas{position:absolute;inset:0;width:100%;height:100%;opacity:.55;pointer-events:none}
+.hero .wrap{position:relative}
+.hero h1{font-size:clamp(38px,9vw,58px);margin-bottom:14px}
+.hero .sub{color:var(--muted);font-size:19px;max-width:34em}
+.scrollhint{margin-top:34px;color:var(--faint);font-family:var(--mono);font-size:13px;animation:bob 2.2s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
+/* cards */
+.analogy{border:1px dashed rgba(255,178,36,.55);border-radius:14px;padding:14px 16px;background:rgba(255,178,36,.05);margin:0 0 1.1em}
+.analogy .lbl,.myth .lbl{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;display:block;margin-bottom:6px}
+.analogy .lbl{color:var(--amber)}
+.myth{border:1px solid rgba(255,107,94,.5);border-radius:14px;padding:14px 16px;background:rgba(255,107,94,.05);margin:1.1em 0}
+.myth .lbl{color:var(--red)}
+.myth p:last-child{margin-bottom:0}
+.takeaway{font-style:italic;font-size:18px;border-left:3px solid var(--amber);padding:2px 0 2px 16px;margin:1.4em 0 0;color:var(--ink)}
+.fine{color:var(--faint);font-size:14px}
+.toy{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--teal);border:1px solid rgba(79,209,197,.5);border-radius:20px;padding:2px 10px;margin-bottom:10px;text-transform:uppercase}
+/* playground */
+.play{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px 18px;margin:1.2em 0}
+.play h3{font-size:15px;font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:14px}
+.ctl{margin:0 0 16px}
+.ctl:last-child{margin-bottom:0}
+.ctl label{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;margin-bottom:8px;gap:10px}
+.ctl label .v{font-family:var(--mono);color:var(--amber);white-space:nowrap}
+input[type=range]{width:100%;height:44px;background:transparent;-webkit-appearance:none;appearance:none;margin:0;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:8px;border-radius:4px;background:#0d0b09;border:1px solid var(--line)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:30px;border-radius:50%;background:var(--amber);margin-top:-12px;border:3px solid #0d0b09;box-shadow:0 0 0 1px var(--amber)}
+input[type=range]::-moz-range-track{height:8px;border-radius:4px;background:#0d0b09;border:1px solid var(--line)}
+input[type=range]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;background:var(--amber);border:3px solid #0d0b09}
+.eq{font-family:var(--mono);font-size:clamp(17px,4.6vw,23px);text-align:center;padding:14px 8px;background:#0d0b09;border-radius:12px;border:1px solid var(--line);margin:6px 0 12px;overflow-x:auto;white-space:nowrap}
+.eq .out{color:var(--green)}
+.barwrap{background:#0d0b09;border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:10px}
+.barlabel{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin-bottom:8px}
+.bar{position:relative;height:26px;background:#161310;border-radius:8px;overflow:hidden}
+.bar .zero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--line)}
+.bar .fill{position:absolute;top:4px;bottom:4px;border-radius:5px;transition:left .08s linear,width .08s linear,background .15s}
+.btn{display:inline-block;background:var(--amber);color:#1a1408;font-weight:700;font-size:16px;border:0;border-radius:12px;padding:13px 22px;min-height:48px;cursor:pointer;font-family:inherit}
+.btn:active{transform:scale(.97)}
+.btn.ghost{background:transparent;color:var(--amber);border:1px solid var(--amber)}
+.btnrow{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}
+canvas.field{width:100%;display:block;border-radius:14px;background:#0d0b09;border:1px solid var(--line)}
+.readout{font-family:var(--mono);font-size:14px;color:var(--muted);background:#0d0b09;border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-top:12px;min-height:48px}
+.readout b{color:var(--ink)}
+.nrow{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.nrow .xin{flex:1;min-width:0}
+.nrow .meta{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+.nrow .cbar{height:10px;background:#0d0b09;border-radius:5px;overflow:hidden;margin-top:6px;border:1px solid var(--line)}
+.nrow .cbar i{display:block;height:100%;border-radius:5px;transition:width .1s linear}
+/* lyra */
+.stackbar{display:flex;height:56px;border-radius:12px;overflow:hidden;border:1px solid var(--line);margin:14px 0 4px}
+.stackbar div{height:100%;transition:flex .2s}
+.legend{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.legend button{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;color:var(--ink);font-family:inherit;font-size:15px;cursor:pointer;min-height:56px}
+.legend button.active{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber)}
+.legend .dot{width:14px;height:14px;border-radius:50%;flex:none}
+.legend .lg{margin-left:auto;font-family:var(--mono);font-size:13px;color:var(--muted);white-space:nowrap}
+.detail{background:#0d0b09;border:1px solid var(--amber);border-radius:12px;padding:14px 16px;margin-top:12px;font-size:15px}
+.detail .num{color:var(--amber)}
+table.spec{width:100%;border-collapse:collapse;font-size:14px;margin:12px 0}
+table.spec th,table.spec td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}
+table.spec th{color:var(--faint);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+table.spec td.num{text-align:right}
+/* peek */
+#peekStream{font-family:var(--mono);font-size:13px;line-height:1.9;color:var(--muted);background:#0d0b09;border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-height:220px;margin-top:12px;overflow:hidden}
+#peekStream .neg{color:var(--blue)} #peekStream .pos{color:var(--red)}
+/* reveal */
+.rv{opacity:0;transform:translateY(16px);transition:opacity .6s ease,transform .6s ease}
+.rv.in{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}.scrollhint{animation:none}html{scroll-behavior:auto}}
+/* version badge */
+#ver{position:fixed;right:10px;bottom:10px;z-index:60;font-family:var(--mono);font-size:11px;color:var(--faint);background:rgba(13,11,9,.85);border:1px solid var(--line);border-radius:8px;padding:5px 9px;pointer-events:none}
+footer{padding:48px 0 90px;border-top:1px solid var(--line);color:var(--faint);font-size:14px}
+footer a{color:var(--amber)}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<header class="hero">
+  <canvas id="heroCanvas" aria-hidden="true"></canvas>
+  <div class="wrap">
+    <div class="eyebrow rv">A hands-on tour</div>
+    <h1 class="rv">What does a billion numbers look like?</h1>
+    <p class="sub rv">A neural network is made of <b>weights</b> — plain numbers, billions of them. Drag, tap, and count your way from a single weight to fourteen billion, ending inside a real model measured today.</p>
+    <div class="scrollhint rv">scroll ↓</div>
+  </div>
+</header>
+
+<main>
+<!-- ============ 1. ONE WEIGHT ============ -->
+<section class="block" id="one">
+  <div class="wrap">
+    <div class="eyebrow rv">1 · One weight</div>
+    <h2 class="rv">It starts with a single number.</h2>
+    <div class="analogy rv">
+      <span class="lbl">Think of it like…</span>
+      <p style="margin:0">…a <b>dimmer knob on a wire</b>. A signal flows in along the wire. The knob decides how much of it gets through — full blast, a trickle, or flipped backwards.</p>
+    </div>
+    <p class="rv">Here is one real-ish weight: <span class="num" id="wVal" style="color:var(--amber);font-size:20px">−0.4231</span></p>
+    <p class="rv">Now the technical name, since you've felt it first: engineers call this number a <b>weight</b> (or <b>parameter</b>). The network learns millions of these knob settings during training.</p>
+    <div class="play rv">
+      <h3>Playground · turn the knobs</h3>
+      <div class="ctl">
+        <label>Signal in <span class="v num" id="inVal">8.0</span></label>
+        <input type="range" id="inSlider" min="0" max="10" step="0.1" value="8" aria-label="Input signal">
+      </div>
+      <div class="ctl">
+        <label>Weight (the dimmer knob) <span class="v num" id="wtVal">−0.4231</span></label>
+        <input type="range" id="wtSlider" min="-1" max="1" step="0.0001" value="-0.4231" aria-label="Weight value">
+      </div>
+      <div class="eq"><span id="eqIn">8.0</span> × <span id="eqW">−0.4231</span> = <span class="out" id="eqOut">−3.38</span></div>
+      <div class="barwrap">
+        <div class="barlabel"><span>← flipped back</span><span>signal out</span><span>passed through →</span></div>
+        <div class="bar"><div class="zero"></div><div class="fill" id="outFill"></div></div>
+      </div>
+      <p class="fine" style="margin:10px 0 0">Negative weight? The signal comes out <i>flipped</i> — like the knob is wired backwards. That's not broken; networks use this constantly.</p>
+    </div>
+    <div class="myth rv">
+      <span class="lbl">Most people think…</span>
+      <p>…that a weight is a <b>stored fact</b> — "the AI memorized this." Actually one weight means nothing on its own. It's a knob setting, not a fact. Meaning only appears when millions of knobs work together.</p>
+    </div>
+    <p class="takeaway rv">One weight is a dimmer knob: it decides how much of a signal passes through — and nothing more.</p>
+  </div>
+</section>
+
+<!-- ============ 2. A NEURON ============ -->
+<section class="block" id="neuron">
+  <div class="wrap">
+    <div class="eyebrow rv">2 · A neuron</div>
+    <h2 class="rv">Dozens of knobs, one speaker.</h2>
+    <div class="analogy rv">
+      <span class="lbl">Think of it like…</span>
+      <p style="margin:0">…a <b>mixing board</b>. Four faders feed one speaker. Each fader has its own knob setting (weight). The speaker plays the mix — then <b>squishes</b> it so the total can never blow out the speakers, no matter how loud the inputs get.</p>
+    </div>
+    <p class="rv">The jargon, now that you've got the picture: each input is multiplied by its weight, everything is <b>added up</b> (the weighted sum), then passed through a <b>nonlinearity</b> — the "squish." That whole assembly is one <b>neuron</b>. Real ones have dozens to thousands of inputs.</p>
+    <div class="play rv">
+      <h3>Playground · mix the board <span class="toy">toy neuron</span></h3>
+      <div id="neuronRows"></div>
+      <div class="eq" style="font-size:15px" id="sumEq">sum = 0.00</div>
+      <div class="barwrap">
+        <div class="barlabel"><span>squished output</span><span class="num" id="neuronOut">0%</span></div>
+        <div class="bar" style="height:30px"><div class="fill" id="neuronFill" style="left:0;background:var(--green)"></div></div>
+      </div>
+      <p class="fine" style="margin:10px 0 0">The squish here is <span class="num">tanh</span> — it squeezes any sum, however huge, into a tidy −100%…+100%. Try maxing every fader: the output refuses to blow past 100%.</p>
+    </div>
+    <div class="myth rv">
+      <span class="lbl">Most people think…</span>
+      <p>…the neuron is "thinking," like a tiny brain cell deciding things. Actually it just multiplies, adds, and squishes. Nothing in this section is intelligent — the intelligence only shows up when <b>millions</b> of these do it together.</p>
+    </div>
+    <p class="takeaway rv">A neuron multiplies, adds, and squishes — the whole trick, repeated billions of times.</p>
+  </div>
+</section>
+
+<!-- ============ 3. 10,000 WEIGHTS ============ -->
+<section class="block" id="tenk">
+  <div class="wrap">
+    <div class="eyebrow rv">3 · Ten thousand weights</div>
+    <h2 class="rv">Now stop counting individuals.</h2>
+    <div class="analogy rv">
+      <span class="lbl">Think of it like…</span>
+      <p style="margin:0">…a <b>stadium crowd holding colored cards</b> — blue for negative, red for positive, brighter for bigger. From the stands you see the pattern. Up close, each card is still just one number.</p>
+    </div>
+    <p class="rv">Every square below <b>is</b> one weight — 100 × 100 = 10,000 of them. That's roughly <b>one small layer</b> of a real network. <span class="toy">Simplified illustration</span></p>
+    <div class="play rv">
+      <h3>Playground · one small layer</h3>
+      <canvas class="field" id="gridCanvas" height="340" aria-label="100 by 100 grid of weights. Tap a cell to inspect its value."></canvas>
+      <div class="readout" id="gridReadout">Tap any square → its exact weight appears here.</div>
+      <div class="btnrow"><button class="btn ghost" id="regenBtn">Shuffle the layer</button></div>
+      <p class="fine" style="margin:0">You can still <i>almost</i> see individuals here. Remember this feeling — it's the last time you'll have it.</p>
+    </div>
+    <div class="myth rv">
+      <span class="lbl">Most people think…</span>
+      <p>…10,000 numbers sounds like a lot for AI. Actually it's barely <b>one layer</b>. A single layer in a big model can hold millions of weights — this whole grid would be one pixel of it.</p>
+    </div>
+    <p class="takeaway rv">At 10,000 you can still almost point at individuals — the last scale where a weight is a thing you can see.</p>
+  </div>
+</section>
+
+<!-- ============ 4. A BILLION ============ -->
+<section class="block" id="billion">
+  <div class="wrap">
+    <div class="eyebrow rv">4 · A billion weights</div>
+    <h2 class="rv">Individuals are gone. Only texture remains.</h2>
+    <div class="analogy rv">
+      <span class="lbl">Think of it like…</span>
+      <p style="margin:0">…<b>grains of sand</b>. One grain means nothing. A beach isn't "many grains" the way a pile of coins is — it's a texture. A billion weights is a beach.</p>
+    </div>
+    <p class="rv">Below: <b>1,000 dots</b>. Each dot is <b>one million weights</b>. Together they are one billion — 10<sup>9</sup>. <span class="toy">Simplified illustration</span></p>
+    <div class="play rv">
+      <h3>Playground · count the billion</h3>
+      <canvas class="field" id="dotCanvas" height="300" aria-label="One thousand dots, each one million weights"></canvas>
+      <div class="ctl" style="margin-top:14px">
+        <label>Your counting speed <span class="v num" id="speedVal">1,000 / sec</span></label>
+        <input type="range" id="speedSlider" min="0" max="8" step="1" value="3" aria-label="Counting speed, weights per second">
+      </div>
+      <div class="btnrow">
+        <button class="btn ghost" data-speed="0">1/sec · you</button>
+        <button class="btn ghost" data-speed="2">100/sec · fast typer</button>
+        <button class="btn ghost" data-speed="4">10,000/sec · computer</button>
+      </div>
+      <div class="btnrow"><button class="btn" id="countBtn">Start counting</button></div>
+      <div class="readout" id="countReadout">Press start. Each lit dot = 1,000,000 weights counted.</div>
+      <p class="fine" id="projected" style="margin:10px 0 0"></p>
+    </div>
+    <div class="myth rv">
+      <span class="lbl">Most people think…</span>
+      <p>…"a billion" is just a bigger pile — something you could sort through given time. Actually no human timescale works. Count one weight per second and you finish in <b>31 years</b>. At this scale there are no individuals left to meet.</p>
+    </div>
+    <p class="takeaway rv">Count one weight per second and you'll finish in 31 years. A billion isn't a pile — it's a texture.</p>
+  </div>
+</section>
+
+<!-- ============ 5. LYRA 2.0 — 14 BILLION ============ -->
+<section class="block" id="lyra">
+  <div class="wrap">
+    <div class="eyebrow rv">5 · Fourteen billion — inside a real model</div>
+    <h2 class="rv">Meet Lyra 2.0.</h2>
+    <p class="rv">This isn't a toy. Lyra 2.0 is NVIDIA's open-source model that turns a single image into an explorable 3D world. Today we measured its actual weight files on Hugging Face — <span class="num">28.7&nbsp;GB</span> of them. At 2 bytes per weight, that's roughly <b>13–15 billion knobs</b>.</p>
+    <p class="rv">They don't arrive as one blob. They come in <b>five boxes</b>, each with a job. Tap each box:</p>
+    <div class="play rv">
+      <h3>Five boxes of knobs · <span class="num">≈14.4B weights</span></h3>
+      <div class="stackbar" id="stackbar" aria-hidden="true"></div>
+      <div class="legend" id="legend"></div>
+      <div class="detail" id="compDetail">Tap a box above ↑</div>
+    </div>
+    <p class="rv">Now the dot field. <b>Each dot = 100 million weights.</b> That's the same beach as before, fourteen times over:</p>
+    <div class="play rv">
+      <h3>Playground · ~145 dots of Lyra</h3>
+      <canvas class="field" id="lyraCanvas" height="300" aria-label="Dot field of Lyra 2.0 weights by component"></canvas>
+      <div class="readout" id="lyraReadout">Tap a dot → which box it belongs to.</div>
+    </div>
+    <table class="spec rv">
+      <tr><th>Component</th><th style="text-align:right">Weights file</th><th style="text-align:right">≈ weights</th></tr>
+      <tr><td>Text encoder</td><td class="num">11.4 GB</td><td class="num">5.7B</td></tr>
+      <tr><td>3D reconstruction</td><td class="num">13.4 GB</td><td class="num">6.7B</td></tr>
+      <tr><td>Image encoder</td><td class="num">2.4 GB</td><td class="num">1.2B</td></tr>
+      <tr><td>VAE</td><td class="num">0.5 GB</td><td class="num">0.25B</td></tr>
+      <tr><td>3 LoRA adapters</td><td class="num">1.1 GB</td><td class="num">0.55B</td></tr>
+      <tr><td><b>Total</b></td><td class="num"><b>28.7 GB</b></td><td class="num"><b>≈ 13–15B</b></td></tr>
+    </table>
+    <p class="fine rv">How we estimated: the weight files store 16-bit floats — 2 bytes each — so gigabytes ÷ 2 ≈ billions of weights. Measured from the real files at <span class="num">huggingface.co/nvidia/Lyra-2.0</span>, October 2026. It needs an H100 with 80&nbsp;GB of memory just to run.</p>
+    <div class="myth rv">
+      <span class="lbl">Most people think…</span>
+      <p>…28 GB means 28 GB of <b>stored 3D worlds</b>. Actually it's 28 GB of <b>knobs</b>. No world, no image, no video is stored anywhere in there — you'll see why in the next section.</p>
+    </div>
+    <p class="takeaway rv">Lyra 2.0 is ~14 billion dimmer knobs in five boxes — and not one of them is a picture of anything.</p>
+  </div>
+</section>
+
+<!-- ============ 6. THE MISCONCEPTION ============ -->
+<section class="block" id="myth">
+  <div class="wrap">
+    <div class="eyebrow rv">6 · The big misconception</div>
+    <h2 class="rv">The weights are not a photo album.</h2>
+    <p class="rv">Here's what almost everyone gets wrong: <b>none of those 28 gigabytes "looks like" anything.</b> There is no tiny 3D world folded up inside. No hidden pictures. Just numbers.</p>
+    <div class="analogy rv">
+      <span class="lbl">Think of it like…</span>
+      <p style="margin:0">…a <b>recipe vs. a cake</b>. The weights are the recipe — 14 billion tiny instructions like "a pinch more of this." The 3D world is the cake: it doesn't exist until you <b>bake it</b>, fresh, every time you run the model. You can't find the cake inside the recipe.</p>
+    </div>
+    <div class="play rv">
+      <h3>Playground · peek inside the 28 GB</h3>
+      <p class="fine">Real-format values, drawn from the same kind of distribution as trained weights. <span class="toy">toy values</span></p>
+      <div class="btnrow">
+        <button class="btn" id="peekBtn">Peek inside</button>
+        <button class="btn ghost" id="findBtn">Find the 3D world in there</button>
+      </div>
+      <div id="peekStream" aria-live="polite"><span style="color:var(--faint)">Press "Peek inside" — raw weights will stream here.</span></div>
+    </div>
+    <p class="rv">When Lyra turns your photo into a walkable 3D world, it <b>reconstructs</b> it at runtime — signals flowing through 14 billion knobs, each nudging the result a hair. Nothing is retrieved. Nothing was ever stored.</p>
+    <div class="myth rv">
+      <span class="lbl">Most people think…</span>
+      <p>…AI "remembers" things the way a hard drive does — that somewhere in the weights sits a copy of every image it trained on. Actually training <b>smeared</b> everything across billions of knobs. Ask for one training image back and you can't point to where it lives — because it doesn't live anywhere.</p>
+    </div>
+    <p class="takeaway rv">A neural net doesn't contain worlds — it contains the knobs to rebuild one, fresh, every single time.</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><b style="color:var(--ink)">What does a billion numbers look like?</b><br>
+    Lyra 2.0 figures are real — measured from the weight files at <span class="num">huggingface.co/nvidia/Lyra-2.0</span> in October 2026. Everything else is a labeled toy built to train your intuition.</p>
+    <p style="margin:0">Built to be touched. If a slider didn't move something, that's a bug — go break it.</p>
+  </div>
+</footer>
+<div id="ver">v2026.10.01-21.04</div>
+
+<script>
+/* ---------- utils ---------- */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const fmt=(n,d=2)=>Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const fmtInt=n=>Math.round(n).toLocaleString('en-US');
+const fmtU=(n,d=2)=>{ // unicode minus for display
+  const s=fmt(n,d); return n<0?s.replace('-','\u2212'):s;
+};
+function wcolor(v,alpha=1){ // diverging blue(-)/red(+)
+  const a=Math.min(1,Math.abs(v)*1.5)*alpha;
+  return v>=0?`rgba(255,107,94,${(0.10+a*0.90).toFixed(3)})`:`rgba(90,169,255,${(0.10+a*0.90).toFixed(3)})`;
+}
+function fitCanvas(cv,h){
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  const w=cv.clientWidth;
+  cv.width=Math.max(1,Math.round(w*dpr)); cv.height=Math.round(h*dpr);
+  cv.style.height=h+'px';
+  const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx,w,h};
+}
+function humanTime(sec){
+  if(!isFinite(sec))return'forever';
+  if(sec<60)return sec<10?sec.toFixed(1)+' seconds':Math.round(sec)+' seconds';
+  const m=sec/60; if(m<60)return m.toFixed(1)+' minutes';
+  const h=m/60; if(h<48)return h.toFixed(1)+' hours';
+  const d=h/24; if(d<730)return d.toFixed(1)+' days';
+  return (d/365.25).toFixed(1)+' years';
+}
+
+/* ---------- progress bar + reveal ---------- */
+const prog=document.getElementById('progress');
+addEventListener('scroll',()=>{
+  const st=scrollY, dh=document.documentElement.scrollHeight-innerHeight;
+  prog.style.width=(dh>0?(st/dh*100):0)+'%';
+},{passive:true});
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.12});
+document.querySelectorAll('.rv').forEach(el=>io.observe(el));
+
+/* ---------- hero drifting dots ---------- */
+(function(){
+  const cv=document.getElementById('heroCanvas');
+  const {ctx,w,h}=fitCanvas(cv,cv.parentElement.clientHeight);
+  const rnd=mulberry32(7);
+  const dots=Array.from({length:70},()=>({x:rnd()*w,y:rnd()*h,r:1+rnd()*2.2,vx:(rnd()-.5)*.25,vy:(rnd()-.5)*.25,c:rnd()<.5?'90,169,255':'255,178,36',a:.15+rnd()*.4}));
+  let vis=true;
+  new IntersectionObserver(e=>vis=e[0].isIntersecting).observe(cv);
+  (function tick(){
+    requestAnimationFrame(tick);
+    if(!vis)return;
+    ctx.clearRect(0,0,w,h);
+    for(const d of dots){
+      d.x+=d.vx;d.y+=d.vy;
+      if(d.x<0||d.x>w)d.vx*=-1; if(d.y<0||d.y>h)d.vy*=-1;
+      ctx.beginPath();ctx.arc(d.x,d.y,d.r,0,7);
+      ctx.fillStyle=`rgba(${d.c},${d.a})`;ctx.fill();
+    }
+  })();
+  addEventListener('resize',()=>{const f=fitCanvas(cv,cv.parentElement.clientHeight);});
+})();
+
+/* ---------- 1. ONE WEIGHT ---------- */
+(function(){
+  const inS=document.getElementById('inSlider'), wtS=document.getElementById('wtSlider');
+  const inVal=document.getElementById('inVal'), wtVal=document.getElementById('wtVal');
+  const eqIn=document.getElementById('eqIn'), eqW=document.getElementById('eqW'), eqOut=document.getElementById('eqOut');
+  const fill=document.getElementById('outFill');
+  function upd(){
+    const x=parseFloat(inS.value), wgt=parseFloat(wtS.value), out=x*wgt;
+    inVal.textContent=fmt(x,1); wtVal.textContent=fmtU(wgt,4);
+    eqIn.textContent=fmt(x,1); eqW.textContent=fmtU(wgt,4);
+    const eo=document.getElementById('eqOut');
+    eo.textContent=fmtU(out); eo.style.color=out<0?'var(--blue)':'var(--green)';
+    // bar: center zero, max |out| = 10
+    const frac=Math.min(1,Math.abs(out)/10);
+    if(out>=0){fill.style.left='50%';fill.style.width=(frac*50)+'%';}
+    else{fill.style.left=(50-frac*50)+'%';fill.style.width=(frac*50)+'%';}
+    fill.style.background=out<0?'var(--blue)':'var(--green)';
+  }
+  inS.addEventListener('input',upd); wtS.addEventListener('input',upd); upd();
+})();
+
+/* ---------- 2. NEURON ---------- */
+(function(){
+  const W=[0.8,-0.5,0.3,0.9];
+  const X=[7,3,9,1];
+  const host=document.getElementById('neuronRows');
+  const rows=X.map((xv,i)=>{
+    const div=document.createElement('div');div.className='nrow';
+    div.innerHTML=`<div class="xin"><div class="ctl" style="margin:0"><label style="font-size:14px">input x${i+1} <span class="v num" id="nx${i}">${fmt(xv,1)}</span></label>
+      <input type="range" min="0" max="10" step="0.1" value="${xv}" id="ns${i}" aria-label="Input ${i+1}"></div>
+      <div class="cbar"><i id="nb${i}"></i></div></div>
+      <div class="meta">× ${W[i]}<br>= <span class="num" id="nc${i}"></span></div>`;
+    host.appendChild(div);
+    return {s:div.querySelector('#ns'+i)};
+  });
+  const sumEq=document.getElementById('sumEq'), nOut=document.getElementById('neuronOut'), nFill=document.getElementById('neuronFill');
+  function upd(){
+    let sum=0; const terms=[];
+    rows.forEach((r,i)=>{
+      const x=parseFloat(r.s.value), t=x*W[i]; sum+=t; terms.push(t);
+      document.getElementById('nx'+i).textContent=fmt(x,1);
+      document.getElementById('nc'+i).textContent=fmtU(t);
+      const b=document.getElementById('nb'+i), f=Math.min(1,Math.abs(t)/9);
+      b.style.width=(f*100)+'%'; b.style.background=t<0?'var(--blue)':'var(--red)';
+    });
+    const sq=Math.tanh(sum/6); // the squish
+    sumEq.innerHTML='weighted sum = '+terms.map(t=>fmtU(t)).join(' + ')+' = <b>'+fmtU(sum)+'</b> → squished ×tanh';
+    nOut.textContent=fmtU(sq*100,0)+'%';
+    nFill.style.width=(Math.abs(sq)*100)+'%';
+    nFill.style.background=sq<0?'var(--blue)':'var(--green)';
+  }
+  rows.forEach(r=>r.s.addEventListener('input',upd)); upd();
+})();
+
+/* ---------- 3. TEN THOUSAND WEIGHTS ---------- */
+(function(){
+  const N=100, cv=document.getElementById('gridCanvas'), out=document.getElementById('gridReadout');
+  let vals=new Float32Array(N*N), seed=1234;
+  function gen(){
+    const rnd=mulberry32(seed);
+    for(let i=0;i<vals.length;i++){
+      // approx-normal in [-1,1]: sum of 3 uniforms
+      vals[i]=((rnd()+rnd()+rnd())/3*2-1)*1.4;
+      vals[i]=Math.max(-1,Math.min(1,vals[i]));
+    }
+  }
+  function draw(hi=-1){
+    const {ctx,w,h}=fitCanvas(cv,Math.min(420,cv.clientWidth));
+    const cw=w/N, ch=h/N;
+    ctx.fillStyle='#0d0b09';ctx.fillRect(0,0,w,h);
+    for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+      const i=r*N+c;
+      ctx.fillStyle=wcolor(vals[i]);
+      ctx.fillRect(c*cw,r*ch,cw+0.5,ch+0.5);
+    }
+    if(hi>=0){
+      const r=Math.floor(hi/N),c=hi%N;
+      ctx.strokeStyle='#ffb224';ctx.lineWidth=2;
+      ctx.strokeRect(c*cw-1,r*ch-1,cw+2,ch+2);
+    }
+  }
+  function pick(ev){
+    const rect=cv.getBoundingClientRect();
+    const px=(ev.touches&&ev.touches[0]?ev.touches[0].clientX:ev.clientX)-rect.left;
+    const py=(ev.touches&&ev.touches[0]?ev.touches[0].clientY:ev.clientY)-rect.top;
+    const c=Math.floor(px/rect.width*N), r=Math.floor(py/rect.height*N);
+    if(c<0||c>=N||r<0||r>=N)return;
+    const i=r*N+c;
+    draw(i);
+    out.innerHTML=`weight <b>#${fmtInt(i+1)}</b> of 10,000 · row ${r+1}, col ${c+1} → <b>${fmtU(vals[i],4)}</b>`;
+  }
+  cv.addEventListener('pointerdown',pick);
+  document.getElementById('regenBtn').addEventListener('click',()=>{
+    seed=(seed*9301+49297)%233280;
+    out.innerHTML='Shuffled. Tap any square → its exact weight appears here.';
+    gen();draw();
+  });
+  gen();draw();
+  addEventListener('resize',()=>draw());
+})();
+
+/* ---------- 4. A BILLION ---------- */
+(function(){
+  const DOTS=1000, PER=1e6, TOTAL=1e9;
+  const cv=document.getElementById('dotCanvas'), out=document.getElementById('countReadout');
+  const proj=document.getElementById('projected');
+  const speedS=document.getElementById('speedSlider'), speedVal=document.getElementById('speedVal');
+  const SPEEDS=[1,10,100,1000,1e4,1e5,1e6,1e7,1e8];
+  let lit=0, raf=null, t0=0, counted=0;
+  function speed(){return SPEEDS[parseInt(speedS.value)];}
+  function drawDots(){
+    const {ctx,w,h}=fitCanvas(cv,300);
+    const cols=40, rows=25, gx=w/cols, gy=h/rows, r=Math.min(gx,gy)*0.32;
+    ctx.fillStyle='#0d0b09';ctx.fillRect(0,0,w,h);
+    for(let i=0;i<DOTS;i++){
+      const c=i%cols, rr=Math.floor(i/cols);
+      ctx.beginPath();ctx.arc(c*gx+gx/2,rr*gy+gy/2,r,0,7);
+      if(i<lit){ctx.fillStyle='#ffb224';}
+      else{ctx.fillStyle='rgba(245,239,227,0.10)';}
+      ctx.fill();
+    }
+  }
+  function updProj(){
+    const s=speed();
+    speedVal.textContent=fmtInt(s)+' / sec';
+    proj.innerHTML=`At <b class="num">${fmtInt(s)}/sec</b>, counting to a billion takes <b>${humanTime(TOTAL/s)}</b>. One dot = 1M weights.`;
+  }
+  function tick(now){
+    const el=(now-t0)/1000, s=speed();
+    counted=Math.min(TOTAL,el*s);
+    const newLit=Math.floor(counted/PER);
+    if(newLit!==lit){lit=newLit;drawDots();}
+    out.innerHTML=`counted <b>${fmtInt(counted)}</b> / 1,000,000,000 · <b>${fmtInt(lit)}</b> of 1,000 dots · elapsed <b>${humanTime(el)}</b>`;
+    if(counted>=TOTAL){stop();out.innerHTML+=`<br><span style="color:var(--green)">Done — a billion, at ${fmtInt(s)}/sec, took ${humanTime(el)}.</span>`;return;}
+    raf=requestAnimationFrame(tick);
+  }
+  function stop(){if(raf)cancelAnimationFrame(raf);raf=null;document.getElementById('countBtn').textContent='Start counting';}
+  document.getElementById('countBtn').addEventListener('click',()=>{
+    if(raf){stop();return;}
+    lit=0;counted=0;drawDots();t0=performance.now();
+    document.getElementById('countBtn').textContent='Stop';
+    raf=requestAnimationFrame(tick);
+  });
+  speedS.addEventListener('input',updProj);
+  document.querySelectorAll('[data-speed]').forEach(b=>b.addEventListener('click',()=>{
+    speedS.value=b.getAttribute('data-speed');updProj();
+  }));
+  updProj();drawDots();
+  addEventListener('resize',drawDots);
+})();
+
+/* ---------- 5. LYRA 2.0 ---------- */
+(function(){
+  const comps=[
+    {name:'Text encoder',gb:11.4,b:5.7,color:'#5aa9ff',job:'Reads your prompt and turns words into numbers the 3D model can steer by. Nearly half the machine is just *understanding the request*.'},
+    {name:'3D reconstruction',gb:13.4,b:6.7,color:'#ff6b5e',job:'The world-builder: turns the walkthrough video into actual 3D geometry you can move through.'},
+    {name:'Image encoder',gb:2.4,b:1.2,color:'#ffb224',job:'Reads your starting photo — the seed the whole world grows from.'},
+    {name:'VAE',gb:0.5,b:0.25,color:'#4fd1c5',job:'The compressor/decompressor: squeezes images into a compact code and back. Small but load-bearing.'},
+    {name:'3 LoRA adapters',gb:1.1,b:0.55,color:'#5fd68a',job:'Fine-tuning patches: small add-on knob sets that sharpen detail and realism without retraining the giant.'},
+  ];
+  const totalB=comps.reduce((a,c)=>a+c.b,0);
+  // stacked bar
+  const bar=document.getElementById('stackbar');
+  comps.forEach(c=>{
+    const d=document.createElement('div');
+    d.style.cssText=`flex:${c.b};background:${c.color};opacity:.85`;
+    bar.appendChild(d);
+  });
+  // legend + detail
+  const leg=document.getElementById('legend'), det=document.getElementById('compDetail');
+  comps.forEach((c,i)=>{
+    const b=document.createElement('button');
+    b.innerHTML=`<span class="dot" style="background:${c.color}"></span><span>${c.name}</span><span class="lg num">${c.gb} GB ≈ ${c.b}B</span>`;
+    b.addEventListener('click',()=>{
+      leg.querySelectorAll('button').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      [...bar.children].forEach((s,j)=>s.style.opacity=j===i?'1':'.25');
+      det.innerHTML=`<b>${c.name}</b> — <span class="num">${c.gb} GB ≈ ${c.b} billion weights</span> (${(c.b/totalB*100).toFixed(1)}% of Lyra)<br><span style="color:var(--muted)">${c.job}</span>`;
+    });
+    leg.appendChild(b);
+    if(i===0)b.click();
+  });
+  // dot field: 1 dot = 100M weights
+  const cv=document.getElementById('lyraCanvas'), out=document.getElementById('lyraReadout');
+  const dots=[]; // {comp}
+  comps.forEach((c,ci)=>{const n=Math.round(c.b*10);for(let k=0;k<n;k++)dots.push(ci);});
+  // shuffle deterministically so colors interleave
+  const rnd=mulberry32(42);
+  for(let i=dots.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[dots[i],dots[j]]=[dots[j],dots[i]];}
+  function drawDots(){
+    const {ctx,w,h}=fitCanvas(cv,300);
+    const cols=18, rows=Math.ceil(dots.length/cols);
+    const gx=w/cols, gy=h/rows, r=Math.min(gx,gy)*0.34;
+    ctx.fillStyle='#0d0b09';ctx.fillRect(0,0,w,h);
+    dots.forEach((ci,i)=>{
+      const c=i%cols, rr=Math.floor(i/cols);
+      ctx.beginPath();ctx.arc(c*gx+gx/2,rr*gy+gy/2,r,0,7);
+      ctx.fillStyle=comps[ci].color;ctx.globalAlpha=.9;ctx.fill();ctx.globalAlpha=1;
+    });
+    cv._geo={cols,rows,gx,gy};
+  }
+  cv.addEventListener('pointerdown',ev=>{
+    const rect=cv.getBoundingClientRect(), g=cv._geo; if(!g)return;
+    const px=ev.clientX-rect.left, py=ev.clientY-rect.top;
+    const c=Math.floor(px/rect.width*g.cols), r=Math.floor(py/rect.height*g.rows);
+    const i=r*g.cols+c;
+    if(i<0||i>=dots.length)return;
+    const comp=comps[dots[i]];
+    out.innerHTML=`This dot = <b>100,000,000 weights</b> in the <b style="color:${comp.color}">${comp.name}</b> (${comp.gb} GB).`;
+  });
+  drawDots();
+  addEventListener('resize',drawDots);
+})();
+
+/* ---------- 6. PEEK INSIDE ---------- */
+(function(){
+  const stream=document.getElementById('peekStream');
+  const peekBtn=document.getElementById('peekBtn'), findBtn=document.getElementById('findBtn');
+  let timer=null, idx=8412003991;
+  function line(rnd){
+    const v=((rnd()+rnd()+rnd())/3*2-1)*1.4;
+    const cls=v<0?'neg':'pos';
+    return `<div>#${fmtInt(idx++)} → <span class="${cls}">${fmtU(v,4)}</span></div>`;
+  }
+  peekBtn.addEventListener('click',()=>{
+    if(timer)clearInterval(timer);
+    stream.innerHTML='';
+    const rnd=mulberry32(Date.now()%100000);
+    let n=0;
+    timer=setInterval(()=>{
+      stream.insertAdjacentHTML('beforeend',line(rnd));
+      if(++n>=10)clearInterval(timer);
+      stream.scrollTop=stream.scrollHeight;
+    },110);
+  });
+  findBtn.addEventListener('click',()=>{
+    stream.innerHTML='<div style="color:var(--faint)">scanning 28.7 GB for anything that looks like a 3D world…</div>';
+    setTimeout(()=>{
+      stream.innerHTML='<div style="color:var(--faint)">scanning 28.7 GB for anything that looks like a 3D world…</div>'+
+      '<div style="color:var(--green);margin-top:8px">0 worlds found. 0 pictures found. 0 videos found.</div>'+
+      '<div style="margin-top:8px">It\u2019s knobs all the way down.</div>';
+    },1400);
+  });
+})();
+</script>
+</body>
+</html>

@@ -56,7 +56,22 @@ const SITES = ["leetcode-games", "ergosphere", "illusion-bowling", "shotgrep", "
   "sysdesign-design-metrics-system",
   "sysdesign-design-ticket-booking",
   "sysdesign-design-uber",
-  "sysdesign-design-youtube"];
+  "sysdesign-design-youtube",
+  "ai-hedge-fund-lab",
+  "claw",
+  "debate-club",
+  "dictation-pad",
+  "flight-tracker",
+  "fridge-portfolio",
+  "omarchy-web",
+  "paint-timeline-demo",
+  "points-of-view",
+  "step-through-lab",
+  "swipe-cards-lab",
+  "todo-autopilot",
+  "tokenizer-from-scratch",
+  "what-should-we-do-tonight",
+  "what-weights-look-like"];
 const PROJECTS_HOST = "projects.lukezhang.si";
 const SITE_HOST_RE = /^([a-z0-9-]+)\.lukezhang\.si$/;
 

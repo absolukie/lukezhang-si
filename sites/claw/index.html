@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claw — a tiny language for agents</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    background: #0b0e14; color: #e8ecf3; min-height: 100vh; padding: 22px 16px 40px; }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 34px; letter-spacing: -1px; }
+  h1 .c { color: #7ee2a8; }
+  .sub { color: #8b93a7; font-size: 14px; margin: 6px 0 4px; }
+  .principles { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0 20px; }
+  .principles span { font-size: 12px; font-weight: 600; color: #9db4e8; background: #1d2538;
+    border: 1px solid #2c3a5c; border-radius: 999px; padding: 5px 12px; }
+  .toolbar { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  select, button { font-size: 14px; font-weight: 700; border-radius: 12px; padding: 10px 14px;
+    border: 1px solid #2c3a5c; background: #1a2230; color: #e8ecf3; touch-action: manipulation; cursor: pointer; }
+  button.run { background: #7ee2a8; border-color: #7ee2a8; color: #0b0e12; font-size: 15px; padding: 10px 26px; }
+  button:active, select:active { transform: scale(.97); }
+  #editor { width: 100%; min-height: 220px; background: #10151d; color: #e8ecf3;
+    border: 1px solid #2c3a5c; border-radius: 14px; padding: 14px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; line-height: 1.55;
+    resize: vertical; tab-size: 2; }
+  #editor:focus { outline: none; border-color: #7ee2a8; }
+  #stats { display: flex; gap: 14px; flex-wrap: wrap; margin: 12px 2px; font-size: 12.5px; color: #8b93a7; }
+  #stats b { color: #7ee2a8; }
+  #out { background: #0e1319; border: 1px solid #232c42; border-radius: 14px; padding: 14px;
+    min-height: 90px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+  #out .err { color: #ff7b7b; }
+  #out .ok { color: #7ee2a8; }
+  details { margin-top: 12px; }
+  summary { font-size: 13px; font-weight: 700; color: #9db4e8; cursor: pointer; touch-action: manipulation; }
+  #dis { margin-top: 8px; background: #0e1319; border: 1px solid #232c42; border-radius: 14px;
+    padding: 14px; font-family: ui-monospace, Menlo, monospace; font-size: 12px;
+    line-height: 1.65; white-space: pre; overflow-x: auto; color: #aeb6c9; }
+  .cheat { margin-top: 22px; background: #11161f; border: 1px solid #232c42; border-radius: 16px; padding: 18px; }
+  .cheat h3 { font-size: 15px; margin-bottom: 10px; }
+  .cheat code { display: block; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px;
+    color: #c6cfdb; background: #0b0e14; border-radius: 8px; padding: 10px 12px; margin: 8px 0;
+    white-space: pre; overflow-x: auto; }
+  .cheat p { font-size: 13px; color: #8b93a7; line-height: 1.55; }
+  #ver { text-align: center; color: #4a5568; font-size: 11px; margin-top: 34px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><span class="c">claw</span></h1>
+  <p class="sub">A tiny language written by agents, for agents. Terse source, compile-time checks, bytecode VM.</p>
+  <div class="principles">
+    <span>token-dense syntax</span><span>annotations, not novels</span><span>errors at compile time</span><span>bytecode VM</span>
+  </div>
+  <div class="toolbar">
+    <select id="examples"></select>
+    <button class="run" id="runbtn">Run ▸</button>
+    <button id="disbtn">Bytecode</button>
+  </div>
+  <textarea id="editor" spellcheck="false"></textarea>
+  <div id="stats"><span>—</span></div>
+  <div id="out">Output appears here.</div>
+  <details id="diswrap"><summary>Disassembly</summary><div id="dis">Run something first.</div></details>
+  <div class="cheat">
+    <h3>Cheat sheet</h3>
+    <code>f fib(n:i):i = n&lt;2 ? n : fib(n-1)+fib(n-2)  # fn, typed params
+p fib(25)                                       # print
+x = 10                                          # inferred var
+s:i = 0                                         # annotated var
+if x > 5 { p "big" } else { p "small" }
+while i &lt; 10 { p i  i = i+1 }                    # ; or newline separates
+ret x                                           # return (or just leave last expr)</code>
+    <p>Types: <b>i</b>nt, <b>f</b>loat, <b>s</b>tr, <b>b</b>ool. Operators: + - * / % &lt; &gt; &lt;= &gt;= == != and ternary <b>?</b> <b>:</b>. Natives: <b>rand()</b> → 0..1, <b>clock()</b> → ms timestamp. Unknown names, wrong arg counts, and bad syntax all fail at compile time — before a single instruction runs.</p>
+  </div>
+  <div id="ver">v2026.10.02-20.05</div>
+</div>
+<script>
+/* ================= CLAW: lexer ================= */
+function clawErr(msg, line) { const e = new Error("line " + line + ": " + msg); e.isClaw = true; return e; }
+
+function lex(src) {
+  const toks = []; let i = 0, line = 1;
+  const isD = c => c >= "0" && c <= "9";
+  const isA = c => (c >= "a" && c <= "z") || (c >= "A" && c <= "Z") || c === "_";
+  const KW = { f: "F", if: "IF", else: "ELSE", while: "WHILE", p: "P", ret: "RET", true: "TRUE", false: "FALSE" };
+  while (i < src.length) {
+    const c = src[i];
+    if (c === "\n") { toks.push({ t: "NL", line }); line++; i++; continue; }
+    if (c === " " || c === "\t" || c === "\r") { i++; continue; }
+    if (c === "#") { while (i < src.length && src[i] !== "\n") i++; continue; }
+    if (isD(c)) {
+      let j = i, dot = false;
+      while (j < src.length && (isD(src[j]) || (!dot && src[j] === "."))) { if (src[j] === ".") dot = true; j++; }
+      toks.push({ t: "NUM", v: parseFloat(src.slice(i, j)), line }); i = j; continue;
+    }
+    if (c === '"') {
+      let j = i + 1, s = "";
+      while (j < src.length && src[j] !== '"') {
+        if (src[j] === "\\" && j + 1 < src.length) { const e = src[++j]; s += e === "n" ? "\n" : e === "t" ? "\t" : e; }
+        else s += src[j];
+        j++;
+      }
+      if (src[j] !== '"') throw clawErr("unterminated string", line);
+      toks.push({ t: "STR", v: s, line }); i = j + 1; continue;
+    }
+    if (isA(c)) {
+      let j = i;
+      while (j < src.length && (isA(src[j]) || isD(src[j]))) j++;
+      const w = src.slice(i, j);
+      toks.push({ t: KW[w] || "ID", v: w, line }); i = j; continue;
+    }
+    const two = src.substr(i, 2);
+    if (["<=", ">=", "==", "!="].includes(two)) { toks.push({ t: two, line }); i += 2; continue; }
+    if ("+-*/%<>=!?:;,.(){}".includes(c)) { toks.push({ t: c, line }); i++; continue; }
+    throw clawErr("bad character '" + c + "'", line);
+  }
+  toks.push({ t: "EOF", line });
+  return toks;
+}
+
+/* ================= CLAW: parser ================= */
+function parse(toks) {
+  let pos = 0;
+  const peek = () => toks[pos];
+  const next = () => toks[pos++];
+  const expect = t => {
+    const k = next();
+    if (k.t !== t) throw clawErr("expected " + t + ", got " + (k.v || k.t), k.line);
+    return k;
+  };
+  const sep = () => { while (peek().t === "NL" || peek().t === ";") pos++; };
+
+  function program() { sep(); const ss = []; while (peek().t !== "EOF") { ss.push(stmt()); sep(); } return { k: "prog", ss }; }
+  function block() {
+    expect("{"); sep(); const ss = [];
+    while (peek().t !== "}") { ss.push(stmt()); sep(); }
+    expect("}"); return ss;
+  }
+  function stmt() {
+    const t = peek();
+    if (t.t === "F") return fnDef();
+    if (t.t === "P") { next(); return { k: "print", e: expr() }; }
+    if (t.t === "IF") return ifStmt();
+    if (t.t === "WHILE") return whileStmt();
+    if (t.t === "RET") { next(); return { k: "ret", e: expr() }; }
+    if (t.t === "ID" && (toks[pos + 1].t === "=" || toks[pos + 1].t === ":")) return assign();
+    return { k: "expr", e: expr() };
+  }
+  function assign() {
+    const name = expect("ID").v; let typ = null;
+    if (peek().t === ":") { next(); typ = expect("ID").v; }
+    expect("="); return { k: "assign", name, typ, e: expr() };
+  }
+  function fnDef() {
+    expect("F"); const name = expect("ID").v; expect("(");
+    const params = [];
+    if (peek().t !== ")") {
+      do {
+        const pn = expect("ID").v; let pt = null;
+        if (peek().t === ":") { next(); pt = expect("ID").v; }
+        params.push({ n: pn, t: pt });
+      } while (peek().t === "," && next());
+    }
+    expect(")"); let rt = null;
+    if (peek().t === ":") { next(); rt = expect("ID").v; }
+    let body;
+    if (peek().t === "=") { next(); body = [{ k: "ret", e: expr() }]; }
+    else body = block();
+    return { k: "fn", name, params, rt, body };
+  }
+  function ifStmt() {
+    expect("IF"); const c = expr(); const a = block(); let b = null;
+    const save = pos; sep();
+    if (peek().t === "ELSE") { next(); b = block(); } else pos = save;
+    return { k: "if", c, a, b };
+  }
+  function whileStmt() { expect("WHILE"); const c = expr(); return { k: "while", c, body: block() }; }
+
+  function expr() { return ternary(); }
+  function ternary() {
+    const c = logic();
+    if (peek().t === "?") { next(); const a = expr(); expect(":"); const b = expr(); return { k: "tern", c, a, b }; }
+    return c;
+  }
+  function logic() {
+    let e = comp();
+    while (peek().t === "==" || peek().t === "!=") { const op = next().t; e = { k: "bin", op, a: e, b: comp() }; }
+    return e;
+  }
+  function comp() {
+    let e = add();
+    while (["<", ">", "<=", ">="].includes(peek().t)) { const op = next().t; e = { k: "bin", op, a: e, b: add() }; }
+    return e;
+  }
+  function add() {
+    let e = mul();
+    while (peek().t === "+" || peek().t === "-") { const op = next().t; e = { k: "bin", op, a: e, b: mul() }; }
+    return e;
+  }
+  function mul() {
+    let e = unary();
+    while (["*", "/", "%"].includes(peek().t)) { const op = next().t; e = { k: "bin", op, a: e, b: unary() }; }
+    return e;
+  }
+  function unary() {
+    if (peek().t === "-") { next(); return { k: "neg", e: unary() }; }
+    return primary();
+  }
+  function primary() {
+    const t = next();
+    if (t.t === "NUM" || t.t === "STR") return { k: "lit", v: t.v };
+    if (t.t === "TRUE") return { k: "lit", v: true };
+    if (t.t === "FALSE") return { k: "lit", v: false };
+    if (t.t === "ID") {
+      if (peek().t === "(") {
+        next(); const args = [];
+        if (peek().t !== ")") { do { args.push(expr()); } while (peek().t === "," && next()); }
+        expect(")"); return { k: "call", name: t.v, args };
+      }
+      return { k: "var", name: t.v };
+    }
+    if (t.t === "(") { const e = expr(); expect(")"); return e; }
+    throw clawErr("unexpected " + (t.v || t.t), t.line);
+  }
+  return program();
+}
+/* ================= CLAW: compiler (AST -> bytecode) ================= */
+function compile(prog) {
+  const consts = [], cmap = new Map(), funcs = {};
+  const ck = v => {
+    const key = typeof v + ":" + String(v);
+    if (!cmap.has(key)) { cmap.set(key, consts.length); consts.push(v); }
+    return cmap.get(key);
+  };
+  const BIN = { "+": "ADD", "-": "SUB", "*": "MUL", "/": "DIV", "%": "MOD",
+                "<": "LT", ">": "GT", "<=": "LTE", ">=": "GTE", "==": "EQ", "!=": "NEQ" };
+
+  function compStmts(ss, ctx, code) { for (const s of ss) compStmt(s, ctx, code); }
+  function compStmt(s, ctx, code) {
+    switch (s.k) {
+      case "fn": {
+        const fcode = [], fctx = { slots: new Map(), next: 0 };
+        for (const p of s.params) { fctx.slots.set(p.n, fctx.next++); }
+        compStmts(s.body, fctx, fcode);
+        fcode.push({ op: "CONST", a: ck(null) }, { op: "RET" });
+        funcs[s.name] = { code: fcode, arity: s.params.length, rt: s.rt };
+        break;
+      }
+      case "assign": {
+        compExpr(s.e, ctx, code);
+        if (!ctx.slots.has(s.name)) ctx.slots.set(s.name, ctx.next++);
+        code.push({ op: "STORE", a: ctx.slots.get(s.name) });
+        break;
+      }
+      case "print": compExpr(s.e, ctx, code); code.push({ op: "PRINT" }); break;
+      case "expr": compExpr(s.e, ctx, code); code.push({ op: "POP" }); break;
+      case "ret": compExpr(s.e, ctx, code); code.push({ op: "RET" }); break;
+      case "if": {
+        compExpr(s.c, ctx, code);
+        const jf = { op: "JF", a: -1 }; code.push(jf);
+        compStmts(s.a, ctx, code);
+        if (s.b) {
+          const jmp = { op: "JMP", a: -1 }; code.push(jmp);
+          jf.a = code.length;
+          compStmts(s.b, ctx, code);
+          jmp.a = code.length;
+        } else jf.a = code.length;
+        break;
+      }
+      case "while": {
+        const loop = code.length;
+        compExpr(s.c, ctx, code);
+        const jf = { op: "JF", a: -1 }; code.push(jf);
+        compStmts(s.body, ctx, code);
+        code.push({ op: "JMP", a: loop });
+        jf.a = code.length;
+        break;
+      }
+    }
+  }
+  function compExpr(e, ctx, code) {
+    switch (e.k) {
+      case "lit": code.push({ op: "CONST", a: ck(e.v) }); break;
+      case "var": {
+        if (!ctx.slots.has(e.name)) throw clawErr("unknown variable '" + e.name + "'", 0);
+        code.push({ op: "LOAD", a: ctx.slots.get(e.name) }); break;
+      }
+      case "neg": compExpr(e.e, ctx, code); code.push({ op: "NEG" }); break;
+      case "bin":
+        compExpr(e.a, ctx, code); compExpr(e.b, ctx, code);
+        code.push({ op: BIN[e.op] }); break;
+      case "tern": {
+        compExpr(e.c, ctx, code);
+        const jf = { op: "JF", a: -1 }; code.push(jf);
+        compExpr(e.a, ctx, code);
+        const jmp = { op: "JMP", a: -1 }; code.push(jmp);
+        jf.a = code.length;
+        compExpr(e.b, ctx, code);
+        jmp.a = code.length;
+        break;
+      }
+      case "call": {
+        for (const a of e.args) compExpr(a, ctx, code);
+        code.push({ op: "CALL", name: e.name, argc: e.args.length });
+        break;
+      }
+    }
+  }
+  const main = [], ctx = { slots: new Map(), next: 0 };
+  compStmts(prog.ss, ctx, main);
+  main.push({ op: "HALT" });
+  return { main, funcs, consts };
+}
+
+/* ================= CLAW: VM ================= */
+const NATIVES = {
+  rand:  { arity: 0, fn: () => Math.random() },
+  clock: { arity: 0, fn: () => performance.now() },
+};
+function runVM(unit) {
+  const out = [];
+  const { main, funcs, consts } = unit;
+  const str = v => v === null || v === undefined ? "null" : typeof v === "string" ? v : String(v);
+  let frame = { code: main, ip: 0, locals: [], stack: [] };
+  const calls = [];
+  let icount = 0;
+  const LIMIT = 2e9;
+  while (true) {
+    if (++icount > LIMIT) throw clawErr("time limit exceeded", 0);
+    const ins = frame.code[frame.ip++], S = frame.stack;
+    switch (ins.op) {
+      case "CONST": S.push(consts[ins.a]); break;
+      case "LOAD": S.push(frame.locals[ins.a]); break;
+      case "STORE": frame.locals[ins.a] = S.pop(); break;
+      case "ADD": { const b = S.pop(), a = S.pop();
+        S.push(typeof a === "string" || typeof b === "string" ? String(a) + String(b) : a + b); break; }
+      case "SUB": { const b = S.pop(), a = S.pop(); S.push(a - b); break; }
+      case "MUL": { const b = S.pop(), a = S.pop(); S.push(a * b); break; }
+      case "DIV": { const b = S.pop(), a = S.pop(); S.push(a / b); break; }
+      case "MOD": { const b = S.pop(), a = S.pop(); S.push(a % b); break; }
+      case "NEG": S.push(-S.pop()); break;
+      case "LT": { const b = S.pop(), a = S.pop(); S.push(a < b); break; }
+      case "GT": { const b = S.pop(), a = S.pop(); S.push(a > b); break; }
+      case "LTE": { const b = S.pop(), a = S.pop(); S.push(a <= b); break; }
+      case "GTE": { const b = S.pop(), a = S.pop(); S.push(a >= b); break; }
+      case "EQ": { const b = S.pop(), a = S.pop(); S.push(a === b); break; }
+      case "NEQ": { const b = S.pop(), a = S.pop(); S.push(a !== b); break; }
+      case "JMP": frame.ip = ins.a; break;
+      case "JF": if (!S.pop()) frame.ip = ins.a; break;
+      case "CALL": {
+        const args = [];
+        for (let i = 0; i < ins.argc; i++) args.unshift(S.pop());
+        const nat = NATIVES[ins.name];
+        if (nat) {
+          if (args.length !== nat.arity) throw clawErr(ins.name + " wants " + nat.arity + " args, got " + args.length, 0);
+          S.push(nat.fn(args));
+          break;
+        }
+        const fn = funcs[ins.name];
+        if (!fn) throw clawErr("unknown function '" + ins.name + "'", 0);
+        if (args.length !== fn.arity) throw clawErr(ins.name + " wants " + fn.arity + " args, got " + args.length, 0);
+        calls.push(frame);
+        frame = { code: fn.code, ip: 0, locals: args, stack: [] };
+        break;
+      }
+      case "RET": {
+        const v = S.pop();
+        frame = calls.pop();
+        if (!frame) return { out, icount };
+        frame.stack.push(v);
+        break;
+      }
+      case "PRINT": out.push(str(S.pop())); break;
+      case "POP": S.pop(); break;
+      case "HALT": return { out, icount };
+      default: throw clawErr("bad op " + ins.op, 0);
+    }
+  }
+}
+
+function disasm(unit) {
+  const lines = [];
+  const show = (name, code, consts) => {
+    lines.push("== " + name + " ==");
+    code.forEach((ins, i) => {
+      let s = String(i).padStart(4, "0") + "  " + ins.op.padEnd(6);
+      if (ins.op === "CONST") s += ins.a + "   ; " + JSON.stringify(consts[ins.a]);
+      else if (ins.op === "CALL") s += ins.name + "/" + ins.argc;
+      else if (ins.a !== undefined) s += ins.a;
+      lines.push(s);
+    });
+  };
+  show("main", unit.main, unit.consts);
+  for (const n of Object.keys(unit.funcs)) show("fn " + n, unit.funcs[n].code, unit.consts);
+  return lines.join("\n");
+}
+
+function clawRun(src) {
+  const t0 = performance.now();
+  const toks = lex(src);
+  const ast = parse(toks);
+  const unit = compile(ast);
+  const t1 = performance.now();
+  const res = runVM(unit);
+  const t2 = performance.now();
+  return { out: res.out, icount: res.icount, compileMs: t1 - t0, runMs: t2 - t1, unit };
+}
+/* ================= playground UI ================= */
+const EXAMPLES = {
+  "hello": 'p "hello, world"\n# claw: terse, typed, bytecode VM\n',
+  "fib(25)": 'f fib(n:i):i = n<2 ? n : fib(n-1)+fib(n-2)\np fib(25)\n',
+  "loop 10M": 's = 0\ni = 0\nwhile i<10000000 {\n  s = s+i\n  i = i+1\n}\np s\n',
+  "fizzbuzz": 'i = 1\nwhile i<=20 {\n  p i%15==0 ? "fizzbuzz" : i%3==0 ? "fizz" : i%5==0 ? "buzz" : i\n  i = i+1\n}\n',
+  "types": 'f add(a:i, b:i):i {\n  ret a+b\n}\np add(40, 2)\nname:s = "claw"\np "built with " + name\n',
+};
+const editor = document.getElementById("editor"),
+      out = document.getElementById("out"),
+      stats = document.getElementById("stats"),
+      dis = document.getElementById("dis"),
+      exSel = document.getElementById("examples");
+Object.keys(EXAMPLES).forEach(k => {
+  const o = document.createElement("option"); o.value = k; o.textContent = k; exSel.appendChild(o);
+});
+exSel.value = "fib(25)";
+editor.value = EXAMPLES["fib(25)"];
+exSel.addEventListener("change", () => { editor.value = EXAMPLES[exSel.value]; });
+
+let lastUnit = null;
+function run() {
+  const src = editor.value;
+  try {
+    const r = clawRun(src);
+    lastUnit = r.unit;
+    out.innerHTML = r.out.length
+      ? r.out.map(x => "<span class='ok'>" + escapeHtml(x) + "</span>").join("\n")
+      : "<span class='ok'>(no output)</span>";
+    const ips = r.runMs > 0 ? Math.round(r.icount / (r.runMs / 1000)) : 0;
+    stats.innerHTML =
+      "<span>compile <b>" + r.compileMs.toFixed(2) + " ms</b></span>" +
+      "<span>run <b>" + r.runMs.toFixed(1) + " ms</b></span>" +
+      "<span><b>" + r.icount.toLocaleString() + "</b> instr</span>" +
+      "<span><b>" + (ips / 1e6).toFixed(1) + "M</b> instr/sec</span>" +
+      "<span><b>" + src.length + "</b> chars</span>";
+    dis.textContent = disasm(r.unit);
+  } catch (e) {
+    out.innerHTML = "<span class='err'>Error: " + escapeHtml(e.message) + "</span>";
+    stats.innerHTML = "<span>compile failed — fix it and run again</span>";
+  }
+}
+function escapeHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+document.getElementById("runbtn").addEventListener("click", run);
+document.getElementById("disbtn").addEventListener("click", () => {
+  const d = document.getElementById("diswrap");
+  d.open = !d.open;
+  if (d.open && !lastUnit) run();
+  else if (lastUnit) dis.textContent = disasm(lastUnit);
+});
+editor.addEventListener("keydown", e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); run(); }
+  if (e.key === "Tab") {
+    e.preventDefault();
+    const s = editor.selectionStart;
+    editor.value = editor.value.slice(0, s) + "  " + editor.value.slice(editor.selectionEnd);
+    editor.selectionStart = editor.selectionEnd = s + 2;
+  }
+});
+run();
+</script>
+</body>
+</html>

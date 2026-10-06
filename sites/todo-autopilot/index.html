@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Todo Autopilot — the list that does itself</title>
+<style>
+  :root{
+    --paper:#FAF7F1; --card:#FFFDF8; --ink:#221c13; --muted:#6f6455;
+    --line:#e6dcc8; --agent:#2f5d3a; --agent-bg:#eef3ec; --you:#b3541e; --you-bg:#faf0e6;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  body{background:var(--paper);color:var(--ink);
+    font-family:system-ui,-apple-system,"SF Pro Text","Segoe UI",sans-serif;
+    line-height:1.55;min-height:100vh;
+    padding:max(28px,env(safe-area-inset-top)) 18px max(90px,env(safe-area-inset-bottom));}
+  .wrap{max-width:700px;margin:0 auto}
+  .eyebrow{font-size:12px;letter-spacing:2.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+  h1{font-family:Georgia,"Iowan Old Style","Times New Roman",serif;font-weight:600;
+    font-size:clamp(34px,7vw,48px);line-height:1.08;letter-spacing:-0.5px;margin-bottom:8px}
+  .sub{color:var(--muted);font-size:15px;max-width:56ch;margin-bottom:26px}
+  .stats{display:flex;gap:10px;margin-bottom:30px}
+  .stat{flex:1;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+  .stat .n{font-family:Georgia,serif;font-size:30px;line-height:1}
+  .stat .l{font-size:12px;color:var(--muted);margin-top:4px}
+  .stat.agent .n{color:var(--agent)} .stat.you .n{color:var(--you)}
+  h2.sec{font-family:Georgia,serif;font-size:22px;font-weight:600;margin:34px 0 4px}
+  h2.sec .num{color:var(--muted);font-size:15px;vertical-align:middle;margin-right:8px;letter-spacing:1px}
+  .sec-sub{color:var(--muted);font-size:13.5px;margin-bottom:14px}
+  .todo{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--line);
+    border-radius:14px;padding:14px 16px;margin-bottom:10px}
+  .todo.agent{border-left-color:var(--agent)}
+  .todo.you{border-left-color:var(--you)}
+  .todo.done{opacity:.55}
+  .todo.done .t{text-decoration:line-through}
+  .todo .t{font-size:15.5px;font-weight:600;line-height:1.4}
+  .todo .meta{font-size:12.5px;color:var(--muted);margin-top:4px}
+  .todo .why{font-size:13px;margin-top:8px;padding:8px 10px;border-radius:9px;line-height:1.45}
+  .todo.agent .why{background:var(--agent-bg);color:var(--agent)}
+  .todo.you .why{background:var(--you-bg);color:var(--you)}
+  .todo .actions{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}
+  button{touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer;
+    font-family:inherit;font-size:13.5px;font-weight:600;border-radius:999px;
+    padding:9px 16px;border:1px solid var(--ink);background:var(--ink);color:var(--paper)}
+  button.ghost{background:transparent;color:var(--ink)}
+  button.small{padding:6px 12px;font-size:12.5px}
+  button:disabled{opacity:.45;cursor:default}
+  .runbtn{background:var(--agent);border-color:var(--agent)}
+  .big-run{width:100%;padding:14px;font-size:15px;margin:6px 0 4px}
+  .progress{font-size:13px;color:var(--muted);margin:8px 0;min-height:20px}
+  .run{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:10px}
+  .run .rt{font-size:14px;font-weight:600}
+  .run .rm{font-size:12.5px;color:var(--muted);margin:2px 0 8px}
+  .run pre{white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:12.5px;background:var(--paper);border:1px solid var(--line);border-radius:9px;
+    padding:10px 12px;line-height:1.5;max-height:260px;overflow:auto}
+  .empty{color:var(--muted);font-size:14px;border:1px dashed var(--line);border-radius:14px;
+    padding:18px;text-align:center}
+  .rule{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;
+    margin-bottom:8px;display:grid;grid-template-columns:1fr;gap:8px}
+  .rule .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .rule input[type=text]{flex:1;min-width:140px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;
+    padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink)}
+  .rule input.why-in{font-family:inherit}
+  .pill{font-size:12px;font-weight:700;border-radius:999px;padding:6px 12px;border:1px solid var(--line);
+    background:var(--paper);color:var(--muted);touch-action:manipulation}
+  .pill.on-agent{background:var(--agent);border-color:var(--agent);color:#fff}
+  .pill.on-you{background:var(--you);border-color:var(--you);color:#fff}
+  .rule .tag{font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .addrule{margin-top:10px}
+  .note{font-size:13px;color:var(--muted);margin-top:12px;line-height:1.6}
+  #vbadge{position:fixed;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));
+    font-size:11.5px;color:var(--muted);background:var(--card);border:1px solid var(--line);
+    border-radius:999px;padding:5px 11px;z-index:10}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:70px;background:var(--ink);color:var(--paper);
+    font-size:13.5px;padding:10px 18px;border-radius:999px;opacity:0;transition:opacity .25s;z-index:20;
+    max-width:92vw;text-align:center}
+  .toast.show{opacity:1}
+  @media (max-width:480px){ .stats{flex-direction:column} .stat{display:flex;align-items:baseline;gap:10px}
+    .stat .n{font-size:24px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">Burn week · prototype 03</div>
+  <h1>Todo Autopilot</h1>
+  <p class="sub">The list that does itself. Every todo gets triaged by visible rules — the agent runs what it can, you keep what only you can do. Nothing runs without a rule you can read.</p>
+
+  <div class="stats">
+    <div class="stat agent"><div class="n" id="stAgent">0</div><div class="l">agent can run</div></div>
+    <div class="stat you"><div class="n" id="stYou">0</div><div class="l">needs you</div></div>
+    <div class="stat"><div class="n" id="stDone">0</div><div class="l">done</div></div>
+  </div>
+
+  <button class="big-run runbtn" id="demoBtn">▶ Run autopilot demo</button>
+  <div class="progress" id="progress"></div>
+
+  <h2 class="sec"><span class="num">01</span>Agent can run with these</h2>
+  <p class="sec-sub">One tap runs one todo. The demo button runs up to three.</p>
+  <div id="agentList"></div>
+
+  <h2 class="sec"><span class="num">02</span>Needs you</h2>
+  <p class="sec-sub">Judgment calls, money, bookings, humans, and the physical world.</p>
+  <div id="youList"></div>
+
+  <h2 class="sec"><span class="num">03</span>Run history</h2>
+  <p class="sec-sub">What the agent did, when, and what came out of it.</p>
+  <div id="runList"></div>
+
+  <h2 class="sec"><span class="num">04</span>Triage rules</h2>
+  <p class="sec-sub">Needs-you rules always win over agent rules, whatever the order. Within a side, first match wins. Edit, add, or delete; the list re-triages instantly. Stored on this device.</p>
+  <div id="ruleList"></div>
+  <div class="addrule">
+    <button class="ghost small" id="addRuleBtn">+ Add rule</button>
+    <button class="ghost small" id="resetRulesBtn">Reset to defaults</button>
+    <button class="ghost small" id="resetDemoBtn">Reset demo data</button>
+  </div>
+  <p class="note">Demo data is illustrative, seeded from Luke's real open items (China trip, company, burn week). In production this page would read the live todo list and the agent would run on a schedule — no cron is wired in this prototype.</p>
+</div>
+<div id="vbadge">v2026.10.03-01</div>
+<div class="toast" id="toast"></div>
+<script>
+"use strict";
+/* ---------- data ---------- */
+const SEED_TODOS = [
+  {id:"t-visa",   text:"Check China visa status — was it submitted in the Sep 5–15 window?", status:"pending", source:"China/Korea trip", due:"2026-10-06"},
+  {id:"t-12306",  text:"Research 12306 account setup for foreigners", status:"pending", source:"China/Korea trip", due:"2026-10-15"},
+  {id:"t-insure", text:"Compare travel insurance options for the China/Korea trip", status:"pending", source:"China/Korea trip", due:"2026-11-01"},
+  {id:"t-justfly",text:"Draft a message to clarify the odd Dec 11 SFO→Beijing Justfly flight", status:"pending", source:"China/Korea trip", due:"2026-10-10"},
+  {id:"t-subs",   text:"Check which subscriptions renewed this month", status:"pending", source:"Money", due:"2026-10-05"},
+  {id:"t-greatwall", text:"Decide Great Wall: private driver vs group tour", status:"pending", source:"China/Korea trip", due:"2026-11-01"},
+  {id:"t-seoul",  text:"Book Seoul Christmas Eve dinner", status:"pending", source:"China/Korea trip", due:"2026-12-01"},
+  {id:"t-facial", text:"Book Dec 26 facial in Seoul", status:"pending", source:"China/Korea trip", due:"2026-12-01"},
+  {id:"t-kbbq",   text:"Book Dec 27 KBBQ in Seoul", status:"pending", source:"China/Korea trip", due:"2026-12-01"},
+  {id:"t-brand",  text:"Pick company brand top 3 from the Explorer", status:"pending", source:"Company", due:"2026-10-10"},
+  {id:"t-nails",  text:"Cut nails", status:"pending", source:"Reminders", due:"2026-10-03"}
+];
+
+const DEFAULT_RULES = [
+  {id:"r-book",   bucket:"you",   pattern:"\\bbook\\b|\\breserv",      why:"booking commits your calendar and money"},
+  {id:"r-money",  bucket:"you",   pattern:"\\bbuy\\b|\\bpurchase\\b|\\border\\b|\\bpay\\b|\\bvenmo\\b", why:"spending money needs your word"},
+  {id:"r-decide", bucket:"you",   pattern:"decide|\\bpick\\b|choose|approve|sign off", why:"judgment calls are yours"},
+  {id:"r-human",  bucket:"you",   pattern:"\\bcall\\b|\\bphone\\b|text (mom|dad|gabrielle|landlord)|message (him|her|them)", why:"talking to humans is yours"},
+  {id:"r-body",   bucket:"you",   pattern:"cut nails|clean|water the|pack|workout|sleep", why:"physical world — the agent has no hands"},
+  {id:"r-research",bucket:"agent", pattern:"research|look up|find out|investigate|compare|\\baudit\\b|survey", why:"research and comparison is agent work"},
+  {id:"r-draft",  bucket:"agent", pattern:"draft|write|compose|summarize|distill|outline", why:"drafting is agent work — you review after"},
+  {id:"r-check",  bucket:"agent", pattern:"check|verify|confirm|review|monitor|scan|track", why:"checking and verifying is agent work"},
+  {id:"r-build",  bucket:"agent", pattern:"build|prototype|fix|refactor|\\btest\\b|deploy", why:"building and fixing is agent work"}
+];
+
+/* ---------- state ---------- */
+const LS_TODOS="autopilot-todos-v1", LS_RULES="autopilot-rules-v1", LS_RUNS="autopilot-runs-v1";
+let todos=[], rules=[], runs=[];
+
+function loadState(){
+  try{ todos=JSON.parse(localStorage.getItem(LS_TODOS))||null; }catch(e){ todos=null; }
+  try{ rules=JSON.parse(localStorage.getItem(LS_RULES))||null; }catch(e){ rules=null; }
+  try{ runs=JSON.parse(localStorage.getItem(LS_RUNS))||[]; }catch(e){ runs=[]; }
+  if(!todos) todos=JSON.parse(JSON.stringify(SEED_TODOS));
+  if(!rules) rules=JSON.parse(JSON.stringify(DEFAULT_RULES));
+}
+function saveTodos(){ localStorage.setItem(LS_TODOS,JSON.stringify(todos)); }
+function saveRules(){ localStorage.setItem(LS_RULES,JSON.stringify(rules)); }
+function saveRuns(){ localStorage.setItem(LS_RUNS,JSON.stringify(runs)); }
+
+async function loadTodosJson(){
+  try{
+    const r=await fetch("todos.json",{cache:"no-store"});
+    if(r.ok){
+      const j=await r.json();
+      if(Array.isArray(j)&&j.length){
+        const cur=JSON.parse(localStorage.getItem(LS_TODOS)||"null");
+        if(!cur){ todos=j.map(t=>({...t})); saveTodos(); render(); }
+      }
+    }
+  }catch(e){/* offline or file:// — seed data stands in */}
+}
+
+/* ---------- triage ---------- */
+function triage(todo, ruleSet){
+  const text=(todo.text||"").toLowerCase();
+  const rs=ruleSet||rules;
+  // two passes: needs-you rules always win over agent rules, regardless of list order
+  for(let pass=0; pass<2; pass++){
+    const want=pass===0?"you":"agent";
+    for(const r of rs){
+      if(r.bucket!==want) continue;
+      let re;
+      try{ re=new RegExp(r.pattern,"i"); }catch(e){ continue; }
+      if(re.test(text)) return {bucket:r.bucket, rule:r, why:r.why};
+    }
+  }
+  return {bucket:"you", rule:null, why:"no rule matched — defaulting to you"};
+}
+function triageAll(){ return todos.map(t=>({todo:t, ...triage(t)})); }
+
+/* ---------- render ---------- */
+const $=id=>document.getElementById(id);
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+function todoCard(t, tr){
+  const el=document.createElement("div");
+  el.className="todo "+tr.bucket+(t.status==="done"?" done":"");
+  const due=t.due?` · due ${esc(t.due)}`:"";
+  const verb=tr.bucket==="agent"?"Agent can do this":"Needs you";
+  let actions="";
+  if(t.status!=="done"){
+    if(tr.bucket==="agent") actions=`<button class="small runbtn" data-run="${t.id}">Run now</button>`;
+    actions+=`<button class="small ghost" data-done="${t.id}">✓ Done</button>`;
+  }else{
+    actions=`<span class="meta">completed</span>`;
+  }
+  el.innerHTML=`
+    <div class="t">${esc(t.text)}</div>
+    <div class="meta">${esc(t.source||"")}${due}</div>
+    <div class="why"><b>${verb}.</b> ${esc(tr.why)}${tr.rule?` <span style="opacity:.65">(rule: ${esc(tr.rule.id)})</span>`:""}</div>
+    <div class="actions">${actions}</div>`;
+  return el;
+}
+
+function render(){
+  const tri=triageAll();
+  const aL=$("agentList"), yL=$("youList");
+  aL.innerHTML=""; yL.innerHTML="";
+  let nA=0,nY=0,nD=0;
+  for(const {todo:t,bucket} of tri){
+    if(t.status==="done"){ nD++; continue; }
+    const tr=triage(t);
+    if(bucket==="agent"){ nA++; aL.appendChild(todoCard(t,tr)); }
+    else{ nY++; yL.appendChild(todoCard(t,tr)); }
+  }
+  if(!nA) aL.innerHTML=`<div class="empty">Nothing for the agent right now. Add a todo or loosen a rule.</div>`;
+  if(!nY) yL.innerHTML=`<div class="empty">All clear — the agent has everything.</div>`;
+  $("stAgent").textContent=nA; $("stYou").textContent=nY; $("stDone").textContent=nD;
+  renderRuns(); renderRules();
+  aL.querySelectorAll("[data-run]").forEach(b=>b.onclick=()=>runTodo(b.dataset.run));
+  document.querySelectorAll("[data-done]").forEach(b=>b.onclick=()=>{
+    const t=todos.find(x=>x.id===b.dataset.done); if(t){t.status="done";saveTodos();render();toast("Marked done.");}
+  });
+}
+
+function renderRuns(){
+  const box=$("runList"); box.innerHTML="";
+  if(!runs.length){ box.innerHTML=`<div class="empty">No runs yet — hit “Run autopilot demo”.</div>`; return; }
+  for(const r of runs.slice().reverse()){
+    const el=document.createElement("div"); el.className="run";
+    const when=new Date(r.ts).toLocaleString();
+    el.innerHTML=`<div class="rt">${esc(r.title)}</div><div class="rm">${esc(when)} · ${esc(r.todoText)}</div><pre>${esc(r.body)}</pre>`;
+    box.appendChild(el);
+  }
+}
+/* ---------- demo task handlers ---------- */
+function stamp(){ return new Date().toISOString(); }
+
+function doResearch(t){
+  const x=t.text.toLowerCase();
+  let bullets;
+  if(x.includes("12306")){
+    bullets=[
+      "Foreigners CAN register on 12306 (China Railway) — passport verification required, done in-app or at a station counter.",
+      "Registration needs: passport scan + a Chinese mobile number for SMS. eSIMs with Chinese numbers generally work; some travelers use a travel companion's number.",
+      "Verify identity early — approval can take 1–3 days. Do it before Dec, not the week of travel.",
+      "Alternative: Trip.com / China Highlights book the same trains with foreign passports and no 12306 account, for a small fee."
+    ];
+  }else if(x.includes("insurance")){
+    bullets=[
+      "Look for: ≥$100k medical, trip cancellation (nonrefundable hotels/flights are on the line), and adventure-activity coverage if skiing/scootering.",
+      "Annual multi-trip plans beat single-trip if 2+ trips/year — compare Allianz, World Nomads, SafetyWing.",
+      "Check whether the Chase/Amex card used for booking already includes trip delay + baggage cover — don't double-pay.",
+      "Read the pre-existing-condition clause; most require purchase within 14–21 days of first booking."
+    ];
+  }else if(x.includes("visa")){
+    bullets=[
+      "US passport holders: 10-year multi-entry L (tourist) visa is the standard ask — but issuance is per-consulate discretion.",
+      "Application goes through the Chinese Visa Application Service Center; typical processing 4–7 business days after submission.",
+      "The Sep 5–15 window in the trip doc is unconfirmed — ACTION: verify submission actually happened before booking anything nonrefundable.",
+      "Keep: passport (6+ months validity), photo, itinerary, hotel confirmations, old visas if any."
+    ];
+  }else if(x.includes("subscription")){
+    bullets=[
+      "Scan the last 90 days of statements for recurring charges under $30 — those are the ones that hide.",
+      "Flag anything unused 60+ days: cancel candidates. Anything price-hiked in the last year: renegotiate or cancel.",
+      "Demo note: with Gmail access this becomes a real tally with amounts and cancel links."
+    ];
+  }else{
+    bullets=[
+      "Broke the question into 3 sub-questions and answered each from public sources.",
+      "Flagged the one decision that actually needs a human.",
+      "Demo note: a production run would cite sources and prices."
+    ];
+  }
+  return {kind:"research",
+    title:"Findings: "+t.text,
+    body:"DEMO FINDINGS — verify before acting.\n\n"+bullets.map((b,i)=>`${i+1}. ${b}`).join("\n")};
+}
+
+function doDraft(t){
+  const x=t.text.toLowerCase();
+  let body;
+  if(x.includes("justfly")){
+    body="Hi — I'm looking at my itinerary and I see a flight on Dec 11 from SFO to Beijing booked via Justfly, but I'll already be in China (arriving Shanghai Dec 3). Can you confirm what this booking actually is — is it a duplicate, a return leg mislabeled, or an error? Booking ref on request. Thanks!";
+  }else{
+    body=`Draft for: ${t.text}\n\n[Opening line stating the ask plainly]\n[One sentence of context]\n[Clear next step + deadline]\n\n— Luke`;
+  }
+  return {kind:"draft", title:"Draft: "+t.text, body:"DEMO DRAFT — edit before sending.\n\n"+body};
+}
+
+function doCheck(t){
+  return {kind:"check",
+    title:"Check result: "+t.text,
+    body:"DEMO CHECK — with live access this would query the real source.\n\nStatus: needs verification.\nNext step: confirm against the source of truth, then mark done."};
+}
+
+function doBuild(t){
+  return {kind:"build",
+    title:"Build note: "+t.text,
+    body:"DEMO BUILD — a production run would implement and test this.\n\nPlan: scope the change, write the patch, run the checks, report the diff."};
+}
+
+function handlerFor(t, bucket){
+  const x=t.text.toLowerCase();
+  if(bucket!=="agent") return null;
+  if(/research|compare|look up|investigate/.test(x)) return doResearch;
+  if(/draft|write|compose/.test(x)) return doDraft;
+  if(/check|verify|confirm|review|monitor|scan/.test(x)) return doCheck;
+  return doBuild;
+}
+
+/* ---------- run engine ---------- */
+let running=false;
+function logRun(todo, result){
+  runs.push({ts:stamp(), todoId:todo.id, todoText:todo.text, title:result.title, body:result.body, kind:result.kind});
+  saveRuns();
+}
+function setProgress(msg){ $("progress").textContent=msg||""; }
+
+async function runTodo(id){
+  if(running) return;
+  const t=todos.find(x=>x.id===id); if(!t||t.status==="done") return;
+  const tr=triage(t);
+  if(tr.bucket!=="agent"){ toast("That one needs you — no rule lets the agent run it."); return; }
+  running=true;
+  setProgress("Running: "+t.text);
+  await new Promise(r=>setTimeout(r,700));
+  const h=handlerFor(t,"agent");
+  const res=h(t);
+  t.status="done"; saveTodos();
+  logRun(t,res);
+  running=false; setProgress("");
+  render(); toast("Done: "+t.text.slice(0,42)+"…");
+}
+
+async function runDemo(){
+  if(running) return;
+  const cands=todos.filter(t=>t.status!=="done"&&triage(t).bucket==="agent").slice(0,3);
+  if(!cands.length){ toast("No agent-doable todos pending."); return; }
+  running=true; $("demoBtn").disabled=true;
+  let i=0;
+  for(const t of cands){
+    i++;
+    setProgress(`Demo run ${i}/${cands.length}: ${t.text}`);
+    await new Promise(r=>setTimeout(r,800));
+    const h=handlerFor(t,"agent");
+    const res=h(t);
+    t.status="done"; logRun(t,res);
+    render();
+  }
+  saveTodos();
+  running=false; $("demoBtn").disabled=false; setProgress("");
+  toast(`Demo run complete — ${cands.length} todos handled.`);
+  document.querySelector("#runList").scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+
+/* ---------- rules editor ---------- */
+function renderRules(){
+  const box=$("ruleList"); box.innerHTML="";
+  rules.forEach((r,idx)=>{
+    const el=document.createElement("div"); el.className="rule";
+    el.innerHTML=`
+      <div class="row"><span class="tag">${esc(r.id)}</span>
+        <button class="pill ${r.bucket==="agent"?"on-agent":""}" data-bucket="agent">agent can do</button>
+        <button class="pill ${r.bucket==="you"?"on-you":""}" data-bucket="you">needs you</button>
+        <button class="pill" data-del="1" style="margin-left:auto">delete</button>
+      </div>
+      <div class="row"><input type="text" value="${esc(r.pattern)}" data-pat="1" spellcheck="false"></div>
+      <div class="row"><input type="text" class="why-in" value="${esc(r.why)}" data-whytxt="1" placeholder="one-line why"></div>`;
+    el.querySelectorAll("[data-bucket]").forEach(b=>b.onclick=()=>{ r.bucket=b.dataset.bucket; saveRules(); render(); });
+    el.querySelector("[data-del]").onclick=()=>{ rules.splice(idx,1); saveRules(); render(); toast("Rule deleted."); };
+    el.querySelector("[data-pat]").onchange=e=>{ r.pattern=e.target.value; saveRules(); render(); };
+    el.querySelector("[data-whytxt]").onchange=e=>{ r.why=e.target.value; saveRules(); render(); };
+    box.appendChild(el);
+  });
+}
+
+/* ---------- misc ---------- */
+let toastTimer=null;
+function toast(msg){
+  const el=$("toast"); el.textContent=msg; el.classList.add("show");
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.remove("show"),2400);
+}
+
+/* ---------- init ---------- */
+$("demoBtn").onclick=runDemo;
+$("addRuleBtn").onclick=()=>{
+  const n=rules.length+1;
+  rules.push({id:"r-custom"+n, bucket:"agent", pattern:"keyword", why:"custom rule — describe why"});
+  saveRules(); render(); toast("Rule added — edit the pattern.");
+};
+$("resetRulesBtn").onclick=()=>{ rules=JSON.parse(JSON.stringify(DEFAULT_RULES)); saveRules(); render(); toast("Rules reset."); };
+$("resetDemoBtn").onclick=()=>{
+  localStorage.removeItem(LS_TODOS); localStorage.removeItem(LS_RUNS);
+  todos=JSON.parse(JSON.stringify(SEED_TODOS)); runs=[]; saveTodos(); saveRuns(); render(); toast("Demo data reset.");
+};
+
+loadState();
+render();
+loadTodosJson();
+
+/* harness API for headless tests */
+window.__autopilot={
+  triageAll:()=>triageAll().map(({todo,bucket,why,rule})=>({id:todo.id,text:todo.text,bucket,why,rule:rule&&rule.id})),
+  runDemo,
+  getTodos:()=>todos.map(t=>({id:t.id,status:t.status})),
+  getRuns:()=>runs,
+  setRules:r=>{rules=r;saveRules();render();}
+};
+</script>
+</body>
+</html>

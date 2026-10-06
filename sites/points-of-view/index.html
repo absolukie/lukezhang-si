@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Points of view — a wave packet, three ways</title>
+<style>
+  :root{
+    --paper:#f6f4ec; --ink:#191817; --dim:#6f6a5e; --line:#e2ddcd;
+    --card:#fffdf7; --accent:#c96a1e; --red:#d94f4f; --blue:#2f6fdd;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);
+    font-family:"Avenir Next","Segoe UI",system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  header{max-width:1180px;margin:0 auto;padding:34px 22px 8px}
+  h1{font-size:clamp(30px,5vw,52px);letter-spacing:-0.02em;margin:0 0 6px;font-weight:800}
+  h1 .dot{color:var(--accent)}
+  .sub{color:var(--dim);font-size:clamp(14px,2.2vw,18px);max-width:70ch;line-height:1.55}
+  .formula{font-family:Georgia,"Times New Roman",serif;font-style:italic}
+  main{max-width:1180px;margin:0 auto;padding:14px 22px 30px}
+  .stage{display:grid;grid-template-columns:1.55fr 1fr;gap:16px}
+  @media (max-width:860px){.stage{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;
+    box-shadow:0 10px 30px rgba(60,50,30,.07);overflow:hidden}
+  .card .cap{padding:12px 16px 4px;font-size:13px;color:var(--dim);letter-spacing:.02em}
+  .card .cap b{color:var(--ink);font-weight:700}
+  canvas{display:block;width:100%;height:auto;touch-action:manipulation}
+  #view3d{aspect-ratio:1/1}
+  .panels{display:grid;grid-template-rows:1fr 1fr 1fr;gap:16px}
+  .panels canvas{aspect-ratio:16/10}
+  .controls{margin-top:16px;background:var(--card);border:1px solid var(--line);
+    border-radius:18px;padding:16px 18px;box-shadow:0 10px 30px rgba(60,50,30,.07)}
+  .transport{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  #playbtn{width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;
+    background:var(--ink);color:var(--paper);font-size:20px;line-height:1;
+    touch-action:manipulation;flex:none}
+  #playbtn:hover{background:#000}
+  .readout{font-variant-numeric:tabular-nums;font-size:15px;min-width:250px}
+  .readout .formula{font-size:16px}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:6px;border-radius:99px;
+    background:var(--line);outline:none;cursor:pointer;touch-action:manipulation}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:20px;height:20px;
+    border-radius:50%;background:var(--accent);border:3px solid #fff;
+    box-shadow:0 2px 6px rgba(0,0,0,.25);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;
+    background:var(--accent);border:3px solid #fff;cursor:pointer}
+  #time{flex:1;min-width:200px}
+  .sliders{display:flex;gap:26px;margin-top:14px;flex-wrap:wrap}
+  .sliders label{font-size:13px;color:var(--dim);display:flex;align-items:center;gap:10px}
+  .sliders label output{font-variant-numeric:tabular-nums;color:var(--ink);min-width:44px;font-weight:600}
+  .sliders input{width:150px}
+  .note{max-width:1180px;margin:0 auto;padding:0 22px 20px;color:var(--dim);font-size:14px;line-height:1.7}
+  footer{max-width:1180px;margin:0 auto;padding:10px 22px 40px;color:var(--dim);font-size:13px;
+    display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}
+  footer a{color:var(--accent);text-decoration:none;font-weight:600}
+  footer a:hover{text-decoration:underline}
+  .ver{font-variant-numeric:tabular-nums;opacity:.7}
+</style>
+</head>
+<body>
+<header>
+  <h1>Points of view<span class="dot">.</span></h1>
+  <p class="sub">One mathematical object — the complex wave packet
+    <span class="formula">f(t) = e<sup>−γ(t−t₀)²</sup> · e<sup>iωt</sup></span>.
+    Seen from three sides it becomes three different things: a spiral in the complex plane,
+    a dying sine wave, and a dying cosine wave. Drag the time slider and watch the same point
+    tell three stories at once.</p>
+</header>
+
+<main>
+  <div class="stage">
+    <div class="card">
+      <div class="cap"><b>The object itself</b> — the helix (Re f, Im f, t) in 3D. The amber bead is “now”.</div>
+      <canvas id="view3d"></canvas>
+    </div>
+    <div class="panels">
+      <div class="card">
+        <div class="cap"><b>Point of view ①</b> — the Re–Im plane: an inward spiral</div>
+        <canvas id="p-spiral"></canvas>
+      </div>
+      <div class="card">
+        <div class="cap"><b>Point of view ②</b> — <span class="formula">Im f = e<sup>−γ(t−t₀)²</sup> sin(ωt)</span></div>
+        <canvas id="p-im"></canvas>
+      </div>
+      <div class="card">
+        <div class="cap"><b>Point of view ③</b> — <span class="formula">Re f = e<sup>−γ(t−t₀)²</sup> cos(ωt)</span></div>
+        <canvas id="p-re"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="transport">
+      <button id="playbtn" aria-label="Play or pause">⏸</button>
+      <input type="range" id="time" min="0" max="1000" value="0" aria-label="Time scrubber">
+      <div class="readout" id="readout">t = 0.00 T &nbsp;·&nbsp; <span class="formula">f(t)</span> = …</div>
+    </div>
+    <div class="sliders">
+      <label>Twist&nbsp;ω <input type="range" id="twist" min="25" max="300" value="100"><output id="twistv">1.00×</output></label>
+      <label>Spread&nbsp;σ <input type="range" id="spread" min="60" max="250" value="140"><output id="spreadv">1.40 T</output></label>
+      <label>Speed <input type="range" id="speed" min="25" max="200" value="100"><output id="speedv">1.00×</output></label>
+    </div>
+  </div>
+</main>
+
+<p class="note">
+  The Gaussian envelope <span class="formula">e<sup>−γ(t−t₀)²</sup></span> squeezes the endless
+  oscillation <span class="formula">e<sup>iωt</sup></span> into a packet localized near
+  <span class="formula">t₀</span> — the same shape (a Morlet wavelet) used to hunt for brief
+  oscillations hidden in signals, from seismic tremors to brain waves. Turn the Twist up and the
+  spiral winds tighter; widen the Spread and the packet relaxes toward a pure tone.
+</p>
+
+<footer>
+  <span>A recreation of <a href="https://x.com/rainmaker1973/status/2106013832732897334?s=46" target="_blank" rel="noopener">@rainmaker1973’s “Points of view”</a> — view the original post</span>
+  <span class="ver">v2026.10.03</span>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+  // ---- math: f(u) = env(u) * e^{i*2π*m*u}, u = t/T ----
+  const U_MAX = 3.5;                   // view range in units of T
+  let twist = 1.0;                   // oscillations per T
+  let sigma = 1.4;                   // envelope width, in T
+  const env = u => Math.exp(-((u/sigma)*(u/sigma)));
+  const reF = u => env(u)*Math.cos(2*Math.PI*twist*u);
+  const imF = u => env(u)*Math.sin(2*Math.PI*twist*u);
+
+  // ---- tiny canvas helper ----
+  function setup(id){
+    const c = document.getElementById(id);
+    const dpr = Math.min(2, window.devicePixelRatio||1);
+    const r = c.getBoundingClientRect();
+    c.width = Math.max(2, Math.round(r.width*dpr));
+    c.height = Math.max(2, Math.round(r.height*dpr));
+    const x = c.getContext("2d");
+    x.setTransform(dpr,0,0,dpr,0,0);
+    return {c, x, w:r.width, h:r.height};
+  }
+  let V3, PS, PI, PR;
+  function layout(){
+    V3 = setup("view3d"); PS = setup("p-spiral");
+    PI = setup("p-im");   PR = setup("p-re");
+  }
+  window.addEventListener("resize", ()=>{ layout(); draw(); });
+
+  // ---- 3D projection (orthographic) ----
+  const AZ = -0.62, EL = 1.02;       // view angles, tuned by eye
+  const ca = Math.cos(AZ), sa = Math.sin(AZ), ce = Math.cos(EL), se = Math.sin(EL);
+  function proj(x, y, z){
+    const x1 = x*ca - y*sa, y1 = x*sa + y*ca;
+    const y2 = y1*ce - z*se, z2 = y1*se + z*ce;
+    return [x1, z2];                  // screen-ish: right, up
+  }
+
+  // ---- animation state ----
+  let uNow = -U_MAX, playing = true, speed = 1;
+  const LOOP_S = 11;                  // ~11s loop like the original
+  let last = performance.now();
+
+  const playbtn = document.getElementById("playbtn");
+  const timeEl = document.getElementById("time");
+  const readout = document.getElementById("readout");
+  playbtn.addEventListener("click", ()=>{
+    playing = !playing;
+    playbtn.textContent = playing ? "⏸" : "▶";
+    last = performance.now();
+  });
+  timeEl.addEventListener("input", ()=>{
+    uNow = -U_MAX + (timeEl.value/1000)*2*U_MAX;
+    draw();
+  });
+  const twistEl = document.getElementById("twist"), twistv = document.getElementById("twistv");
+  const spreadEl = document.getElementById("spread"), spreadv = document.getElementById("spreadv");
+  const speedEl = document.getElementById("speed"), speedv = document.getElementById("speedv");
+  twistEl.addEventListener("input", ()=>{ twist = twistEl.value/100; twistv.textContent = twist.toFixed(2)+"×"; draw(); });
+  spreadEl.addEventListener("input", ()=>{ sigma = spreadEl.value/100; spreadv.textContent = sigma.toFixed(2)+" T"; draw(); });
+  speedEl.addEventListener("input", ()=>{ speed = speedEl.value/100; speedv.textContent = speed.toFixed(2)+"×"; });
+
+  function fmt(n){ return (n<0?"−":"") + Math.abs(n).toFixed(2); }
+  function fmtC(r,i){ return fmt(r) + (i<0 ? " − " : " + ") + Math.abs(i).toFixed(2) + "i"; }
+
+  // ---- drawing ----
+  const INK="#1c1a16", DIM="#8a8474", GRID="#e7e2d2", AMBER="#c96a1e";
+  function rr(x, X, Y, W, H, R){
+    x.beginPath();
+    x.roundRect(X, Y, W, H, R);
+  }
+
+  function draw3D(){
+    const {x, w, h} = V3;
+    x.clearRect(0,0,w,h);
+    // translucent stage panel
+    x.fillStyle = "rgba(255,255,255,0.55)";
+    rr(x, 8, 8, w-16, h-16, 14); x.fill();
+    x.strokeStyle = "#e2ddcd"; x.lineWidth = 1; x.stroke();
+
+    const cx = w*0.5, cy = h*0.52;
+    const s = Math.min(w*0.9/3.4, h*0.92/7.0);   // hero-scale the helix; t-axis bleeds off top/bottom
+    const P = (wx,wy,wz)=>{ const [px,py] = proj(wx,wy,wz); return [cx+px*s, cy-py*s]; };
+
+    // axes
+    x.lineWidth = 1.4; x.strokeStyle = "#a09a88";
+    x.font = "600 14px Georgia, serif"; x.fillStyle = DIM;
+    function axis(a, b, label, lx, ly){
+      const [x1,y1]=P(...a), [x2,y2]=P(...b);
+      x.beginPath(); x.moveTo(x1,y1); x.lineTo(x2,y2); x.stroke();
+      const [tx,ty]=P(lx,ly); x.fillText(label, tx+7, ty-7);
+    }
+    axis([-1.5,0,-U_MAX],[1.5,0,-U_MAX],"Re", 1.58,0,-U_MAX);
+    axis([0,-1.5,-U_MAX],[0,1.5,-U_MAX],"Im", 0,1.58,-U_MAX);
+    // t axis drawn full-bleed; label pinned near the top edge so it never clips
+    axis([0,0,-U_MAX-0.6],[0,0,U_MAX+1.4],"", 0,0,0);
+    const zTop = (cy-30)/s;
+    { const [tx,ty]=P(0.12,0,zTop); x.fillText("t", tx+7, ty+4); }
+
+    // the helix
+    const N = 900;
+    x.lineWidth = 2.6; x.strokeStyle = INK; x.lineJoin = "round";
+    x.beginPath();
+    for(let i=0;i<=N;i++){
+      const u = -U_MAX + (i/N)*2*U_MAX;
+      const [sx,sy] = P(reF(u), imF(u), u);
+      i ? x.lineTo(sx,sy) : x.moveTo(sx,sy);
+    }
+    x.stroke();
+
+    // envelope ghost (dashed) at the t-axis extremes
+    x.setLineDash([5,5]); x.lineWidth = 1.2; x.strokeStyle = "#b9b29e";
+    x.beginPath();
+    for(let i=0;i<=200;i++){
+      const u = -U_MAX + (i/200)*2*U_MAX;
+      const [sx,sy] = P(env(u), 0, u);
+      i ? x.lineTo(sx,sy) : x.moveTo(sx,sy);
+    }
+    x.stroke(); x.setLineDash([]);
+
+    // "now" marker + guide lines
+    const [mx,my] = P(reF(uNow), imF(uNow), uNow);
+    x.strokeStyle = "rgba(201,106,30,0.45)"; x.lineWidth = 1.2; x.setLineDash([4,4]);
+    const [gx,gy] = P(reF(uNow), imF(uNow), -U_MAX);
+    x.beginPath(); x.moveTo(mx,my); x.lineTo(gx,gy); x.stroke();
+    x.setLineDash([]);
+    x.fillStyle = AMBER;
+    x.beginPath(); x.arc(mx,my,7,0,7); x.fill();
+    x.strokeStyle = "#fff"; x.lineWidth = 2; x.stroke();
+  }
+
+  function drawPanel2D(V, yFn, color, label){
+    const {x, w, h} = V;
+    x.clearRect(0,0,w,h);
+    x.fillStyle = "rgba(255,255,255,0.55)";
+    rr(x, 6, 6, w-12, h-12, 12); x.fill();
+    const L=34, Rr=12, T=14, B=22, pw=w-L-Rr, ph=h-T-B;
+    const X = u => L + ((u+U_MAX)/(2*U_MAX))*pw;
+    const Y = v => T + (1-(v+1.15)/2.3)*ph;
+    // grid + axes
+    x.strokeStyle = GRID; x.lineWidth = 1;
+    for(let g=-3; g<=3; g+=1.5){
+      x.beginPath(); x.moveTo(X(g),T); x.lineTo(X(g),T+ph); x.stroke();
+    }
+    x.strokeStyle = "#a09a88";
+    x.beginPath(); x.moveTo(L,Y(0)); x.lineTo(L+pw,Y(0)); x.stroke();
+    x.fillStyle = DIM; x.font = "11px system-ui";
+    x.fillText("−3T", X(-3)-8, T+ph+14); x.fillText("0", X(0)-3, T+ph+14); x.fillText("+3T", X(3)-10, T+ph+14);
+    // dashed envelope
+    x.setLineDash([5,5]); x.strokeStyle = "#b9b29e"; x.lineWidth = 1.2;
+    for(const sgn of [1,-1]){
+      x.beginPath();
+      for(let i=0;i<=240;i++){
+        const u=-U_MAX+(i/240)*2*U_MAX, px=X(u), py=Y(sgn*env(u));
+        i?x.lineTo(px,py):x.moveTo(px,py);
+      }
+      x.stroke();
+    }
+    x.setLineDash([]);
+    // the wave
+    x.strokeStyle = color; x.lineWidth = 2.4; x.lineJoin="round";
+    x.beginPath();
+    for(let i=0;i<=600;i++){
+      const u=-U_MAX+(i/600)*2*U_MAX, px=X(u), py=Y(yFn(u));
+      i?x.lineTo(px,py):x.moveTo(px,py);
+    }
+    x.stroke();
+    // now-line + bead
+    const nx = X(uNow);
+    x.strokeStyle = "rgba(201,106,30,0.5)"; x.lineWidth = 1.2;
+    x.beginPath(); x.moveTo(nx,T); x.lineTo(nx,T+ph); x.stroke();
+    x.fillStyle = AMBER;
+    x.beginPath(); x.arc(nx, Y(yFn(uNow)), 5.5, 0, 7); x.fill();
+    x.strokeStyle="#fff"; x.lineWidth=1.6; x.stroke();
+  }
+
+  function drawSpiral(){
+    const {x, w, h} = PS;
+    x.clearRect(0,0,w,h);
+    x.fillStyle = "rgba(255,255,255,0.55)";
+    rr(x, 6, 6, w-12, h-12, 12); x.fill();
+    const cx=w/2, cy=h/2, s=Math.min(w,h)*0.36;
+    const X=v=>cx+v*s, Y=v=>cy-v*s;
+    x.strokeStyle=GRID; x.lineWidth=1;
+    x.beginPath(); x.moveTo(6,Y(0)); x.lineTo(w-6,Y(0)); x.stroke();
+    x.beginPath(); x.moveTo(X(0),6); x.lineTo(X(0),h-6); x.stroke();
+    x.fillStyle=DIM; x.font="12px Georgia, serif";
+    x.fillText("Re", w-26, Y(0)-8); x.fillText("Im", X(0)+8, 20);
+    x.strokeStyle=INK; x.lineWidth=2.2; x.lineJoin="round";
+    x.beginPath();
+    for(let i=0;i<=700;i++){
+      const u=-U_MAX+(i/700)*2*U_MAX, px=X(reF(u)), py=Y(imF(u));
+      i?x.lineTo(px,py):x.moveTo(px,py);
+    }
+    x.stroke();
+    x.fillStyle=AMBER;
+    x.beginPath(); x.arc(X(reF(uNow)), Y(imF(uNow)), 6, 0, 7); x.fill();
+    x.strokeStyle="#fff"; x.lineWidth=2; x.stroke();
+  }
+
+  function draw(){
+    draw3D(); drawSpiral();
+    drawPanel2D(PI, imF, "#d94f4f");
+    drawPanel2D(PR, reF, "#2f6fdd");
+    readout.innerHTML = "t = "+uNow.toFixed(2)+" T &nbsp;·&nbsp; <span class=\"formula\">f(t)</span> = "+fmtC(reF(uNow), imF(uNow));
+    timeEl.value = Math.round(((uNow+U_MAX)/(2*U_MAX))*1000);
+  }
+
+  function frame(now){
+    const dt = Math.min(0.05,(now-last)/1000); last = now;
+    if(playing){
+      uNow += dt*(2*U_MAX/LOOP_S)*speed;
+      if(uNow > U_MAX) uNow = -U_MAX;
+      draw();
+    }
+    requestAnimationFrame(frame);
+  }
+
+  layout(); draw();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

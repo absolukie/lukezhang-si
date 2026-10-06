@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The next button · step-through feel lab</title>
+<style>
+  :root{
+    --bg:#0e100e; --panel:#161a16; --panel2:#1c211c; --line:#2b332b;
+    --ink:#f2efe6; --muted:#a8a396; --faint:#6f6b60;
+    --accent:#e8a33d; --accent-soft:rgba(232,163,61,.14);
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,"Segoe UI",sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0;}
+  body{background:var(--bg); color:var(--ink); font-family:var(--sans); line-height:1.55;
+       padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
+  .wrap{max-width:680px; margin:0 auto; padding:34px 20px 80px;}
+  .kicker{font-family:var(--mono); font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:var(--accent); margin:0 0 10px;}
+  h1{font-size:34px; line-height:1.15; margin:0 0 10px; letter-spacing:-.01em;}
+  .lede{color:var(--muted); font-size:16px; margin:0 0 26px; max-width:56ch;}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:26px 22px;}
+  /* feel picker */
+  .feels{display:flex; gap:8px; margin-bottom:6px;}
+  .feel{flex:1; font-family:var(--sans); font-weight:700; font-size:14px; color:var(--muted);
+        background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:11px 6px;
+        cursor:pointer; touch-action:manipulation; transition:border-color .15s, color .15s, transform .12s;}
+  .feel.on{border-color:var(--accent); color:var(--accent); background:var(--accent-soft);}
+  .feel small{display:block; font-weight:400; font-size:11px; color:var(--faint); margin-top:2px;}
+  .feel.on small{color:var(--accent);}
+  .feel-note{font-size:13px; color:var(--faint); min-height:20px; margin:8px 2px 18px;}
+  /* stage */
+  .stage{background:var(--panel2); border:1px solid var(--line); border-radius:14px; padding:26px 18px 20px; margin-bottom:18px; overflow:hidden;}
+  .chips{display:flex; gap:10px; justify-content:center; flex-wrap:wrap; min-height:64px; align-items:center; align-content:center;}
+  .chip{font-family:var(--mono); font-size:22px; font-weight:700; background:#242b24; border:1px solid var(--line);
+        color:var(--ink); border-radius:12px; padding:10px 18px; position:relative;}
+  .chip.merged{border-color:var(--accent); background:var(--accent-soft); color:var(--accent);}
+  .caption{text-align:center; color:var(--muted); font-size:14px; margin:16px 0 0; min-height:22px;}
+  .caption b{color:var(--ink);}
+  .caption .rank{font-family:var(--mono); color:var(--accent);}
+  .prog{height:6px; background:#242b24; border-radius:99px; margin-top:14px; overflow:hidden;}
+  .prog i{display:block; height:100%; width:0%; background:var(--accent); border-radius:99px;}
+  /* controls */
+  .controls{display:flex; gap:12px; align-items:stretch;}
+  .btn{font-family:var(--sans); touch-action:manipulation; cursor:pointer; border-radius:16px;
+       user-select:none; -webkit-user-select:none;}
+  .btn-back{flex:0 0 112px; font-size:16px; font-weight:600; color:var(--muted);
+            background:transparent; border:1px solid var(--line);}
+  .btn-back:disabled{opacity:.32; cursor:default;}
+  .btn-next{flex:1; font-size:19px; font-weight:800; color:#14100a; background:var(--accent);
+            border:1px solid var(--accent); min-height:64px; letter-spacing:.01em;
+            box-shadow:0 8px 28px rgba(232,163,61,.28);
+            will-change:transform;}
+  .btn-next .arrow{display:inline-block; margin-left:8px;}
+  .hints{display:flex; justify-content:space-between; margin-top:12px; font-size:12.5px; color:var(--faint);}
+  .hints kbd{font-family:var(--mono); background:var(--panel2); border:1px solid var(--line);
+             border-radius:6px; padding:1px 7px; font-size:12px;}
+  .soundrow{display:flex; align-items:center; gap:10px; margin-top:16px; font-size:14px; color:var(--muted);}
+  .switch{position:relative; width:46px; height:27px; border-radius:99px; background:#2b332b; border:1px solid var(--line);
+          cursor:pointer; touch-action:manipulation; transition:background .15s;}
+  .switch::after{content:""; position:absolute; top:2px; left:2px; width:21px; height:21px; border-radius:50%;
+                 background:var(--muted); transition:left .15s, background .15s;}
+  .switch.on{background:var(--accent-soft); border-color:var(--accent);}
+  .switch.on::after{left:21px; background:var(--accent);}
+  /* chip entrance animations per feel */
+  @keyframes chipJump{0%{transform:translateY(0) scale(1);}35%{transform:translateY(-14px) scale(1.12);}70%{transform:translateY(2px) scale(.98);}100%{transform:translateY(0) scale(1);}}
+  @keyframes chipFlash{0%{background:var(--accent); color:#14100a;}100%{background:var(--accent-soft);}}
+  @keyframes chipIn{from{opacity:0; transform:translateY(10px) scale(.96);}to{opacity:1; transform:none;}}
+  .anim-pop .chip.merged{animation:chipJump .38s cubic-bezier(.34,1.56,.64,1);}
+  .anim-pop .chip:not(.merged){animation:chipIn .3s ease both;}
+  .anim-pop .chip:not(.merged):nth-child(2){animation-delay:.04s}
+  .anim-pop .chip:not(.merged):nth-child(3){animation-delay:.08s}
+  .anim-pop .chip:not(.merged):nth-child(4){animation-delay:.12s}
+  .anim-pop .chip:not(.merged):nth-child(5){animation-delay:.16s}
+  .anim-crisp .chip.merged{animation:chipFlash .22s ease-out;}
+  .anim-crisp .chip{animation:chipIn .12s ease-out both;}
+  .anim-glide .chip{animation:chipIn .34s cubic-bezier(.22,.8,.3,1) both;}
+  .anim-glide .chip:nth-child(2){animation-delay:.05s}
+  .anim-glide .chip:nth-child(3){animation-delay:.1s}
+  .anim-glide .chip:nth-child(4){animation-delay:.15s}
+  .anim-glide .chip:nth-child(5){animation-delay:.2s}
+  /* press physics per feel (release easing) */
+  .feel-pop.pressed{transform:scale(.9); transition:transform .1s ease-in;}
+  .feel-pop:not(.pressed){transition:transform .34s cubic-bezier(.34,1.8,.5,1);}
+  .feel-crisp.pressed{transform:scale(.95); transition:transform .07s ease-in;}
+  .feel-crisp:not(.pressed){transition:transform .11s cubic-bezier(.2,.9,.3,1);}
+  .feel-glide.pressed{transform:scale(.96); transition:transform .16s ease-in;}
+  .feel-glide:not(.pressed){transition:transform .3s cubic-bezier(.22,.8,.3,1);}
+  .btn-back.pressed{transform:scale(.93); transition:transform .08s ease-in;}
+  .btn-back:not(.pressed){transition:transform .18s ease-out;}
+  /* progress motion per feel */
+  .prog-pop i{transition:width .45s cubic-bezier(.34,1.56,.64,1);}
+  .prog-crisp i{transition:width .12s linear;}
+  .prog-glide i{transition:width .4s cubic-bezier(.22,.8,.3,1);}
+  .steal{margin-top:34px;}
+  .steal h2{font-size:20px; margin:0 0 8px;}
+  .steal p{color:var(--muted); font-size:14px; margin:0 0 12px;}
+  pre{background:#0a0c0a; border:1px solid var(--line); border-radius:12px; padding:16px; overflow-x:auto;
+      font-family:var(--mono); font-size:12.5px; line-height:1.6; color:#c9c4b4;}
+  footer{margin-top:44px; font-size:13px; color:var(--faint);}
+  @media (max-width:480px){ h1{font-size:28px;} .card{padding:20px 14px;} .btn-next{min-height:60px;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="kicker">Explainer tools · feel lab 01</p>
+  <h1>The next button.</h1>
+  <p class="lede">A real step-through animator — the byte-pair merges that turn <b style="color:var(--ink)">t·o·k·e·n</b> into token <b style="color:var(--ink)">#10346</b>, exactly as o200k does it. <b style="color:var(--ink)">Glide</b> is the chosen feel; Pop and Crisp are still here to compare. The next button never moves between presses — that's the rule.</p>
+
+  <div class="card">
+    <div class="feels" role="radiogroup" aria-label="Button feel">
+      <button class="feel on" data-feel="pop" role="radio" aria-checked="true">Pop<small>springy · playful</small></button>
+      <button class="feel" data-feel="crisp" role="radio" aria-checked="false">Crisp<small>tight · precise</small></button>
+      <button class="feel" data-feel="glide" role="radio" aria-checked="false">Glide<small>smooth · calm</small></button>
+    </div>
+    <p class="feel-note" id="feelNote"></p>
+
+    <div class="stage anim-pop" id="stage">
+      <div class="chips" id="chips"></div>
+      <p class="caption" id="caption"></p>
+      <div class="prog prog-pop" id="prog"><i id="progFill"></i></div>
+    </div>
+
+    <div class="controls">
+      <button class="btn btn-back" id="backBtn" aria-label="Previous step">← Back</button>
+      <button class="btn btn-next feel-pop" id="nextBtn"><span id="nextLabel">Next merge</span><span class="arrow">→</span></button>
+    </div>
+    <div class="hints"><span><kbd>←</kbd> <kbd>→</kbd> keys work too</span><span id="stepCount"></span></div>
+
+    <div class="soundrow">
+      <button class="switch on" id="soundSw" role="switch" aria-checked="true" aria-label="Button sound"></button>
+      <span>Sound <span style="color:var(--faint)">— tiny synth blip per feel, made in code</span></span>
+    </div>
+  </div>
+
+  <div class="steal">
+    <h2>Steal this</h2>
+    <p>The whole trick is <b style="color:var(--ink)">pointerdown, not click</b> — the press visual starts the instant the finger lands. Release springs back with overshoot. Everything else is garnish.</p>
+<pre>nextBtn.addEventListener('pointerdown', e => {
+  e.preventDefault();               // no focus ring, no delay
+  nextBtn.classList.add('pressed'); // scale(.9), 100ms in
+  ensureAudio();
+});
+const release = () => {
+  nextBtn.classList.remove('pressed'); // spring back w/ overshoot
+  advance();                           // the actual step
+};
+nextBtn.addEventListener('pointerup', release);
+nextBtn.addEventListener('pointercancel', () =>
+  nextBtn.classList.remove('pressed'));</pre>
+  </div>
+
+  <footer>Feel lab 01 · step-through animator · real o200k merges · <span id="ver">v1</span></footer>
+</div>
+
+<script>
+/* Real o200k merges for the word "token", from the from-scratch Python impl. */
+const STEPS = [
+  {parts:['t','o','k','e','n'], merged:null,    rank:null,  at:-1, note:'5 raw UTF-8 bytes — nothing merged yet.'},
+  {parts:['t','o','k','en'],   merged:'en',    rank:262,   at:3,  note:'<b>en</b> merges first — rank <span class="rank">#262</span>, the most frequent pair here.'},
+  {parts:['t','ok','en'],      merged:'ok',    rank:525,   at:1,  note:'<b>ok</b> fuses next — rank <span class="rank">#525</span>. Lowest rank wins, not leftmost.'},
+  {parts:['t','oken'],         merged:'oken',  rank:2488,  at:1,  note:'<b>oken</b> — rank <span class="rank">#2,488</span>. Chunks keep fusing, never by meaning.'},
+  {parts:['token'],            merged:'token', rank:10346, at:0,  note:'<b>token</b> — rank <span class="rank">#10,346</span>. Four merges, one token id.'},
+];
+const FEEL_NOTES = {
+  pop:   'Pop — the button squashes deep and springs back past resting, chips jump. For playful explainers.',
+  crisp: 'Crisp — a tight 90ms press, the merged chip flashes once. For precise, technical walkthroughs.',
+  glide: 'Glide — soft press, chips crossfade in sequence. For calm, narrative pacing.',
+};
+
+const chipsEl = document.getElementById('chips');
+const captionEl = document.getElementById('caption');
+const nextBtn = document.getElementById('nextBtn');
+const nextLabel = document.getElementById('nextLabel');
+const backBtn = document.getElementById('backBtn');
+const stepCountEl = document.getElementById('stepCount');
+const stageEl = document.getElementById('stage');
+const progEl = document.getElementById('prog');
+const progFill = document.getElementById('progFill');
+const feelNote = document.getElementById('feelNote');
+
+let idx = 0, feel = 'pop', soundOn = true;
+try{ feel = localStorage.getItem('feelLabFeel') || 'glide'; soundOn = localStorage.getItem('feelLabSound') !== 'off'; }catch(e){}
+
+/* ---------- no-move rule: reserve space for the tallest step ----------
+   The next button's resting position must be pixel-identical on every
+   step. Measure every step's chips + caption height in a hidden probe
+   at the real stage width, then pin min-heights so advancing a step
+   can never shift the button. */
+function stabilize(){
+  const stageW = stageEl.clientWidth;
+  if(!stageW) return;
+  const probe = document.createElement('div');
+  const st = getComputedStyle(stageEl);
+  probe.style.cssText = 'position:absolute;top:0;left:0;visibility:hidden;pointer-events:none;padding:' + st.padding + ';width:' + stageW + 'px;';
+  probe.innerHTML = '<div class="chips"></div><p class="caption"></p>';
+  document.body.appendChild(probe);
+  const pc = probe.querySelector('.chips'), pp = probe.querySelector('.caption');
+  let mhChips = 0, mhCap = 0;
+  STEPS.forEach(s => {
+    pc.innerHTML = s.parts.map(p => '<span class="chip">' + p + '</span>').join('');
+    pp.innerHTML = s.note;
+    if(pc.offsetHeight > mhChips) mhChips = pc.offsetHeight;
+    if(pp.offsetHeight > mhCap) mhCap = pp.offsetHeight;
+  });
+  document.body.removeChild(probe);
+  /* ceil + 1px: real rendering can land a fraction above the probe
+     measurement — the pin must always win, never the content. */
+  chipsEl.style.minHeight = (Math.ceil(mhChips) + 1) + 'px';
+  captionEl.style.minHeight = (Math.ceil(mhCap) + 1) + 'px';
+}
+let stabT = null;
+window.addEventListener('resize', () => { clearTimeout(stabT); stabT = setTimeout(stabilize, 150); });
+
+/* ---------- sound: tiny synth, different per feel ---------- */
+let actx = null;
+function ensureAudio(){
+  if(actx || !soundOn) return;
+  try{ actx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){}
+}
+function blip(){
+  if(!actx || !soundOn) return;
+  const t0 = actx.currentTime, g = actx.createGain();
+  g.gain.value = 0.0001; g.connect(actx.destination);
+  if(feel === 'pop'){
+    const o = actx.createOscillator(); o.type = 'sine';
+    const f = 480 * Math.pow(2, idx * 0.12);
+    o.frequency.setValueAtTime(f, t0); o.frequency.exponentialRampToValueAtTime(f * 1.5, t0 + .09);
+    g.gain.exponentialRampToValueAtTime(.22, t0 + .015); g.gain.exponentialRampToValueAtTime(.0001, t0 + .16);
+    o.connect(g); o.start(t0); o.stop(t0 + .18);
+  } else if(feel === 'crisp'){
+    const len = actx.sampleRate * .03, buf = actx.createBuffer(1, len, actx.sampleRate), d = buf.getChannelData(0);
+    for(let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = actx.createBufferSource(); src.buffer = buf;
+    const hp = actx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3200;
+    g.gain.exponentialRampToValueAtTime(.3, t0 + .005); g.gain.exponentialRampToValueAtTime(.0001, t0 + .05);
+    src.connect(hp); hp.connect(g); src.start(t0);
+  } else {
+    const o = actx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(210, t0); o.frequency.exponentialRampToValueAtTime(95, t0 + .12);
+    g.gain.exponentialRampToValueAtTime(.2, t0 + .02); g.gain.exponentialRampToValueAtTime(.0001, t0 + .2);
+    o.connect(g); o.start(t0); o.stop(t0 + .22);
+  }
+}
+
+/* ---------- rendering ---------- */
+function render(){
+  const s = STEPS[idx];
+  chipsEl.innerHTML = '';
+  s.parts.forEach((p, i) => {
+    const c = document.createElement('span');
+    c.className = 'chip' + (s.merged && i === s.at ? ' merged' : '');
+    c.textContent = p;
+    chipsEl.appendChild(c);
+  });
+  // restart entrance animations
+  chipsEl.querySelectorAll('.chip').forEach(c => { void c.offsetWidth; });
+  captionEl.innerHTML = s.note;
+  stepCountEl.textContent = idx + ' / ' + (STEPS.length - 1) + ' merges';
+  progFill.style.width = (idx / (STEPS.length - 1) * 100) + '%';
+  nextLabel.textContent = idx < STEPS.length - 1 ? (idx === STEPS.length - 2 ? 'Finish' : 'Next merge') : 'Replay';
+  backBtn.disabled = idx === 0;
+}
+
+function advance(){
+  blip();
+  if(navigator.vibrate) { try{ navigator.vibrate(8); }catch(e){} }
+  idx = idx >= STEPS.length - 1 ? 0 : idx + 1;
+  render();
+}
+function retreat(){
+  blip();
+  idx = Math.max(0, idx - 1);
+  render();
+}
+
+/* ---------- the next button: pointerdown = instant feel ---------- */
+nextBtn.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  nextBtn.classList.add('pressed');
+  ensureAudio();
+  if(actx && actx.state === 'suspended') actx.resume();
+});
+nextBtn.addEventListener('pointerup', () => { nextBtn.classList.remove('pressed'); advance(); });
+nextBtn.addEventListener('pointercancel', () => nextBtn.classList.remove('pressed'));
+nextBtn.addEventListener('pointerleave', () => nextBtn.classList.remove('pressed'));
+nextBtn.addEventListener('keydown', e => {
+  if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); nextBtn.classList.add('pressed'); }
+});
+nextBtn.addEventListener('keyup', e => {
+  if(e.key === 'Enter' || e.key === ' '){ nextBtn.classList.remove('pressed'); advance(); }
+});
+backBtn.addEventListener('pointerdown', () => backBtn.classList.add('pressed'));
+backBtn.addEventListener('pointerup', () => { backBtn.classList.remove('pressed'); retreat(); });
+backBtn.addEventListener('pointercancel', () => backBtn.classList.remove('pressed'));
+document.addEventListener('keydown', e => {
+  if(e.key === 'ArrowRight') advance();
+  else if(e.key === 'ArrowLeft') retreat();
+});
+
+/* ---------- feel switching ---------- */
+function setFeel(f){
+  feel = f;
+  try{ localStorage.setItem('feelLabFeel', f); }catch(e){}
+  document.querySelectorAll('.feel').forEach(b => {
+    const on = b.dataset.feel === f;
+    b.classList.toggle('on', on); b.setAttribute('aria-checked', on);
+  });
+  nextBtn.className = 'btn btn-next feel-' + f;
+  stageEl.className = 'stage anim-' + f;
+  progEl.className = 'prog prog-' + f;
+  feelNote.textContent = FEEL_NOTES[f];
+  render();
+}
+document.querySelectorAll('.feel').forEach(b =>
+  b.addEventListener('click', () => setFeel(b.dataset.feel)));
+
+/* ---------- sound toggle ---------- */
+const soundSw = document.getElementById('soundSw');
+function paintSound(){
+  soundSw.classList.toggle('on', soundOn);
+  soundSw.setAttribute('aria-checked', soundOn);
+}
+soundSw.addEventListener('click', () => {
+  soundOn = !soundOn;
+  try{ localStorage.setItem('feelLabSound', soundOn ? 'on' : 'off'); }catch(e){}
+  paintSound();
+});
+paintSound();
+stabilize();
+setFeel(feel);
+</script>
+</body>
+</html>

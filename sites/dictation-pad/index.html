@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dictation Pad — free on-device transcription</title>
+<meta name="description" content="Dictate on your iPhone and get text back. Open-source Whisper runs 100% in your browser — no account, no fees, audio never leaves your phone.">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#f6f2ea">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Dictation Pad">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+<style>
+  :root{
+    --paper:#f6f2ea; --card:#fffdf8; --ink:#1d2530; --ink60:rgba(29,37,48,.6);
+    --ink35:rgba(29,37,48,.35); --line:rgba(29,37,48,.12);
+    --accent:#2e6f4e; --accent-soft:rgba(46,111,78,.1);
+    --rec:#d64545; --rec-soft:rgba(214,69,69,.12);
+    --radius:18px;
+    --shadow:0 10px 30px rgba(29,37,48,.08);
+    --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.5;min-height:100dvh;
+  }
+  button,.tap,[role="button"]{touch-action:manipulation;font-family:inherit}
+  .wrap{max-width:480px;margin:0 auto;padding:calc(var(--sat) + 18px) 18px calc(var(--sab) + 34px)}
+
+  header.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .brand{display:flex;align-items:center;gap:10px}
+  .brand .logo{width:34px;height:34px;border-radius:10px;background:var(--ink);display:grid;place-items:center}
+  .brand .logo svg{width:20px;height:20px}
+  .brand h1{font-size:19px;margin:0;font-weight:700;letter-spacing:-.02em}
+  .icon-btn{
+    width:42px;height:42px;border-radius:50%;border:1px solid var(--line);
+    background:var(--card);color:var(--ink);font-size:19px;cursor:pointer;
+    display:grid;place-items:center;box-shadow:var(--shadow);
+  }
+  .icon-btn:active{transform:scale(.94)}
+
+  .status{
+    display:flex;align-items:center;gap:9px;background:var(--card);
+    border:1px solid var(--line);border-radius:999px;padding:9px 15px;
+    font-size:13.5px;font-weight:600;margin-bottom:22px;box-shadow:var(--shadow);
+  }
+  .status .dot{width:9px;height:9px;border-radius:50%;background:var(--ink35);flex:none}
+  .status.ready .dot{background:var(--accent)}
+  .status.busy .dot{background:var(--accent);animation:pulse 1.2s infinite}
+  .status.recording .dot{background:var(--rec);animation:pulse .8s infinite}
+  .status.error .dot{background:var(--rec)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .status .sub{font-weight:400;color:var(--ink60)}
+
+  .mic-zone{display:flex;flex-direction:column;align-items:center;gap:14px;margin:6px 0 22px}
+  #micBtn{
+    width:104px;height:104px;border-radius:50%;border:0;cursor:pointer;
+    background:var(--ink);color:#fff;display:grid;place-items:center;
+    box-shadow:0 14px 34px rgba(29,37,48,.28);transition:transform .12s,background .2s;
+    position:relative;
+  }
+  #micBtn:active{transform:scale(.94)}
+  #micBtn svg{width:40px;height:40px}
+  #micBtn.recording{background:var(--rec);box-shadow:0 14px 34px rgba(214,69,69,.4)}
+  #micBtn.recording::after{
+    content:"";position:absolute;inset:-9px;border-radius:50%;
+    border:3px solid var(--rec);opacity:.5;animation:ring 1.4s ease-out infinite;
+  }
+  @keyframes ring{0%{transform:scale(.85);opacity:.6}100%{transform:scale(1.12);opacity:0}}
+  #micBtn:disabled{opacity:.45;cursor:default}
+  #micBtn:disabled:active{transform:none}
+  .mic-label{font-size:13px;color:var(--ink60);font-weight:600;min-height:20px;text-align:center}
+
+  .meter{width:100%;max-width:300px;height:8px;border-radius:99px;background:rgba(29,37,48,.08);overflow:hidden}
+  .meter i{display:block;height:100%;width:0%;border-radius:99px;background:var(--accent);transition:width .06s linear}
+  .recording-row .meter i{background:var(--rec)}
+
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:16px;margin-bottom:18px;
+  }
+  .card h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink60);margin:0 0 10px;font-weight:700}
+  #transcript{
+    width:100%;min-height:150px;resize:vertical;border:1px solid var(--line);border-radius:12px;
+    padding:12px 13px;font:inherit;font-size:16px;line-height:1.6;color:var(--ink);
+    background:#fff;outline:none;
+  }
+  #transcript:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .empty-hint{color:var(--ink35);font-size:14px}
+  .btn-row{display:flex;gap:10px;margin-top:12px}
+  .btn{
+    flex:1;border:0;border-radius:14px;padding:13px 10px;font-size:15.5px;font-weight:700;
+    cursor:pointer;transition:transform .1s;
+  }
+  .btn:active{transform:scale(.97)}
+  .btn.primary{background:var(--ink);color:#fff}
+  .btn.ghost{background:rgba(29,37,48,.07);color:var(--ink)}
+  .btn.armed{background:var(--rec);color:#fff}
+
+  #historyList{display:flex;flex-direction:column;gap:8px}
+  .hist-item{
+    display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;
+    padding:11px 12px;background:#fff;cursor:pointer;
+  }
+  .hist-item:active{background:rgba(29,37,48,.04)}
+  .hist-item .txt{flex:1;min-width:0}
+  .hist-item .snippet{font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hist-item .meta{font-size:12px;color:var(--ink60)}
+  .hist-del{
+    flex:none;width:34px;height:34px;border-radius:50%;border:0;cursor:pointer;
+    background:rgba(29,37,48,.07);color:var(--ink60);font-size:16px;line-height:1;
+  }
+  .hist-del:active{background:var(--rec-soft);color:var(--rec)}
+  .link-btn{background:none;border:0;color:var(--ink60);font-size:13.5px;font-weight:600;cursor:pointer;padding:8px}
+  .link-btn.danger.armed{color:var(--rec)}
+
+  .fine{font-size:12.5px;color:var(--ink60);text-align:center;margin-top:6px;line-height:1.6}
+  .fine b{color:var(--ink)}
+
+  /* bottom sheet */
+  .sheet-back{
+    position:fixed;inset:0;background:rgba(20,26,35,.45);opacity:0;pointer-events:none;
+    transition:opacity .22s;z-index:40;
+  }
+  .sheet{
+    position:fixed;left:0;right:0;bottom:0;z-index:41;max-width:520px;margin:0 auto;
+    background:var(--card);border-radius:24px 24px 0 0;padding:14px 20px calc(var(--sab) + 26px);
+    transform:translateY(102%);transition:transform .28s cubic-bezier(.32,.72,.24,1);
+    max-height:86dvh;overflow-y:auto;
+  }
+  body.sheet-open .sheet{transform:translateY(0)}
+  body.sheet-open .sheet-back{opacity:1;pointer-events:auto}
+  .grab{width:44px;height:5px;border-radius:99px;background:var(--line);margin:2px auto 14px}
+  .sheet h2{font-size:18px;margin:0 0 4px;letter-spacing:-.01em}
+  .sheet p{font-size:14px;color:var(--ink60);margin:6px 0 14px}
+  .model-opt{
+    display:flex;gap:12px;align-items:flex-start;border:1.5px solid var(--line);border-radius:14px;
+    padding:13px 14px;margin-bottom:10px;cursor:pointer;background:#fff;
+  }
+  .model-opt.sel{border-color:var(--accent);background:var(--accent-soft)}
+  .model-opt input{margin-top:4px;accent-color:var(--accent);width:18px;height:18px;flex:none}
+  .model-opt .t{font-weight:700;font-size:15.5px}
+  .model-opt .d{font-size:13px;color:var(--ink60)}
+  .dl-bar{height:8px;border-radius:99px;background:rgba(29,37,48,.08);overflow:hidden;margin:8px 0 4px}
+  .dl-bar i{display:block;height:100%;width:0;background:var(--accent);border-radius:99px;transition:width .2s}
+  .limits{font-size:13.5px;color:var(--ink60);margin:14px 0 0;padding-left:20px}
+  .limits li{margin-bottom:8px}
+
+  /* onboarding */
+  .onb-back{position:fixed;inset:0;background:rgba(20,26,35,.5);z-index:50;display:grid;place-items:center;padding:22px}
+  .onb{background:var(--card);border-radius:22px;padding:24px 22px;max-width:420px;box-shadow:0 24px 70px rgba(0,0,0,.25)}
+  .onb h2{margin:0 0 6px;font-size:21px;letter-spacing:-.02em}
+  .onb .sub{font-size:14px;color:var(--ink60);margin:0 0 12px}
+  .onb ul{margin:0 0 18px;padding-left:20px;font-size:14px;color:var(--ink);line-height:1.55}
+  .onb li{margin-bottom:9px}
+  .onb li b{font-weight:700}
+  [hidden]{display:none!important}
+
+  #toast{
+    position:fixed;left:50%;bottom:calc(var(--sab) + 26px);transform:translateX(-50%) translateY(20px);
+    background:var(--ink);color:#fff;font-size:14px;font-weight:600;padding:11px 18px;border-radius:999px;
+    opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:60;max-width:88vw;text-align:center;
+  }
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#f6f2ea" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="22"/></svg>
+      </span>
+      <h1>Dictation Pad</h1>
+    </div>
+    <button class="icon-btn" id="settingsBtn" aria-label="Settings">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </header>
+
+  <div class="status" id="statusPill" role="status">
+    <span class="dot"></span><span id="statusText">Getting ready…</span>
+  </div>
+
+  <div class="mic-zone" id="micZone">
+    <button id="micBtn" aria-label="Start recording">
+      <svg id="micIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="22"/></svg>
+    </button>
+    <div class="meter" id="meter" hidden><i id="meterFill"></i></div>
+    <div class="mic-label" id="micLabel">Tap the mic to dictate</div>
+  </div>
+
+  <section class="card" aria-label="Transcript">
+    <h2>Transcript</h2>
+    <textarea id="transcript" placeholder="Your words will appear here. You can edit them freely."></textarea>
+    <div class="btn-row">
+      <button class="btn primary" id="copyBtn">Copy</button>
+      <button class="btn ghost" id="clearBtn">Clear</button>
+    </div>
+  </section>
+
+  <section class="card" aria-label="History">
+    <h2>History</h2>
+    <div id="historyList"></div>
+    <div style="text-align:center;margin-top:6px">
+      <button class="link-btn danger" id="clearAllBtn" hidden>Clear all history</button>
+    </div>
+  </section>
+
+  <p class="fine"><b>100% on-device.</b> Transcription runs in your browser with open-source Whisper.<br>No account, no fees, no audio ever leaves your phone.</p>
+</div>
+
+<div class="sheet-back" id="sheetBack"></div>
+<div class="sheet" role="dialog" aria-modal="true" aria-label="Settings" id="sheet">
+  <div class="grab"></div>
+  <h2>Settings</h2>
+  <p>Pick the transcription model. It downloads once, then lives on your phone.</p>
+  <label class="model-opt" id="optTiny">
+    <input type="radio" name="model" value="tiny">
+    <span><span class="t">Fast</span><br><span class="d">whisper-tiny.en · ~75&nbsp;MB download · quickest on phones, good for clear speech</span></span>
+  </label>
+  <label class="model-opt" id="optBase">
+    <input type="radio" name="model" value="base">
+    <span><span class="t">Accurate</span><br><span class="d">whisper-base.en · ~150&nbsp;MB download · better with accents &amp; background noise, slower</span></span>
+  </label>
+  <div id="dlWrap" hidden>
+    <div class="dl-bar"><i id="dlFill"></i></div>
+    <p id="dlText" style="margin:0;font-size:13px">Downloading…</p>
+  </div>
+  <p style="font-size:13px">Tip: download on Wi-Fi the first time. After that it works offline.</p>
+  <h2 style="margin-top:18px">Good to know</h2>
+  <ul class="limits">
+    <li>First run downloads the model (~75–150&nbsp;MB).</li>
+    <li>On-phone transcription is slower than cloud services — a 30&#8209;second note takes a few seconds.</li>
+    <li>Keep recordings to a few minutes; longer audio is transcribed in chunks.</li>
+    <li>This isn't a replacement for your keyboard's mic button — dictate here, tap Copy, paste anywhere.</li>
+    <li>Audio never leaves your phone. There is no server.</li>
+  </ul>
+</div>
+
+<div class="onb-back" id="onbBack" hidden>
+  <div class="onb" role="dialog" aria-modal="true" aria-label="Welcome">
+    <h2>Dictation, minus the cloud.</h2>
+    <p class="sub">This pad transcribes your voice with open-source Whisper running entirely on your phone.</p>
+    <ul>
+      <li><b>Free forever.</b> No account, no API key, no usage fees.</li>
+      <li><b>Private.</b> Your audio never leaves this device.</li>
+      <li><b>One download.</b> The model is ~75&nbsp;MB (Fast) or ~150&nbsp;MB (Accurate) — grab it on Wi-Fi once.</li>
+      <li><b>Honest trade-offs.</b> On-phone is slower than cloud dictation, and this can't replace your keyboard's mic — dictate here, then Copy &amp; paste anywhere.</li>
+    </ul>
+    <button class="btn primary" id="onbGo" style="width:100%">Start dictating</button>
+  </div>
+</div>
+
+<div id="toast" role="status"></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

@@ -93,6 +93,9 @@ textarea:focus{outline:none;border-color:var(--accent)}
   font-weight:800;padding:15px;border-radius:13px;font-size:16px;cursor:pointer}
 #shareBtn:active{transform:scale(.98)}
 #gifDl{display:inline-block;margin-top:10px;color:var(--muted);font-size:14px}
+#hiddenMedia{position:fixed;left:0;top:0;width:8px;height:8px;opacity:.01;
+  pointer-events:none;z-index:-1;overflow:hidden}
+#hiddenMedia video,#hiddenMedia img{width:8px;height:8px}
 #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);
   background:var(--card);border:1px solid var(--line);color:var(--text);padding:12px 22px;
   border-radius:12px;font-size:14px;transition:transform .3s ease;z-index:50;max-width:92vw;text-align:center}
@@ -101,6 +104,7 @@ footer{text-align:center;color:var(--faint);font-size:12px;margin-top:44px;line-
 </style>
 </head>
 <body>
+<div id="hiddenMedia" aria-hidden="true"></div>
 <div class="wrap">
   <header>
     <div class="logo">Top<span>Text</span></div>
@@ -227,6 +231,9 @@ function draw(){
 function loop(){ draw(); requestAnimationFrame(loop); }
 
 function setMedia(el, kind, name){
+  var hm = document.getElementById("hiddenMedia");
+  hm.innerHTML = "";
+  hm.appendChild(el); // must be in the DOM (even invisibly) or browsers won't animate it
   media = el; mediaKind = kind; mediaName = name;
   document.getElementById("stage").classList.add("show");
   var mi = document.getElementById("mediaInfo");
@@ -311,8 +318,14 @@ function loadScript(src){
     document.head.appendChild(s);
   });
 }
-function seekTo(v, t){
-  return new Promise(function(res){
+function quickHash(c, w, h){
+  try{
+    var d = c.getImageData(0, 0, w, h).data, s = 0;
+    for(var i = 0; i < d.length; i += 64){ s = (s + d[i] * 31 + d[i+1] * 17 + d[i+2] * 13) % 1000000007; }
+    return s;
+  }catch(e){ return -1; }
+}
+function seekTo(v, t){  return new Promise(function(res){
     var done = false;
     function h(){ if(done) return; done = true; v.removeEventListener("seeked", h); res(); }
     v.addEventListener("seeked", h);
@@ -360,12 +373,16 @@ document.getElementById("gifBtn").addEventListener("click", async function(){
       }
       if(!wasPaused){ try{ media.play(); }catch(e){} }
     } else {
+      var hashes = [];
       for(var j = 0; j < n; j++){
         await snap();
         gif.addFrame(off, {copy: true, delay: Math.round(1000 / fps)});
+        hashes.push(quickHash(octx, gw, gh));
         setP(0.4 * (j + 1) / n);
         await new Promise(function(r){ setTimeout(r, 1000 / fps); });
       }
+      var animated = hashes.some(function(h){ return h !== hashes[0]; });
+      if(!animated) showToast("That GIF isn't animating in the browser — try the video file instead");
     }
     gif.on("progress", function(p){ setP(0.4 + 0.6 * p); });
     gifBlob = await new Promise(function(res){ gif.on("finished", res); gif.render(); });

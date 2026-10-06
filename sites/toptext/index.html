@@ -80,10 +80,14 @@ textarea:focus{outline:none;border-color:var(--accent)}
 #gifResult{display:none;margin-top:12px;text-align:center}
 #gifResult.show{display:block}
 #gifImg{width:100%;border-radius:12px;border:1px solid var(--line);background:#000}
-#shareBtn{width:100%;margin-top:10px;background:var(--accent);border:none;color:#171106;
-  font-weight:800;padding:15px;border-radius:13px;font-size:16px;cursor:pointer}
-#shareBtn:active{transform:scale(.98)}
-#gifDl{display:inline-block;margin-top:10px;color:var(--muted);font-size:14px}
+#morphBtn{position:relative;display:flex;align-items:center;justify-content:center;gap:9px;
+  width:100%;margin-top:12px;background:var(--accent);border:none;color:#171106;
+  font-weight:800;padding:15px;border-radius:13px;font-size:17px;cursor:pointer;
+  touch-action:manipulation;overflow:hidden}
+#morphBtn:active{transform:scale(.98)}
+.mstack{position:relative;width:22px;height:22px;flex:none}
+.micon{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+.micon[data-k="share"]{opacity:0}
 #hiddenMedia{position:fixed;left:0;top:0;width:8px;height:8px;opacity:.01;
   pointer-events:none;z-index:-1;overflow:hidden}
 #hiddenMedia video,#hiddenMedia img{width:8px;height:8px}
@@ -140,11 +144,16 @@ footer{text-align:center;color:var(--faint);font-size:12px;margin-top:44px;line-
     <div id="recDot"><i></i> recording…</div>
     <div id="gifResult">
       <img id="gifImg" alt="your meme as a GIF">
-      <button id="shareBtn">Save to Photos</button><br>
-      <a id="gifDl" download="toptext-meme.gif">download the .gif file instead</a>
-      <p class="fine">On iPhone, Save to Photos opens the share sheet — tap Save Image and it's in your library. Or long-press the GIF above → Add to Photos.</p>
+      <button id="morphBtn" aria-label="Save GIF" title="Save GIF">
+        <span class="mstack" aria-hidden="true">
+          <span class="micon" data-k="save"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M4.5 19.5h15"/></svg></span>
+          <span class="micon" data-k="share"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M6 12.5V19a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-6.5"/></svg></span>
+        </span>
+        <span id="morphLabel">Save</span>
+      </button>
+      <p class="fine">Save drops the GIF into your Photos — tap Save Image in the sheet. Then share it anywhere.</p>
     </div>
-    <p class="fine">No button needed — your GIF builds itself a couple seconds after you stop typing or load a clip. Export is just your clip, no caption, at 360px and 10fps for up to 5 seconds. Best for Photos, iMessage, and group chats.</p>
+    <p class="fine">No export button needed — your GIF builds itself the moment your clip loads, and again live as you type. Caption included, 360px, 10fps, up to 5 seconds.</p>
   </div>
 
   <footer>made for the group chat<br>your clips never leave your device — everything renders locally</footer>
@@ -233,7 +242,9 @@ function setMedia(el, kind, name){
   var gb = document.getElementById("gifBtn");
   gb.disabled = false; gb.textContent = "Export GIF";
   document.getElementById("stage").scrollIntoView({behavior:"smooth", block:"nearest"});
-  scheduleAutoExport(2000); // no clicks needed — the GIF builds itself
+  document.getElementById("gifResult").classList.remove("show");
+  setMorphMode("save");
+  scheduleAutoExport(600); // export starts the moment the clip lands — no waiting on text
 }
 
 document.getElementById("uploadBtn").addEventListener("click", function(){
@@ -346,8 +357,9 @@ async function gifFromDecodedFrames(gif, off, octx, gw, fps, setP){
     if(totalMs <= 0) return false;
     var maxMs = Math.min(totalMs, 5000);
     var n = Math.max(4, Math.round(maxMs / 1000 * fps));
-    var mh = Math.round(gw * fh / fw); // clip only, no caption
-    off.width = gw; off.height = mh;
+    var h = memeHeader(gw); // caption renders live into every exported frame
+    var mh = Math.round(gw * fh / fw);
+    off.width = gw; off.height = h.hh + mh;
     var tmp = document.createElement("canvas"); tmp.width = fw; tmp.height = fh;
     var tctx = tmp.getContext("2d");
     var pix = new Uint8ClampedArray(fw * fh * 4);
@@ -400,8 +412,9 @@ async function gifFromDecodedFrames(gif, off, octx, gw, fps, setP){
       while(fi < nf - 1 && cum[fi] + delays[fi] <= tMs) fi++;
       decodeUpTo(fi);
       tctx.putImageData(imgd, 0, 0);
-      octx.fillStyle = "#000"; octx.fillRect(0, 0, gw, mh);
-      octx.drawImage(tmp, 0, 0, gw, mh);
+      paintHeader(octx, gw, h);
+      octx.fillStyle = "#000"; octx.fillRect(0, h.hh, gw, mh);
+      octx.drawImage(tmp, 0, h.hh, gw, mh);
       gif.addFrame(off, {copy: true, delay: Math.round(1000 / fps)});
       setP(0.4 * (i + 1) / n);
     }
@@ -443,15 +456,13 @@ async function runGifExport(){
       ? Math.min(media.duration, maxSec) : maxSec;
     var n = Math.max(4, Math.round(dur * fps));
     var gw = 360; // smaller = much faster encode, still crisp on a phone
-    var fullH = memeHeader(W); // export is the clip only — crop the caption out
-    var mediaH = Math.max(1, cv.height - fullH.hh);
-    var gh = Math.round(gw * mediaH / W);
+    var gh = Math.round(gw * cv.height / cv.width);
     var off = document.createElement("canvas"); off.width = gw; off.height = gh;
     var octx = off.getContext("2d");
     var gif = new GIF({workers: 4, quality: 15, width: gw, height: gh, workerScript: workerUrl});
     async function snap(){
       await new Promise(function(r){ requestAnimationFrame(function(){ requestAnimationFrame(r); }); });
-      octx.drawImage(cv, 0, fullH.hh, W, mediaH, 0, 0, gw, gh);
+      octx.drawImage(cv, 0, 0, gw, gh);
     }
     if(mediaKind === "video"){
       var wasPaused = media.paused;
@@ -482,8 +493,8 @@ async function runGifExport(){
     setP(1);
     var gurl = URL.createObjectURL(gifBlob);
     document.getElementById("gifImg").src = gurl;
-    document.getElementById("gifDl").href = gurl;
     document.getElementById("gifResult").classList.add("show");
+    setMorphMode("save"); // fresh export = back to the primary action
     showToast("GIF ready");
     document.getElementById("gifResult").scrollIntoView({behavior: "smooth", block: "nearest"});
   }catch(err){
@@ -498,19 +509,100 @@ async function runGifExport(){
 document.getElementById("gifBtn").addEventListener("click", function(){
   pendingAuto = false; clearTimeout(autoTimer); runGifExport();
 });
-document.getElementById("shareBtn").addEventListener("click", async function(){
-  if(!gifBlob) return;
-  var file = new File([gifBlob], "toptext-meme.gif", {type: "image/gif"});
-  try{
-    if(navigator.canShare && navigator.canShare({files: [file]})){
-      await navigator.share({files: [file], title: "TopText meme"});
-      return;
+
+/* morph button: Save first, then Share — per the morph-button skill.
+   State A (default, always): Save. Tap → save succeeds → morph to State B: Share.
+   Morphs back to Save the instant context changes (new export, new clip, share done). */
+var morphMode = "save", morphPop = null;
+var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+if(window.matchMedia){
+  var rmq = window.matchMedia("(prefers-reduced-motion: reduce)");
+  var rmUpd = function(){ reduceMotion = rmq.matches; };
+  if(rmq.addEventListener) rmq.addEventListener("change", rmUpd);
+  else if(rmq.addListener) rmq.addListener(rmUpd);
+}
+function setMorphMode(mode){
+  var btn = document.getElementById("morphBtn");
+  if(!btn) return;
+  var icons = btn.querySelectorAll(".micon");
+  var running = false;
+  icons.forEach(function(ic){ if(ic.getAnimations().length) running = true; });
+  if(mode === morphMode && !running) return; // already settled here
+  morphMode = mode;
+  var showK = mode === "save" ? "save" : "share";
+  var label = document.getElementById("morphLabel");
+  label.textContent = mode === "save" ? "Save" : "Share";
+  var aria = mode === "save" ? "Save GIF" : "Share GIF";
+  btn.setAttribute("aria-label", aria); btn.title = aria;
+  icons.forEach(function(ic){
+    var on = ic.dataset.k === showK;
+    var anims = ic.getAnimations();
+    var csOp = parseFloat(getComputedStyle(ic).opacity);
+    var cur = (csOp >= 0) ? csOp : (on ? 1 : 0); // always read the true rendered pose
+    anims.forEach(function(a){ a.cancel(); });
+    if(reduceMotion){ ic.style.opacity = on ? 1 : 0; ic.style.transform = ""; return; }
+    ic.style.opacity = "";
+    if(on){
+      ic.animate([
+        {opacity: cur, transform: "scale(" + (0.35 + 0.65 * cur) + ") rotate(" + (-10 + 10 * cur) + "deg)"},
+        {opacity: 1, transform: "scale(1.06) rotate(1deg)", offset: 0.7, easing: "cubic-bezier(.2,.9,.3,1.25)"},
+        {opacity: 1, transform: "scale(1) rotate(0deg)"}
+      ], {duration: 400, fill: "forwards", easing: "ease-out"});
+    } else {
+      ic.animate([
+        {opacity: cur, transform: "scale(" + (0.35 + 0.65 * cur) + ")"},
+        {opacity: 0, transform: "scale(0.35) rotate(-10deg)"}
+      ], {duration: 180, fill: "forwards", easing: "ease-in"});
     }
-  }catch(e){ /* user cancelled — fall through to download */ }
+  });
+  if(!reduceMotion){
+    if(morphPop) morphPop.cancel();
+    morphPop = btn.animate(
+      [{transform: "scale(1)"}, {transform: "scale(1.06)", offset: 0.4}, {transform: "scale(1)"}],
+      {duration: 320, easing: "ease-out"});
+  }
+}
+function gifFile(){
+  return new File([gifBlob], "toptext-meme.gif", {type: "image/gif"});
+}
+function sysShareable(f){
+  return navigator.canShare && navigator.canShare({files: [f]});
+}
+function downloadGif(){
   var a = document.createElement("a");
   a.href = URL.createObjectURL(gifBlob); a.download = "toptext-meme.gif";
   document.body.appendChild(a); a.click(); a.remove();
-  showToast("Downloaded — long-press the GIF above → Add to Photos");
+}
+async function doSaveGif(){
+  var f = gifFile();
+  if(sysShareable(f)){
+    try{ await navigator.share({files: [f], title: "TopText meme"}); return true; }
+    catch(e){ return false; } // dismissed — stay in Save
+  }
+  downloadGif();
+  return true;
+}
+async function doShareGif(){
+  var f = gifFile();
+  try{
+    if(sysShareable(f)) await navigator.share({files: [f], title: "TopText meme"});
+    else downloadGif();
+  }catch(e){ /* dismissed — fine */ }
+}
+document.getElementById("morphBtn").addEventListener("click", async function(){
+  if(!gifBlob) return;
+  var btn = this;
+  btn.disabled = true;
+  try{
+    if(morphMode === "save"){
+      if(await doSaveGif()){ showToast("Saved"); setMorphMode("share"); }
+    } else {
+      await doShareGif();
+      setMorphMode("save"); // share completed or dismissed — revert
+    }
+  }finally{
+    btn.disabled = false;
+  }
 });
 
 if(document.fonts && document.fonts.ready){ document.fonts.ready.then(function(){ draw(); }); }

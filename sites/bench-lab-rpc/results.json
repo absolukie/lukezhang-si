@@ -1,0 +1,259 @@
+{
+  "meta": {
+    "date": "2026-10-02",
+    "vm": "2cpu/8gb",
+    "runs": 5,
+    "versions": {
+      "g++": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "python": "Python 3.12.3",
+      "go": "go1.25.1",
+      "rustc": "rustc 1.98.1",
+      "cargo": "cargo 1.98.1 (797e8a9bc 2026-08-05)",
+      "bend": "bend 2.0.34",
+      "grpcio": "1.84.0",
+      "grpc-go": "v1.84.0",
+      "protobuf-go": "v1.36.12",
+      "tonic": "0.12.3",
+      "axum": "0.8.9"
+    },
+    "notes": [
+      "Each program prints '<bench> <lang> <ms> <checksum>'; ms = compute wall time measured inside the program.",
+      "Median of 5 runs. Checksums must agree across languages per benchmark (checksums_agree).",
+      "C++ compiled with -O3 -march=native -ffp-contract=off -fopenmp; the -ffp-contract=off flag disables FMA contraction so checksums are bit-identical with Go/Rust/Python (strict IEEE-754 double rounding).",
+      "nbody uses 100 Euler steps (not 200000): the step count is tuned so CPython finishes in reasonable time; the workload is otherwise identical in all languages (same N=1024, dt, softening, LCG init, two-phase update).",
+      "Threading: 2 CPU cores; parallel benchmarks use all cores where natural (OpenMP/rayon/goroutines); Python is serial.",
+      "bend2 (Bend 2.0.34 installed OK): omitted from measurements -- Bend's Base library currently provides only U32/F32 numerics (no F64/U64), so the f64 workloads cannot be ported with checksum-identical results, and its tree-based Array makes a 1e8 sieve / JSON parsing impractical."
+    ]
+  },
+  "rpc": {
+    "payloads": [
+      "1KB",
+      "256KB"
+    ],
+    "grpc": {
+      "1KB": {
+        "latency_p50_ms": 0.393,
+        "latency_p99_ms": 1.271,
+        "seq_n": 2000,
+        "throughput_rps": 2375.3,
+        "conc_total": 11887
+      },
+      "256KB": {
+        "latency_p50_ms": 2.409,
+        "latency_p99_ms": 7.296,
+        "seq_n": 2000,
+        "throughput_rps": 640.1,
+        "conc_total": 3205
+      }
+    },
+    "rest": {
+      "1KB": {
+        "latency_p50_ms": 0.578,
+        "latency_p99_ms": 1.235,
+        "seq_n": 2000,
+        "throughput_rps": 1892.8,
+        "conc_total": 9720
+      },
+      "256KB": {
+        "latency_p50_ms": 0.695,
+        "latency_p99_ms": 3.491,
+        "seq_n": 2000,
+        "throughput_rps": 1275.8,
+        "conc_total": 6797
+      }
+    },
+    "notes": "Python localhost. gRPC: grpcio server (16 worker threads) over a Unix-domain socket (TCP localhost was unusable: this VM's egress proxy env vars hijack grpc's HTTP/2 client connections). REST: stdlib ThreadingHTTPServer on 127.0.0.1:8000, POST /echo. Sequential: 2000 calls, p50/p99 per-call latency. Concurrent: 8 clients x 5s, throughput req/s. Deterministic payload bytes (random.Random(1234))."
+  },
+  "go": {
+    "payloads": [
+      "1KB",
+      "64KB",
+      "1MB",
+      "16MB"
+    ],
+    "grpc": {
+      "1KB": {
+        "latency_p50_ms": 0.107,
+        "latency_p99_ms": 1.561,
+        "seq_n": 2000,
+        "throughput_rps": 18582.0,
+        "conc_total": 92910
+      },
+      "64KB": {
+        "latency_p50_ms": 0.385,
+        "latency_p99_ms": 1.853,
+        "seq_n": 2000,
+        "throughput_rps": 4328.0,
+        "conc_total": 21640
+      },
+      "1MB": {
+        "latency_p50_ms": 2.36,
+        "latency_p99_ms": 5.036,
+        "seq_n": 500,
+        "throughput_rps": 493.2,
+        "conc_total": 2466
+      },
+      "16MB": {
+        "latency_p50_ms": 29.183,
+        "latency_p99_ms": 104.21,
+        "seq_n": 100,
+        "throughput_rps": 10.8,
+        "conc_total": 54
+      }
+    },
+    "rest": {
+      "1KB": {
+        "latency_p50_ms": 0.087,
+        "latency_p99_ms": 0.261,
+        "seq_n": 2000,
+        "throughput_rps": 22825.4,
+        "conc_total": 114127
+      },
+      "64KB": {
+        "latency_p50_ms": 0.295,
+        "latency_p99_ms": 2.708,
+        "seq_n": 2000,
+        "throughput_rps": 2605.6,
+        "conc_total": 13028
+      },
+      "1MB": {
+        "latency_p50_ms": 6.045,
+        "latency_p99_ms": 16.358,
+        "seq_n": 500,
+        "throughput_rps": 213.6,
+        "conc_total": 1068
+      },
+      "16MB": {
+        "latency_p50_ms": 54.46,
+        "latency_p99_ms": 123.645,
+        "seq_n": 100,
+        "throughput_rps": 25.6,
+        "conc_total": 128
+      }
+    },
+    "notes": "Go echo benchmark on 2-CPU VM, localhost TCP, no TLS. gRPC: grpc-go server on 127.0.0.1:50051 via grpc.NewServer() with DEFAULT options; client: single grpc.ClientConn (grpc.NewClient + insecure credentials), reused across all calls. REST: net/http server on 127.0.0.1:8080 (default http.Server, no timeouts), POST /echo reads full body, writes it back with Content-Length; client: single http.Client with keep-alives (MaxIdleConnsPerHost=16), reused. Payload: deterministic bytes from math/rand seed 1234, verified byte-identical on every response (abort on mismatch). seq N: 2000 calls for 1KB/64KB, 500 for 1MB, 100 for 16MB. conc: 8 goroutine clients x 5s. Versions: go1.25.1, google.golang.org/grpc v1.84.0, google.golang.org/protobuf v1.36.12, protoc 31.1, protoc-gen-go v1.36.12, protoc-gen-go-grpc 1.6.2. CAVEAT: grpc-go defaults cap messages at 4MB, so 16MB echo FAILED with defaults (ResourceExhausted: received message larger than max 16777221 vs 4194304). The grpc 16MB figures are a bonus run on 127.0.0.1:50052 with ONLY MaxRecvMsgSize/MaxSendMsgSize raised to 32MB on both server and client call options; all other settings identical. REST handled 16MB with defaults."
+  },
+  "rust": {
+    "payloads": [
+      "1KB",
+      "64KB",
+      "1MB",
+      "16MB"
+    ],
+    "grpc": {
+      "1KB": {
+        "throughput_rps": 13367.6,
+        "conc_total": 66838,
+        "latency_p50_ms": 0.118207,
+        "latency_p99_ms": 1.11935,
+        "seq_n": 2000
+      },
+      "64KB": {
+        "throughput_rps": 4953.2,
+        "conc_total": 24766,
+        "latency_p50_ms": 0.304337,
+        "latency_p99_ms": 3.41697,
+        "seq_n": 2000
+      },
+      "1MB": {
+        "throughput_rps": 301.2,
+        "conc_total": 1506,
+        "latency_p50_ms": 2.466013,
+        "latency_p99_ms": 11.350451,
+        "seq_n": 500
+      },
+      "16MB": {
+        "throughput_rps": 19.2,
+        "conc_total": 96,
+        "latency_p50_ms": 47.431029,
+        "latency_p99_ms": 147.317132,
+        "seq_n": 100
+      }
+    },
+    "rest": {
+      "1KB": {
+        "throughput_rps": 21145.8,
+        "conc_total": 105729,
+        "latency_p50_ms": 0.117877,
+        "latency_p99_ms": 0.740782,
+        "seq_n": 2000
+      },
+      "64KB": {
+        "throughput_rps": 12914.4,
+        "conc_total": 64572,
+        "latency_p50_ms": 0.110316,
+        "latency_p99_ms": 0.607202,
+        "seq_n": 2000
+      },
+      "1MB": {
+        "throughput_rps": 1151.6,
+        "conc_total": 5758,
+        "latency_p50_ms": 1.336146,
+        "latency_p99_ms": 2.566954,
+        "seq_n": 500
+      },
+      "16MB": {
+        "throughput_rps": 58.0,
+        "conc_total": 290,
+        "latency_p50_ms": 15.0664,
+        "latency_p99_ms": 69.757539,
+        "seq_n": 100
+      }
+    },
+    "notes": "Rust echo benchmark on 2-CPU VM, localhost TCP, no TLS. gRPC: tonic server on 127.0.0.1:50051 (tonic::transport::Server defaults; echo handler clones the bytes payload). REST: axum 0.8 server on 127.0.0.1:8080 (default axum::serve; POST /echo reads the full body and writes it back; DefaultBodyLimit::disable() was set because axum rejects bodies >2MB by default). Clients reuse one tonic Channel / one reqwest Client (keep-alive) across all calls. Payload: deterministic bytes from rand StdRng::seed_from_u64(1234), freshly seeded per payload size; EVERY response byte-compared against the request payload, abort on mismatch (zero mismatches in all accepted runs). seq N: 2000 calls for 1KB/64KB, 500 for 1MB, 100 for 16MB. conc: 8 tasks x 5s, throughput req/s. tonic defaults cap messages at 4MB: the 16MB gRPC run failed with defaults (OutOfRange: decoded message length too large: found 16777221 bytes, the limit is: 4194304 bytes); the reported 16MB gRPC numbers are a bonus run with MAX_MSG_MB=32 raising max_decoding/max_encoding_message_size to 32MB on both server and client. One contaminated run was discarded: stale Go benchmark servers left from an earlier session were still bound to the ports during the first Rust attempt; they were killed, ports verified free, and the full matrix re-run clean. One REST 16MB attempt with axum's default 2MB body limit was rejected (413) and re-run with the limit disabled. Versions: rustc 1.98.1, tonic 0.12.3, prost 0.13.5, tonic-build 0.12.3, axum 0.8.9, reqwest 0.12.28, tokio 1.53.1, rand 0.10.3, protoc 31.1 (real codegen via build.rs)."
+  },
+  "structured": {
+    "payloads": [
+      "10 items",
+      "500 items",
+      "5000 items"
+    ],
+    "grpc": {
+      "10 items": {
+        "wire_bytes": 2361,
+        "latency_p50_ms": 0.168443,
+        "latency_p99_ms": 2.061815,
+        "seq_n": 2000,
+        "throughput_rps": 10414.8
+      },
+      "500 items": {
+        "wire_bytes": 116568,
+        "latency_p50_ms": 2.235236,
+        "latency_p99_ms": 3.407676,
+        "seq_n": 200,
+        "throughput_rps": 648.6
+      },
+      "5000 items": {
+        "wire_bytes": 1167388,
+        "latency_p50_ms": 22.138537,
+        "latency_p99_ms": 26.239484,
+        "seq_n": 50,
+        "throughput_rps": 60.4
+      }
+    },
+    "rest": {
+      "10 items": {
+        "wire_bytes": 3413,
+        "latency_p50_ms": 0.110546,
+        "latency_p99_ms": 0.834473,
+        "seq_n": 2000,
+        "throughput_rps": 15289.6
+      },
+      "500 items": {
+        "wire_bytes": 169314,
+        "latency_p50_ms": 2.927055,
+        "latency_p99_ms": 4.534978,
+        "seq_n": 200,
+        "throughput_rps": 523.4
+      },
+      "5000 items": {
+        "wire_bytes": 1698601,
+        "latency_p50_ms": 29.153419,
+        "latency_p99_ms": 41.250531,
+        "seq_n": 50,
+        "throughput_rps": 51.8
+      }
+    },
+    "notes": "Rust structured-payload echo benchmark on 2-CPU VM, localhost TCP, no TLS. Catalog proto: Item{id,name,description,price,quantity,tags[3],in_stock,created_at,category,rating} x N, service CatalogService.Echo. Data: deterministic from StdRng seed 1234; name=product-%06d, description=20 lorem words (~120 chars), price=2-decimal 0-1000, quantity 0-999, 3 tags tag-00..49, in_stock p=0.8, created_at=1700000000+i, category cycles 8 values, rating 1.0-5.0. SAME generated structs used for both protocols (tonic-build type_attribute adds serde Serialize/Deserialize to the prost types), so identical logical data on the wire; every response compared as full struct, abort on mismatch (zero mismatches). gRPC: tonic server 127.0.0.1:50051 defaults; REST: axum 127.0.0.1:8080 POST /echo Json<Catalog>, defaults. No config changes from defaults: largest protobuf payload 1,167,388 bytes < tonic 4MB cap; largest JSON 1,698,601 bytes < axum 2MB body limit. Clients reuse one tonic Channel / one reqwest Client (keep-alive). seq N: 2000 (10 items), 200 (500), 50 (5000). conc: 8 tasks x 5 s. wire_bytes = serialized message body only (protobuf encode_to_vec / serde_json string length); HTTP/2 frames+headers and HTTP/1.1 headers excluded. Crate versions: tonic 0.12.3, prost 0.13.5, tonic-build 0.12.3, axum 0.8.9, reqwest 0.12.28, tokio 1.53.1, rand 0.9.5, serde 1.0.229, serde_json 1.0.151; rustc 1.98.1; protoc 31.1 (real codegen via build.rs). Caveat: conc mode shares one tonic Channel (single multiplexed h2 connection) vs reqwest connection pool; 10-item p99s show scheduling noise typical of sub-ms localhost measurements on 2 CPUs."
+  }
+}

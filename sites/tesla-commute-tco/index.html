@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Tesla Commute TCO — Antioch → Menlo Park</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { touch-action: manipulation; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, Segoe UI, Roboto, sans-serif;
+    background: #0c0d11; color: #eceef2; line-height: 1.5;
+  }
+  button, input, select { touch-action: manipulation; font: inherit; }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 18px 90px; }
+  header.top {
+    position: sticky; top: 0; z-index: 20;
+    background: rgba(12,13,17,.92); backdrop-filter: blur(10px);
+    border-bottom: 1px solid #23252d;
+  }
+  header.top .inner { max-width: 1060px; margin: 0 auto; padding: 12px 18px; display: flex; align-items: center; gap: 12px; }
+  header.top h1 { font-size: 16px; margin: 0; font-weight: 700; letter-spacing: .2px; }
+  header.top .sub { font-size: 12px; color: #9aa0ae; }
+  .badge { margin-left: auto; font-size: 11px; color: #9aa0ae; border: 1px solid #2a2d36; padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
+  .hero { padding: 34px 0 8px; }
+  .hero .kicker { color: #e82127; font-weight: 700; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; }
+  .hero h2 { font-size: clamp(30px, 5.4vw, 46px); margin: 8px 0 6px; line-height: 1.12; font-weight: 800; }
+  .hero p.lede { color: #b7bcc8; max-width: 640px; margin: 0 0 6px; font-size: 15px; }
+  .controls {
+    background: #14151b; border: 1px solid #23252d; border-radius: 16px;
+    padding: 18px; margin: 20px 0 8px; display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+  .ctl label { display: flex; justify-content: space-between; font-size: 13px; color: #b7bcc8; margin-bottom: 6px; }
+  .ctl label b { color: #fff; font-weight: 700; }
+  .ctl input[type=range] { width: 100%; accent-color: #e82127; height: 28px; }
+  .seg { display: flex; background: #0c0d11; border: 1px solid #2a2d36; border-radius: 10px; overflow: hidden; }
+  .seg button { flex: 1; background: transparent; border: 0; color: #9aa0ae; padding: 10px 0; font-weight: 700; cursor: pointer; }
+  .seg button.on { background: #e82127; color: #fff; }
+  .toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
+  .toggle .pill { width: 46px; height: 26px; border-radius: 20px; background: #2a2d36; position: relative; transition: .2s; flex: none; }
+  .toggle .pill::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: .2s; }
+  .toggle.on .pill { background: #e82127; }
+  .toggle.on .pill::after { left: 23px; }
+  .verdict {
+    margin: 22px 0; background: linear-gradient(135deg, #171a12, #14151b);
+    border: 1px solid #2c3324; border-radius: 18px; padding: 22px;
+  }
+  .verdict .win { display: inline-block; background: #1f7a3d; color: #fff; font-size: 12px; font-weight: 800; letter-spacing: 1px; padding: 4px 12px; border-radius: 20px; text-transform: uppercase; }
+  .verdict h3 { margin: 10px 0 4px; font-size: 24px; }
+  .verdict p { color: #b7bcc8; margin: 6px 0; font-size: 14px; max-width: 640px; }
+  .bars { margin-top: 16px; display: grid; gap: 10px; }
+  .bar-row { display: grid; grid-template-columns: 150px 1fr 92px; align-items: center; gap: 10px; font-size: 13px; }
+  .bar-row .nm { color: #dfe3ea; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar-track { background: #23252d; border-radius: 8px; height: 26px; position: relative; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 8px; background: #4a4e5a; transition: width .45s ease; }
+  .bar-fill.best { background: linear-gradient(90deg, #1f7a3d, #35b558); }
+  .bar-row .amt { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .bar-row .amt small { display: block; font-weight: 400; color: #9aa0ae; font-size: 11px; }
+  .options { display: grid; gap: 16px; margin-top: 26px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .opt { background: #14151b; border: 1px solid #23252d; border-radius: 18px; padding: 20px; position: relative; }
+  .opt.winner { border-color: #2f7a44; box-shadow: 0 0 0 1px #2f7a44 inset; }
+  .opt .tag { position: absolute; top: -11px; left: 18px; background: #1f7a3d; color: #fff; font-size: 11px; font-weight: 800; letter-spacing: 1px; padding: 3px 12px; border-radius: 20px; text-transform: uppercase; }
+  .opt h3 { margin: 2px 0 2px; font-size: 19px; }
+  .opt .price { color: #9aa0ae; font-size: 13px; margin-bottom: 10px; }
+  .opt .big { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .opt .big small { font-size: 14px; font-weight: 500; color: #9aa0ae; }
+  .opt .total-line { font-size: 13px; color: #9aa0ae; margin-bottom: 12px; font-variant-numeric: tabular-nums; }
+  table.lines { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.lines td { padding: 7px 0; border-top: 1px solid #1f2129; vertical-align: top; }
+  table.lines td:last-child { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; }
+  table.lines td:first-child { color: #b7bcc8; padding-right: 8px; }
+  table.lines tr.note td { font-size: 11px; color: #6d7280; border-top: 0; padding-top: 0; }
+  section.block { margin-top: 44px; }
+  section.block > h2 { font-size: 24px; margin: 0 0 4px; }
+  section.block > p.stand { color: #b7bcc8; font-size: 14px; max-width: 680px; margin: 0 0 16px; }
+  .steps { display: grid; gap: 12px; }
+  .step { background: #14151b; border: 1px solid #23252d; border-radius: 14px; padding: 16px 18px; display: flex; gap: 14px; }
+  .step .n { flex: none; width: 34px; height: 34px; border-radius: 50%; background: #e82127; color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+  .step h4 { margin: 2px 0 4px; font-size: 15px; }
+  .step p { margin: 0; font-size: 13.5px; color: #b7bcc8; }
+  .step p b { color: #eceef2; }
+  .grid2 { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .fact { background: #14151b; border: 1px solid #23252d; border-radius: 14px; padding: 16px 18px; }
+  .fact h4 { margin: 0 0 6px; font-size: 14px; color: #e82127; text-transform: uppercase; letter-spacing: 1px; font-size: 12px; }
+  .fact p { margin: 0; font-size: 13.5px; color: #b7bcc8; }
+  .fact p b { color: #eceef2; }
+  .warn { background: #1c1410; border: 1px solid #4a351f; border-radius: 14px; padding: 16px 18px; font-size: 13.5px; color: #d8c9ae; margin-top: 12px; }
+  .warn b { color: #f0dfba; }
+  footer.notes { margin-top: 48px; border-top: 1px solid #23252d; padding-top: 18px; font-size: 12px; color: #6d7280; }
+  footer.notes li { margin-bottom: 6px; }
+  footer.notes ul { padding-left: 18px; margin: 0; }
+  .hq-link { display: inline-block; margin-top: 14px; color: #9aa0ae; font-size: 13px; text-decoration: none; }
+  @media (max-width: 560px) {
+    .bar-row { grid-template-columns: 108px 1fr 80px; }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="inner">
+    <div>
+      <h1>🔋 Tesla Commute TCO</h1>
+      <div class="sub">Antioch → Menlo Park · Robinhood · FSD every day</div>
+    </div>
+    <span class="badge">v2026.10.03-00.30</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="hero">
+    <div class="kicker">Total cost of ownership</div>
+    <h2>What the commute really costs.</h2>
+    <p class="lede">Every number below is computed live from your inputs — nothing hardcoded. Move the sliders and the whole breakdown re-computes. FSD is included in all three options, because that's non-negotiable.</p>
+  </div>
+
+  <div class="controls" id="controls">
+    <div class="ctl">
+      <label>Office days / week <b id="v-days">2</b></label>
+      <input type="range" id="in-days" min="1" max="5" step="1" value="2">
+    </div>
+    <div class="ctl">
+      <label>Time horizon</label>
+      <div class="seg" id="seg-horizon">
+        <button data-h="3" class="on">3 years</button>
+        <button data-h="4">4 years</button>
+      </div>
+    </div>
+    <div class="ctl">
+      <label>Work charging <b id="v-work">$0.25/kWh</b></label>
+      <input type="range" id="in-work" min="0" max="0.6" step="0.05" value="0.25">
+    </div>
+    <div class="ctl">
+      <label>Personal miles / year <b id="v-pers">5,000</b></label>
+      <input type="range" id="in-pers" min="0" max="15000" step="500" value="5000">
+    </div>
+    <div class="ctl">
+      <label>Used 2022 Model 3 price <b id="v-used">$20,000</b></label>
+      <input type="range" id="in-used" min="15000" max="28000" step="500" value="20000">
+    </div>
+    <div class="ctl">
+      <label>FSD subscription</label>
+      <div class="toggle on" id="tg-fsd"><span class="pill"></span><b id="v-fsd">$99/mo · on</b></div>
+    </div>
+  </div>
+
+  <div class="verdict" id="verdict"></div>
+
+  <div class="options" id="options"></div>
+
+  <section class="block">
+    <h2>⚡ How to charge: the 2-hour-gated work setup</h2>
+    <p class="stand">Your office has Level 3 (DC fast) chargers with a 2-hour session cap. Here's the good news: that cap will basically never bind you. A full DC session on a 2022 Model 3 takes under an hour.</p>
+    <div class="steps">
+      <div class="step"><div class="n">1</div><div>
+        <h4>Know your battery</h4>
+        <p>A 2022 Model 3 RWD (the one to hunt for) has the <b>LFP pack ≈ 60 kWh</b> — it charges to 100% without battery guilt, and Tesla actually recommends a 100% charge at least weekly. Peak DC rate ≈ 170 kW: <b>10% → 100% in roughly 50–60 minutes</b>. The 2-hour gate is 2× what you need.</p>
+      </div></div>
+      <div class="step"><div class="n">2</div><div>
+        <h4>The office-day routine</h4>
+        <p>You arrive with ~30% after the 63-mile morning run. Plug in around 9am, the app pings you near full by ~10–10:30, you move the car. That one session (≈ 42 kWh) covers the <b>entire 127-mile round trip</b> with buffer. Do it on both office days and you're fueled for the week.</p>
+      </div></div>
+      <div class="step"><div class="n">3</div><div>
+        <h4>Don't be the hog</h4>
+        <p>The 2-hour cap exists so people rotate. Move your car when the app says it's done — campus karma matters and coworkers notice. If the stalls are full when you arrive, wait for the mid-morning shuffle; most people unplug by 10:30.</p>
+      </div></div>
+      <div class="step"><div class="n">4</div><div>
+        <h4>WFH days: do nothing</h4>
+        <p>The car sits. No charging needed, no errands to "top up." If you burn personal miles on weekends, grab a 15-minute Supercharger top-up — or just roll it into your next office day's session.</p>
+      </div></div>
+      <div class="step"><div class="n">5</div><div>
+        <h4>Keep a backup in your pocket</h4>
+        <p>If work chargers are down or iced by non-EVs, the nearest Supercharger is a 20-minute stop, needed maybe once a month. Precondition the battery via the app on the way there in winter.</p>
+      </div></div>
+    </div>
+    <div class="warn"><b>The key point:</b> with this setup you never need home charging. If your apartment or house has no plug, it doesn't matter — the office <i>is</i> your gas station, two days a week, ~40 minutes a session.</div>
+  </section>
+
+  <section class="block">
+    <h2>🛣️ The commute, realistically</h2>
+    <p class="stand">Antioch → Menlo Park is not a short drive. Here's the honest picture at 2 days a week.</p>
+    <div class="grid2">
+      <div class="fact"><h4>Route</h4><p><b>CA-4 W → CA-242 S → I-680 S → CA-84 W</b> over the Dumbarton Bridge → US-101 S into Menlo Park. About <b>63–68 miles each way</b>, 127-mile round trip.</p></div>
+      <div class="fact"><h4>Time</h4><p><b>80–110 minutes each way</b> in rush hour. Leave Antioch ~7:00am → desk ~8:30. Leave ~5:30pm → home ~7:00–7:15. That's ~3 hours in the car per office day, ~6 hours a week.</p></div>
+      <div class="fact"><h4>Toll</h4><p>Dumbarton is <b>$8.50 westbound</b> with FasTrak (2026 rate, rising yearly to $10.50 by 2030). You pay it every <b>morning</b>; the evening return is free. ≈ <b>$880/year</b> at 2 days/week.</p></div>
+      <div class="fact"><h4>No carpool lane</h4><p>California's Clean Air Vehicle decal program <b>ended Sept 30, 2025</b>. A 2022 Model 3 gets no HOV access — you're in the regular lanes on 680 with everyone else. This is exactly where FSD earns its $99.</p></div>
+      <div class="fact"><h4>Where FSD shines</h4><p>The grind — CA-4 through Pittsburg/Concord, 680 through San Ramon, the Dumbarton approach backup — is <b>stop-and-go highway</b>, FSD's best use case. You'll take over for the 84/101 interchange dance and Menlo Park surface streets.</p></div>
+      <div class="fact"><h4>Energy per day</h4><p>127 miles at ~3.0 mi/kWh ≈ <b>42 kWh per office day</b> — about 70% of the LFP pack. You arrive home with ~30% left. Totally comfortable, no range anxiety, ever.</p></div>
+    </div>
+  </section>
+
+  <footer class="notes">
+    <ul>
+      <li>All figures computed live in your browser from the inputs above. Defaults: 127-mi round trip, 52 weeks, 3.0 mi/kWh (used) / 3.4 mi/kWh (new), $8.50 Dumbarton toll westbound only, FSD $99/mo.</li>
+      <li>Used 2022 Model 3: assumes cash purchase; resale retention 60% at 3 yrs / 52% at 4 yrs. Battery &amp; drive-unit warranty runs 8 yrs/120k mi — still active on a 2022.</li>
+      <li>Lease: 2026 Model 3 Standard RWD at $419/mo + $4,114 due at signing (Oct 2026 Tesla pricing, 10k mi/yr base) with a +$60/mo estimate for the 15k mi/yr tier your mileage needs. 4-yr view assumes a 12-mo extension at the same rate. $395 disposition fee applied once.</li>
+      <li>New purchase: $38,380 MSRP + ~$1,420 destination/fees, 10% down, 1.99% APR / 72 mo (current Tesla promo rate). Interest is amortized properly per horizon.</li>
+      <li>Work charging default $0.25/kWh — set it to $0 if Robinhood's chargers are free. Personal miles priced at Supercharger rates. Insurance ($1,800 used / $2,200 new), tires &amp; maintenance, and CA registration incl. the ZEV fee are estimates.</li>
+      <li>Pricing checked October 2026. Tesla changes prices often — re-check at order time. This is a planning tool, not financial advice.</li>
+    </ul>
+    <a class="hq-link" href="https://my-hq-ct5.pages.dev">← Luke HQ</a>
+  </footer>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const fmt$ = n => "$" + Math.round(n).toLocaleString("en-US");
+const fmtMo = n => "$" + Math.round(n).toLocaleString("en-US");
+
+const S = { days: 2, horizon: 3, workKwh: 0.25, superKwh: 0.42, personal: 5000, usedPrice: 20000, fsd: true };
+
+const COMMUTE_RT = 127, WEEKS = 52, TOLL = 8.50, FSD_MO = 99;
+const NEW_PRICE = 38380 + 1420; // MSRP + dest/fees
+
+function loanInterest(principal, annualRate, totalMonths, monthsElapsed) {
+  const r = annualRate / 12;
+  const pmt = principal * r / (1 - Math.pow(1 + r, -totalMonths));
+  let bal = principal, interest = 0;
+  for (let m = 0; m < monthsElapsed; m++) {
+    const i = bal * r;
+    interest += i;
+    bal -= (pmt - i);
+  }
+  return { pmt, interest };
+}
+
+function compute() {
+  const H = S.horizon, mo = H * 12;
+  const commuteMi = S.days * WEEKS * COMMUTE_RT;
+  const totalMi = commuteMi + S.personal;
+  const tolls = S.days * WEEKS * TOLL * H;
+  const fsd = S.fsd ? FSD_MO * mo : 0;
+  const elecUsed = ((commuteMi / 3.0) * S.workKwh + (S.personal / 3.0) * S.superKwh) * H;
+  const elecNew = ((commuteMi / 3.4) * S.workKwh + (S.personal / 3.4) * S.superKwh) * H;
+  const retention = H === 3 ? 0.60 : 0.52;
+
+  // A: used buy, cash
+  const depA = S.usedPrice * (1 - retention);
+  const linesA = [
+    ["Depreciation (" + fmt$(S.usedPrice) + " → " + fmt$(S.usedPrice * retention) + " resale)", depA],
+    ["Insurance ($1,800/yr est.)", 1800 * H],
+    ["Charging (work + Supercharger)", elecUsed],
+    ["FSD subscription" + (S.fsd ? "" : " (off)"), fsd],
+    ["Tires & maintenance ($600/yr est.)", 600 * H],
+    ["Dumbarton tolls ($8.50 × mornings)", tolls],
+    ["Registration + CA ZEV fee ($400/yr est.)", 400 * H],
+  ];
+
+  // B: lease new, 15k mi/yr
+  const leaseMo = 419 + 60; // base + mileage-tier bump
+  const linesB = [
+    ["Lease payments (" + fmt$(leaseMo) + "/mo × " + mo + " mo)", leaseMo * mo],
+    ["Due at signing", 4114],
+    ["Insurance ($2,200/yr est.)", 2200 * H],
+    ["Charging (work + Supercharger)", elecNew],
+    ["FSD subscription" + (S.fsd ? "" : " (off)"), fsd],
+    ["Tires & maintenance ($300/yr est.)", 300 * H],
+    ["Dumbarton tolls ($8.50 × mornings)", tolls],
+    ["Registration ($550/yr est.)", 550 * H],
+    ["Disposition fee (end of lease)", 395],
+  ];
+  if (H === 4) linesB.splice(1, 0, ["<i>Assumes 12-mo extension at same rate</i>", 0]);
+
+  // C: buy new, finance
+  const down = NEW_PRICE * 0.10;
+  const loan = loanInterest(NEW_PRICE - down, 0.0199, 72, mo);
+  const depC = NEW_PRICE * (1 - retention);
+  const linesC = [
+    ["Depreciation (" + fmt$(NEW_PRICE) + " → " + fmt$(NEW_PRICE * retention) + " resale)", depC],
+    ["Loan interest (1.99% APR, 72 mo, 10% down)", loan.interest],
+    ["Insurance ($2,200/yr est.)", 2200 * H],
+    ["Charging (work + Supercharger)", elecNew],
+    ["FSD subscription" + (S.fsd ? "" : " (off)"), fsd],
+    ["Tires & maintenance ($300/yr est.)", 300 * H],
+    ["Dumbarton tolls ($8.50 × mornings)", tolls],
+    ["Registration ($550/yr est.)", 550 * H],
+  ];
+
+  const opts = [
+    { id: "A", name: "Buy used 2022 Model 3", sub: fmt$(S.usedPrice) + " cash · RWD LFP, the sweet spot", lines: linesA },
+    { id: "B", name: "Lease new Model 3", sub: "2026 Standard RWD · 15k mi/yr lease", lines: linesB },
+    { id: "C", name: "Buy new Model 3", sub: fmt$(NEW_PRICE) + " · 1.99% APR financing", lines: linesC },
+  ];
+  opts.forEach(o => {
+    o.total = o.lines.reduce((t, l) => t + l[1], 0);
+    o.monthly = o.total / mo;
+  });
+  const best = opts.reduce((a, b) => (a.monthly <= b.monthly ? a : b));
+  return { opts, best, mo, commuteMi, totalMi };
+}
+
+function render() {
+  const { opts, best, mo, commuteMi, totalMi } = compute();
+  const maxMo = Math.max(...opts.map(o => o.monthly));
+
+  // verdict
+  const v = $("verdict");
+  const savings = opts.filter(o => o !== best).map(o => ({ o, d: (o.monthly - best.monthly) * mo }));
+  v.innerHTML =
+    '<span class="win">Cheapest</span>' +
+    "<h3>" + best.name + " — " + fmtMo(best.monthly) + "<small style='font-size:15px;color:#9aa0ae;font-weight:500'>/mo</small></h3>" +
+    "<p>Over " + S.horizon + " years at " + S.days + " office days/week (" + Math.round(totalMi).toLocaleString() + " mi/yr): <b style='color:#fff'>" + best.name + "</b> costs <b style='color:#fff'>" + fmt$(best.total) + "</b> all-in. " +
+    savings.map(s => "Saves " + fmt$(s.d) + " vs " + s.o.name.toLowerCase() + ".").join(" ") + "</p>" +
+    '<div class="bars">' + opts.map(o =>
+      '<div class="bar-row"><div class="nm">' + o.name + '</div>' +
+      '<div class="bar-track"><div class="bar-fill' + (o === best ? " best" : "") + '" style="width:' + (o.monthly / maxMo * 100).toFixed(1) + '%"></div></div>' +
+      '<div class="amt">' + fmtMo(o.monthly) + "<small>/mo · " + fmt$(o.total) + "</small></div></div>"
+    ).join("") + "</div>";
+
+  // options
+  $("options").innerHTML = opts.map(o =>
+    '<div class="opt' + (o === best ? " winner" : "") + '">' +
+    (o === best ? '<span class="tag">Lowest cost</span>' : "") +
+    "<h3>" + o.name + "</h3><div class='price'>" + o.sub + "</div>" +
+    '<div class="big">' + fmtMo(o.monthly) + " <small>/mo</small></div>" +
+    '<div class="total-line">' + fmt$(o.total) + " total over " + S.horizon + " years · " + Math.round(commuteMi).toLocaleString() + " commute mi/yr</div>" +
+    '<table class="lines">' + o.lines.map(l =>
+      (typeof l[1] === "string" || l[1] === 0 && l[0].indexOf("<i>") === 0)
+        ? '<tr class="note"><td colspan="2">' + l[0] + "</td></tr>"
+        : "<tr><td>" + l[0] + "</td><td>" + fmt$(l[1]) + "</td></tr>"
+    ).join("") + "</table></div>"
+  ).join("");
+
+  // control labels
+  $("v-days").textContent = S.days;
+  $("v-work").textContent = "$" + S.workKwh.toFixed(2) + "/kWh";
+  $("v-pers").textContent = S.personal.toLocaleString();
+  $("v-used").textContent = fmt$(S.usedPrice);
+  $("v-fsd").textContent = S.fsd ? "$99/mo · on" : "off";
+}
+
+$("in-days").addEventListener("input", e => { S.days = +e.target.value; render(); });
+$("in-work").addEventListener("input", e => { S.workKwh = +e.target.value; render(); });
+$("in-pers").addEventListener("input", e => { S.personal = +e.target.value; render(); });
+$("in-used").addEventListener("input", e => { S.usedPrice = +e.target.value; render(); });
+$("seg-horizon").querySelectorAll("button").forEach(b =>
+  b.addEventListener("click", () => {
+    $("seg-horizon").querySelectorAll("button").forEach(x => x.classList.remove("on"));
+    b.classList.add("on");
+    S.horizon = +b.dataset.h;
+    render();
+  }));
+$("tg-fsd").addEventListener("click", () => {
+  S.fsd = !S.fsd;
+  $("tg-fsd").classList.toggle("on", S.fsd);
+  render();
+});
+
+render();
+</script>
+</body>
+</html>

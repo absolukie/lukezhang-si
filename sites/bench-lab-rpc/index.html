@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bench Lab RPC — gRPC vs REST, measured live</title>
+<meta name="description" content="Real measured benchmarks: gRPC vs REST with production-realistic structured data — protobuf vs JSON in Rust. Every number measured on the same VM.">
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#12161f; --panel2:#171c27; --text:#e8ecf4; --muted:#9aa4b8;
+    --line:#232a3a; --accent:#7cc4ff;
+    --grpc:#8be89b; --rest:#f5a97c;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.55;font-size:16px}
+  button{touch-action:manipulation}
+  .wrap{max-width:860px;margin:0 auto;padding:0 16px 80px}
+  header{padding:28px 0 8px}
+  .kicker{color:var(--muted);font-size:13px;letter-spacing:.12em;text-transform:uppercase}
+  h1{font-size:30px;line-height:1.2;margin:6px 0 8px;letter-spacing:-.01em}
+  h1 .live{display:inline-block;font-size:12px;vertical-align:middle;margin-left:8px;
+    color:#0b0e14;background:#8be89b;border-radius:999px;padding:3px 10px;font-weight:700;letter-spacing:.06em}
+  .sub{color:var(--muted);font-size:15px;max-width:60ch}
+  .badge{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font-size:12.5px;color:var(--muted);
+    border:1px solid var(--line);border-radius:999px;padding:4px 12px;background:var(--panel)}
+  .badge svg{width:14px;height:14px}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:18px 16px;margin:18px 0}
+  section h2{font-size:19px;margin:0 0 4px}
+  section .desc{color:var(--muted);font-size:13.5px;margin:0 0 12px}
+  svg.chart{width:100%;height:auto;display:block}
+  .bar-label{font-size:12.5px;fill:var(--text);font-weight:600}
+  .bar-value{font-size:12px;fill:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;word-break:break-all}
+  .method{font-size:14px;color:var(--muted)}
+  .method li{margin:7px 0}
+  .method code{color:var(--text);background:var(--panel2);padding:1px 6px;border-radius:6px;font-size:12.5px}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13.5px;margin-top:8px}
+  .kv dt{color:var(--muted)} .kv dd{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
+  .verdict{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:14.5px;margin-top:12px}
+  footer{color:var(--muted);font-size:12.5px;text-align:center;padding:24px 0}
+  .err{background:#3a1d1d;border:1px solid #7c2d2d;color:#f5c6c6;border-radius:12px;padding:16px;margin:18px 0}
+  .toggle{display:inline-flex;background:var(--panel2);border:1px solid var(--line);
+    border-radius:999px;padding:3px;margin:0 0 4px}
+  .toggle button{border:0;background:transparent;color:var(--muted);font-size:13.5px;
+    padding:7px 16px;border-radius:999px;cursor:pointer;font-weight:600}
+  .toggle button[aria-pressed="true"]{background:var(--accent);color:#0b0e14}
+  @media (min-width:640px){ h1{font-size:36px} section{padding:22px 22px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">Measured on real hardware</div>
+    <h1>Bench Lab RPC <span class="live">LIVE DATA</span></h1>
+    <p class="sub">gRPC vs REST with <b>production-realistic structured data</b> — catalog records (10 fields each) over <b>protobuf</b> (tonic) vs <b>JSON</b> (axum), in Rust.
+      Payloads of 10, 500, and 5000 items. Every number below was measured on the same 2-core VM. No simulations, no estimates.</p>
+    <div class="badge">
+      <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.5" stroke="#7cc4ff" stroke-width="1.6"/><path d="M8 4.5V8l2.4 1.6" stroke="#7cc4ff" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <span>build <strong id="buildVersion" class="mono">v2026.10.02-05.35</strong></span>
+      <span aria-hidden="true">·</span><span id="metaLine">loading…</span>
+    </div>
+  </header>
+
+  <div id="loadError"></div>
+  <div id="content" hidden>
+    <section id="secSize">
+      <h2>Wire size</h2>
+      <p class="desc">Serialized message body in bytes — same logical data, protobuf vs JSON. Smaller is better.</p>
+      <div id="sizeChart"></div>
+    </section>
+    <section>
+      <h2>Latency</h2>
+      <p class="desc">Sequential calls per payload size. p50 solid, p99 faded. Lower is better.</p>
+      <div id="latChart"></div>
+      <div class="verdict" id="latVerdict"></div>
+    </section>
+
+    <section>
+      <h2>Throughput</h2>
+      <p class="desc">8 concurrent clients × 5 seconds. Higher is better.</p>
+      <div id="tputChart"></div>
+      <div class="verdict" id="tputVerdict"></div>
+    </section>
+
+    <section>
+      <h2>Methodology</h2>
+      <ul class="method" id="methodList"></ul>
+      <h3 style="font-size:15px;margin:16px 0 4px">Toolchain versions</h3>
+      <dl class="kv" id="versionList"></dl>
+    </section>
+  </div>
+
+  <footer>Bench Lab RPC · every figure measured on this VM · <span class="mono" id="footVersion"></span></footer>
+</div>
+
+<script>
+"use strict";
+const BUILD_VERSION = document.getElementById("buildVersion").textContent.trim();
+document.getElementById("footVersion").textContent = BUILD_VERSION;
+const RPC_COLORS = {grpc:"#8be89b", rest:"#f5a97c"};
+const NAMES = {grpc:"gRPC", rest:"REST"};
+const META_LINE = "Rust structured catalog data - protobuf (tonic) vs JSON (axum) - TCP localhost - no TLS";
+let DATA = null;
+
+function grouped(el, title, series, fmt){
+  const W=640,rowH=30,top=8,labelW=128,valW=110,padR=8,plotW=W-labelW-valW-padR;
+  const H = top + series.length*rowH + 12;
+  const mx = Math.max(...series.map(s=>s.value));
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${title}">`;
+  series.forEach((d,i)=>{
+    const y = top+i*rowH, bw = Math.max(3,(d.value/mx)*plotW);
+    s += `<text class="bar-label" x="0" y="${y+12}" font-size="12">${d.label}</text>`;
+    s += `<rect x="${labelW}" y="${y}" width="${bw.toFixed(1)}" height="16" rx="4" fill="${d.color}" ${d.dash?'fill-opacity="0.45"':""}/>`;
+    s += `<text class="bar-value" x="${labelW+bw+8}" y="${y+12}">${fmt(d.value)}</text>`;
+  });
+  el.innerHTML = s + "</svg>";
+}
+
+function verdicts(d){
+  const g1=d.grpc["10 items"], r1=d.rest["10 items"], g2=d.grpc["500 items"], r2=d.rest["500 items"],
+        g3=d.grpc["5000 items"], r3=d.rest["5000 items"];
+  return {
+    lat: `With real structured data, protobuf is <b>1.45x smaller on the wire</b> at every size ` +
+         `(${(g1.wire_bytes/1024).toFixed(1)} KB vs ${(r1.wire_bytes/1024).toFixed(1)} KB; ` +
+         `${(g3.wire_bytes/1048576).toFixed(2)} MB vs ${(r3.wire_bytes/1048576).toFixed(2)} MB). ` +
+         `And the size advantage turns into speed: <b>REST wins at 10 items</b> (${r1.latency_p50_ms.toFixed(3)} ms vs ${g1.latency_p50_ms.toFixed(3)} ms, ` +
+         `per-call machinery dominates), but <b>gRPC wins at 500 items</b> (${g2.latency_p50_ms.toFixed(2)} ms vs ${r2.latency_p50_ms.toFixed(2)} ms) ` +
+         `and <b>5000 items</b> (${g3.latency_p50_ms.toFixed(1)} ms vs ${r3.latency_p50_ms.toFixed(1)} ms). The crossover is real.`,
+    tput: `Throughput follows the same crossover: <b>REST wins at 10 items</b> (${r1.throughput_rps.toFixed(0)} vs ${g1.throughput_rps.toFixed(0)} req/s), ` +
+          `<b>gRPC wins at 500</b> (${g2.throughput_rps.toFixed(0)} vs ${r2.throughput_rps.toFixed(0)}) and <b>5000 items</b> ` +
+          `(${g3.throughput_rps.toFixed(0)} vs ${r3.throughput_rps.toFixed(0)}). ` +
+          `With raw bytes REST won everything; give protobuf structured data and its 1.45x size edge compounds into a speed edge at scale.`
+  };
+}
+
+function renderImpl(){
+  const d = DATA.structured;
+  const lat = [], tput = [];
+  const size = [];
+  const fmtB = v => v >= 1048576 ? (v/1048576).toFixed(2)+" MB" : v >= 1024 ? (v/1024).toFixed(1)+" KB" : Math.round(v)+" B";
+  d.payloads.forEach(p=>{
+    size.push({label:`protobuf ${p}`, value:d.grpc[p].wire_bytes, color:RPC_COLORS.grpc});
+    size.push({label:`JSON ${p}`, value:d.rest[p].wire_bytes, color:RPC_COLORS.rest});
+  });
+  grouped(document.getElementById("sizeChart"), "wire size", size, fmtB);
+  d.payloads.forEach(p=>{
+    // p50 pair adjacent, then p99 pair adjacent: every comparison sits side-by-side
+    ["grpc","rest"].forEach(proto=>{
+      lat.push({label:`${NAMES[proto]} ${p} p50`, value:d[proto][p].latency_p50_ms, color:RPC_COLORS[proto]});
+    });
+    ["grpc","rest"].forEach(proto=>{
+      lat.push({label:`${NAMES[proto]} ${p} p99`, value:d[proto][p].latency_p99_ms, color:RPC_COLORS[proto], dash:true});
+    });
+    ["grpc","rest"].forEach(proto=>{
+      tput.push({label:`${NAMES[proto]} ${p}`, value:d[proto][p].throughput_rps, color:RPC_COLORS[proto]});
+    });
+  });
+  grouped(document.getElementById("latChart"), "latency", lat, v=>v.toFixed(2)+" ms");
+  grouped(document.getElementById("tputChart"), "throughput", tput, v=>v.toFixed(0)+" req/s");
+  const v = verdicts(d);
+  document.getElementById("latVerdict").innerHTML = v.lat;
+  document.getElementById("tputVerdict").innerHTML = v.tput;
+  const m = DATA.meta;
+  document.getElementById("metaLine").textContent = `${m.date} - ${m.vm} - ${META_LINE}`;
+  document.getElementById("methodList").innerHTML = `<li>${d.notes}</li>` +
+    (m.notes||[]).map(n=>`<li>${n}</li>`).join("");
+  document.getElementById("versionList").innerHTML =
+    Object.entries(m.versions||{}).map(([k,vv])=>`<dt>${k}</dt><dd>${vv}</dd>`).join("");
+}
+
+async function init(){
+  try{
+    const r = await fetch("results.json", {cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    DATA = await r.json();
+  }catch(e){
+    document.getElementById("loadError").innerHTML =
+      `<div class="err"><strong>Could not load results.json.</strong><br>${e.message}<br>`+
+      `Serve this directory over HTTP (e.g. <span class="mono">python3 -m http.server</span>) so fetch() works.</div>`;
+    return;
+  }
+  document.getElementById("content").hidden = false;
+  renderImpl();
+}
+init();
+</script>
+</body>
+</html>

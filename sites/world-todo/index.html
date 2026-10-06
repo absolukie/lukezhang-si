@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>World Todo — your globe of things to do</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    background: radial-gradient(1200px 800px at 50% 30%, #101a33 0%, #070b18 55%, #04060e 100%);
+    color: #e8ecf3; user-select: none; -webkit-user-select: none;
+  }
+  #scene { position: fixed; inset: 0; touch-action: none; }
+  #scene canvas { display: block; }
+
+  header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+    padding: 14px 16px 0; pointer-events: none;
+  }
+  header h1 {
+    font-size: 22px; font-weight: 800; letter-spacing: -0.5px; text-align: center;
+    text-shadow: 0 2px 12px rgba(0,0,0,.6);
+  }
+  header h1 .g { color: #7ee2a8; }
+  #stats { text-align: center; font-size: 12px; color: #8b93a7; margin-top: 4px; text-shadow: 0 1px 8px rgba(0,0,0,.6); }
+
+  #searchwrap {
+    position: fixed; top: 76px; left: 0; right: 0; z-index: 10;
+    display: flex; justify-content: center; pointer-events: none;
+  }
+  #searchbox { position: relative; width: min(420px, calc(100% - 32px)); pointer-events: auto; }
+  #q {
+    width: 100%; padding: 12px 16px; font-size: 15px; border-radius: 14px;
+    border: 1px solid #2c3a5c; background: rgba(16,21,29,.92); color: #e8ecf3;
+    touch-action: manipulation; backdrop-filter: blur(6px);
+  }
+  #q:focus { outline: none; border-color: #7ee2a8; }
+  #results {
+    position: absolute; top: 52px; left: 0; right: 0; max-height: 300px; overflow-y: auto;
+    background: rgba(17,22,31,.97); border: 1px solid #232c42; border-radius: 14px;
+    display: none; backdrop-filter: blur(8px); box-shadow: 0 12px 40px rgba(0,0,0,.5);
+  }
+  #results .r {
+    padding: 12px 16px; font-size: 14.5px; cursor: pointer; touch-action: manipulation;
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  }
+  #results .r:active { background: #1a2233; }
+  #results .r + .r { border-top: 1px solid #1e2635; }
+  #results .r .n { color: #8b93a7; font-size: 12px; background: #1a2233; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+  #results .r .n.has { color: #7ee2a8; }
+
+  #hint {
+    position: fixed; bottom: 26px; left: 0; right: 0; z-index: 5; text-align: center;
+    font-size: 13px; color: #5b6579; pointer-events: none; transition: opacity .4s;
+    padding: 0 30px;
+  }
+
+  /* bottom sheet */
+  #sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    background: #10151d; border-top: 1px solid #232c42;
+    border-radius: 22px 22px 0 0; padding: 10px 20px calc(20px + env(safe-area-inset-bottom));
+    transform: translateY(105%); transition: transform .28s cubic-bezier(.32,.72,.35,1);
+    max-height: 62vh; display: flex; flex-direction: column;
+    box-shadow: 0 -12px 50px rgba(0,0,0,.55);
+  }
+  #sheet.open { transform: translateY(0); }
+  #grab { width: 44px; height: 5px; border-radius: 999px; background: #2c3a5c; margin: 2px auto 10px; }
+  #sheethead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  #cname { font-size: 20px; font-weight: 800; letter-spacing: -0.3px; }
+  #close { background: none; border: none; color: #8b93a7; font-size: 22px; padding: 6px 10px; cursor: pointer; touch-action: manipulation; }
+  #csub { font-size: 12.5px; color: #5b6579; margin-bottom: 10px; }
+  #todos { overflow-y: auto; margin-bottom: 10px; }
+  .todo {
+    display: flex; align-items: center; gap: 12px; padding: 11px 4px;
+    border-bottom: 1px solid #1a2233; font-size: 15px;
+  }
+  .todo .box {
+    width: 24px; height: 24px; border-radius: 8px; border: 2px solid #2c3a5c; flex: none;
+    display: flex; align-items: center; justify-content: center; font-size: 15px; color: #06281a;
+    cursor: pointer; touch-action: manipulation; background: transparent;
+  }
+  .todo.done .box { background: #7ee2a8; border-color: #7ee2a8; }
+  .todo.done .box::after { content: "✓"; font-weight: 800; }
+  .todo .txt { flex: 1; line-height: 1.4; }
+  .todo.done .txt { color: #5b6579; text-decoration: line-through; }
+  .todo .del { background: none; border: none; color: #5b6579; font-size: 18px; padding: 6px 8px; cursor: pointer; touch-action: manipulation; }
+  .todo .del:active { color: #ff7a7a; }
+  #empty { text-align: center; color: #5b6579; font-size: 13.5px; padding: 18px 0; }
+  #addrow { display: flex; gap: 8px; }
+  #newtodo {
+    flex: 1; padding: 13px 15px; font-size: 15px; border-radius: 13px;
+    border: 1px solid #2c3a5c; background: #0b0e14; color: #e8ecf3; touch-action: manipulation;
+  }
+  #newtodo:focus { outline: none; border-color: #7ee2a8; }
+  #addbtn {
+    padding: 0 20px; font-size: 15px; font-weight: 700; border-radius: 13px; border: none;
+    background: #7ee2a8; color: #06281a; cursor: pointer; touch-action: manipulation;
+  }
+  #addbtn:active { transform: scale(.96); }
+
+  #err {
+    position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center;
+    background: rgba(4,6,14,.9); padding: 30px; text-align: center; font-size: 14px; color: #9aa7b8; line-height: 1.7;
+  }
+  #err button {
+    margin-top: 14px; padding: 12px 26px; border-radius: 12px; border: none;
+    background: #7ee2a8; color: #06281a; font-size: 15px; font-weight: 700; cursor: pointer; touch-action: manipulation;
+  }
+  #ver { position: fixed; bottom: 8px; right: 12px; z-index: 5; font-size: 10px; color: #3d4659; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="scene"></div>
+
+<header>
+  <h1>World <span class="g">Todo</span></h1>
+  <div id="stats">loading…</div>
+</header>
+
+<div id="searchwrap">
+  <div id="searchbox">
+    <input id="q" placeholder="Search countries…" autocomplete="off" enterkeyhint="search">
+    <div id="results"></div>
+  </div>
+</div>
+
+<div id="hint">Drag to spin · tap a country to add todos</div>
+
+<div id="sheet">
+  <div id="grab"></div>
+  <div id="sheethead">
+    <div id="cname">—</div>
+    <button id="close" aria-label="Close">✕</button>
+  </div>
+  <div id="csub"></div>
+  <div id="todos"></div>
+  <div id="addrow">
+    <input id="newtodo" placeholder="Add something to do here…" autocomplete="off" enterkeyhint="done">
+    <button id="addbtn">Add</button>
+  </div>
+</div>
+
+<div id="err"><div><div id="errmsg"></div><button onclick="location.reload()">Retry</button></div></div>
+<div id="ver">v2026.10.03-03</div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js" } }
+</script>
+<script src="./vendor/topojson-client.min.js"></script>
+<script type="module">
+import * as THREE from 'three';
+
+const err = (m) => { document.getElementById('errmsg').textContent = m; document.getElementById('err').style.display = 'flex'; };
+
+let features = [];        // GeoJSON features, index-aligned
+let idToName = {};        // "702" -> "Singapore"
+let idToIdx = {};         // "702" -> feature index
+const W = 2048, H = 1024;
+
+const store = {
+  load() { try { return JSON.parse(localStorage.getItem('world-todo-v1') || '{}'); } catch { return {}; } },
+  save(d) { localStorage.setItem('world-todo-v1', JSON.stringify(d)); }
+};
+let todos = store.load();
+// ---- seed packs (versioned; merged into existing data on upgrade) ----
+const SEED_VERSION = 2;
+const SEED = {
+  "702": [
+    { t: "Try FairPrice Fried Chicken Cashews", done: false }
+  ],
+  "156": [
+    { t: "Shanghai Disneyland — rope drop: Zootopia, Pirates, TRON", done: false },
+    { t: "The Bund at night + Nanjing Road walk", done: false },
+    { t: "Yu Garden + Old Town Shanghai", done: false },
+    { t: "Huangpu River cruise", done: false },
+    { t: "French Concession + Xintiandi cafe hopping", done: false },
+    { t: "Peking duck dinner in Beijing", done: false },
+    { t: "Tiananmen Square + Forbidden City (reserve ahead)", done: false },
+    { t: "Mutianyu Great Wall — cable car up, toboggan down", done: false },
+    { t: "Lama Temple + Wudaoying Hutong", done: false },
+    { t: "Temple of Heaven + Panjiayuan Antique Market", done: false },
+    { t: "Summer Palace + Molly Tea", done: false },
+    { t: "Shichahai / Houhai lakes at sunset", done: false },
+    { t: "Chengdu hotpot dinner", done: false },
+    { t: "Chengdu Panda Base (go early morning)", done: false },
+    { t: "Sichuan opera — face-changing performance", done: false },
+    { t: "People's Park tea house", done: false },
+    { t: "Jinli Ancient Street + hanfu/qipao rental", done: false },
+    { t: "Dujiangyan Irrigation System", done: false },
+    { t: "Mount Qingcheng", done: false },
+    { t: "Bring home: mahjong set, Yixing teapot, tea sets", done: false }
+  ],
+  "410": [
+    { t: "Myeongdong Kyoja — kalguksu + mandu", done: false },
+    { t: "Myeongdong street food: bungeoppang, hotteok, eomuk", done: false },
+    { t: "Shinsegae / Myeongdong Christmas lights", done: false },
+    { t: "Gyeongbokgung Palace (+ hanbok = free entry)", done: false },
+    { t: "Bukchon Hanok Village walk", done: false },
+    { t: "Insadong — Gaeseong mandu + tea at Sinyet Chatjip", done: false },
+    { t: "Christmas Eve dinner — Wooara or Yu Yuan (reserve ahead)", done: false },
+    { t: "Han River walk at Yeouido", done: false },
+    { t: "Hongdae: Kyochon chimaek + noraebang", done: false },
+    { t: "Hongdae club night", done: false },
+    { t: "Seoulistique facial in Seongsu (book ~2pm)", done: false },
+    { t: "Solsot (sotbap) in Seongsu", done: false },
+    { t: "Cafe Onion Seongsu", done: false },
+    { t: "COEX Starfield Library", done: false },
+    { t: "N Seoul Tower at sunset", done: false },
+    { t: "Korean BBQ at Hansik Wangbijib", done: false },
+    { t: "Wolmido — Disco Pang Pang", done: false },
+    { t: "Convenience-store snack night (banana milk!)", done: false }
+  ]
+};
+function applySeed() {
+  const fresh = !localStorage.getItem('world-todo-v1');
+  const d = fresh ? {} : store.load();
+  if (fresh) {
+    for (const k in SEED) d[k] = SEED[k].map(x => ({ t: x.t, done: false }));
+  } else if (localStorage.getItem('world-todo-seed-v') !== String(SEED_VERSION)) {
+    for (const k in SEED) {
+      d[k] = (d[k] || []).filter(x => x.t !== "Trip — December 2026");
+      const have = new Set(d[k].map(x => x.t));
+      for (const item of SEED[k]) if (!have.has(item.t)) d[k].push({ t: item.t, done: false });
+    }
+  }
+  store.save(d);
+  localStorage.setItem('world-todo-seed-v', String(SEED_VERSION));
+  return d;
+}
+todos = applySeed();
+
+// ---------- three.js scene ----------
+const container = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+container.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 100);
+let camDist = 3.4, camDistTarget = 3.4;
+camera.position.set(0, 0, camDist);
+
+const globeGroup = new THREE.Group();
+globeGroup.rotation.x = 0.22;
+scene.add(globeGroup);
+
+// stars
+{
+  const n = 900, pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const r = 20 + Math.random() * 30, th = Math.random() * Math.PI * 2, ph = Math.acos(2 * Math.random() - 1);
+    pos[i*3] = r * Math.sin(ph) * Math.cos(th); pos[i*3+1] = r * Math.cos(ph); pos[i*3+2] = r * Math.sin(ph) * Math.sin(th);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0x8b93a7, size: 0.07, transparent: true, opacity: 0.8 })));
+}
+
+// soft glow behind globe
+{
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const x = c.getContext('2d');
+  const gr = x.createRadialGradient(128,128,40,128,128,128);
+  gr.addColorStop(0, 'rgba(80,140,255,0.28)'); gr.addColorStop(1, 'rgba(80,140,255,0)');
+  x.fillStyle = gr; x.fillRect(0,0,256,256);
+  const tex = new THREE.CanvasTexture(c);
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  spr.scale.set(4.6, 4.6, 1);
+  scene.add(spr);
+}
+
+function lonLatToVec3(lat, lon, r) {
+  const phi = (lon + 180) * Math.PI / 180, theta = (90 - lat) * Math.PI / 180;
+  return new THREE.Vector3(
+    -r * Math.cos(phi) * Math.sin(theta),
+     r * Math.cos(theta),
+     r * Math.sin(phi) * Math.sin(theta)
+  );
+}
+const projX = (lon, w) => (lon + 180) / 360 * w;
+const projY = (lat, h) => (90 - lat) / 180 * h;
+
+function drawRing(ctx, ring, w, h, close = true) {
+  for (const off of [0, -w, w]) {           // wrap around antimeridian
+    ctx.beginPath();
+    ring.forEach(([lon, lat], i) => {
+      const x = projX(lon, w) + off, y = projY(lat, h);
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    });
+    if (close) ctx.closePath();
+    ctx.fill();
+  }
+}
+function drawFeature(ctx, f, w, h) {
+  const g = f.geometry;
+  const polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates;
+  for (const poly of polys) for (const ring of poly) drawRing(ctx, ring, w, h);
+}
+
+const visCanvas = document.createElement('canvas'); visCanvas.width = W; visCanvas.height = H;
+let selectedIdx = -1;
+
+function paintGlobe() {
+  const ctx = visCanvas.getContext('2d');
+  // ocean
+  const oc = ctx.createLinearGradient(0, 0, 0, H);
+  oc.addColorStop(0, '#0d1830'); oc.addColorStop(0.5, '#0a1226'); oc.addColorStop(1, '#0d1830');
+  ctx.fillStyle = oc; ctx.fillRect(0, 0, W, H);
+  // countries
+  features.forEach((f, i) => {
+    const has = (todos[f._fid] || []).length > 0;
+    ctx.fillStyle = i === selectedIdx ? '#e8b93c' : has ? '#2f7d5b' : '#233a5e';
+    drawFeature(ctx, f, W, H);
+  });
+  // borders
+  ctx.strokeStyle = 'rgba(126,226,168,0.16)'; ctx.lineWidth = 1;
+  features.forEach((f) => {
+    const g = f.geometry;
+    const polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates;
+    for (const poly of polys) for (const ring of poly) {
+      for (const off of [0, -W, W]) {
+        ctx.beginPath();
+        ring.forEach(([lon, lat], i) => {
+          const x = projX(lon, W) + off, y = projY(lat, H);
+          i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+        });
+        ctx.closePath(); ctx.stroke();
+      }
+    }
+  });
+  globeTexture.needsUpdate = true;
+}
+
+// ---------- geometric country picking ----------
+// The old color-coded pick canvas is gone: canvas rasterization can corrupt
+// single scanlines (wrong RGB -> wrong country, e.g. a tap near Singapore
+// decoding as Mexico), and antialiased edges decode to phantom countries.
+// Taps now resolve to lon/lat and are tested against the real polygons.
+let featBboxes = [];  // per feature: {lonMin,lonMax,latMin,latMax,cx,area} on unwrapped coords
+let featHitOrder = []; // feature indices, smallest bbox area first (enclaves win)
+
+function unwrapRing(ring) {
+  const out = new Array(ring.length);
+  let prev = null;
+  for (let k = 0; k < ring.length; k++) {
+    const lon = ring[k][0], lat = ring[k][1];
+    let x = lon;
+    if (prev !== null) {
+      while (x - prev > 180) x -= 360;
+      while (x - prev < -180) x += 360;
+    }
+    prev = x;
+    out[k] = [x, lat];
+  }
+  return out;
+}
+
+function buildSpatialIndex() {
+  featBboxes = features.map((f) => {
+    const g = f.geometry;
+    const polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates;
+    let lonMin = 1e9, lonMax = -1e9, latMin = 1e9, latMax = -1e9;
+    const ppolys = [];
+    for (const poly of polys) {
+      const prings = [];
+      let plonMin = 1e9, plonMax = -1e9, platMin = 1e9, platMax = -1e9;
+      for (const ring of poly) {
+        const u = unwrapRing(ring);
+        prings.push(u);
+        for (let k = 0; k < u.length; k++) {
+          const x = u[k][0], y = u[k][1];
+          if (x < plonMin) plonMin = x; if (x > plonMax) plonMax = x;
+          if (y < platMin) platMin = y; if (y > platMax) platMax = y;
+        }
+      }
+      ppolys.push({ rings: prings, lonMin: plonMin, lonMax: plonMax,
+                    latMin: platMin, latMax: platMax, cx: (plonMin + plonMax) / 2 });
+      if (plonMin < lonMin) lonMin = plonMin; if (plonMax > lonMax) lonMax = plonMax;
+      if (platMin < latMin) latMin = platMin; if (platMax > latMax) latMax = platMax;
+    }
+    f._ppolys = ppolys; // per-polygon unwrapped rings + bboxes (antimeridian-safe)
+    return { lonMin, lonMax, latMin, latMax, cx: (lonMin + lonMax) / 2,
+             area: Math.max(1e-4, (lonMax - lonMin) * (latMax - latMin)) };
+  });
+  featHitOrder = features.map((_, i) => i).sort((a, b) => featBboxes[a].area - featBboxes[b].area);
+}
+
+function pointInRing(x, y, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+// shift a test longitude near a bbox center (antimeridian-safe)
+function nearLon(lon, cx) { return lon + Math.round((cx - lon) / 360) * 360; }
+
+function countryAt(lon, lat) {
+  for (const i of featHitOrder) {
+    const ppolys = features[i]._ppolys;
+    for (const pb of ppolys) {
+      if (lat < pb.latMin || lat > pb.latMax) continue;
+      const x = nearLon(lon, pb.cx);
+      if (x < pb.lonMin || x > pb.lonMax) continue;
+      if (pointInRing(x, lat, pb.rings[0])) {
+        let inHole = false;
+        for (let h = 1; h < pb.rings.length; h++) {
+          if (pointInRing(x, lat, pb.rings[h])) { inHole = true; break; }
+        }
+        if (!inHole) return i;
+      }
+    }
+  }
+  return -1;
+}
+
+function polyBboxDist(lon, lat, pb) {
+  const x = nearLon(lon, pb.cx);
+  const dx = x < pb.lonMin ? pb.lonMin - x : x > pb.lonMax ? x - pb.lonMax : 0;
+  const dy = lat < pb.latMin ? pb.latMin - lat : lat > pb.latMax ? lat - pb.latMax : 0;
+  return Math.hypot(dx, dy);
+}
+
+// countries with any polygon bbox within maxDist degrees of the tap, nearest first
+function nearbyCandidates(lon, lat, maxDist = 6) {
+  const out = [];
+  for (let i = 0; i < features.length; i++) {
+    let d = Infinity;
+    for (const pb of features[i]._ppolys) {
+      const pd = polyBboxDist(lon, lat, pb);
+      if (pd < d) d = pd;
+    }
+    if (d <= maxDist) out.push({ idx: i, dist: d });
+  }
+  out.sort((a, b) => a.dist - b.dist || featBboxes[a.idx].area - featBboxes[b.idx].area);
+  return out.slice(0, 8);
+}
+
+// "small" = main landmass is tiny on screen (hard to tap directly)
+function isSmallCountry(i) {
+  let maxDiag = 0;
+  for (const pb of features[i]._ppolys) {
+    const d = Math.hypot(pb.lonMax - pb.lonMin, pb.latMax - pb.latMin);
+    if (d > maxDiag) maxDiag = d;
+  }
+  return maxDiag < 4;
+}
+
+function centroid(f) {
+  // average of unwrapped vertices — robust for antimeridian-crossers
+  let sx = 0, sy = 0, n = 0, prev = null;
+  const g = f.geometry;
+  const polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates;
+  for (const poly of polys) for (const ring of poly) for (const [lon, lat] of ring) {
+    let x = lon;
+    if (prev !== null) {
+      while (x - prev > 180) x -= 360;
+      while (x - prev < -180) x += 360;
+    }
+    prev = x; sx += x; sy += lat; n++;
+  }
+  if (!n) return null;
+  let lon = (sx / n) % 360;
+  if (lon > 180) lon -= 360; if (lon < -180) lon += 360;
+  return [lon, sy / n];
+}
+
+let globeTexture, globeMesh, markerGroup;
+let selectRing = null, selectLonLat = null; // [lon, lat] of selected country centroid
+const glowTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const x = c.getContext('2d');
+  const g = x.createRadialGradient(32,32,2,32,32,30);
+  g.addColorStop(0, 'rgba(126,226,168,1)'); g.addColorStop(0.4, 'rgba(126,226,168,0.55)'); g.addColorStop(1, 'rgba(126,226,168,0)');
+  x.fillStyle = g; x.fillRect(0,0,64,64);
+  return new THREE.CanvasTexture(c);
+})();
+const ringTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const x = c.getContext('2d');
+  x.strokeStyle = 'rgba(232,185,60,0.35)'; x.lineWidth = 20;
+  x.beginPath(); x.arc(64, 64, 50, 0, Math.PI * 2); x.stroke();
+  x.strokeStyle = '#e8b93c'; x.lineWidth = 9;
+  x.beginPath(); x.arc(64, 64, 50, 0, Math.PI * 2); x.stroke();
+  return new THREE.CanvasTexture(c);
+})();
+
+function positionSelectRing(idx) {
+  if (!selectRing) return;
+  const c = centroid(features[idx]);
+  if (!c) { selectLonLat = null; selectRing.visible = false; return; }
+  selectLonLat = c;
+  selectRing.position.copy(lonLatToVec3(c[1], c[0], 1.04));
+}
+
+function refreshMarkers() {
+  while (markerGroup.children.length) markerGroup.remove(markerGroup.children[0]);
+  for (const [id, list] of Object.entries(todos)) {
+    if (!list.length || !(id in idToIdx)) continue;
+    const c = centroid(features[idToIdx[id]]);
+    if (!c) continue;
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, depthTest: false }));
+    spr.position.copy(lonLatToVec3(c[1], c[0], 1.03));
+    spr.scale.set(0.14, 0.14, 1);
+    markerGroup.add(spr);
+  }
+  updateStats();
+}
+
+function updateStats() {
+  const ids = Object.keys(todos).filter(id => todos[id].length);
+  let t = 0, done = 0;
+  for (const id of ids) for (const item of todos[id]) { t++; if (item.done) done++; }
+  document.getElementById('stats').textContent =
+    ids.length ? `${ids.length} ${ids.length === 1 ? 'country' : 'countries'} · ${t} ${t === 1 ? 'todo' : 'todos'} · ${done} done` : 'No todos yet — tap a country to start';
+  if (ids.length) document.getElementById('hint').style.opacity = 0;
+}
+
+// ---------- interaction: drag to spin, tap to pick, pinch to zoom ----------
+const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
+let dragging = false, moved = 0, lastX = 0, lastY = 0, downT = 0, idleT = 0, autoSpin = true;
+let pinched = false, pinchDist = 0;
+const el = renderer.domElement;
+const pointers = new Map(); // pointerId -> {x, y}
+
+function safeCapture(id) { try { el.setPointerCapture(id); } catch (_) {} }
+
+el.addEventListener('pointerdown', (e) => {
+  safeCapture(e.pointerId);
+  if (pointers.size === 0) pinched = false; // fresh gesture
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 1) {
+    dragging = true; moved = 0; lastX = e.clientX; lastY = e.clientY; downT = performance.now();
+    autoSpin = false; idleT = 0;
+  } else if (pointers.size === 2) {
+    pinched = true; dragging = false; // pinch takes over from rotate
+    const p = [...pointers.values()];
+    pinchDist = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
+    idleT = 0;
+  }
+});
+el.addEventListener('pointermove', (e) => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  idleT = 0;
+  if (pointers.size === 2) {
+    const p = [...pointers.values()];
+    const d = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
+    if (pinchDist > 0 && d > 0) {
+      camDistTarget = Math.max(2.0, Math.min(5.5, camDistTarget * (pinchDist / d)));
+    }
+    pinchDist = d;
+    return;
+  }
+  if (!dragging) return;
+  const dx = e.clientX - lastX, dy = e.clientY - lastY;
+  moved += Math.abs(dx) + Math.abs(dy);
+  globeGroup.rotation.y += dx * 0.005;
+  globeGroup.rotation.x = Math.max(-0.9, Math.min(0.9, globeGroup.rotation.x + dy * 0.003));
+  lastX = e.clientX; lastY = e.clientY;
+});
+function endPointer(e) {
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) pinchDist = 0;
+  if (pointers.size === 0) {
+    const wasTap = dragging && moved < 10 && performance.now() - downT < 500 && !pinched;
+    dragging = false; idleT = 0; pinched = false;
+    if (wasTap) pickCountry(e.clientX, e.clientY);
+  } else if (pointers.size === 1) {
+    // pinch ended, one finger left: resume as a fresh drag (no tap credit)
+    const p = [...pointers.values()][0];
+    lastX = p.x; lastY = p.y; moved = 999; downT = performance.now(); dragging = true;
+  }
+}
+el.addEventListener('pointerup', endPointer);
+el.addEventListener('pointercancel', endPointer);
+el.addEventListener('wheel', (e) => {
+  camDistTarget = Math.max(2.0, Math.min(5.5, camDistTarget + e.deltaY * 0.002));
+}, { passive: true });
+
+// tap -> lon/lat -> country. Repeated taps in the same spot cycle through
+// nearby candidates (for tiny countries like Singapore), highlighting each.
+// A tap elsewhere resets the cycle.
+let lastTap = null; // {x, y, t, cands:[idx], pos}
+const TAP_CYCLE_PX = 56, TAP_CYCLE_MS = 6000;
+
+function lonLatFromTap(cx, cy) {
+  ptr.x = (cx / innerWidth) * 2 - 1;
+  ptr.y = -(cy / innerHeight) * 2 + 1;
+  ray.setFromCamera(ptr, camera);
+  const hit = ray.intersectObject(globeMesh)[0];
+  if (!hit || !hit.uv) return null;
+  return { lon: hit.uv.x * 360 - 180, lat: hit.uv.y * 180 - 90 };
+}
+
+function pickCountry(cx, cy) {
+  const ll = lonLatFromTap(cx, cy);
+  if (!ll) return;
+  const now = performance.now();
+  if (lastTap && lastTap.cands.length > 1 &&
+      Math.hypot(cx - lastTap.x, cy - lastTap.y) < TAP_CYCLE_PX &&
+      now - lastTap.t < TAP_CYCLE_MS) {
+    lastTap.pos = (lastTap.pos + 1) % lastTap.cands.length;
+    lastTap.x = cx; lastTap.y = cy; lastTap.t = now;
+    openSheet(lastTap.cands[lastTap.pos], false, true);
+    return;
+  }
+  const direct = countryAt(ll.lon, ll.lat);
+  const cands = nearbyCandidates(ll.lon, ll.lat);
+  let idx = direct;
+  if (idx < 0 && cands.length) {
+    // tapped sea/edge: snap to the nearest candidate only if it's very close
+    // or a genuinely small country (tiny islands are hard to hit directly)
+    const fb = cands[0];
+    if (fb.dist < 1.5 || isSmallCountry(fb.idx)) idx = fb.idx;
+  }
+  if (idx < 0) { lastTap = null; return; }          // open ocean: nothing
+  // cycle list: direct hit first, then nearby. Only enable cycling when a
+  // genuinely small country is in the mix (so double-taps on big countries
+  // don't surprise-cycle).
+  const list = [idx];
+  for (const c of cands) if (c.idx !== idx) list.push(c.idx);
+  const enableCycle = list.some(isSmallCountry);
+  lastTap = { x: cx, y: cy, t: now, cands: enableCycle ? list.slice(0, 8) : [idx], pos: 0 };
+  openSheet(idx, false, false);
+}
+
+// fly camera focus to a country (used by search)
+let flyAnim = null;
+function focusCountry(idx) {
+  const c = centroid(features[idx]);
+  if (!c) return;
+  const p = lonLatToVec3(c[1], c[0], 1);
+  const targetRot = -Math.atan2(p.x, p.z);
+  let cur = globeGroup.rotation.y;
+  let delta = ((targetRot - cur + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+  flyAnim = { from: cur, to: cur + delta, t: 0 };
+  camDistTarget = 2.3;
+  autoSpin = false; idleT = 0;
+}
+
+// ---------- bottom sheet ----------
+const sheet = document.getElementById('sheet');
+let openIdx = -1;
+
+function openSheet(idx, fly, cycling = false) {
+  openIdx = idx;
+  if (selectedIdx !== idx) { selectedIdx = idx; paintGlobe(); }
+  const f = features[idx];
+  document.getElementById('cname').textContent = idToName[f._fid] || 'Unknown';
+  renderTodos();
+  sheet.classList.add('open');
+  if (fly) focusCountry(idx);
+  positionSelectRing(idx);
+  // when cycling candidates, don't yank the keyboard up on every tap
+  if (!cycling) setTimeout(() => document.getElementById('newtodo').focus({ preventScroll: true }), 350);
+}
+function closeSheet() {
+  sheet.classList.remove('open');
+  selectedIdx = -1; paintGlobe(); openIdx = -1;
+  selectLonLat = null; lastTap = null;
+  document.getElementById('q').blur();
+}
+document.getElementById('close').onclick = closeSheet;
+
+function renderTodos() {
+  const f = features[openIdx];
+  const id = f._fid;
+  const list = todos[id] || [];
+  document.getElementById('csub').textContent =
+    list.length ? `${list.filter(i => i.done).length} of ${list.length} done` : 'Nothing here yet — add the first thing.';
+  const box = document.getElementById('todos');
+  box.innerHTML = '';
+  if (!list.length) { box.innerHTML = '<div id="empty">What do you want to do in ' + esc(idToName[id] || 'this country') + '?</div>'; return; }
+  list.forEach((item, i) => {
+    const d = document.createElement('div');
+    d.className = 'todo' + (item.done ? ' done' : '');
+    d.innerHTML = `<div class="box"></div><div class="txt">${esc(item.t)}</div><button class="del" aria-label="Delete">×</button>`;
+    d.querySelector('.box').onclick = () => { item.done = !item.done; persist(); renderTodos(); refreshMarkers(); };
+    d.querySelector('.del').onclick = () => { list.splice(i, 1); if (!list.length) delete todos[id]; persist(); renderTodos(); refreshMarkers(); };
+    box.appendChild(d);
+  });
+}
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function persist() { store.save(todos); }
+
+function addTodo() {
+  const inp = document.getElementById('newtodo');
+  const v = inp.value.trim();
+  if (!v || openIdx < 0) return;
+  const id = features[openIdx]._fid;
+  (todos[id] = todos[id] || []).push({ t: v, done: false });
+  inp.value = '';
+  persist(); renderTodos(); refreshMarkers();
+  inp.focus({ preventScroll: true });
+}
+document.getElementById('addbtn').onclick = addTodo;
+document.getElementById('newtodo').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTodo(); });
+
+// ---------- search ----------
+const q = document.getElementById('q'), results = document.getElementById('results');
+q.addEventListener('input', () => {
+  const s = q.value.trim().toLowerCase();
+  results.innerHTML = '';
+  if (!s) { results.style.display = 'none'; return; }
+  const matches = features
+    .map((f, i) => ({ i, name: idToName[f._fid] || '' }))
+    .filter(o => o.name.toLowerCase().includes(s))
+    .sort((a, b) => {
+      const an = (todos[features[a.i]._fid] || []).length, bn = (todos[features[b.i]._fid] || []).length;
+      return bn - an || a.name.localeCompare(b.name);
+    })
+    .slice(0, 12);
+  if (!matches.length) { results.style.display = 'none'; return; }
+  for (const m of matches) {
+    const id = features[m.i]._fid;
+    const n = (todos[id] || []).length;
+    const d = document.createElement('div');
+    d.className = 'r';
+    d.innerHTML = `<span>${esc(m.name)}</span><span class="n${n ? ' has' : ''}">${n ? n + (n === 1 ? ' todo' : ' todos') : 'add'}</span>`;
+    d.onclick = () => { results.style.display = 'none'; q.value = ''; q.blur(); lastTap = null; openSheet(m.i, true); };
+    results.appendChild(d);
+  }
+  results.style.display = 'block';
+});
+q.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { const first = results.querySelector('.r'); if (first) first.click(); }
+});
+document.addEventListener('pointerdown', (e) => {
+  if (!document.getElementById('searchbox').contains(e.target)) results.style.display = 'none';
+});
+
+// ---------- boot ----------
+async function boot() {
+  const topo = await fetch('./data/countries-50m.json').then(r => { if (!r.ok) throw 0; return r.json(); });
+  features = topojson.feature(topo, topo.objects.countries).features;
+  const seenFid = {};
+  features.forEach((f, i) => {
+    let fid = (f.id !== undefined && f.id !== null) ? String(f.id) : 'x-' + f.properties.name;
+    if (seenFid[fid]) fid = 'x-' + f.properties.name; // NE reuses ids: Ashmore and Cartier Is. shares '036' with Australia
+    seenFid[fid] = true;
+    f._fid = fid;
+    idToIdx[f._fid] = i; idToName[f._fid] = f.properties.name;
+  });
+
+  globeTexture = new THREE.CanvasTexture(visCanvas);
+  globeTexture.colorSpace = THREE.SRGBColorSpace;
+  globeMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 96, 96),
+    new THREE.MeshBasicMaterial({ map: globeTexture })
+  );
+  globeGroup.add(globeMesh);
+  markerGroup = new THREE.Group();
+  globeGroup.add(markerGroup);
+
+  // pulsing gold ring that marks the currently selected country (visible even
+  // for 1px microstates); child of globeGroup so it rotates with the map
+  selectRing = new THREE.Sprite(new THREE.SpriteMaterial({ map: ringTex, transparent: true, depthWrite: false }));
+  selectRing.visible = false;
+  globeGroup.add(selectRing);
+
+  paintGlobe();
+  buildSpatialIndex();
+  refreshMarkers();
+  // start facing Asia-Pacific
+  globeGroup.rotation.y = 2.35;
+
+  requestAnimationFrame(tick);
+}
+
+let lastT = performance.now();
+function tick(now) {
+  const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+  idleT += dt;
+  if (!dragging && idleT > 4) autoSpin = true;
+  if (autoSpin && !flyAnim) globeGroup.rotation.y += dt * 0.06;
+  if (flyAnim) {
+    flyAnim.t += dt / 0.9;
+    const k = flyAnim.t >= 1 ? 1 : 1 - Math.pow(1 - flyAnim.t, 3);
+    globeGroup.rotation.y = flyAnim.from + (flyAnim.to - flyAnim.from) * k;
+    if (flyAnim.t >= 1) flyAnim = null;
+  }
+  camDist += (camDistTarget - camDist) * Math.min(1, dt * 4);
+  camera.position.set(0, 0, camDist);
+  camera.lookAt(0, 0, 0);
+  if (selectRing) {
+    let show = !!selectLonLat;
+    if (show) {
+      const v = lonLatToVec3(selectLonLat[1], selectLonLat[0], 1).applyEuler(globeGroup.rotation);
+      const facing = v.clone().normalize().dot(camera.position.clone().sub(v).normalize());
+      show = facing > 0.12; // hide when the country rotates to the far side
+    }
+    selectRing.visible = show;
+    if (show) {
+      const s = 0.15 + 0.022 * Math.sin(now * 0.008);
+      selectRing.scale.set(s, s, 1);
+    }
+  }
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ---------- test hook (read-only helpers for automated E2E; no effect on UX) ----------
+window.__wt = {
+  get features() { return features; },
+  get todos() { return todos; },
+  get idToName() { return idToName; },
+  findIdx(name) {
+    name = String(name).toLowerCase();
+    return features.findIndex(f => (idToName[f._fid] || '').toLowerCase() === name);
+  },
+  screenPosLonLat(lon, lat) {
+    const v = lonLatToVec3(lat, lon, 1).applyEuler(globeGroup.rotation);
+    const toCam = camera.position.clone().sub(v).normalize();
+    const facing = v.clone().normalize().dot(toCam);
+    const p = v.clone().project(camera);
+    return { x: (p.x * 0.5 + 0.5) * innerWidth, y: (-p.y * 0.5 + 0.5) * innerHeight, facing };
+  },
+  centroidOf(name) {
+    const idx = this.findIdx(name);
+    if (idx < 0) return null;
+    const c = centroid(features[idx]);
+    return c ? { lon: c[0], lat: c[1] } : null;
+  },
+  faceLonLat(lon, lat) {
+    const p = lonLatToVec3(lat, lon, 1);
+    const targetRot = -Math.atan2(p.x, p.z);
+    const cur = globeGroup.rotation.y;
+    globeGroup.rotation.y = cur + (((targetRot - cur + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+    globeGroup.rotation.x = 0.22;
+    camDist = 3.4; camDistTarget = 3.4;
+    autoSpin = false; idleT = 0; flyAnim = null;
+  },
+  faceCountry(name) {
+    const idx = this.findIdx(name);
+    if (idx < 0) return false;
+    const c = centroid(features[idx]);
+    if (!c) return false;
+    this.faceLonLat(c[0], c[1]);
+    return true;
+  },
+  sheetOpen() { return sheet.classList.contains('open'); },
+  sheetName() { return document.getElementById('cname').textContent; },
+  get camDist() { return camDist; },
+  get camDistTarget() { return camDistTarget; },
+  // geometric pick internals (for automated E2E)
+  tapLonLat(cx, cy) { return lonLatFromTap(cx, cy); },
+  countryAt(lon, lat) { return countryAt(lon, lat); },
+  countryName(idx) { return (idx >= 0 && idx < features.length) ? (idToName[features[idx]._fid] || '?') : null; },
+  dbgLastTap() { return lastTap ? { x: +lastTap.x.toFixed(1), y: +lastTap.y.toFixed(1), ncands: lastTap.cands.length, pos: lastTap.pos, ageMs: Math.round(performance.now() - lastTap.t) } : null; },
+};
+
+boot().catch(() => err('Could not load the world map data. Check your connection and retry.'));
+</script>
+</body>
+</html>

@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>How the X Algorithm Works — an interactive blueprint</title>
+<meta name="description" content="A tappable, interactive explainer of the X For You feed algorithm — candidate sourcing, Phoenix scoring, visibility filtering — built from the open-sourced xai-org/x-algorithm repo. Runs entirely in your browser.">
+<meta name="theme-color" content="#0b101c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="How X Algorithm Works">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="hero">
+  <p class="kicker">An interactive blueprint · tap any stage</p>
+  <h1>How the X<br>algorithm works</h1>
+  <p class="lede">Every time you open X, a machine reads your recent behavior, pulls about a thousand candidate posts, and predicts — for <i>you</i> specifically — how likely you are to like, reply, mute, or report each one. This is that machine, stage by stage, built from the code xAI open-sourced.</p>
+  <p class="flow-note" aria-hidden="true"><span class="flow-arrow">↓</span> the request path flows down</p>
+</header>
+
+<main>
+  <figure class="flow-fig">
+        <div class="flow-scroll">
+  <svg width="1180" height="250" viewBox="0 0 1180 250" role="img" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" aria-label="For You request path: open X, Home Mixer, candidate sources, pre-scoring filters, Phoenix scoring, top-K selection, visibility filtering, ranked feed">
+  <defs><marker id="xarrA" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e9a13b"/></marker></defs>
+  <g font-size="12" fill="#ece7d8" text-anchor="middle">
+  <rect x="8" y="30" width="104" height="56" rx="8" fill="#0d1424" stroke="#62b6a4" stroke-width="1.5"/>
+  <text x="60" y="54">you open</text><text x="60" y="72" font-size="10.5" fill="#98a0b3">the app</text>
+  <rect x="140" y="30" width="120" height="56" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+  <text x="200" y="54">Home Mixer</text><text x="200" y="72" font-size="10.5" fill="#98a0b3">orchestrates</text>
+  <rect x="288" y="8" width="150" height="52" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+  <text x="363" y="30">Thunder</text><text x="363" y="48" font-size="10" fill="#98a0b3">follows · ≤1,200</text>
+  <rect x="288" y="68" width="150" height="52" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+  <text x="363" y="90">Phoenix retrieval</text><text x="363" y="108" font-size="10" fill="#98a0b3">discovery · ≤1,000</text>
+  <rect x="288" y="128" width="150" height="52" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+  <text x="363" y="150">SimClusters</text><text x="363" y="168" font-size="10" fill="#98a0b3">cluster picks</text>
+  <rect x="466" y="30" width="120" height="56" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+  <text x="526" y="54">pre-scoring</text><text x="526" y="72" font-size="10.5" fill="#98a0b3">filters</text>
+  <rect x="614" y="30" width="120" height="56" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+  <text x="674" y="54">Phoenix</text><text x="674" y="72" font-size="10.5" fill="#98a0b3">scores Σw·P</text>
+  <rect x="762" y="30" width="120" height="56" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+  <text x="822" y="54">top-K</text><text x="822" y="72" font-size="10.5" fill="#98a0b3">+ rerank</text>
+  <rect x="910" y="30" width="130" height="56" rx="8" fill="#0d1424" stroke="#62b6a4" stroke-width="1.5"/>
+  <text x="975" y="54">visibility</text><text x="975" y="72" font-size="10.5" fill="#98a0b3">allow / drop</text>
+  <rect x="1068" y="30" width="104" height="56" rx="8" fill="#0d1424" stroke="#62b6a4" stroke-width="1.5"/>
+  <text x="1120" y="54">your For</text><text x="1120" y="72" font-size="10.5" fill="#98a0b3">You feed</text>
+  </g>
+  <g stroke="#e9a13b" stroke-width="1.5" fill="none">
+  <path d="M112,58 H136" marker-end="url(#xarrA)"/>
+  <path d="M260,44 C274,44 274,34 284,34" marker-end="url(#xarrA)"/>
+  <path d="M260,58 C274,58 274,94 284,94" marker-end="url(#xarrA)"/>
+  <path d="M260,72 C274,72 274,154 284,154" marker-end="url(#xarrA)"/>
+  <path d="M438,34 C452,34 452,44 462,44" marker-end="url(#xarrA)"/>
+  <path d="M438,94 C452,94 452,58 462,58" marker-end="url(#xarrA)"/>
+  <path d="M438,154 C452,154 452,72 462,72" marker-end="url(#xarrA)"/>
+  <path d="M586,58 H610" marker-end="url(#xarrA)"/>
+  <path d="M734,58 H758" marker-end="url(#xarrA)"/>
+  <path d="M882,58 H906" marker-end="url(#xarrA)"/>
+  <path d="M1040,58 H1064" marker-end="url(#xarrA)"/>
+  </g>
+  <text x="363" y="210" font-size="11" fill="#98a0b3" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">≈ half from accounts you follow · ≈ half out-of-network discovery</text>
+  <text x="674" y="232" font-size="11" fill="#98a0b3" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">ranking decides the order — visibility decides what may appear at all</text>
+  </svg>
+        </div>
+        <figcaption class="flow-cap">The For You request path, per the open-sourced repo: sources → filters → scoring → selection → visibility → feed.</figcaption>
+      </figure>
+
+<section class="pipeline" aria-label="The X algorithm, stage by stage">
+  <span class="pulse" aria-hidden="true"></span><span class="pulse p2" aria-hidden="true"></span><span class="pulse p3" aria-hidden="true"></span>
+
+  <!-- 1 · REQUEST PATH + HISTORY -->
+  <article class="node" id="st-path">
+    <button class="node-head" aria-expanded="false" aria-controls="st-path-body">
+      <span class="num" aria-hidden="true">1</span>
+      <span class="head-text">
+        <span class="stage-name">The request path</span>
+        <span class="teaser">From tap to timeline, in about seven steps.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-path-body" hidden>
+      <p class="plain">Opening X fires one <b>For You feed request</b>. The <b>Home Mixer</b> (Rust) runs it through a pipeline: hydrate your context, pull candidates from three sources in parallel, filter, score, pick the top K, then run visibility filtering. A second <b>blending pipeline</b> wraps it all and interleaves the things the model doesn't rank — ads, Who to Follow, prompts. Then side effects: record what was served, refresh caches, log events.</p>
+      <figure class="flow-fig">
+            <div class="flow-scroll">
+      <svg width="880" height="330" viewBox="0 0 880 330" role="img" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" aria-label="Timeline: March-April 2023 twitter slash the-algorithm, November 2025 Following feed ranked, January 2026 x-algorithm Phoenix, May 2026 full pipeline and model, August 2026 Under the Hood">
+      <defs><marker id="xarrT" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e9a13b"/></marker></defs>
+      <line x1="30" y1="165" x2="850" y2="165" stroke="#e9a13b" stroke-width="1.5" stroke-dasharray="6 5"/>
+      <g font-size="12" fill="#ece7d8" text-anchor="middle">
+      <circle cx="90" cy="165" r="7" fill="#0b101c" stroke="#e9a13b" stroke-width="2"/>
+      <text x="90" y="130" font-size="11" fill="#e9a13b">Mar–Apr 2023</text>
+      <rect x="10" y="190" width="160" height="86" rx="8" fill="#0d1424" stroke="#62b6a4" stroke-width="1.2"/>
+      <text x="90" y="212" font-size="11">twitter/the-algorithm</text>
+      <text x="90" y="230" font-size="10" fill="#98a0b3">Light → Heavy Ranker</text>
+      <text x="90" y="246" font-size="10" fill="#98a0b3">hand-built features</text>
+      <text x="90" y="262" font-size="10" fill="#98a0b3">~1,500 candidates</text>
+      <circle cx="275" cy="165" r="7" fill="#0b101c" stroke="#e9a13b" stroke-width="2"/>
+      <text x="275" y="130" font-size="11" fill="#e9a13b">Nov 2025</text>
+      <rect x="195" y="190" width="160" height="86" rx="8" fill="#0d1424" stroke="#62b6a4" stroke-width="1.2"/>
+      <text x="275" y="212" font-size="11">Following feed ranked</text>
+      <text x="275" y="230" font-size="10" fill="#98a0b3">engagement-ranked too</text>
+      <text x="275" y="246" font-size="10" fill="#98a0b3">chronological toggle</text>
+      <text x="275" y="262" font-size="10" fill="#98a0b3">remains</text>
+      <circle cx="460" cy="165" r="9" fill="#e9a13b"/>
+      <text x="460" y="130" font-size="11" fill="#e9a13b">Jan 2026</text>
+      <rect x="380" y="190" width="160" height="86" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+      <text x="460" y="212" font-size="11">xai-org/x-algorithm</text>
+      <text x="460" y="230" font-size="10" fill="#98a0b3">“Phoenix” Grok transformer</text>
+      <text x="460" y="246" font-size="10" fill="#98a0b3">hand-engineered features</text>
+      <text x="460" y="262" font-size="10" fill="#98a0b3">eliminated</text>
+      <circle cx="645" cy="165" r="7" fill="#0b101c" stroke="#e9a13b" stroke-width="2"/>
+      <text x="645" y="130" font-size="11" fill="#e9a13b">May 2026</text>
+      <rect x="565" y="190" width="160" height="86" rx="8" fill="#0d1424" stroke="#62b6a4" stroke-width="1.2"/>
+      <text x="645" y="212" font-size="11">full pipeline + model</text>
+      <text x="645" y="230" font-size="10" fill="#98a0b3">end-to-end code</text>
+      <text x="645" y="246" font-size="10" fill="#98a0b3">downloadable Phoenix</text>
+      <text x="645" y="262" font-size="10" fill="#98a0b3">model</text>
+      <circle cx="800" cy="165" r="7" fill="#0b101c" stroke="#e9a13b" stroke-width="2"/>
+      <text x="800" y="130" font-size="11" fill="#e9a13b">Aug 2026</text>
+      <rect x="725" y="190" width="150" height="86" rx="8" fill="#0d1424" stroke="#62b6a4" stroke-width="1.2"/>
+      <text x="800" y="212" font-size="11">Under the Hood</text>
+      <text x="800" y="230" font-size="10" fill="#98a0b3">download your labels</text>
+      <text x="800" y="246" font-size="10" fill="#98a0b3">as JSON · training code</text>
+      <text x="800" y="262" font-size="10" fill="#98a0b3">published</text>
+      </g>
+      <g stroke="#e9a13b" stroke-width="1.2" fill="none">
+      <path d="M90,158 V186" marker-end="url(#xarrT)"/>
+      <path d="M275,158 V186" marker-end="url(#xarrT)"/>
+      <path d="M460,156 V186" marker-end="url(#xarrT)"/>
+      <path d="M645,158 V186" marker-end="url(#xarrT)"/>
+      <path d="M800,158 V186" marker-end="url(#xarrT)"/>
+      </g>
+      </svg>
+            </div>
+            <figcaption class="flow-cap">2023 → 2026: hand-built ranking features gave way to one learned transformer. The repo is Apache 2.0 and updates ship roughly every 4 weeks.</figcaption>
+          </figure>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p>The 2023 open source (<b>twitter/the-algorithm</b>) described three stages: candidate sourcing (~1,500 posts), ranking with a <b>Light Ranker</b> then a <b>Heavy Ranker</b> neural net, and heuristics &amp; filters. The 2026 repo (<b>xai-org/x-algorithm</b>) keeps Home Mixer as the orchestrator but replaces the hand-built machinery: in xAI's words, they <i>“eliminated every single hand-engineered feature and most heuristics from the system.”</i> Four components do the work now: <b>Home Mixer</b> (orchestration, Rust), <b>Thunder</b> (in-memory in-network post store, Rust), <b>Phoenix</b> (the Grok-based transformer that scores, JAX/Python with a Rust serving layer), and the <b>Candidate Pipeline</b> framework (Rust) everything is composed from.</p>
+      </div>
+      <aside class="takeaway">
+        <p class="tk-tag">Takeaway</p>
+        <p class="tk-line">Your For You feed doesn't exist until you open the app — it's assembled from scratch on every single open, and no two opens ever build the same one.</p>
+        <p class="tk-analogy"><b>Analogy:</b> like a made-to-order kitchen — nothing is plated before you sit down. The Home Mixer is the head chef, running your order through every station — fetch, filter, score, plate — in under a second.</p>
+        <p class="tk-myth"><b>Most people think</b> the feed is a fixed queue that slowly updates over the day — <b>actually</b>, every open fires one brand-new request that rebuilds the entire timeline from zero.</p>
+      </aside>
+    </div>
+  </article>
+
+  <!-- 2 · CANDIDATE SOURCING -->
+  <article class="node" id="st-source">
+    <button class="node-head" aria-expanded="false" aria-controls="st-source-body">
+      <span class="num" aria-hidden="true">2</span>
+      <span class="head-text">
+        <span class="stage-name">Candidate sourcing</span>
+        <span class="teaser">500M posts a day → ~1,500 worth scoring.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-source-body" hidden>
+      <p class="plain">Scoring every post on X for every viewer is impossible, so the pipeline first <b>narrows the universe</b>. Three sources are queried in parallel, and their results are hydrated (text, media, author, labels, engagement counts) and de-duplicated. Roughly half of a typical feed comes from accounts you follow; roughly half is out-of-network discovery.</p>
+      <div class="demo">
+        <p class="demo-label">Simplified illustration · animated</p>
+        <h3>The candidate funnel</h3>
+        <p class="demo-note">Watch the day's firehose shrink to the set Phoenix actually scores.</p>
+        <div class="funnel" id="funnel">
+          <div class="frow" data-stage="0"><span class="flab">posts published today</span><span class="fbar"><span class="ffill" style="width:100%"></span></span><span class="fnum">500M</span></div>
+          <div class="frow dim" data-stage="1"><span class="flab">Thunder · accounts you follow</span><span class="fbar"><span class="ffill teal" style="width:0%"></span></span><span class="fnum">—</span></div>
+          <div class="frow dim" data-stage="2"><span class="flab">Phoenix retrieval · out-of-network</span><span class="fbar"><span class="ffill teal" style="width:0%"></span></span><span class="fnum">—</span></div>
+          <div class="frow dim" data-stage="3"><span class="flab">SimClusters · cluster picks</span><span class="fbar"><span class="ffill teal" style="width:0%"></span></span><span class="fnum">—</span></div>
+          <div class="frow dim" data-stage="4"><span class="flab">after dedup + pre-scoring filters</span><span class="fbar"><span class="ffill" style="width:0%"></span></span><span class="fnum">—</span></div>
+        </div>
+        <p class="funnel-read" id="funnel-read" aria-live="polite">Press “Run the funnel”.</p>
+        <div class="samp-row">
+          <button type="button" class="btn" id="funnel-run">Run the funnel</button>
+          <button type="button" class="btn ghost" id="funnel-reset">Reset</button>
+        </div>
+      </div>
+      <figure class="flow-fig">
+            <div class="flow-scroll">
+      <svg width="720" height="300" viewBox="0 0 720 300" role="img" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" aria-label="Two-tower retrieval: your engagement history becomes a user vector, each post becomes a post vector, nearest neighbors are returned as candidates">
+      <defs><marker id="xarrR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e9a13b"/></marker></defs>
+      <g font-size="12" fill="#ece7d8" text-anchor="middle">
+      <rect x="10" y="30" width="200" height="96" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+      <text x="110" y="58">you-tower</text>
+      <text x="110" y="78" font-size="10.5" fill="#98a0b3">recent likes · replies</text>
+      <text x="110" y="94" font-size="10.5" fill="#98a0b3">follows · dwell</text>
+      <text x="110" y="110" font-size="10.5" fill="#98a0b3">→ your vector</text>
+      <rect x="10" y="150" width="200" height="96" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+      <text x="110" y="178">post-tower</text>
+      <text x="110" y="198" font-size="10.5" fill="#98a0b3">text · media · author</text>
+      <text x="110" y="214" font-size="10.5" fill="#98a0b3">engagement so far</text>
+      <text x="110" y="230" font-size="10.5" fill="#98a0b3">→ its vector</text>
+      <rect x="300" y="90" width="170" height="110" rx="8" fill="#0d1424" stroke="#62b6a4" stroke-width="1.5"/>
+      <text x="385" y="120">nearest</text><text x="385" y="140">neighbors</text>
+      <text x="385" y="162" font-size="10.5" fill="#98a0b3">closest post vectors</text>
+      <text x="385" y="180" font-size="10.5" fill="#98a0b3">to your vector</text>
+      <rect x="540" y="90" width="170" height="110" rx="8" fill="#62b6a4" fill-opacity="0.07" stroke="#62b6a4" stroke-width="1.2" stroke-dasharray="5 4"/>
+      <text x="625" y="130">candidates</text>
+      <text x="625" y="150" font-size="10.5" fill="#98a0b3">out-of-network</text>
+      <text x="625" y="168" font-size="10.5" fill="#98a0b3">discovery</text>
+      </g>
+      <g stroke="#e9a13b" stroke-width="1.5" fill="none">
+      <path d="M210,78 H296" marker-end="url(#xarrR)"/>
+      <path d="M210,198 H296" marker-end="url(#xarrR)"/>
+      <path d="M470,145 H536" marker-end="url(#xarrR)"/>
+      </g>
+      <g fill="#62b6a4" opacity="0.85">
+      <circle cx="330" cy="112" r="3"/><circle cx="352" cy="128" r="3"/><circle cx="372" cy="108" r="3"/>
+      <circle cx="392" cy="132" r="3"/><circle cx="414" cy="118" r="3"/><circle cx="436" cy="140" r="3"/>
+      <circle cx="342" cy="150" r="3"/><circle cx="404" cy="158" r="3"/>
+      </g>
+      <circle cx="385" cy="145" r="6" fill="none" stroke="#e9a13b" stroke-width="1.5"/>
+      <text x="385" y="240" font-size="10.5" fill="#98a0b3" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">your vector lands here · the ring marks the closest posts</text>
+      </svg>
+            </div>
+            <figcaption class="flow-cap">Two-tower retrieval: Phoenix embeds you and each post as vectors, then returns the posts nearest to you — that's how strangers' posts reach your feed.</figcaption>
+          </figure>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p><b>Thunder</b> holds recent posts in memory as they're published and returns those from accounts you follow (config allows up to ~1,200). <b>Phoenix retrieval</b> is the two-tower model: it embeds the viewer and each post as vectors and returns the nearest posts (up to ~1,000) — pure out-of-network discovery. <b>SimClusters</b> groups accounts and posts by who engages with what and mines the clusters for more. Candidates are then <b>hydrated</b> — text, media, author details, labels, engagement counts — and <b>pre-scoring filters</b> strip out duplicates across sources, posts older than 48 hours, your own posts, blocked/muted accounts and keywords, already-seen posts, and subscriber-only posts you can't access.</p>
+      </div>
+      <aside class="takeaway">
+        <p class="tk-tag">Takeaway</p>
+        <p class="tk-line">The famous ranking model never sees 99.9997% of posts — retrieval throws them away first. Retrieval, not ranking, is where your feed is really decided.</p>
+        <p class="tk-analogy"><b>Analogy:</b> like a librarian who won't let you into the stacks — from 500 million books a day, she hands you about 1,500 she thinks you'll like, and you only ever get to choose from those.</p>
+        <p class="tk-myth"><b>Most people think</b> the algorithm scores everything and shows the best — <b>actually</b>, it can only rank the ~1,500 candidates retrieval bothered to fetch. A brilliant post that never becomes a candidate can never surface, no matter how good it is.</p>
+      </aside>
+    </div>
+  </article>
+
+  <!-- 3 · SCORING -->
+  <article class="node" id="st-score">
+    <button class="node-head" aria-expanded="false" aria-controls="st-score-body">
+      <span class="num" aria-hidden="true">3</span>
+      <span class="head-text">
+        <span class="stage-name">Scoring with Phoenix</span>
+        <span class="teaser">One transformer, ~19 predictions per post.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-score-body" hidden>
+      <p class="plain">Phoenix reads <b>your recent engagement history</b> — the main input to the model — plus the post and its author, and predicts how likely <b>you</b> are to take each of ~19 actions on it: like, reply, repost, quote, share, click, dwell, follow the author… or mute, block, report it. The final score is a <b>weighted sum</b>: <span class="formula">score = Σ (weight × P(action))</span>.</p>
+      <figure class="flow-fig">
+            <div class="flow-scroll">
+      <svg width="900" height="330" viewBox="0 0 900 330" role="img" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" aria-label="Phoenix scoring: your engagement history plus post and author context enter the Phoenix transformer, which outputs per-action probabilities, combined by a weighted sum into a score, then adjusted and reranked">
+      <defs><marker id="xarrS" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e9a13b"/></marker></defs>
+      <defs><marker id="xarrSt" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#62b6a4"/></marker></defs>
+      <g font-size="12" fill="#ece7d8" text-anchor="middle">
+      <rect x="10" y="40" width="170" height="72" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+      <text x="95" y="66">your history</text>
+      <text x="95" y="84" font-size="10.5" fill="#98a0b3">recent engagements</text>
+      <text x="95" y="100" font-size="10.5" fill="#98a0b3">· main model input</text>
+      <rect x="10" y="128" width="170" height="72" rx="8" fill="#0d1424" stroke="#62b6a4" stroke-width="1.2"/>
+      <text x="95" y="154">post + author</text>
+      <text x="95" y="172" font-size="10.5" fill="#98a0b3">text · media · labels</text>
+      <text x="95" y="188" font-size="10.5" fill="#98a0b3">account scores</text>
+      <rect x="230" y="64" width="170" height="120" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+      <text x="315" y="110">Phoenix</text>
+      <text x="315" y="128" font-size="10.5" fill="#98a0b3">Grok transformer</text>
+      <text x="315" y="146" font-size="10.5" fill="#98a0b3">P(action) for</text>
+      <text x="315" y="162" font-size="10.5" fill="#98a0b3">~19 actions</text>
+      <rect x="450" y="64" width="170" height="120" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+      <text x="535" y="104">Σ weight × P</text>
+      <text x="535" y="124" font-size="10.5" fill="#98a0b3">weights from config</text>
+      <text x="535" y="142" font-size="10.5" fill="#98a0b3">negatives go below</text>
+      <text x="535" y="160" font-size="10.5" fill="#98a0b3">zero</text>
+      <rect x="670" y="40" width="220" height="72" rx="8" fill="#0d1424" stroke="#62b6a4" stroke-width="1.2"/>
+      <text x="780" y="66">adjustments</text>
+      <text x="780" y="84" font-size="10.5" fill="#98a0b3">author-diversity decay</text>
+      <text x="780" y="100" font-size="10.5" fill="#98a0b3">out-of-network discount</text>
+      <rect x="670" y="128" width="220" height="56" rx="8" fill="#0d1424" stroke="#62b6a4" stroke-width="1.2"/>
+      <text x="780" y="150">VMRanker rerank</text>
+      <text x="780" y="168" font-size="10.5" fill="#98a0b3">diversity for variety</text>
+      </g>
+      <g stroke="#e9a13b" stroke-width="1.5" fill="none">
+      <path d="M180,76 H226" marker-end="url(#xarrS)"/>
+      <path d="M180,164 H226" marker-end="url(#xarrS)"/>
+      <path d="M400,124 H446" marker-end="url(#xarrS)"/>
+      <path d="M620,124 H666" marker-end="url(#xarrS)"/>
+      </g>
+      <path d="M780,112 V124" stroke="#62b6a4" stroke-width="1.5" marker-end="url(#xarrSt)"/>
+      <text x="780" y="230" font-size="11" fill="#98a0b3" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">then TopKScoreSelector sorts by final score and keeps the top K</text>
+      <text x="780" y="252" font-size="11" fill="#98a0b3" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">new authors under ~1,000 impressions get a boost toward slots ~15–16</text>
+      <text x="450" y="300" font-size="11" fill="#e9a13b" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">the weights multiply your predicted probabilities — not raw engagement counts</text>
+      </svg>
+            </div>
+            <figcaption class="flow-cap">Phoenix predicts your personal action probabilities; the weighted sum becomes the score; adjustments and a diversity rerank finish the order.</figcaption>
+          </figure>
+      <div class="demo">
+        <p class="demo-label">Simplified illustration · interactive toy</p>
+        <h3>Scoring playground</h3>
+        <p class="demo-note">Four sample posts. Toggle the engagements you'd take on each — the score recomputes from the <b>real published weights</b> and the feed re-ranks live. Probabilities are toy (a toggle = it happens); the weights are the ones in the repo config.</p>
+        <div class="cslider-row">
+          <div class="cslider-head"><span>Your engagement level <em class="hint">— scales every positive probability, like the real model does per viewer</em></span><b id="eng-val">100%</b></div>
+          <div class="cslider-line">
+            <button type="button" class="stepper" id="eng-dec" aria-label="Lower engagement level">−</button>
+            <div class="cslider" id="sl-eng" role="slider" tabindex="0" aria-label="Your engagement level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" aria-valuetext="100%">
+              <div class="cslider-track"><div class="cslider-fill"></div><div class="cslider-thumb"></div></div>
+            </div>
+            <button type="button" class="stepper" id="eng-inc" aria-label="Raise engagement level">+</button>
+          </div>
+        </div>
+        <div id="pg-posts"></div>
+        <div class="samp-row">
+          <button type="button" class="btn ghost" id="pg-reset">Reset all toggles</button>
+        </div>
+        <h4 class="rank-title">Your toy For You feed <em>— live ranking</em></h4>
+        <div class="bars" id="pg-rank"></div>
+        <p class="pg-caveat" id="pg-caveat"></p>
+      </div>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p>Three scorer stages run in order: <b>PhoenixScorer</b> emits a probability per action; <b>RankingScorer</b> takes the weighted sum, then applies <b>author diversity</b> (each post after an author's first is multiplied by a decaying factor, down to a floor), an <b>out-of-network discount</b> (a factor below 1 for accounts you don't follow), and a <b>new-author boost</b> (under ~1,000 impressions, lifted toward slots ~15–16). <b>VMRanker</b> then calls a separate service that reorders with a determinantal point process over post embeddings — trading a little score for less similarity between neighbors, so your feed isn't five versions of the same post. Then <b>TopKScoreSelector</b> keeps the top K. The single most misunderstood line in the repo: weights scale <i>your predicted probability</i> of each action — driven substantially by your own behavior — not raw engagement counts. A report's weight being 468× a like's does <i>not</i> mean one report cancels 468 likes.</p>
+      </div>
+      <aside class="takeaway">
+        <p class="tk-tag">Takeaway</p>
+        <p class="tk-line">Your feed is a mirror, not a leaderboard — every weight multiplies a prediction of <i>you</i>, so no two people on Earth see the same X.</p>
+        <p class="tk-analogy"><b>Analogy:</b> like a talent show where each judge's paddle has a different point value — one "replied!" paddle outscores ten "liked it!" paddles, and a single "reported" paddle can sink the whole act.</p>
+        <p class="tk-myth"><b>Most people think</b> a report (−234) cancels 468 likes because the weight is 468× bigger — <b>actually</b>, weights multiply your <i>predicted probability</i> of each action, and you're roughly a thousand times less likely to report than to like, so the arithmetic doesn't work like that.</p>
+      </aside>
+    </div>
+  </article>
+
+  <!-- 4 · FILTERS -->
+  <article class="node" id="st-filter">
+    <button class="node-head" aria-expanded="false" aria-controls="st-filter-body">
+      <span class="num" aria-hidden="true">4</span>
+      <span class="head-text">
+        <span class="stage-name">Filters <span class="amp">+</span> visibility</span>
+        <span class="teaser">Ranking sets the order; visibility sets what's allowed.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-filter-body" hidden>
+      <p class="plain">Two separate filter moments. <b>Pre-scoring filters</b> run before ranking and remove the obvious: duplicates, stale posts, your own posts, blocked or muted accounts, things you've already seen. <b>Post-selection visibility filtering</b> runs after the order is fixed and answers one of three things per post: <b>allow</b>, <b>interstitial</b> (shown behind a tap-through, e.g. adult or graphic media), or <b>drop</b>.</p>
+      <figure class="flow-fig">
+            <div class="flow-scroll">
+      <svg width="760" height="300" viewBox="0 0 760 300" role="img" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" aria-label="Visibility filtering: label systems feed rules that answer allow, interstitial, or drop for each post and viewer">
+      <defs><marker id="xarrV" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e9a13b"/></marker></defs>
+      <g font-size="12" fill="#ece7d8" text-anchor="middle">
+      <rect x="10" y="30" width="180" height="60" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+      <text x="100" y="54">label systems</text>
+      <text x="100" y="72" font-size="10.5" fill="#98a0b3">rules · models · scores</text>
+      <rect x="10" y="110" width="180" height="60" rx="8" fill="#0d1424" stroke="#62b6a4" stroke-width="1.2"/>
+      <text x="100" y="134">you</text>
+      <text x="100" y="152" font-size="10.5" fill="#98a0b3">blocks · mutes · follows</text>
+      <rect x="250" y="70" width="180" height="60" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+      <text x="340" y="94">visibility rules</text>
+      <text x="340" y="112" font-size="10.5" fill="#98a0b3">registry.rs</text>
+      <rect x="490" y="16" width="150" height="52" rx="8" fill="#0d1424" stroke="#62b6a4" stroke-width="1.5"/>
+      <text x="565" y="38">ALLOW</text><text x="565" y="56" font-size="10" fill="#98a0b3">show normally</text>
+      <rect x="490" y="84" width="150" height="52" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+      <text x="565" y="106">INTERSTITIAL</text><text x="565" y="124" font-size="10" fill="#98a0b3">tap-through</text>
+      <rect x="490" y="152" width="150" height="52" rx="8" fill="#0d1424" stroke="#e06c5b" stroke-width="1.5"/>
+      <text x="565" y="174" fill="#e06c5b">DROP</text><text x="565" y="192" font-size="10" fill="#98a0b3">do not show</text>
+      </g>
+      <g stroke="#e9a13b" stroke-width="1.5" fill="none">
+      <path d="M190,60 H246" marker-end="url(#xarrV)"/>
+      <path d="M190,140 H246" marker-end="url(#xarrV)"/>
+      <path d="M430,50 C460,50 460,42 486,42" marker-end="url(#xarrV)"/>
+      <path d="M430,100 H486" marker-end="url(#xarrV)"/>
+      <path d="M430,150 C460,150 460,178 486,178" marker-end="url(#xarrV)"/>
+      </g>
+      <text x="100" y="230" font-size="11" fill="#98a0b3" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">scarecrow/botmaker rules · agatha · bdsm · media models</text>
+      <text x="100" y="250" font-size="11" fill="#98a0b3" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">some rules drop a post only as an out-of-network</text>
+      <text x="100" y="268" font-size="11" fill="#98a0b3" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">recommendation — the same post is allowed to a follower</text>
+      </svg>
+            </div>
+            <figcaption class="flow-cap">Visibility filtering is separate from ranking: labels plus your own blocks/mutes decide allow, interstitial, or drop.</figcaption>
+          </figure>
+      <div class="demo">
+        <p class="demo-label">Simplified illustration · interactive toy</p>
+        <h3>Filter demo</h3>
+        <p class="demo-note">Nine posts enter the pipeline. Step through and watch each one get kept or dropped — with the reason stamped on it.</p>
+        <p class="fd-stage" id="fd-stage" aria-live="polite">Stage 0 of 4 · candidates queued</p>
+        <div class="fd-list" id="fd-posts"></div>
+        <div class="samp-row">
+          <button type="button" class="btn" id="fd-step">Step →</button>
+          <button type="button" class="btn ghost" id="fd-run">Run all</button>
+          <button type="button" class="btn ghost" id="fd-reset">Reset</button>
+        </div>
+      </div>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p>Labels are produced continuously, <i>off</i> the request path: classifiers on text and media (grox, media models), account models like <b>agatha</b> (blocks and reports relative to favorites) and <b>bdsm</b> (inauthentic behavior over time), <b>user-cred-v2</b> (PageRank over the follow and engagement graph), and rule engines (<b>scarecrow</b> embedding <b>botmaker</b>). On the request path, the visibility rules read those labels plus your own blocks, mutes, follows, and settings. A post dropped post-selection takes its thread, quote, or repost ancestors down with it. And you can audit some of this yourself: the <b>Under the Hood</b> page in Settings lets you download a JSON of the labels applied to your account and posts.</p>
+      </div>
+      <aside class="takeaway">
+        <p class="tk-tag">Takeaway</p>
+        <p class="tk-line">Most posts you never see weren't outscored — they were disqualified before the contest began: too old, already seen, a duplicate, or your own.</p>
+        <p class="tk-analogy"><b>Analogy:</b> like a club door policy with three stamps — come on in, wait behind the rope, or not tonight. And the bouncer checks your personal list first: your blocks and mutes are on the clipboard.</p>
+        <p class="tk-myth"><b>Most people think</b> one ranking brain decides everything — <b>actually</b>, ranking and visibility are separate systems. A post can win the ranking and still get dropped at the door — or be allowed for a follower but dropped as a stranger's recommendation.</p>
+      </aside>
+    </div>
+  </article>
+
+  <!-- 5 · WHY REPLIES BEAT LIKES -->
+  <article class="node" id="st-why">
+    <button class="node-head" aria-expanded="false" aria-controls="st-why-body">
+      <span class="num" aria-hidden="true">5</span>
+      <span class="head-text">
+        <span class="stage-name">Why replies beat likes</span>
+        <span class="teaser">The weights, the north star, the takeaways.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-why-body" hidden>
+      <p class="plain">Not all engagement is equal. The weights below come from the repo's published config (synced Sep 28, 2026) — plus 2023-era values and one community estimate, each badged. Two things jump out: <b>conversation dwarfs everything</b>, and <b>negative signals are enormous</b> — because they're rare, so they're weighted up to matter at all.</p>
+      <div class="demo">
+        <p class="demo-label">Simplified illustration · real config values</p>
+        <h3>The weight chart</h3>
+        <p class="demo-note">Bars use a square-root scale so small weights stay visible — the numbers are exact. Badges: <span class="tbadge v">verified</span> = current repo config · <span class="tbadge h">historical</span> = 2023 open source · <span class="tbadge e">estimated</span> = community analysis.</p>
+        <div class="bars" id="w-chart"></div>
+        <p class="pg-caveat">Weights multiply <b>your predicted probability</b> of each action — not raw counts. A report's weight is 468× a like's, but that does <i>not</i> mean one report cancels 468 likes: the baseline chance you'd report is 1000×+ lower than liking. Weights also ship roughly every 4 weeks — re-check the repo before quoting them.</p>
+      </div>
+      <div class="demo">
+        <p class="demo-label">Simplified illustration</p>
+        <h3>The north star: unregretted user-minutes</h3>
+        <p class="plain">X's stated goal for all of this machinery is maximizing <b>“unregretted user-minutes”</b> — time spent on the app you don't regret afterwards. The weights are one expression of it: replies, deep reads, and follows are treated as signs of time well spent; mute, block, and report as signs it wasn't.</p>
+      </div>
+      <h4 class="rank-title">Takeaways</h4>
+      <ul class="takes">
+        <li><b>As a poster:</b> write things people reply to. A reply is worth ~10 likes in today's config (and the author's own reply back was worth 150× a like in the 2023 config). Ask real questions; be worth arguing with politely.</li>
+        <li><b>As a reader:</b> your mutes, blocks, and reports are the strongest levers you have — negative weights are huge. Use them and your feed reshapes fast.</li>
+        <li><b>The feed is a mirror:</b> every weight multiplies <i>your</i> predicted behavior. Two people see different feeds because the model has learned different versions of them.</li>
+        <li><b>Freshness matters:</b> posts older than 48 hours are filtered before scoring even starts.</li>
+        <li><b>New voices get a shot:</b> authors under ~1,000 impressions are boosted toward the middle of the feed, not buried.</li>
+      </ul>
+      <aside class="takeaway">
+        <p class="tk-tag">Takeaway</p>
+        <p class="tk-line">In X's economy, one reply buys what ten likes buy — conversation isn't just encouraged, it's the currency.</p>
+        <p class="tk-analogy"><b>Analogy:</b> like a recipe where the rarest spices get the biggest pinches — reports, mutes, and blocks almost never happen, so each one is weighted enormously just to register at all.</p>
+        <p class="tk-myth"><b>Most people think</b> likes are the currency of the feed — <b>actually</b>, the like (+0.5) is nearly the cheapest signal on the board. Replies, follows, shares, and the negative signals move your feed orders of magnitude more.</p>
+      </aside>
+    </div>
+  </article>
+
+  <!-- 6 · HOW WE KNOW -->
+  <article class="node" id="st-know">
+    <button class="node-head" aria-expanded="false" aria-controls="st-know-body">
+      <span class="num" aria-hidden="true">6</span>
+      <span class="head-text">
+        <span class="stage-name">How we know</span>
+        <span class="teaser">Three tiers of evidence.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-know-body" hidden>
+      <p class="plain">Everything on this page comes from one of three places — kept deliberately separate:</p>
+      <div class="tiers">
+        <div class="tier v"><p class="tier-tag">Verified</p><p>From <b>xai-org/x-algorithm</b> itself: the Phoenix scorer, the action list, the current weights in <span class="mono">home-mixer/params/param.rs</span>, the filter names, the visibility rules, the component layout. Quoted verbatim where it matters.</p></div>
+        <div class="tier h"><p class="tier-tag">Historical</p><p>From <b>twitter/the-algorithm</b> (Mar–Apr 2023) and X Engineering restatements: the Light → Heavy Ranker era, the famous +75 / +13.5 / −369 weights. Directionally current, numerically stale — the config has moved on.</p></div>
+        <div class="tier e"><p class="tier-tag">Estimated</p><p>Community analyses, e.g. bookmark ≈ 10× a like. Never in any public config. Treated as a guess, labeled as one.</p></div>
+      </div>
+      <p class="plain">Weights ship roughly <b>every 4 weeks</b>, and the repo's config defaults may not exactly match production. If you're quoting a number, re-check the source first:</p>
+      <p class="repo-link"><a href="https://github.com/xai-org/x-algorithm">https://github.com/xai-org/x-algorithm</a></p>
+      <aside class="takeaway">
+        <p class="tk-tag">Takeaway</p>
+        <p class="tk-line">The strangest thing about the X algorithm: you can read it. Most of this page comes from code X published itself — not leaks, not guesses.</p>
+        <p class="tk-analogy"><b>Analogy:</b> like learning a magic trick from the magician's own notebook — except the notebook gets rewritten about every month, so always check the date before quoting a number.</p>
+        <p class="tk-myth"><b>Most people think</b> the algorithm is a total black box — <b>actually</b>, the pipeline code and even the Phoenix model are open source under Apache 2.0. What's private is your data — and whether production runs exactly this config.</p>
+      </aside>
+    </div>
+  </article>
+
+</section>
+</main>
+
+<footer>
+  <p class="fine">The playgrounds are <b>simplified illustrations</b> — real published weights, toy probabilities, running entirely in your browser. No servers, no tracking, no data leaves your device.</p>
+  <p class="fine dim">Unofficial educational explainer — not affiliated with X Corp or xAI.</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

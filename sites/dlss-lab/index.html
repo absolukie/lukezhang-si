@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DLSS Lab — tune the knobs, measure the multipliers</title>
+<meta name="description" content="Interactive DLSS comparison lab: tune Super Resolution, Frame Generation and Reflex per panel and watch the speed multipliers change live.">
+<style>
+:root{
+  --bg:#06090f; --bg2:#0b111c; --card:#0e1624; --line:#1c2940;
+  --txt:#e8f0fc; --dim:#8ea0bd; --acc:#76b900; --acc2:#00c8ff;
+  --warn:#ffb020; --good:#3ddc84; --bad:#ff5d5d;
+  --r:14px;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{background:radial-gradient(1200px 600px at 50% -10%, #0d1626 0%, var(--bg) 60%) fixed, var(--bg);
+  color:var(--txt); font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  line-height:1.45; padding-bottom:64px}
+button,select,input{font:inherit; touch-action:manipulation}
+.wrap{max-width:1180px;margin:0 auto;padding:0 16px}
+header.hero{padding:28px 0 8px;text-align:center}
+.hero h1{margin:0;font-size:clamp(26px,5vw,44px);letter-spacing:-.5px}
+.hero h1 .g{color:var(--acc)}
+.hero p{color:var(--dim);margin:8px auto 0;max-width:640px;font-size:15px}
+.badge{display:inline-block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#0a0f16;
+  background:var(--acc);border-radius:999px;padding:3px 10px;font-weight:700;margin-bottom:10px}
+.card{background:linear-gradient(180deg,var(--card),#0b1320);border:1px solid var(--line);
+  border-radius:var(--r);padding:16px;margin-top:16px}
+.card h2{margin:0 0 4px;font-size:17px}
+.card .sub{color:var(--dim);font-size:13px;margin:0 0 12px}
+.knobs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.knob{background:#0a1220;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.knob label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin-bottom:6px}
+.knob select,.knob input[type=range]{width:100%}
+.knob select{background:#101b2e;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:8px}
+.knob .val{font-size:12px;color:var(--acc2);margin-top:4px}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{background:#101b2e;border:1px solid var(--line);color:var(--dim);border-radius:8px;
+  padding:7px 10px;font-size:13px;cursor:pointer}
+.seg button.on{background:var(--acc);border-color:var(--acc);color:#0a0f16;font-weight:700}
+.toggle{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;user-select:none}
+.toggle .pill{width:40px;height:22px;border-radius:999px;background:#1a2740;position:relative;transition:.15s;border:1px solid var(--line)}
+.toggle .pill::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#8ea0bd;transition:.15s}
+.toggle.on .pill{background:var(--acc)}
+.toggle.on .pill::after{left:20px;background:#0a0f16}
+
+.duel{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+@media(max-width:760px){.duel{grid-template-columns:1fr}}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.panel .phead{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line)}
+.panel .phead .tag{font-weight:800;font-size:15px}
+.panel .phead .tag.a{color:var(--acc2)} .panel .phead .tag.b{color:var(--warn)}
+.screen{position:relative;aspect-ratio:16/9;background:#000}
+.screen canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.hud{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;
+  padding:10px 12px;pointer-events:none;font-variant-numeric:tabular-nums}
+.hud .fps{background:rgba(4,8,14,.72);border:1px solid var(--line);border-radius:10px;padding:6px 10px;backdrop-filter:blur(4px)}
+.hud .fps .n{font-size:26px;font-weight:800;line-height:1}
+.hud .fps .u{font-size:11px;color:var(--dim)}
+.hud .chips{display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+.chip{font-size:11px;background:rgba(4,8,14,.72);border:1px solid var(--line);border-radius:999px;padding:2px 9px;color:var(--dim)}
+.chip.hot{color:var(--acc);border-color:#2c4a12}
+.multbar{position:absolute;left:0;right:0;bottom:0;padding:10px 12px;
+  background:linear-gradient(0deg,rgba(4,8,14,.88),transparent);display:flex;justify-content:space-between;align-items:flex-end;pointer-events:none}
+.multbar .mx{font-size:30px;font-weight:800;color:var(--acc)}
+.multbar .mx small{font-size:13px;color:var(--dim);font-weight:400}
+.multbar .lat{font-size:12px;color:var(--dim);text-align:right;font-variant-numeric:tabular-nums}
+.pknobs{padding:12px 14px;display:grid;gap:10px}
+.prow{display:grid;grid-template-columns:110px 1fr;gap:8px;align-items:center;font-size:13px}
+.prow .lbl{color:var(--dim);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+
+.vs{display:flex;align-items:center;justify-content:center;gap:10px;margin:18px 0 4px;text-align:center;flex-wrap:wrap}
+.vs .big{font-size:clamp(22px,4.5vw,36px);font-weight:800}
+.vs .big .x{color:var(--acc)}
+.vs .sub{width:100%;color:var(--dim);font-size:13px}
+.presets{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px}
+.presets button{background:#101b2e;border:1px solid var(--line);color:var(--txt);border-radius:999px;
+  padding:8px 14px;font-size:13px;cursor:pointer}
+.presets button:hover{border-color:var(--acc)}
+#chart{width:100%;height:180px;display:block;background:#070d16;border:1px solid var(--line);border-radius:10px;margin-top:12px}
+.legend{display:flex;gap:16px;justify-content:center;font-size:12px;color:var(--dim);margin-top:6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px}
+
+table.model{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+table.model th,table.model td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+table.model th{color:var(--dim);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.fine{color:var(--dim);font-size:13px}
+.fine a{color:var(--acc2)}
+.ver{position:fixed;right:10px;bottom:8px;font-size:11px;color:#5b6b88;background:rgba(6,10,17,.8);
+  border:1px solid var(--line);padding:3px 8px;border-radius:999px;pointer-events:none}
+footer{margin-top:28px;text-align:center;color:#5b6b88;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="badge">Interactive comparison</div>
+  <h1>DLSS <span class="g">Lab</span></h1>
+  <p>Tune the knobs on two live panels and watch the speed multipliers move — Super Resolution, Frame Generation and Reflex, modeled on NVIDIA's published DLSS numbers.</p>
+</header>
+
+<div class="card">
+  <h2>Global setup</h2>
+  <p class="sub">Same rig and scene for both panels — this is the baseline everything multiplies against.</p>
+  <div class="knobs">
+    <div class="knob"><label>GPU</label><div class="seg" id="gpuSeg"></div></div>
+    <div class="knob"><label>Output resolution</label><div class="seg" id="resSeg"></div></div>
+    <div class="knob"><label>Scene load</label><div class="seg" id="sceneSeg"></div></div>
+  </div>
+</div>
+
+<div class="duel">
+  <div class="panel" id="panelA">
+    <div class="phead"><span class="tag a">A · LEFT</span><span class="chip" id="nativeA"></span></div>
+    <div class="screen"><canvas id="cvA"></canvas>
+      <div class="hud">
+        <div class="fps"><div class="n" id="fpsA">–</div><div class="u">FPS · <span id="msA">–</span> ms</div></div>
+        <div class="chips" id="chipsA"></div>
+      </div>
+      <div class="multbar">
+        <div class="mx"><span id="multA">×1.0</span> <small>vs native</small></div>
+        <div class="lat">PC latency<br><b id="latA">–</b> ms</div>
+      </div>
+    </div>
+    <div class="pknobs">
+      <div class="prow"><span class="lbl">Super Res</span><div class="seg" id="srA"></div></div>
+      <div class="prow"><span class="lbl">Frame Gen</span><div class="seg" id="fgA"></div></div>
+      <div class="prow"><span class="lbl">Reflex</span><div class="toggle" id="reflexA"><span class="pill"></span><span>Low latency</span></div></div>
+    </div>
+  </div>
+  <div class="panel" id="panelB">
+    <div class="phead"><span class="tag b">B · RIGHT</span><span class="chip" id="nativeB"></span></div>
+    <div class="screen"><canvas id="cvB"></canvas>
+      <div class="hud">
+        <div class="fps"><div class="n" id="fpsB">–</div><div class="u">FPS · <span id="msB">–</span> ms</div></div>
+        <div class="chips" id="chipsB"></div>
+      </div>
+      <div class="multbar">
+        <div class="mx"><span id="multB">×1.0</span> <small>vs native</small></div>
+        <div class="lat">PC latency<br><b id="latB">–</b> ms</div>
+      </div>
+    </div>
+    <div class="pknobs">
+      <div class="prow"><span class="lbl">Super Res</span><div class="seg" id="srB"></div></div>
+      <div class="prow"><span class="lbl">Frame Gen</span><div class="seg" id="fgB"></div></div>
+      <div class="prow"><span class="lbl">Reflex</span><div class="toggle" id="reflexB"><span class="pill"></span><span>Low latency</span></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Head to head</h2>
+  <p class="sub">Live multiplier between the two panels, plus a rolling FPS trace.</p>
+  <div class="vs">
+    <div class="big" id="vsBig">B is <span class="x">×1.0</span> faster than A</div>
+    <div class="sub" id="vsSub">–</div>
+  </div>
+  <div class="presets" id="presets"></div>
+  <canvas id="chart"></canvas>
+  <div class="legend"><span><i style="background:#00c8ff"></i>A · LEFT</span><span><i style="background:#ffb020"></i>B · RIGHT</span></div>
+</div>
+
+<div class="card">
+  <h2>How the numbers work</h2>
+  <p class="sub">An honest model, not a benchmark. Every multiplier below is tunable above — that's the point.</p>
+  <table class="model">
+    <tr><th>Knob</th><th>Setting</th><th>Effect on FPS</th></tr>
+    <tr><td>Super Resolution</td><td>Quality / Balanced / Performance / Ultra Perf</td><td>×1.45 / ×1.65 / ×1.95 / ×2.40</td></tr>
+    <tr><td>Frame Generation</td><td>2× / 3× / 4×</td><td>×1.9 / ×2.7 / ×3.4</td></tr>
+    <tr><td>Reflex</td><td>On</td><td>No FPS change — cuts PC latency ~35%</td></tr>
+    <tr><td>Combo example</td><td>Ultra Perf + 4× FG</td><td>×2.40 × ×3.40 ≈ <b>×8.2 vs native</b></td></tr>
+  </table>
+  <p class="fine">Base frame rates are modeled per GPU at 4K with full ray tracing (RTX 5070 ≈ 26, 5080 ≈ 34, 5090 ≈ 45 native FPS), scaled for output resolution and scene load, with ±3% run-to-run jitter. Super Resolution uplifts and multi-frame-generation multipliers follow the ranges in NVIDIA's DLSS 4 announcements (up to 8× combined). The "game footage" is a procedurally animated scene — but the resolution scaling is real: each panel renders internally at its DLSS render resolution (Quality 67%, Balanced 58%, Performance 50%, Ultra Performance 33%) and upscales, so you can see the actual sharpness trade-off. Frame Generation's FPS effect is modeled, not rendered.</p>
+</div>
+
+<footer>DLSS Lab · a fan-made interactive model, not affiliated with NVIDIA · footage simulated</footer>
+</div>
+<div class="ver">v2026.10.02-20.35</div>
+<script>
+"use strict";
+/* ---------- model ---------- */
+const GPU_BASE = { "RTX 5070": 26, "RTX 5080": 34, "RTX 5090": 45 }; // native FPS, 4K full-RT
+const RES_SCALE = { "1080p": 2.3, "1440p": 1.6, "4K": 1.0 };
+const SCENE_SCALE = { "No RT": 2.2, "RT Medium": 1.45, "Full RT": 1.0 };
+const SR = {
+  "Off":            { mult: 1.00, rs: 1.00, label: "Off" },
+  "Quality":        { mult: 1.45, rs: 0.67, label: "Quality" },
+  "Balanced":       { mult: 1.65, rs: 0.58, label: "Balanced" },
+  "Performance":    { mult: 1.95, rs: 0.50, label: "Performance" },
+  "Ultra Perf.":    { mult: 2.40, rs: 0.33, label: "Ultra Perf." },
+};
+const FG = {
+  "Off": { mult: 1.0, gen: 0 },
+  "2x":  { mult: 1.9, gen: 1 },
+  "3x":  { mult: 2.7, gen: 2 },
+  "4x":  { mult: 3.4, gen: 3 },
+};
+const state = {
+  gpu: "RTX 5090", res: "4K", scene: "Full RT",
+  A: { sr: "Off", fg: "Off", reflex: false },
+  B: { sr: "Ultra Perf.", fg: "4x", reflex: true },
+};
+function nativeFPS() {
+  return GPU_BASE[state.gpu] * RES_SCALE[state.res] * SCENE_SCALE[state.scene];
+}
+function panelFPS(p) {
+  return nativeFPS() * SR[p.sr].mult * FG[p.fg].mult;
+}
+function latencyMs(fps, reflex) {
+  return (1000 / fps) * (reflex ? 0.65 : 1.0) + (reflex ? 4 : 8);
+}
+const $ = id => document.getElementById(id);
+
+/* ---------- segmented controls ---------- */
+function seg(el, options, get, set) {
+  el.innerHTML = "";
+  options.forEach(o => {
+    const b = document.createElement("button");
+    b.textContent = o;
+    if (get() === o) b.classList.add("on");
+    b.onclick = () => { set(o); refresh(); };
+    el.appendChild(b);
+  });
+}
+function buildControls() {
+  seg($("gpuSeg"), Object.keys(GPU_BASE), () => state.gpu, v => state.gpu = v);
+  seg($("resSeg"), Object.keys(RES_SCALE), () => state.res, v => state.res = v);
+  seg($("sceneSeg"), Object.keys(SCENE_SCALE), () => state.scene, v => state.scene = v);
+  ["A", "B"].forEach(P => {
+    seg($("sr" + P), Object.keys(SR), () => state[P].sr, v => state[P].sr = v);
+    seg($("fg" + P), Object.keys(FG), () => state[P].fg, v => state[P].fg = v);
+    const t = $("reflex" + P);
+    t.classList.toggle("on", state[P].reflex);
+    t.onclick = () => { state[P].reflex = !state[P].reflex; refresh(); };
+  });
+}
+
+/* ---------- presets ---------- */
+const PRESETS = [
+  { name: "🎬 NVIDIA-style demo", A: { sr: "Off", fg: "Off", reflex: false }, B: { sr: "Ultra Perf.", fg: "4x", reflex: true } },
+  { name: "⚖️ Quality vs Performance", A: { sr: "Quality", fg: "2x", reflex: true }, B: { sr: "Performance", fg: "4x", reflex: true } },
+  { name: "🪜 Frame-gen ladder", A: { sr: "Performance", fg: "2x", reflex: false }, B: { sr: "Performance", fg: "4x", reflex: false } },
+  { name: "🔁 Mirror panels", A: { sr: "Balanced", fg: "2x", reflex: true }, B: { sr: "Balanced", fg: "2x", reflex: true } },
+];
+function buildPresets() {
+  const el = $("presets"); el.innerHTML = "";
+  PRESETS.forEach(p => {
+    const b = document.createElement("button");
+    b.textContent = p.name;
+    b.onclick = () => {
+      state.A = { ...p.A }; state.B = { ...p.B };
+      refresh();
+    };
+    el.appendChild(b);
+  });
+  const swap = document.createElement("button");
+  swap.textContent = "⇄ Swap A/B";
+  swap.onclick = () => { const t = state.A; state.A = state.B; state.B = t; refresh(); };
+  el.appendChild(swap);
+}
+
+/* ---------- procedural night-city scene (same seed => fair comparison) ---------- */
+function rng(seed) { let s = seed >>> 0; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
+function makeScene(seed) {
+  const R = rng(seed), stars = [], far = [], mid = [], near = [];
+  for (let i = 0; i < 90; i++) stars.push({ x: R(), y: R() * 0.55, r: R() * 1.3 + 0.3, p: R() * 6.28 });
+  const layer = (arr, n, wMin, wMax, hMin, hMax) => {
+    let x = 0;
+    for (let i = 0; i < n; i++) {
+      const w = wMin + R() * (wMax - wMin), h = hMin + R() * (hMax - hMin);
+      const wins = [];
+      const cols = Math.floor(w / 9), rows = Math.floor(h / 12);
+      for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++)
+        if (R() < 0.42) wins.push({ c, r, warm: R() < 0.7 });
+      arr.push({ x, w, h, wins, neon: R() < 0.3 ? ["#ff2d78", "#00c8ff", "#ffe14d", "#7C4DFF"][Math.floor(R() * 4)] : null });
+      x += w + 4 + R() * 26;
+    }
+    arr.span = x;
+  };
+  layer(far, 26, 40, 90, 60, 150);
+  layer(mid, 20, 50, 110, 90, 220);
+  layer(near, 14, 70, 150, 140, 320);
+  const drops = []; for (let i = 0; i < 70; i++) drops.push({ x: R(), y: R(), l: 8 + R() * 14, s: 0.5 + R() * 0.8 });
+  return { stars, far, mid, near, drops };
+}
+const SCENE = makeScene(20261002);
+function drawBuildings(ctx, arr, baseY, t, speed, color, winOn, scale) {
+  const W = ctx.canvas.width;
+  const off = (t * speed) % arr.span;
+  for (let rep = -1; rep * arr.span < W + arr.span; rep++) {
+    const ox = rep * arr.span - off;
+    for (const b of arr) {
+      const x = ox + b.x, y = baseY - b.h * scale;
+      if (x + b.w < -50 || x > W + 50) continue;
+      ctx.fillStyle = color;
+      ctx.fillRect(x, y, b.w, b.h * scale);
+      if (winOn && scale > 0.4) {
+        for (const wn of b.wins) {
+          const wx = x + 4 + wn.c * 9, wy = y + 6 + wn.r * 12;
+          if (wx > x + b.w - 6) continue;
+          ctx.fillStyle = wn.warm ? "rgba(255,190,90,.85)" : "rgba(150,220,255,.8)";
+          ctx.fillRect(wx, wy, 4.5, 6);
+        }
+      }
+      if (b.neon && scale > 0.55) {
+        ctx.fillStyle = b.neon; ctx.globalAlpha = 0.9;
+        ctx.fillRect(x + b.w * 0.2, y - 8, b.w * 0.6, 4);
+        ctx.globalAlpha = 0.25;
+        ctx.fillRect(x + b.w * 0.2 - 6, y - 14, b.w * 0.6 + 12, 16);
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+}
+function drawScene(ctx, w, h, t) {
+  const g = ctx.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, "#04070f"); g.addColorStop(0.6, "#0a1226"); g.addColorStop(1, "#060a14");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+  // stars
+  ctx.fillStyle = "#cfe4ff";
+  for (const s of SCENE.stars) {
+    ctx.globalAlpha = 0.35 + 0.35 * Math.sin(t * 2 + s.p);
+    ctx.fillRect(s.x * w, s.y * h, s.r, s.r);
+  }
+  ctx.globalAlpha = 1;
+  // moon
+  ctx.fillStyle = "#e8f1ff"; ctx.globalAlpha = 0.9;
+  ctx.beginPath(); ctx.arc(w * 0.8, h * 0.16, h * 0.055, 0, 6.29); ctx.fill(); ctx.globalAlpha = 1;
+  const hor = h * 0.72;
+  drawBuildings(ctx, SCENE.far, hor, t, 12, "#0b1322", false, h / 400 * 0.5);
+  drawBuildings(ctx, SCENE.mid, hor, t, 34, "#101b30", true, h / 400 * 0.75);
+  // street glow
+  const sg = ctx.createLinearGradient(0, hor, 0, h);
+  sg.addColorStop(0, "rgba(255,45,120,.10)"); sg.addColorStop(1, "rgba(0,200,255,.06)");
+  ctx.fillStyle = sg; ctx.fillRect(0, hor, w, h - hor);
+  drawBuildings(ctx, SCENE.near, hor, t, 80, "#0d1626", true, h / 400);
+  // car light streaks
+  ctx.globalAlpha = 0.8;
+  for (let i = 0; i < 7; i++) {
+    const y = hor + 8 + ((i * 53 + t * 260) % (h - hor - 16));
+    const x = w - ((t * (300 + i * 60) + i * 311) % (w + 240)) + 120;
+    const grd = ctx.createLinearGradient(x - 90, 0, x, 0);
+    grd.addColorStop(0, "rgba(255,80,80,0)"); grd.addColorStop(1, "rgba(255,80,80,.9)");
+    ctx.fillStyle = grd; ctx.fillRect(x - 90, y, 90, 2.5);
+    ctx.fillStyle = "rgba(255,220,220,.95)"; ctx.fillRect(x, y - 1, 7, 4.5);
+  }
+  ctx.globalAlpha = 1;
+  // rain
+  ctx.strokeStyle = "rgba(170,200,255,.28)"; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (const d of SCENE.drops) {
+    const y = ((d.y * h + t * 420 * d.s) % (h + 30)) - 15, x = d.x * w - y * 0.12;
+    ctx.moveTo(x, y); ctx.lineTo(x + d.l * 0.12, y + d.l);
+  }
+  ctx.stroke();
+}
+
+/* ---------- panels ---------- */
+const panels = {};
+function makePanel(P) {
+  const cv = $("cv" + P);
+  const off = document.createElement("canvas");
+  const octx = off.getContext("2d");
+  return { P, cv, ctx: cv.getContext("2d"), off, octx, clock: Math.random() * 10, hist: [] };
+}
+function sizePanels() {
+  ["A", "B"].forEach(P => {
+    const p = panels[P];
+    const r = p.cv.parentElement.getBoundingClientRect();
+    const dw = Math.max(2, Math.round(r.width)), dh = Math.max(2, Math.round(r.height));
+    if (p.cv.width !== dw || p.cv.height !== dh) { p.cv.width = dw; p.cv.height = dh; }
+    const rs = SR[state[P].sr].rs;
+    const iw = Math.max(2, Math.round(dw * rs)), ih = Math.max(2, Math.round(dh * rs));
+    if (p.off.width !== iw || p.off.height !== ih) { p.off.width = iw; p.off.height = ih; }
+  });
+  sizeChart();
+}
+function renderPanel(p, dt) {
+  const fps = panelFPS(state[p.P]);
+  p.clock += dt;
+  // quantize motion to the panel's frame rate: you SEE the smoothness difference
+  const tq = Math.floor(p.clock * fps) / fps;
+  drawScene(p.octx, p.off.width, p.off.height, tq);
+  p.ctx.imageSmoothingEnabled = true; p.ctx.imageSmoothingQuality = "high";
+  p.ctx.drawImage(p.off, 0, 0, p.cv.width, p.cv.height);
+  // frame-gen shimmer: tag generated frames
+  const gen = FG[state[p.P].fg].gen;
+  if (gen > 0) {
+    p.ctx.fillStyle = "rgba(118,185,0,.9)";
+    p.ctx.font = "600 10px -apple-system,sans-serif";
+    p.ctx.fillText("AI ×" + (gen + 1) + " frames", 8, p.cv.height - 8);
+  }
+}
+
+/* ---------- HUD + chart ---------- */
+const jitter = () => 1 + (Math.random() - 0.5) * 0.06;
+function fmtMult(m) { return "×" + (m >= 10 ? m.toFixed(1) : m.toFixed(2).replace(/0$/, "")); }
+function updateHUD() {
+  const nat = nativeFPS();
+  ["A", "B"].forEach(P => {
+    const p = state[P];
+    const fps = panelFPS(p) * jitter();
+    const mult = panelFPS(p) / nat;
+    $("fps" + P).textContent = Math.round(fps);
+    $("ms" + P).textContent = (1000 / fps).toFixed(1);
+    $("mult" + P).textContent = fmtMult(mult);
+    $("lat" + P).textContent = latencyMs(fps, p.reflex).toFixed(0);
+    $("nativeA") && ($("native" + P).textContent = Math.round(nat) + " native FPS");
+    const chips = [];
+    chips.push(p.sr === "Off" ? "DLSS OFF" : "DLSS " + p.sr.toUpperCase());
+    if (p.fg !== "Off") chips.push("FG " + p.fg);
+    if (p.reflex) chips.push("REFLEX");
+    $("chips" + P).innerHTML = chips.map(c =>
+      '<span class="chip' + (c !== "DLSS OFF" ? " hot" : "") + '">' + c + "</span>").join("");
+    panels[P].hist.push(fps);
+    if (panels[P].hist.length > 60) panels[P].hist.shift();
+  });
+  const fa = panelFPS(state.A), fb = panelFPS(state.B);
+  const m = fb / fa;
+  $("vsBig").innerHTML = m >= 1
+    ? 'B is <span class="x">' + fmtMult(m) + "</span> faster than A"
+    : 'A is <span class="x">' + fmtMult(1 / m) + "</span> faster than B";
+  $("vsSub").textContent = Math.round(fa) + " FPS vs " + Math.round(fb) + " FPS · " +
+    state.gpu + " · " + state.res + " · " + state.scene;
+  drawChart();
+}
+const chart = $("chart"), cctx = chart.getContext("2d");
+function sizeChart() {
+  const r = chart.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  chart.width = Math.max(2, Math.round(r.width * dpr));
+  chart.height = Math.max(2, Math.round(180 * dpr));
+}
+function drawChart() {
+  const w = chart.width, h = chart.height;
+  cctx.clearRect(0, 0, w, h);
+  const all = panels.A.hist.concat(panels.B.hist);
+  if (!all.length) return;
+  const max = Math.max(...all) * 1.15 || 1;
+  const line = (hist, color) => {
+    cctx.strokeStyle = color; cctx.lineWidth = Math.max(1.5, w / 400);
+    cctx.beginPath();
+    hist.forEach((v, i) => {
+      const x = (i / 59) * w, y = h - (v / max) * (h * 0.86) - h * 0.07;
+      i ? cctx.lineTo(x, y) : cctx.moveTo(x, y);
+    });
+    cctx.stroke();
+  };
+  cctx.fillStyle = "rgba(142,160,189,.85)";
+  cctx.font = `${Math.max(10, w / 60)}px -apple-system,sans-serif`;
+  cctx.fillText(Math.round(max / 1.15) + " FPS", 6, 14);
+  line(panels.A.hist, "#00c8ff");
+  line(panels.B.hist, "#ffb020");
+}
+function refresh() { buildControls(); sizePanels(); updateHUD(); }
+
+/* ---------- main loop ---------- */
+let last = performance.now(), hudT = 0;
+function loop(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  renderPanel(panels.A, dt);
+  renderPanel(panels.B, dt);
+  hudT += dt;
+  if (hudT > 0.25) { hudT = 0; updateHUD(); }
+  requestAnimationFrame(loop);
+}
+window.addEventListener("resize", () => { sizePanels(); });
+
+/* ---------- init ---------- */
+panels.A = makePanel("A"); panels.B = makePanel("B");
+buildControls(); buildPresets(); sizePanels(); updateHUD();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

@@ -86,7 +86,22 @@ const SITES = ["leetcode-games", "ergosphere", "illusion-bowling", "shotgrep", "
   "random-side-quest",
   "teaching-tools-lab",
   "trade-compass",
-  "unknown-unknown-search"];
+  "unknown-unknown-search",
+  "autonomous-scientist",
+  "bench-lab-rpc",
+  "deep-reader",
+  "dlss-lab",
+  "hangtime",
+  "how-well-do-we-match",
+  "how-x-algorithm-works",
+  "musk-emails",
+  "personal-digital-twin",
+  "personal-site",
+  "song-duel",
+  "spf-showdown",
+  "tesla-commute-tco",
+  "what-should-we-talk-about",
+  "world-todo"];
 const PROJECTS_HOST = "projects.lukezhang.si";
 const SITE_HOST_RE = /^([a-z0-9-]+)\.lukezhang\.si$/;
 

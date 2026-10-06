@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Excalidraw Share Links Are Just an ID and a Key: luke's blog</title>
+<meta name="description" content="An Excalidraw share link doesn't contain your drawing. It holds a scene ID and a decryption key. I rebuilt the whole encrypted upload pipeline in Python and published a diagram without ever pressing Share.">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    min-height: 100%;
+    background: radial-gradient(circle at 50% 0%, #3a2718 0%, #1c130e 45%, #0d0a09 100%);
+    background-attachment: fixed;
+    color: #f3e2cd;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.7;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 56px 22px 80px; }
+  nav.top { margin-bottom: 40px; font-size: 14px; }
+  nav.top a { color: rgba(243,226,205,0.55); text-decoration: none; }
+  nav.top a:hover { color: #e8a15c; }
+  h1 { font-size: 32px; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 8px; }
+  .meta { color: rgba(243,226,205,0.5); font-size: 14px; margin-bottom: 24px; }
+  .verdict { font-size: 17px; color: #ffd9a8; border-left: 3px solid #e8a15c;
+    padding: 4px 0 4px 18px; margin: 0 0 28px; line-height: 1.65; }
+  p { margin-bottom: 16px; font-size: 16px; color: rgba(243,226,205,0.88); }
+  p strong, li strong { color: #ffd9a8; }
+  h2 { font-size: 23px; color: #ffd9a8; margin: 40px 0 10px; letter-spacing: -0.01em; }
+  ul { margin: 0 0 16px 20px; font-size: 16px; color: rgba(243,226,205,0.88); }
+  li { margin-bottom: 8px; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px;
+    background: rgba(232,161,92,0.12); border: 1px solid rgba(232,161,92,0.25);
+    border-radius: 6px; padding: 1px 7px; color: #ffd9a8; white-space: nowrap; }
+  pre { background: rgba(0,0,0,0.35); border: 1px solid rgba(232,161,92,0.2);
+    border-radius: 12px; padding: 16px 18px; margin: 0 0 16px; overflow-x: auto; }
+  pre code { background: none; border: none; padding: 0; white-space: pre; font-size: 13.5px; line-height: 1.6; }
+  a { color: #e8a15c; }
+  .demo { display: block; margin: 28px 0; border: 1px solid rgba(232,161,92,0.3);
+    border-radius: 16px; padding: 22px; text-decoration: none; color: inherit;
+    background: rgba(255,255,255,0.02); touch-action: manipulation; }
+  .demo:hover { border-color: rgba(232,161,92,0.6); }
+  .demo h3 { color: #ffd9a8; font-size: 19px; margin-bottom: 6px; }
+  .demo p { margin: 0; font-size: 15px; color: rgba(243,226,205,0.75); }
+  .demo .go { display: inline-block; margin-top: 10px; color: #e8a15c; font-weight: 700; font-size: 15px; }
+  .tryit { margin: 28px 0; border: 1px solid rgba(232,161,92,0.3); border-radius: 16px;
+    padding: 22px; background: rgba(255,255,255,0.02); }
+  .tryit h3 { color: #ffd9a8; font-size: 19px; margin-bottom: 6px; }
+  .tryit p { margin-bottom: 14px; font-size: 15px; color: rgba(243,226,205,0.75); }
+  .tryit-row { display: flex; gap: 10px; }
+  .tryit-row input { flex: 1; min-width: 0; font-size: 16px; padding: 12px 14px; border-radius: 10px;
+    border: 1px solid rgba(232,161,92,0.35); background: rgba(0,0,0,0.35); color: #f3e2cd;
+    font-family: inherit; touch-action: manipulation; }
+  .tryit-row input:focus { outline: none; border-color: #e8a15c; }
+  .tryit-row button { font-size: 16px; font-weight: 700; padding: 12px 18px; border-radius: 10px;
+    border: none; background: #e8a15c; color: #1c130e; cursor: pointer;
+    font-family: inherit; touch-action: manipulation; white-space: nowrap; }
+  .tryit-row button:active { transform: scale(0.97); }
+  .tryout { margin-top: 14px; word-break: break-all; }
+  .tryout[hidden] { display: none; }
+  figure { margin: 20px 0 24px; }
+  figure img { width: 100%; border-radius: 12px; border: 1px solid rgba(232,161,92,0.2); display: block; background: #0d0a09; }
+  figcaption { font-size: 14px; color: rgba(243,226,205,0.6); margin-top: 8px; line-height: 1.5; }
+  .sidebyside { display: flex; gap: 12px; margin: 20px 0 8px; }
+  .sidebyside figure { flex: 1; margin: 0; }
+  .sidebyside figcaption { font-size: 13px; }
+  @media (max-width: 560px) { .sidebyside { flex-direction: column; } }
+  footer { margin-top: 60px; font-size: 13px; color: rgba(243,226,205,0.35); }
+  footer a { color: rgba(243,226,205,0.6); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="top"><a href="/blog/">← blog</a></nav>
+  <h1>Excalidraw Share Links Are Just an ID and a Key</h1>
+  <div class="meta">October 6, 2026 · reverse engineering · excalidraw</div>
+
+  <p class="verdict">An Excalidraw share link does not contain your drawing. It contains a scene ID and a decryption key. Your drawing is encrypted on your device, uploaded as a blob nobody can read, and only someone holding the link can decrypt it. I rebuilt the entire pipeline in a Python script and uploaded a diagram without ever pressing the app's Share button.</p>
+
+  <h2>1. What I wanted</h2>
+  <p>A post was going around showing AI drawing live inside Excalidraw, sketching out explanations stroke by stroke. I asked my assistant if it could do the same. Honest answer: it can't draw inside the app. But a <code>.excalidraw</code> file is just JSON, a list of boxes, arrows, and text. So it wrote one by hand: a full reference diagram for Euclidean distance, 61 real editable elements, recreated from a diagram in the thread. Then it wanted a share link for it, the way you'd get from pressing Share.</p>
+
+  <h2>2. My first guess was wrong</h2>
+  <p>Share links look like <code>excalidraw.com/#json=&lt;stuff&gt;</code>. I assumed <code>&lt;stuff&gt;</code> was the drawing itself, so I compressed my scene and pasted it into the fragment. The app opened a blank canvas and stared back at me. Nothing.</p>
+
+  <div class="sidebyside">
+    <figure>
+      <img src="blank.png" alt="Blank Excalidraw canvas after pasting scene data into the URL">
+      <figcaption>What I tried first: the whole scene pasted into <code>#json=</code>. Blank canvas.</figcaption>
+    </figure>
+    <figure>
+      <img src="rendered.png" alt="The Euclidean distance diagram rendered from a real share link">
+      <figcaption>What actually works: a real share link. The full diagram, editable.</figcaption>
+    </figure>
+  </div>
+
+  <h2>3. What the link actually is</h2>
+  <p>The fragment is two things separated by a comma: a <strong>scene ID</strong> and a <strong>decryption key</strong>. The app fetches an encrypted blob from Excalidraw's servers and decrypts it in your browser. The server never sees your drawing. It never even sees the key, because URL fragments are never sent to servers. This is end-to-end encryption done right, and it's the default for every share link.</p>
+
+  <figure>
+    <img src="anatomy.png" alt="Anatomy of a share link: domain, fragment marker, scene ID, decryption key">
+    <figcaption>Every share link has the same four parts. The key never leaves the fragment.</figcaption>
+  </figure>
+
+  <p>Here is what Excalidraw's server actually stores for my diagram. All 61 elements, the text, the arrows, the colors, reduced to this:</p>
+
+  <figure>
+    <img src="server-sees.png" alt="Hex dump of the encrypted payload stored on Excalidraw's server">
+    <figcaption>4,226 bytes of noise. The readable bit at the top is just the format label. Without the key from the link, none of the rest means anything.</figcaption>
+  </figure>
+
+  <h2>4. The pipeline</h2>
+  <figure>
+    <img src="pipeline.png" alt="Diagram of the share link pipeline: scene JSON, deflate, AES-128-GCM encrypt, POST, blob stored, share link">
+    <figcaption>The full pipeline, drawn as an Excalidraw diagram itself. The key is generated on your device and only ever lives in the URL fragment.</figcaption>
+  </figure>
+  <p>The exact recipe, pulled from a published open-source uploader instead of guessed: take the scene JSON, compress it with zlib, encrypt it with AES-128-GCM using a random 16-byte key and a random 12-byte IV, wrap it in Excalidraw's chunk format, and POST the raw bytes to <code>json.excalidraw.com/api/v2/post/</code>. The server hands back an ID. The link is <code>excalidraw.com/#json=&lt;id&gt;,&lt;key&gt;</code>, with the key in base64.</p>
+
+  <div class="tryit">
+    <h3>Try the actual primitive</h3>
+    <p>Type anything. Your browser encrypts it with AES-128-GCM, the same algorithm guarding the diagram. Nothing leaves your device.</p>
+    <div class="tryit-row">
+      <input id="tryin" type="text" placeholder="type something secret" maxlength="120" autocomplete="off">
+      <button id="trybtn" type="button">Encrypt it</button>
+    </div>
+    <pre id="tryout" class="tryout" hidden></pre>
+  </div>
+  <script>
+  (function () {
+    var btn = document.getElementById('trybtn');
+    btn.addEventListener('click', async function () {
+      var out = document.getElementById('tryout');
+      var text = document.getElementById('tryin').value || 'hello excalidraw';
+      try {
+        var key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 128 }, true, ['encrypt']);
+        var iv = crypto.getRandomValues(new Uint8Array(12));
+        var ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key,
+          new TextEncoder().encode(text));
+        var bytes = new Uint8Array(ct);
+        var bin = '';
+        for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+        var b64 = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        var exported = await crypto.subtle.exportKey('jwk', key);
+        out.hidden = false;
+        out.textContent = 'ciphertext: ' + b64 + '\nkey (this would live in your link): ' + exported.k;
+      } catch (e) {
+        out.hidden = false;
+        out.textContent = 'Encryption is not available in this browser.';
+      }
+    });
+  })();
+  </script>
+
+  <h2>5. The upload</h2>
+  <p>The Python version is about 30 lines. The only drama was the network: HTTPS POSTs hung forever from my machine, the proxy eats them, while plain HTTP went through instantly. The payload is already encrypted, so the transport doesn't matter. One request, 0.6 seconds, ID received.</p>
+  <pre><code>key = os.urandom(16); iv = os.urandom(12)
+inner = concat(b"{}", scene_bytes)
+ct = AESGCM(key).encrypt(iv, zlib.compress(inner), None)
+payload = concat(b'{"version":2,"compression":"pako@1",'
+                 b'"encryption":"AES-GCM"}', iv, ct)
+r = requests.post("https://json.excalidraw.com/api/v2/post/",
+                  data=payload)
+scene_id = r.json()["id"]
+url = f"https://excalidraw.com/#json={scene_id},{b64(key)}"</code></pre>
+
+  <h2>6. Proof</h2>
+  <p>Trust, but verify. I downloaded the blob back from their server, decrypted it, decompressed it: all 61 elements, byte for byte identical to the original. Then I opened the link in the real app. The full diagram rendered, editable, every arrow and label in place.</p>
+
+  <a class="demo" href="https://excalidraw.com/#json=aY4jlFYTxE2qzt-E2qJVB,_Rp6KqYk-xxgITzvrVl17Q">
+    <h3>The live diagram</h3>
+    <p>Euclidean (L2) distance: the straight-line gap. Opens editable in excalidraw.com. The <code>.excalidraw</code> source files are linked below.</p>
+    <span class="go">Open it →</span>
+  </a>
+
+  <h2>7. What this unlocks</h2>
+  <p>Any diagram my assistant generates is now one script run away from a real editable Excalidraw link. No export, no import, no dragging files into a browser tab. It writes the JSON, runs the uploader, sends the link.</p>
+
+  <p>A share link is a treasure map where X marks a locked box and the key is taped to the back of the map.</p>
+
+  <footer>
+    Files: <a href="euclidean-l2-distance.excalidraw">euclidean-l2-distance.excalidraw</a> ·
+    <a href="excalidraw-share-pipeline.excalidraw">excalidraw-share-pipeline.excalidraw</a> ·
+    <a href="excalidraw-link-anatomy.excalidraw">excalidraw-link-anatomy.excalidraw</a> ·
+    uploader at <code>~/workspace/excalidraw/upload.py</code>
+  </footer>
+</div>
+</body>
+</html>

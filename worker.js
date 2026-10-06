@@ -213,6 +213,18 @@ async function handleDecision(request, env) {
     return json({ ok: true, id: id }, 201);
   }
 
+  if (request.method === "POST" && action === "autosave") {
+    var aip = request.headers.get("cf-connecting-ip") || "unknown";
+    if (!(await rateLimit(kv, "dd:auto:" + aip, 120, 3600))) return err("slow down", 429);
+    var abody = await request.json().catch(function () { return null; });
+    var aslug = abody && abody.slug;
+    if (!aslug || !SLUG_RE.test(aslug)) return err("bad slug", 400);
+    var apicks = abody.picks && typeof abody.picks === "object" ? abody.picks : {};
+    var anotes = abody.notes && typeof abody.notes === "object" ? abody.notes : {};
+    await kv.put("dd:draft:" + aslug, JSON.stringify({ slug: aslug, picks: apicks, notes: anotes, updatedAt: Date.now() }).slice(0, 20000));
+    return json({ ok: true });
+  }
+
   if (request.method === "GET" && action === "responses") {
     if (url.searchParams.get("key") !== DD_READ_KEY) return err("forbidden", 403);
     var rslug = url.searchParams.get("slug") || "";
@@ -223,7 +235,8 @@ async function handleDecision(request, env) {
       var r = await kv.get("dd:sub:" + rslug + ":" + ridx[i], "json");
       if (r) out.push(r);
     }
-    return json({ slug: rslug, responses: out });
+    var draft = await kv.get("dd:draft:" + rslug, "json");
+    return json({ slug: rslug, responses: out, draft: draft || null });
   }
 
   return err("not found", 404);

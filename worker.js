@@ -36,6 +36,8 @@ const SITES = ["leetcode-games", "ergosphere", "illusion-bowling", "shotgrep", "
   "us-book-dr",
   "wikimari",
   "blackbox",
+  "wiggle-room-brand",
+  "skill-tree-directions",
   "sysdesign-build-a-job-scheduler",
   "sysdesign-build-a-tokenizer",
   "sysdesign-design-a-chat-system",

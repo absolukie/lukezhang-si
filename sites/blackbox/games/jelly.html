@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>JELLY — BLACKBOX</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; overflow:hidden; background:#0a0a12; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:#e8f4ff;
+         display:flex; align-items:center; justify-content:center; }
+  #wrap { position:relative; width:100%; max-width:480px; height:100%; }
+  canvas { position:absolute; inset:0; width:100%; height:100%; touch-action:none; display:block; }
+  .screen { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+            text-align:center; padding:24px; background:rgba(6,8,16,.9); z-index:10; }
+  .hidden { display:none !important; }
+  h1 { font-size:46px; letter-spacing:8px; color:#7df9ff; text-shadow:0 0 24px #22d3ee; margin-bottom:8px; }
+  h2 { font-size:30px; letter-spacing:3px; color:#7df9ff; text-shadow:0 0 18px #22d3ee; margin-bottom:8px; }
+  .sub { color:#8fa3bf; font-size:15px; margin-bottom:16px; line-height:1.5; }
+  .howto { color:#c8d8ee; font-size:15px; line-height:1.8; margin-bottom:24px; max-width:330px; }
+  .howto b { color:#7df9ff; }
+  button { touch-action:manipulation; font-size:18px; letter-spacing:2px; padding:14px 42px; border-radius:999px;
+           border:1px solid #22d3ee; background:rgba(34,211,238,.12); color:#a5f3fc; cursor:pointer;
+           font-family:inherit; }
+  button:active { background:rgba(34,211,238,.3); }
+  #hud { position:absolute; top:0; left:0; right:0; display:flex; justify-content:space-between; align-items:center;
+         padding:calc(10px + env(safe-area-inset-top)) 16px 10px; z-index:5; pointer-events:none;
+         font-size:14px; letter-spacing:1px; color:#8fa3bf; }
+  #hud .name { color:#7df9ff; font-weight:700; letter-spacing:3px; }
+  #hud button { pointer-events:auto; font-size:12px; padding:8px 16px; }
+  #toast { position:absolute; left:50%; bottom:26%; transform:translateX(-50%); z-index:6; color:#a5f3fc;
+           background:rgba(10,14,26,.85); border:1px solid #22d3ee55; border-radius:12px; padding:10px 18px;
+           font-size:14px; opacity:0; transition:opacity .3s; pointer-events:none; white-space:nowrap; }
+  .trick { margin-top:18px; font-size:13px; color:#5b6b87; letter-spacing:1px; }
+  .trick b { color:#22d3ee; }
+  .big { font-size:46px; color:#fff; margin:6px 0 12px; text-shadow:0 0 30px #22d3ee; }
+  #controls { position:absolute; left:0; right:0; bottom:0; z-index:5; display:flex; justify-content:space-between;
+              align-items:flex-end; padding:0 18px calc(18px + env(safe-area-inset-bottom)); pointer-events:none; }
+  #controls .pad { display:flex; gap:14px; pointer-events:auto; }
+  .ctl { touch-action:manipulation; width:72px; height:72px; border-radius:50%; border:1px solid #22d3ee;
+         background:rgba(34,211,238,.1); color:#a5f3fc; font-size:26px; display:flex; align-items:center;
+         justify-content:center; user-select:none; -webkit-user-select:none; }
+  .ctl.on { background:rgba(34,211,238,.35); }
+  #jumpBtn { width:88px; font-size:15px; letter-spacing:2px; }
+  .lives { color:#ff7ad9; letter-spacing:2px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+  <div id="hud" class="hidden">
+    <span class="name">JELLY</span>
+    <span class="lives" id="hudLives">●●●</span>
+    <span id="hudTime">0.0s</span>
+    <button id="resetBtn">RESET</button>
+  </div>
+  <div id="toast"></div>
+  <div id="controls" class="hidden">
+    <div class="pad">
+      <div class="ctl" id="leftBtn">◀</div>
+      <div class="ctl" id="rightBtn">▶</div>
+    </div>
+    <div class="pad">
+      <div class="ctl" id="jumpBtn">JUMP</div>
+    </div>
+  </div>
+
+  <div id="titleScreen" class="screen">
+    <h1>JELLY</h1>
+    <div class="sub">BLACKBOX &middot; physics toy</div>
+    <div class="howto"><b>Roll the jelly</b> through the lab.<br>
+      Arrow keys or on-screen buttons: <b>LEFT / RIGHT</b> to roll, <b>UP</b> to jump.<br>
+      Hop the gap, ride the bouncy pad, squish through the tunnel, hit the flag.<br>
+      3 lives. Fastest time wins.</div>
+    <button id="startBtn">START ROLLING</button>
+    <div class="trick">The trick: <b>soft-body pressure model</b></div>
+  </div>
+
+  <div id="winScreen" class="screen hidden">
+    <h2>GOAL</h2>
+    <div class="sub">your time</div>
+    <div class="big" id="finalScore">0.0s</div>
+    <div class="sub" id="bestLine"></div>
+    <button id="againBtn">ROLL AGAIN</button>
+    <div class="trick">The trick: <b>soft-body pressure model</b></div>
+  </div>
+
+  <div id="loseScreen" class="screen hidden">
+    <h2>OUT OF LIVES</h2>
+    <div class="sub">the jelly dissolved into the void</div>
+    <button id="retryBtn">TRY AGAIN</button>
+    <div class="trick">The trick: <b>soft-body pressure model</b></div>
+  </div>
+</div>
+<script>
+"use strict";
+// ---------- setup ----------
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = 400, H = 700;
+let DPR = 1;
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const r = canvas.getBoundingClientRect();
+  canvas.width = Math.max(1, Math.round(r.width * DPR));
+  canvas.height = Math.max(1, Math.round(r.height * DPR));
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ---------- world ----------
+// rects: {x,y,w,h, oneWay} — y down. neon lab course.
+const PLATS = [
+  { x:-40,  y:620, w:380,  h:80 },          // start ground
+  { x:470,  y:600, w:260,  h:80 },          // landing after gap
+  { x:890,  y:400, w:330,  h:28, oneWay:1 },// high ledge (from bouncy pad)
+  { x:1260, y:560, w:640,  h:80 },          // squeeze tunnel floor
+  { x:1360, y:468, w:440,  h:32 },          // squeeze tunnel ceiling (gap 60)
+  { x:1900, y:620, w:420,  h:80 },          // final ground
+  { x:2320, y:0,   w:40,   h:940 },         // right wall
+  { x:-80,  y:0,   w:40,   h:940 },         // left wall
+];
+const PAD = { x:620, y:572, w:90, h:28, power:1050 }; // bouncy pad on platform B
+const GOAL = { x:2160, y:440, w:80, h:180 };          // goal flag zone
+const KILL_Y = 950;
+const SPAWN = { x:140, y:500 };
+const WORLD_W = 2360;
+
+// ---------- jelly: soft-body ring ----------
+// 12 point masses, verlet integration. Springs: neighbors + second-neighbors.
+// Internal pressure: each frame compute polygon area; push every edge outward
+// along its normal proportional to (1 - area/restArea). Volume-ish conserved:
+// the jelly squishes on impact, then the pressure pushes it back round.
+const N = 12, R = 34;
+const REST1 = 2 * R * Math.sin(Math.PI / N);      // neighbor rest length
+const REST2 = 2 * R * Math.sin(2 * Math.PI / N);  // second-neighbor rest length
+const REST_AREA = Math.PI * R * R;
+const GRAV = 1500;
+const SUB = 4;              // physics substeps per frame
+const ITER = 3;             // constraint relaxation iterations
+const DAMP = 0.998;
+const VMAX = 380;    // max horizontal speed, units/sec
+const VMAXY = 1300;  // max vertical speed, units/sec
+
+const pts = [];
+for (let i = 0; i < N; i++) {
+  const a = (i / N) * Math.PI * 2;
+  pts.push({ x: SPAWN.x + Math.cos(a) * R, y: SPAWN.y + Math.sin(a) * R,
+             px: SPAWN.x + Math.cos(a) * R, py: SPAWN.y + Math.sin(a) * R,
+             grounded: false });
+}
+let groundedTimer = 0;
+let jumpBuffer = 0;
+let areaRatio = 1;
+
+function spawnJelly(x, y) {
+  for (let i = 0; i < N; i++) {
+    const a = (i / N) * Math.PI * 2;
+    pts[i].x = x + Math.cos(a) * R; pts[i].y = y + Math.sin(a) * R;
+    pts[i].px = pts[i].x; pts[i].py = pts[i].y; pts[i].grounded = false;
+  }
+  groundedTimer = 0;
+  jumpBuffer = 0;
+}
+
+function polyArea() {
+  let a = 0;
+  for (let i = 0; i < N; i++) {
+    const p = pts[i], q = pts[(i + 1) % N];
+    a += p.x * q.y - q.x * p.y;
+  }
+  return Math.abs(a) / 2;
+}
+
+function center() {
+  let cx = 0, cy = 0, vx = 0, vy = 0;
+  for (const p of pts) { cx += p.x; cy += p.y; vx += (p.x - p.px); vy += (p.y - p.py); }
+  return { x: cx / N, y: cy / N, vx: vx / N, vy: vy / N };
+}
+
+// positional distance constraint between point i and j
+function spring(i, j, rest, stiff) {
+  const a = pts[i], b = pts[j];
+  let dx = b.x - a.x, dy = b.y - a.y;
+  const d = Math.hypot(dx, dy) || 1e-6;
+  const diff = (d - rest) / d * stiff * 0.5;
+  dx *= diff; dy *= diff;
+  a.x += dx; a.y += dy; b.x -= dx; b.y -= dy;
+}
+
+// Volume-constraint style pressure: each frame compute the polygon area, then
+// push every edge outward along its normal proportional to (1 - area/restArea).
+// Moving each point out by (restArea - area)/perimeter restores the area exactly
+// (linearized), so the jelly conserves volume-ish: it squishes on impact and
+// the pressure visibly pushes it back round.
+function applyPressure(gain) {
+  const A = polyArea();
+  const dev = REST_AREA - A;               // >0 when squished: push outward
+  if (Math.abs(dev) < 1) return;
+  let P = 0;
+  for (let i = 0; i < N; i++) {
+    const a = pts[i], b = pts[(i + 1) % N];
+    P += Math.hypot(b.x - a.x, b.y - a.y);
+  }
+  if (P < 1e-6) return;
+  const c = center();
+  const d = dev / P * gain;                // displacement per point
+  for (let i = 0; i < N; i++) {
+    const a = pts[i], b = pts[(i + 1) % N];
+    // outward normal of edge a->b (away from centroid)
+    let nx = -(b.y - a.y), ny = (b.x - a.x);
+    const mx = (a.x + b.x) / 2 - c.x, my = (a.y + b.y) / 2 - c.y;
+    if (nx * mx + ny * my < 0) { nx = -nx; ny = -ny; }
+    const l = Math.hypot(nx, ny) || 1e-6;
+    const push = d * 0.5 / l;              // per-endpoint share
+    a.x += nx * push; a.y += ny * push;
+    b.x += nx * push; b.y += ny * push;
+  }
+}
+
+function collidePoint(p) {
+  p.grounded = false;
+  for (const r of PLATS) {
+    if (r.oneWay) {
+      // land on top only if previously above and moving down
+      const vy = p.y - p.py;
+      if (vy >= 0 && p.py <= r.y + 8 && p.x > r.x - 6 && p.x < r.x + r.w + 6 && p.y > r.y && p.y < r.y + r.h + 40) {
+        p.y = r.y; p.py = p.y; // kill vertical velocity
+        p.px = p.x - (p.x - p.px) * 0.94; // ground friction
+        p.grounded = true;
+      }
+      continue;
+    }
+    const nx = Math.max(r.x, Math.min(p.x, r.x + r.w));
+    const ny = Math.max(r.y, Math.min(p.y, r.y + r.h));
+    let dx = p.x - nx, dy = p.y - ny;
+    if (dx === 0 && dy === 0) {
+      // center inside: push along smallest exit and kill velocity into the wall
+      const l = p.x - r.x, rr = r.x + r.w - p.x, t = p.y - r.y, bb = r.y + r.h - p.y;
+      const m = Math.min(l, rr, t, bb);
+      if (m === t) { p.y = r.y; p.py = p.y; p.grounded = true; }
+      else if (m === bb) { p.y = r.y + r.h; p.py = p.y; }
+      else if (m === l) { p.x = r.x; p.px = p.x; }
+      else { p.x = r.x + r.w; p.px = p.x; }
+      continue;
+    }
+    const d = Math.hypot(dx, dy);
+    if (d < 3.2) { // point radius
+      const push = 3.2 - d;
+      dx /= d; dy /= d;
+      p.x += dx * push; p.y += dy * push;
+      // kill velocity into the surface
+      const vx = p.x - p.px, vy = p.y - p.py;
+      const vn = vx * dx + vy * dy;
+      if (vn < 0) {
+        p.px += dx * vn; p.py += dy * vn;
+        if (dy < -0.5) { // landed on top
+          p.grounded = true;
+          p.px = p.x - (p.x - p.px) * 0.94;
+        }
+      }
+    }
+  }
+}
+
+let padCooldown = 0;
+function collidePad(dt) {
+  padCooldown -= dt;
+  if (padCooldown > 0) return;
+  for (const p of pts) {
+    if (p.x > PAD.x - 8 && p.x < PAD.x + PAD.w + 8 && p.y > PAD.y - 10 && p.y < PAD.y + PAD.h + 10) {
+      for (const q of pts) { q.py = q.y + PAD.power * (1 / 240); } // upward impulse
+      padCooldown = 0.4;
+      burst((PAD.x + PAD.w / 2), PAD.y, '#7df9ff', 18);
+      blip(520, 0.12);
+      toast('BOING');
+      return;
+    }
+  }
+}
+
+// ---------- particles (capped, cheap) ----------
+const parts = [];
+function burst(x, y, color, n) {
+  for (let i = 0; i < n && parts.length < 90; i++) {
+    const a = Math.random() * Math.PI * 2, s = 60 + Math.random() * 220;
+    parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 60,
+                 life: 0.5 + Math.random() * 0.4, t: 0, color });
+  }
+}
+
+// ---------- audio: tiny hand-rolled blips ----------
+let AC = null;
+function blip(freq, dur) {
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === 'suspended') AC.resume();
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = 'sine'; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.12, AC.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + dur);
+    o.connect(g); g.connect(AC.destination);
+    o.start(); o.stop(AC.currentTime + dur);
+  } catch (e) { /* audio unavailable: stay silent */ }
+}
+
+// ---------- game state ----------
+let mode = 'title'; // title | play | win | lose
+let lives = 3, elapsed = 0, winTime = 0;
+let best = parseFloat(localStorage.getItem('bb-jelly-best') || '0');
+let camX = 0, camY = 0, toastT = 0;
+const input = { left: false, right: false };
+
+const $ = id => document.getElementById(id);
+const hud = $('hud'), controls = $('controls'), toastEl = $('toast');
+
+function toast(msg) {
+  toastEl.textContent = msg;
+  toastEl.style.opacity = 1;
+  toastT = 1.2;
+}
+
+function show(id) { $(id).classList.remove('hidden'); }
+function hide(id) { $(id).classList.add('hidden'); }
+
+function startGame() {
+  lives = 3; elapsed = 0;
+  spawnJelly(SPAWN.x, SPAWN.y);
+  camX = 0; camY = 0;
+  mode = 'play';
+  hide('titleScreen'); hide('winScreen'); hide('loseScreen');
+  hud.classList.remove('hidden'); controls.classList.remove('hidden');
+  updateLives();
+  toast('ROLL RIGHT');
+}
+
+function updateLives() {
+  $('hudLives').textContent = '●'.repeat(lives) + '○'.repeat(Math.max(0, 3 - lives));
+}
+
+function loseLife() {
+  lives--;
+  updateLives();
+  blip(160, 0.25);
+  if (lives <= 0) {
+    mode = 'lose';
+    show('loseScreen');
+    controls.classList.add('hidden');
+  } else {
+    toast(lives + (lives === 1 ? ' LIFE LEFT' : ' LIVES LEFT'));
+    spawnJelly(SPAWN.x, SPAWN.y);
+    camX = 0; camY = 0;
+  }
+}
+
+function winGame() {
+  winTime = elapsed;
+  mode = 'win';
+  $('finalScore').textContent = winTime.toFixed(1) + 's';
+  let line = '';
+  if (!best || winTime < best) {
+    best = winTime;
+    try { localStorage.setItem('bb-jelly-best', String(best)); } catch (e) {}
+    line = 'NEW BEST';
+  } else {
+    line = 'best ' + best.toFixed(1) + 's';
+  }
+  $('bestLine').textContent = line;
+  show('winScreen');
+  controls.classList.add('hidden');
+  burst(center().x, center().y, '#7CFC00', 30);
+  blip(660, 0.15); setTimeout(() => blip(880, 0.2), 120);
+}
+
+// ---------- input ----------
+window.addEventListener('keydown', e => {
+  if (e.repeat) { if (['ArrowLeft','ArrowRight','ArrowUp',' '].includes(e.key)) e.preventDefault(); return; }
+  if (e.key === 'ArrowLeft') { input.left = true; e.preventDefault(); }
+  else if (e.key === 'ArrowRight') { input.right = true; e.preventDefault(); }
+  else if (e.key === 'ArrowUp' || e.key === ' ') { tryJump(); e.preventDefault(); }
+  else if (e.key === 'Enter' && mode === 'title') startGame();
+});
+window.addEventListener('keyup', e => {
+  if (e.key === 'ArrowLeft') input.left = false;
+  else if (e.key === 'ArrowRight') input.right = false;
+});
+function bindBtn(id, on, off) {
+  const el = $(id);
+  const start = e => { e.preventDefault(); el.classList.add('on'); on(); };
+  const end = e => { e.preventDefault(); el.classList.remove('on'); if (off) off(); };
+  el.addEventListener('pointerdown', start);
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+  el.addEventListener('pointerleave', end);
+  el.addEventListener('contextmenu', e => e.preventDefault());
+}
+bindBtn('leftBtn', () => input.left = true, () => input.left = false);
+bindBtn('rightBtn', () => input.right = true, () => input.right = false);
+bindBtn('jumpBtn', () => tryJump(), null);
+
+function tryJump() {
+  if (mode !== 'play') return;
+  if (groundedTimer > 0) {
+    doJump();
+  } else {
+    jumpBuffer = 0.18; // buffered: fires on touchdown
+  }
+}
+
+function doJump() {
+  for (const p of pts) { p.py = p.y + 760 * (1 / 240); } // upward impulse
+  groundedTimer = 0;
+  jumpBuffer = 0;
+  burst(center().x, center().y + R * 0.8, '#22d3ee', 8);
+  blip(300, 0.1);
+}
+
+$('startBtn').addEventListener('click', startGame);
+$('againBtn').addEventListener('click', startGame);
+$('retryBtn').addEventListener('click', startGame);
+$('resetBtn').addEventListener('click', startGame);
+
+// ---------- physics step ----------
+const HSTEP = 1 / 60 / SUB;
+function physics(h) {
+  // verlet integrate + control forces
+  const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+  for (const p of pts) {
+    const vx = (p.x - p.px) * DAMP, vy = (p.y - p.py) * DAMP;
+    p.px = p.x; p.py = p.y;
+    let nvx = vx, nvy = vy + GRAV * h * h;
+    if (dir !== 0) nvx += dir * 2200 * h;
+    // velocity caps: vx/vy here are displacement-per-substep, scale by h
+    const cx = VMAX * h, cy = VMAXY * h;
+    if (nvx > cx) nvx = cx; else if (nvx < -cx) nvx = -cx;
+    if (nvy > cy) nvy = cy; else if (nvy < -cy) nvy = -cy;
+    p.x += nvx; p.y += nvy;
+  }
+  // constraints + pressure (relaxed together so volume fights deformation,
+  // but soft enough that impacts visibly squish before recovering)
+  for (let k = 0; k < ITER; k++) {
+    for (let i = 0; i < N; i++) spring(i, (i + 1) % N, REST1, 1.0);
+    for (let i = 0; i < N; i++) spring(i, (i + 2) % N, REST2, 0.5);
+  }
+  applyPressure(0.1);
+  areaRatio = polyArea() / REST_AREA;
+  // collisions
+  let anyGrounded = false;
+  for (const p of pts) { collidePoint(p); if (p.grounded) anyGrounded = true; }
+  groundedTimer = anyGrounded ? 0.25 : Math.max(0, groundedTimer - h);
+  if (jumpBuffer > 0) {
+    jumpBuffer -= h;
+    if (anyGrounded) doJump();
+  }
+}
+
+// ---------- render ----------
+function drawBackground() {
+  ctx.fillStyle = '#0a0a12';
+  ctx.fillRect(0, 0, W, H);
+  // lab grid, camera-locked
+  ctx.strokeStyle = 'rgba(34,211,238,0.06)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  const gx = -(((camX) % 40) + 40) % 40, gy = -(((camY) % 40) + 40) % 40;
+  for (let x = gx; x < W; x += 40) { ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+  for (let y = gy; y < H; y += 40) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
+  ctx.stroke();
+}
+
+function drawWorld(t) {
+  ctx.save();
+  ctx.translate(-camX, -camY);
+  // platforms
+  for (const r of PLATS) {
+    ctx.fillStyle = '#141a2c';
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.fillStyle = 'rgba(34,211,238,0.85)';
+    ctx.fillRect(r.x, r.y, r.w, 3); // neon top edge
+    if (r.x === 1360) { // tunnel ceiling: hazard stripes on its bottom face
+      for (let x = r.x; x < r.x + r.w; x += 24) {
+        ctx.fillStyle = (Math.floor(x / 24) % 2) ? '#facc15' : '#111318';
+        ctx.fillRect(x, r.y + r.h - 8, 24, 8);
+      }
+    }
+  }
+  // bouncy pad
+  const pulse = 0.6 + 0.4 * Math.sin(t * 8);
+  ctx.fillStyle = 'rgba(125,249,255,' + (0.25 + 0.25 * pulse) + ')';
+  ctx.fillRect(PAD.x, PAD.y, PAD.w, PAD.h);
+  ctx.fillStyle = '#7df9ff';
+  ctx.fillRect(PAD.x, PAD.y, PAD.w, 3);
+  ctx.fillRect(PAD.x, PAD.y + PAD.h - 3, PAD.w, 3);
+  // goal flag
+  ctx.fillStyle = '#7CFC00';
+  ctx.fillRect(GOAL.x + 30, GOAL.y - 40, 5, GOAL.h + 40);
+  const wave = Math.sin(t * 6) * 6;
+  ctx.beginPath();
+  ctx.moveTo(GOAL.x + 35, GOAL.y - 40);
+  ctx.lineTo(GOAL.x + 35 + 46, GOAL.y - 24 + wave);
+  ctx.lineTo(GOAL.x + 35, GOAL.y - 8);
+  ctx.closePath();
+  ctx.fill();
+  // jelly
+  drawJelly(t);
+  // particles
+  for (const q of parts) {
+    ctx.globalAlpha = Math.max(0, 1 - q.t / q.life);
+    ctx.fillStyle = q.color;
+    ctx.fillRect(q.x - 2, q.y - 2, 4, 4);
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+  // squish meter (area ratio) — top center, shows the pressure model at work
+  const sq = Math.max(0, Math.min(1.4, areaRatio));
+  ctx.fillStyle = 'rgba(10,14,26,.7)';
+  ctx.fillRect(W / 2 - 55, 12, 110, 22);
+  ctx.strokeStyle = 'rgba(34,211,238,.4)';
+  ctx.strokeRect(W / 2 - 55, 12, 110, 22);
+  ctx.fillStyle = sq < 0.93 ? '#ff7ad9' : '#22d3ee';
+  ctx.fillRect(W / 2 - 51, 16, 102 * Math.min(1, sq), 14);
+  ctx.fillStyle = '#8fa3bf';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('SQUISH', W / 2, 44);
+}
+
+function drawJelly(t) {
+  const c = center();
+  // glow pass (no shadowBlur: layered strokes instead)
+  ctx.beginPath();
+  for (let i = 0; i < N; i++) {
+    const p = pts[i];
+    if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(34,211,238,0.28)';
+  ctx.fill();
+  ctx.lineWidth = 9;
+  ctx.strokeStyle = 'rgba(34,211,238,0.18)';
+  ctx.stroke();
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = '#7df9ff';
+  ctx.stroke();
+  // inner highlight
+  ctx.beginPath();
+  for (let i = 0; i < N; i++) {
+    const p = pts[i];
+    const x = c.x + (p.x - c.x) * 0.62, y = c.y + (p.y - c.y) * 0.62;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(165,243,252,0.12)';
+  ctx.fill();
+  // eyes look toward motion
+  const look = Math.max(-6, Math.min(6, c.vx * 2.5));
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(c.x - 11, c.y - 8, 7, 0, 7); ctx.arc(c.x + 11, c.y - 8, 7, 0, 7); ctx.fill();
+  ctx.fillStyle = '#0a0a12';
+  ctx.beginPath(); ctx.arc(c.x - 11 + look, c.y - 8, 3.2, 0, 7); ctx.arc(c.x + 11 + look, c.y - 8, 3.2, 0, 7); ctx.fill();
+}
+
+// ---------- main loop ----------
+let last = 0, acc = 0;
+function frame(ts) {
+  requestAnimationFrame(frame);
+  const now = ts / 1000;
+  let dt = Math.min(0.05, now - (last || now));
+  last = now;
+  if (mode === 'play') {
+    acc += dt;
+    let steps = 0;
+    while (acc >= 1 / 60 && steps < 3) {
+      for (let s = 0; s < SUB; s++) physics(HSTEP);
+      collidePad(1 / 60);
+      elapsed += 1 / 60;
+      acc -= 1 / 60; steps++;
+      const c = center();
+      if (c.x > GOAL.x && c.x < GOAL.x + GOAL.w && c.y > GOAL.y && c.y < GOAL.y + GOAL.h) winGame();
+      else if (c.y > KILL_Y) loseLife();
+      if (mode !== 'play') break;
+    }
+    if (steps === 3) acc = 0;
+    $('hudTime').textContent = elapsed.toFixed(1) + 's';
+    // camera
+    const c = center();
+    const tx = Math.max(0, Math.min(WORLD_W - W, c.x - 150));
+    const ty = Math.max(-80, Math.min(320, c.y - 480));
+    camX += (tx - camX) * 0.12; camY += (ty - camY) * 0.08;
+  }
+  // particles always update
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const q = parts[i];
+    q.t += dt;
+    if (q.t >= q.life) { parts.splice(i, 1); continue; }
+    q.x += q.vx * dt; q.y += q.vy * dt; q.vy += 500 * dt;
+  }
+  if (toastT > 0) { toastT -= dt; if (toastT <= 0) toastEl.style.opacity = 0; }
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  drawBackground();
+  drawWorld(now);
+}
+requestAnimationFrame(frame);
+
+// debug hook for automated smoke tests
+window.__jelly = {
+  get mode() { return mode; },
+  get lives() { return lives; },
+  get elapsed() { return elapsed; },
+  get areaRatio() { return areaRatio; },
+  get groundedTimer() { return groundedTimer; },
+  get center() { return center(); },
+  start: startGame,
+  teleport(x, y) {
+    const ox = pts[0].x, oy = pts[0].y;
+    for (const p of pts) {
+      const dx = p.x - ox, dy = p.y - oy;
+      const vx = p.x - p.px, vy = p.y - p.py;
+      p.x = x + dx; p.y = y + dy; p.px = p.x - vx; p.py = p.y - vy;
+    }
+  },
+  press(d) { input.left = d === 'left'; input.right = d === 'right'; },
+  release() { input.left = input.right = false; },
+  jump: tryJump
+};
+</script>
+</body>
+</html>

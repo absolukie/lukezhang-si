@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#04060c">
+<title>GRAVITY — BLACKBOX</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; overflow:hidden; background:#04060c; overscroll-behavior:none; }
+  body {
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    color:#d7f9ff; position:fixed; inset:0; width:100%;
+    -webkit-touch-callout:none; user-select:none; -webkit-user-select:none;
+  }
+  canvas { display:block; width:100%; height:100%; touch-action:none; }
+  #vig { position:fixed; inset:0; z-index:5; pointer-events:none;
+         background:radial-gradient(ellipse at center, rgba(0,0,0,0) 42%, rgba(0,0,0,0.45) 100%); }
+  .pill {
+    position:fixed; z-index:20; touch-action:manipulation; cursor:pointer;
+    background:rgba(8,14,24,.72); border:1px solid rgba(34,211,238,.45); color:#a5f3fc;
+    border-radius:999px; padding:10px 16px; font-size:13px; letter-spacing:.08em;
+    backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+    font-family:inherit; user-select:none; -webkit-user-select:none;
+  }
+  .pill:active { transform:scale(.94); }
+  #btnInfo { left:14px; bottom:calc(14px + env(safe-area-inset-bottom)); z-index:35; }
+  #card {
+    position:fixed; z-index:36; left:14px; right:14px; bottom:calc(64px + env(safe-area-inset-bottom));
+    background:rgba(6,10,20,.94); border:1px solid rgba(240,171,252,.5); border-radius:14px;
+    padding:16px 18px; font-size:13px; line-height:1.65; color:#e9d5ff; display:none;
+    box-shadow:0 8px 40px rgba(0,0,0,.6); max-width:420px;
+  }
+  #card.show { display:block; }
+  #card b { color:#f0abfc; letter-spacing:.06em; }
+  #card .mono { color:#67e8f9; }
+  /* HUD */
+  #hud { position:fixed; top:0; left:0; right:0; z-index:15; pointer-events:none;
+         padding:calc(10px + env(safe-area-inset-top)) 14px 0 14px; }
+  #hudRow { display:flex; align-items:center; justify-content:space-between; }
+  #hudSys { font-size:13px; letter-spacing:.14em; color:#67e8f9; }
+  #hudScore { font-size:13px; letter-spacing:.14em; color:#ffd24d; }
+  #btnRestart { position:static; pointer-events:auto; padding:7px 13px; font-size:11px; }
+  #fuelWrap { margin-top:8px; height:6px; border-radius:3px; background:rgba(255,255,255,.08);
+              overflow:hidden; border:1px solid rgba(166,255,77,.25); }
+  #fuelFill { height:100%; width:100%; border-radius:3px;
+              background:linear-gradient(90deg,#a6ff4d,#ffd24d,#ff5d7a);
+              background-size:420px 100%; transition:width .12s linear; }
+  #warn { margin-top:6px; font-size:12px; letter-spacing:.12em; color:#ff5d7a; min-height:16px;
+          text-align:center; }
+  #warn.calm { color:#67e8f9; }
+  /* full screens */
+  .screen {
+    position:fixed; inset:0; z-index:30; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; padding:24px;
+    background:rgba(3,5,11,.82); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+  }
+  .screen.hidden { display:none; }
+  .screen h1 {
+    font-size:46px; letter-spacing:.28em; margin-left:.28em; color:#fff;
+    text-shadow:0 0 24px rgba(77,216,255,.9), 0 0 70px rgba(77,216,255,.4);
+  }
+  .screen h2 {
+    font-size:30px; letter-spacing:.18em; margin-left:.18em; color:#fff;
+    text-shadow:0 0 20px rgba(77,216,255,.8);
+  }
+  .screen .sub { margin-top:10px; font-size:12px; letter-spacing:.3em; margin-left:.3em; color:#67e8f9; }
+  .screen .how { margin-top:26px; font-size:13px; line-height:2.1; color:#a5f3fc; max-width:340px; }
+  .screen .how b { color:#fff; }
+  .screen .stats { margin-top:18px; font-size:13px; line-height:2; color:#a5f3fc; }
+  .screen .stats .gold { color:#ffd24d; }
+  .screen .bigbtn {
+    margin-top:30px; font-size:16px; padding:16px 46px; letter-spacing:.14em; font-weight:700;
+    color:#04060c; background:#22d3ee; border:1px solid rgba(34,211,238,.9); border-radius:999px;
+    box-shadow:0 0 28px rgba(34,211,238,.55); cursor:pointer; touch-action:manipulation;
+    font-family:inherit; position:static;
+  }
+  .screen .bigbtn:active { transform:scale(.95); }
+  .screen .best { margin-top:16px; font-size:12px; letter-spacing:.2em; color:#ffd24d; }
+  .screen .flav { margin-top:14px; font-size:12px; color:#7c8aa5; letter-spacing:.06em; max-width:320px; line-height:1.7;}
+</style>
+</head>
+<body oncontextmenu="return false">
+<canvas id="cv"></canvas>
+<div id="vig"></div>
+
+<div id="hud">
+  <div id="hudRow">
+    <div id="hudSys">SYS 1/8</div>
+    <div id="hudScore">SCORE 0</div>
+    <button id="btnRestart" class="pill">RESTART</button>
+  </div>
+  <div id="fuelWrap"><div id="fuelFill"></div></div>
+  <div id="warn"></div>
+</div>
+
+<button class="pill" id="btnInfo" aria-label="about the algorithm">?</button>
+<div id="card">
+  <b>n-body simulation</b><br>
+  Every step, the sun and <span class="mono">every planet</span> pull the probe with
+  <span class="mono">F = G&middot;m1&middot;m2 / r&sup2;</span>, softened near the core so nothing
+  divides by zero. Planets ride true circular orbits at
+  <span class="mono">v = &radic;(&mu;/r)</span>. Slingshots are real: dive in close behind a
+  planet to steal its momentum. No prediction line. The gravity is the game.
+</div>
+
+<div id="title" class="screen">
+  <h1>GRAVITY</h1>
+  <div class="sub">N-BODY SLINGSHOT &middot; BLACKBOX</div>
+  <div class="how">
+    <b>Pull back</b> from the probe to launch, <b>hold</b> mid-flight to burn toward your finger. Steal speed from planets, thread the wormhole, clear 8 systems. Do not kiss the sun.
+  </div>
+  <button class="bigbtn" id="btnStart">LAUNCH</button>
+  <div class="best" id="titleBest"></div>
+</div>
+
+<div id="result" class="screen hidden">
+  <h2 id="resTitle">SYSTEM CLEARED</h2>
+  <div class="sub" id="resSub"></div>
+  <div class="stats" id="resStats"></div>
+  <button class="bigbtn" id="btnNext">NEXT</button>
+  <div class="flav" id="resFlav"></div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   GRAVITY — n-body slingshot. BLACKBOX collection.
+   Single file, zero assets, hand-rolled math. Canvas.
+   ============================================================ */
+
+// ---------- world & tuning ----------
+const VW = 420, VH = 860;          // virtual world (px)
+const SOFT2 = 100;                 // 10px gravity softening, squared
+const DT = 1/60, SUB = 4;          // fixed step, 4 substeps
+const MAXV = 300;                  // max launch speed px/s
+const PULL = 2.4;                  // launch px/s per px of pull-back
+const BURN_A = 320;                // burn acceleration px/s^2
+const DRAIN = 20;                  // fuel units per second of burn
+const DRIFT_T = 12;                // seconds of drift after fuel runs out
+const ESC = 320;                   // escape margin px
+const HOLE_R = 22;                 // wormhole capture radius
+const BEST_KEY = "bb-gravity-best";
+
+// ---------- systems (hand-designed, launch-solvable) ----------
+// sun: x,y,r,mu. planet: o=orbit radius, s=size, mu, a0=deg, dir, c=color
+// mu tuned so gravity bends every flight: sun pull at 200px ~ 60px/s^2,
+// planet flybys kick ~25-40% of probe speed. Slingshots are the game.
+const SYSTEMS = [
+  { name:"FIRST LIGHT", fuel:100,
+    sun:{x:100,y:430,r:24,mu:2400000,c:"#ffb347"},
+    planets:[{o:150,s:11,mu:96000,a0:90,dir:1,c:"#4dd8ff"}],
+    probe:{x:300,y:740}, hole:{x:300,y:100} },
+  { name:"SLINGSHOT", fuel:100,
+    sun:{x:140,y:430,r:26,mu:3040000,c:"#ffb347"},
+    planets:[{o:170,s:12,mu:112000,a0:100,dir:1,c:"#4dd8ff"}],
+    probe:{x:90,y:750}, hole:{x:330,y:110} },
+  { name:"CROSSWINDS", fuel:100,
+    sun:{x:210,y:430,r:24,mu:3040000,c:"#ffb347"},
+    planets:[{o:140,s:12,mu:112000,a0:0,dir:1,c:"#4dd8ff"},
+             {o:230,s:14,mu:144000,a0:180,dir:-1,c:"#c26bff"}],
+    probe:{x:210,y:760}, hole:{x:210,y:100} },
+  { name:"FAR SIDE", fuel:100,
+    sun:{x:210,y:430,r:30,mu:3840000,c:"#ff8c42"},
+    planets:[{o:170,s:11,mu:96000,a0:140,dir:1,c:"#4dd8ff"},
+             {o:260,s:13,mu:128000,a0:320,dir:-1,c:"#7dff9a"}],
+    probe:{x:210,y:770}, hole:{x:210,y:90} },
+  { name:"GAUNTLET", fuel:100,
+    sun:{x:210,y:430,r:24,mu:2880000,c:"#ffb347"},
+    planets:[{o:130,s:10,mu:96000,a0:30,dir:1,c:"#4dd8ff"},
+             {o:200,s:12,mu:120000,a0:210,dir:-1,c:"#ff9f43"},
+             {o:270,s:11,mu:104000,a0:120,dir:1,c:"#c26bff"}],
+    probe:{x:60,y:760}, hole:{x:360,y:100} },
+  { name:"WHIP", fuel:100,
+    sun:{x:210,y:430,r:28,mu:3600000,c:"#ff8c42"},
+    planets:[{o:110,s:9,mu:160000,a0:45,dir:1,c:"#ff5d7a"},
+             {o:240,s:14,mu:144000,a0:200,dir:-1,c:"#ffd24d"}],
+    probe:{x:80,y:720}, hole:{x:340,y:140} },
+  { name:"MAZE", fuel:100,
+    sun:{x:210,y:430,r:26,mu:3200000,c:"#ffb347"},
+    planets:[{o:150,s:11,mu:112000,a0:0,dir:1,c:"#4dd8ff"},
+             {o:150,s:11,mu:112000,a0:180,dir:1,c:"#4dd8ff"},
+             {o:230,s:13,mu:136000,a0:90,dir:-1,c:"#c26bff"},
+             {o:300,s:10,mu:96000,a0:270,dir:1,c:"#7dff9a"}],
+    probe:{x:210,y:780}, hole:{x:210,y:80} },
+  { name:"EVENT HORIZON", fuel:110,
+    sun:{x:210,y:430,r:40,mu:4160000,c:"#ff6b3d"},
+    planets:[{o:150,s:10,mu:176000,a0:10,dir:1,c:"#ff5d7a"},
+             {o:230,s:12,mu:192000,a0:170,dir:-1,c:"#ffd24d"},
+             {o:310,s:14,mu:160000,a0:300,dir:1,c:"#4dd8ff"}],
+    probe:{x:60,y:780}, hole:{x:330,y:250} },
+];
+SYSTEMS.forEach(function(sys){
+  sys.planets.forEach(function(p){
+    p.a0 = p.a0 * Math.PI/180;
+    p.om = p.dir * Math.sqrt(sys.sun.mu / (p.o*p.o*p.o)); // circular orbit
+  });
+});
+
+// ---------- tiny synth (no assets) ----------
+let AC = null;
+function ac(){
+  if (!AC){ try{ AC = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ AC=null; } }
+  if (AC && AC.state==="suspended"){ AC.resume().catch(function(){}); }
+  return AC;
+}
+function tone(f0, f1, dur, type, vol){
+  const a = ac(); if (!a) return;
+  try{
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, a.currentTime);
+    o.frequency.exponentialRampToValueAtTime(Math.max(1,f1), a.currentTime+dur);
+    g.gain.setValueAtTime(vol, a.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime+dur);
+    o.connect(g); g.connect(a.destination);
+    o.start(); o.stop(a.currentTime+dur+0.02);
+  }catch(e){}
+}
+const sfx = {
+  click:  function(){ tone(760, 900, 0.07, "square", 0.05); },
+  launch: function(){ tone(200, 720, 0.28, "sawtooth", 0.08); },
+  win:    function(){ tone(520, 520, 0.12, "sine", 0.10); setTimeout(function(){ tone(780, 780, 0.18, "sine", 0.10); }, 110); },
+  crash:  function(){ tone(110, 28, 0.45, "sawtooth", 0.12); },
+  drift:  function(){ tone(300, 90, 0.8, "sine", 0.08); },
+};
+
+// ---------- game state ----------
+const G = {
+  mode:"title", sysIdx:0, score:0, best:0,
+  simT:0, fuel:100, flyT:0, driftT:0,
+  probe:{x:0,y:0,vx:0,vy:0},
+  trail:[], parts:[],
+  aimId:-1, aimX:0, aimY:0, aiming:false,
+  burnId:-1, burnX:0, burnY:0,
+};
+function sys(){ return SYSTEMS[G.sysIdx]; }
+try{ G.best = parseInt(localStorage.getItem(BEST_KEY)||"0",10)||0; }catch(e){ G.best=0; }
+
+function resetSystem(i){
+  G.sysIdx = i;
+  const s = SYSTEMS[i];
+  buildBg(s);
+  G.probe.x=s.probe.x; G.probe.y=s.probe.y; G.probe.vx=0; G.probe.vy=0;
+  G.fuel = s.fuel; G.simT=0; G.flyT=0; G.driftT=0;
+  G.trail.length=0; G.parts.length=0;
+  G.aiming=false; G.aimId=-1; G.burnId=-1;
+  G.mode="aim";
+  document.getElementById("hudSys").textContent = "SYS "+(i+1)+"/"+SYSTEMS.length+" · "+s.name;
+  document.getElementById("hudScore").textContent = "SCORE "+G.score;
+  document.getElementById("warn").textContent = "";
+  document.getElementById("fuelFill").style.width = "100%";
+  hideResult();
+}
+
+// ---------- physics ----------
+const _pp = {x:0,y:0};
+let _ax=0, _ay=0;
+function planetPos(s,p,t,out){
+  const a = p.a0 + p.om*t;
+  out.x = s.sun.x + Math.cos(a)*p.o;
+  out.y = s.sun.y + Math.sin(a)*p.o;
+}
+function accelInto(s,x,y,t){
+  let ax=0, ay=0, dx, dy, r2, inv;
+  const sn=s.sun;
+  dx=sn.x-x; dy=sn.y-y;
+  r2=dx*dx+dy*dy+SOFT2;
+  inv=1/(r2*Math.sqrt(r2));
+  ax+=sn.mu*dx*inv; ay+=sn.mu*dy*inv;
+  for (let i=0;i<s.planets.length;i++){
+    const p=s.planets[i];
+    planetPos(s,p,t,_pp);
+    dx=_pp.x-x; dy=_pp.y-y;
+    r2=dx*dx+dy*dy+SOFT2;
+    inv=1/(r2*Math.sqrt(r2));
+    ax+=p.mu*dx*inv; ay+=p.mu*dy*inv;
+  }
+  _ax=ax; _ay=ay;
+}
+function stepProbe(pr,s,dt,bAx,bAy){
+  const h=dt/SUB;
+  for (let i=0;i<SUB;i++){
+    accelInto(s,pr.x,pr.y,G.simT);
+    pr.vx+=(_ax+bAx)*h; pr.vy+=(_ay+bAy)*h;
+    pr.x+=pr.vx*h; pr.y+=pr.vy*h;
+    G.simT+=h;
+  }
+}
+function checkEvents(pr,s){
+  let dx=pr.x-s.hole.x, dy=pr.y-s.hole.y;
+  if (dx*dx+dy*dy < HOLE_R*HOLE_R) return "win";
+  dx=pr.x-s.sun.x; dy=pr.y-s.sun.y;
+  const rs=s.sun.r+5;
+  if (dx*dx+dy*dy < rs*rs) return "crash";
+  for (let i=0;i<s.planets.length;i++){
+    const p=s.planets[i];
+    planetPos(s,p,G.simT,_pp);
+    dx=pr.x-_pp.x; dy=pr.y-_pp.y;
+    const rr=p.s+5;
+    if (dx*dx+dy*dy < rr*rr) return "crash";
+  }
+  if (pr.x<-ESC||pr.x>VW+ESC||pr.y<-ESC||pr.y>VH+ESC) return "escape";
+  return null;
+}
+
+// headless solver (also used by smoke test): exact same stepping
+function simulate(sysIdx,vx,vy,maxT,t0){
+  maxT = maxT||30;
+  const s=SYSTEMS[sysIdx];
+  const pr={x:s.probe.x,y:s.probe.y,vx:vx,vy:vy};
+  const savedT=G.simT; G.simT=(t0||0);
+  const pos={x:0,y:0};
+  let t=0, res="timeout";
+  outer:
+  while (t<maxT){
+    const h=(1/60)/SUB;
+    for (let k=0;k<60;k++){
+      for (let i=0;i<SUB;i++){
+        accelInto(s,pr.x,pr.y,G.simT);
+        pr.vx+=_ax*h; pr.vy+=_ay*h;
+        pr.x+=pr.vx*h; pr.y+=pr.vy*h;
+        G.simT+=h;
+        let dx=pr.x-s.sun.x, dy=pr.y-s.sun.y;
+        const rs=s.sun.r+5;
+        if (dx*dx+dy*dy<rs*rs){ res="crash"; break outer; }
+        dx=pr.x-s.hole.x; dy=pr.y-s.hole.y;
+        if (dx*dx+dy*dy<HOLE_R*HOLE_R){ res="win"; break outer; }
+        for (let j=0;j<s.planets.length;j++){
+          const p=s.planets[j];
+          planetPos(s,p,G.simT,pos);
+          dx=pr.x-pos.x; dy=pr.y-pos.y;
+          const rr=p.s+5;
+          if (dx*dx+dy*dy<rr*rr){ res="crash"; break outer; }
+        }
+      }
+      t+=1/60;
+      if (t>=maxT) break;
+      if (pr.x<-ESC||pr.x>VW+ESC||pr.y<-ESC||pr.y>VH+ESC){ res="escape"; break outer; }
+    }
+  }
+  G.simT=savedT;
+  return {result:res, t:t, x:pr.x, y:pr.y};
+}
+
+// ---------- particles ----------
+function spawnFlame(bx,by){
+  if (G.parts.length>220) return;
+  for (let i=0;i<2;i++){
+    G.parts.push({x:G.probe.x+(Math.random()-0.5)*6, y:G.probe.y+(Math.random()-0.5)*6,
+      vx:-bx*0.35+(Math.random()-0.5)*60, vy:-by*0.35+(Math.random()-0.5)*60,
+      life:0.35, max:0.35, c:"#ff9f43", sz:3+Math.random()*3});
+  }
+}
+function burst(x,y,c,n,spd){
+  for (let i=0;i<n;i++){
+    if (G.parts.length>260) return;
+    const a=Math.random()*Math.PI*2, sp=spd*(0.3+Math.random()*0.7);
+    G.parts.push({x:x,y:y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,
+      life:0.7+Math.random()*0.5,max:1.1,c:c,sz:2+Math.random()*3});
+  }
+}
+
+// ---------- flow ----------
+function launch(vx,vy){
+  G.probe.vx=vx; G.probe.vy=vy;
+  G.mode="flying"; G.flyT=0; G.launchT=G.simT;
+  G.trail.length=0;
+  sfx.launch();
+  burst(G.probe.x,G.probe.y,"#4dd8ff",14,90);
+}
+function scoreGain(){
+  const fuelPts=Math.round(G.fuel)*6;
+  const timePts=Math.max(0,Math.round(75-G.flyT))*3;
+  return 400+fuelPts+timePts;
+}
+function fmtT(t){ return t.toFixed(1)+"s"; }
+function onWin(){
+  const gain=scoreGain();
+  G.score+=gain;
+  G.mode="over";
+  burst(sys().hole.x,sys().hole.y,"#c26bff",60,160);
+  burst(sys().hole.x,sys().hole.y,"#4dd8ff",40,120);
+  sfx.win();
+  const last = G.sysIdx===SYSTEMS.length-1;
+  if (last && G.score>G.best){
+    G.best=G.score;
+    try{ localStorage.setItem(BEST_KEY,String(G.best)); }catch(e){}
+  }
+  showResult({
+    title: last?"ALL SYSTEMS CLEARED":"SYSTEM "+(G.sysIdx+1)+" CLEARED",
+    sub: last?"THE WORMHOLE NETWORK IS OPEN":sys().name+" · SECURED",
+    stats:'TIME <span class="gold">'+fmtT(G.flyT)+'</span><br>'+
+          'FUEL LEFT <span class="gold">'+Math.round(G.fuel)+'</span><br>'+
+          'BONUS <span class="gold">+'+gain+'</span><br>'+
+          'SCORE <span class="gold">'+G.score+'</span>'+(last?'<br>BEST <span class="gold">'+G.best+'</span>':""),
+    btn: last?"PLAY AGAIN":"NEXT",
+    flav: last?"Eight systems threaded. The planets barely noticed you.":""
+  }, last?"victory":"win");
+}
+function onLose(kind){
+  G.mode="over";
+  if (kind==="crash"){ sfx.crash(); burst(G.probe.x,G.probe.y,"#ff5d7a",46,200); }
+  else sfx.drift();
+  const copy={
+    crash:["CRASHED","The probe met a planet. Or the sun. Either way, it is now glitter."],
+    drift:["OUT OF FUEL","Fuel gone, probe drifting. The dark keeps what it catches."],
+    escape:["LOST IN SPACE","The probe left the system and is not coming back."]
+  }[kind];
+  showResult({title:copy[0],sub:sys().name,stats:"",btn:"RETRY",flav:copy[1]},"lose");
+}
+function showResult(o,mode){
+  document.getElementById("resTitle").textContent=o.title;
+  document.getElementById("resSub").textContent=o.sub;
+  document.getElementById("resStats").innerHTML=o.stats;
+  document.getElementById("btnNext").textContent=o.btn;
+  document.getElementById("resFlav").textContent=o.flav;
+  document.getElementById("result").classList.remove("hidden");
+  document.getElementById("result").dataset.mode=mode;
+}
+function hideResult(){ document.getElementById("result").classList.add("hidden"); }
+
+// ---------- update ----------
+function update(dt){
+  const s=sys();
+  if (G.mode==="aim"||G.mode==="over") G.simT+=dt; // flying advances simT inside stepProbe
+  // particles always animate (win/lose bursts included)
+  for (let i=G.parts.length-1;i>=0;i--){
+    const p=G.parts[i];
+    p.life-=dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.vx*=0.985; p.vy*=0.985;
+    if (p.life<=0) G.parts.splice(i,1);
+  }
+  if (G.mode!=="flying") return;
+  let bAx=0,bAy=0;
+  if (G.burnId>=0 && G.fuel>0){
+    const dx=G.burnX-G.probe.x, dy=G.burnY-G.probe.y;
+    const d=Math.sqrt(dx*dx+dy*dy);
+    if (d>14){
+      bAx=dx/d*BURN_A; bAy=dy/d*BURN_A;
+      G.fuel=Math.max(0,G.fuel-DRAIN*dt);
+      spawnFlame(bAx,bAy);
+      if (G.fuel<=0) G.driftT=DRIFT_T;
+    }
+  }
+  stepProbe(G.probe,s,dt,bAx,bAy);
+  G.flyT+=dt;
+  G.trail.push({x:G.probe.x,y:G.probe.y});
+  if (G.trail.length>240) G.trail.shift();
+  const ev=checkEvents(G.probe,s);
+  if (ev==="win") onWin();
+  else if (ev) onLose(ev);
+  else if (G.fuel<=0){
+    // drift clock runs out only if the probe is still flying free
+    G.driftT-=dt;
+    if (G.driftT<=0) onLose("drift");
+  }
+  // HUD
+  document.getElementById("fuelFill").style.width=(G.fuel/(s.fuel||100)*100)+"%";
+  const w=document.getElementById("warn");
+  if (G.fuel<=0){ w.textContent="FUEL EMPTY · DRIFTING "+Math.max(0,G.driftT).toFixed(1)+"s"; w.className=""; }
+  else if (G.burnId>=0){ w.textContent="BURNING"; w.className="calm"; }
+  else { w.textContent=""; }
+}
+
+// ---------- render ----------
+const cv=document.getElementById("cv");
+const ctx=cv.getContext("2d");
+
+// ---------- pre-rendered sprites (perf: no per-frame gradients/shadows) ----------
+function makeGlowSprite(rgba){
+  const R=64, c=document.createElement("canvas");
+  c.width=c.height=R*2;
+  const x=c.getContext("2d");
+  const g=x.createRadialGradient(R,R,0,R,R,R);
+  g.addColorStop(0,rgba); g.addColorStop(1,"rgba(0,0,0,0)");
+  x.fillStyle=g; x.fillRect(0,0,R*2,R*2);
+  return c;
+}
+const glowCache={};
+function glowSprite(color){
+  if (!glowCache[color]) glowCache[color]=makeGlowSprite(color);
+  return glowCache[color];
+}
+function blitGlow(color,x,y,size){
+  const sp=glowSprite(color);
+  ctx.drawImage(sp,x-size/2,y-size/2,size,size);
+}
+// static per-system background: orbit rings + sun (planets/wormhole move)
+// rendered at exact device size, blitted 1:1 in screen space (no per-frame scaling)
+let bgC=null, bgX=0, bgY=0;
+function buildBg(s){
+  const bw=Math.max(2,Math.round(VW*scale*dpr)), bh=Math.max(2,Math.round(VH*scale*dpr));
+  bgX=Math.round(ox*dpr); bgY=Math.round(oy*dpr);
+  bgC=document.createElement("canvas");
+  bgC.width=bw; bgC.height=bh;
+  const x=bgC.getContext("2d");
+  const k=bw/VW;
+  x.scale(k,k);
+  x.strokeStyle="rgba(120,150,200,0.16)"; x.lineWidth=1;
+  for (let i=0;i<s.planets.length;i++){
+    x.beginPath(); x.arc(s.sun.x,s.sun.y,s.planets[i].o,0,6.2832); x.stroke();
+  }
+  const sp=glowSprite("rgba(255,170,80,0.5)");
+  x.drawImage(sp,s.sun.x-s.sun.r*4,s.sun.y-s.sun.r*4,s.sun.r*8,s.sun.r*8);
+  x.fillStyle="#fff6e8";
+  x.beginPath(); x.arc(s.sun.x,s.sun.y,s.sun.r,0,6.2832); x.fill();
+  x.fillStyle=s.sun.c;
+  x.beginPath(); x.arc(s.sun.x,s.sun.y,s.sun.r*0.72,0,6.2832); x.fill();
+}
+// (vignette is a CSS overlay div #vig — GPU-composited, zero per-frame canvas cost)
+let scale=1,ox=0,oy=0,dpr=1;
+function resize(){
+  dpr=Math.min(window.devicePixelRatio||1,2);
+  const w=window.innerWidth,h=window.innerHeight;
+  cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr);
+  cv.style.width=w+"px"; cv.style.height=h+"px";
+  scale=Math.min(w/VW,h/VH);
+  ox=(w-VW*scale)/2; oy=(h-VH*scale)/2;
+  buildBg(sys());
+}
+window.addEventListener("resize",resize);
+function toWorld(cx,cy){ return {x:(cx-ox)/scale, y:(cy-oy)/scale}; }
+function toScreen(wx,wy){ return {x:ox+wx*scale, y:oy+wy*scale}; }
+
+const STAR_COLS=["#ffffff","#a5f3fc","#f0abfc"];
+const STAR_BUCKETS=6;
+const stars=[];
+const starBins=[];
+for (let b=0;b<3*STAR_BUCKETS;b++) starBins.push([]);
+for (let i=0;i<170;i++){
+  const cr=Math.random();
+  stars.push({x:Math.random()*VW,y:Math.random()*VH,r:0.4+Math.random()*1.3,
+    tw:0.35+Math.random()*0.65, ph:Math.random()*6.28,
+    ci:cr<0.12?1:(cr<0.22?2:0)});
+}
+
+function drawSun(s){ /* sun is baked into the static bg layer (buildBg) */ }
+function drawHole(s,t){
+  const x=s.hole.x,y=s.hole.y;
+  const pr=HOLE_R*(1+0.07*Math.sin(t*3.1));
+  blitGlow("rgba(150,70,230,0.55)",x,y,pr*5.2);
+  ctx.fillStyle="rgba(8,3,20,0.9)";
+  ctx.beginPath(); ctx.arc(x,y,pr*0.72,0,6.2832); ctx.fill();
+  for (let k=0;k<3;k++){
+    ctx.strokeStyle=k%2?"#c26bff":"#4dd8ff";
+    ctx.globalAlpha=0.9-k*0.2;
+    ctx.lineWidth=3-k*0.6;
+    ctx.beginPath();
+    const a0=t*(1.4+k*0.5)+k*2.1;
+    ctx.arc(x,y,pr-k*5,a0,a0+4.4);
+    ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+}
+function drawProbe(){
+  const p=G.probe;
+  const sp=Math.sqrt(p.vx*p.vx+p.vy*p.vy);
+  const ang=sp>1?Math.atan2(p.vy,p.vx):-Math.PI/2;
+  blitGlow("rgba(77,216,255,0.5)",p.x,p.y,44);
+  ctx.save();
+  ctx.translate(p.x,p.y); ctx.rotate(ang);
+  ctx.fillStyle="#f2feff";
+  ctx.beginPath();
+  ctx.moveTo(10,0); ctx.lineTo(-7,6); ctx.lineTo(-4,0); ctx.lineTo(-7,-6);
+  ctx.closePath(); ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.restore();
+  // velocity vector
+  if (G.mode==="flying"&&sp>4){
+    const L=Math.min(110,sp*0.35);
+    const ux=p.vx/sp, uy=p.vy/sp;
+    const ex=p.x+ux*L, ey=p.y+uy*L;
+    ctx.strokeStyle="#a6ff4d"; ctx.lineWidth=2; ctx.globalAlpha=0.85;
+    ctx.beginPath(); ctx.moveTo(p.x+ux*12,p.y+uy*12); ctx.lineTo(ex,ey); ctx.stroke();
+    ctx.fillStyle="#a6ff4d";
+    ctx.beginPath();
+    ctx.moveTo(ex+ux*7,ey+uy*7);
+    ctx.lineTo(ex-uy*4.5,ey+ux*4.5); ctx.lineTo(ex+uy*4.5,ey-ux*4.5);
+    ctx.closePath(); ctx.fill();
+    ctx.globalAlpha=1;
+  }
+}
+function drawTrail(){
+  const n=G.trail.length;
+  if (n<2) return;
+  ctx.lineWidth=2.5; ctx.lineCap="round";
+  const buckets=8;
+  for (let b=0;b<buckets;b++){
+    const i0=Math.floor(n*b/buckets), i1=Math.floor(n*(b+1)/buckets);
+    if (i1<=i0) continue;
+    ctx.strokeStyle="rgba(77,216,255,"+(0.04+0.5*b/buckets).toFixed(3)+")";
+    ctx.beginPath();
+    ctx.moveTo(G.trail[i0].x,G.trail[i0].y);
+    for (let i=i0+1;i<=i1 && i<n;i++) ctx.lineTo(G.trail[i].x,G.trail[i].y);
+    ctx.stroke();
+  }
+}
+function drawAim(){
+  if (!G.aiming) return;
+  const p=G.probe;
+  const dx=p.x-G.aimX, dy=p.y-G.aimY;
+  const pull=Math.sqrt(dx*dx+dy*dy);
+  // elastic back to finger
+  ctx.strokeStyle="rgba(255,255,255,0.35)"; ctx.lineWidth=1.5;
+  ctx.setLineDash([5,5]);
+  ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(G.aimX,G.aimY); ctx.stroke();
+  ctx.setLineDash([]);
+  if (pull>4){
+    const sp=Math.min(MAXV,pull*PULL);
+    const ux=dx/pull, uy=dy/pull;
+    const L=30+sp/MAXV*90;
+    ctx.strokeStyle="#4dd8ff"; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(p.x+ux*12,p.y+uy*12); ctx.lineTo(p.x+ux*L,p.y+uy*L); ctx.stroke();
+    ctx.fillStyle="#4dd8ff";
+    const ex=p.x+ux*L, ey=p.y+uy*L;
+    ctx.beginPath();
+    ctx.moveTo(ex+ux*9,ey+uy*9);
+    ctx.lineTo(ex-uy*6,ey+ux*6); ctx.lineTo(ex+uy*6,ey-ux*6);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle="#d7f9ff"; ctx.font="13px ui-monospace,monospace"; ctx.textAlign="center";
+    ctx.fillText(Math.round(sp/MAXV*100)+"%", p.x, p.y-24);
+  }
+}
+function draw(){
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.fillStyle="#04060c";
+  ctx.fillRect(0,0,cv.width,cv.height);
+  if (bgC) ctx.drawImage(bgC,bgX,bgY); // static layer, 1:1 blit
+  ctx.setTransform(dpr*scale,0,0,dpr*scale,dpr*ox,dpr*oy);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0,0,VW,VH); ctx.clip();
+  const t=G.simT;
+  // stars: one pass to bin by (color, quantized twinkle), then one batched fill per bin
+  for (let b=0;b<starBins.length;b++) starBins[b].length=0;
+  for (let i=0;i<stars.length;i++){
+    const st=stars[i];
+    const a=st.tw*(0.6+0.4*Math.sin(t*1.7+st.ph));
+    starBins[st.ci*STAR_BUCKETS+Math.min(STAR_BUCKETS-1,(a*5.999)|0)].push(st);
+  }
+  for (let c=0;c<3;c++){
+    ctx.fillStyle=STAR_COLS[c];
+    for (let b=0;b<STAR_BUCKETS;b++){
+      const arr=starBins[c*STAR_BUCKETS+b];
+      if (!arr.length) continue;
+      ctx.globalAlpha=0.08+b*0.15;
+      ctx.beginPath();
+      for (let i=0;i<arr.length;i++){ const st=arr[i]; ctx.rect(st.x,st.y,st.r,st.r); }
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha=1;
+  const s=sys();
+  // planets (orbit rings + sun are in the static bg layer)
+  for (let i=0;i<s.planets.length;i++){
+    const p=s.planets[i];
+    planetPos(s,p,t,_pp);
+    blitGlow(p.c+"aa",_pp.x,_pp.y,p.s*5.2);
+    ctx.fillStyle=p.c;
+    ctx.beginPath(); ctx.arc(_pp.x,_pp.y,p.s,0,6.2832); ctx.fill();
+    ctx.fillStyle="rgba(255,255,255,0.75)";
+    ctx.beginPath(); ctx.arc(_pp.x-p.s*0.3,_pp.y-p.s*0.3,p.s*0.28,0,6.2832); ctx.fill();
+  }
+  drawHole(s,t);
+  drawTrail();
+  // launch pad ring
+  if (G.mode==="aim"){
+    ctx.strokeStyle="rgba(77,216,255,"+(0.5+0.3*Math.sin(t*4)).toFixed(3)+")";
+    ctx.lineWidth=1.5; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.arc(s.probe.x,s.probe.y,16+2*Math.sin(t*4),0,6.2832); ctx.stroke();
+    ctx.setLineDash([]);
+    if (G.sysIdx===0){
+      ctx.fillStyle="rgba(215,249,255,0.85)"; ctx.font="12px ui-monospace,monospace"; ctx.textAlign="center";
+      ctx.fillText("PULL BACK FROM THE PROBE", s.probe.x, s.probe.y+38);
+    }
+  }
+  drawProbe();
+  drawAim();
+  // particles
+  for (let i=0;i<G.parts.length;i++){
+    const pt=G.parts[i];
+    ctx.globalAlpha=Math.max(0,pt.life/pt.max);
+    ctx.fillStyle=pt.c;
+    ctx.fillRect(pt.x-pt.sz/2,pt.y-pt.sz/2,pt.sz,pt.sz);
+  }
+  ctx.globalAlpha=1;
+  ctx.restore();
+}
+
+// ---------- input ----------
+function onDown(e){
+  if (G.mode!=="aim"&&G.mode!=="flying") return;
+  const w=toWorld(e.clientX,e.clientY);
+  if (G.mode==="aim"){
+    const p=G.probe;
+    const d=Math.sqrt((w.x-p.x)*(w.x-p.x)+(w.y-p.y)*(w.y-p.y));
+    if (d<64 && G.aimId<0){
+      G.aiming=true; G.aimId=e.pointerId; G.aimX=w.x; G.aimY=w.y;
+      e.preventDefault();
+    }
+  } else if (G.mode==="flying"){
+    if (G.burnId<0 && G.fuel>0){
+      G.burnId=e.pointerId; G.burnX=w.x; G.burnY=w.y;
+      e.preventDefault();
+    }
+  }
+}
+function onMove(e){
+  const w=toWorld(e.clientX,e.clientY);
+  if (G.aiming && e.pointerId===G.aimId){ G.aimX=w.x; G.aimY=w.y; }
+  if (G.burnId>=0 && e.pointerId===G.burnId){ G.burnX=w.x; G.burnY=w.y; }
+}
+function onUp(e){
+  if (G.aiming && e.pointerId===G.aimId){
+    const p=G.probe;
+    const dx=p.x-G.aimX, dy=p.y-G.aimY;
+    const pull=Math.sqrt(dx*dx+dy*dy);
+    G.aiming=false; G.aimId=-1;
+    if (pull>14 && G.mode==="aim"){
+      const sp=Math.min(MAXV,pull*PULL);
+      launch(dx/pull*sp, dy/pull*sp);
+    }
+  }
+  if (e.pointerId===G.burnId) G.burnId=-1;
+}
+cv.addEventListener("pointerdown",onDown,{passive:false});
+window.addEventListener("pointermove",onMove,{passive:true});
+window.addEventListener("pointerup",onUp,{passive:true});
+window.addEventListener("pointercancel",onUp,{passive:true});
+
+// ---------- UI ----------
+document.getElementById("btnStart").addEventListener("click",function(){
+  sfx.click(); ac();
+  G.score=0;
+  document.getElementById("title").classList.add("hidden");
+  resetSystem(0);
+});
+document.getElementById("btnNext").addEventListener("click",function(){
+  sfx.click();
+  const mode=document.getElementById("result").dataset.mode;
+  if (mode==="victory"){ // play again
+    G.score=0;
+    document.getElementById("title").classList.remove("hidden");
+    document.getElementById("titleBest").textContent = G.best>0 ? "BEST "+G.best : "";
+    hideResult();
+    G.mode="title";
+  } else if (mode==="win"){
+    resetSystem(G.sysIdx+1);
+  } else {
+    resetSystem(G.sysIdx); // retry
+  }
+});
+document.getElementById("btnRestart").addEventListener("click",function(){
+  sfx.click();
+  if (G.mode==="aim"||G.mode==="flying"||G.mode==="over") resetSystem(G.sysIdx);
+});
+document.getElementById("btnInfo").addEventListener("click",function(){
+  sfx.click();
+  document.getElementById("card").classList.toggle("show");
+});
+document.getElementById("titleBest").textContent = G.best>0 ? "BEST "+G.best : "";
+
+// ---------- main loop ----------
+let lastT=0, acc=0;
+function frame(now){
+  requestAnimationFrame(frame);
+  if (!lastT) lastT=now;
+  let dt=(now-lastT)/1000; lastT=now;
+  if (dt>0.1) dt=0.1;
+  if (G.mode==="aim"||G.mode==="flying"||G.mode==="over"){
+    acc+=dt;
+    let n=0;
+    while (acc>=DT && n<5){ update(DT); acc-=DT; n++; }
+    if (n===5) acc=0;
+  }
+  draw();
+}
+
+// debug / smoke-test hook (harmless)
+window.__GRAV={
+  systems:SYSTEMS, state:function(){ return {mode:G.mode,sysIdx:G.sysIdx,fuel:G.fuel,simT:G.simT,
+    launchT:G.launchT||0,
+    probe:{x:G.probe.x,y:G.probe.y,vx:G.probe.vx,vy:G.probe.vy},score:G.score}; },
+  simulate:simulate, toScreen:toScreen, reset:resetSystem,
+};
+
+resize();
+resetSystem(0);
+G.mode="title"; // start on title; resetSystem prepared system 1 behind it
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

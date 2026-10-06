@@ -20,7 +20,7 @@ button{touch-action:manipulation;font:inherit;cursor:pointer;border:none;}
 .hud-stat .val{font-size:16px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums;}
 #h-best{color:var(--neon);}
 #btn-finish{margin-left:auto;background:transparent;color:var(--pink);border:1px solid var(--pink);
-  border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;}
+  border-radius:8px;padding:8px 14px;min-height:44px;font-size:13px;font-weight:700;}
 #timer{height:3px;background:rgba(255,255,255,.08);border-radius:2px;margin-top:8px;overflow:hidden;}
 #timer-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--neon),var(--pink));border-radius:2px;}
 .overlay{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;
@@ -28,7 +28,7 @@ button{touch-action:manipulation;font:inherit;cursor:pointer;border:none;}
 .panel{width:100%;max-width:430px;max-height:88vh;overflow-y:auto;background:#0a0d16;
   border:1px solid rgba(0,245,255,.25);border-radius:16px;padding:28px 24px;text-align:center;
   box-shadow:0 0 40px rgba(0,245,255,.08),0 0 80px rgba(255,45,120,.06);}
-h1.title{font-size:44px;letter-spacing:.18em;margin:0 0 4px;color:#fff;
+h1.title{font-size:clamp(24px,8.5vw,44px);letter-spacing:.12em;margin:0 0 4px;color:#fff;
   text-shadow:0 0 18px var(--pink),0 0 46px rgba(255,45,120,.5);}
 .tag{font-size:11px;letter-spacing:.3em;color:var(--neon);margin-bottom:18px;}
 .howto{font-size:14px;line-height:1.55;color:#c6cddb;margin:0 0 24px;}
@@ -43,7 +43,7 @@ h1.title{font-size:44px;letter-spacing:.18em;margin:0 0 4px;color:#fff;
 h2{font-size:20px;letter-spacing:.12em;margin:0 0 6px;color:#fff;}
 .sub{font-size:13px;color:var(--dim);margin:0 0 16px;}
 #rows{display:flex;flex-direction:column;gap:8px;margin-bottom:18px;text-align:left;}
-.row{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;
+.row{min-height:44px;cursor:pointer;display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;
   background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);touch-action:manipulation;}
 .row.sel{border-color:var(--neon);box-shadow:0 0 12px rgba(0,245,255,.35);background:rgba(0,245,255,.07);}
 .rank{font-size:12px;font-weight:800;color:var(--dim);width:20px;text-align:center;}
@@ -87,7 +87,7 @@ h2{font-size:20px;letter-spacing:.12em;margin:0 0 6px;color:#fff;}
 <div id="breed" class="overlay hidden">
   <div class="panel">
     <h2 id="b-head">GENERATION 1 COMPLETE</h2>
-    <p class="sub">Tap 4 walkers to breed the next generation.</p>
+    <p class="sub">Ranked by distance. Tap 4 walkers to breed.</p>
     <div id="rows"></div>
     <div class="btnrow">
       <button class="bigbtn" id="btn-auto">Auto-breed top 4</button>
@@ -132,6 +132,7 @@ const randGenome=()=>[rr(0),rr(1),rr(2),rr(3),rr(4),rr(5),rr(6),rr(7),rr(8),rr(9
 /* ================= canvas ================= */
 const cv=$('cv'),ctx=cv.getContext('2d');
 let W=0,H=0,groundY=0;
+let cameraX=0,cameraScale=1;
 function resize(){
   const DPR=Math.min(2,window.devicePixelRatio||1);
   W=window.innerWidth;H=window.innerHeight;
@@ -221,6 +222,7 @@ try{const s=localStorage.getItem('blackbox-bloodline-best');if(s)allTimeBest=par
 function startRun(genomes){
   walkers=genomes.map((g,i)=>makeWalker(g,i));
   state='run';elapsed=0;acc=0;lastT=0;
+  cameraX=0;cameraScale=1;
   $('title').classList.add('hidden');$('breed').classList.add('hidden');$('end').classList.add('hidden');
   $('hud').classList.remove('hidden');
 }
@@ -255,6 +257,8 @@ function autoBreedTop4(){
   doBreed(results.slice(0,4).map(w=>w.g));
 }
 function showEnd(){
+  // Finish must record the generation currently on screen, even mid-run.
+  if(state==='run') endGeneration();
   state='end';
   $('hud').classList.add('hidden');$('breed').classList.add('hidden');$('title').classList.add('hidden');
   $('e-best').textContent=fmtM(allTimeBest);
@@ -270,8 +274,10 @@ function showBreed(){
   const rows=$('rows');rows.innerHTML='';selected.clear();
   const top=Math.max(1,results[0].best);
   results.forEach((w,ri)=>{
-    const row=document.createElement('div');row.className='row';row.dataset.ri=ri;
-    const rank=document.createElement('span');rank.className='rank';rank.textContent=String(ri+1);
+    const row=document.createElement('button');row.type='button';row.className='row';row.dataset.ri=ri;
+    row.setAttribute('aria-pressed','false');
+    row.setAttribute('aria-label','Walker '+(w.i+1)+', rank '+(ri+1)+', '+fmtM(w.best));
+    const rank=document.createElement('span');rank.className='rank';rank.textContent=String(w.i+1);
     const dot=document.createElement('span');dot.className='dot';
     dot.style.background='hsl('+w.hue+',100%,62%)';dot.style.boxShadow='0 0 8px hsl('+w.hue+',100%,62%)';
     const bw=document.createElement('div');bw.className='barwrap';
@@ -284,6 +290,7 @@ function showBreed(){
     row.addEventListener('click',()=>{
       if(selected.has(ri)){selected.delete(ri);row.classList.remove('sel');}
       else if(selected.size<4){selected.add(ri);row.classList.add('sel');}
+      row.setAttribute('aria-pressed',String(selected.has(ri)));
       const b=$('btn-breed');b.disabled=selected.size!==4;
       b.textContent='Breed ('+selected.size+'/4)';
     });
@@ -304,6 +311,13 @@ function updateHUD(){
   $('timer-fill').style.width=(100*Math.min(1,elapsed/GEN_SECS))+'%';
 }
 function drawWalker(w){
+  // Fit world positions to the viewport, but keep bodies large enough to read.
+  const bodyScale=Math.max(0.6,cameraScale);
+  const screenX=(w.torso.x-cameraX)*cameraScale;
+  ctx.save();
+  ctx.translate(screenX,groundY);
+  ctx.scale(bodyScale,bodyScale);
+  ctx.translate(-w.torso.x,-groundY);
   const c='hsl('+w.hue+',100%,62%)';
   ctx.strokeStyle=c;ctx.lineWidth=3;ctx.lineCap='round';
   ctx.shadowColor=c;ctx.shadowBlur=9;
@@ -319,11 +333,39 @@ function drawWalker(w){
   ctx.fillStyle=c;
   ctx.beginPath();ctx.arc(fl.x,fl.y-2,2.5,0,TAU);ctx.fill();
   ctx.beginPath();ctx.arc(fr.x,fr.y-2,2.5,0,TAU);ctx.fill();
+  ctx.restore();
+  ctx.fillStyle=c;ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+  ctx.fillText(String(w.i+1),screenX,groundY+(w.i%2?29:15));
 }
 function render(){
+  if(walkers.length){
+    const left=Math.min(...walkers.map(w=>w.torso.x));
+    const right=Math.max(...walkers.map(w=>w.torso.x));
+    let targetScale=Math.min(1,(W-100)/Math.max(1,right-left));
+    let lo=0,hi=0;
+    // Include every rendered limb, including the minimum readable body size.
+    for(let pass=0;pass<12;pass++){
+      const bodyScale=Math.max(0.6,targetScale);
+      lo=Math.min(...walkers.flatMap(w=>w.pts.map(p=>w.torso.x*targetScale+(p.x-w.torso.x)*bodyScale)));
+      hi=Math.max(...walkers.flatMap(w=>w.pts.map(p=>w.torso.x*targetScale+(p.x-w.torso.x)*bodyScale)));
+      if(hi-lo<=W-64) break;
+      targetScale*=(W-72)/(hi-lo);
+    }
+    cameraScale=targetScale;
+    cameraX=(lo+hi-W)/(2*cameraScale);
+  }
   ctx.fillStyle='#05060a';ctx.fillRect(0,0,W,H);
   ctx.strokeStyle='rgba(0,245,255,.16)';ctx.lineWidth=1;
-  for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  const tick=40*Math.pow(2,Math.ceil(Math.log2(1/cameraScale)));
+  for(let wx=Math.ceil(cameraX/tick)*tick;wx<cameraX+W/cameraScale;wx+=tick){
+    const x=(wx-cameraX)*cameraScale;
+    ctx.beginPath();ctx.moveTo(x,70);ctx.lineTo(x,groundY);ctx.stroke();
+  }
+  if(walkers.length){
+    ctx.fillStyle='#8b93a7';ctx.font='12px sans-serif';ctx.textAlign='center';
+    ctx.fillText('12 walkers · best distance wins · choose 4 to breed',W/2,100);
+    ctx.fillText('Field view · '+(1/cameraScale).toFixed(1)+'× zoom out',W/2,groundY+57);
+  }
   ctx.strokeStyle='rgba(0,245,255,.45)';ctx.lineWidth=2;
   ctx.shadowColor='#00f5ff';ctx.shadowBlur=12;
   ctx.beginPath();ctx.moveTo(0,groundY);ctx.lineTo(W,groundY);ctx.stroke();
@@ -332,7 +374,7 @@ function render(){
     ctx.strokeStyle='rgba(150,220,255,.30)';ctx.lineWidth=2;
     ctx.beginPath();
     for(let i=0;i<ghostPath.length;i++){
-      const x=24+ghostPath[i].dx,y=ghostPath[i].y;
+      const x=(24+ghostPath[i].dx-cameraX)*cameraScale,y=groundY+(ghostPath[i].y-groundY)*Math.max(0.6,cameraScale);
       if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
     }
     ctx.stroke();

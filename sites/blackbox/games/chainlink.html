@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>CHAINLINK — BLACKBOX</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; overflow:hidden; background:#0a0a12; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:#e8f4ff;
+         display:flex; align-items:center; justify-content:center; }
+  #wrap { position:relative; width:100%; max-width:480px; height:100%; }
+  canvas { position:absolute; inset:0; width:100%; height:100%; touch-action:none; display:block; }
+  .screen { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+            text-align:center; padding:24px; background:rgba(6,8,16,.88); z-index:10; }
+  .hidden { display:none !important; }
+  h1 { font-size:44px; letter-spacing:6px; color:#7df9ff; text-shadow:0 0 24px #22d3ee; margin-bottom:8px; }
+  h2 { font-size:30px; letter-spacing:3px; color:#7df9ff; text-shadow:0 0 18px #22d3ee; margin-bottom:8px; }
+  .sub { color:#8fa3bf; font-size:15px; margin-bottom:20px; line-height:1.5; }
+  .howto { color:#c8d8ee; font-size:15px; line-height:1.7; margin-bottom:24px; max-width:320px; }
+  .howto b { color:#7df9ff; }
+  button { touch-action:manipulation; font-size:18px; letter-spacing:2px; padding:14px 42px; border-radius:999px;
+           border:1px solid #22d3ee; background:rgba(34,211,238,.12); color:#a5f3fc; cursor:pointer; }
+  button:active { background:rgba(34,211,238,.3); }
+  #hud { position:absolute; top:0; left:0; right:0; display:flex; justify-content:space-between; align-items:center;
+         padding:calc(10px + env(safe-area-inset-top)) 16px 10px; z-index:5; pointer-events:none;
+         font-size:14px; letter-spacing:1px; color:#8fa3bf; }
+  #hud .lvl { color:#7df9ff; font-weight:700; }
+  #hud button { pointer-events:auto; font-size:12px; padding:8px 16px; }
+  #toast { position:absolute; left:50%; bottom:12%; transform:translateX(-50%); z-index:6; color:#a5f3fc;
+           background:rgba(10,14,26,.85); border:1px solid #22d3ee55; border-radius:12px; padding:10px 18px;
+           font-size:14px; opacity:0; transition:opacity .3s; pointer-events:none; white-space:nowrap; }
+  .trick { margin-top:18px; font-size:13px; color:#5b6b87; letter-spacing:1px; }
+  .trick b { color:#22d3ee; }
+  .big { font-size:44px; color:#fff; margin:6px 0 12px; text-shadow:0 0 30px #22d3ee; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+  <div id="hud" class="hidden">
+    <span class="lvl" id="hudLvl">CAVE 1/12</span>
+    <span id="hudStat">HOOKS 0</span>
+    <button id="resetBtn">RESET</button>
+  </div>
+  <div id="toast"></div>
+
+  <div id="titleScreen" class="screen">
+    <h1>CHAINLINK</h1>
+    <div class="sub">BLACKBOX &middot; physics toy 04</div>
+    <div class="howto"><b>TAP a peg</b> to fire your hook.<br>Swing with momentum.<br><b>TAP again</b> to release &amp; fling.<br>Reach the portal in all 12 caves.</div>
+    <button id="startBtn">ENTER THE CAVES</button>
+  </div>
+
+  <div id="winScreen" class="screen hidden">
+    <h2>ALL CAVES CLEAR</h2>
+    <div class="sub">total hooks</div>
+    <div class="big" id="finalScore">0</div>
+    <div class="sub" id="bestLine"></div>
+    <button id="againBtn">SWING AGAIN</button>
+    <div class="trick">The trick: <b>verlet integration + constraint relaxation</b></div>
+  </div>
+</div>
+<script>
+"use strict";
+// ---------- setup ----------
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = 400, H = 700;
+let DPR = 1;
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const r = canvas.getBoundingClientRect();
+  canvas.width = Math.max(1, Math.round(r.width * DPR));
+  canvas.height = Math.max(1, Math.round(r.height * DPR));
+}
+window.addEventListener('resize', resize);
+
+// ---------- levels: {spawn, pegs, walls, portal} ----------
+const LEVELS = [
+  { spawn:[60,600],  pegs:[[200,220]],                    walls:[],                          portal:[340,600] },
+  { spawn:[50,620],  pegs:[[150,200],[300,200]],           walls:[],                          portal:[355,620] },
+  { spawn:[50,620],  pegs:[[200,180]],                    walls:[[0,560,140,560],[260,560,400,560]], portal:[350,500] },
+  { spawn:[60,640],  pegs:[[200,420],[200,200]],           walls:[],                          portal:[340,640] },
+  { spawn:[200,660], pegs:[[200,160]],                    walls:[[60,420,340,420]],           portal:[200,340] },
+  { spawn:[50,640],  pegs:[[120,220],[260,160],[340,300]],walls:[],                          portal:[360,620] },
+  { spawn:[60,640],  pegs:[[140,180],[280,140]],          walls:[[0,480,120,480],[280,480,400,480],[180,300,220,300]], portal:[350,420] },
+  { spawn:[200,660], pegs:[[100,200],[300,200],[200,120]],walls:[[0,500,400,500]],            portal:[200,420] },
+  { spawn:[50,600],  pegs:[[180,160],[320,260]],          walls:[[120,440,280,440]],          portal:[350,360] },
+  { spawn:[60,640],  pegs:[[120,160],[240,120],[340,220]],walls:[[0,520,160,520],[240,520,400,520]], portal:[200,440] },
+  { spawn:[200,660], pegs:[[80,240],[200,140],[320,240]], walls:[[0,460,400,460],[140,280,260,280]], portal:[200,380] },
+  { spawn:[40,640],  pegs:[[120,180],[220,120],[320,200],[200,320]], walls:[[0,540,110,540],[290,540,400,540],[150,400,250,400]], portal:[360,470] },
+];
+
+// ---------- game state ----------
+const GRAV = 0.55, DAMP = 0.995, ITER = 14, SEG = 14, PRAD = 10, PLR = 9;
+let level = 0, hooks = 0, totalHooks = 0, t0 = 0;
+let rope = null, player = null, state = 'title', toastTimer = 0;
+
+function toast(msg, ms) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.style.opacity = 1;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.style.opacity = 0, ms || 1400);
+}
+function loadLevel(i) {
+  const L = LEVELS[i];
+  player = { x:L.spawn[0], y:L.spawn[1], px:L.spawn[0], py:L.spawn[1] };
+  rope = null;
+  document.getElementById('hudLvl').textContent = 'CAVE ' + (i+1) + '/12';
+  document.getElementById('hudStat').textContent = 'HOOKS ' + hooks;
+}
+// ---------- rope physics (verlet + constraint relaxation) ----------
+function fireHook(tx, ty) {
+  const L = LEVELS[level];
+  let best = null, bd = 1e9;
+  for (const p of L.pegs) {
+    const d = Math.hypot(p[0]-tx, p[1]-ty);
+    if (d < bd) { bd = d; best = p; }
+  }
+  if (!best || bd > 90) { toast('Tap near a peg to hook'); return; }
+  const n = Math.max(4, Math.round(Math.hypot(best[0]-player.x, best[1]-player.y) / SEG));
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    pts.push({ x:best[0]+(player.x-best[0])*t, y:best[1]+(player.y-best[1])*t,
+               px:best[0]+(player.x-best[0])*t, py:best[1]+(player.y-best[1])*t, pin:i===0 });
+  }
+  rope = { pts, peg:best };
+  hooks++; totalHooks++;
+  document.getElementById('hudStat').textContent = 'HOOKS ' + hooks;
+  // opening kick: perpendicular to rope, biased toward portal, starts the swing
+  const last = pts[pts.length-1];
+  const dx = player.x-best[0], dy = player.y-best[1], d = Math.hypot(dx,dy)||1;
+  let kx = -dy/d, ky = dx/d;
+  if (kx*(L.portal[0]-player.x) < 0) { kx = -kx; ky = -ky; }
+  last.px -= kx*3.2; last.py -= ky*3.2;
+}
+function releaseHook(boost) {
+  if (!rope) return;
+  const pts = rope.pts, last = pts[pts.length-1];
+  player = { x:last.x, y:last.y, px:last.px, py:last.py };
+  if (boost) {
+    const vx = (player.x-player.px)*1.15, vy = (player.y-player.py)*1.15;
+    player.px = player.x - vx; player.py = player.y - vy;
+  }
+  rope = null;
+}
+function wrapRope(L) {
+  const pts = rope.pts;
+  outer:
+  for (let i = 0; i < pts.length-1; i++) {
+    const a = pts[i], b = pts[i+1];
+    for (const p of L.pegs) {
+      if (p === rope.peg && i === 0) continue;
+      const cx = b.x-a.x, cy = b.y-a.y;
+      const t = Math.max(0, Math.min(1, ((p[0]-a.x)*cx+(p[1]-a.y)*cy)/((cx*cx+cy*cy)||1e-6)));
+      const nx = a.x+cx*t, ny = a.y+cy*t;
+      if (Math.hypot(p[0]-nx, p[1]-ny) < PRAD+2) {
+        const ang = Math.atan2(ny-p[1], nx-p[0]);
+        const wx = p[0]+Math.cos(ang)*(PRAD+2), wy = p[1]+Math.sin(ang)*(PRAD+2);
+        pts.splice(i+1, 0, {x:wx,y:wy,px:wx,py:wy,pin:true});
+        if (pts.length > 60) pts.splice(1,1);
+        break outer;
+      }
+    }
+  }
+  for (let i = 1; i < pts.length-1; i++) {
+    if (!pts[i].pin) continue;
+    const a = pts[i-1], b = pts[i], c = pts[i+1];
+    const v1x = b.x-a.x, v1y = b.y-a.y, v2x = c.x-b.x, v2y = c.y-b.y;
+    const d1 = Math.hypot(v1x,v1y)||1, d2 = Math.hypot(v2x,v2y)||1;
+    if ((v1x*v2x+v1y*v2y)/(d1*d2) > 0.985) { pts.splice(i,1); i--; }
+  }
+}
+function stepRope() {
+  const pts = rope.pts, L = LEVELS[level];
+  for (let i = 1; i < pts.length; i++) {
+    const p = pts[i];
+    const vx = (p.x-p.px)*DAMP, vy = (p.y-p.py)*DAMP;
+    p.px = p.x; p.py = p.y;
+    p.x += vx; p.y += vy + GRAV;
+  }
+  for (let k = 0; k < ITER; k++) {
+    for (let i = 0; i < pts.length-1; i++) {
+      const a = pts[i], b = pts[i+1];
+      let dx = b.x-a.x, dy = b.y-a.y;
+      const d = Math.hypot(dx,dy) || 1e-6, diff = (d-SEG)/d;
+      const wa = a.pin?0:1, wb = b.pin?0:1, s = wa+wb;
+      if (!s) continue;
+      dx *= diff; dy *= diff;
+      a.x += dx*(wa/s); a.y += dy*(wa/s);
+      b.x -= dx*(wb/s); b.y -= dy*(wb/s);
+    }
+    wrapRope(L);
+  }
+  const last = pts[pts.length-1];
+  player.x = last.x; player.y = last.y; player.px = last.px; player.py = last.py;
+}
+function stepFree() {
+  const vx = (player.x-player.px)*DAMP, vy = (player.y-player.py)*DAMP;
+  player.px = player.x; player.py = player.y;
+  player.x += vx; player.y += vy + GRAV;
+}
+function collideWalls() {
+  const L = LEVELS[level];
+  for (const wseg of L.walls) {
+    const x1=wseg[0], y1=wseg[1], dx=wseg[2]-x1, dy=wseg[3]-y1;
+    const t = Math.max(0, Math.min(1, ((player.x-x1)*dx+(player.y-y1)*dy)/((dx*dx+dy*dy)||1e-6)));
+    const nx = x1+dx*t, ny = y1+dy*t;
+    let ox = player.x-nx, oy = player.y-ny;
+    const d = Math.hypot(ox,oy);
+    if (d < PLR+3) {
+      if (d < 1e-6) { ox = 0; oy = -1; } else { ox/=d; oy/=d; }
+      player.x = nx+ox*(PLR+3); player.y = ny+oy*(PLR+3);
+    }
+  }
+  if (player.x < PLR) player.x = PLR;
+  if (player.x > W-PLR) player.x = W-PLR;
+  if (player.y < PLR) player.y = PLR;
+}
+// ---------- loop / input / render ----------
+function update() {
+  if (rope) stepRope(); else stepFree();
+  collideWalls();
+  const L = LEVELS[level];
+  if (Math.hypot(player.x-L.portal[0], player.y-L.portal[1]) < 20) {
+    if (level >= LEVELS.length-1) return winGame();
+    level++; hooks = 0; loadLevel(level);
+    toast('Cave ' + (level+1));
+  }
+  if (player.y > H + 60) { loadLevel(level); toast('Lost grip — reset'); }
+}
+function toGame(e) {
+  const r = canvas.getBoundingClientRect();
+  const cx = (e.clientX), cy = (e.clientY);
+  const s = Math.min(r.width/W, r.height/H);
+  const ox = (r.width - W*s)/2, oy = (r.height - H*s)/2;
+  return [(cx-r.left-ox)/s, (cy-r.top-oy)/s];
+}
+canvas.addEventListener('pointerdown', e => {
+  if (state !== 'play') return;
+  e.preventDefault();
+  const [gx, gy] = toGame(e);
+  if (rope) releaseHook(true); else fireHook(gx, gy);
+});
+document.getElementById('resetBtn').addEventListener('click', () => { hooks = 0; loadLevel(level); });
+document.getElementById('startBtn').addEventListener('click', () => {
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('hud').classList.remove('hidden');
+  state = 'play'; level = 0; hooks = 0; totalHooks = 0; t0 = performance.now();
+  loadLevel(0);
+});
+document.getElementById('againBtn').addEventListener('click', () => {
+  document.getElementById('winScreen').classList.add('hidden');
+  state = 'play'; level = 0; hooks = 0; totalHooks = 0; t0 = performance.now();
+  loadLevel(0);
+});
+function winGame() {
+  state = 'win';
+  const secs = Math.round((performance.now()-t0)/1000);
+  document.getElementById('finalScore').textContent = totalHooks + ' hooks · ' + secs + 's';
+  const key = 'bb-chainlink-best';
+  const prev = +(localStorage.getItem(key) || 1e9);
+  const score = totalHooks*1000 + secs;
+  const best = document.getElementById('bestLine');
+  if (score < prev) { localStorage.setItem(key, score); best.textContent = 'NEW BEST'; }
+  else best.textContent = 'best: ' + prev;
+  document.getElementById('winScreen').classList.remove('hidden');
+}
+function render() {
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  const r = canvas.getBoundingClientRect();
+  const s = Math.min(r.width/W, r.height/H);
+  const ox = (r.width-W*s)/2, oy = (r.height-H*s)/2;
+  ctx.clearRect(0,0,r.width,r.height);
+  ctx.fillStyle = '#0a0a12'; ctx.fillRect(0,0,r.width,r.height);
+  ctx.translate(ox,oy); ctx.scale(s,s);
+  if (!render._bg) {
+    const bg = ctx.createRadialGradient(W/2,H/2,60,W/2,H/2,480);
+    bg.addColorStop(0,'#101828'); bg.addColorStop(1,'#070a14');
+    render._bg = bg;
+  }
+  ctx.fillStyle = render._bg; ctx.fillRect(0,0,W,H);
+  const L = LEVELS[level] || LEVELS[0];
+  ctx.strokeStyle = '#2b3a55'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+  for (const wseg of L.walls) { ctx.beginPath(); ctx.moveTo(wseg[0],wseg[1]); ctx.lineTo(wseg[2],wseg[3]); ctx.stroke(); }
+  const pl = 0.6+0.4*Math.sin(performance.now()/300);
+  ctx.strokeStyle = 'rgba(168,85,247,.25)'; ctx.lineWidth = 10;
+  ctx.beginPath(); ctx.arc(L.portal[0],L.portal[1],16,0,7); ctx.stroke();
+  ctx.strokeStyle = '#c084fc'; ctx.lineWidth = 3+2*pl;
+  ctx.beginPath(); ctx.arc(L.portal[0],L.portal[1],16,0,7); ctx.stroke();
+  for (const p of L.pegs) {
+    ctx.fillStyle = '#0e1626'; ctx.strokeStyle = '#7df9ff'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(p[0],p[1],PRAD,0,7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#7df9ff'; ctx.beginPath(); ctx.arc(p[0],p[1],3,0,7); ctx.fill();
+  }
+  if (rope) {
+    ctx.strokeStyle = 'rgba(232,121,249,.3)'; ctx.lineWidth = 7; ctx.lineCap='round';
+    ctx.beginPath();
+    rope.pts.forEach((p,i)=> i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
+    ctx.stroke();
+    ctx.strokeStyle = '#f0abfc'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    rope.pts.forEach((p,i)=> i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
+    ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(250,204,21,.25)';
+  ctx.beginPath(); ctx.arc(player.x,player.y,PLR+6,0,7); ctx.fill();
+  ctx.fillStyle = '#fef08a';
+  ctx.beginPath(); ctx.arc(player.x,player.y,PLR,0,7); ctx.fill();
+}
+function frame() {
+  if (state === 'play') update();
+  if (state !== 'title') render();
+  requestAnimationFrame(frame);
+}
+resize();
+window.__chainlink = { loadLevel, fireHook, releaseHook, get state(){return state;}, get player(){return player;} };
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

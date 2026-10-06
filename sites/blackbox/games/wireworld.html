@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>WIREWORLD - BLACKBOX</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:#0a0e14;color:#e0e6ed;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+button{touch-action:manipulation;user-select:none;-webkit-user-select:none}
+#app{height:100%;display:flex;flex-direction:column}
+.screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center}
+.hidden{display:none!important}
+h1{font-size:2.2em;margin-bottom:10px;background:linear-gradient(135deg,#00d4ff,#ff6b35);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.subtitle{color:#8892a0;margin-bottom:20px;font-size:0.95em;line-height:1.5}
+.btn{background:#1a2332;border:1px solid #00d4ff;color:#00d4ff;padding:14px 32px;font-size:1.1em;border-radius:12px;cursor:pointer;margin:8px;min-width:200px}
+.btn:active{background:#00d4ff;color:#0a0e14;transform:scale(0.97)}
+.btn.primary{background:#00d4ff;color:#0a0e14;font-weight:bold}
+#gameBar{display:flex;gap:6px;padding:8px;background:#0d1420;border-bottom:1px solid #1a2332;flex-wrap:wrap;justify-content:center}
+.toolBtn{background:#1a2332;border:1px solid #2a3a4a;color:#e0e6ed;padding:10px 12px;border-radius:8px;font-size:0.82em;cursor:pointer;min-height:44px}
+.toolBtn.active{background:#00d4ff;color:#0a0e14;border-color:#00d4ff;font-weight:bold}
+#gridWrap{flex:1;position:relative;overflow:hidden;background:#05070a;min-height:0}
+#grid{touch-action:none;cursor:crosshair;display:block;width:100%;height:100%}
+#statusBar{padding:8px 12px;background:#0d1420;border-top:1px solid #1a2332;font-size:0.85em;color:#8892a0;display:flex;justify-content:space-between;align-items:center;gap:10px}
+#challengeTitle{color:#00d4ff;font-weight:bold}
+.reveal{color:#ff6b35;font-style:italic;margin:15px 0;font-size:1.05em}
+.score{font-size:3em;color:#00d4ff;margin:20px 0}
+.howto{background:#0d1420;border:1px solid #1a2332;border-radius:12px;padding:15px;margin:15px 0;max-width:340px;font-size:0.9em;line-height:1.6;color:#aab4c0}
+.howto b{color:#00d4ff}
+</style>
+</head>
+<body>
+<div id="app">
+<div id="titleScreen" class="screen">
+<h1>WIREWORLD</h1>
+<div class="subtitle">Build circuits in a cellular automaton</div>
+<div class="howto"><b>How to play:</b> Draw copper wires with your finger. Tap <b>Inject</b> then a wire to drop an electron. Heads are cyan, tails orange. Wire up the circuits and light the lamps.</div>
+<div class="reveal">Wireworld cellular automaton.</div>
+<button class="btn primary" id="startBtn">START</button>
+<div style="margin-top:14px;color:#5a6577;font-size:0.8em">Best: <span id="bestScore">0</span></div>
+</div>
+<div id="gameScreen" class="hidden" style="flex:1;display:flex;flex-direction:column;min-height:0">
+<div id="gameBar">
+<button class="toolBtn active" data-tool="draw">Draw</button>
+<button class="toolBtn" data-tool="erase">Erase</button>
+<button class="toolBtn" data-tool="inject">Inject</button>
+<button class="toolBtn" id="playBtn">Play</button>
+<button class="toolBtn" id="stepBtn">Step</button>
+<button class="toolBtn" id="clearBtn">Clear</button>
+</div>
+<div id="gridWrap"><canvas id="grid"></canvas></div>
+<div id="statusBar">
+<span id="challengeTitle">1/5 WIRE</span>
+<span id="hint"></span>
+<span id="tickCount">T0</span>
+</div>
+</div>
+<div id="winScreen" class="screen hidden">
+<h1>SOLVED</h1>
+<div class="score" id="winScore">0</div>
+<div id="winMsg" style="color:#8892a0;margin-bottom:10px"></div>
+<button class="btn primary" id="nextBtn">NEXT</button>
+<button class="btn" id="replayBtn">Replay</button>
+</div>
+</div>
+<script>
+"use strict";
+const EMPTY=0,COND=1,HEAD=2,TAIL=3;
+let GW=64,GH=40,grid,nextGrid;
+function initGrid(w,h){GW=w;GH=h;grid=new Uint8Array(w*h);nextGrid=new Uint8Array(w*h);}
+function S(x,y,v){if(x>=0&&y>=0&&x<GW&&y<GH)grid[y*GW+x]=v;}
+function tick(){
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    const i=y*GW+x,s=grid[i];
+    if(s===EMPTY){nextGrid[i]=EMPTY;continue;}
+    if(s===HEAD){nextGrid[i]=TAIL;continue;}
+    if(s===TAIL){nextGrid[i]=COND;continue;}
+    let n=0;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+      if(!dx&&!dy)continue;
+      const nx=x+dx,ny=y+dy;
+      if(nx<0||ny<0||nx>=GW||ny>=GH)continue;
+      if(grid[ny*GW+nx]===HEAD)n++;
+    }
+    nextGrid[i]=(n===1||n===2)?HEAD:COND;
+  }
+  const t=grid;grid=nextGrid;nextGrid=t;
+}
+let challenge=0,tickNum=0,playing=false,tool='draw',winDone=false;
+let sources=[],probes=[],fixedCells=null;
+let scores=[100,200,200,300,500];
+const CH=[
+ {name:'WIRE',hint:'Draw a wire from source to lamp. 3 pulses wins.'},
+ {name:'FANOUT',hint:'Split A\'s signal to light BOTH lamps.'},
+ {name:'OR',hint:'Wire A and B into the gate. Lamp = A OR B.'},
+ {name:'DIODE',hint:'Wire through the diode. Signal flows one way only.'},
+ {name:'CLOCK',hint:'Draw a CLOSED loop. Inject one electron. Sustain 200 ticks.'},
+];
+function wire(x1,y1,x2,y2){
+  let x=x1,y=y1;
+  while(x!==x2){x+=Math.sign(x2-x);S(x,y,COND);}
+  while(y!==y2){y+=Math.sign(y2-y);S(x,y,COND);}
+}
+function diode(x,y,dx,dy){
+  if(dx===1){S(x,y,COND);S(x+1,y-1,COND);S(x+1,y,COND);S(x+1,y+1,COND);S(x+2,y-1,COND);S(x+2,y+1,COND);S(x+3,y,COND);S(x+4,y,COND);}
+  else if(dx===-1){S(x,y,COND);S(x-1,y-1,COND);S(x-1,y,COND);S(x-1,y+1,COND);S(x-2,y-1,COND);S(x-2,y+1,COND);S(x-3,y,COND);S(x-4,y,COND);}
+  else if(dy===1){S(x,y,COND);S(x-1,y+1,COND);S(x,y+1,COND);S(x+1,y+1,COND);S(x-1,y+2,COND);S(x+1,y+2,COND);S(x,y+3,COND);S(x,y+4,COND);}
+  else{S(x,y,COND);S(x-1,y-1,COND);S(x,y-1,COND);S(x+1,y-1,COND);S(x-1,y-2,COND);S(x+1,y-2,COND);S(x,y-3,COND);S(x,y-4,COND);}
+}
+function andnotCore(fx,fy){
+  // Verified geometry: O at (fx,fy), A from west, 3 kill cells north, output southeast.
+  // Kills: (fx-1,fy-1),(fx,fy-1),(fx+1,fy-1). Output: (fx+1,fy+1).
+  // B drives kills via diodes (prevent backfeed). Returns pins.
+  S(fx,fy,COND);
+  const A=[fx-1,fy],K1=[fx-1,fy-1],K2=[fx,fy-1],K3=[fx+1,fy-1],O=[fx+1,fy+1];
+  S(A[0],A[1],COND);S(K1[0],K1[1],COND);S(K2[0],K2[1],COND);S(K3[0],K3[1],COND);S(O[0],O[1],COND);
+  return {A:A,K:[K1,K2,K3],O:O,F:[fx,fy]};
+}
+// Build a single AND-NOT gate with B fanout. bx,by = B input stub. Returns {aIn:[x,y], out:[x,y]}.
+// B branches: from (bx,by) to each kill cell, with diode to prevent backfeed.
+function buildAndNotGate(fx,fy,bx,by){
+  const c=andnotCore(fx,fy);
+  // B fanout: trunk from (bx,by), split to 3 kills with diodes.
+  // Route: (bx,by) -> up to (bx,fy-4), then horizontal to above kills, then down.
+  const ty=fy-4;
+  wire(bx,by,bx,ty);
+  wire(bx,ty,c.K[1][0],ty);
+  // To K1 (fx-1,fy-1): from (bx,ty) -> (fx-1,ty) -> (fx-1,fy-1) with diode
+  wire(bx,ty,c.K[0][0],ty);
+  diode(c.K[0][0],ty+1,0,1); // diode facing south (toward kill)
+  wire(c.K[0][0],ty+3,c.K[0][0],c.K[0][1]);
+  // To K2 (fx,fy-1): from (c.K[1][0],ty) down with diode
+  diode(c.K[1][0],ty+1,0,1);
+  wire(c.K[1][0],ty+3,c.K[1][0],c.K[1][1]);
+  // To K3 (fx+1,fy-1): from (bx,ty) -> (fx+1,ty) -> down with diode
+  wire(bx,ty,c.K[2][0],ty);
+  diode(c.K[2][0],ty+1,0,1);
+  wire(c.K[2][0],ty+3,c.K[2][0],c.K[2][1]);
+  return {aIn:c.A, out:c.O};
+}
+function buildChallenge(n){
+  initGrid(64,40);
+  sources=[];probes=[];tickNum=0;winDone=false;window._clk=0;
+  if(n===0){
+    // WIRE: A to lamp
+    for(let x=4;x<=8;x++)S(x,20,COND);
+    sources.push({x:4,y:20,period:8,phase:0,on:function(){return true;}});
+    for(let x=56;x<=60;x++)S(x,20,COND);
+    probes.push({x:58,y:20,name:'lamp',hits:[]});
+    window._gate='wire';
+    window._auto={a:[4,20],ia:[9,20],o:[55,20],lamp:[58,20]};
+  }else if(n===1){
+    // FANOUT: A splits to two lamps
+    for(let x=4;x<=8;x++)S(x,20,COND);
+    sources.push({x:4,y:20,period:8,phase:0,on:function(){return true;}});
+    for(let x=56;x<=60;x++)S(x,12,COND);
+    for(let x=56;x<=60;x++)S(x,28,COND);
+    probes.push({x:58,y:12,name:'lamp1',hits:[]});
+    probes.push({x:58,y:28,name:'lamp2',hits:[]});
+    window._gate='fanout';
+    window._auto={a:[4,20],ia:[9,20],o1:[55,12],o2:[55,28],lamp1:[58,12],lamp2:[58,28]};
+  }else if(n===2){
+    // OR: A and B merge to lamp. Simple, no diodes needed (player wires it).
+    for(let x=4;x<=8;x++)S(x,15,COND);
+    sources.push({x:4,y:15,period:8,phase:0,on:function(){return true;}});
+    for(let x=4;x<=8;x++)S(x,25,COND);
+    sources.push({x:4,y:25,period:8,phase:0,on:function(){return true;}});
+    for(let x=56;x<=60;x++)S(x,20,COND);
+    probes.push({x:58,y:20,name:'lamp',hits:[]});
+    window._gate='or';
+    window._auto={a:[4,15],b:[4,25],ia:[9,15],ib:[9,25],merge:[30,20],o:[55,20],lamp:[58,20]};
+  }else if(n===3){
+    // DIODE: A to lamp through a pre-placed diode (one-way)
+    for(let x=4;x<=8;x++)S(x,20,COND);
+    sources.push({x:4,y:20,period:8,phase:0,on:function(){return true;}});
+    diode(30,20,1,0);
+    for(let x=56;x<=60;x++)S(x,20,COND);
+    probes.push({x:58,y:20,name:'lamp',hits:[]});
+    window._gate='diode';
+    window._auto={a:[4,20],ia:[9,20],dioIn:[29,20],dioOut:[34,20],o:[55,20],lamp:[58,20]};
+  }
+  fixedCells=grid.slice();
+  drawGrid();
+}
+function buildAND(gx,gy){
+  // AND(A,B) = AND-NOT(A, AND-NOT(A,B)). Two gates.
+  // Gate1 at (gx-10,gy): X = A AND-NOT B. Gate2 at (gx+10,gy): OUT = A AND-NOT X.
+  const g1x=gx-10, g1y=gy, g2x=gx+10, g2y=gy;
+  const inA=[gx-22,gy-1], inB=[gx-10,gy-12], out=[gx+21,gy+1];
+  S(inA[0],inA[1],COND);S(inB[0],inB[1],COND);S(out[0],out[1],COND);
+  // Gate1: A in from west, B in from north stub
+  const g1=buildAndNotGate(g1x,g1y,inB[0],inB[1]);
+  wire(inA[0],inA[1],g1.aIn[0],g1.aIn[1]);
+  // A fanout to Gate2
+  wire(inA[0],inA[1],inA[0],gy+6);wire(inA[0],gy+6,g2x-1,gy+6);wire(g2x-1,gy+6,g2x-1,g2y);
+  // Gate1 output X to Gate2 B input (via diode to prevent backfeed)
+  const xWireY=gy+8;
+  wire(g1.out[0],g1.out[1],g1.out[0],xWireY);wire(g1.out[0],xWireY,g2x,xWireY);
+  // Gate2: A in from west (already wired), B in from north (X signal)
+  const g2=andnotCore(g2x,g2y);
+  // B fanout for Gate2: from (g2x,xWireY) up to kills with diodes
+  const ty2=g2y-4;
+  wire(g2x,xWireY,g2x,ty2);
+  wire(g2x,ty2,g2.K[1][0],ty2);
+  wire(g2x,ty2,g2.K[0][0],ty2);diode(g2.K[0][0],ty2+1,0,1);wire(g2.K[0][0],ty2+3,g2.K[0][0],g2.K[0][1]);
+  diode(g2.K[1][0],ty2+1,0,1);wire(g2.K[1][0],ty2+3,g2.K[1][0],g2.K[1][1]);
+  wire(g2x,ty2,g2.K[2][0],ty2);diode(g2.K[2][0],ty2+1,0,1);wire(g2.K[2][0],ty2+3,g2.K[2][0],g2.K[2][1]);
+  // Gate2 output to lamp
+  wire(g2.O[0],g2.O[1],g2.O[0],gy+8);wire(g2.O[0],gy+8,out[0],gy+8);wire(out[0],gy+8,out[0],out[1]);
+  sources.push({x:8,y:gy-1,period:8,phase:0,on:function(){return true;}});
+  sources.push({x:gx-10,y:2,period:8,phase:0,on:function(t){return (t%160)<80;}});
+  S(gx-10,2,COND);S(gx-10,3,COND);S(8,gy-1,COND);
+  probes.push({x:out[0],y:out[1],name:'lamp',hits:[]});
+  window._auto={a:[8,gy-1],b:[gx-10,3],ia:[inA[0],inA[1]],ib:[inB[0],inB[1]],o:[out[0]+1,out[1]],lamp:[out[0],out[1]]};
+  window._gate='and';
+}
+function buildXOR(gx,gy){
+  // XOR(A,B) = (A AND-NOT B) OR (B AND-NOT A). Two gates, OR-merged outputs.
+  const g1x=gx-10, g1y=gy-8, g2x=gx-10, g2y=gy+8;
+  const inA=[gx-22,gy-1], inB=[gx-22,gy+3], out=[gx+16,gy];
+  S(inA[0],inA[1],COND);S(inB[0],inB[1],COND);S(out[0],out[1],COND);
+  // Gate1: A AND-NOT B. A from west, B from north stub.
+  const b1x=g1x, b1y=g1y-12;
+  S(b1x,b1y,COND);
+  const g1=buildAndNotGate(g1x,g1y,b1x,b1y);
+  wire(inA[0],inA[1],g1.aIn[0],g1.aIn[1]);
+  wire(inB[0],inB[1],inB[0],b1y);wire(inB[0],b1y,b1x,b1y);
+  // Gate2: B AND-NOT A. B from west, A from north stub.
+  const a2x=g2x, a2y=g2y-12;
+  S(a2x,a2y,COND);
+  const g2=buildAndNotGate(g2x,g2y,a2x,a2y);
+  wire(inB[0],inB[1],g2.aIn[0],g2.aIn[1]);
+  wire(inA[0],inA[1],inA[0],a2y);wire(inA[0],a2y,a2x,a2y);
+  // OR merge: X and Y to out with diodes
+  const ox=gx+8, oy=gy;
+  S(ox,oy,COND);
+  wire(g1.out[0],g1.out[1],ox-6,g1.out[1]);wire(ox-6,g1.out[1],ox-6,oy);wire(ox-6,oy,ox-1,oy);diode(ox-4,oy,1,0);
+  wire(g2.out[0],g2.out[1],ox-6,g2.out[1]);wire(ox-6,g2.out[1],ox-6,oy);
+  wire(ox+1,oy,out[0],out[1]);
+  sources.push({x:8,y:gy-1,period:8,phase:0,on:function(){return true;}});
+  sources.push({x:8,y:gy+3,period:8,phase:0,on:function(t){return (t%160)<80;}});
+  S(8,gy-1,COND);S(8,gy+3,COND);
+  probes.push({x:out[0],y:out[1],name:'lamp',hits:[]});
+  window._auto={a:[8,gy-1],b:[8,gy+3],ia:[inA[0],inA[1]],ib:[inB[0],inB[1]],o:[out[0]+1,out[1]],lamp:[out[0],out[1]]};
+  window._gate='xor';
+}
+const canvas=document.getElementById('grid'),ctx=canvas.getContext('2d');
+let cellSize=10;
+function resize(){
+  const wrap=document.getElementById('gridWrap');
+  canvas.width=wrap.clientWidth;canvas.height=wrap.clientHeight;
+  cellSize=Math.max(4,Math.min(canvas.width/GW,canvas.height/GH));
+  drawGrid();
+}
+function drawGrid(){
+  const w=canvas.width,h=canvas.height;
+  ctx.fillStyle='#05070a';ctx.fillRect(0,0,w,h);
+  const ox=(w-GW*cellSize)/2,oy=(h-GH*cellSize)/2;
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    const s=grid[y*GW+x];if(s===EMPTY)continue;
+    const px=ox+x*cellSize,py=oy+y*cellSize;
+    ctx.fillStyle=s===COND?'#6b4a22':(s===HEAD?'#00e5ff':'#ff7b33');
+    ctx.fillRect(px,py,cellSize-1,cellSize-1);
+  }
+  for(const p of probes){
+    const px=ox+p.x*cellSize,py=oy+p.y*cellSize;
+    ctx.strokeStyle='#ff6b35';ctx.lineWidth=2;ctx.strokeRect(px-1,py-1,cellSize+1,cellSize+1);
+  }
+  for(const s of sources){
+    const px=ox+s.x*cellSize,py=oy+s.y*cellSize;
+    ctx.strokeStyle='#00d4ff';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(px+cellSize/2,py+cellSize/2,cellSize*0.7,0,7);ctx.stroke();
+  }
+}
+let drawing=false;
+function gpos(e){
+  const r=canvas.getBoundingClientRect();
+  const cx=(e.touches?e.touches[0].clientX:e.clientX)-r.left;
+  const cy=(e.touches?e.touches[0].clientY:e.clientY)-r.top;
+  const ox=(canvas.width-GW*cellSize)/2,oy=(canvas.height-GH*cellSize)/2;
+  return {x:Math.floor((cx-ox)/cellSize),y:Math.floor((cy-oy)/cellSize)};
+}
+function isFixed(x,y){return fixedCells&&(x<0||y<0||x>=GW||y>=GH||fixedCells[y*GW+x]!==EMPTY);}
+canvas.addEventListener('pointerdown',function(e){
+  drawing=true;const p=gpos(e);
+  if(p.x<0||p.y<0||p.x>=GW||p.y>=GH)return;
+  if(tool==='inject')S(p.x,p.y,HEAD);
+  else if(tool==='draw'&&!isFixed(p.x,p.y))S(p.x,p.y,COND);
+  else if(tool==='erase'&&!isFixed(p.x,p.y))S(p.x,p.y,EMPTY);
+  drawGrid();e.preventDefault();
+});
+canvas.addEventListener('pointermove',function(e){
+  if(!drawing)return;const p=gpos(e);
+  if(p.x<0||p.y<0||p.x>=GW||p.y>=GH)return;
+  if(tool==='draw'&&!isFixed(p.x,p.y))S(p.x,p.y,COND);
+  else if(tool==='erase'&&!isFixed(p.x,p.y))S(p.x,p.y,EMPTY);
+  drawGrid();
+});
+addEventListener('pointerup',function(){drawing=false;});
+let lastT=0,acc=0,speed=12;
+function loop(t){
+  if(playing){acc+=t-lastT;const iv=1000/speed;let n=0;while(acc>=iv&&n<8){stepTick();acc-=iv;n++;}}
+  lastT=t;requestAnimationFrame(loop);
+}
+function stepTick(){
+  for(const s of sources){
+    if(((tickNum-s.phase)%s.period+s.period)%s.period===0&&(!s.on||s.on(tickNum))){
+      const i=s.y*GW+s.x;
+      if(grid[i]===COND)grid[i]=HEAD;
+    }
+  }
+  for(const p of probes){if(grid[p.y*GW+p.x]===HEAD)p.hits.push(tickNum);}
+  tick();tickNum++;
+  document.getElementById('tickCount').textContent='T'+tickNum;
+  checkWin();drawGrid();
+}
+function checkWin(){
+  if(winDone)return;
+  if(challenge===0){
+    const h=probes[0].hits.length;
+    document.getElementById('hint').textContent=h+'/3 pulses';
+    if(h>=3)doWin();
+  }else if(challenge===4){
+    let heads=0;for(let i=0;i<grid.length;i++)if(grid[i]===HEAD)heads++;
+    if(heads>0)window._clk++;else window._clk=0;
+    document.getElementById('hint').textContent='sustain '+window._clk+'/200';
+    if(window._clk>=200)doWin();
+  }else{
+    const r=checkTruth();
+    if(r)document.getElementById('hint').textContent=r;
+  }
+}
+function checkTruth(){
+  // Validates each challenge. Simple, robust checks.
+  const gate = window._gate || 'wire';
+  if(gate==='clock') return null; // clock has its own win logic
+  const auto = window._auto;
+  if(!auto) return null;
+  let tw = window._tw;
+  if(!tw || tw.ch !== challenge){
+    tw = window._tw = {ch:challenge, good:0, lastEval:0};
+  }
+  if(tickNum - tw.lastEval >= 40 && !winDone){
+    tw.lastEval = tickNum;
+    let ok = false;
+    if(gate==='wire' || gate==='diode'){
+      // Single lamp must be pulsing
+      ok = probes[0].hits.length >= 3;
+    }else if(gate==='fanout'){
+      // Both lamps must be pulsing
+      ok = probes[0].hits.length >= 3 && probes[1].hits.length >= 3;
+    }else if(gate==='or'){
+      // Lamp must be pulsing (A always on, so OR should fire)
+      ok = probes[0].hits.length >= 3;
+    }
+    tw.good = ok ? tw.good + 1 : 0;
+    document.getElementById('hint').textContent = 'signal ' + tw.good + '/2';
+    if(tw.good >= 2) doWin();
+  }
+  return null;
+}
+function doWin(){
+  winDone=true;playing=false;document.getElementById('playBtn').textContent='Play';
+  const sc=scores[challenge];
+  const best=parseInt(localStorage.getItem('bb-wireworld-best')||'0');
+  if(sc>best)localStorage.setItem('bb-wireworld-best',String(sc));
+  document.getElementById('winScore').textContent=sc;
+  document.getElementById('winMsg').textContent=CH[challenge].name+' complete';
+  document.getElementById('gameScreen').classList.add('hidden');
+  document.getElementById('winScreen').classList.remove('hidden');
+}
+document.getElementById('startBtn').onclick=function(){
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('gameScreen').classList.remove('hidden');
+  document.getElementById('bestScore').textContent=localStorage.getItem('bb-wireworld-best')||'0';
+  setChallenge(0);resize();requestAnimationFrame(loop);
+};
+function setChallenge(n){
+  challenge=n;playing=false;document.getElementById('playBtn').textContent='Play';
+  document.getElementById('challengeTitle').textContent=(n+1)+'/5 '+CH[n].name;
+  document.getElementById('hint').textContent='';
+  buildChallenge(n);
+}
+document.getElementById('nextBtn').onclick=function(){
+  document.getElementById('winScreen').classList.add('hidden');
+  document.getElementById('gameScreen').classList.remove('hidden');
+  setChallenge((challenge+1)%5);
+};
+document.getElementById('replayBtn').onclick=function(){
+  document.getElementById('winScreen').classList.add('hidden');
+  document.getElementById('gameScreen').classList.remove('hidden');
+  setChallenge(challenge);
+};
+document.querySelectorAll('.toolBtn[data-tool]').forEach(function(b){b.onclick=function(){
+  document.querySelectorAll('.toolBtn[data-tool]').forEach(function(x){x.classList.remove('active');});
+  b.classList.add('active');tool=b.dataset.tool;
+};});
+document.getElementById('playBtn').onclick=function(){playing=!playing;this.textContent=playing?'Pause':'Play';};
+document.getElementById('stepBtn').onclick=function(){playing=false;document.getElementById('playBtn').textContent='Play';stepTick();};
+document.getElementById('clearBtn').onclick=function(){buildChallenge(challenge);};
+addEventListener('resize',resize);
+window.__autoSolve=function(n){
+  setChallenge(n);
+  const a=window._auto;
+  if(n===0){
+    wire(a.a[0],a.a[1],a.lamp[0],a.lamp[1]);drawGrid();
+  }else if(n===1){
+    // FANOUT: A to split point, then to both lamps
+    wire(a.a[0],a.a[1],30,20);wire(30,20,30,12);wire(30,12,a.o1[0],a.o1[1]);wire(a.o1[0],a.o1[1],a.lamp1[0],a.lamp1[1]);
+    wire(30,20,30,28);wire(30,28,a.o2[0],a.o2[1]);wire(a.o2[0],a.o2[1],a.lamp2[0],a.lamp2[1]);
+    drawGrid();
+  }else if(n===2){
+    // OR: A and B to merge point, then to lamp
+    wire(a.a[0],a.a[1],a.merge[0],a.merge[1]);
+    wire(a.b[0],a.b[1],a.merge[0],a.merge[1]);
+    wire(a.merge[0],a.merge[1],a.lamp[0],a.lamp[1]);
+    drawGrid();
+  }else if(n===3){
+    // DIODE: A through diode to lamp
+    wire(a.a[0],a.a[1],a.dioIn[0],a.dioIn[1]);
+    wire(a.dioOut[0],a.dioOut[1],a.lamp[0],a.lamp[1]);
+    drawGrid();
+  }else if(n===4){
+    // Small square loop (12x12), robust oscillator. Inject HEAD with TAIL behind for direction.
+    for(let x=26;x<=38;x++){S(x,14,COND);S(x,26,COND);}
+    for(let y=14;y<=26;y++){S(26,y,COND);S(38,y,COND);}
+    S(31,14,TAIL);S(32,14,HEAD);drawGrid();
+  }else if(a){
+    if(a.a) wire(a.a[0],a.a[1],a.ia[0],a.ia[1]);
+    if(a.b) wire(a.b[0],a.b[1],a.ib[0],a.ib[1]);
+    if(a.o&&a.lamp) wire(a.o[0],a.o[1],a.lamp[0],a.lamp[1]);
+    drawGrid();
+  }
+};
+window.__grid=function(){return {GW:GW,GH:GH,grid:grid};};
+window.__tick=stepTick;
+window.__state=function(){return {challenge:challenge,tick:tickNum,probes:probes.map(function(p){return {name:p.name,hits:p.hits.length};})};};
+</script>
+</body>
+</html>

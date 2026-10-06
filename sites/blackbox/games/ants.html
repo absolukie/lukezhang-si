@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#07090f">
+<title>ANTS — BLACKBOX</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; overflow:hidden; background:#07090f; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:#e8f4ff;
+         display:flex; align-items:center; justify-content:center; }
+  #wrap { position:relative; width:100%; max-width:480px; height:100%; }
+  canvas { position:absolute; inset:0; width:100%; height:100%; touch-action:none; display:block; }
+  .screen { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+            text-align:center; padding:24px; background:rgba(5,7,13,.9); z-index:10; }
+  .hidden { display:none !important; }
+  h1 { font-size:46px; letter-spacing:8px; color:#7df9ff; text-shadow:0 0 24px #22d3ee; margin-bottom:8px; }
+  h2 { font-size:30px; letter-spacing:3px; color:#7df9ff; text-shadow:0 0 18px #22d3ee; margin-bottom:8px; }
+  h2.lost { color:#ff8f9d; text-shadow:0 0 18px #ff4d6d; }
+  .sub { color:#8fa3bf; font-size:14px; margin-bottom:18px; line-height:1.5; letter-spacing:1px; }
+  .howto { color:#c8d8ee; font-size:15px; line-height:1.8; margin-bottom:26px; max-width:330px; }
+  .howto b { color:#ffb347; }
+  button { touch-action:manipulation; font-size:17px; letter-spacing:2px; padding:14px 40px; border-radius:999px;
+           border:1px solid #22d3ee; background:rgba(34,211,238,.12); color:#a5f3fc; cursor:pointer;
+           font-family:inherit; }
+  button:active { background:rgba(34,211,238,.32); }
+  #hud { position:absolute; top:0; left:0; right:0; display:flex; justify-content:space-between; align-items:center;
+         padding:calc(10px + env(safe-area-inset-top)) 14px 10px; z-index:5; pointer-events:none;
+         font-size:13px; letter-spacing:1px; color:#8fa3bf; }
+  #hud .stat b { color:#7df9ff; font-size:15px; }
+  #hud .stat.amber b { color:#ffb347; }
+  #hudTime.low b { color:#ff8f9d; animation:blink 1s infinite; }
+  @keyframes blink { 50% { opacity:.45; } }
+  #hud button { pointer-events:auto; font-size:11px; padding:8px 14px; letter-spacing:1px; }
+  #toast { position:absolute; left:50%; bottom:12%; transform:translateX(-50%); z-index:6; color:#a5f3fc;
+           background:rgba(10,14,26,.88); border:1px solid rgba(34,211,238,.35); border-radius:12px; padding:10px 18px;
+           font-size:14px; opacity:0; transition:opacity .3s; pointer-events:none; white-space:nowrap; }
+  .trick { margin-top:20px; font-size:13px; color:#5b6b87; letter-spacing:1px; max-width:320px; line-height:1.6; }
+  .trick b { color:#22d3ee; }
+  #trickTap { color:#22d3ee; border-bottom:1px dashed #22d3ee; cursor:pointer; touch-action:manipulation; }
+  .big { font-size:46px; color:#fff; margin:4px 0 10px; text-shadow:0 0 30px #22d3ee; }
+  .scoreRow { color:#c8d8ee; font-size:15px; line-height:1.9; margin-bottom:6px; }
+  .scoreRow b { color:#ffb347; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+  <div id="hud" class="hidden">
+    <span class="stat amber">HOME <b id="hudHome">0/50</b></span>
+    <span class="stat" id="hudTimeWrap">WINTER <b id="hudTime">3:00</b></span>
+    <span class="stat">SUGAR <b id="hudSugar">5</b></span>
+    <button id="restartBtn">RESTART</button>
+  </div>
+  <div id="toast"></div>
+
+  <div id="titleScreen" class="screen">
+    <h1>ANTS</h1>
+    <div class="sub">BLACKBOX &middot; algorithm toy 06</div>
+    <div class="howto"><b>TAP</b> anywhere to drop sugar lumps (5).<br>
+      Ants sniff them out, haul sugar home,<br>and lay glowing trails for the colony.<br>
+      Get <b>50</b> sugar home before <b>winter</b>.</div>
+    <button id="startBtn">RELEASE THE ANTS</button>
+    <div class="trick">The trick: <span id="trickTap">TAP TO REVEAL</span></div>
+  </div>
+
+  <div id="endScreen" class="screen hidden">
+    <h2 id="endTitle">COLONY FED</h2>
+    <div class="sub" id="endSub"></div>
+    <div class="sub">score</div>
+    <div class="big" id="finalScore">0</div>
+    <div class="scoreRow" id="endStats"></div>
+    <div class="sub" id="bestLine"></div>
+    <button id="againBtn">FORAGE AGAIN</button>
+    <div class="trick">The trick: <b>ant colony optimization</b></div>
+  </div>
+</div>
+<script>
+"use strict";
+// ================= setup =================
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const WW = 400, WH = 700;              // logical world (portrait)
+const CELL = 4, GW = WW / CELL, GH = WH / CELL;  // pheromone grid
+const NEST = { x: 46, y: 350, r: 24 };
+const OBST = [                          // obstacle slabs (x, y, w, h)
+  { x: 150, y: 90,  w: 26,  h: 240 },
+  { x: 230, y: 440, w: 160, h: 26  }
+];
+// ACO tuning
+const ANT_N = 200, SPD = 1.5, SD = 11, SA = 0.55, TURN = 0.42, WANDER = 0.28;
+const EVAP = 0.9945, MAXP = 5;
+const FOOD_DEP = 1.7, HOME_DEP = 0.6;
+const MAXD = Math.hypot(WW, WH);
+const CAP = 3, LUMP_UNITS = 20, DROPS = 5, GOAL = 50, TIME_LIMIT = 180;
+const STEP = 1 / 60;
+
+let DPR = 1, vw = 0, vh = 0, sc = 1, ox = 0, oy = 0;
+let bg = null;
+const pcan = document.createElement('canvas');
+pcan.width = GW; pcan.height = GH;
+const pctx = pcan.getContext('2d');
+const pimg = pctx.createImageData(GW, GH);
+
+// ================= state =================
+let state = 'title';   // title | playing | won | lost
+let ants = [], lumps = [];
+let food = new Float32Array(GW * GH);
+let home = new Float32Array(GW * GH);
+let delivered = 0, dropsLeft = DROPS, timeLeft = TIME_LIMIT, acc = 0;
+let toastTimer = 0, lastTickSnd = 0;
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const r = canvas.getBoundingClientRect();
+  vw = Math.max(1, r.width); vh = Math.max(1, r.height);
+  canvas.width = Math.round(vw * DPR);
+  canvas.height = Math.round(vh * DPR);
+  sc = Math.min(vw / WW, vh / WH);
+  ox = (vw - WW * sc) / 2; oy = (vh - WH * sc) / 2;
+  paintBG();
+}
+window.addEventListener('resize', resize);
+
+function paintBG() {
+  bg = document.createElement('canvas');
+  bg.width = Math.max(1, Math.round(vw * DPR));
+  bg.height = Math.max(1, Math.round(vh * DPR));
+  const b = bg.getContext('2d');
+  b.fillStyle = '#07090f';
+  b.fillRect(0, 0, bg.width, bg.height);
+  const s = DPR;
+  b.strokeStyle = 'rgba(34,211,238,0.05)';
+  b.lineWidth = 1;
+  for (let x = 0; x < vw; x += 40) { b.beginPath(); b.moveTo(x * s, 0); b.lineTo(x * s, vh * s); b.stroke(); }
+  for (let y = 0; y < vh; y += 40) { b.beginPath(); b.moveTo(0, y * s); b.lineTo(vw * s, y * s); b.stroke(); }
+  const vg = b.createRadialGradient(bg.width/2, bg.height/2, Math.min(bg.width,bg.height)*0.35,
+                                    bg.width/2, bg.height/2, Math.max(bg.width,bg.height)*0.75);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(0,0,0,0.55)');
+  b.fillStyle = vg;
+  b.fillRect(0, 0, bg.width, bg.height);
+  // world border
+  b.strokeStyle = 'rgba(34,211,238,0.18)';
+  b.lineWidth = 2;
+  b.strokeRect(ox * s, oy * s, WW * sc * s, WH * sc * s);
+}
+
+// ================= helpers =================
+function toast(msg, ms) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.style.opacity = 1;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.style.opacity = 0; }, ms || 1500);
+}
+let AC = null;
+function beep(freq, dur, type, gain) {
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = type || 'sine'; o.frequency.value = freq;
+    g.gain.setValueAtTime(gain || 0.04, AC.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime + dur);
+    o.connect(g); g.connect(AC.destination);
+    o.start(); o.stop(AC.currentTime + dur);
+  } catch (e) { /* audio unavailable, stay silent */ }
+}
+function sndTick() {
+  const n = performance.now();
+  if (n - lastTickSnd > 130) { lastTickSnd = n; beep(760 + Math.random() * 160, 0.06, 'square', 0.025); }
+}
+function getBest() {
+  try { return parseInt(localStorage.getItem('bb-ants-best') || '0', 10) || 0; }
+  catch (e) { return 0; }
+}
+function setBest(v) {
+  try { localStorage.setItem('bb-ants-best', String(v)); } catch (e) { /* ignore */ }
+}
+function inObst(x, y, m) {
+  m = m || 0;
+  for (const o of OBST) {
+    if (x > o.x - m && x < o.x + o.w + m && y > o.y - m && y < o.y + o.h + m) return true;
+  }
+  return false;
+}
+function read(grid, x, y) {
+  const gx = (x / CELL) | 0, gy = (y / CELL) | 0;
+  if (gx < 0 || gy < 0 || gx >= GW || gy >= GH) return 0;
+  return grid[gy * GW + gx];
+}
+// 3x3 splat deposit = slight diffusion; clamp keeps trails from blowing out
+function deposit(grid, x, y, amt) {
+  const gx = (x / CELL) | 0, gy = (y / CELL) | 0;
+  for (let dy = -1; dy <= 1; dy++) {
+    const yy = gy + dy;
+    if (yy < 0 || yy >= GH) continue;
+    for (let dx = -1; dx <= 1; dx++) {
+      const xx = gx + dx;
+      if (xx < 0 || xx >= GW) continue;
+      const i = yy * GW + xx;
+      const v = grid[i] + amt * ((dx === 0 && dy === 0) ? 0.5 : 0.0625);
+      grid[i] = v > MAXP ? MAXP : v;
+    }
+  }
+}
+
+// ================= game flow =================
+function resetGame() {
+  food.fill(0); home.fill(0);
+  ants = []; lumps = [];
+  for (let i = 0; i < ANT_N; i++) {
+    const a = Math.random() * Math.PI * 2;
+    ants.push({
+      x: NEST.x + Math.cos(a) * (NEST.r + 5),
+      y: NEST.y + Math.sin(a) * (NEST.r + 5),
+      h: Math.random() * Math.PI * 2,
+      s: 0, carry: 0, wt: 0
+    });
+  }
+  delivered = 0; dropsLeft = DROPS; timeLeft = TIME_LIMIT; acc = 0;
+  updateHUD();
+}
+function startGame() {
+  resetGame();
+  try { if (window.__demoTime > 0) { timeLeft = window.__demoTime; updateHUD(); } } catch (e) { /* ignore */ }
+  state = 'playing';
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('endScreen').classList.add('hidden');
+  document.getElementById('hud').classList.remove('hidden');
+  toast('Tap anywhere to drop sugar', 1800);
+}
+function fmtTime(s) {
+  s = Math.max(0, Math.ceil(s));
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+function updateHUD() {
+  document.getElementById('hudHome').textContent = Math.min(delivered, GOAL) + '/' + GOAL;
+  const t = document.getElementById('hudTime');
+  t.textContent = fmtTime(timeLeft);
+  document.getElementById('hudTimeWrap').classList.toggle('low', timeLeft < 30);
+  document.getElementById('hudSugar').textContent = dropsLeft;
+}
+function endGame(won) {
+  state = won ? 'won' : 'lost';
+  const score = won ? delivered + Math.ceil(timeLeft) : delivered;
+  const best = getBest();
+  if (score > best) setBest(score);
+  const et = document.getElementById('endTitle');
+  et.textContent = won ? 'COLONY FED' : 'WINTER WINS';
+  et.classList.toggle('lost', !won);
+  document.getElementById('endSub').textContent = won
+    ? 'the colony feasts until spring'
+    : 'the frost came too soon';
+  document.getElementById('finalScore').textContent = score;
+  document.getElementById('endStats').innerHTML =
+    'sugar home <b>' + Math.min(delivered, GOAL) + '/' + GOAL + '</b>' +
+    (won ? ' &nbsp;&middot;&nbsp; time bonus <b>+' + Math.ceil(timeLeft) + '</b>' : '');
+  document.getElementById('bestLine').textContent = 'best ' + Math.max(best, score);
+  document.getElementById('endScreen').classList.remove('hidden');
+  if (won) { beep(523, 0.14); setTimeout(() => beep(659, 0.14), 130); setTimeout(() => beep(784, 0.22), 260); }
+  else { beep(220, 0.2, 'sawtooth', 0.03); setTimeout(() => beep(165, 0.3, 'sawtooth', 0.03), 180); }
+}
+
+// ================= input: place sugar =================
+function tapAt(wx, wy) {
+  if (state !== 'playing') return false;
+  if (dropsLeft <= 0) { toast('No sugar left'); return false; }
+  if (wx < 24 || wx > WW - 24 || wy < 24 || wy > WH - 24) { toast('Too close to the edge'); return false; }
+  const nd = Math.hypot(wx - NEST.x, wy - NEST.y);
+  if (nd < NEST.r + 30) { toast('Too close to the nest'); return false; }
+  if (inObst(wx, wy, 12)) { toast('Blocked by a slab'); return false; }
+  for (const L of lumps) {
+    if (Math.hypot(wx - L.x, wy - L.y) < 36) { toast('Sugar already here'); return false; }
+  }
+  lumps.push({ x: wx, y: wy, units: LUMP_UNITS, r: 15 });
+  dropsLeft--;
+  updateHUD();
+  beep(1200, 0.05, 'sine', 0.02);
+  return true;
+}
+canvas.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  if (state !== 'playing') return;
+  const r = canvas.getBoundingClientRect();
+  tapAt((e.clientX - r.left - ox) / sc, (e.clientY - r.top - oy) / sc);
+});
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// ================= simulation: real ACO =================
+function stepAnt(a) {
+  const foraging = a.s === 0;
+  const grid = foraging ? food : home;
+  const h = a.h;
+  const c = read(grid, a.x + Math.cos(h) * SD, a.y + Math.sin(h) * SD);
+  const l = read(grid, a.x + Math.cos(h - SA) * SD, a.y + Math.sin(h - SA) * SD);
+  const r = read(grid, a.x + Math.cos(h + SA) * SD, a.y + Math.sin(h + SA) * SD);
+  if (c >= l && c >= r) { /* straight */ }
+  else if (l > c && l > r) a.h -= TURN;
+  else if (r > c && r > l) a.h += TURN;
+  else a.h += (Math.random() - 0.5) * TURN;
+  a.h += (Math.random() - 0.5) * WANDER;
+
+  const ndx = NEST.x - a.x, ndy = NEST.y - a.y;
+  const dNest = Math.hypot(ndx, ndy);
+  const dn = Math.min(1, dNest / MAXD);
+
+  if (!foraging) {
+    // returning: follow home pheromone, weak nest bias so nobody gets lost;
+    // deposit SMALL near nest, LARGE near food => gradient slopes UP toward food
+    let want = Math.atan2(ndy, ndx), dh = want - a.h;
+    while (dh > Math.PI) dh -= 2 * Math.PI;
+    while (dh < -Math.PI) dh += 2 * Math.PI;
+    a.h += Math.max(-1, Math.min(1, dh)) * (dNest < 70 ? 0.22 : 0.06);
+    deposit(food, a.x, a.y, FOOD_DEP * (0.15 + 0.85 * dn));
+    if (dNest < NEST.r + 8) {
+      delivered += a.carry; a.carry = 0; a.s = 0; a.wt = 0;
+      a.h = Math.random() * Math.PI * 2;
+      sndTick();
+      updateHUD();
+      return;
+    }
+  } else {
+    // foraging: follow food pheromone, lay home pheromone
+    deposit(home, a.x, a.y, HOME_DEP * (1 - 0.65 * dn));
+    // anti-mill: a forager that smells no food for a while breaks out and explores
+    if (c > 0.25) a.wt = 0; else a.wt += STEP;
+    if (a.wt > 8) { a.h += (Math.random() - 0.5) * 1.4; a.wt = 4; }
+    for (const L of lumps) {
+      if (L.units <= 0) continue;
+      const dx = L.x - a.x, dy = L.y - a.y, rr = L.r + 5;
+      if (dx * dx + dy * dy < rr * rr) {
+        const take = Math.min(CAP, L.units);
+        L.units -= take; a.carry = take; a.s = 1;
+        a.h += Math.PI;                       // U-turn, head home
+        deposit(food, a.x, a.y, 3.2);         // mark the source
+        sndTick();
+        break;
+      }
+    }
+  }
+
+  let nx = a.x + Math.cos(a.h) * SPD, ny = a.y + Math.sin(a.h) * SPD;
+  if (nx < 4 || nx > WW - 4 || ny < 4 || ny > WH - 4 || inObst(nx, ny, 2)) {
+    a.h += Math.PI * (0.75 + Math.random() * 0.5);
+    nx = a.x + Math.cos(a.h) * SPD; ny = a.y + Math.sin(a.h) * SPD;
+    if (nx < 4 || nx > WW - 4 || ny < 4 || ny > WH - 4 || inObst(nx, ny, 2)) { nx = a.x; ny = a.y; }
+  }
+  a.x = nx; a.y = ny;
+}
+
+function simulate() {
+  timeLeft -= STEP;
+  if (timeLeft <= 0) { timeLeft = 0; updateHUD(); endGame(false); return; }
+  for (let i = 0; i < food.length; i++) { food[i] *= EVAP; home[i] *= EVAP; }
+  for (const a of ants) stepAnt(a);
+  if (lumps.length) {
+    let dirty = false;
+    for (const L of lumps) if (L.units <= 0) dirty = true;
+    if (dirty) lumps = lumps.filter((L) => L.units > 0);
+  }
+  if (delivered >= GOAL) { updateHUD(); endGame(true); return; }
+  if ((simulate.tick = (simulate.tick || 0) + 1) % 12 === 0) updateHUD();
+}
+
+// ================= render =================
+function renderPhero() {
+  const d = pimg.data;
+  for (let i = 0, j = 0; i < food.length; i++, j += 4) {
+    const fi = Math.min(1, food[i] * 0.45);
+    const hi = Math.min(1, home[i] * 0.38);
+    d[j]     = Math.min(255, fi * 255 + hi * 50);
+    d[j + 1] = Math.min(255, fi * 138 + hi * 210);
+    d[j + 2] = Math.min(255, fi * 42 + hi * 255);
+    d[j + 3] = Math.min(255, (fi + hi) * 255);
+  }
+  pctx.putImageData(pimg, 0, 0);
+}
+function render(t) {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.drawImage(bg, 0, 0, vw, vh);
+  ctx.save();
+  ctx.translate(ox, oy); ctx.scale(sc, sc);
+  ctx.lineWidth = 1 / sc;
+
+  // pheromone glow layer
+  renderPhero();
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = 0.9;
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(pcan, 0, 0, WW, WH);
+  ctx.restore();
+
+  // obstacle slabs
+  for (const o of OBST) {
+    ctx.fillStyle = '#0c1220';
+    ctx.fillRect(o.x, o.y, o.w, o.h);
+    ctx.strokeStyle = 'rgba(34,211,238,0.4)';
+    ctx.strokeRect(o.x, o.y, o.w, o.h);
+  }
+
+  // sugar lumps
+  for (const L of lumps) {
+    const g = ctx.createRadialGradient(L.x, L.y, 1, L.x, L.y, L.r + 12);
+    g.addColorStop(0, 'rgba(220,245,255,0.5)');
+    g.addColorStop(1, 'rgba(220,245,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(L.x - L.r - 12, L.y - L.r - 12, (L.r + 12) * 2, (L.r + 12) * 2);
+    ctx.save();
+    ctx.translate(L.x, L.y);
+    ctx.fillStyle = '#eaf6ff';
+    for (let k = 0; k < 5; k++) {
+      const aa = (k / 5) * Math.PI * 2 + 0.4;
+      const rr = L.r * (0.55 + (k % 2) * 0.3);
+      ctx.save();
+      ctx.rotate(aa);
+      ctx.fillRect(-3.4, -3.4, 6.8, 6.8);
+      ctx.restore();
+      ctx.beginPath();
+      ctx.arc(Math.cos(aa) * rr * 0.5, Math.sin(aa) * rr * 0.5, 2.2, 0, 6.283);
+      ctx.fill();
+    }
+    ctx.restore();
+    ctx.fillStyle = 'rgba(200,230,255,0.85)';
+    ctx.font = '10px -apple-system,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(L.units, L.x, L.y + L.r + 14);
+  }
+
+  // nest
+  const pulse = 0.5 + 0.5 * Math.sin(t * 3);
+  const ng = ctx.createRadialGradient(NEST.x, NEST.y, 2, NEST.x, NEST.y, NEST.r + 26);
+  ng.addColorStop(0, 'rgba(255,170,60,' + (0.5 + pulse * 0.3) + ')');
+  ng.addColorStop(1, 'rgba(255,170,60,0)');
+  ctx.fillStyle = ng;
+  ctx.fillRect(NEST.x - NEST.r - 26, NEST.y - NEST.r - 26, (NEST.r + 26) * 2, (NEST.r + 26) * 2);
+  ctx.fillStyle = '#141007';
+  ctx.beginPath(); ctx.arc(NEST.x, NEST.y, NEST.r, 0, 6.283); ctx.fill();
+  ctx.strokeStyle = '#ffb347';
+  ctx.lineWidth = 2 / sc;
+  ctx.beginPath(); ctx.arc(NEST.x, NEST.y, NEST.r, 0, 6.283); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,200,120,0.9)';
+  ctx.font = '600 9px -apple-system,sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('N E S T', NEST.x, NEST.y - NEST.r - 8);
+
+  // ants: one stroked path per caste = fast
+  ctx.lineWidth = 2.3 / sc; ctx.lineCap = 'round';
+  ctx.strokeStyle = '#b9ff9d';
+  ctx.beginPath();
+  for (const a of ants) {
+    if (a.s !== 0) continue;
+    const c = Math.cos(a.h) * 3.4, s = Math.sin(a.h) * 3.4;
+    ctx.moveTo(a.x - c, a.y - s); ctx.lineTo(a.x + c, a.y + s);
+  }
+  ctx.stroke();
+  ctx.strokeStyle = '#ffb347';
+  ctx.beginPath();
+  for (const a of ants) {
+    if (a.s !== 1) continue;
+    const c = Math.cos(a.h) * 3.4, s = Math.sin(a.h) * 3.4;
+    ctx.moveTo(a.x - c, a.y - s); ctx.lineTo(a.x + c, a.y + s);
+  }
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+// ================= main loop =================
+let last = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  let dt = (now - last) / 1000; last = now;
+  if (dt > 0.25) dt = 0.25;
+  if (state === 'playing') {
+    acc += dt;
+    let n = 0;
+    while (acc >= STEP && n < 4) { simulate(); acc -= STEP; n++; if (state !== 'playing') { acc = 0; break; } }
+    if (n === 4) acc = 0;
+  }
+  render(now / 1000);
+}
+
+// ================= UI wiring =================
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('againBtn').addEventListener('click', startGame);
+document.getElementById('restartBtn').addEventListener('click', startGame);
+document.getElementById('trickTap').addEventListener('click', function () {
+  this.textContent = 'ant colony optimization';
+  this.style.borderBottom = 'none';
+  this.style.color = '#22d3ee';
+  this.style.cursor = 'default';
+});
+document.getElementById('bestLine');
+(function showTitleBest() {
+  const b = getBest();
+  if (b > 0) {
+    const el = document.createElement('div');
+    el.className = 'sub';
+    el.textContent = 'best ' + b;
+    el.style.marginTop = '-8px';
+    document.getElementById('titleScreen').insertBefore(el, document.querySelector('#titleScreen .trick'));
+  }
+})();
+
+resize();
+resetGame();
+requestAnimationFrame(frame);
+
+// ================= headless smoke-test hooks (?demo=1 win run, ?demo=lose) =================
+(function () {
+  let qs;
+  try { qs = new URLSearchParams(location.search); } catch (e) { return; }
+  const demo = qs.get('demo');
+  if (!demo) return;
+  try { // demo-only: shorten the winter timer (?demo=1&t=25)
+    const t = parseFloat(qs.get('t') || '');
+    if (t > 0) { /* applied in startGame via window.__demoTime */ window.__demoTime = t; }
+  } catch (e) { /* ignore */ }
+  function foodMax() { let m = 0; for (let i = 0; i < food.length; i++) if (food[i] > m) m = food[i]; return m; }
+  function corridor() {
+    // mean food pheromone in a corridor from nest to first demo lump
+    const x1 = NEST.x, y1 = NEST.y, x2 = 290, y2 = 250;
+    let s = 0, n = 0;
+    for (let i = 0; i <= 24; i++) {
+      const t = i / 24, x = x1 + (x2 - x1) * t, y = y1 + (y2 - y1) * t;
+      for (let k = -2; k <= 2; k++) for (let m2 = -2; m2 <= 2; m2++) { s += read(food, x + k * 4, y + m2 * 4); n++; }
+    }
+    return s / n;
+  }
+  function snap() {
+    return {
+      state, delivered, t: Math.round(timeLeft),
+      foodMax: +foodMax().toFixed(3), corridor: +corridor().toFixed(4),
+      lumps: lumps.length, dropsLeft
+    };
+  }
+  window.__antsSnap = snap;
+  window.__antsTap = tapAt;   // demo-only: place sugar from the test driver
+  setInterval(() => {
+    try { window.__antsLast = snap(); console.log('TEST ' + JSON.stringify(window.__antsLast)); }
+    catch (e) { /* ignore */ }
+  }, 1000);
+  setTimeout(() => {
+    startGame();
+    if (demo === '1') {
+      setTimeout(() => {
+        try {
+          // lump 1 through the REAL pointer-event path (exercises input mapping)
+          const r = canvas.getBoundingClientRect();
+          canvas.dispatchEvent(new PointerEvent('pointerdown', {
+            clientX: r.left + ox + 290 * sc, clientY: r.top + oy + 250 * sc, bubbles: true
+          }));
+        } catch (e) { console.log('TEST pointer dispatch failed: ' + e.message); }
+        tapAt(110, 590);  // lump 2 through the same validator
+        tapAt(150, 480);  // lump 3: 60 units total on the field, goal is 50
+      }, 400);
+    }
+    // demo=lose: place nothing, the timer must end the run
+  }, 300);
+})();
+</script>
+</body>
+</html>

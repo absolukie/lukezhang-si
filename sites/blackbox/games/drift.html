@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#04060c">
+<title>DRIFT — BLACKBOX</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; overflow:hidden; background:#04060c; overscroll-behavior:none; }
+  body { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace; color:#d7f9ff; }
+  #stage { position:fixed; inset:0; }
+  canvas { display:block; width:100%; height:100%; touch-action:none; }
+  .pill {
+    position:fixed; z-index:10; touch-action:manipulation; cursor:pointer;
+    background:rgba(8,14,24,.72); border:1px solid rgba(34,211,238,.45); color:#a5f3fc;
+    border-radius:999px; padding:10px 16px; font-size:13px; letter-spacing:.08em;
+    backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); user-select:none; -webkit-user-select:none;
+  }
+  .pill:active { transform:scale(.94); }
+  #btnInfo { left:14px; bottom:calc(14px + env(safe-area-inset-bottom)); }
+  #btnStart, #btnAgain {
+    left:50%; top:68%; transform:translateX(-50%);
+    font-size:16px; padding:16px 42px; border-color:rgba(34,211,238,.8);
+    color:#04060c; background:#22d3ee; font-weight:700; letter-spacing:.12em;
+    box-shadow:0 0 28px rgba(34,211,238,.55);
+  }
+  #btnAgain { display:none; }
+  #btnAgain:active { transform:translateX(-50%) scale(.95); }
+  #btnStart:active { transform:translateX(-50%) scale(.95); }
+  #card {
+    position:fixed; z-index:11; left:14px; right:14px; bottom:calc(64px + env(safe-area-inset-bottom));
+    background:rgba(6,10,20,.94); border:1px solid rgba(240,171,252,.5); border-radius:14px;
+    padding:16px 18px; font-size:13px; line-height:1.65; color:#e9d5ff; display:none;
+    box-shadow:0 8px 40px rgba(0,0,0,.6);
+  }
+  #card b { color:#f0abfc; letter-spacing:.06em; }
+  #card .mono { color:#67e8f9; }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="cv"></canvas></div>
+<button class="pill" id="btnInfo" aria-label="about the algorithm">?</button>
+<button class="pill" id="btnStart">FLY</button>
+<button class="pill" id="btnAgain">FLY AGAIN</button>
+<div id="card">
+  <b>domain-warped Perlin noise</b><br>
+  Every point of this canyon is sampled as <span class="mono">fbm(p + 3.2 &middot; fbm(p))</span>:
+  one Perlin noise field warps the sample coordinates of another, twisting smooth
+  gradients into caverns and strata. The flight corridor is then carved smooth so the
+  canyon is always threadable. Hand-rolled math, zero libraries, zero network.
+</div>
+<script>
+"use strict";
+/* ============================================================
+   DRIFT — endless glider through a domain-warped Perlin canyon
+   BLACKBOX collection. Single file, zero assets, hand-rolled math.
+   ============================================================ */
+
+// ---------- seeded PRNG (mulberry32) ----------
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+
+// ---------- Perlin noise (hand-rolled, seeded permutation) ----------
+const Noise = (function(){
+  const rnd = mulberry32(1337);
+  const perm = new Uint8Array(256);
+  for(let i=0;i<256;i++) perm[i]=i;
+  for(let i=255;i>0;i--){const j=(rnd()*(i+1))|0; const t=perm[i]; perm[i]=perm[j]; perm[j]=t;}
+  const p = new Uint8Array(512);
+  for(let i=0;i<512;i++) p[i]=perm[i&255];
+  const fade=t=>t*t*t*(t*(t*6-15)+10);
+  const lerp=(a,b,t)=>a+(b-a)*t;
+  function grad(h,x,y){
+    switch(h&7){
+      case 0:return  x+y; case 1:return  x-y; case 2:return -x+y; case 3:return -x-y;
+      case 4:return  x;   case 5:return -x;   case 6:return  y;   default:return -y;
+    }
+  }
+  function noise2(x,y){
+    const X=Math.floor(x)&255, Y=Math.floor(y)&255;
+    x-=Math.floor(x); y-=Math.floor(y);
+    const u=fade(x), v=fade(y);
+    const a=p[X]+Y, b=p[X+1]+Y;
+    return lerp(
+      lerp(grad(p[a],x,y),   grad(p[b],x-1,y),   u),
+      lerp(grad(p[a+1],x,y-1),grad(p[b+1],x-1,y-1),u), v)*1.41421356;
+  }
+  function fbm(x,y,oct){
+    let s=0, amp=0.5, f=1, norm=0;
+    for(let i=0;i<oct;i++){ s+=amp*noise2(x*f,y*f); norm+=amp; f*=2.03; amp*=0.5; }
+    return s/norm; // ~[-0.75, 0.75]
+  }
+  return {noise2, fbm};
+})();
+
+// ---------- canvas ----------
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+let W=0, H=0, DPR=1, bgImg=null;
+let titleImg=null, overImg=null; // pre-rendered text (shadowBlur is brutal in software rasterizers)
+function textSprite(text, font, color, glowColor, glow){
+  const pad=glow*2+8;
+  const m=document.createElement('canvas').getContext('2d');
+  m.font=font;
+  const tw=Math.ceil(m.measureText(text).width);
+  const th=parseInt(font.match(/(\d+)px/)[1],10);
+  const c=document.createElement('canvas');
+  c.width=Math.ceil((tw+pad*2)*DPR); c.height=Math.ceil((th*1.4+pad*2)*DPR);
+  const g=c.getContext('2d');
+  g.setTransform(DPR,0,0,DPR,0,0);
+  g.font=font; g.textAlign='center'; g.textBaseline='middle';
+  g.shadowColor=glowColor; g.shadowBlur=glow;
+  g.fillStyle=color;
+  g.fillText(text, tw/2+pad, th*0.7+pad);
+  return {img:c, w:tw+pad*2, h:th*1.4+pad*2};
+}
+function resize(){
+  DPR = Math.min(2, window.devicePixelRatio||1);
+  W = Math.floor(window.innerWidth); H = Math.floor(window.innerHeight);
+  cv.width = Math.floor(W*DPR); cv.height = Math.floor(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  // pre-render the background gradient: blitting a bitmap beats re-rasterizing
+  // a gradient every frame, especially in software renderers.
+  // Oversized by the shake margin so screen shake never exposes an edge.
+  const BM=24;
+  bgImg=document.createElement('canvas');
+  bgImg.width=Math.max(2,Math.floor((W+BM*2)*DPR)); bgImg.height=Math.max(2,Math.floor((H+BM*2)*DPR));
+  const bgb=bgImg.getContext('2d');
+  const bgGrad=bgb.createLinearGradient(0,0,0,bgImg.height);
+  bgGrad.addColorStop(0,'#05070f'); bgGrad.addColorStop(0.55,'#04060c'); bgGrad.addColorStop(1,'#070510');
+  bgb.fillStyle=bgGrad; bgb.fillRect(0,0,bgImg.width,bgImg.height);
+  bgImg._ox=BM; // css-px offset of the blit origin
+  const titleSize=Math.floor(Math.min(W*0.16,84));
+  titleImg=textSprite('DRIFT','800 '+titleSize+'px ui-monospace,Menlo,Consolas,monospace','#22d3ee','#22d3ee',26);
+  overImg=textSprite('HULL BREACH','800 '+Math.floor(Math.min(W*0.11,54))+'px ui-monospace,Menlo,Consolas,monospace','#fb7185','#fb7185',22);
+  buildStars();
+}
+window.addEventListener('resize', resize);
+
+// ---------- stars (precomputed, parallax twinkle) ----------
+let stars=[];
+function buildStars(){
+  const rnd = mulberry32(4242);
+  stars=[];
+  const n = Math.floor(W*H/9000);
+  for(let i=0;i<n;i++) stars.push({x:rnd()*W, y:rnd()*H, r:0.4+rnd()*1.3, tw:rnd()*6.28, sp:0.4+rnd()*0.8});
+}
+
+// ---------- world sampling: domain-warped fbm + carved corridor ----------
+// Column cache: ring buffer of RAW warped-noise values per integer world-column.
+// Corridor geometry is derived per-frame from the raw values + current
+// difficulty, so the difficulty ramp stays smooth and the cache never goes
+// stale (keying cached geometry on difficulty would pop or freeze the ramp).
+const CACHE_N = 2048;
+const cacheX = new Int32Array(CACHE_N).fill(-1);
+const cacheNC = new Float32Array(CACHE_N); // warped ceiling noise, ~[-1,1]
+const cacheNF = new Float32Array(CACHE_N); // warped floor noise, ~[-1,1]
+const cachePN = new Float32Array(CACHE_N); // path noise (raw fbm)
+
+const WARP = 3.2;
+function sampleColumn(wx){
+  const idx = ((wx % CACHE_N)+CACHE_N)%CACHE_N;
+  if(cacheX[idx]===wx) return idx;
+  const t = wx*0.0016;
+  // domain warp: warp the sample point with another fbm field
+  const qx = Noise.fbm(t, 0.13, 4);
+  const qy = Noise.fbm(t+5.2, 2.71, 4);
+  cacheNC[idx] = Noise.fbm(t + WARP*qx, 1.7 + WARP*qy, 4)/0.75;
+  cacheNF[idx] = Noise.fbm(t + WARP*qx + 9.13, 8.31 + WARP*qy, 4)/0.75;
+  cachePN[idx] = Noise.fbm(wx*0.00042, 3.3, 3);
+  cacheX[idx]=wx;
+  return idx;
+}
+function clamp1(v){ return v>1?1:v<-1?-1:v; }
+// corridor geometry from raw noise + difficulty. The corridor is carved by
+// construction: walls always clear [path-halfGap, path+halfGap], so the
+// canyon is guaranteed threadable — never an impossible wall.
+function pathAt(i){ let q=0.5+cachePN[i]*0.42; return q<0.12?0.12:q>0.88?0.88:q; } // 0.12..0.88 of H
+function ceilAt(i, diff){
+  const path = pathAt(i);
+  const rock = 0.030 + 0.110*(0.5+0.5*clamp1(cacheNC[i])) + 0.02*diff;
+  const c = path - (0.150-0.045*diff) - rock;
+  return c<-0.25?-0.25:c;
+}
+function floorAt(i, diff){
+  const path = pathAt(i);
+  const rock = 0.030 + 0.110*(0.5+0.5*clamp1(cacheNF[i])) + 0.02*diff;
+  const f = path + (0.150-0.045*diff) + rock;
+  return f>1.25?1.25:f;
+}
+function colAt(wx, diff){
+  const i = sampleColumn(wx);
+  return {c:ceilAt(i,diff)*H, f:floorAt(i,diff)*H, p:pathAt(i)*H};
+}
+
+// ---------- game state ----------
+const S = {
+  mode:'title',      // title | play | over
+  camX:0, speed:0, dist:0, score:0, best:0,
+  y:0, vy:0, px:0, r:9,
+  lives:3, invuln:0, shake:0, flash:0,
+  input:0, pDown:false, pDownY:0, pY:0,
+  time:0, diff:0, emit:0,
+};
+try{ S.best = parseInt(localStorage.getItem('bb-drift-best')||'0',10)||0; }catch(e){ S.best=0; }
+
+const particles=[];
+function spawnTrail(){
+  for(let k=0;k<2;k++){
+    if(particles.length>160) return;
+    particles.push({x:S.px-12, y:S.y+(Math.random()-0.5)*6, vx:-S.speed*0.35-Math.random()*40,
+      vy:(Math.random()-0.5)*40, life:0.55, max:0.55, hue:Math.random()<0.7?187:315});
+  }
+}
+function burst(n,hue){
+  for(let k=0;k<n;k++){
+    if(particles.length>220) return;
+    const a=Math.random()*6.28, sp=60+Math.random()*220;
+    particles.push({x:S.px, y:S.y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:0.7, max:0.7, hue});
+  }
+}
+
+// ---------- input: drag up/down, or hold top/bottom half ----------
+function onDown(y){
+  if(S.mode!=='play') return;
+  S.pDown=true; S.pDownY=y; S.pY=y;
+}
+function onMove(y){ if(S.pDown) S.pY=y; }
+function onUp(){ S.pDown=false; S.input=0; }
+cv.addEventListener('pointerdown', e=>{ e.preventDefault(); onDown(e.clientY); });
+window.addEventListener('pointermove', e=>{ onMove(e.clientY); });
+window.addEventListener('pointerup', onUp);
+window.addEventListener('pointercancel', onUp);
+cv.addEventListener('contextmenu', e=>e.preventDefault());
+const keys={};
+window.addEventListener('keydown', e=>{ keys[e.key]=true; if(['ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault(); });
+window.addEventListener('keyup', e=>{ keys[e.key]=false; });
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden) onUp(); });
+
+function readInput(){
+  let inp=0;
+  if(S.pDown){
+    const dy=S.pY-S.pDownY;
+    if(Math.abs(dy)>24) inp=Math.max(-1,Math.min(1,dy/160));
+    else{
+      if(S.pDownY < H*0.38) inp=-0.9;       // hold top: climb
+      else if(S.pDownY > H*0.62) inp=0.9;   // hold bottom: dive
+    }
+  }
+  if(keys['ArrowUp']||keys['w']||keys['W']) inp=-1;
+  if(keys['ArrowDown']||keys['s']||keys['S']) inp=1;
+  return inp;
+}
+
+// ---------- flow ----------
+const btnStart=document.getElementById('btnStart');
+const btnAgain=document.getElementById('btnAgain');
+const btnInfo=document.getElementById('btnInfo');
+const card=document.getElementById('card');
+function startGame(){
+  S.mode='play'; S.camX=0; S.dist=0; S.score=0; S.speed=200;
+  const c0=colAt(0,0); S.y=c0.p; S.vy=0;
+  S.px=Math.floor(W*0.32); S.lives=3; S.invuln=0; S.shake=0; S.flash=0;
+  S.diff=0; S.time=0; particles.length=0; S.emit=0;
+  btnStart.style.display='none'; btnAgain.style.display='none'; card.style.display='none';
+}
+function endGame(){
+  S.mode='over';
+  if(S.score>S.best){ S.best=S.score; try{localStorage.setItem('bb-drift-best',String(S.best));}catch(e){} }
+  btnAgain.style.display='block';
+}
+function hitWall(){
+  S.lives--; S.flash=1; S.shake=14; burst(26, 0);
+  const c=colAt(Math.floor(S.camX+S.px+14), S.diff);
+  S.y=c.p; S.vy=0; S.invuln=1.6;
+  if(S.lives<=0) endGame();
+}
+btnStart.addEventListener('click', startGame);
+btnAgain.addEventListener('click', startGame);
+btnInfo.addEventListener('click', e=>{ e.stopPropagation(); card.style.display = card.style.display==='block'?'none':'block'; });
+// tap canvas on title/over screens starts too (buttons are the main path)
+cv.addEventListener('pointerdown', ()=>{ if(S.mode!=='play'){ card.style.display='none'; startGame(); } });
+
+// ---------- update ----------
+let last=0;
+function frame(ts){
+  requestAnimationFrame(frame);
+  const now=ts/1000;
+  let dt=Math.min(0.05, last? now-last : 0.016);
+  last=now;
+  S.time+=dt;
+  update(dt);
+  render();
+}
+
+function update(dt){
+  if(S.mode==='play'){
+    S.diff=Math.min(1, S.dist/60000);
+    S.speed=200+Math.min(340, S.dist*0.006);
+    S.camX+=S.speed*dt;
+    S.dist+=S.speed*dt;
+    S.score=Math.floor(S.dist/50);
+    S.px=Math.floor(W*0.32);
+    const wx=Math.floor(S.camX+S.px);
+    const col=colAt(wx, S.diff);
+    const inp=readInput();
+    S.input=inp;
+    // physics: thrust + spring toward corridor center + damping = momentum with auto-drift
+    const spring=(col.p-S.y)*(inp===0?7.0:1.6);
+    S.vy += (inp*2500 + spring)*dt;
+    S.vy *= Math.exp(-3.1*dt);
+    if(S.vy>640) S.vy=640; if(S.vy<-640) S.vy=-640;
+    S.y += S.vy*dt;
+    // trail
+    S.emit+=dt*90;
+    while(S.emit>1){ S.emit-=1; spawnTrail(); }
+    // collision at the nose
+    if(S.invuln>0) S.invuln-=dt; else {
+      const nose=colAt(Math.floor(S.camX+S.px+14), S.diff);
+      if(S.y-S.r < nose.c || S.y+S.r > nose.f) hitWall();
+    }
+    if(S.flash>0) S.flash-=dt*2.2;
+    if(S.shake>0) S.shake=Math.max(0,S.shake-dt*40);
+  } else {
+    // idle drift on menus so the canyon breathes behind the title
+    S.camX+=90*dt;
+    S.diff=0;
+  }
+  // particles always tick
+  for(let i=particles.length-1;i>=0;i--){
+    const q=particles[i];
+    q.life-=dt;
+    if(q.life<=0){ particles.splice(i,1); continue; }
+    q.x+=q.vx*dt; q.y+=q.vy*dt; q.vx*=Math.exp(-2*dt); q.vy*=Math.exp(-2*dt);
+  }
+}
+
+// ---------- render ----------
+function strokeEdge(top, color, glow, width){
+  const x0=Math.floor(S.camX)-8, x1=S.camX+W+8, d=S.diff;
+  ctx.lineJoin='round'; ctx.lineCap='round';
+  const edgeY = top? ceilAt : floorAt;
+  const trace=()=>{
+    ctx.beginPath();
+    let i=sampleColumn(x0);
+    ctx.moveTo(x0,edgeY(i,d)*H);
+    for(let x=x0+3;x<=x1;x+=3){ i=sampleColumn(x); ctx.lineTo(x,edgeY(i,d)*H); }
+  };
+  if(glow>0){ trace(); ctx.strokeStyle=color; ctx.globalAlpha=glow; ctx.lineWidth=width+7; ctx.stroke(); }
+  trace(); ctx.globalAlpha=1; ctx.strokeStyle=color; ctx.lineWidth=width; ctx.stroke();
+}
+function fillWall(top){
+  const x0=Math.floor(S.camX)-8, x1=S.camX+W+8, d=S.diff;
+  ctx.beginPath();
+  ctx.moveTo(x0, top? -4 : H+4);
+  for(let x=x0;x<=x1;x+=3){
+    const i=sampleColumn(x);
+    ctx.lineTo(x,(top?ceilAt(i,d):floorAt(i,d))*H);
+  }
+  ctx.lineTo(x1, top? -4 : H+4);
+  ctx.closePath();
+  // flat fill: gradient re-rasterization of big wall areas is the top
+  // software-rendering cost; strata lines + neon edges carry the depth
+  ctx.fillStyle=top? '#0a0e1c' : '#0d0918';
+  ctx.fill();
+}
+function strata(top){
+  // offset contour bands inside the rock: parallax strata layers
+  const hues = top? [187,205,222] : [315,285,25];
+  const d=S.diff;
+  for(let i=1;i<=4;i++){
+    const off=i*30;
+    ctx.beginPath();
+    const x0=Math.floor(S.camX)-8, x1=S.camX+W+8;
+    let started=false;
+    for(let x=x0;x<=x1;x+=10){
+      const ci=sampleColumn(x);
+      const y=(top?ceilAt(ci,d):floorAt(ci,d))*H+(top? -off : off);
+      if(top && y<2) continue; if(!top && y>H-2) continue;
+      if(!started){ ctx.moveTo(x,y); started=true; } else ctx.lineTo(x,y);
+    }
+    ctx.strokeStyle='hsla('+hues[i%3]+',90%,62%,'+(0.16-0.028*i)+')';
+    ctx.lineWidth=2; ctx.stroke();
+  }
+}
+function parallax(){
+  // two distant ridge silhouettes, warped fbm at low parallax factors
+  const parLayers=[
+    {par:0.22, base:0.62, amp:0.30, col:'rgba(28,20,58,0.5)', seed:11.7},
+    {par:0.45, base:0.72, amp:0.24, col:'rgba(20,32,66,0.55)',  seed:47.3},
+  ];
+  for(const L of parLayers){
+    ctx.beginPath();
+    ctx.moveTo(-4,H+4);
+    for(let x=0;x<=W;x+=8){
+      const t=(S.camX*L.par+x)*0.0011;
+      const q=Noise.fbm(t,L.seed,3);
+      const n=Noise.fbm(t+WARP*q, L.seed+4.4, 4);
+      const y=H*(L.base + n*L.amp*0.9 + q*0.08);
+      ctx.lineTo(x,y);
+    }
+    ctx.lineTo(W+4,H+4); ctx.closePath();
+    ctx.fillStyle=L.col; ctx.fill();
+  }
+}
+function drawPlayer(){
+  const blink = S.invuln>0 && (S.time*14|0)%2===0;
+  if(blink) return;
+  const tilt=Math.max(-0.6,Math.min(0.6,S.vy/700));
+  ctx.save();
+  ctx.translate(S.px,S.y); ctx.rotate(tilt*0.9);
+  // glider: sleek delta
+  ctx.beginPath();
+  ctx.moveTo(16,0); ctx.lineTo(-10,-9); ctx.lineTo(-10,9);
+  ctx.closePath();
+  const g=ctx.createLinearGradient(-10,0,16,0);
+  g.addColorStop(0,'rgba(34,211,238,0.25)'); g.addColorStop(1,'#e8feff');
+  ctx.fillStyle=g; ctx.fill();
+  ctx.strokeStyle='rgba(165,243,252,0.9)'; ctx.lineWidth=1.5; ctx.stroke();
+  // cockpit spark
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(4,0,2.2,0,6.29); ctx.fill();
+  ctx.restore();
+}
+function drawHUD(){
+  ctx.textBaseline='top';
+  ctx.textAlign='left';
+  ctx.fillStyle='rgba(215,249,255,0.92)';
+  ctx.font='700 22px ui-monospace,Menlo,Consolas,monospace';
+  ctx.fillText(S.score+' m', 16, 14);
+  if(S.best>0){
+    ctx.font='12px ui-monospace,Menlo,Consolas,monospace';
+    ctx.fillStyle='rgba(165,243,252,0.55)';
+    ctx.fillText('BEST '+S.best+' m', 16, 42);
+  }
+  // lives: vector hearts (manual glow — shadowBlur is too slow in software)
+  function heartPath(){
+    ctx.beginPath();
+    ctx.moveTo(0,4);
+    ctx.bezierCurveTo(-9,-4,-5,-11,0,-6);
+    ctx.bezierCurveTo(5,-11,9,-4,0,4);
+    ctx.closePath();
+  }
+  for(let i=0;i<3;i++){
+    const x=W-28-i*30, y=26, s=i<S.lives?1:0.45;
+    ctx.save(); ctx.translate(x,y); ctx.scale(s,s);
+    if(i<S.lives){
+      ctx.save(); ctx.scale(1.5,1.5); ctx.globalAlpha=0.22; ctx.fillStyle='#fb7185';
+      heartPath(); ctx.fill(); ctx.restore();
+    }
+    ctx.fillStyle=i<S.lives?'#fb7185':'rgba(251,113,133,0.25)';
+    heartPath(); ctx.fill(); ctx.restore();
+  }
+}
+function drawTitle(){
+  ctx.textAlign='center';
+  const cx=W/2, cy=H*0.34;
+  if(titleImg) ctx.drawImage(titleImg.img, cx-titleImg.w/2, cy-titleImg.h/2, titleImg.w, titleImg.h);
+  const titleSize=Math.floor(Math.min(W*0.16,84));
+  ctx.font='13px ui-monospace,Menlo,Consolas,monospace';
+  ctx.fillStyle='rgba(240,171,252,0.85)';
+  ctx.fillText('a canyon carved by domain-warped Perlin noise', cx, cy+titleSize*0.75);
+  ctx.fillStyle='rgba(215,249,255,0.8)';
+  ctx.font='12.5px ui-monospace,Menlo,Consolas,monospace';
+  const lines=['Drag up/down or hold halves to climb/dive.','Thread the canyon. 3 hulls.'];
+  lines.forEach((l,i)=>ctx.fillText(l, cx, H*0.52+i*22));
+  if(S.best>0){
+    ctx.fillStyle='rgba(165,243,252,0.6)';
+    ctx.fillText('BEST  '+S.best+' m', cx, H*0.52+88);
+  }
+}
+function render(){
+  ctx.save();
+  if(S.shake>0) ctx.translate((Math.random()-0.5)*S.shake,(Math.random()-0.5)*S.shake);
+  if(bgImg){ ctx.save(); ctx.setTransform(1,0,0,1,0,0);
+    ctx.drawImage(bgImg, Math.round(-bgImg._ox*DPR), Math.round(-bgImg._ox*DPR)); ctx.restore(); }
+  // stars
+  for(const s of stars){
+    const a=0.25+0.55*Math.abs(Math.sin(S.time*s.sp+s.tw));
+    ctx.globalAlpha=a; ctx.fillStyle='#bfe9ff';
+    const sx=((s.x - S.camX*0.05)%W+W)%W; // wrap: camX grows unboundedly
+    ctx.fillRect(sx, s.y, s.r, s.r);
+  }
+  ctx.globalAlpha=1;
+  parallax();
+  // camera: walls/strata/edges are sampled in world-x but must be drawn in
+  // screen-x (without this the canyon scrolls off-screen within seconds)
+  ctx.save(); ctx.translate(-Math.round(S.camX),0);
+  fillWall(true); fillWall(false);
+  strata(true); strata(false);
+  strokeEdge(true,'#22d3ee',0.16,2.5);   // ceiling neon
+  strokeEdge(false,'#f0abfc',0.16,2.5);  // floor neon
+  ctx.restore();
+  // particles
+  for(const q of particles){
+    const a=q.life/q.max;
+    ctx.globalAlpha=a*0.85;
+    ctx.fillStyle='hsl('+q.hue+',95%,68%)';
+    ctx.fillRect(q.x,q.y,2,2);
+  }
+  ctx.globalAlpha=1;
+  if(S.mode!=='title') drawPlayer();
+  if(S.flash>0){ ctx.fillStyle='rgba(251,113,133,'+(S.flash*0.28)+')'; ctx.fillRect(0,0,W,H); }
+  ctx.restore();
+  if(S.mode==='play') drawHUD();
+  else if(S.mode==='title') drawTitle();
+  else drawGameOver();
+}
+function drawGameOver(){
+  ctx.fillStyle='rgba(4,6,12,0.62)'; ctx.fillRect(0,0,W,H);
+  ctx.textAlign='center';
+  const cy=H*0.32;
+  if(overImg) ctx.drawImage(overImg.img, W/2-overImg.w/2, cy-overImg.h/2, overImg.w, overImg.h);
+  const overSize=Math.floor(Math.min(W*0.11,54));
+  ctx.fillStyle='rgba(215,249,255,0.92)';
+  ctx.font='700 30px ui-monospace,Menlo,Consolas,monospace';
+  ctx.fillText(S.score+' m', W/2, cy+overSize*0.75+18);
+  ctx.font='13px ui-monospace,Menlo,Consolas,monospace';
+  ctx.fillStyle='rgba(165,243,252,0.65)';
+  ctx.fillText('BEST  '+S.best+' m', W/2, cy+overSize*0.75+58);
+}
+
+// debug hook for automated smoke tests (read-only-ish)
+window.__drift={ S, colAt,
+  start:startGame,
+  forceHit:function(){ S.invuln=0; hitWall(); },
+  px:function(x,y){ const d=ctx.getImageData(Math.round(x*DPR),Math.round(y*DPR),1,1).data; return [d[0],d[1],d[2]]; },
+};
+
+// ---------- boot ----------
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

@@ -583,7 +583,7 @@ function step() {
   /* ---- game logic (only while playing) ---- */
   if (state === 'playing') {
     framesLeft--;
-    if (framesLeft <= 0) { endGame(); }
+    if (framesLeft <= 0) { endGame(); return; }
 
     // rings
     ringTimer--;
@@ -766,6 +766,10 @@ function updateTime() {
   }
 }
 function startGame() {
+  spawnBoids();
+  dragging = false;
+  frameAcc = 0;
+  frameLast = null;
   score = 0;
   framesLeft = 5400;
   rings.length = 0;
@@ -787,6 +791,7 @@ function startGame() {
 }
 function endGame() {
   state = 'over';
+  dragging = false;
   const isBest = score > best;
   if (isBest) { best = score; saveBest(); }
   finalScore.textContent = score;
@@ -800,6 +805,7 @@ document.getElementById('againBtn').addEventListener('click', startGame);
 /* ---------------- input: drag to stir wind ---------------- */
 let dragging = false, lastX = 0, lastY = 0;
 canvas.addEventListener('pointerdown', function (e) {
+  if (state !== 'playing' || !e.isPrimary || e.button !== 0) return;
   dragging = true;
   lastX = e.clientX; lastY = e.clientY;
   ripple(e.clientX, e.clientY);
@@ -815,6 +821,7 @@ canvas.addEventListener('pointermove', function (e) {
 function endDrag() { dragging = false; }
 canvas.addEventListener('pointerup', endDrag);
 canvas.addEventListener('pointercancel', endDrag);
+canvas.addEventListener('lostpointercapture', endDrag);
 canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 document.addEventListener('touchmove', function (e) { e.preventDefault(); }, { passive: false });
 
@@ -834,17 +841,30 @@ window.__test = {
   timeLeft: function () { return Math.ceil(framesLeft / 60); }
 };
 
+// Run the simulation at 60 Hz regardless of display refresh rate.
+let frameLast = null, frameAcc = 0;
+const FIXED_STEP = 1000 / 60;
+document.addEventListener('visibilitychange', function () {
+  frameLast = null; frameAcc = 0; endDrag();
+});
 /* ---------------- boot ---------------- */
 resize();
 spawnBoids();
 for (let w = 0; w < 90; w++) step();   // warm-up so the title shows a murmuration, not scatter
 updateScore();
 updateTime();
-(function frame() {
+function frame(now) {
   requestAnimationFrame(frame);
-  step();
+  if(frameLast === null) frameLast = now;
+  frameAcc += Math.max(0, Math.min(100, now - frameLast));
+  frameLast = now;
+  while(frameAcc + 1e-7 >= FIXED_STEP){
+    step();
+    frameAcc -= FIXED_STEP;
+  }
   draw();
-})();
+}
+requestAnimationFrame(frame);
 </script>
 </body>
 </html>

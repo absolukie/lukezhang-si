@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<meta name="theme-color" content="#070b12"/>
+<title>BRIDGE · BLACKBOX</title>
+<style>
+  :root{
+    --bg:#070b12; --panel:rgba(10,16,26,.92); --line:rgba(34,211,238,.25);
+    --neon:#22d3ee; --mag:#e879f9; --red:#ef4444; --txt:#dbe7f3; --dim:#7d8ea3;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    -webkit-user-select:none;user-select:none;}
+  #c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;}
+  button{touch-action:manipulation;font-family:inherit;cursor:pointer;}
+
+  #top{position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;
+    padding:calc(10px + env(safe-area-inset-top)) 14px 10px;pointer-events:none;z-index:5;}
+  #top .pill{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:7px 12px;font-size:12px;letter-spacing:2px;color:var(--neon);}
+  #top .pill b{color:#fff;}
+  #budgetPill.warn{color:var(--red);border-color:rgba(239,68,68,.5);}
+
+  #tools{position:fixed;top:calc(58px + env(safe-area-inset-top));right:12px;display:flex;
+    flex-direction:column;gap:10px;z-index:5;}
+  .tbtn{background:var(--panel);border:1px solid var(--line);color:var(--txt);
+    border-radius:10px;padding:10px 14px;font-size:12px;letter-spacing:2px;}
+  .tbtn:active{background:rgba(34,211,238,.18);}
+  .tbtn:disabled{opacity:.3;}
+
+  #bottom{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;flex-direction:column;
+    align-items:center;gap:8px;padding:12px 16px calc(16px + env(safe-area-inset-bottom));
+    pointer-events:none;}
+  #actionBtn{pointer-events:auto;background:linear-gradient(180deg,#0e2a33,#0a1c24);
+    border:2px solid var(--neon);color:#fff;border-radius:16px;padding:16px 44px;
+    font-size:16px;letter-spacing:4px;box-shadow:0 0 24px rgba(34,211,238,.35);}
+  #actionBtn:active{transform:scale(.97);}
+  #actionBtn:disabled{opacity:.35;box-shadow:none;}
+  #status{font-size:11px;letter-spacing:2px;color:var(--dim);text-align:center;min-height:15px;}
+  #status.hot{color:var(--neon);}
+
+  #panel{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;
+    background:rgba(4,7,12,.72);backdrop-filter:blur(3px);padding:24px;}
+  #panel.hidden{display:none;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;
+    padding:28px 26px;max-width:330px;width:100%;text-align:center;
+    box-shadow:0 0 40px rgba(34,211,238,.12);}
+  .card h1{font-size:34px;letter-spacing:8px;color:#fff;margin-bottom:4px;
+    text-shadow:0 0 18px rgba(34,211,238,.8);}
+  .card h2{font-size:20px;letter-spacing:4px;color:#fff;margin-bottom:10px;}
+  .card .sub{font-size:11px;letter-spacing:3px;color:var(--dim);margin-bottom:14px;}
+  .card p{font-size:13px;line-height:1.7;color:var(--txt);margin-bottom:14px;}
+  .card .stat{font-size:13px;letter-spacing:1px;color:var(--neon);margin:4px 0;}
+  .card .stat.big{font-size:22px;color:#fff;margin:10px 0;}
+  .bigbtn{display:block;width:100%;margin-top:12px;background:linear-gradient(180deg,#0e2a33,#0a1c24);
+    border:2px solid var(--neon);color:#fff;border-radius:14px;padding:14px;
+    font-size:14px;letter-spacing:3px;}
+  .bigbtn:active{transform:scale(.97);}
+  .ghostbtn{display:block;width:100%;margin-top:10px;background:transparent;
+    border:1px solid var(--dim);color:var(--dim);border-radius:14px;padding:12px;
+    font-size:12px;letter-spacing:3px;}
+  #revealBtn{background:transparent;border:1px dashed var(--line);color:var(--dim);
+    border-radius:10px;padding:8px 14px;font-size:11px;letter-spacing:2px;margin-bottom:12px;}
+  #tagLabel{display:block;font-size:12px;letter-spacing:2px;color:var(--mag);margin-bottom:12px;
+    text-shadow:0 0 12px rgba(232,121,249,.6);}
+
+  #toast{position:fixed;top:38%;left:50%;transform:translateX(-50%);z-index:20;
+    background:rgba(10,16,26,.95);border:1px solid var(--line);color:var(--neon);
+    border-radius:12px;padding:10px 18px;font-size:12px;letter-spacing:2px;white-space:nowrap;
+    transition:opacity .25s;}
+  #toast.hidden{opacity:0;pointer-events:none;}
+  #toast.err{color:#ffb4b4;border-color:rgba(239,68,68,.5);}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="top">
+  <div class="pill" id="gapPill">GAP <b>1</b>/6</div>
+  <div class="pill" id="budgetPill">BUDGET <b>10</b></div>
+</div>
+<div id="tools">
+  <button class="tbtn" id="undoBtn">UNDO</button>
+  <button class="tbtn" id="clearBtn">CLEAR</button>
+</div>
+<div id="bottom">
+  <div id="status"></div>
+  <button id="actionBtn">TEST DRIVE</button>
+</div>
+<div id="panel"><div class="card" id="cardBox"></div></div>
+<div id="toast" class="hidden"></div>
+
+<script>
+'use strict';
+/* ============================================================
+   BRIDGE — spring-lattice structural sim (BLACKBOX collection)
+   verlet points + soft spring constraints + strain break checks
+   ============================================================ */
+
+// ---------- tiny utils ----------
+const clamp=(v,a,b)=>v<a?a:(v>b?b:v);
+const lerp=(a,b,t)=>a+(b-a)*t;
+function hx(c){return [parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16)];}
+function mix(c1,c2,t){
+  const a=hx(c1),b=hx(c2);
+  return 'rgb('+Math.round(lerp(a[0],b[0],t))+','+Math.round(lerp(a[1],b[1],t))+','+Math.round(lerp(a[2],b[2],t))+')';
+}
+
+// ---------- canvas + camera ----------
+// World coordinates: fixed logical space per level (worldW x 844).
+// Camera fits world width to screen; physics & input live in world px.
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+let W=0,H=0,DPR=1, VS=1, VOX=0, VOY=0;
+function worldW(){ return LEVELS[G.level].gap+140; }
+function resize(){
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  W=window.innerWidth; H=window.innerHeight;
+  canvas.width=Math.round(W*DPR); canvas.height=Math.round(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  VS=Math.min(W/worldW(), H/844, 1.3);
+  VOX=(W-worldW()*VS)/2; VOY=(H-844*VS)/2;
+  paintBG();
+  // re-fit geometry on rotate/resize — but never reset a live sim mid-test
+  if(G && G.level>=0 && (G.state==='build'||G.state==='title')) layoutLevel(G.level,true);
+}
+function toWorld(cx,cy){ return {x:(cx-VOX)/VS, y:(cy-VOY)/VS}; }
+function toScreen(wx,wy){ return {x:wx*VS+VOX, y:wy*VS+VOY}; }
+// static background cached offscreen (repaint on resize only)
+const bgC=document.createElement('canvas');
+function paintBG(){
+  bgC.width=Math.max(1,Math.round(W*DPR)); bgC.height=Math.max(1,Math.round(H*DPR));
+  const b=bgC.getContext('2d'); b.setTransform(DPR,0,0,DPR,0,0);
+  const g=b.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#0a1018'); g.addColorStop(0.55,'#070b12'); g.addColorStop(1,'#04060b');
+  b.fillStyle=g; b.fillRect(0,0,W,H);
+  b.strokeStyle='rgba(34,211,238,0.05)'; b.lineWidth=1; b.beginPath();
+  for(let x=0;x<W;x+=34){ b.moveTo(x,0); b.lineTo(x,H); }
+  for(let y=0;y<H;y+=34){ b.moveTo(0,y); b.lineTo(W,y); }
+  b.stroke();
+}
+window.addEventListener('resize',resize);
+window.addEventListener('orientationchange',()=>setTimeout(resize,120));
+
+// ---------- tuning ----------
+const MAXBEAM=150;        // longest legal beam (px)
+const SPRING_K=0.23;       // soft-constraint stiffness per iteration
+const ITER=7;             // relaxation iterations
+const GRAV=0.5;           // px / frame^2
+const DAMP=0.985;
+const FAIL_SAG=36;        // deck drop (px) that fails the crawler
+const ANCHOR_R=28;        // touch radius (world px)
+
+// ---------- levels: 6 gaps, wider / heavier ----------
+const LEVELS=[
+  {gap:170,budget:10,deck:3,tower:false,crawlerMass:12, name:'FIRST SPAN'},
+  {gap:230,budget:12,deck:4,tower:false,crawlerMass:13, name:'WIDER WATER'},
+  {gap:290,budget:14,deck:5,tower:true, crawlerMass:14, name:'TOWER ASSIST'},
+  {gap:350,budget:15,deck:6,tower:true, crawlerMass:15, name:'LONG HAUL'},
+  {gap:410,budget:16,deck:7,tower:true, crawlerMass:16,name:'HEAVY LOAD'},
+  {gap:470,budget:17,deck:8,tower:true, crawlerMass:17,name:'THE GAUNTLET'},
+];
+
+// ---------- game state ----------
+const G={
+  state:'title', level:0, budget:0, beams:[], nodes:[],
+  cliffL:0, cliffR:0, roadY:0, deckIdx:[],
+  selected:-1, particles:[], shake:0, time:0,
+  score:0, crawler:null, snapshot:null, maxStrain:0,
+  dieT:0, winT:0, toastTO:0,
+};
+
+// ---------- level construction ----------
+function layoutLevel(li,keep){
+  const L=LEVELS[li];
+  G.roadY=440;
+  G.cliffL=70;
+  G.cliffR=70+L.gap;
+  const cx=(G.cliffL+G.cliffR)/2, ry=G.roadY;
+  const N=[];
+  const pin=(x,y,type,deck)=>{N.push({x:x,y:y,px:x,py:y,hx:x,hy:y,pinned:true,mass:1,type:type||'cliff',deck:!!deck,fx:0,fy:0});return N.length-1;};
+  // cliff anchors: road level + upper + lower on each face
+  const lRoad=pin(G.cliffL,ry,'cliff',true),  rRoad=pin(G.cliffR,ry,'cliff',true);
+  pin(G.cliffL,ry-64,'cliff'); pin(G.cliffL,ry+64,'cliff');
+  pin(G.cliffR,ry-64,'cliff'); pin(G.cliffR,ry+64,'cliff');
+  // deck nodes (ghost-pinned during build, free during test)
+  const deckIdx=[lRoad];
+  for(let k=1;k<=L.deck;k++){
+    const x=G.cliffL+L.gap*k/(L.deck+1);
+    N.push({x:x,y:ry,px:x,py:ry,hx:x,hy:ry,pinned:true,mass:1,type:'deck',deck:true,fx:0,fy:0});
+    deckIdx.push(N.length-1);
+  }
+  deckIdx.push(rRoad);
+  // mid-air tower anchors for wide gaps
+  if(L.tower){ pin(cx,ry-120,'tower'); pin(cx,ry-60,'tower'); }
+  G.nodes=N; G.deckIdx=deckIdx;
+  if(!keep){ G.beams=[]; G.budget=L.budget; }
+  G.selected=-1; G.particles=[]; G.shake=0; G.maxStrain=0;
+  resetNodes();
+  updateHud();
+}
+function resetNodes(){
+  for(const n of G.nodes){ n.x=n.hx; n.y=n.hy; n.px=n.hx; n.py=n.hy; n.fx=0; n.fy=0;
+    n.pinned = (n.type!=='deck') ? true : (G.state==='build'||G.state==='title'); }
+}
+
+// ---------- HUD / DOM ----------
+const gapPill=document.getElementById('gapPill'), budgetPill=document.getElementById('budgetPill');
+const undoBtn=document.getElementById('undoBtn'), clearBtn=document.getElementById('clearBtn');
+const actionBtn=document.getElementById('actionBtn'), statusEl=document.getElementById('status');
+const panel=document.getElementById('panel'), cardBox=document.getElementById('cardBox');
+const toastEl=document.getElementById('toast');
+function updateHud(){
+  gapPill.innerHTML='GAP <b>'+(G.level+1)+'</b>/6';
+  budgetPill.innerHTML='BUDGET <b>'+G.budget+'</b>';
+  budgetPill.classList.toggle('warn',G.budget<=2);
+  undoBtn.disabled = !(G.state==='build'&&G.beams.length>0);
+  clearBtn.disabled = !(G.state==='build'&&G.beams.length>0);
+  actionBtn.disabled = !(G.state==='build'&&G.beams.length>0);
+  document.getElementById('tools').style.display=(G.state==='build')?'flex':'none';
+  actionBtn.style.display=(G.state==='build')?'block':'none';
+  statusEl.textContent = G.state==='build'
+    ? (G.selected>=0 ? 'PICK A SECOND ANCHOR' : 'TAP TWO ANCHORS TO PLACE A BEAM · TAP A BEAM TO REMOVE IT')
+    : (G.state==='test' ? 'TESTING…' : '');
+  statusEl.classList.toggle('hot',G.state==='test');
+}
+function toast(msg,err){
+  toastEl.textContent=msg; toastEl.classList.toggle('err',!!err);
+  toastEl.classList.remove('hidden');
+  clearTimeout(G.toastTO);
+  G.toastTO=setTimeout(()=>toastEl.classList.add('hidden'),1400);
+}
+function showPanel(html){ cardBox.innerHTML=html; panel.classList.remove('hidden'); wirePanel(); }
+function hidePanel(){ panel.classList.add('hidden'); }
+
+// ---------- panels ----------
+function titlePanel(){
+  showPanel(
+    '<h1>BRIDGE</h1>'+
+    '<div class="sub">BLACKBOX // STRUCTURAL LAB</div>'+
+    '<button id="revealBtn">▸ tap to reveal</button>'+
+    '<span id="tagLabel" hidden>spring-lattice structural sim.</span>'+
+    '<p>Tap two anchors to place a beam. Then hit TEST DRIVE: a crawler rolls across your spring lattice. Too much strain and beams snap. Get it to the far side.</p>'+
+    '<button class="bigbtn" id="startBtn">START BUILDING</button>');
+  document.getElementById('revealBtn').addEventListener('click',()=>{
+    document.getElementById('tagLabel').hidden=false;
+    document.getElementById('revealBtn').style.display='none';
+  });
+  document.getElementById('startBtn').addEventListener('click',()=>{
+    hidePanel(); G.state='build'; G.level=0; layoutLevel(0); updateHud();
+  });
+}
+function winPanel(){
+  const bonus=G.budget;
+  showPanel(
+    '<h2>GAP '+(G.level+1)+' CLEARED</h2>'+
+    '<div class="sub">'+LEVELS[G.level].name+'</div>'+
+    '<div class="stat">BEAMS USED: '+G.beams.length+'</div>'+
+    '<div class="stat">BUDGET LEFT: +'+bonus+' BONUS</div>'+
+    '<div class="stat big">SCORE '+G.score+'</div>'+
+    '<button class="bigbtn" id="nextBtn">'+(G.level<5?'NEXT GAP ▸':'FINISH ▸')+'</button>');
+  document.getElementById('nextBtn').addEventListener('click',()=>{
+    hidePanel();
+    if(G.level<5){ G.level++; G.state='build'; layoutLevel(G.level); }
+    else victoryPanel();
+    updateHud();
+  });
+}
+function collapsePanel(){
+  showPanel(
+    '<h2 style="color:#ff8a8a">COLLAPSED</h2>'+
+    '<div class="sub">THE CRAWLER DID NOT MAKE IT</div>'+
+    '<p>Snapped beams are marked. Repair them and reinforce, or clear the deck and start over.</p>'+
+    '<button class="bigbtn" id="repairBtn">REPAIR SNAPPED BEAMS</button>'+
+    '<button class="ghostbtn" id="clearAllBtn">CLEAR EVERYTHING</button>');
+  document.getElementById('repairBtn').addEventListener('click',()=>{
+    hidePanel();
+    // restore pre-test beams, reset geometry
+    G.beams=G.snapshot.map(s=>({a:s.a,b:s.b,rest:s.rest,k:s.k,broken:false,flash:0,strain:0}));
+    G.state='build'; G.selected=-1; G.particles=[]; resetNodes(); updateHud();
+    toast('BEAMS RESTORED');
+  });
+  document.getElementById('clearAllBtn').addEventListener('click',()=>{
+    hidePanel(); G.beams=[]; G.budget=LEVELS[G.level].budget;
+    G.state='build'; G.selected=-1; G.particles=[]; resetNodes(); updateHud();
+  });
+}
+function victoryPanel(){
+  G.state='victory';
+  let best=0;
+  try{ best=parseInt(localStorage.getItem('bb-bridge-best')||'0',10)||0; }catch(e){}
+  const isBest=G.score>best;
+  if(isBest){ try{ localStorage.setItem('bb-bridge-best',String(G.score)); }catch(e){} best=G.score; }
+  showPanel(
+    '<h2>ALL GAPS CROSSED</h2>'+
+    '<div class="sub">STRUCTURAL ENGINEER CERTIFIED</div>'+
+    '<div class="stat big">SCORE '+G.score+'</div>'+
+    '<div class="stat">'+(isBest?'★ NEW BEST ★':'BEST '+best)+'</div>'+
+    '<button class="bigbtn" id="againBtn">RESTART</button>');
+  document.getElementById('againBtn').addEventListener('click',()=>{
+    hidePanel(); G.score=0; G.level=0; G.state='build'; layoutLevel(0); updateHud();
+  });
+}
+function wirePanel(){ /* buttons wired at creation time */ }
+
+// ---------- build interactions ----------
+// nearest-target picking: a tap near both an anchor and a beam resolves to
+// whichever is closer, with a 6px hysteresis bias toward the anchor (selecting
+// is non-destructive; without this, short beams could never be tap-removed
+// because their midpoint sits inside the anchor touch radius).
+function nodeNear(x,y){
+  let bi=-1,bd=1e12;
+  for(let i=G.nodes.length-1;i>=0;i--){
+    const n=G.nodes[i], dx=x-n.x, dy=y-n.y, d2=dx*dx+dy*dy;
+    if(d2<bd){ bd=d2; bi=i; }
+  }
+  return {i:bi,d:Math.sqrt(bd)};
+}
+function beamNear(x,y){
+  let bi=-1,bd=1e12;
+  for(let i=G.beams.length-1;i>=0;i--){
+    const b=G.beams[i], p=G.nodes[b.a], q=G.nodes[b.b];
+    const dx=q.x-p.x, dy=q.y-p.y, len2=dx*dx+dy*dy;
+    let t=len2>0?((x-p.x)*dx+(y-p.y)*dy)/len2:0; t=clamp(t,0,1);
+    const cx=p.x+dx*t, cy=p.y+dy*t, ddx=x-cx, ddy=y-cy, d2=ddx*ddx+ddy*ddy;
+    if(d2<bd){ bd=d2; bi=i; }
+  }
+  return {i:bi,d:Math.sqrt(bd)};
+}
+function tryPlace(a,b){
+  if(a===b){ G.selected=-1; updateHud(); return; }
+  const p=G.nodes[a], q=G.nodes[b];
+  const d=Math.hypot(q.x-p.x,q.y-p.y);
+  for(const e of G.beams){ if((e.a===a&&e.b===b)||(e.a===b&&e.b===a)){ toast('ALREADY CONNECTED'); G.selected=-1; updateHud(); return; } }
+  if(d>MAXBEAM+1){ toast('TOO FAR · MAX '+MAXBEAM+'PX',true); G.selected=-1; updateHud(); return; }
+  if(G.budget<=0){ toast('NO BUDGET · UNDO A BEAM',true); G.selected=-1; updateHud(); return; }
+  G.beams.push({a:a,b:b,rest:d,k:SPRING_K,broken:false,flash:0,strain:0});
+  G.budget--; G.selected=-1; updateHud();
+}
+canvas.addEventListener('pointerdown',e=>{
+  if(G.state!=='build') return;
+  e.preventDefault();
+  const r=canvas.getBoundingClientRect();
+  const wpt=toWorld(e.clientX-r.left, e.clientY-r.top);
+  const x=wpt.x, y=wpt.y;
+  const nn=nodeNear(x,y), nb=beamNear(x,y);
+  const nodeHit=nn.i>=0&&nn.d<ANCHOR_R;
+  const beamHit=nb.i>=0&&nb.d<20;
+  if(nodeHit&&(!beamHit||nn.d<=nb.d+6)){
+    if(G.selected<0){ G.selected=nn.i; }
+    else tryPlace(G.selected,nn.i);
+  }else if(beamHit){
+    if(G.selected<0){
+      G.beams.splice(nb.i,1); G.budget++; toast('BEAM REMOVED · +1');
+    }else G.selected=-1;
+  }else G.selected=-1;
+  updateHud();
+});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+undoBtn.addEventListener('click',()=>{ if(G.state==='build'&&G.beams.length){G.beams.pop();G.budget++;G.selected=-1;updateHud();} });
+clearBtn.addEventListener('click',()=>{ if(G.state==='build'&&G.beams.length){G.beams=[];G.budget=LEVELS[G.level].budget;G.selected=-1;updateHud();toast('CLEARED');} });
+actionBtn.addEventListener('click',()=>{ if(G.state==='build'&&G.beams.length) startTest(); });
+
+// ---------- test phase ----------
+function startTest(){
+  G.snapshot=G.beams.map(b=>({a:b.a,b:b.b,rest:b.rest,k:b.k}));
+  for(const n of G.nodes) if(n.type==='deck') n.pinned=false;
+  for(const b of G.beams){ b.broken=false; b.flash=0; b.strain=0; }
+  const L=LEVELS[G.level];
+  G.crawler={x:G.cliffL-26,y:G.roadY-10,vx:120,vy:0,rot:0,mass:L.crawlerMass,wheel:0};
+  G.maxStrain=0; G.state='test'; G.selected=-1; G.particles=[];
+  updateHud();
+}
+function deckYat(x){
+  const idx=G.deckIdx, ns=G.nodes;
+  if(x<=ns[idx[0]].x) return ns[idx[0]].y;
+  for(let i=0;i<idx.length-1;i++){
+    const a=ns[idx[i]], b=ns[idx[i+1]];
+    if(x<=b.x){ const t=(x-a.x)/((b.x-a.x)||1); return lerp(a.y,b.y,clamp(t,0,1)); }
+  }
+  return ns[idx[idx.length-1]].y;
+}
+function stepPhysics(dt){
+  const ns=G.nodes;
+  // crawler load: spread over nearest deck nodes (keeps loading the wreck while it falls)
+  if((G.state==='test'||G.state==='dying')&&G.crawler){
+    for(const n of ns){ n.fx=0; n.fy=0; }
+    for(const n of ns){
+      if(n.type!=='deck') continue;
+      const dx=Math.abs(n.x-G.crawler.x);
+      if(dx<70){ const w=1-dx/70; n.fy+=G.crawler.mass*0.55*w; }
+    }
+  }else for(const n of ns){ n.fx=0; n.fy=0; }
+
+  // verlet integrate (accelerations are tuned in px/frame^2 at 60fps; s scales them)
+  const s=dt*60;
+  for(const n of ns){
+    if(n.pinned){ n.x=n.hx; n.y=n.hy; n.px=n.hx; n.py=n.hy; continue; }
+    const nx=n.x+(n.x-n.px)*DAMP+n.fx*s*s;
+    const ny=n.y+(n.y-n.py)*DAMP+(GRAV+n.fy)*s*s;
+    n.px=n.x; n.py=n.y; n.x=nx; n.y=ny;
+    if(!isFinite(n.x)||!isFinite(n.y)){ n.x=n.hx; n.y=n.hy; n.px=n.hx; n.py=n.hy; }
+  }
+  // relax spring constraints
+  for(let it=0;it<ITER;it++){
+    for(const b of G.beams){
+      const p=ns[b.a], q=ns[b.b];
+      const dx=q.x-p.x, dy=q.y-p.y;
+      const d=Math.sqrt(dx*dx+dy*dy)||1e-6;
+      let kk=b.k;
+      if(b.broken) kk*=b.flash/14; // failing beams go slack
+      const diff=(d-b.rest)/d*kk;
+      const wa=p.pinned?0:1/p.mass, wb=q.pinned?0:1/q.mass, s=wa+wb;
+      if(s===0) continue;
+      p.x+=dx*diff*wa/s; p.y+=dy*diff*wa/s;
+      q.x-=dx*diff*wb/s; q.y-=dy*diff*wb/s;
+    }
+  }
+  // strain + break check (also during collapse: the wreck keeps snapping)
+  if(G.state==='test'||G.state==='dying'){
+    for(const b of G.beams){
+      if(b.broken) continue;
+      const p=ns[b.a], q=ns[b.b];
+      const d=Math.hypot(q.x-p.x,q.y-p.y);
+      const strain=(d-b.rest)/b.rest;
+      b.strain=strain;
+      const as=Math.abs(strain);
+      if(as>G.maxStrain) G.maxStrain=as;
+      const longF=b.rest/MAXBEAM;              // long beams are weaker
+      const tenLim=0.24;                        // tension snap (generous: sag + fold-snaps handle failure)
+      const buckLim=0.26-0.12*longF;           // compression buckle (long beams buckle easier)
+      if(strain>tenLim||strain<-buckLim){ b.broken=true; b.flash=14; }
+    }
+    // count down failing beams, then remove with debris
+    for(let i=G.beams.length-1;i>=0;i--){
+      const b=G.beams[i];
+      if(!b.broken) continue;
+      if(--b.flash<=0){
+        const p=ns[b.a], q=ns[b.b];
+        burst((p.x+q.x)/2,(p.y+q.y)/2, b.strain>0?'#22d3ee':'#fb923c', 10);
+        G.beams.splice(i,1); G.shake=7;
+      }
+    }
+  }
+  // crawler
+  const c=G.crawler;
+  if(c){
+    if(G.state==='test'){
+      c.x+=c.vx*dt; c.wheel+=c.vx*dt/10;
+      const dy=deckYat(c.x);
+      c.y=lerp(c.y,dy-10,0.5);
+      if(dy-G.roadY>FAIL_SAG){ beginCollapse(); }
+      else if(c.x>=G.cliffR-4){ beginWin(); }
+    }else if(G.state==='dying'){
+      c.vy+=GRAV*3600*2.2*dt; c.x+=c.vx*dt; c.y+=c.vy*dt*0.5;
+      c.vx*=0.995; c.rot+=0.06;
+      G.dieT-=dt;
+      if(G.dieT<=0){ G.state='collapsed'; collapsePanel(); updateHud(); }
+    }else if(G.state==='win'){
+      c.x+=c.vx*dt; c.wheel+=c.vx*dt/10; c.y=lerp(c.y,deckYat(Math.min(c.x,G.cliffR))-10,0.4);
+      G.winT-=dt;
+      if(G.winT<=0&&!panelShown){ panelShown=true; winPanel(); }
+    }
+  }
+  // particles
+  for(let i=G.particles.length-1;i>=0;i--){
+    const pt=G.particles[i];
+    pt.x+=pt.vx; pt.y+=pt.vy; pt.vy+=0.25; pt.life--;
+    if(pt.life<=0) G.particles.splice(i,1);
+  }
+  if(G.shake>0) G.shake*=0.88;
+}
+let panelShown=false;
+function beginCollapse(){
+  if(G.state!=='test') return;
+  // the road folds where it sagged most: those beams snap first (guaranteed drama)
+  let worst=-1, ws=0;
+  for(const i of G.deckIdx.slice(1,-1)){
+    const sag=G.nodes[i].y-G.roadY;
+    if(sag>ws){ ws=sag; worst=i; }
+  }
+  if(worst>=0) for(const b of G.beams){
+    if(!b.broken&&(b.a===worst||b.b===worst)){ b.broken=true; b.flash=14; }
+  }
+  G.state='dying'; G.dieT=1.5;
+  G.crawler.vy=-1; updateHud();
+}
+function beginWin(){
+  if(G.state!=='test') return;
+  G.state='win'; G.winT=0.7; panelShown=false;
+  G.score+=G.budget;
+  const cx=(G.cliffL+G.cliffR)/2;
+  for(let i=0;i<60;i++) burst(cx+(Math.random()-0.5)*200,G.roadY-60-Math.random()*120,
+    ['#22d3ee','#e879f9','#a3e635'][i%3],1);
+  updateHud();
+}
+function burst(x,y,color,n){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2, s=1+Math.random()*3;
+    G.particles.push({x:x,y:y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1,life:20+Math.random()*20,color:color});
+  }
+}
+
+// ---------- rendering ----------
+function drawBG(){
+  ctx.drawImage(bgC,0,0,W,H);
+}
+function drawChasm(){
+  // world space: depth glow inside the gap
+  const cg=ctx.createLinearGradient(0,G.roadY,0,844);
+  cg.addColorStop(0,'rgba(34,211,238,0.05)'); cg.addColorStop(1,'rgba(0,0,0,0.55)');
+  ctx.fillStyle=cg; ctx.fillRect(G.cliffL,G.roadY,G.cliffR-G.cliffL,844-G.roadY);
+}
+function drawCliffs(){
+  const ww=worldW();
+  for(const side of [-1,1]){
+    const ex=side<0?G.cliffL:G.cliffR;
+    const x0=side<0?-300:ex, x1=side<0?ex:ww+300;
+    ctx.fillStyle='#111826';
+    ctx.fillRect(x0,0,x1-x0,844);
+    ctx.fillStyle='#0c1119';
+    for(let y=40;y<844;y+=64) ctx.fillRect(x0,y,x1-x0,3); // strata
+    // neon inner edge
+    ctx.strokeStyle='rgba(34,211,238,0.55)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(ex,0); ctx.lineTo(ex,844); ctx.stroke();
+    ctx.strokeStyle='rgba(34,211,238,0.12)'; ctx.lineWidth=7;
+    ctx.beginPath(); ctx.moveTo(ex,0); ctx.lineTo(ex,844); ctx.stroke();
+    // road stub
+    const sx=side<0?ex-46:ex;
+    ctx.fillStyle='#1b2434'; ctx.fillRect(sx,G.roadY-5,46,10);
+    ctx.strokeStyle='rgba(163,230,53,0.5)'; ctx.setLineDash([6,6]); ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(sx,G.roadY); ctx.lineTo(sx+46,G.roadY); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+function drawTower(){
+  if(!LEVELS[G.level].tower) return;
+  const cx=(G.cliffL+G.cliffR)/2, top=G.roadY-120;
+  ctx.fillStyle='#131a26'; ctx.fillRect(cx-6,top,12,844-top);
+  ctx.strokeStyle='rgba(232,121,249,0.5)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(cx-6,top); ctx.lineTo(cx-6,844); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx+6,top); ctx.lineTo(cx+6,844); ctx.stroke();
+  ctx.strokeStyle='rgba(232,121,249,0.25)';
+  for(let y=top+20;y<844;y+=44){
+    ctx.beginPath(); ctx.moveTo(cx-6,y); ctx.lineTo(cx+6,y+22); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx+6,y); ctx.lineTo(cx-6,y+22); ctx.stroke();
+  }
+}
+function beamColor(b){
+  if(b.broken) return (Math.floor(G.time*20)%2===0)?'#ef4444':'#ffffff';
+  const s=b.strain, a=Math.abs(s);
+  if(a<0.03) return '#5f7396';
+  const longF=b.rest/MAXBEAM;
+  const lim=s>0?0.24:(0.26-0.12*longF);
+  const t=clamp(a/lim,0,1);
+  return s>0?mix('#5f7396','#22d3ee',t):mix('#5f7396','#fb923c',t);
+}
+function drawBeams(){
+  ctx.lineCap='round';
+  for(const b of G.beams){
+    const p=G.nodes[b.a], q=G.nodes[b.b];
+    const mx=(p.x+q.x)/2, my=(p.y+q.y)/2;
+    const dx=q.x-p.x, dy=q.y-p.y, len=Math.hypot(dx,dy)||1;
+    const off=clamp(b.strain*130,-16,16); // visible flex
+    ctx.strokeStyle=beamColor(b);
+    ctx.lineWidth=2.5+clamp(Math.abs(b.strain)*14,0,3);
+    ctx.beginPath(); ctx.moveTo(p.x,p.y);
+    ctx.quadraticCurveTo(mx-dy/len*off, my+dx/len*off, q.x,q.y);
+    ctx.stroke();
+  }
+}
+function drawNodes(){
+  const t=G.time;
+  for(let i=0;i<G.nodes.length;i++){
+    const n=G.nodes[i];
+    if(n.type==='deck'){
+      if(G.state==='build'||G.state==='title'){
+        ctx.strokeStyle='rgba(125,142,163,0.6)'; ctx.setLineDash([4,4]); ctx.lineWidth=1.5;
+        ctx.beginPath(); ctx.arc(n.x,n.y,7,0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+      }else{
+        ctx.fillStyle='#3b4a63'; ctx.beginPath(); ctx.arc(n.x,n.y,6,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#22d3ee'; ctx.beginPath(); ctx.arc(n.x,n.y,2.5,0,Math.PI*2); ctx.fill();
+      }
+    }else{
+      const col=n.type==='tower'?'#e879f9':'#22d3ee';
+      ctx.strokeStyle=col; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(n.x,n.y,8,0,Math.PI*2); ctx.stroke();
+      ctx.fillStyle=col; ctx.beginPath(); ctx.arc(n.x,n.y,2.5,0,Math.PI*2); ctx.fill();
+    }
+    if(i===G.selected){
+      const r=12+3*Math.sin(t*10);
+      ctx.strokeStyle='#a3e635'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(n.x,n.y,r,0,Math.PI*2); ctx.stroke();
+      ctx.strokeStyle='rgba(163,230,53,0.25)'; ctx.setLineDash([6,6]);
+      ctx.beginPath(); ctx.arc(n.x,n.y,MAXBEAM,0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
+}
+function drawCrawler(){
+  const c=G.crawler; if(!c) return;
+  ctx.save(); ctx.translate(c.x,c.y); ctx.rotate(c.rot||0);
+  // chassis
+  ctx.strokeStyle='#22d3ee'; ctx.lineWidth=2.5;
+  ctx.fillStyle='rgba(34,211,238,0.12)';
+  ctx.beginPath();
+  if(ctx.roundRect) ctx.roundRect(-19,-14,38,14,4); else ctx.rect(-19,-14,38,14);
+  ctx.fill(); ctx.stroke();
+  // cabin
+  ctx.strokeStyle='#e879f9';
+  ctx.beginPath();
+  if(ctx.roundRect) ctx.roundRect(-8,-24,18,12,3); else ctx.rect(-8,-24,18,12);
+  ctx.stroke();
+  // wheels
+  for(const wx of [-11,11]){
+    ctx.save(); ctx.translate(wx,0); ctx.rotate(c.wheel);
+    ctx.strokeStyle='#dbe7f3'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(0,0,9,0,Math.PI*2); ctx.stroke();
+    ctx.beginPath();
+    for(let k=0;k<3;k++){ const a=k*Math.PI/3; ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*9,Math.sin(a)*9); }
+    ctx.stroke(); ctx.restore();
+  }
+  ctx.restore();
+}
+function drawParticles(){
+  for(const p of G.particles){
+    ctx.globalAlpha=clamp(p.life/30,0,1);
+    ctx.fillStyle=p.color;
+    ctx.fillRect(p.x-1.5,p.y-1.5,3,3);
+  }
+  ctx.globalAlpha=1;
+}
+function drawGapLabel(){
+  ctx.fillStyle='rgba(125,142,163,0.8)';
+  ctx.font='11px ui-monospace,Menlo,monospace'; ctx.textAlign='center';
+  ctx.fillText('GAP '+(G.level+1)+' · '+LEVELS[G.level].name, worldW()/2, G.roadY+120);
+}
+function render(){
+  ctx.save();
+  if(G.shake>0.4) ctx.translate((Math.random()-0.5)*G.shake,(Math.random()-0.5)*G.shake);
+  drawBG();                       // screen space
+  ctx.translate(VOX,VOY); ctx.scale(VS,VS);   // world space from here
+  drawChasm(); drawCliffs(); drawTower(); drawBeams(); drawNodes(); drawCrawler(); drawParticles();
+  if(G.state==='build') drawGapLabel();
+  ctx.restore();
+}
+
+// ---------- main loop (fixed-step physics) ----------
+let lastT=0, acc=0;
+function frame(ts){
+  requestAnimationFrame(frame);
+  if(!lastT) lastT=ts;
+  let dt=(ts-lastT)/1000; lastT=ts;
+  if(dt>0.1) dt=0.1;
+  G.time+=dt;
+  const h=1/60;
+  if(G.state==='test'||G.state==='dying'||G.state==='win'){
+    acc+=dt*(G.state==='dying'?0.35:1);
+    let n=0;
+    while(acc>=h&&n<4){ stepPhysics(h); acc-=h; n++; }
+    if(n===4) acc=0;
+  }else acc=0;
+  render();
+}
+
+// ---------- boot ----------
+resize();
+G.state='title';
+layoutLevel(0);
+G.state='title'; resetNodes(); updateHud();
+titlePanel();
+requestAnimationFrame(frame);
+
+// ---------- test hook (used by automated smoke test) ----------
+window.__bb={
+  G:G, LEVELS:LEVELS,
+  nodePos:i=>({x:G.nodes[i].x,y:G.nodes[i].y}),
+  screenPos:i=>toScreen(G.nodes[i].x,G.nodes[i].y),
+  place:(a,b)=>{ G.selected=a; tryPlace(a,b); },
+  test:()=>startTest(),
+  deckNodes:()=>G.deckIdx.slice(),
+  nodeCount:()=>G.nodes.length,
+};
+</script>
+</body>
+</html>

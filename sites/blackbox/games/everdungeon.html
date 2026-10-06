@@ -29,7 +29,7 @@ body{
 .heart.on svg{fill:#ff5f6b;filter:drop-shadow(0 0 5px rgba(255,95,107,.9))}
 #wrap{
   flex:1 1 auto;position:relative;display:flex;align-items:center;justify-content:center;
-  overflow:hidden;background:radial-gradient(ellipse at 50% 42%, #0a1020 0%, #04060a 72%);
+  touch-action:none;overflow:hidden;background:radial-gradient(ellipse at 50% 42%, #0a1020 0%, #04060a 72%);
 }
 canvas{
   touch-action:none;border:1px solid rgba(120,180,255,.16);border-radius:10px;
@@ -40,7 +40,7 @@ canvas{
   gap:15px;background:rgba(4,6,10,.87);text-align:center;padding:26px;z-index:5;
 }
 .overlay.hidden{display:none}
-h1.title{margin:0;font-size:40px;font-weight:800;letter-spacing:5px;color:#eafcff;text-shadow:0 0 20px rgba(95,242,255,.7)}
+h1.title{margin:0;font-size:clamp(22px,8vw,40px);font-weight:800;letter-spacing:5px;color:#eafcff;text-shadow:0 0 20px rgba(95,242,255,.7)}
 h1.title.small{font-size:30px;letter-spacing:3px}
 .tag{font-size:12px;letter-spacing:4px;color:#5ff2ff;font-weight:700}
 .howto{color:#c7d8f5;font-size:15px;line-height:1.55;max-width:330px;margin:0}
@@ -52,6 +52,10 @@ button.btn{
   box-shadow:0 0 26px rgba(95,242,255,.35);
 }
 button.btn:active{transform:scale(.96)}
+#joystick{display:none;position:absolute;z-index:4;pointer-events:none;width:88px;height:88px;
+  border:2px solid rgba(140,200,255,.55);border-radius:50%;background:rgba(140,200,255,.12);transform:translate(-50%,-50%)}
+#joystick span{position:absolute;left:42px;top:42px;width:36px;height:36px;border-radius:50%;
+  background:rgba(160,220,255,.75);transform:translate(-50%,-50%)}
 .stats{display:flex;gap:30px}
 .stat{display:flex;flex-direction:column;gap:5px;align-items:center}
 .stat b{font-size:32px;color:#eafcff;font-weight:800}
@@ -67,10 +71,11 @@ button.btn:active{transform:scale(.96)}
   </div>
   <div id="wrap">
     <canvas id="game"></canvas>
+    <div id="joystick" aria-hidden="true"><span></span></div>
     <div id="titleScreen" class="overlay">
       <h1 class="title">EVERDUNGEON</h1>
       <div class="tag">AN ENDLESS DESCENT</div>
-      <p class="howto">Drag the left half of the screen, or use WASD / arrow keys, to move. Grab coins, dodge the sentries, and step onto the glowing exit to descend deeper.</p>
+      <p class="howto">Hold and drag on the left half of the play area, or use WASD / arrow keys, to move. Grab coins, dodge the sentries, and step onto the glowing exit to descend deeper.</p>
       <div class="reveal">Wave Function Collapse + A* + Poisson-disc sampling.</div>
       <button id="startBtn" class="btn" type="button">START DESCENT</button>
     </div>
@@ -454,43 +459,41 @@ function joyMove(px,py){
   if(m>max){ dx=dx/m*max; dy=dy/m*max; }
   joyVec=(m<10)?{x:0,y:0}:{x:dx/max,y:dy/max};
 }
-canvas.addEventListener('touchstart',e=>{
-  if(state==='playing'&&!joyActive){
-    for(const t of e.changedTouches){
-      const r=canvas.getBoundingClientRect(), px=t.clientX-r.left, py=t.clientY-r.top;
-      if(px<canvas.clientWidth/2){ joyActive=true; joyId=t.identifier; joyOX=px; joyOY=py; joyVec={x:0,y:0}; break; }
-    }
-  }
-  e.preventDefault();
-},{passive:false});
-canvas.addEventListener('touchmove',e=>{
-  for(const t of e.changedTouches){
-    if(joyActive&&t.identifier===joyId){
-      const r=canvas.getBoundingClientRect();
-      joyMove(t.clientX-r.left,t.clientY-r.top);
-    }
-  }
-  e.preventDefault();
-},{passive:false});
-function joyEnd(e){
-  for(const t of e.changedTouches)
-    if(joyActive&&t.identifier===joyId){ joyActive=false; joyId=null; joyVec={x:0,y:0}; }
+const joystick=document.getElementById('joystick');
+function releaseJoy(){
+  const id=joyId;
+  joyActive=false; joyId=null; joyVec={x:0,y:0};
+  joystick.style.display='none';
+  if(id!==null&&wrap.hasPointerCapture(id)) wrap.releasePointerCapture(id);
 }
-canvas.addEventListener('touchend',joyEnd);
-canvas.addEventListener('touchcancel',joyEnd);
-canvas.addEventListener('contextmenu',e=>e.preventDefault());
-canvas.addEventListener('mousedown',e=>{           // desktop drag fallback
-  if(state!=='playing'||joyActive) return;
-  const r=canvas.getBoundingClientRect(), px=e.clientX-r.left, py=e.clientY-r.top;
-  if(px<canvas.clientWidth/2){ joyActive=true; joyId='mouse'; joyOX=px; joyOY=py; joyVec={x:0,y:0}; }
+function clearInput(){ keys.clear(); releaseJoy(); }
+wrap.addEventListener('pointerdown',e=>{
+  if(state!=='playing'||joyActive||!e.isPrimary||e.button!==0||e.target.closest('.overlay,button')) return;
+  const area=wrap.getBoundingClientRect();
+  if(e.clientX-area.left>=area.width/2) return;
+  const r=canvas.getBoundingClientRect();
+  joyActive=true; joyId=e.pointerId;
+  joyOX=e.clientX-r.left; joyOY=e.clientY-r.top; joyVec={x:0,y:0};
+  joystick.style.left=(e.clientX-area.left)+'px';
+  joystick.style.top=(e.clientY-area.top)+'px';
+  joystick.firstElementChild.style.transform='translate(-50%,-50%)';
+  joystick.style.display='block';
+  wrap.setPointerCapture(e.pointerId);
+  e.preventDefault();
 });
-window.addEventListener('mousemove',e=>{
-  if(joyActive&&joyId==='mouse'){
-    const r=canvas.getBoundingClientRect();
-    joyMove(e.clientX-r.left,e.clientY-r.top);
-  }
+wrap.addEventListener('pointermove',e=>{
+  if(!joyActive||e.pointerId!==joyId) return;
+  const r=canvas.getBoundingClientRect();
+  joyMove(e.clientX-r.left,e.clientY-r.top);
+  joystick.firstElementChild.style.transform='translate(calc(-50% + '+(joyVec.x*40)+'px),calc(-50% + '+(joyVec.y*40)+'px))';
+  e.preventDefault();
 });
-window.addEventListener('mouseup',()=>{ if(joyId==='mouse'){ joyActive=false; joyId=null; joyVec={x:0,y:0}; } });
+for(const event of ['pointerup','pointercancel','lostpointercapture']){
+  wrap.addEventListener(event,e=>{ if(e.pointerId===joyId) releaseJoy(); });
+}
+wrap.addEventListener('contextmenu',e=>e.preventDefault());
+window.addEventListener('blur',clearInput);
+document.addEventListener('visibilitychange',()=>{ if(document.hidden) clearInput(); });
 
 /* ================= movement & combat ================= */
 function hitsWall(x,y){
@@ -557,6 +560,7 @@ function update(dt){
   for(const e of enemies){
     if(Math.hypot(enemyPX(e)-player.x,enemyPY(e)-player.y)<pr+0.34&&invT<=0){ damage(); break; }
   }
+  if(state!=='playing') return;
   for(const c of coinsArr){
     if(c.taken) continue;
     if(Math.hypot(c.x-player.x,c.y-player.y)<pr+0.2){
@@ -639,14 +643,6 @@ function render(){
     ctx.beginPath(); ctx.arc(p.x*TILE,p.y*TILE,TILE*0.07,0,TAU); ctx.fill();
   }
   ctx.globalAlpha=1;
-  if(joyActive){                                  // joystick indicator
-    ctx.strokeStyle='rgba(140,200,255,0.35)'; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.arc(joyOX,joyOY,44,0,TAU); ctx.stroke();
-    ctx.fillStyle='rgba(140,200,255,0.18)';
-    ctx.beginPath(); ctx.arc(joyOX,joyOY,44,0,TAU); ctx.fill();
-    ctx.fillStyle='rgba(160,220,255,0.75)';
-    ctx.beginPath(); ctx.arc(joyOX+joyVec.x*40,joyOY+joyVec.y*40,18,0,TAU); ctx.fill();
-  }
   if(bannerT>0){
     ctx.globalAlpha=clamp(bannerT,0,1);
     ctx.fillStyle='#d9feff';
@@ -677,10 +673,12 @@ function readBest(){
   catch(err){ return 0; }
 }
 function startGame(){
+  clearInput();
   state='playing';
   titleScreen.classList.add('hidden');
 }
 function gameOver(){
+  clearInput();
   state='gameover';
   const b=readBest();
   best=Math.max(b,depth);
@@ -691,6 +689,7 @@ function gameOver(){
   overScreen.classList.remove('hidden');
 }
 function resetGame(){
+  clearInput();
   depth=1; hp=3; score=0; coinsGot=0;
   genDepth();
   updateHUD();

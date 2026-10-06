@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>PRISM: BLACKBOX</title>
+<style>
+  :root{
+    --bg:#0a0a12; --ink:#e8f1ff; --dim:#8b98b8;
+    --cyan:#22d3ee; --mag:#e879f9;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; overflow:hidden;}
+  #wrap{position:fixed;inset:0;}
+  #cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;}
+  #hud{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;
+    padding:calc(10px + env(safe-area-inset-top)) 14px 8px;pointer-events:none;user-select:none;-webkit-user-select:none;}
+  #hud .grp{display:flex;align-items:center;gap:10px;pointer-events:auto;}
+  .stat{font-size:12px;letter-spacing:1px;color:var(--dim);}
+  .stat b{color:#fff;font-size:14px;}
+  .btn{font-family:inherit;font-size:12px;letter-spacing:2px;color:var(--cyan);
+    background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.35);border-radius:8px;
+    padding:10px 14px;cursor:pointer;touch-action:manipulation;min-height:44px;}
+  .btn:active{background:rgba(34,211,238,.2);}
+  .btn.mag{color:var(--mag);background:rgba(232,121,249,.08);border-color:rgba(232,121,249,.35);}
+  .btn.mag:active{background:rgba(232,121,249,.2);}
+  .btn.big{font-size:16px;padding:14px 34px;min-height:56px;}
+  .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;background:rgba(10,10,18,.82);backdrop-filter:blur(3px);z-index:10;padding:24px;}
+  .overlay.hidden{display:none;}
+  .title{font-size:52px;font-weight:700;letter-spacing:14px;margin:0 0 6px;color:#fff;
+    text-shadow:0 0 24px rgba(34,211,238,.7),0 0 60px rgba(232,121,249,.4);}
+  .subtitle{font-size:12px;letter-spacing:3px;color:var(--mag);margin-bottom:22px;}
+  .howto{font-size:14px;line-height:1.7;color:var(--ink);max-width:300px;margin-bottom:8px;}
+  .reveal{font-size:12px;letter-spacing:1px;color:var(--dim);margin-bottom:26px;}
+  .reveal b{color:var(--cyan);}
+  .bestline{font-size:12px;letter-spacing:2px;color:var(--dim);margin-bottom:26px;}
+  .bestline b{color:#fff;}
+  .bignum{font-size:44px;font-weight:700;color:#fff;margin:4px 0 2px;
+    text-shadow:0 0 18px rgba(34,211,238,.6);}
+  .lbl{font-size:11px;letter-spacing:3px;color:var(--dim);margin-bottom:14px;}
+  .row{display:flex;gap:18px;margin-bottom:20px;}
+  .cell{text-align:center;}
+  #hint{position:absolute;left:0;right:0;bottom:calc(18px + env(safe-area-inset-bottom));text-align:center;
+    font-size:12px;letter-spacing:1px;color:var(--dim);pointer-events:none;z-index:5;
+    user-select:none;-webkit-user-select:none;}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="cv"></canvas>
+  <div id="hud">
+    <div class="grp">
+      <span class="stat">LV <b id="lv">1/10</b></span>
+      <span class="stat">SCORE <b id="score">0</b></span>
+    </div>
+    <div class="grp">
+      <button class="btn" id="restartBtn">RESTART</button>
+      <button class="btn" id="menuBtn">MENU</button>
+    </div>
+  </div>
+  <div id="hint"></div>
+
+  <div class="overlay" id="title">
+    <h1 class="title">PRISM</h1>
+    <div class="subtitle">BLACKBOX ARCADE</div>
+    <div class="howto">Drag in a circle around a glass prism to rotate it. Bend each color of light into its matching target.</div>
+    <div class="reveal">The physics: <b>Snell&rsquo;s law + dispersion.</b></div>
+    <div class="bestline" id="titleBest"></div>
+    <button class="btn mag big" id="startBtn">TAP TO START</button>
+  </div>
+
+  <div class="overlay hidden" id="solved">
+    <div class="lbl">PUZZLE <span id="solvedLv">1</span> / 10</div>
+    <div class="bignum">SOLVED</div>
+    <div class="row">
+      <div class="cell"><div class="bignum" style="font-size:26px" id="solvedRot">0&deg;</div><div class="lbl">ROTATED</div></div>
+      <div class="cell"><div class="bignum" style="font-size:26px" id="solvedScore">+0</div><div class="lbl">SCORE</div></div>
+    </div>
+    <button class="btn mag big" id="nextBtn">NEXT &rarr;</button>
+  </div>
+
+  <div class="overlay hidden" id="victory">
+    <div class="lbl">ALL 10 PUZZLES SOLVED</div>
+    <div class="bignum" id="totalScore">0</div>
+    <div class="lbl">TOTAL SCORE</div>
+    <div class="bestline" id="victoryBest"></div>
+    <div class="reveal">The physics: <b>Snell&rsquo;s law + dispersion.</b></div>
+    <button class="btn mag big" id="againBtn">PLAY AGAIN</button>
+  </div>
+</div>
+<script>
+// phys.mjs  -  real refraction + Cauchy dispersion. DOM-free.
+// Shared by the Node puzzle generator and inlined into prism.html (browser).
+// build.py strips the `export` keywords when inlining; keep this file import-free.
+
+const LAMBDAS = [650, 532, 405]; // nm: red, green, blue
+const BEAM_RGB = ['255,46,46', '46,255,90', '80,110,255'];
+const TARGET_RGB = BEAM_RGB;
+
+// Cauchy index of the prism glass: n(λ) = 1.60 + 0.008/λ², λ in µm
+function cauchyIndex(nm) {
+  const um = nm / 1000;
+  return 1.60 + 0.008 / (um * um);
+}
+const NGLASS = LAMBDAS.map(cauchyIndex);
+
+// Equilateral triangle vertices for prism {x, y, r, rot}
+function prismVerts(p) {
+  const v = [];
+  for (let i = 0; i < 3; i++) {
+    const a = p.rot + (i * 2 * Math.PI) / 3;
+    v.push([p.x + p.r * Math.cos(a), p.y + p.r * Math.sin(a)]);
+  }
+  return v;
+}
+
+// Ray (ox,oy) dir (dx,dy, need not be unit) vs segment a->b. Returns t or -1.
+function raySegT(ox, oy, dx, dy, ax, ay, bx, by) {
+  const ex = bx - ax, ey = by - ay;
+  const den = dx * ey - dy * ex;
+  if (Math.abs(den) < 1e-12) return -1;
+  const qx = ax - ox, qy = ay - oy;
+  const t = (qx * ey - qy * ex) / den;
+  const u = (qx * dy - qy * dx) / den;
+  return (t > 1e-9 && u >= -1e-9 && u <= 1 + 1e-9) ? t : -1;
+}
+
+// Vector-form Snell's law. d = incident unit dir, n = unit normal opposing d,
+// eta = n1/n2. Returns refracted dir, or null on total internal reflection.
+function snellRefract(dx, dy, nx, ny, eta) {
+  const cos1 = -(dx * nx + dy * ny);
+  const k = 1 - eta * eta * (1 - cos1 * cos1);
+  if (k < 0) return null; // TIR
+  const f = eta * cos1 - Math.sqrt(k);
+  return [eta * dx + f * nx, eta * dy + f * ny];
+}
+
+// Trace one laser ({x, y, ang}) through prisms [{x,y,r,rot}].
+// Returns per wavelength: {pts: [[x,y]...], hc: [completed interactions before each segment]}.
+// Segment i runs pts[i]->pts[i+1]; hc[0] is always 0 (direct beam).
+function traceLaser(laser, prisms, maxSeg) {
+  maxSeg = maxSeg || 40;
+  const FAR = 2400;
+  return LAMBDAS.map((nm, li) => {
+    const ng = NGLASS[li];
+    let ox = laser.x, oy = laser.y;
+    let dx = Math.cos(laser.ang), dy = Math.sin(laser.ang);
+    const pts = [[ox, oy]];
+    const hc = [0];
+    let inside = false;
+    let hits = 0;
+    for (let s = 0; s < maxSeg; s++) {
+      let bestT = Infinity, ba = null, bb = null;
+      for (const p of prisms) {
+        const v = prismVerts(p);
+        for (let e = 0; e < 3; e++) {
+          const a = v[e], b = v[(e + 1) % 3];
+          const t = raySegT(ox, oy, dx, dy, a[0], a[1], b[0], b[1]);
+          if (t > 1e-4 && t < bestT) { bestT = t; ba = a; bb = b; }
+        }
+      }
+      if (ba === null) {
+        pts.push([ox + dx * FAR, oy + dy * FAR]);
+        hc.push(hits);
+        break;
+      }
+      const hx = ox + dx * bestT, hy = oy + dy * bestT;
+      pts.push([hx, hy]);
+      // Edge normal, oriented against the ray.
+      let nx = -(bb[1] - ba[1]), ny = bb[0] - ba[0];
+      const nl = Math.hypot(nx, ny) || 1;
+      nx /= nl; ny /= nl;
+      if (dx * nx + dy * ny > 0) { nx = -nx; ny = -ny; }
+      const eta = inside ? ng : 1 / ng; // n1/n2
+      let nd = snellRefract(dx, dy, nx, ny, eta);
+      if (nd === null) {
+        // True total internal reflection: mirror, stay inside.
+        const cos1 = -(dx * nx + dy * ny);
+        nd = [dx + 2 * cos1 * nx, dy + 2 * cos1 * ny];
+      } else {
+        inside = !inside;
+      }
+      hits++;
+      hc.push(hits); // segment starting at this hit has `hits` completed interactions
+      const l = Math.hypot(nd[0], nd[1]) || 1;
+      dx = nd[0] / l; dy = nd[1] / l;
+      ox = hx + dx * 1e-3; oy = hy + dy * 1e-3;
+    }
+    return { pts, hc };
+  });
+}
+
+// Trace every laser. Returns traces[laserIdx][colorIdx].
+function traceAll(lasers, prisms) {
+  return lasers.map(l => traceLaser(l, prisms));
+}
+
+function segDist(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay;
+  const L2 = dx * dx + dy * dy;
+  let t = L2 > 0 ? ((px - ax) * dx + (py - ay) * dy) / L2 : 0;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
+// targets: [{x, y, color: 0|1|2, r}]. Lit when its own color crosses it (any laser).
+// Returns [{lit}]  -  this is exactly what the game uses for glow + solve detection.
+function targetsLit(traces, targets) {
+  return targets.map(tg => {
+    for (let li = 0; li < traces.length; li++) {
+      const tr = traces[li][tg.color];
+      for (let i = 0; i < tr.pts.length - 1; i++) {
+        if (segDist(tg.x, tg.y, tr.pts[i][0], tr.pts[i][1], tr.pts[i+1][0], tr.pts[i+1][1]) <= tg.r) {
+          return { lit: true };
+        }
+      }
+    }
+    return { lit: false };
+  });
+}
+
+</script>
+<script>
+window.__PRISM_LEVELS = {"levels":[{"lasers":[{"x":12,"y":550.7037,"ang":-0.2098}],"prisms":[{"x":128.2885,"y":525.9453,"r":46,"rot":0.464,"locked":false,"start":-1.0079}],"targets":[{"x":263.1,"y":639,"color":0,"r":16,"laser":0}],"solution":[0.464]},{"lasers":[{"x":12,"y":308.7066,"ang":0.1718}],"prisms":[{"x":136.7396,"y":330.3447,"r":46,"rot":5.7854,"locked":false,"start":3.7831}],"targets":[{"x":261.9,"y":215.9,"color":0,"r":16,"laser":0},{"x":46.4,"y":147,"color":2,"r":16,"laser":0}],"solution":[5.7854]},{"lasers":[{"x":12,"y":562.1093,"ang":0.1186}],"prisms":[{"x":123.3441,"y":575.3823,"r":46,"rot":3.3076,"locked":false,"start":5.5839},{"x":245.7021,"y":459.7923,"r":46,"rot":4.8381,"locked":false,"start":3.6785}],"targets":[{"x":245.5,"y":281.7,"color":0,"r":16,"laser":0},{"x":225.8,"y":222.8,"color":1,"r":16,"laser":0}],"solution":[3.3076,4.8381]},{"lasers":[{"x":12,"y":331.0476,"ang":-0.0508}],"prisms":[{"x":135.1573,"y":324.7835,"r":46,"rot":5.1105,"locked":false,"start":6.6191},{"x":241.4046,"y":437.1174,"r":46,"rot":3.6225,"locked":true,"start":3.6225}],"targets":[{"x":232.2,"y":610.1,"color":0,"r":16,"laser":0},{"x":212.6,"y":662.6,"color":1,"r":16,"laser":0},{"x":62.8,"y":457.7,"color":2,"r":16,"laser":0}],"solution":[5.1105,3.6225]},{"lasers":[{"x":12,"y":487.8991,"ang":0.2056}],"prisms":[{"x":133.6186,"y":513.2586,"r":46,"rot":3.422,"locked":false,"start":4.5064},{"x":256.1486,"y":418.4777,"r":46,"rot":4.9368,"locked":false,"start":7.4671}],"targets":[{"x":270.4,"y":246.6,"color":0,"r":16,"laser":0},{"x":60,"y":359,"color":2,"r":16,"laser":0},{"x":254.7,"y":189,"color":1,"r":16,"laser":0}],"solution":[3.422,4.9368]},{"lasers":[{"x":12,"y":224.658,"ang":0.0951},{"x":12,"y":649.4921,"ang":-0.0434}],"prisms":[{"x":130.6399,"y":235.9756,"r":46,"rot":0.8117,"locked":false,"start":-0.0846},{"x":130.3754,"y":644.3514,"r":46,"rot":1.3623,"locked":false,"start":0.0448}],"targets":[{"x":230.1,"y":374.6,"color":0,"r":16,"laser":0},{"x":259.1,"y":475.5,"color":2,"r":16,"laser":0},{"x":224,"y":512.9,"color":1,"r":16,"laser":1}],"solution":[0.8117,1.3623]},{"lasers":[{"x":12,"y":355.1514,"ang":-0.1511},{"x":12,"y":507.7468,"ang":0.164}],"prisms":[{"x":138.7045,"y":335.8596,"r":46,"rot":5.0327,"locked":false,"start":2.77},{"x":259.9382,"y":442.8028,"r":46,"rot":5.6091,"locked":false,"start":4.5986},{"x":125.2777,"y":526.4946,"r":46,"rot":2.9832,"locked":false,"start":4.519}],"targets":[{"x":266.3,"y":628.1,"color":0,"r":16,"laser":0},{"x":251,"y":673.4,"color":1,"r":16,"laser":0},{"x":216.4,"y":711.9,"color":2,"r":16,"laser":1},{"x":202.2,"y":645.2,"color":0,"r":16,"laser":1}],"solution":[5.0327,5.6091,2.9832]},{"lasers":[{"x":12,"y":222.4567,"ang":0.0259},{"x":12,"y":580.0151,"ang":-0.1375}],"prisms":[{"x":117.9978,"y":225.1986,"r":46,"rot":3.1493,"locked":false,"start":1.3137},{"x":221.314,"y":359.9043,"r":46,"rot":1.6045,"locked":true,"start":1.6045},{"x":124.5209,"y":564.4481,"r":46,"rot":0.8572,"locked":false,"start":-0.5812},{"x":235.9612,"y":665.6952,"r":46,"rot":4.361,"locked":false,"start":7.0292}],"targets":[{"x":196.6,"y":533.3,"color":0,"r":16,"laser":0},{"x":45.9,"y":368.7,"color":2,"r":16,"laser":0},{"x":303.1,"y":473.8,"color":1,"r":16,"laser":1},{"x":294.9,"y":553.3,"color":0,"r":16,"laser":1}],"solution":[3.1493,1.6045,0.8572,4.361]},{"lasers":[{"x":12,"y":253.4563,"ang":0.0004},{"x":12,"y":571.1909,"ang":-0.1915}],"prisms":[{"x":129.5299,"y":253.4987,"r":46,"rot":3.1059,"locked":false,"start":0.3454},{"x":230.9629,"y":376.8949,"r":46,"rot":1.5716,"locked":false,"start":0.2925},{"x":118.0157,"y":550.6333,"r":46,"rot":4.9848,"locked":false,"start":2.7766},{"x":245.9457,"y":653.8009,"r":46,"rot":4.3076,"locked":true,"start":4.3076}],"targets":[{"x":211.4,"y":546.8,"color":0,"r":16,"laser":0},{"x":189.2,"y":592.5,"color":1,"r":16,"laser":0},{"x":294.8,"y":405.9,"color":2,"r":16,"laser":1},{"x":303.1,"y":458.1,"color":1,"r":16,"laser":1}],"solution":[3.1059,1.5716,4.9848,4.3076]},{"lasers":[{"x":12,"y":198.8515,"ang":-0.0338},{"x":12,"y":359.7826,"ang":-0.1739},{"x":12,"y":682.6247,"ang":-0.1108}],"prisms":[{"x":117.3442,"y":195.286,"r":46,"rot":0.6819,"locked":false,"start":1.6687},{"x":120.5268,"y":340.7182,"r":46,"rot":2.5801,"locked":false,"start":0.8256},{"x":136.0046,"y":668.8304,"r":46,"rot":3.0575,"locked":false,"start":1.5662},{"x":227.5725,"y":527.1799,"r":46,"rot":3.7653,"locked":true,"start":3.7653}],"targets":[{"x":237.4,"y":324.7,"color":0,"r":16,"laser":0},{"x":54.7,"y":497.6,"color":2,"r":16,"laser":1},{"x":338.2,"y":691.4,"color":1,"r":16,"laser":2},{"x":321.9,"y":642,"color":0,"r":16,"laser":2}],"solution":[0.6819,2.5801,3.0575,3.7653]}]};
+</script>
+<script>
+// game.js  -  PRISM browser game. Uses phys.mjs (inlined above) + window.__PRISM_LEVELS.
+(function () {
+'use strict';
+
+var LW = 390, LH = 844;
+var canvas = document.getElementById('cv');
+var ctx = canvas.getContext('2d');
+var LEVELS = window.__PRISM_LEVELS.levels;
+
+var vw = 0, vh = 0, dpr = 1, scale = 1, ox = 0, oy = 0;
+function resize() {
+  vw = window.innerWidth; vh = window.innerHeight;
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.round(vw * dpr); canvas.height = Math.round(vh * dpr);
+  scale = Math.min(vw / LW, vh / LH);
+  ox = (vw - LW * scale) / 2; oy = (vh - LH * scale) / 2;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function toScreen(x, y) { return [x * scale + ox, y * scale + oy]; }
+function fromScreen(sx, sy) { return [(sx - ox) / scale, (sy - oy) / scale]; }
+
+// ---------- state ----------
+var screen = 'title'; // title | play | solved | victory
+var levelIdx = 0;
+var rots = [];
+var totalDeg = 0;
+var totalScore = 0;
+var beams = null;
+var litAll = [];
+var dirty = true;
+var solveAt = 0;
+var best = parseInt(localStorage.getItem('bb-prism-best') || '0', 10) || 0;
+
+function level() { return LEVELS[levelIdx]; }
+
+function $(id) { return document.getElementById(id); }
+
+function loadLevel(i) {
+  levelIdx = i;
+  var lv = level();
+  rots = lv.prisms.map(function (p) { return p.start; });
+  totalDeg = 0; litAll = []; solveAt = 0; dirty = true;
+  $('lv').textContent = (i + 1) + '/10';
+  $('hint').textContent = (i === 0) ? 'drag in a circle around a prism to rotate it' : '';
+}
+
+function retrace() {
+  var lv = level();
+  var prisms = lv.prisms.map(function (p, i) { return { x: p.x, y: p.y, r: p.r, rot: rots[i] }; });
+  beams = traceAll(lv.lasers, prisms);
+  litAll = targetsLit(beams, lv.targets).map(function (o) { return o.lit; });
+  dirty = false;
+}
+
+// ---------- drawing ----------
+function strokePts(pts) {
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.stroke();
+}
+
+function drawBeams() {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (var li = 0; li < beams.length; li++) {
+    for (var c = 0; c < 3; c++) {
+      var pts = beams[li][c].pts;
+      ctx.strokeStyle = 'rgba(' + BEAM_RGB[c] + ',0.10)';
+      ctx.lineWidth = 9;
+      strokePts(pts);
+      ctx.strokeStyle = 'rgba(' + BEAM_RGB[c] + ',0.85)';
+      ctx.lineWidth = 2.6;
+      strokePts(pts);
+    }
+  }
+  ctx.restore();
+}
+
+function drawLasers() {
+  var lv = level();
+  lv.lasers.forEach(function (l) {
+    ctx.save();
+    ctx.translate(l.x, l.y); ctx.rotate(l.ang);
+    ctx.shadowColor = '#e879f9'; ctx.shadowBlur = 14;
+    ctx.fillStyle = '#e879f9';
+    ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#2a2a3a';
+    ctx.strokeStyle = '#e879f9'; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(4, -5, 26, 10, 4); else ctx.rect(4, -5, 26, 10);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(30, 0, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  });
+}
+
+function drawPadlock(x, y) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.strokeStyle = '#8b98b8'; ctx.fillStyle = '#8b98b8'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(0, -3, 6, Math.PI, 0); ctx.stroke();
+  ctx.fillRect(-8, -3, 16, 12);
+  ctx.fillStyle = '#0a0a12';
+  ctx.beginPath(); ctx.arc(0, 1, 2.5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillRect(-1, 1, 2, 5);
+  ctx.restore();
+}
+
+function drawPrisms(now) {
+  var lv = level();
+  lv.prisms.forEach(function (p, i) {
+    var v = prismVerts({ x: p.x, y: p.y, r: p.r, rot: rots[i] });
+    ctx.beginPath();
+    ctx.moveTo(v[0][0], v[0][1]); ctx.lineTo(v[1][0], v[1][1]); ctx.lineTo(v[2][0], v[2][1]);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(150,210,255,0.07)';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = p.locked ? 'rgba(139,152,184,0.8)' : 'rgba(34,211,238,0.9)';
+    if (!p.locked && (levelIdx < 2)) {
+      ctx.setLineDash([6, 5]);
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 14 + 3 * Math.sin(now / 400), 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(34,211,238,0.35)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgba(34,211,238,0.9)';
+      ctx.lineWidth = 2;
+    }
+    ctx.stroke();
+    // vertex tick so rotation is visible
+    ctx.fillStyle = p.locked ? 'rgba(139,152,184,0.9)' : '#22d3ee';
+    ctx.beginPath(); ctx.arc(v[0][0], v[0][1], 3.5, 0, Math.PI * 2); ctx.fill();
+    if (p.locked) drawPadlock(p.x, p.y);
+  });
+}
+
+function drawTargets(now) {
+  var lv = level();
+  lv.targets.forEach(function (t, i) {
+    var col = TARGET_RGB[t.color];
+    var lit = litAll[i];
+    ctx.save();
+    if (lit) {
+      var pulse = 0.55 + 0.30 * Math.sin(now / 160);
+      ctx.shadowColor = 'rgb(' + col + ')'; ctx.shadowBlur = 22;
+      ctx.fillStyle = 'rgba(' + col + ',' + pulse.toFixed(3) + ')';
+      ctx.beginPath(); ctx.arc(t.x, t.y, t.r, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = lit ? '#ffffff' : 'rgba(' + col + ',0.95)';
+    ctx.beginPath(); ctx.arc(t.x, t.y, t.r, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = lit ? '#fff' : 'rgba(' + col + ',0.9)';
+    ctx.beginPath(); ctx.arc(t.x, t.y, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  });
+}
+
+function render(now) {
+  if (dirty || !beams) retrace();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = '#0a0a12';
+  ctx.fillRect(0, 0, vw, vh);
+  ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * ox, dpr * oy);
+  drawBeams();
+  drawLasers();
+  drawPrisms(now);
+  drawTargets(now);
+  if (screen === 'play') {
+    var all = litAll.length > 0 && litAll.every(function (x) { return x; });
+    if (all) {
+      if (!solveAt) solveAt = now;
+      if (now - solveAt > 350) onSolved();
+    } else solveAt = 0;
+  }
+  requestAnimationFrame(render);
+}
+
+// ---------- input: drag in a circle to rotate ----------
+var dragIdx = -1, lastAng = 0;
+
+canvas.addEventListener('pointerdown', function (e) {
+  if (screen !== 'play') return;
+  var s = fromScreen(e.clientX, e.clientY);
+  var lv = level();
+  var bi = -1, bd = 78;
+  lv.prisms.forEach(function (p, i) {
+    if (p.locked) return;
+    var d = Math.hypot(s[0] - p.x, s[1] - p.y);
+    if (d < bd) { bd = d; bi = i; }
+  });
+  if (bi >= 0) {
+    dragIdx = bi;
+    lastAng = Math.atan2(s[1] - lv.prisms[bi].y, s[0] - lv.prisms[bi].x);
+    $('hint').textContent = '';
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    e.preventDefault();
+  }
+});
+
+window.addEventListener('pointermove', function (e) {
+  if (dragIdx < 0 || screen !== 'play') return;
+  var s = fromScreen(e.clientX, e.clientY);
+  var p = level().prisms[dragIdx];
+  if (Math.hypot(s[0] - p.x, s[1] - p.y) < 20) return; // dead zone at center
+  var a = Math.atan2(s[1] - p.y, s[0] - p.x);
+  var d = a - lastAng;
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;
+  lastAng = a;
+  rots[dragIdx] += d;
+  totalDeg += Math.abs(d) * 180 / Math.PI;
+  dirty = true;
+});
+
+function endDrag() { dragIdx = -1; }
+window.addEventListener('pointerup', endDrag);
+window.addEventListener('pointercancel', endDrag);
+
+// ---------- flow ----------
+function onSolved() {
+  screen = 'solved';
+  var sc = Math.max(50, 1000 - Math.round(totalDeg) * 2);
+  totalScore += sc;
+  $('solvedLv').textContent = levelIdx + 1;
+  $('solvedRot').innerHTML = Math.round(totalDeg) + '&deg;';
+  $('solvedScore').textContent = '+' + sc;
+  $('score').textContent = totalScore;
+  $('nextBtn').innerHTML = (levelIdx >= 9) ? 'FINISH &rarr;' : 'NEXT &rarr;';
+  $('solved').classList.remove('hidden');
+}
+
+function showVictory() {
+  screen = 'victory';
+  $('solved').classList.add('hidden');
+  $('totalScore').textContent = totalScore;
+  if (totalScore > best) {
+    best = totalScore;
+    try { localStorage.setItem('bb-prism-best', String(best)); } catch (err) {}
+  }
+  $('victoryBest').innerHTML = 'BEST <b>' + best + '</b>';
+  $('victory').classList.remove('hidden');
+}
+
+function showTitle() {
+  screen = 'title';
+  $('solved').classList.add('hidden');
+  $('victory').classList.add('hidden');
+  $('titleBest').innerHTML = best > 0 ? 'BEST <b>' + best + '</b>' : '';
+  $('title').classList.remove('hidden');
+}
+
+$('startBtn').addEventListener('click', function () {
+  totalScore = 0;
+  $('score').textContent = '0';
+  $('title').classList.add('hidden');
+  loadLevel(0);
+  screen = 'play';
+});
+
+$('nextBtn').addEventListener('click', function () {
+  if (screen !== 'solved') return;
+  if (levelIdx >= 9) { showVictory(); return; }
+  $('solved').classList.add('hidden');
+  loadLevel(levelIdx + 1);
+  screen = 'play';
+});
+
+$('againBtn').addEventListener('click', function () {
+  totalScore = 0;
+  $('score').textContent = '0';
+  $('victory').classList.add('hidden');
+  loadLevel(0);
+  screen = 'play';
+});
+
+$('restartBtn').addEventListener('click', function () {
+  if (screen !== 'play') return;
+  loadLevel(levelIdx);
+});
+
+$('menuBtn').addEventListener('click', function () {
+  endDrag();
+  showTitle();
+});
+
+// ---------- debug hook (used by automated smoke test) ----------
+window.__prism = {
+  state: function () {
+    return {
+      screen: screen, level: levelIdx,
+      rotations: rots.slice(), lit: litAll.slice(),
+      totalDeg: Math.round(totalDeg * 10) / 10, totalScore: totalScore, best: best
+    };
+  },
+  solve: function () { rots = level().solution.slice(); dirty = true; },
+  setRot: function (i, deg) { rots[i] = deg * Math.PI / 180; dirty = true; },
+  prisms: function () {
+    return level().prisms.map(function (p) {
+      var s = toScreen(p.x, p.y);
+      return { x: s[0], y: s[1], locked: p.locked };
+    });
+  },
+  toScreen: function (x, y) { var s = toScreen(x, y); return { x: s[0], y: s[1] }; },
+  beams: function () {
+    if (!beams && dirty) retrace();
+    return beams.map(function (lb) {
+      return lb.map(function (b) {
+        return b.pts.map(function (p) { return [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]; });
+      });
+    });
+  },
+  levels: LEVELS.length
+};
+
+loadLevel(0);
+showTitle();
+requestAnimationFrame(render);
+})();
+
+</script>
+</body>
+</html>

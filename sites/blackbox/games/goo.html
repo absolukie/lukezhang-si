@@ -105,6 +105,9 @@
     margin:14px 0 24px; padding:10px 14px;
     border:1px solid #1b2530; border-radius:12px; background:#0a0f15;
   }
+  #jarInfo{display:flex;justify-content:space-between;gap:8px;padding:0 16px 8px;color:var(--dim);font-size:12px;}
+  #capacity.warn{color:var(--magenta);font-weight:800;}
+  #mergeHint{position:absolute;top:14px;left:12px;right:12px;text-align:center;color:var(--ink);font-size:13px;pointer-events:none;}
   .hint{color:#43525c; font-size:11px; letter-spacing:1px; margin-top:18px;}
 </style>
 </head>
@@ -118,12 +121,14 @@
     </div>
     <div id="clock"><b id="time">0:00</b></div>
   </header>
+  <div id="jarInfo"><span id="capacity">Drops 0 / 14</span><span>Merge one color to 100%</span></div>
   <div id="jarWrap">
     <canvas id="game"></canvas>
+    <div id="mergeHint" role="status" aria-live="polite"></div>
 
     <div class="overlay" id="titleOv">
       <h1 class="big">GOO</h1>
-      <p class="tag">Drag drops of the <b>same color</b> together to merge them into one mega-blob. Reach <b>100%</b> before the jar overflows. Mixed colors turn to useless brown sludge.</p>
+      <p class="tag">Drag drops of the <b>same color</b> together to merge them into one mega-blob. Reach <b>100%</b> before more than <b>14 drops</b> fill the jar. Mixed colors turn to useless brown sludge.</p>
       <button class="btn" id="startBtn">START</button>
       <div class="hint">MARCHING SQUARES + SCALAR FIELDS</div>
     </div>
@@ -165,7 +170,7 @@ var MAX_DROPS   = 14;     // more than this live -> jar overflows
 var SPAWN_EVERY = 1600;   // ms
 var GRAV        = 0.35;   // px per frame^2 at 60fps
 var BOUNCE      = 0.55;   // wall/floor bounce damping
-var CELL        = 10;     // marching-squares grid cell, css px
+var CELL        = 4;     // marching-squares grid cell, css px
 var BEST_KEY    = "blackbox-goo-best";
 
 var canvas = document.getElementById("game");
@@ -188,6 +193,9 @@ var drops = [];
 var spawnTimer = 0;
 var elapsed = 0;                 // ms of play
 var best = readBest();
+var mergeEffects = [];
+var mergeMessageUntil = 0;
+var grabPointer = null;
 var grabbed = null;              // drop being dragged
 var grabPX = 0, grabPY = 0, grabT = 0, grabVX = 0, grabVY = 0;
 
@@ -227,6 +235,10 @@ window.addEventListener("resize", resize);
 /* ---------------- game control ---------------- */
 function reset(){
   drops = [];
+  mergeEffects = [];
+  mergeMessageUntil = 0;
+  grabPointer = null;
+  document.getElementById('mergeHint').textContent = '';
   spawnTimer = 0;
   elapsed = 0;
   grabbed = null;
@@ -287,6 +299,9 @@ function stepPhysics(dt){
 
   for(i = 0; i < drops.length; i++){
     d = drops[i];
+    if(d.mergeAge !== undefined) d.mergeAge += dt / 60;
+    d.visualR = d.fromR ? d.fromR+(d.r-d.fromR)*Math.min(1,d.mergeAge/0.18) : d.r;
+    d.squish = d.mergeAge !== undefined ? 1+0.16*Math.sin(d.mergeAge*25)*Math.exp(-d.mergeAge*8) : 1;
     if(d === grabbed){
       d.vx = 0; d.vy = 0;
       continue;
@@ -310,7 +325,8 @@ function stepPhysics(dt){
       var p = drops[i], q = drops[j];
       if(p.brown || q.brown) continue;      // brown never merges again
       var mdx = q.x - p.x, mdy = q.y - p.y;
-      var mrr = (p.r + q.r) * 0.85;
+      // Matching liquid fuses on contact, before separation can push it away.
+      var mrr = p.color === q.color ? p.r + q.r + 2 : (p.r + q.r) * 0.85;
       if(mdx * mdx + mdy * mdy < mrr * mrr){
         var M = p.mass + q.mass;
         var same = (p.color === q.color);
@@ -322,9 +338,17 @@ function stepPhysics(dt){
           r: Math.sqrt(M),                            // area conserved
           mass: M,
           color: same ? p.color : "brown",
-          brown: !same
+          brown: !same,
+          mergeAge: 0, fromR: Math.max(p.r,q.r), visualR: Math.max(p.r,q.r), squish: 1
         };
-        if(p === grabbed || q === grabbed) grabbed = merged;
+        if(p === grabbed || q === grabbed){
+          grabbed = merged;
+          merged.x = Math.max(merged.r,Math.min(W-merged.r,grabPX));
+          merged.y = Math.max(merged.r,Math.min(H-merged.r,grabPY));
+        }
+        mergeEffects.push({x:merged.x,y:merged.y,r:merged.r,color:same?COLORS[merged.color]:'#d6a878',life:0.6});
+        document.getElementById('mergeHint').textContent = same ? 'Merged! Keep this color growing.' : 'Mixed colors make sludge. Keep colors apart.';
+        mergeMessageUntil = elapsed + 2200;
         drops[i] = merged;
         drops.splice(j, 1);
         dead = merged;
@@ -348,6 +372,11 @@ function stepPhysics(dt){
         if(b !== grabbed){ b.x += nx * push; b.y += ny * push; }
       }
     }
+  }
+  // Separation can push edge drops outside the glass; constrain the final pose.
+  for(d of drops){
+    d.x=Math.max(d.r,Math.min(W-d.r,d.x));
+    d.y=Math.max(d.r,Math.min(H-d.r,d.y));
   }
 }
 
@@ -384,8 +413,10 @@ function fieldAt(blob, x, y){
   var f = 0;
   for(var i = 0; i < blob.length; i++){
     var d = blob[i];
-    var dx = x - d.x, dy = y - d.y;
-    var rsq = d.r * d.r;
+    var squish = d.squish || 1;
+    var dx = (x - d.x)/squish, dy = (y - d.y)*squish;
+    var radius = d.visualR || d.r;
+    var rsq = radius * radius;
     f += rsq / (dx * dx + dy * dy + 40);
   }
   return f;
@@ -407,28 +438,36 @@ function renderBlob(blob){
   var cw = W / cols, ch = H / rows;
   var i, j, k;
 
+  // Only sample cells near this field; the rest of the jar is transparent.
+  var pad = Math.sqrt(blob.length)*1.25;
+  var xMin=Math.max(0,Math.floor(Math.min.apply(null,blob.map(d=>d.x-d.r*pad))/cw)-1);
+  var xMax=Math.min(cols,Math.ceil(Math.max.apply(null,blob.map(d=>d.x+d.r*pad))/cw)+1);
+  var yMin=Math.max(0,Math.floor(Math.min.apply(null,blob.map(d=>d.y-d.r*pad))/ch)-1);
+  var yMax=Math.min(rows,Math.ceil(Math.max.apply(null,blob.map(d=>d.y+d.r*pad))/ch)+1);
   // corner field values (iso = 1.0)
-  for(j = 0; j <= rows; j++){
+  for(j = yMin; j <= yMax; j++){
     var y = j * ch;
-    for(i = 0; i <= cols; i++){
+    for(i = xMin; i <= xMax; i++){
       cornerF[j * (cols + 1) + i] = fieldAt(blob, i * cw, y);
     }
   }
 
   // low-res alpha mask -> smooth liquid fill
   var data = maskImg.data;
+  data.fill(0);
   var hex = COLORS[color];
   var rr8 = parseInt(hex.slice(1, 3), 16);
   var gg8 = parseInt(hex.slice(3, 5), 16);
   var bb8 = parseInt(hex.slice(5, 7), 16);
   var p = 0;
-  for(j = 0; j < rows; j++){
+  for(j = yMin; j < yMax; j++){
     var cy = (j + 0.5) * ch;
-    for(i = 0; i < cols; i++){
+    for(i = xMin; i < xMax; i++){
       var cx = (i + 0.5) * cw;
       var f = fieldAt(blob, cx, cy);
+      p = (j*cols+i)*4;
       data[p] = rr8; data[p + 1] = gg8; data[p + 2] = bb8;
-      data[p + 3] = (f >= 1.0) ? 235 : 0;
+      data[p + 3] = Math.max(0,Math.min(1,(f-0.88)/0.24))*235;
       p += 4;
     }
   }
@@ -443,17 +482,17 @@ function renderBlob(blob){
   ctx.lineJoin = "round";
   ctx.beginPath();
   var stride = cols + 1;
-  for(j = 0; j < rows; j++){
-    for(i = 0; i < cols; i++){
+  for(j = yMin; j < yMax; j++){
+    for(i = xMin; i < xMax; i++){
       var c0 = cornerF[j * stride + i];
       var c1 = cornerF[j * stride + i + 1];
       var c2 = cornerF[(j + 1) * stride + i + 1];
       var c3 = cornerF[(j + 1) * stride + i];
       var idx = 0;
-      if(c0 >= 1) idx |= 8;
-      if(c1 >= 1) idx |= 4;
-      if(c2 >= 1) idx |= 2;
-      if(c3 >= 1) idx |= 1;
+      if(c0 >= 1) idx |= 1;
+      if(c1 >= 1) idx |= 2;
+      if(c2 >= 1) idx |= 4;
+      if(c3 >= 1) idx |= 8;
       if(idx === 0 || idx === 15) continue;
       var segs = MS_TABLE[idx];
       if(!segs) continue;
@@ -506,6 +545,12 @@ function render(){
   var blobs = findBlobs();
   for(var b = 0; b < blobs.length; b++) renderBlob(blobs[b]);
 
+  for(var effect of mergeEffects){
+    ctx.globalAlpha=Math.max(0,effect.life/0.6);
+    ctx.strokeStyle=effect.color;ctx.lineWidth=3;
+    ctx.beginPath();ctx.arc(effect.x,effect.y,effect.r+(0.6-effect.life)*50,0,Math.PI*2);ctx.stroke();
+  }
+  ctx.globalAlpha=1;
   // grabbed drop highlight ring
   if(grabbed && state === "playing"){
     ctx.strokeStyle = "rgba(255,255,255,0.9)";
@@ -534,6 +579,10 @@ function updateHud(){
   progFill.style.width = pct + "%";
   progPct.textContent = pct + "%";
   timeEl.textContent = fmtTime(elapsed);
+  var capacity = document.getElementById('capacity');
+  capacity.textContent = 'Drops '+drops.length+' / '+MAX_DROPS;
+  capacity.classList.toggle('warn',drops.length>=MAX_DROPS-3);
+  if(elapsed>mergeMessageUntil) document.getElementById('mergeHint').textContent='';
 }
 
 /* ---------------- drag ---------------- */
@@ -542,7 +591,7 @@ function toLocal(e){
   return { x: e.clientX - r.left, y: e.clientY - r.top };
 }
 canvas.addEventListener("pointerdown", function(e){
-  if(state !== "playing" || grabbed) return;
+  if(state !== "playing" || grabbed || !e.isPrimary || e.button !== 0) return;
   var pt = toLocal(e);
   var bestD = null, bestDist = 1e9;
   for(var i = 0; i < drops.length; i++){
@@ -553,6 +602,7 @@ canvas.addEventListener("pointerdown", function(e){
   }
   if(bestD){
     grabbed = bestD;
+    grabPointer = e.pointerId;
     grabPX = pt.x; grabPY = pt.y; grabT = performance.now();
     grabVX = 0; grabVY = 0;
     grabbed.x = pt.x; grabbed.y = pt.y;
@@ -561,7 +611,7 @@ canvas.addEventListener("pointerdown", function(e){
   }
 });
 canvas.addEventListener("pointermove", function(e){
-  if(!grabbed || state !== "playing") return;
+  if(!grabbed || state !== "playing" || e.pointerId !== grabPointer) return;
   var pt = toLocal(e);
   var now = performance.now();
   var dt = Math.max(1, now - grabT);
@@ -572,8 +622,12 @@ canvas.addEventListener("pointermove", function(e){
   grabbed.y = Math.max(grabbed.r, Math.min(H - grabbed.r, pt.y));
   e.preventDefault();
 });
-function releaseGrab(){
+function releaseGrab(e){
+  if(e && e.pointerId !== grabPointer) return;
+  grabPointer = null;
   if(!grabbed) return;
+  // Holding still should settle a drop, not fling it with an old move velocity.
+  if(performance.now()-grabT>80 || (e && e.type !== 'pointerup')) grabVX=grabVY=0;
   var v = Math.sqrt(grabVX * grabVX + grabVY * grabVY);
   var maxV = 14;
   if(v > maxV){ grabVX *= maxV / v; grabVY *= maxV / v; }
@@ -583,6 +637,7 @@ function releaseGrab(){
 }
 canvas.addEventListener("pointerup", releaseGrab);
 canvas.addEventListener("pointercancel", releaseGrab);
+canvas.addEventListener("lostpointercapture", releaseGrab);
 canvas.addEventListener("contextmenu", function(e){ e.preventDefault(); });
 
 /* ---------------- main loop ---------------- */
@@ -603,6 +658,8 @@ function loop(now){
       spawnDrop();
     }
     if(state === "playing"){                 // spawnDrop may have ended the game
+      for(var effect of mergeEffects) effect.life -= rawDt/1000;
+      mergeEffects = mergeEffects.filter(effect=>effect.life>0);
       stepPhysics(dt);
       if(largestMass() >= TARGET) endGame(true);
     }

@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>SMOKE · BLACKBOX</title>
+<style>
+  :root{
+    --bg:#05070c; --panel:#0a0e16; --line:#16202e;
+    --neon:#22d3ee; --neon-dim:#0e7490; --mag:#e879f9; --ok:#4ade80;
+    --txt:#dbe7f3; --mut:#5b6b80;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--txt);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow:hidden;
+    overscroll-behavior:none;}
+  #wrap{height:100%;display:flex;flex-direction:column;align-items:center;
+    max-width:520px;margin:0 auto;padding:10px 12px calc(10px + env(safe-area-inset-bottom));}
+  #hud{width:100%;display:flex;align-items:center;justify-content:space-between;
+    padding:8px 4px 10px;font-size:13px;letter-spacing:.08em;}
+  #hud .brand{color:var(--neon);font-weight:700;}
+  #hud .brand small{color:var(--mut);font-weight:400;}
+  #pips{display:flex;gap:6px;}
+  .pip{width:10px;height:10px;border-radius:50%;border:1px solid var(--neon-dim);
+    background:transparent;transition:all .25s;}
+  .pip.on{background:var(--ok);border-color:var(--ok);box-shadow:0 0 8px var(--ok);}
+  .pip.act{border-color:var(--neon);box-shadow:0 0 6px var(--neon);}
+  #timer{color:var(--txt);min-width:64px;text-align:right;}
+  #timer b{color:var(--neon);font-weight:700;}
+  #stage{position:relative;width:100%;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;}
+  #game{display:block;border:1px solid var(--line);border-radius:10px;background:#04060a;
+    touch-action:none;user-select:none;-webkit-user-select:none;}
+  .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;background:rgba(4,6,10,.86);
+    backdrop-filter:blur(3px);border-radius:10px;padding:24px;z-index:5;}
+  .overlay.hidden{display:none;}
+  .kicker{font-size:11px;letter-spacing:.35em;color:var(--mut);margin-bottom:10px;}
+  h1{margin:0 0 6px;font-size:44px;letter-spacing:.18em;color:var(--txt);
+    text-shadow:0 0 22px rgba(34,211,238,.55);}
+  h1 .s{color:var(--neon);}
+  .howto{font-size:14px;line-height:1.65;color:var(--txt);max-width:300px;margin:10px 0 4px;}
+  .trick{margin-top:14px;font-size:12px;color:var(--mut);letter-spacing:.06em;}
+  .trick b{color:var(--mag);font-weight:400;}
+  .btn{margin-top:20px;touch-action:manipulation;cursor:pointer;
+    background:transparent;color:var(--neon);border:1px solid var(--neon);
+    border-radius:8px;padding:13px 34px;font-size:15px;letter-spacing:.22em;
+    font-family:inherit;box-shadow:0 0 14px rgba(34,211,238,.25), inset 0 0 10px rgba(34,211,238,.08);}
+  .btn:active{background:rgba(34,211,238,.15);transform:scale(.97);}
+  #win h2{margin:0 0 4px;font-size:30px;letter-spacing:.14em;color:var(--ok);
+    text-shadow:0 0 18px rgba(74,222,128,.5);}
+  #score{font-size:52px;color:var(--txt);margin:8px 0 2px;}
+  #score small{font-size:16px;color:var(--mut);}
+  #best{font-size:13px;color:var(--mut);letter-spacing:.08em;}
+  #newbest{display:none;margin-top:8px;font-size:13px;color:var(--mag);letter-spacing:.2em;
+    animation:blink 1s steps(2) infinite;}
+  @keyframes blink{50%{opacity:.35;}}
+  #foot{width:100%;text-align:center;font-size:11px;color:var(--mut);
+    letter-spacing:.12em;padding-top:10px;}
+  #foot b{color:var(--neon-dim);font-weight:400;}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="hud">
+    <div class="brand">SMOKE <small>/ BLACKBOX</small></div>
+    <div id="pips"></div>
+    <div id="timer"><b>0.0</b>s</div>
+  </div>
+  <div id="stage">
+    <canvas id="game"></canvas>
+    <div id="title" class="overlay">
+      <div class="kicker">BLACKBOX // 07</div>
+      <h1><span class="s">S</span>MOKE</h1>
+      <div class="howto">Drag to paint smoke. Steer each puff through the glowing ring to clear it. Clear all 5 rings as fast as you can.</div>
+      <div class="trick">the trick: <b>a stable fluid solver.</b></div>
+      <button class="btn" id="startBtn">START</button>
+      <div class="trick" id="titleBest" style="margin-top:12px"></div>
+    </div>
+    <div id="win" class="overlay hidden">
+      <div class="kicker">ALL RINGS CLEAR</div>
+      <h2>VENTILATED</h2>
+      <div id="score">0.0<small>s</small></div>
+      <div id="best">best 0.0s</div>
+      <div id="newbest">NEW BEST</div>
+      <button class="btn" id="againBtn">AGAIN</button>
+    </div>
+  </div>
+  <div id="foot">drag paints smoke <b>+</b> velocity &nbsp;//&nbsp; semi-lagrangian advection</div>
+</div>
+<script>
+"use strict";
+/* ============ SMOKE : Jos Stam stable fluids, 64x64 ============ */
+const N = 64, SIZE = N * N;
+const IX = (x, y) => x + y * N;
+
+let u = new Float32Array(SIZE), v = new Float32Array(SIZE);
+let u0 = new Float32Array(SIZE), v0 = new Float32Array(SIZE);
+let d = new Float32Array(SIZE), d0 = new Float32Array(SIZE);
+let p = new Float32Array(SIZE), div = new Float32Array(SIZE), curl = new Float32Array(SIZE);
+
+function set_bnd(b, x) {
+  for (let i = 1; i < N - 1; i++) {
+    x[IX(i, 0)]   = b === 2 ? -x[IX(i, 1)]   : x[IX(i, 1)];
+    x[IX(i, N-1)] = b === 2 ? -x[IX(i, N-2)] : x[IX(i, N-2)];
+    x[IX(0, i)]   = b === 1 ? -x[IX(1, i)]   : x[IX(1, i)];
+    x[IX(N-1, i)] = b === 1 ? -x[IX(N-2, i)] : x[IX(N-2, i)];
+  }
+  x[IX(0,0)]     = 0.5 * (x[IX(1,0)] + x[IX(0,1)]);
+  x[IX(0,N-1)]   = 0.5 * (x[IX(1,N-1)] + x[IX(0,N-2)]);
+  x[IX(N-1,0)]   = 0.5 * (x[IX(N-2,0)] + x[IX(N-1,1)]);
+  x[IX(N-1,N-1)] = 0.5 * (x[IX(N-2,N-1)] + x[IX(N-1,N-2)]);
+}
+
+/* Jacobi relaxation (iter ~14 for pressure projection) */
+function lin_solve(b, x, x0, a, c, iter) {
+  for (let k = 0; k < iter; k++) {
+    for (let j = 1; j < N - 1; j++) for (let i = 1; i < N - 1; i++) {
+      x[IX(i,j)] = (x0[IX(i,j)] + a * (x[IX(i-1,j)] + x[IX(i+1,j)] + x[IX(i,j-1)] + x[IX(i,j+1)])) / c;
+    }
+    set_bnd(b, x);
+  }
+}
+
+function advect(b, dd, d0f, uu, vv, dt) {
+  const dt0 = dt * (N - 2);
+  for (let j = 1; j < N - 1; j++) for (let i = 1; i < N - 1; i++) {
+    let x = i - dt0 * uu[IX(i,j)], y = j - dt0 * vv[IX(i,j)];
+    if (x < 0.5) x = 0.5; else if (x > N - 1.5) x = N - 1.5;
+    if (y < 0.5) y = 0.5; else if (y > N - 1.5) y = N - 1.5;
+    const i0 = Math.floor(x), i1 = i0 + 1, j0 = Math.floor(y), j1 = j0 + 1;
+    const s1 = x - i0, s0 = 1 - s1, t1 = y - j0, t0 = 1 - t1;
+    dd[IX(i,j)] = s0 * (t0 * d0f[IX(i0,j0)] + t1 * d0f[IX(i0,j1)])
+                + s1 * (t0 * d0f[IX(i1,j0)] + t1 * d0f[IX(i1,j1)]);
+  }
+  set_bnd(b, dd);
+}
+
+function project() {
+  for (let j = 1; j < N - 1; j++) for (let i = 1; i < N - 1; i++) {
+    div[IX(i,j)] = -0.5 * ((u[IX(i+1,j)] - u[IX(i-1,j)]) + (v[IX(i,j+1)] - v[IX(i,j-1)])) / N;
+    p[IX(i,j)] = 0;
+  }
+  set_bnd(0, div); set_bnd(0, p);
+  lin_solve(0, p, div, 1, 4, 14);
+  for (let j = 1; j < N - 1; j++) for (let i = 1; i < N - 1; i++) {
+    u[IX(i,j)] -= 0.5 * N * (p[IX(i+1,j)] - p[IX(i-1,j)]);
+    v[IX(i,j)] -= 0.5 * N * (p[IX(i,j+1)] - p[IX(i,j-1)]);
+  }
+  set_bnd(1, u); set_bnd(2, v);
+}
+
+/* vorticity confinement, epsilon ~1.2 */
+function vorticity(dt) {
+  const eps = 1.2;
+  for (let j = 1; j < N - 1; j++) for (let i = 1; i < N - 1; i++) {
+    curl[IX(i,j)] = ((u[IX(i,j+1)] - u[IX(i,j-1)]) - (v[IX(i+1,j)] - v[IX(i-1,j)])) * 0.5;
+  }
+  for (let j = 2; j < N - 2; j++) for (let i = 2; i < N - 2; i++) {
+    const c = curl[IX(i,j)];
+    let nx = (Math.abs(curl[IX(i+1,j)]) - Math.abs(curl[IX(i-1,j)])) * 0.5;
+    let ny = (Math.abs(curl[IX(i,j+1)]) - Math.abs(curl[IX(i,j-1)])) * 0.5;
+    const len = Math.hypot(nx, ny) + 1e-5;
+    nx /= len; ny /= len;
+    const f = eps * c;
+    u[IX(i,j)] += dt * f * ny;
+    v[IX(i,j)] += dt * -f * nx;
+  }
+  set_bnd(1, u); set_bnd(2, v);
+}
+
+function step(dt) {
+  vorticity(dt);
+  u0.set(u); v0.set(v);
+  advect(1, u, u0, u0, v0, dt);
+  advect(2, v, v0, u0, v0, dt);
+  project();
+  d0.set(d);
+  advect(0, d, d0, u, v, dt);
+  for (let k = 0; k < SIZE; k++) { d[k] *= 0.996; u[k] *= 0.995; v[k] *= 0.995; }
+}
+
+/* ============ painting ============ */
+function dab(x, y, segx, segy) {
+  const R = 2.6, R2 = R * R;
+  const cx = Math.round(x), cy = Math.round(y);
+  let vl = Math.hypot(segx, segy);
+  if (vl > 3) { segx *= 3 / vl; segy *= 3 / vl; vl = 3; }
+  const imp = 1.6;
+  for (let j = -3; j <= 3; j++) for (let i = -3; i <= 3; i++) {
+    const xx = cx + i, yy = cy + j;
+    if (xx < 1 || yy < 1 || xx >= N - 1 || yy >= N - 1) continue;
+    const dd2 = (xx - x) * (xx - x) + (yy - y) * (yy - y);
+    if (dd2 > R2) continue;
+    const f = 1 - dd2 / R2;
+    const k = IX(xx, yy);
+    d[k] += 150 * f * f;
+    u[k] += segx * imp * f;
+    v[k] += segy * imp * f;
+  }
+}
+
+/* interpolate along stroke segments so fast swipes do not gap */
+function paintStroke(x0, y0, x1, y1) {
+  const dx = x1 - x0, dy = y1 - y0;
+  const dist = Math.hypot(dx, dy);
+  const steps = Math.max(1, Math.ceil(dist / 1.2));
+  const sx = dx / steps, sy = dy / steps;
+  for (let s = 0; s <= steps; s++) dab(x0 + sx * s, y0 + sy * s, sx, sy);
+}
+
+/* ============ game: guide puffs through 5 rings ============ */
+const RINGS = [
+  { x: 0.20, y: 0.20 }, { x: 0.80, y: 0.26 }, { x: 0.50, y: 0.55 },
+  { x: 0.20, y: 0.80 }, { x: 0.80, y: 0.78 }
+];
+const RING_R = 0.078;          // normalized radius
+const CLEAR_NEED = 1400;       // accumulated density to clear a ring
+
+let cleared = 0, acc = 0, started = false, won = false;
+let t0 = 0, elapsed = 0, best = Infinity;
+try {
+  const b = localStorage.getItem('bb-smoke-best');
+  if (b) best = parseFloat(b);
+} catch (e) { /* private mode */ }
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const simCanvas = document.createElement('canvas');
+simCanvas.width = N; simCanvas.height = N;
+const simCtx = simCanvas.getContext('2d');
+const img = simCtx.createImageData(N, N);
+
+/* neon cyan-white ramp */
+const lut = new Uint8ClampedArray(256 * 4);
+for (let i = 0; i < 256; i++) {
+  const t = i / 255;
+  lut[i*4+0] = 255 * Math.pow(t, 2.6) * 0.55 + 130 * Math.pow(t, 7);
+  lut[i*4+1] = 255 * Math.pow(t, 1.8);
+  lut[i*4+2] = 255 * Math.pow(t, 1.45);
+  lut[i*4+3] = 255 * Math.min(1, t * 1.5);
+}
+
+function resize() {
+  const stage = document.getElementById('stage');
+  const w = stage.clientWidth, h = stage.clientHeight;
+  const s = Math.max(200, Math.min(w, h));
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  canvas.style.width = s + 'px'; canvas.style.height = s + 'px';
+  canvas.width = Math.round(s * dpr); canvas.height = Math.round(s * dpr);
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ---- input: finger/mouse paints density + velocity ---- */
+let lastP = null, painting = false;
+function toSim(cx, cy) {
+  const r = canvas.getBoundingClientRect();
+  return [1 + (cx - r.left) / r.width * (N - 2), 1 + (cy - r.top) / r.height * (N - 2)];
+}
+canvas.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  painting = true;
+  lastP = toSim(e.clientX, e.clientY);
+  dab(lastP[0], lastP[1], 0, 0);
+  if (!started && !won) { started = true; t0 = performance.now(); }
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', e => {
+  if (!painting) return;
+  e.preventDefault();
+  const q = toSim(e.clientX, e.clientY);
+  paintStroke(lastP[0], lastP[1], q[0], q[1]);
+  lastP = q;
+});
+function endStroke() { painting = false; lastP = null; }
+canvas.addEventListener('pointerup', endStroke);
+canvas.addEventListener('pointercancel', endStroke);
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+/* ---- ring logic ---- */
+function ringCellSum(r) {
+  const cx = 1 + r.x * (N - 2), cy = 1 + r.y * (N - 2), rr = RING_R * (N - 2);
+  let s = 0;
+  const x0 = Math.max(1, Math.floor(cx - rr)), x1 = Math.min(N - 2, Math.ceil(cx + rr));
+  const y0 = Math.max(1, Math.floor(cy - rr)), y1 = Math.min(N - 2, Math.ceil(cy + rr));
+  for (let j = y0; j <= y1; j++) for (let i = x0; i <= x1; i++) {
+    if ((i - cx) * (i - cx) + (j - cy) * (j - cy) <= rr * rr) s += d[IX(i, j)];
+  }
+  return s;
+}
+
+function blip(freq) {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    blip.ac = blip.ac || new AC();
+    const o = blip.ac.createOscillator(), g = blip.ac.createGain();
+    o.type = 'sine'; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.08, blip.ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, blip.ac.currentTime + 0.25);
+    o.connect(g); g.connect(blip.ac.destination);
+    o.start(); o.stop(blip.ac.currentTime + 0.3);
+  } catch (e) { /* audio unavailable */ }
+}
+
+function updateRings(dt) {
+  if (won || cleared >= RINGS.length) return;
+  acc += ringCellSum(RINGS[cleared]) * dt;
+  acc *= 0.9985;
+  if (acc >= CLEAR_NEED) {
+    cleared++;
+    acc = 0;
+    blip(520 + cleared * 120);
+    renderPips();
+    if (cleared >= RINGS.length) win();
+  }
+}
+
+function win() {
+  won = true;
+  elapsed = (performance.now() - t0) / 1000;
+  const nb = elapsed < best;
+  if (nb) {
+    best = elapsed;
+    try { localStorage.setItem('bb-smoke-best', String(best)); } catch (e) {}
+  }
+  document.getElementById('score').innerHTML = elapsed.toFixed(1) + '<small>s</small>';
+  document.getElementById('best').textContent = 'best ' + best.toFixed(1) + 's';
+  document.getElementById('newbest').style.display = nb ? 'block' : 'none';
+  document.getElementById('win').classList.remove('hidden');
+  blip(880);
+}
+
+/* ---- HUD ---- */
+const pipsEl = document.getElementById('pips');
+function renderPips() {
+  pipsEl.innerHTML = '';
+  for (let i = 0; i < RINGS.length; i++) {
+    const s = document.createElement('span');
+    s.className = 'pip' + (i < cleared ? ' on' : i === cleared ? ' act' : '');
+    pipsEl.appendChild(s);
+  }
+}
+renderPips();
+
+/* ---- render ---- */
+function renderField() {
+  const data = img.data;
+  for (let k = 0; k < SIZE; k++) {
+    let vval = d[k] * 1.4;
+    if (vval > 255) vval = 255;
+    const li = (vval | 0) * 4;
+    data[k*4+0] = lut[li+0]; data[k*4+1] = lut[li+1];
+    data[k*4+2] = lut[li+2]; data[k*4+3] = lut[li+3];
+  }
+  simCtx.putImageData(img, 0, 0);
+}
+
+function render() {
+  renderField();
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(simCanvas, 0, 0, W, H);
+  // lab grid
+  ctx.strokeStyle = 'rgba(34,211,238,0.05)'; ctx.lineWidth = 1;
+  const gs = W / 8;
+  ctx.beginPath();
+  for (let i = 1; i < 8; i++) {
+    ctx.moveTo(i * gs, 0); ctx.lineTo(i * gs, H);
+    ctx.moveTo(0, i * gs); ctx.lineTo(W, i * gs);
+  }
+  ctx.stroke();
+  // rings
+  const now = performance.now() / 1000;
+  for (let i = 0; i < RINGS.length; i++) {
+    const r = RINGS[i], x = r.x * W, y = r.y * H, rr = RING_R * W;
+    ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2);
+    if (i < cleared) {
+      ctx.strokeStyle = 'rgba(74,222,128,0.75)'; ctx.lineWidth = 2.5;
+      ctx.shadowColor = '#4ade80'; ctx.shadowBlur = 10; ctx.stroke(); ctx.shadowBlur = 0;
+      // check mark
+      ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(x - rr * 0.35, y); ctx.lineTo(x - rr * 0.05, y + rr * 0.3); ctx.lineTo(x + rr * 0.4, y - rr * 0.3);
+      ctx.stroke();
+    } else if (i === cleared && !won) {
+      const pulse = 1 + 0.06 * Math.sin(now * 4);
+      ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 3;
+      ctx.shadowColor = '#22d3ee'; ctx.shadowBlur = 14;
+      ctx.beginPath(); ctx.arc(x, y, rr * pulse, 0, Math.PI * 2); ctx.stroke();
+      ctx.shadowBlur = 0;
+      const prog = Math.min(1, acc / CLEAR_NEED);
+      if (prog > 0.01) {
+        ctx.strokeStyle = '#e879f9'; ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.arc(x, y, rr * pulse + 5, -Math.PI / 2, -Math.PI / 2 + prog * Math.PI * 2);
+        ctx.stroke();
+      }
+    } else {
+      ctx.strokeStyle = 'rgba(91,107,128,0.5)'; ctx.lineWidth = 2; ctx.stroke();
+    }
+  }
+  // faint velocity streaks
+  ctx.strokeStyle = 'rgba(232,121,249,0.10)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let j = 4; j < N - 4; j += 6) for (let i = 4; i < N - 4; i += 6) {
+    const k = IX(i, j), sp = Math.hypot(u[k], v[k]);
+    if (sp > 0.25) {
+      const x = i / (N - 2) * W, y = j / (N - 2) * H;
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + u[k] / sp * 10, y + v[k] / sp * 10);
+    }
+  }
+  ctx.stroke();
+}
+
+/* ---- main loop ---- */
+const timerEl = document.querySelector('#timer b');
+let lastT = performance.now();
+function frame(now) {
+  let dt = (now - lastT) / 1000;
+  lastT = now;
+  if (dt > 0.05) dt = 0.05;
+  if (started && !won) {
+    step(dt);
+    updateRings(dt);
+    timerEl.textContent = ((now - t0) / 1000).toFixed(1);
+  } else if (!started) {
+    step(dt); // ambient drift behind title
+  }
+  render();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ---- UI wiring ---- */
+document.getElementById('startBtn').addEventListener('click', () => {
+  document.getElementById('title').classList.add('hidden');
+  if (isFinite(best)) document.getElementById('titleBest').textContent = 'best ' + best.toFixed(1) + 's';
+  blip(440);
+});
+document.getElementById('againBtn').addEventListener('click', () => {
+  u.fill(0); v.fill(0); d.fill(0); p.fill(0);
+  cleared = 0; acc = 0; started = false; won = false;
+  timerEl.textContent = '0.0';
+  renderPips();
+  document.getElementById('win').classList.add('hidden');
+  blip(440);
+});
+(function showBest() {
+  if (isFinite(best)) document.getElementById('titleBest').textContent = 'best ' + best.toFixed(1) + 's';
+})();
+
+/* ---- hidden headless test hook (?#test) ---- */
+function testStats() {
+  let tot = 0, sx = 0, sy = 0;
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const k = IX(i, j), w = d[k];
+    tot += w; sx += i * w; sy += j * w;
+  }
+  return { cleared, acc, total: tot, cx: tot ? sx / tot : 0, cy: tot ? sy / tot : 0 };
+}
+if (location.hash === '#test') {
+  document.getElementById('title').classList.add('hidden');
+  started = true; t0 = performance.now();
+  let f = 0, phase = 0, done = false;
+  const testInt = setInterval(() => {
+    f++;
+    if (won) { if (!done) { done = true; console.log('TEST:DONE cleared=5 time=' + elapsed.toFixed(1)); clearInterval(testInt); } return; }
+    if (f < 150) {
+      // phase 1: paint at fixed point left-center, pushing right; proves advection
+      const px = 1 + 0.25 * (N - 2), py = 1 + 0.5 * (N - 2);
+      paintStroke(px, py, px + 4, py);
+    } else {
+      // phase 2: paint puffs around the active ring
+      const r = RINGS[cleared];
+      const t = performance.now() / 280;
+      const px = 1 + (r.x + Math.cos(t) * 0.10) * (N - 2);
+      const py = 1 + (r.y + Math.sin(t) * 0.10) * (N - 2);
+      paintStroke(px, py, px + Math.cos(t + 1.2) * 7, py + Math.sin(t + 1.2) * 7);
+    }
+    if (f % 60 === 0) {
+      const s = testStats();
+      console.log('TEST: f=' + f + ' cleared=' + s.cleared + ' acc=' + s.acc.toFixed(0) +
+        ' dens=' + s.total.toFixed(0) + ' cx=' + s.cx.toFixed(1) + ' cy=' + s.cy.toFixed(1));
+    }
+    if (f > 5400) { console.log('TEST:TIMEOUT cleared=' + cleared); }
+  }, 16);
+}
+</script>
+</body>
+</html>

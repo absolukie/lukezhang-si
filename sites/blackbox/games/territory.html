@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>TERRITORY — BLACKBOX</title>
+<style>
+  :root{
+    --bg:#070a12; --panel:#0c1220; --ink:#e8f1ff; --dim:#8b98b8;
+    --cyan:#22d3ee; --mag:#e879f9; --org:#fb923c; --lim:#a3e635;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; overflow:hidden;}
+  #wrap{position:fixed;inset:0;display:flex;flex-direction:column;}
+  #hud{padding:10px 14px 6px;user-select:none;-webkit-user-select:none;}
+  #toprow{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px;}
+  #timer{font-size:30px;font-weight:700;letter-spacing:2px;color:#fff;
+    text-shadow:0 0 14px rgba(34,211,238,.55);}
+  #timer.low{color:#ff5d5d;text-shadow:0 0 14px rgba(255,60,60,.6);}
+  #bestline{font-size:11px;color:var(--dim);letter-spacing:1px;}
+  #lb{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+  .lrow{display:flex;align-items:center;gap:7px;background:var(--panel);
+    border:1px solid rgba(140,170,255,.12);border-radius:8px;padding:5px 9px;font-size:12px;}
+  .lrow .dot{width:10px;height:10px;border-radius:3px;flex:none;}
+  .lrow .nm{letter-spacing:1px;color:var(--dim);flex:none;width:44px;}
+  .lrow.you .nm{color:#fff;font-weight:700;}
+  .lrow .bar{flex:1;height:6px;border-radius:3px;background:#141b2e;overflow:hidden;}
+  .lrow .bar i{display:block;height:100%;width:0%;border-radius:3px;transition:width .25s;}
+  .lrow .pc{width:46px;text-align:right;font-weight:700;flex:none;}
+  #stage{flex:1;position:relative;min-height:0;}
+  #grid{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair;}
+  .overlay{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:28px;background:rgba(4,6,12,.86);backdrop-filter:blur(6px);}
+  .overlay.hidden{display:none;}
+  .kicker{font-size:11px;letter-spacing:4px;color:var(--dim);margin-bottom:10px;}
+  h1.title{font-size:44px;margin:0 0 6px;letter-spacing:6px;color:#fff;
+    text-shadow:0 0 22px rgba(34,211,238,.7),0 0 60px rgba(232,121,249,.35);}
+  .reveal{font-size:13px;color:var(--cyan);letter-spacing:1px;margin-bottom:18px;}
+  .howto{font-size:14px;line-height:1.65;color:var(--ink);max-width:330px;margin:0 0 8px;}
+  .howto b{color:var(--cyan);}
+  .best{font-size:12px;color:var(--dim);letter-spacing:1px;margin-bottom:22px;}
+  .best b{color:#fff;}
+  .btn{touch-action:manipulation;font:inherit;font-size:17px;font-weight:700;letter-spacing:3px;
+    color:#04121a;background:var(--cyan);border:none;border-radius:12px;padding:15px 44px;cursor:pointer;
+    box-shadow:0 0 24px rgba(34,211,238,.45);}
+  .btn:active{transform:scale(.96);}
+  #end h2{font-size:34px;margin:0 0 4px;letter-spacing:4px;}
+  #end h2.win{color:var(--cyan);text-shadow:0 0 20px rgba(34,211,238,.7);}
+  #end h2.lose{color:#ff5d5d;text-shadow:0 0 20px rgba(255,60,60,.55);}
+  #end .rule{font-size:11px;color:var(--dim);letter-spacing:1px;margin-bottom:16px;}
+  #breakdown{width:min(330px,86vw);margin-bottom:18px;}
+  .brow{display:flex;align-items:center;gap:9px;margin-bottom:8px;font-size:13px;}
+  .brow .dot{width:12px;height:12px;border-radius:3px;flex:none;}
+  .brow .nm{width:52px;text-align:left;letter-spacing:1px;color:var(--dim);}
+  .brow .bar{flex:1;height:9px;border-radius:5px;background:#141b2e;overflow:hidden;}
+  .brow .bar i{display:block;height:100%;width:0%;}
+  .brow .pc{width:52px;text-align:right;font-weight:700;}
+  #newbest{font-size:13px;color:var(--lim);letter-spacing:2px;margin-bottom:14px;min-height:18px;}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="hud">
+    <div id="toprow">
+      <div id="timer">1:00</div>
+      <div id="bestline">BEST <span id="besthud">—</span></div>
+    </div>
+    <div id="lb"></div>
+  </div>
+  <div id="stage"><canvas id="grid"></canvas></div>
+</div>
+
+<div id="title" class="overlay">
+  <div class="kicker">BLACKBOX ARCADE</div>
+  <h1 class="title">TERRITORY</h1>
+  <div class="reveal">Voronoi diagrams + distance transform.</div>
+  <p class="howto">Tap empty cells to plant seeds. Seeds grow territory by nearest-seed distance. <b>Own the most land at 0:00 to win.</b></p>
+  <div class="best">BEST <b id="besttitle">—</b></div>
+  <button class="btn" id="startBtn">START</button>
+</div>
+
+<div id="end" class="overlay hidden">
+  <div class="kicker">MATCH OVER</div>
+  <h2 id="endtitle">VICTORY</h2>
+  <div class="rule" id="endrule">Strict plurality wins. Ties lose.</div>
+  <div id="breakdown"></div>
+  <div id="newbest"></div>
+  <button class="btn" id="againBtn">PLAY AGAIN</button>
+</div>
+
+<script>
+'use strict';
+/* ================= TERRITORY — Voronoi diagrams + distance transform =================
+   64x64 grid. Multi-source BFS (queue distance transform) from every seed.
+   Each cell is owned by its Manhattan-nearest seed; ties keep the earlier claim
+   (seeds enter the queue in plant order, first claim wins). The transform is
+   recomputed on a per-frame budget (288 cells/frame) and committed progressively,
+   so territory visibly spreads like ink. */
+
+const W = 64, H = 64, N = W * H;
+const BUDGET = 288;            // cells of the distance transform per frame
+const MATCH_S = 60;            // match length
+const COOLDOWN_S = 1.5;        // player plant cooldown
+const PULSE_S = 1.0;           // contested-cell pulse window
+const TELEGRAPH_S = 0.8;       // AI telegraph ring duration
+
+const COLORS = ['#22d3ee', '#e879f9', '#fb923c', '#a3e635']; // you, nova, ember, volt
+const NAMES  = ['YOU', 'NOVA', 'EMBER', 'VOLT'];
+const RGB = COLORS.map(h => [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)]);
+const BG = [9, 12, 22];
+const FILL = RGB.map(c => [Math.round(c[0]*0.34 + BG[0]*0.66), Math.round(c[1]*0.34 + BG[1]*0.66), Math.round(c[2]*0.34 + BG[2]*0.66)]);
+
+/* ---------- persistent best ---------- */
+let best = 0;
+try { best = parseFloat(localStorage.getItem('bb-territory-best')) || 0; } catch (e) { best = 0; }
+function saveBest(v) { best = v; try { localStorage.setItem('bb-territory-best', String(v)); } catch (e) {} }
+
+/* ---------- state ---------- */
+let state = 'title';           // title | playing | over
+let gameTime = 0;
+let timeLeft = MATCH_S;
+let seeds = [];                // {x, y, owner} — plant order = array order (tie-break)
+let seedAt = new Int8Array(N); // owner of seed at cell, -1 = none
+let dispOwner = new Int8Array(N);
+let dispDist = new Float64Array(N);
+let changeT = new Float64Array(N);
+let pass = null;               // active distance-transform pass
+let cooldown = 0;
+let lastTap = null;            // {cx, cy} css px of last plant, for cooldown dial
+let aiTimers = [0, 0, 0];
+let telegraphs = [];           // {x, y, owner, t}
+let lastCounts = [0, 0, 0, 0];
+
+function resetArrays() {
+  seedAt.fill(-1); dispOwner.fill(-1);
+  dispDist.fill(Infinity); changeT.fill(-1e9);
+}
+
+/* ---------- distance transform: multi-source BFS ---------- */
+function startPass() {
+  const owner = new Int8Array(N).fill(-1);
+  const dist = new Float64Array(N).fill(Infinity);
+  const q = new Int32Array(N);
+  let qh = 0, qt = 0;
+  for (const s of seeds) {
+    const i = s.y * W + s.x;
+    if (owner[i] === -1) { owner[i] = s.owner; dist[i] = 0; q[qt++] = i; }
+  }
+  pass = { owner, dist, q, qh, qt };
+}
+
+function pumpPass(budget) {
+  if (!pass) return true;
+  let n = 0;
+  while (pass.qh < pass.qt && n < budget) {
+    const i = pass.q[pass.qh++]; n++;
+    const o = pass.owner[i], d = pass.dist[i];
+    const x = i % W, y = (i / W) | 0;
+    const nd = d + 1;
+    // 4-neighbors; claim only unclaimed cells -> Manhattan-nearest, ties keep earlier claim
+    if (x > 0)     { const j = i - 1; if (pass.owner[j] === -1) { pass.owner[j] = o; pass.dist[j] = nd; pass.q[pass.qt++] = j; } }
+    if (x < W - 1) { const j = i + 1; if (pass.owner[j] === -1) { pass.owner[j] = o; pass.dist[j] = nd; pass.q[pass.qt++] = j; } }
+    if (y > 0)     { const j = i - W; if (pass.owner[j] === -1) { pass.owner[j] = o; pass.dist[j] = nd; pass.q[pass.qt++] = j; } }
+    if (y < H - 1) { const j = i + W; if (pass.owner[j] === -1) { pass.owner[j] = o; pass.dist[j] = nd; pass.q[pass.qt++] = j; } }
+    // progressive commit to the display double-buffer
+    if (dispOwner[i] !== o) { dispOwner[i] = o; changeT[i] = gameTime; }
+    dispDist[i] = d;
+  }
+  return pass.qh >= pass.qt;
+}
+
+function finishPass() { while (pass) { if (pumpPass(N)) pass = null; } }
+
+/* ---------- planting ---------- */
+function plantSeed(x, y, owner) {
+  const i = y * W + x;
+  if (seedAt[i] !== -1) return false;
+  seeds.push({ x, y, owner });
+  seedAt[i] = owner;
+  startPass();                 // new seed -> new transform pass
+  return true;
+}
+
+function tryPlayerPlant(x, y) {
+  if (state !== 'playing') return 'not-playing';
+  if (cooldown > 0) return 'cooldown';
+  const i = y * W + x;
+  if (seedAt[i] !== -1) return 'seed';
+  plantSeed(x, y, 0);
+  cooldown = COOLDOWN_S;
+  const r = gridRectCss();
+  lastTap = { cx: r.gx + (x + 0.5) * r.cell, cy: r.gy + (y + 0.5) * r.cell };
+  window.__lastPlant = { x, y, t: gameTime };
+  return 'ok';
+}
+
+/* ---------- AI: greedy farthest-point + telegraph ---------- */
+function aiPick(a) {
+  // sample ~40 random cells, plant at the one farthest from any existing seed
+  let bx = 0, by = 0, bd = -1;
+  for (let s = 0; s < 40; s++) {
+    const x = (Math.random() * W) | 0, y = (Math.random() * H) | 0;
+    if (seedAt[y * W + x] !== -1) continue;
+    let dmin = Infinity;
+    for (const sd of seeds) {
+      const d = Math.abs(sd.x - x) + Math.abs(sd.y - y);
+      if (d < dmin) dmin = d;
+    }
+    if (dmin > bd) { bd = dmin; bx = x; by = y; }
+  }
+  if (bd >= 0) telegraphs.push({ x: bx, y: by, owner: a, t: TELEGRAPH_S });
+}
+
+/* ---------- match flow ---------- */
+function startMatch() {
+  resetArrays();
+  seeds = []; telegraphs = []; pass = null;
+  gameTime = 0; timeLeft = MATCH_S; cooldown = 0; lastTap = null;
+  lastCounts = [0, 0, 0, 0];
+  // one seed each in shuffled quadrants
+  const spots = [[16, 16], [48, 16], [16, 48], [48, 48]];
+  const owners = [0, 1, 2, 3];
+  for (let i = owners.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; const t = owners[i]; owners[i] = owners[j]; owners[j] = t; }
+  spots.forEach((sp, k) => { seeds.push({ x: sp[0], y: sp[1], owner: owners[k] }); seedAt[sp[1] * W + sp[0]] = owners[k]; });
+  startPass();
+  aiTimers = [2 + Math.random() * 2, 3 + Math.random() * 2, 4 + Math.random() * 2];
+  state = 'playing';
+  document.getElementById('title').classList.add('hidden');
+  document.getElementById('end').classList.add('hidden');
+  updateHud(true);
+}
+
+function computeCounts() {
+  const c = [0, 0, 0, 0];
+  for (let i = 0; i < N; i++) { const o = dispOwner[i]; if (o >= 0) c[o]++; }
+  return c;
+}
+
+function endMatch() {
+  state = 'over';
+  finishPass();
+  const c = computeCounts();
+  const pct = c.map(v => v / N * 100);
+  // STRICT plurality: you must beat every AI outright; ties lose.
+  const win = c[0] > c[1] && c[0] > c[2] && c[0] > c[3];
+  const tied = !win && (c[0] === Math.max(c[0], c[1], c[2], c[3]));
+  if (pct[0] > best) { saveBest(pct[0]); document.getElementById('newbest').textContent = 'NEW BEST ' + pct[0].toFixed(1) + '%'; }
+  else document.getElementById('newbest').textContent = '';
+  const et = document.getElementById('endtitle');
+  et.textContent = win ? 'VICTORY' : 'DEFEAT';
+  et.className = win ? 'win' : 'lose';
+  document.getElementById('endrule').textContent =
+    win ? 'Strict plurality at 0:00. You owned more than every rival.'
+        : (tied ? 'Tie at the top. Strict plurality wins, so ties lose.'
+                : 'Strict plurality at 0:00. A rival owned more than you.');
+  const bd = document.getElementById('breakdown');
+  bd.innerHTML = '';
+  const order = [0, 1, 2, 3].sort((a, b) => c[b] - c[a]);
+  for (const o of order) {
+    const row = document.createElement('div');
+    row.className = 'brow';
+    row.innerHTML = '<span class="dot" style="background:' + COLORS[o] + '"></span>' +
+      '<span class="nm">' + NAMES[o] + '</span>' +
+      '<span class="bar"><i style="background:' + COLORS[o] + ';width:' + pct[o].toFixed(1) + '%"></i></span>' +
+      '<span class="pc">' + pct[o].toFixed(1) + '%</span>';
+    bd.appendChild(row);
+  }
+  document.getElementById('end').classList.remove('hidden');
+}
+
+/* ---------- per-frame update ---------- */
+function update(dt) {
+  gameTime += dt;
+  if (state !== 'playing') return;
+  timeLeft -= dt;
+  if (cooldown > 0) cooldown = Math.max(0, cooldown - dt);
+  // telegraphs resolve into real seeds
+  for (let i = telegraphs.length - 1; i >= 0; i--) {
+    const t = telegraphs[i];
+    t.t -= dt;
+    if (t.t <= 0) { telegraphs.splice(i, 1); plantSeed(t.x, t.y, t.owner); }
+  }
+  // AI plant timers
+  for (let a = 1; a <= 3; a++) {
+    aiTimers[a - 1] -= dt;
+    if (aiTimers[a - 1] <= 0) { aiPick(a); aiTimers[a - 1] = 3 + Math.random() * 2; }
+  }
+  // budgeted transform
+  if (pass && pumpPass(BUDGET)) pass = null;
+  if (timeLeft <= 0) { timeLeft = 0; endMatch(); return; }
+  updateHud(false);
+}
+
+/* ---------- HUD ---------- */
+const lbRows = [];
+(function buildLb() {
+  const lb = document.getElementById('lb');
+  for (let o = 0; o < 4; o++) {
+    const row = document.createElement('div');
+    row.className = 'lrow' + (o === 0 ? ' you' : '');
+    row.innerHTML = '<span class="dot" style="background:' + COLORS[o] + '"></span>' +
+      '<span class="nm">' + NAMES[o] + '</span>' +
+      '<span class="bar"><i style="background:' + COLORS[o] + '"></i></span>' +
+      '<span class="pc">0%</span>';
+    lb.appendChild(row);
+    lbRows.push({ bar: row.querySelector('i'), pc: row.querySelector('.pc') });
+  }
+})();
+
+let lastTimerText = '';
+function updateHud(force) {
+  const t = Math.max(0, Math.ceil(timeLeft));
+  const txt = Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+  if (force || txt !== lastTimerText) {
+    lastTimerText = txt;
+    const el = document.getElementById('timer');
+    el.textContent = txt;
+    el.classList.toggle('low', timeLeft <= 10 && state === 'playing');
+  }
+  const c = computeCounts();
+  let dirty = force;
+  for (let o = 0; o < 4; o++) if (c[o] !== lastCounts[o]) { dirty = true; break; }
+  if (dirty) {
+    lastCounts = c;
+    const order = [0, 1, 2, 3];
+    for (const o of order) {
+      const p = c[o] / N * 100;
+      lbRows[o].bar.style.width = p.toFixed(1) + '%';
+      lbRows[o].pc.textContent = p.toFixed(0) + '%';
+    }
+  }
+  const bh = best > 0 ? best.toFixed(1) + '%' : '—';
+  document.getElementById('besthud').textContent = bh;
+}
+
+/* ---------- rendering ---------- */
+const cv = document.getElementById('grid');
+const ctx = cv.getContext('2d');
+const off = document.createElement('canvas');
+off.width = W; off.height = H;
+const octx = off.getContext('2d');
+const img = octx.createImageData(W, H);
+
+function gridRectCss() {
+  const r = cv.getBoundingClientRect();
+  const gs = Math.min(r.width, r.height);
+  return { gx: (r.width - gs) / 2, gy: (r.height - gs) / 2, gs, cell: gs / W };
+}
+
+function render() {
+  const r = cv.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.max(1, Math.round(r.width * dpr));
+  const h = Math.max(1, Math.round(r.height * dpr));
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  ctx.fillStyle = '#070a12';
+  ctx.fillRect(0, 0, w, h);
+  const gs = Math.min(w, h), gx = (w - gs) / 2, gy = (h - gs) / 2, cell = gs / W;
+
+  // territory cells -> 64x64 offscreen, upscaled crisp
+  const d = img.data;
+  for (let i = 0; i < N; i++) {
+    const o = dispOwner[i];
+    let fr, fg, fb;
+    if (o < 0) { fr = BG[0]; fg = BG[1]; fb = BG[2]; }
+    else {
+      const f = FILL[o]; fr = f[0]; fg = f[1]; fb = f[2];
+      const age = gameTime - changeT[i];
+      if (age < PULSE_S && age >= 0) {
+        const p = 1 - age / PULSE_S;
+        const k = p * 0.6 * (0.6 + 0.4 * Math.sin(age * 22));
+        fr += (255 - fr) * k; fg += (255 - fg) * k; fb += (255 - fb) * k;
+      }
+    }
+    const j = i * 4;
+    d[j] = fr; d[j + 1] = fg; d[j + 2] = fb; d[j + 3] = 255;
+  }
+  octx.putImageData(img, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(off, gx, gy, gs, gs);
+
+  // seeds: glowing diamonds
+  for (const s of seeds) {
+    const cx = gx + (s.x + 0.5) * cell, cy = gy + (s.y + 0.5) * cell;
+    ctx.fillStyle = COLORS[s.owner];
+    ctx.shadowColor = COLORS[s.owner]; ctx.shadowBlur = 7 * dpr;
+    const rr = cell * 0.44;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - rr); ctx.lineTo(cx + rr, cy); ctx.lineTo(cx, cy + rr); ctx.lineTo(cx - rr, cy);
+    ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  // AI telegraph rings: 0.8s pulsing warning before the seed lands
+  for (const t of telegraphs) {
+    const cx = gx + (t.x + 0.5) * cell, cy = gy + (t.y + 0.5) * cell;
+    const pr = 0.5 + 0.5 * Math.sin(gameTime * 20);
+    ctx.strokeStyle = COLORS[t.owner];
+    ctx.globalAlpha = 0.3 + 0.6 * pr;
+    ctx.lineWidth = Math.max(1.5, 2 * dpr);
+    ctx.beginPath();
+    ctx.arc(cx, cy, cell * (0.8 + 0.6 * pr), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  // player cooldown: radial dial at last tap
+  if (cooldown > 0 && lastTap) {
+    const px = gx + lastTap.cx * dpr, py = gy + lastTap.cy * dpr;
+    const frac = cooldown / COOLDOWN_S;
+    ctx.strokeStyle = 'rgba(34,211,238,0.9)';
+    ctx.lineWidth = 3 * dpr;
+    ctx.beginPath();
+    ctx.arc(px, py, cell * 1.3, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac);
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle = 'rgba(140,170,255,0.18)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(gx + 0.5, gy + 0.5, gs - 1, gs - 1);
+}
+
+/* ---------- input ---------- */
+cv.addEventListener('pointerdown', (e) => {
+  if (state !== 'playing') return;
+  const r = cv.getBoundingClientRect();
+  const gs = Math.min(r.width, r.height);
+  const gx = (r.width - gs) / 2, gy = (r.height - gs) / 2, cell = gs / W;
+  const x = Math.floor((e.clientX - r.left - gx) / cell);
+  const y = Math.floor((e.clientY - r.top - gy) / cell);
+  if (x < 0 || x >= W || y < 0 || y >= H) return;
+  e.preventDefault();
+  tryPlayerPlant(x, y);
+});
+
+document.getElementById('startBtn').addEventListener('click', startMatch);
+document.getElementById('againBtn').addEventListener('click', startMatch);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && state === 'title') startMatch();
+});
+
+/* ---------- boot ---------- */
+document.getElementById('besttitle').textContent = best > 0 ? best.toFixed(1) + '%' : '—';
+document.getElementById('besthud').textContent = best > 0 ? best.toFixed(1) + '%' : '—';
+let lastT = performance.now();
+function frame(now) {
+  let dt = (now - lastT) / 1000;
+  lastT = now;
+  if (dt > 0.1) dt = 0.1;
+  if (dt > 0) update(dt);
+  render();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ---------- debug hooks (used by the smoke test; harmless in production) ---------- */
+window.__debugTick = function (dt) {
+  // advance the simulation by dt seconds in fixed 1/60 steps, then render once
+  const step = 1 / 60;
+  let rem = dt;
+  let guard = 0;
+  while (rem > 1e-9 && guard < 200000) {
+    const h = Math.min(step, rem);
+    update(h);
+    rem -= h;
+    guard++;
+  }
+  render();
+};
+window.__territory = {
+  state: () => state,
+  seeds: () => seeds.map(s => ({ x: s.x, y: s.y, owner: s.owner })),
+  owner: () => Array.from(dispOwner),
+  counts: computeCounts,
+  pct: () => computeCounts().map(v => v / N * 100),
+  passActive: () => !!pass,
+  telegraphs: () => telegraphs.length,
+  freezeAI: () => { aiTimers = [1e9, 1e9, 1e9]; telegraphs.length = 0; },
+  plant: tryPlayerPlant,
+  timeLeft: () => timeLeft,
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
+<meta name="theme-color" content="#05060d"/>
+<title>CORAL — BLACKBOX</title>
+<style>
+:root{
+  --bg:#05060d; --panel:#0a0d18; --line:#1e2547; --txt:#dfe6ff; --dim:#8b94bd;
+  --uchem:#00ffa3; --vchem:#ff3d81; --cyan:#41e9ff; --amber:#ffb347;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
+body{min-height:100dvh;display:flex;flex-direction:column;align-items:center;
+  padding:10px 12px calc(14px + env(safe-area-inset-bottom));
+  user-select:none;-webkit-user-select:none;overscroll-behavior:none}
+button{touch-action:manipulation;font:inherit;color:var(--txt);background:#12172c;
+  border:1px solid var(--line);border-radius:12px;padding:10px 14px;cursor:pointer}
+button:active{transform:scale(.97)}
+header{width:100%;max-width:460px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.logo{font-weight:700;letter-spacing:3px;font-size:18px}
+.logo small{display:block;font-size:10px;letter-spacing:2px;color:var(--dim);font-weight:400}
+#algo{font-size:10px;color:var(--dim);border:1px dashed var(--line);border-radius:999px;
+  padding:6px 10px;background:none;max-width:48%;text-align:center;line-height:1.4}
+#algo.revealed{color:var(--cyan);border-style:solid}
+#hud{width:100%;max-width:460px;display:flex;align-items:center;gap:10px;margin-bottom:8px;
+  font-size:11px;color:var(--dim)}
+#targetName{color:var(--txt);font-weight:700;letter-spacing:1px;white-space:nowrap}
+#covbar{flex:1;height:8px;background:#10142a;border:1px solid var(--line);border-radius:99px;overflow:hidden}
+#covfill{height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),var(--vchem));transition:width .2s}
+#covpct{min-width:42px;text-align:right;color:var(--txt)}
+#timer{min-width:44px;text-align:right;color:var(--amber)}
+#stage{position:relative;width:min(94vw,430px);aspect-ratio:1/1;border:1px solid var(--line);
+  border-radius:14px;overflow:hidden;background:#04050b;touch-action:none}
+#stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#ghost,#cursor{pointer-events:none}
+#controls{width:100%;max-width:460px;display:flex;gap:8px;margin-top:10px;align-items:stretch}
+.brush{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 6px;border-radius:12px}
+.brush .dot{width:14px;height:14px;border-radius:50%}
+.brush[data-b="u"] .dot{background:var(--uchem);box-shadow:0 0 10px var(--uchem)}
+.brush[data-b="v"] .dot{background:var(--vchem);box-shadow:0 0 10px var(--vchem)}
+.brush.active{border-color:var(--cyan);background:#16203a}
+.brush .nm{font-size:11px;font-weight:700;letter-spacing:1px}
+.brush .sub{font-size:9px;color:var(--dim)}
+#sizectl{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  padding:6px 10px;border:1px solid var(--line);border-radius:12px;background:#12172c}
+#sizectl label{font-size:9px;color:var(--dim);letter-spacing:1px}
+#size{width:84px;accent-color:var(--cyan);touch-action:manipulation}
+#sizeLbl{font-size:10px;color:var(--txt)}
+#clear{padding:6px 12px;font-size:11px;align-self:center}
+#hint{font-size:10px;color:var(--dim);margin-top:8px;text-align:center;max-width:460px;line-height:1.5}
+.overlay{position:fixed;inset:0;background:rgba(3,4,10,.94);display:flex;align-items:center;
+  justify-content:center;z-index:10;padding:20px}
+.overlay.hidden{display:none}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:26px 22px;
+  max-width:400px;width:100%;text-align:center;box-shadow:0 0 60px rgba(65,233,255,.08)}
+.card h1{margin:0 0 4px;font-size:34px;letter-spacing:8px}
+.card h1 .c1{color:var(--uchem)} .card h1 .c2{color:var(--vchem)}
+.card .tag{font-size:10px;letter-spacing:3px;color:var(--dim);margin-bottom:16px}
+.card p{font-size:12px;line-height:1.7;color:var(--txt);margin:0 0 18px}
+.card p b.u{color:var(--uchem)} .card p b.v{color:var(--vchem)}
+#startBtn,#againBtn{font-size:15px;font-weight:700;letter-spacing:2px;padding:13px 30px;
+  border-radius:14px;background:linear-gradient(90deg,#0e3a4a,#3a0e2c);border:1px solid var(--cyan)}
+#bestLine{font-size:11px;color:var(--dim);margin-top:12px}
+.scoreRow{display:flex;justify-content:space-between;font-size:12px;padding:7px 4px;
+  border-bottom:1px dashed var(--line)}
+.scoreRow.total{font-weight:700;font-size:15px;border-bottom:none;margin-top:6px;color:var(--cyan)}
+#verdict{font-size:20px;letter-spacing:2px;margin:0 0 10px}
+#verdict.win{color:var(--uchem)} #verdict.lose{color:var(--vchem)}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">CORAL<small>BLACKBOX · REACTION LAB</small></div>
+  <button type="button" id="algo" aria-label="reveal algorithm">ALGORITHM:<br/>[ tap to reveal ]</button>
+</header>
+<div id="hud">
+  <span id="targetName">TARGET 1/3 · RING</span>
+  <div id="covbar"><div id="covfill"></div></div>
+  <span id="covpct">0%</span>
+  <span id="timer">2:00</span>
+</div>
+<div id="stage">
+  <canvas id="sim"></canvas>
+  <canvas id="ghost"></canvas>
+  <canvas id="cursor"></canvas>
+</div>
+<div id="controls">
+  <button type="button" class="brush" data-b="u" id="brushU">
+    <span class="dot"></span><span class="nm">U · FEED</span><span class="sub">nutrient wash</span>
+  </button>
+  <button type="button" class="brush active" data-b="v" id="brushV">
+    <span class="dot"></span><span class="nm">V · SEED</span><span class="sub">pattern spark</span>
+  </button>
+  <div id="sizectl">
+    <label for="size">BRUSH</label>
+    <input type="range" id="size" min="0" max="2" step="1" value="1" aria-label="brush size"/>
+    <span id="sizeLbl">M</span>
+  </div>
+  <button type="button" id="clear">CLEAR<br/>DISH</button>
+</div>
+<div id="hint">Paint <b style="color:var(--vchem)">V</b> to spark coral centers, wash <b style="color:var(--uchem)">U</b> to feed it. Fill the ghost shape.</div>
+
+<div class="overlay" id="titleScr">
+  <div class="card">
+    <h1><span class="c1">C</span><span class="c2">O</span><span class="c1">R</span><span class="c2">A</span><span class="c1">L</span></h1>
+    <div class="tag">BLACKBOX · REACTION LAB 07</div>
+    <p>Paint <b class="u">U feed</b> and <b class="v">V seed</b> inside the ghost silhouette. Coral blooms where you paint. Cover <b>70%</b> of the shape to advance, 3 dishes, 2:00 each.</p>
+    <button type="button" id="startBtn">START CULTURE</button>
+    <div id="bestLine"></div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="endScr">
+  <div class="card">
+    <div id="verdict">CULTURE THRIVING</div>
+    <div class="tag">3 DISHES · FINAL REPORT</div>
+    <div id="scoreRows"></div>
+    <div style="margin-top:18px"><button type="button" id="againBtn">GROW AGAIN</button></div>
+    <div id="bestLineEnd"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* CORAL — Gray-Scott reaction-diffusion lab.
+   U = feed chemical (replenishes nutrient), V = kill/seed chemical (sparks pattern centers).
+   All math hand-rolled, zero network requests. */
+
+/* ---------- simulation core ---------- */
+var N = 128, NN = N * N;
+var DU = 1.0, DV = 0.5, FEED = 0.0545, KILLR = 0.062; /* mitosis regime: replicating spots */
+var u = new Float32Array(NN), v = new Float32Array(NN);
+var uB = new Float32Array(NN), vB = new Float32Array(NN);
+var colonized = new Uint8Array(NN); /* latched: cells where coral has bloomed (v > thresh) */
+var V_THRESH = 0.2, ADVANCE = 0.70, TARGET_TIME = 120;
+
+function resetDish(){ u.fill(1); v.fill(0); }
+
+function step(){
+  /* 9-point Laplacian (Karsten 0.2/0.05 weights), inlined for speed.
+     NOTE: the plain 5-point Laplacian is unstable at Du=1.0 (checkerboards);
+     the 9-point is stable and matches the classic Gray-Scott demos. */
+  for(var y=0;y<N;y++){
+    var yu=y*N, ym=(y>0?y-1:y)*N, yp=(y<N-1?y+1:y)*N;
+    for(var x=0;x<N;x++){
+      var xm=x>0?x-1:x, xp=x<N-1?x+1:x;
+      var i=yu+x;
+      var uc=u[i], vc=v[i];
+      var lu=0.2*(u[yu+xm]+u[yu+xp]+u[ym+x]+u[yp+x])
+            +0.05*(u[ym+xm]+u[ym+xp]+u[yp+xm]+u[yp+xp])-uc;
+      var lv=0.2*(v[yu+xm]+v[yu+xp]+v[ym+x]+v[yp+x])
+            +0.05*(v[ym+xm]+v[ym+xp]+v[yp+xm]+v[yp+xp])-vc;
+      var uvv=uc*vc*vc;
+      var nu=uc+(DU*lu-uvv+FEED*(1-uc));
+      var nv=vc+(DV*lv+uvv-(FEED+KILLR)*vc);
+      uB[i]=nu<0?0:(nu>1?1:nu);
+      vB[i]=nv<0?0:(nv>1?1:nv);
+    }
+  }
+  var t=u;u=uB;uB=t; t=v;v=vB;vB=t;
+}
+
+function stamp(cx,cy,r,chem){
+  var x0=Math.max(0,Math.floor(cx-r)), x1=Math.min(N-1,Math.ceil(cx+r));
+  var y0=Math.max(0,Math.floor(cy-r)), y1=Math.min(N-1,Math.ceil(cy+r));
+  var r2=r*r;
+  for(var y=y0;y<=y1;y++)for(var x=x0;x<=x1;x++){
+    var dx=x-cx, dy=y-cy;
+    if(dx*dx+dy*dy>r2) continue;
+    var i=y*N+x;
+    if(chem==='u'){ u[i]=1; }              /* feed: replenish nutrient */
+    else { u[i]=0.45; v[i]=0.35; }        /* seed: balanced Gray-Scott nucleus.
+        Weak enough to never self-erase (a V-flood wipes the dish), strong
+        enough to reliably bloom into coral. */
+  }
+}
+
+/* ---------- rendering ---------- */
+var simC=document.getElementById('sim'), ghostC=document.getElementById('ghost'), curC=document.getElementById('cursor');
+simC.width=N; simC.height=N; ghostC.width=N; ghostC.height=N; curC.width=N; curC.height=N;
+var sctx=simC.getContext('2d'), gctx=ghostC.getContext('2d'), cctx=curC.getContext('2d');
+sctx.imageSmoothingEnabled=true; sctx.imageSmoothingQuality='high';
+var img=sctx.createImageData(N,N), px=img.data;
+/* neon coral gradient: deep navy -> teal -> cyan -> magenta -> white */
+var STOPS=[[0,7,9,24],[0.22,14,80,128],[0.45,0,196,214],[0.68,70,220,255],[0.85,255,80,158],[1,255,244,250]];
+function render(){
+  for(var i=0;i<NN;i++){
+    var t=v[i]*2.2; if(t>1)t=1; /* pattern vmax ~0.41: scale up for vivid color */
+    var r=7,g=9,b=24, s=0;
+    while(s<STOPS.length-2 && t>STOPS[s+1][0]) s++;
+    var a=STOPS[s], c=STOPS[s+1], f=(t-a[0])/((c[0]-a[0])||1);
+    if(f<0)f=0; else if(f>1)f=1;
+    r=a[1]+(c[1]-a[1])*f; g=a[2]+(c[2]-a[2])*f; b=a[3]+(c[3]-a[3])*f;
+    var dim=1-0.30*(1-u[i]); /* consumed nutrient darkens the dish */
+    var o=i*4;
+    px[o]=r*dim; px[o+1]=g*dim; px[o+2]=b*dim; px[o+3]=255;
+  }
+  sctx.putImageData(img,0,0);
+}
+
+/* ---------- targets ---------- */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function makeMask(kind){
+  var m=new Uint8Array(NN), count=0, x, y;
+  function set(px,py){px|=0;py|=0;if(px>=0&&py>=0&&px<N&&py<N){var i=py*N+px;if(!m[i]){m[i]=1;count++;}}}
+  if(kind==='RING'){
+    for(y=0;y<N;y++)for(x=0;x<N;x++){var d=Math.hypot(x-63.5,y-63.5);if(d>29&&d<45)set(x,y);}
+  }else if(kind==='BLOB'){
+    for(y=0;y<N;y++)for(x=0;x<N;x++){if(Math.hypot(x-63.5,y-63.5)<34)set(x,y);}
+  }else{ /* BRANCH: recursive coral skeleton */
+    var rnd=mulberry32(1337);
+    function disk(cx,cy,r){var yy,xx;for(yy=Math.floor(cy-r);yy<=Math.ceil(cy+r);yy++)for(xx=Math.floor(cx-r);xx<=Math.ceil(cx+r);xx++){if(Math.hypot(xx-cx,yy-cy)<=r)set(xx,yy);}}
+    function line(x0,y0,x1,y1,w){var d=Math.hypot(x1-x0,y1-y0),n=Math.ceil(d),s;for(s=0;s<=n;s++){var t=s/n;disk(x0+(x1-x0)*t,y0+(y1-y0)*t,w);}}
+    function grow(x,y,ang,len,w,dep){
+      if(dep<=0||len<3)return;
+      var x1=x+Math.cos(ang)*len, y1=y+Math.sin(ang)*len;
+      line(x,y,x1,y1,w);
+      var nB=2+(rnd()<0.45?1:0), k;
+      for(k=0;k<nB;k++) grow(x1,y1,ang+(rnd()-0.5)*1.15,len*(0.60+rnd()*0.20),w*0.70,dep-1);
+    }
+    grow(64,124,-Math.PI/2,36,5,5);
+  }
+  return {m:m,count:count};
+}
+function drawGhost(mask){
+  var gi=gctx.createImageData(N,N), gp=gi.data;
+  for(var y=0;y<N;y++)for(var x=0;x<N;x++){
+    var i=y*N+x;
+    if(!mask[i])continue;
+    var edge=(x===0||y===0||x===N-1||y===N-1||!mask[i-1]||!mask[i+1]||!mask[i-N]||!mask[i+N]);
+    var o=i*4; gp[o]=120;gp[o+1]=230;gp[o+2]=255;gp[o+3]=edge?150:26;
+  }
+  gctx.clearRect(0,0,N,N);
+  gctx.putImageData(gi,0,0);
+}
+
+/* ---------- game state ---------- */
+var TARGETS=[{id:'RING'},{id:'BLOB'},{id:'BRANCH'}];
+var state='title', targetIdx=0, mask=null, maskCount=1;
+var lastCov=0, timeLeft=TARGET_TIME, scores=[0,0,0];
+var brush='v', brushR=8;
+var covTick=0, lastT=performance.now(), lastSec=-1;
+var best=0;
+try{ best=parseFloat(localStorage.getItem('bb-coral-best'))||0; }catch(e){}
+
+var targetNameEl=document.getElementById('targetName'),
+    covfillEl=document.getElementById('covfill'),
+    covpctEl=document.getElementById('covpct'),
+    timerEl=document.getElementById('timer');
+
+function setTarget(i){
+  targetIdx=i;
+  var mm=makeMask(TARGETS[i].id);
+  mask=mm.m; maskCount=mm.count||1;
+  timeLeft=TARGET_TIME; lastCov=0; covTick=0; lastSec=-1;
+  resetDish();
+  colonized.fill(0);
+  drawGhost(mask);
+  targetNameEl.textContent='TARGET '+(i+1)+'/3 · '+TARGETS[i].id;
+  updateHUD(); updateTimer(true);
+}
+function coverage(){
+  /* latched coverage: once coral blooms on a cell it counts — progress never slides back */
+  var c=0;
+  for(var i=0;i<NN;i++){
+    if(v[i]>V_THRESH) colonized[i]=1;
+    if(colonized[i]&&mask[i]) c++;
+  }
+  return c/maskCount;
+}
+function updateHUD(){
+  var p=Math.round(lastCov*100);
+  covfillEl.style.width=Math.min(100,p)+'%';
+  covpctEl.textContent=p+'%';
+}
+function updateTimer(force){
+  var s=Math.max(0,Math.ceil(timeLeft));
+  if(force||s!==lastSec){
+    lastSec=s;
+    timerEl.textContent=Math.floor(s/60)+':'+('0'+(s%60)).slice(-2);
+  }
+}
+function advance(){
+  scores[targetIdx]=Math.min(1,Math.max(0,lastCov));
+  if(targetIdx+1>=TARGETS.length) endGame();
+  else setTarget(targetIdx+1);
+}
+function totalScore(){ return (scores[0]+scores[1]+scores[2])/3; }
+function endGame(){
+  state='end';
+  var total=totalScore()*100, won=total>=50;
+  if(total>best){ best=total; try{localStorage.setItem('bb-coral-best',String(Math.round(total)));}catch(e){} }
+  var verdict=document.getElementById('verdict');
+  verdict.textContent=won?'CULTURE THRIVING':'CULTURE STALLED';
+  verdict.className=won?'win':'lose';
+  var rows='';
+  for(var i=0;i<3;i++) rows+='<div class="scoreRow"><span>'+TARGETS[i].id+'</span><span>'+Math.round(scores[i]*100)+'%</span></div>';
+  rows+='<div class="scoreRow total"><span>TOTAL</span><span>'+Math.round(total)+'%</span></div>';
+  document.getElementById('scoreRows').innerHTML=rows;
+  document.getElementById('bestLineEnd').innerHTML='BEST: '+Math.round(best)+'%';
+  document.getElementById('endScr').classList.remove('hidden');
+}
+function startGame(){
+  document.getElementById('titleScr').classList.add('hidden');
+  document.getElementById('endScr').classList.add('hidden');
+  scores=[0,0,0];
+  setTarget(0);
+  state='play';
+}
+
+/* ---------- main loop ---------- */
+function frame(now){
+  requestAnimationFrame(frame);
+  var dt=(now-lastT)/1000; lastT=now;
+  if(dt>0.25)dt=0.25;
+  if(state==='play'){
+    step(); step();
+    timeLeft-=dt;
+    if(++covTick>=20){covTick=0;lastCov=coverage();updateHUD();}
+    updateTimer(false);
+    if(lastCov>=ADVANCE) advance();
+    else if(timeLeft<=0) advance();
+  }
+  render();
+}
+
+/* ---------- input: paint U / V ---------- */
+var stage=document.getElementById('stage');
+var painting=false, lastPX=0, lastPY=0;
+function toGrid(e){
+  var r=simC.getBoundingClientRect();
+  return [(e.clientX-r.left)/r.width*N,(e.clientY-r.top)/r.height*N];
+}
+function drawCursor(gx,gy){
+  cctx.clearRect(0,0,N,N);
+  cctx.beginPath(); cctx.arc(gx,gy,brushR,0,6.2832);
+  cctx.strokeStyle=brush==='u'?'#00ffa3':'#ff3d81';
+  cctx.lineWidth=1.5; cctx.stroke();
+}
+stage.addEventListener('pointerdown',function(e){
+  e.preventDefault();
+  painting=true;
+  try{stage.setPointerCapture(e.pointerId);}catch(err){}
+  var g=toGrid(e); lastPX=g[0]; lastPY=g[1];
+  stamp(lastPX,lastPY,brushR,brush);
+  drawCursor(lastPX,lastPY);
+});
+stage.addEventListener('pointermove',function(e){
+  var g=toGrid(e), gx=g[0], gy=g[1];
+  if(painting){
+    var d=Math.hypot(gx-lastPX,gy-lastPY), n=Math.max(1,Math.ceil(d/(brushR*0.5))), s;
+    for(s=1;s<=n;s++) stamp(lastPX+(gx-lastPX)*s/n,lastPY+(gy-lastPY)*s/n,brushR,brush);
+    lastPX=gx; lastPY=gy;
+  }
+  drawCursor(gx,gy);
+});
+function endPaint(){painting=false;}
+stage.addEventListener('pointerup',endPaint);
+stage.addEventListener('pointercancel',endPaint);
+stage.addEventListener('pointerleave',function(){cctx.clearRect(0,0,N,N);});
+stage.addEventListener('contextmenu',function(e){e.preventDefault();});
+
+/* ---------- controls ---------- */
+var brushU=document.getElementById('brushU'), brushV=document.getElementById('brushV');
+function setBrush(b){
+  brush=b;
+  brushU.classList.toggle('active',b==='u');
+  brushV.classList.toggle('active',b==='v');
+}
+brushU.addEventListener('click',function(){setBrush('u');});
+brushV.addEventListener('click',function(){setBrush('v');});
+var sizeEl=document.getElementById('size'), sizeLbl=document.getElementById('sizeLbl');
+var RADII=[4,8,12], NAMES=['S','M','L'];
+sizeEl.addEventListener('input',function(){var i=+sizeEl.value;brushR=RADII[i];sizeLbl.textContent=NAMES[i];});
+document.getElementById('clear').addEventListener('click',function(){resetDish();});
+var algoEl=document.getElementById('algo'), algoOn=false;
+algoEl.addEventListener('click',function(){
+  algoOn=!algoOn;
+  algoEl.classList.toggle('revealed',algoOn);
+  algoEl.innerHTML=algoOn?'ALGORITHM:<br/>Gray-Scott reaction-diffusion':'ALGORITHM:<br/>[ tap to reveal ]';
+});
+document.getElementById('startBtn').addEventListener('click',startGame);
+document.getElementById('againBtn').addEventListener('click',startGame);
+(function(){
+  var bl=document.getElementById('bestLine');
+  if(best>0) bl.textContent='BEST: '+Math.round(best)+'%';
+})();
+
+/* debug hook for automated smoke tests */
+window.__coral={
+  get state(){return state;},
+  get target(){return targetIdx;},
+  get cov(){return lastCov;},
+  get timeLeft(){return timeLeft;},
+  get maskCount(){return maskCount;},
+  maskHas:function(i){return !!mask[i];},
+  scores:function(){return scores.slice();},
+  paintV:function(x,y,r){stamp(x,y,r||8,'v');},
+  paintU:function(x,y,r){stamp(x,y,r||8,'u');},
+  forceTimeout:function(){timeLeft=0.05;},
+  vMax:function(){var m=0;for(var i=0;i<NN;i++)if(v[i]>m)m=v[i];return m;},
+  vCount:function(t){var c=0;for(var i=0;i<NN;i++)if(v[i]>t)c++;return c;},
+  vVar:function(){var mean=0,i;for(i=0;i<NN;i++)mean+=v[i];mean/=NN;var va=0;for(i=0;i<NN;i++){var d=v[i]-mean;va+=d*d;}return va/NN;}
+};
+
+setTarget(0);
+state='title';
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

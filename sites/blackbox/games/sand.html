@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>SAND — Blackbox Arcade</title>
+<style>
+  :root{
+    --bg:#05070a; --panel:#0a0e14; --cyan:#22d3ee; --mag:#e879f9; --lime:#a3e635;
+    --ink:#e8f1f2; --dim:#7b8a94; --line:#1b2530; --red:#fb7185;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%; margin:0;}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    display:flex; justify-content:center; overflow:hidden;
+    user-select:none; -webkit-user-select:none; touch-action:manipulation;
+  }
+  #app{
+    width:100%; max-width:480px; height:100dvh; display:flex; flex-direction:column;
+    background:
+      radial-gradient(1200px 500px at 50% -10%, rgba(34,211,238,.06), transparent 60%),
+      radial-gradient(900px 500px at 50% 110%, rgba(232,121,249,.05), transparent 60%),
+      var(--bg);
+  }
+  header{display:flex; align-items:center; gap:10px; padding:10px 14px 4px;}
+  #logo{
+    font-weight:800; font-size:24px; letter-spacing:4px;
+    background:linear-gradient(90deg,var(--cyan),var(--mag));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  #hudMid{flex:1; min-width:0;}
+  #puzLabel{font-size:11px; letter-spacing:2px; color:var(--cyan); font-weight:700;}
+  #goalLine{font-size:12px; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  #goalLine b{color:var(--ink);}
+  #goalLine .warn{color:var(--red); font-weight:700;}
+  #restartBtn{
+    touch-action:manipulation; background:none; border:1px solid var(--line);
+    color:var(--dim); border-radius:10px; font-size:17px; width:38px; height:38px; cursor:pointer; flex:none;
+  }
+  #restartBtn:active{transform:scale(.94);}
+  #clock{font-variant-numeric:tabular-nums; font-size:14px; color:var(--dim); min-width:50px; text-align:right; flex:none;}
+  #clock b{color:var(--ink); font-weight:600;}
+  #clock.low b{color:var(--red);}
+  #stageWrap{
+    position:relative; flex:1; margin:4px 12px 8px; border-radius:18px; overflow:hidden;
+    background:#070b10; border:1px solid var(--line);
+    box-shadow:inset 0 0 60px rgba(0,0,0,.6), 0 0 0 1px rgba(34,211,238,.06);
+  }
+  #game{position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:crosshair;}
+  .overlay{
+    position:absolute; inset:0; z-index:5;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:28px;
+    background:rgba(4,6,9,.87); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  }
+  .overlay[hidden]{display:none;}
+  .big{
+    font-size:58px; font-weight:800; letter-spacing:10px; margin:0 0 8px;
+    background:linear-gradient(90deg,var(--cyan),var(--mag),var(--lime));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 0 18px rgba(34,211,238,.35));
+  }
+  .tag{color:var(--dim); font-size:14.5px; line-height:1.55; max-width:305px; margin:0 0 20px;}
+  .tag b{color:var(--ink); font-weight:600;}
+  .btn{
+    touch-action:manipulation; cursor:pointer; font-family:inherit;
+    font-size:16px; font-weight:700; letter-spacing:2px;
+    color:#041014; background:linear-gradient(90deg,var(--cyan),var(--lime));
+    border:0; border-radius:99px; padding:13px 42px;
+    box-shadow:0 0 24px rgba(34,211,238,.45);
+  }
+  .btn:active{transform:scale(.96);}
+  .btn.ghost{
+    background:none; color:var(--cyan); border:1px solid rgba(34,211,238,.5);
+    box-shadow:none; padding:10px 26px; font-size:13px; margin-top:12px;
+  }
+  .result{font-size:29px; font-weight:800; letter-spacing:3px; margin:0 0 6px;}
+  .result.win{color:var(--lime); text-shadow:0 0 24px rgba(163,230,53,.5);}
+  .result.lose{color:var(--red); text-shadow:0 0 24px rgba(251,113,133,.5);}
+  .puzname{font-size:13px; letter-spacing:3px; color:var(--cyan); font-weight:700; margin:0 0 10px;}
+  .stats{color:var(--dim); font-size:15px; margin:0 0 4px; font-variant-numeric:tabular-nums;}
+  .stats b{color:var(--ink);}
+  .reveal{
+    color:#8fa3b0; font-size:12.5px; line-height:1.6; max-width:300px;
+    margin:12px 0 20px; padding:10px 14px;
+    border:1px solid var(--line); border-radius:12px; background:#0a0f15;
+  }
+  .reveal[hidden]{display:none;}
+  .reveal b{color:var(--mag);}
+  .hint{color:#43525c; font-size:11px; letter-spacing:1px; margin-top:16px;}
+  .bestline{color:var(--dim); font-size:13px; margin:0 0 18px; font-variant-numeric:tabular-nums;}
+  .bestline b{color:var(--cyan);}
+  #matbar{display:flex; gap:6px; padding:0 12px calc(10px + env(safe-area-inset-bottom));}
+  .mat{
+    touch-action:manipulation; flex:1; min-width:0;
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+    padding:8px 2px 6px; border-radius:12px; border:1px solid var(--line);
+    background:#0a0f15; color:var(--dim); font-family:inherit; cursor:pointer;
+  }
+  .mat .dot{width:15px; height:15px; border-radius:50%; box-shadow:0 0 8px currentColor;}
+  .mat .nm{font-size:9px; letter-spacing:1px; font-weight:700;}
+  .mat .bd{font-size:10px; font-variant-numeric:tabular-nums;}
+  .mat.sel{border-color:var(--cyan); box-shadow:0 0 12px rgba(34,211,238,.35); color:var(--ink);}
+  .mat.dis{opacity:.3;}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div id="logo">SAND</div>
+    <div id="hudMid">
+      <div id="puzLabel">BLACKBOX LAB</div>
+      <div id="goalLine">paint the six materials</div>
+    </div>
+    <button id="restartBtn" type="button" aria-label="restart puzzle">&#10227;</button>
+    <div id="clock"><b id="time">--:--</b></div>
+  </header>
+  <div id="stageWrap">
+    <canvas id="game"></canvas>
+
+    <div class="overlay" id="ovTitle">
+      <h1 class="big">SAND</h1>
+      <p class="tag">Paint <b>sand, water, fire, wood, oil and steam</b> to solve <b>5 lab puzzles</b>. Drag to paint, tap a material to switch.</p>
+      <button class="btn" id="startBtn" type="button">START</button>
+      <p class="bestline" id="titleBest" hidden>best score: <b id="titleBestV"></b></p>
+      <button class="btn ghost" id="revealBtn" type="button">reveal the trick</button>
+      <p class="reveal" id="trick" hidden><b>Cellular automata.</b> The tank is a 120&times;192 grid and every cell runs the same tiny local rules each frame: fall, flow, ignite, condense. Sand piles at its angle of repose, oil floats on water, fire climbs. No physics engine, just 23,040 cells obeying neighborhood rules.</p>
+      <div class="hint">CELLULAR AUTOMATA</div>
+    </div>
+
+    <div class="overlay" id="ovIntro" hidden>
+      <p class="puzname" id="introName">PUZZLE 1/5</p>
+      <h2 class="result" id="introTitle">FIREHOUSE</h2>
+      <p class="tag" id="introBrief"></p>
+      <p class="stats" id="introPaints"></p>
+      <button class="btn" id="goBtn" type="button">GO</button>
+    </div>
+
+    <div class="overlay" id="ovWin" hidden>
+      <p class="puzname" id="winName">PUZZLE 1/5 SOLVED</p>
+      <h2 class="result win">SOLVED</h2>
+      <p class="stats" id="winStats"></p>
+      <button class="btn" id="nextBtn" type="button">NEXT</button>
+    </div>
+
+    <div class="overlay" id="ovLose" hidden>
+      <p class="puzname">EXPERIMENT FAILED</p>
+      <h2 class="result lose">FAILED</h2>
+      <p class="tag" id="loseReason"></p>
+      <p class="stats" id="loseStats"></p>
+      <button class="btn" id="retryBtn" type="button">RETRY</button>
+    </div>
+
+    <div class="overlay" id="ovVictory" hidden>
+      <p class="puzname">ALL EXPERIMENTS COMPLETE</p>
+      <h2 class="result win">LAB CLEAR</h2>
+      <p class="stats" id="vicStats"></p>
+      <p class="stats" id="vicBest"></p>
+      <button class="btn ghost" id="revealBtn2" type="button">reveal the trick</button>
+      <p class="reveal" id="trick2" hidden><b>Cellular automata.</b> The tank is a 120&times;192 grid and every cell runs the same tiny local rules each frame: fall, flow, ignite, condense. Sand piles at its angle of repose, oil floats on water, fire climbs. No physics engine, just 23,040 cells obeying neighborhood rules.</p>
+      <button class="btn" id="againBtn" type="button">PLAY AGAIN</button>
+    </div>
+  </div>
+  <div id="matbar"></div>
+</div>
+<script>
+"use strict";
+/* ============================================================
+   SAND — multi-material falling-sand cellular automata.
+   Grid 120x192. Each cell: material id + aux (life/heat) + shade.
+   Two passes per step: interact (ignite/extinguish/sprout/drain)
+   then move (bottom-to-top, alternating x direction).
+   ============================================================ */
+var COLS = 120, ROWS = 192, N = COLS * ROWS;
+var EMPTY=0, SAND=1, WATER=2, FIRE=3, WOOD=4, OIL=5, STEAM=6,
+    WALL=7, SEED=8, PLANT=9, DRAIN=10;
+
+var mat   = new Uint8Array(N);
+var aux   = new Uint16Array(N);  // fire/steam life, wood heat
+var shd   = new Uint8Array(N);   // color variant
+var stamp = new Int32Array(N);   // last frame this cell acted
+
+var frame = 0;
+var fireCount = 0, woodCount = 0, plantCount = 0;
+var changes = 0;
+var sprouted = false;
+var drainedWater = 0;
+var woodTotal = 0, initWater = 0;
+var rain = null, drip = null;
+var target = null, tank = null;
+
+var HEAT_NEED = 70;              // frames of fire contact to ignite wood/plant
+var FIRE_LIFE_WOOD = 150, FIRE_LIFE_OIL = 240, FIRE_LIFE_PAINT = 90;
+
+function setM(i, m, life){
+  var o = mat[i];
+  if(o === FIRE) fireCount--;
+  else if(o === WOOD) woodCount--;
+  else if(o === PLANT) plantCount--;
+  mat[i] = m;
+  aux[i] = life || 0;
+  shd[i] = (Math.random() * 256) | 0;
+  if(m === FIRE) fireCount++;
+  else if(m === WOOD) woodCount++;
+  else if(m === PLANT) plantCount++;
+  stamp[i] = frame;
+  changes++;
+}
+/* swapCells is the single correct swap; it keeps the live counters exact. */
+function swapCells(i, j){
+  var mi = mat[i], ai = aux[i], si = shd[i];
+  var mj = mat[j];
+  if(mi === FIRE) fireCount--; else if(mi === WOOD) woodCount--; else if(mi === PLANT) plantCount--;
+  if(mj === FIRE) fireCount--; else if(mj === WOOD) woodCount--; else if(mj === PLANT) plantCount--;
+  mat[i] = mj; aux[i] = aux[j]; shd[i] = shd[j];
+  mat[j] = mi; aux[j] = ai;     shd[j] = si;
+  if(mj === FIRE) fireCount++; else if(mj === WOOD) woodCount++; else if(mj === PLANT) plantCount++;
+  if(mi === FIRE) fireCount++; else if(mi === WOOD) woodCount++; else if(mi === PLANT) plantCount++;
+  stamp[i] = frame; stamp[j] = frame;
+  changes++;
+}
+
+function inB(x, y){ return x >= 0 && x < COLS && y >= 0 && y < ROWS; }
+
+/* ---- pass 1: fire spread/extinguish, seed sprout, drain ---- */
+function interact(){
+  for(var y = 0; y < ROWS; y++){
+    var row = y * COLS;
+    for(var x = 0; x < COLS; x++){
+      var i = row + x;
+      if(stamp[i] === frame) continue;
+      var m = mat[i];
+      if(m === FIRE){
+        var life = aux[i] - 1;
+        if(life <= 0){
+          setM(i, Math.random() < 0.22 ? STEAM : EMPTY, 120 + ((Math.random() * 80) | 0));
+          continue;
+        }
+        aux[i] = life;
+        if(x > 0)        fireTouch(i, i - 1);
+        if(x < COLS - 1) fireTouch(i, i + 1);
+        if(y > 0)        fireTouch(i, i - COLS);
+        if(y < ROWS - 1) fireTouch(i, i + COLS);
+      } else if(m === SEED){
+        if((x > 0 && mat[i-1] === WATER) || (x < COLS-1 && mat[i+1] === WATER) ||
+           (y > 0 && mat[i-COLS] === WATER) || (y < ROWS-1 && mat[i+COLS] === WATER)){
+          sprout(i, x, y);
+        }
+      } else if(m === DRAIN){
+        if(y > 0){
+          var a = i - COLS, am = mat[a];
+          if(am === WATER){ setM(a, EMPTY, 0); drainedWater++; }
+          else if(am === SAND || am === OIL || am === STEAM || am === FIRE){ setM(a, EMPTY, 0); }
+        }
+      }
+    }
+  }
+}
+function fireTouch(i, j){
+  if(stamp[j] === frame) return;
+  var nm = mat[j];
+  if(nm === WOOD || nm === PLANT){
+    // wood chars with sustained heat, then ignites: steady burn front
+    var h = aux[j] + 1;
+    if(h > HEAT_NEED) setM(j, FIRE, FIRE_LIFE_WOOD);
+    else aux[j] = h;
+  } else if(nm === OIL){
+    if(Math.random() < 0.32) setM(j, FIRE, FIRE_LIFE_OIL);
+  } else if(nm === WATER){
+    if(Math.random() < 0.45){ setM(i, STEAM, 130); }
+  }
+}
+function sprout(i, x, y){
+  setM(i, PLANT, 0);
+  sprouted = true;
+  for(var k = 1; k <= 5; k++){
+    var yy = y - k;
+    if(yy < 0) break;
+    var j = yy * COLS + x;
+    if(mat[j] !== EMPTY) break;
+    setM(j, PLANT, 0);
+  }
+}
+
+/* ---- pass 2: movement, bottom-to-top, alternating x ---- */
+function movePass(){
+  var ltr = (frame & 1) === 0;
+  for(var y = ROWS - 1; y >= 0; y--){
+    var row = y * COLS;
+    if(ltr){ for(var x = 0; x < COLS; x++) moveCell(row + x, x, y); }
+    else   { for(var x2 = COLS - 1; x2 >= 0; x2--) moveCell(row + x2, x2, y); }
+  }
+}
+function moveCell(i, x, y){
+  if(stamp[i] === frame) return;
+  var m = mat[i];
+  if(m === SAND) moveSand(i, x, y);
+  else if(m === WATER) moveWater(i, x, y);
+  else if(m === OIL) moveOil(i, x, y);
+  else if(m === FIRE) moveFire(i, x, y);
+  else if(m === STEAM) moveSteam(i, x, y);
+}
+function moveSand(i, x, y){
+  if(y + 1 >= ROWS) return;
+  var b = i + COLS, bm = mat[b];
+  if(bm === EMPTY || bm === WATER || bm === OIL || bm === STEAM){ swapCells(i, b); return; }
+  if(bm === FIRE){ setM(b, EMPTY, 0); swapCells(i, b); return; }
+  var d = Math.random() < 0.5 ? -1 : 1;
+  for(var k = 0; k < 2; k++){
+    var nx = x + d;
+    if(nx >= 0 && nx < COLS){
+      var t = b + d, tm = mat[t];
+      if(tm === EMPTY || tm === WATER || tm === OIL || tm === STEAM){ swapCells(i, t); return; }
+      if(tm === FIRE){ setM(t, EMPTY, 0); swapCells(i, t); return; }
+    }
+    d = -d;
+  }
+}
+function waterInto(i, t){
+  var tm = mat[t];
+  if(tm === EMPTY || tm === STEAM){ swapCells(i, t); return true; }
+  if(tm === OIL){ swapCells(i, t); return true; }
+  if(tm === FIRE){ setM(t, STEAM, 140); swapCells(i, t); return true; }
+  return false;
+}
+function moveWater(i, x, y){
+  if(y + 1 < ROWS){
+    var b = i + COLS;
+    if(waterInto(i, b)) return;
+    var d = Math.random() < 0.5 ? -1 : 1;
+    for(var k = 0; k < 2; k++){
+      var nx = x + d;
+      if(nx >= 0 && nx < COLS && waterInto(i, b + d)) return;
+      d = -d;
+    }
+  }
+  disperse(i, x, 5);
+}
+function disperse(i, x, dist){
+  var d = Math.random() < 0.5 ? -1 : 1;
+  for(var k = 0; k < 2; k++){
+    var best = -1;
+    for(var s = 1; s <= dist; s++){
+      var tx = x + d * s;
+      if(tx < 0 || tx >= COLS) break;
+      var t = i + d * s, tm = mat[t];
+      if(tm === EMPTY || tm === STEAM){ best = t; continue; }
+      if(tm === FIRE){ setM(t, STEAM, 140); swapCells(i, t); return; }
+      if(tm === OIL){ swapCells(i, t); return; }
+      break;
+    }
+    if(best >= 0){ swapCells(i, best); return; }
+    d = -d;
+  }
+}
+function moveOil(i, x, y){
+  if(y > 0 && mat[i - COLS] === WATER){ swapCells(i, i - COLS); return; }
+  if(y + 1 < ROWS){
+    var b = i + COLS, bm = mat[b];
+    if(bm === EMPTY || bm === STEAM){ swapCells(i, b); return; }
+    if(bm === FIRE){ setM(b, STEAM, 140); swapCells(i, b); return; }
+    var d = Math.random() < 0.5 ? -1 : 1;
+    for(var k = 0; k < 2; k++){
+      var nx = x + d;
+      if(nx >= 0 && nx < COLS){
+        var t = b + d, tm = mat[t];
+        if(tm === EMPTY || tm === STEAM){ swapCells(i, t); return; }
+      }
+      d = -d;
+    }
+  }
+  if(((frame + i) & 1) === 0) disperse(i, x, 4);
+}
+function moveFire(i, x, y){
+  if(y <= 0) return;
+  var d = Math.random() < 0.5 ? -1 : 1;
+  var a = i - COLS;
+  // fire clings to fuel instead of rising straight off it
+  var fuel =
+    (x > 0 && (mat[i-1] === WOOD || mat[i-1] === OIL || mat[i-1] === PLANT)) ||
+    (x < COLS-1 && (mat[i+1] === WOOD || mat[i+1] === OIL || mat[i+1] === PLANT)) ||
+    (y < ROWS-1 && (mat[i+COLS] === WOOD || mat[i+COLS] === OIL || mat[i+COLS] === PLANT)) ||
+    (mat[a] === WOOD || mat[a] === OIL || mat[a] === PLANT);
+  var oilFuel =
+    (x > 0 && mat[i-1] === OIL) || (x < COLS-1 && mat[i+1] === OIL) ||
+    (y < ROWS-1 && mat[i+COLS] === OIL) || (mat[a] === OIL);
+  if(oilFuel) return; // fire sits in oil and burns it, never rises off
+  var riseP = fuel ? 0.10 : 0.85;
+  if(fuel && Math.random() < 0.98) return; // cling: sit and ignite
+  if(mat[a] === EMPTY && Math.random() < riseP){ swapCells(i, a); return; }
+  var nx = x + d;
+  if(nx >= 0 && nx < COLS && mat[a + d] === EMPTY){ swapCells(i, a + d); return; }
+  var nx2 = x - d;
+  if(nx2 >= 0 && nx2 < COLS && mat[a - d] === EMPTY){ swapCells(i, a - d); return; }
+  if(Math.random() < 0.3 && nx >= 0 && nx < COLS && mat[i + d] === EMPTY) swapCells(i, i + d);
+}
+function moveSteam(i, x, y){
+  var life = aux[i] - 1;
+  if(life <= 0 || y < 3){ setM(i, WATER, 0); return; }
+  aux[i] = life;
+  if(y <= 0) return;
+  var d = Math.random() < 0.5 ? -1 : 1;
+  var a = i - COLS;
+  if(mat[a] === EMPTY){ swapCells(i, a); return; }
+  var nx = x + d;
+  if(nx >= 0 && nx < COLS && mat[a + d] === EMPTY){ swapCells(i, a + d); return; }
+  var nx2 = x - d;
+  if(nx2 >= 0 && nx2 < COLS && mat[a - d] === EMPTY){ swapCells(i, a - d); return; }
+  if(Math.random() < 0.4 && nx >= 0 && nx < COLS && mat[i + d] === EMPTY) swapCells(i, i + d);
+}
+
+/* ---- spawners ---- */
+function spawnerTick(){
+  var k, x, i;
+  if(rain){
+    for(k = 0; k < rain.per; k++){
+      if(rain.count >= rain.cap) break;
+      x = rain.x0 + ((Math.random() * (rain.x1 - rain.x0 + 1)) | 0);
+      i = rain.y * COLS + x;
+      if(mat[i] === EMPTY){ setM(i, WATER, 0); rain.count++; }
+    }
+  }
+  if(drip && (frame % drip.every) === 0){
+    for(k = 0; k < drip.n; k++){
+      if(drip.count >= drip.cap) break;
+      x = drip.x0 + ((Math.random() * (drip.x1 - drip.x0 + 1)) | 0);
+      i = drip.y * COLS + x;
+      if(mat[i] === EMPTY){ setM(i, WATER, 0); drip.count++; }
+    }
+  }
+}
+function doStep(){
+  frame++;
+  spawnerTick();
+  interact();
+  movePass();
+}
+
+/* ================= puzzles ================= */
+function R(x0, y0, x1, y1, m, life){
+  for(var y = y0; y <= y1; y++)
+    for(var x = x0; x <= x1; x++)
+      if(x >= 0 && x < COLS && y >= 0 && y < ROWS) setM(y * COLS + x, m, life || 0);
+}
+function countRegion(x0, y0, x1, y1, m){
+  var c = 0;
+  for(var y = y0; y <= y1; y++)
+    for(var x = x0; x <= x1; x++)
+      if(mat[y * COLS + x] === m) c++;
+  return c;
+}
+
+/* 1: FIREHOUSE — burning wood house, spray water. Put every flame out. */
+function buildP1(){
+  R(0, 186, 119, 191, WALL);
+  R(35, 145, 37, 185, WOOD);
+  R(83, 145, 85, 185, WOOD);
+  R(45, 140, 75, 142, WOOD);
+  R(50, 137, 70, 139, WOOD);
+  R(55, 134, 65, 136, WOOD);
+  // fierce, long-lived fire on surfaces (always reachable by water).
+  // it will NOT go out on its own (outlasts the timer).
+  R(58, 131, 62, 133, FIRE, 10000);  // on the roof
+  R(32, 158, 34, 164, FIRE, 10000);  // on the left wall outer face
+  R(50, 170, 70, 175, FIRE, 10000);  // inside the house, open air
+  woodTotal = woodCount;
+}
+function goalP1(){
+  if(fireCount === 0) return "win";
+  return null;
+}
+function hudP1(){
+  return "FIRE <b>" + fireCount + "</b> (get it to 0)";
+}
+
+/* 2: THE SEED — drip falls left, pot sits right. Build a flume, sprout the seed. */
+function buildP2(){
+  R(0, 186, 119, 191, WALL);
+  R(0, 0, 1, 191, WALL);
+  R(118, 0, 119, 191, WALL);
+  R(88, 160, 90, 180, WOOD);
+  R(106, 160, 108, 180, WOOD);
+  R(88, 181, 108, 183, WOOD);
+  setM(180 * COLS + 98, SEED, 0);
+  drip = { x0: 19, x1: 22, y: 2, every: 2, n: 2, cap: 9000, count: 0 };
+}
+function goalP2(){
+  if(sprouted) return "win";
+  return null;
+}
+function hudP2(){
+  return sprouted ? "SPROUTED" : "guide water to the <b>seed</b> (green dot, right)";
+}
+
+/* 3: MELTDOWN — burn down the wood wall. */
+function buildP3(){
+  R(0, 186, 119, 191, WALL);
+  R(56, 0, 58, 186, WOOD);
+  woodTotal = woodCount;
+}
+function goalP3(){
+  if(woodCount < woodTotal * 0.5) return "win";
+  return null;
+}
+function hudP3(){
+  var pct = woodTotal ? Math.round(100 * woodCount / woodTotal) : 100;
+  return "WALL <b>" + pct + "%</b> (burn it below 50%)";
+}
+
+/* 4: SKIM — mixed tank, float the oil out over the low walls with added water. */
+function buildP4(){
+  R(0, 186, 119, 191, WALL);
+  R(20, 150, 23, 186, WALL);
+  R(97, 150, 100, 186, WALL);
+  var x, y;
+  for(y = 160; y <= 185; y++)
+    for(x = 24; x <= 96; x++)
+      setM(y * COLS + x, Math.random() < 0.12 ? OIL : WATER, 0);
+  R(0, 184, 19, 185, DRAIN);
+  R(101, 184, 118, 185, DRAIN);
+  initWater = countRegion(24, 150, 96, 185, WATER);
+  tank = { x0: 24, y0: 150, x1: 96, y1: 185 };
+}
+function goalP4(){
+  if(frame % 10 === 0){
+    var oil = countRegion(tank.x0, tank.y0, tank.x1, tank.y1, OIL);
+    var wat = countRegion(tank.x0, tank.y0, tank.x1, tank.y1, WATER);
+    if(oil <= 10 && wat >= initWater * 0.5) return "win";
+  }
+  return null;
+}
+function hudP4(){
+  return "oil left in tank: <b>" + countRegion(24, 150, 96, 185, OIL) + "</b> (goal 10 or less)";
+}
+
+/* 5: THE DAM — rain falls on the town, dam it into the drain basin. */
+function buildP5(){
+  R(0, 0, 1, 191, WALL);
+  R(118, 0, 119, 191, WALL);
+  R(0, 186, 119, 191, WALL);
+  R(93, 160, 94, 188, WALL);
+  R(95, 184, 117, 185, DRAIN);
+  rain = { x0: 52, x1: 68, y: 2, per: 3, cap: 30000, count: 0 };
+  drainedWater = 0;
+}
+function goalP5(){
+  if(drainedWater >= 250) return "win";
+  return null;
+}
+function hudP5(){
+  return "DRAINED <b>" + drainedWater + "</b> / 250";
+}
+
+var PUZZLES = [
+  { name: "FIREHOUSE", num: "1/5",
+    goalShort: "fire = 0",
+    brief: "The lab house is burning. Spray WATER on the flames, water turns fire to steam. Put out every last flame before time runs out.",
+    paints: "WATER x1000",
+    time: 150, budgets: { 2: 1000 }, build: buildP1, goal: goalP1, hud: hudP1 },
+  { name: "THE SEED", num: "2/5",
+    goalShort: "sprout the seed",
+    brief: "A drip falls on the left, the seed waits in its pot on the right. Build a WOOD flume (patch leaks with SAND) to carry the stream across.",
+    paints: "WOOD x300 + SAND x120",
+    time: 180, budgets: { 4: 300, 1: 120 }, build: buildP2, goal: goalP2, hud: hudP2 },
+  { name: "MELTDOWN", num: "3/5",
+    goalShort: "burn 50% of the wall",
+    brief: "A solid wood wall blocks the way. Paint FIRE directly on the wall to ignite it and burn it down below half. Oil burns even hotter.",
+    paints: "FIRE x80 + OIL x350",
+    time: 180, budgets: { 5: 350, 3: 80 }, build: buildP3, goal: goalP3, hud: hudP3 },
+  { name: "SKIM", num: "4/5",
+    goalShort: "float the oil out, keep the water",
+    brief: "The tank holds mixed oil and water. Oil floats. Paint WATER in to raise the level and float the oil over the low walls into the drains. Keep half the water.",
+    paints: "WATER x1300",
+    time: 200, budgets: { 2: 1300 }, build: buildP4, goal: goalP4, hud: hudP4 },
+  { name: "THE DAM", num: "5/5",
+    goalShort: "drain 250 water with a sand dam",
+    brief: "Rain is flooding the town. Pile SAND into a dam that diverts the stream right, over the wall and into the drain basin.",
+    paints: "SAND x1500",
+    time: 240, budgets: { 1: 1500 }, build: buildP5, goal: goalP5, hud: hudP5 },
+];
+
+/* ================= game flow ================= */
+var BEST_KEY = "bb-sand-best";
+var screen = "title";   // title|intro|playing|win|lose|victory
+var pIdx = 0;
+var budgets = {}, initialBudgets = {};
+var timeLeft = 0;
+var puzzleScores = [0, 0, 0, 0, 0];
+var curMat = 2;
+var painting = false, lastGX = 0, lastGY = 0;
+var brushX = 0, brushY = 0, brushOn = false;
+var stillN = 0, lastChanges = 0;
+var best = readBest();
+var sandbox = false;   // true in debug blank grid: loop skips goal checks
+
+var cv = document.getElementById("game");
+var ctx = cv.getContext("2d");
+var wrap = document.getElementById("stageWrap");
+var puzLabel = document.getElementById("puzLabel");
+var goalLine = document.getElementById("goalLine");
+var timeEl = document.getElementById("time");
+var clockEl = document.getElementById("clock");
+var matbar = document.getElementById("matbar");
+
+var MATS = [
+  { id: 1,  name: "SAND",  color: "#e8c86a" },
+  { id: 2,  name: "WATER", color: "#38bdf8" },
+  { id: 3,  name: "FIRE",  color: "#fb923c" },
+  { id: 4,  name: "WOOD",  color: "#a0714a" },
+  { id: 5,  name: "OIL",   color: "#a78bfa" },
+  { id: 6,  name: "STEAM", color: "#cbd5e1" },
+  { id: -1, name: "ERASE", color: "#64748b" },
+];
+var BRUSH = { 1: 3, 2: 3, 3: 2, 4: 3, 5: 3, 6: 3 };
+
+function readBest(){
+  try{ var v = localStorage.getItem(BEST_KEY); return v === null ? 0 : parseInt(v, 10) || 0; }
+  catch(e){ return 0; }
+}
+function writeBest(v){
+  try{ localStorage.setItem(BEST_KEY, String(v)); }catch(e){}
+}
+function $(id){ return document.getElementById(id); }
+function show(id){ $(id).hidden = false; }
+function hide(id){ $(id).hidden = true; }
+function hideAllOv(){ ["ovTitle","ovIntro","ovWin","ovLose","ovVictory"].forEach(hide); }
+function fmt(n){ return n.toLocaleString("en-US"); }
+function fmtTime(s){
+  s = Math.max(0, Math.ceil(s));
+  return ((s / 60) | 0) + ":" + ("0" + (s % 60)).slice(-2);
+}
+
+function buildMatbar(){
+  matbar.innerHTML = "";
+  MATS.forEach(function(mt){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "mat";
+    b.dataset.mid = mt.id;
+    b.innerHTML = '<span class="dot" style="background:' + mt.color + ';color:' + mt.color + '"></span>' +
+      '<span class="nm">' + mt.name + '</span><span class="bd"></span>';
+    b.addEventListener("click", function(){ selectMaterial(mt.id); });
+    matbar.appendChild(b);
+  });
+}
+function updateMatbar(){
+  var btns = matbar.children;
+  for(var k = 0; k < btns.length; k++){
+    var b = btns[k], mid = parseInt(b.dataset.mid, 10);
+    var bd = b.querySelector(".bd");
+    var usable = (mid === -1) || (mid in initialBudgets);
+    b.classList.toggle("dis", !usable);
+    b.classList.toggle("sel", mid === curMat && usable);
+    bd.textContent = (mid === -1) ? "\u221e" : (usable ? fmt(budgets[mid]) : "\u2013");
+  }
+}
+function selectMaterial(mid){
+  if(mid !== -1 && !(mid in initialBudgets)) return;
+  curMat = mid;
+  updateMatbar();
+}
+function outOfPaint(){
+  for(var k in initialBudgets) if(budgets[k] > 0) return false;
+  return true;
+}
+function unusedBudget(){
+  var s = 0;
+  for(var k in budgets) s += budgets[k];
+  return s;
+}
+function totalScore(){
+  var s = 0;
+  for(var k = 0; k < 5; k++) s += puzzleScores[k];
+  return s;
+}
+
+function showTitle(){
+  screen = "title";
+  hideAllOv(); show("ovTitle");
+  if(best > 0){ $("titleBest").hidden = false; $("titleBestV").textContent = fmt(best); }
+  puzLabel.textContent = "BLACKBOX LAB";
+  goalLine.textContent = "paint the six materials";
+  timeEl.textContent = "--:--";
+}
+function showIntro(i){
+  pIdx = i;
+  screen = "intro";
+  hideAllOv(); show("ovIntro");
+  var p = PUZZLES[i];
+  $("introName").textContent = "PUZZLE " + p.num;
+  $("introTitle").textContent = p.name;
+  $("introBrief").textContent = p.brief;
+  $("introPaints").innerHTML = "paints: <b>" + p.paints + "</b> &middot; " + fmtTime(p.time);
+}
+function loadPuzzle(i){
+  pIdx = i;
+  var p = PUZZLES[i];
+  mat.fill(0); aux.fill(0); shd.fill(0);
+  fireCount = 0; woodCount = 0; plantCount = 0;
+  sprouted = false; drainedWater = 0;
+  woodTotal = 0; initWater = 0;
+  rain = null; drip = null; target = null; tank = null;
+  changes = 0; lastChanges = 0; stillN = 0;
+  p.build();
+  budgets = {}; initialBudgets = {};
+  for(var k in p.budgets){ budgets[k] = p.budgets[k]; initialBudgets[k] = p.budgets[k]; }
+  var first = -1;
+  for(var k2 in initialBudgets){ first = parseInt(k2, 10); break; }
+  curMat = first >= 0 ? first : -1;
+  timeLeft = p.time;
+  painting = false;
+  sandbox = false;
+  screen = "playing";
+  hideAllOv();
+  puzLabel.textContent = p.num + " \u00b7 " + p.name;
+  updateMatbar();
+  updateHUD();
+}
+function winPuzzle(){
+  var p = PUZZLES[pIdx];
+  var s = 1000 + 5 * Math.ceil(timeLeft) + ((unusedBudget() / 25) | 0);
+  puzzleScores[pIdx] = s;
+  screen = "win";
+  hideAllOv(); show("ovWin");
+  $("winName").textContent = "PUZZLE " + p.num + " SOLVED";
+  $("winStats").innerHTML = "+" + fmt(s) + " &middot; total <b>" + fmt(totalScore()) + "</b>";
+  $("nextBtn").textContent = pIdx < 4 ? "NEXT" : "FINISH";
+  painting = false;
+}
+function losePuzzle(reason){
+  screen = "lose";
+  hideAllOv(); show("ovLose");
+  $("loseReason").textContent = reason;
+  $("loseStats").innerHTML = "score so far: <b>" + fmt(totalScore()) + "</b>";
+  painting = false;
+}
+function victory(){
+  screen = "victory";
+  hideAllOv(); show("ovVictory");
+  var t = totalScore(), nb = false;
+  if(t > best){ best = t; writeBest(t); nb = true; }
+  $("vicStats").innerHTML = "total score: <b>" + fmt(t) + "</b>";
+  $("vicBest").innerHTML = nb ? '<b style="color:var(--lime)">NEW BEST</b>' : "best: <b>" + fmt(best) + "</b>";
+}
+
+/* ================= painting ================= */
+function paintDot(gx, gy, free){
+  var m = curMat;
+  var r = (m === -1) ? 5 : BRUSH[m];
+  for(var dy = -r; dy <= r; dy++){
+    for(var dx = -r; dx <= r; dx++){
+      if(dx * dx + dy * dy > r * r) continue;
+      var x = gx + dx, y = gy + dy;
+      if(x < 0 || x >= COLS || y < 0 || y >= ROWS) continue;
+      var i = y * COLS + x, cm = mat[i];
+      if(m === -1){
+        if(cm >= SAND && cm <= STEAM) setM(i, EMPTY, 0);
+        continue;
+      }
+      if(!free && (budgets[m] || 0) <= 0) return false;
+      var changed = false;
+      if(m === WATER){
+        if(cm === EMPTY){ setM(i, WATER, 0); changed = true; }
+        else if(cm === FIRE){ setM(i, STEAM, 140); changed = true; }
+      } else if(m === FIRE){
+        if(cm === EMPTY){ setM(i, FIRE, FIRE_LIFE_PAINT); changed = true; }
+        else if(cm === WOOD){ setM(i, FIRE, FIRE_LIFE_WOOD); changed = true; }
+        else if(cm === OIL){ setM(i, FIRE, FIRE_LIFE_OIL); changed = true; }
+      } else {
+        if(cm === EMPTY){ setM(i, m, 0); changed = true; }
+      }
+      if(changed && !free){
+        budgets[m]--;
+        if(budgets[m] < 0) budgets[m] = 0;
+      }
+    }
+  }
+  return true;
+}
+function paintStroke(x0, y0, x1, y1, free){
+  var dx = x1 - x0, dy = y1 - y0;
+  var steps = Math.max(Math.abs(dx), Math.abs(dy));
+  if(steps === 0){ paintDot(x1, y1, free); return; }
+  for(var s = 0; s <= steps; s++){
+    var gx = Math.round(x0 + dx * s / steps), gy = Math.round(y0 + dy * s / steps);
+    if(!paintDot(gx, gy, free)) return;
+  }
+}
+var vw = 0, vh = 0, csc = 1, cox = 0, coy = 0;
+function fit(){
+  var r = wrap.getBoundingClientRect();
+  vw = Math.max(1, r.width); vh = Math.max(1, r.height);
+  cv.width = Math.round(vw); cv.height = Math.round(vh);
+  csc = Math.min(vw / COLS, vh / ROWS);
+  cox = (vw - COLS * csc) / 2; coy = (vh - ROWS * csc) / 2;
+}
+function toGrid(e){
+  var r = cv.getBoundingClientRect();
+  var cx = e.clientX - r.left, cy = e.clientY - r.top;
+  var gx = Math.floor((cx - cox) / csc), gy = Math.floor((cy - coy) / csc);
+  if(gx < 0) gx = 0; if(gx >= COLS) gx = COLS - 1;
+  if(gy < 0) gy = 0; if(gy >= ROWS) gy = ROWS - 1;
+  return { x: gx, y: gy, cx: cx, cy: cy };
+}
+cv.addEventListener("pointerdown", function(e){
+  if(screen !== "playing") return;
+  e.preventDefault();
+  painting = true;
+  try{ cv.setPointerCapture(e.pointerId); }catch(err){}
+  var g = toGrid(e);
+  lastGX = g.x; lastGY = g.y;
+  brushX = g.cx; brushY = g.cy; brushOn = true;
+  paintStroke(g.x, g.y, g.x, g.y, false);
+  updateMatbar();
+});
+cv.addEventListener("pointermove", function(e){
+  if(!painting || screen !== "playing") return;
+  e.preventDefault();
+  var g = toGrid(e);
+  brushX = g.cx; brushY = g.cy; brushOn = true;
+  paintStroke(lastGX, lastGY, g.x, g.y, false);
+  lastGX = g.x; lastGY = g.y;
+  updateMatbar();
+});
+function endStroke(){ painting = false; brushOn = false; }
+cv.addEventListener("pointerup", endStroke);
+cv.addEventListener("pointercancel", endStroke);
+cv.addEventListener("contextmenu", function(e){ e.preventDefault(); });
+document.addEventListener("dblclick", function(e){ e.preventDefault(); }, { passive: false });
+
+/* ================= rendering ================= */
+var off = document.createElement("canvas");
+off.width = COLS; off.height = ROWS;
+var octx = off.getContext("2d");
+var img = octx.createImageData(COLS, ROWS);
+
+function render(){
+  var d = img.data, i, o, m, s, v;
+  for(i = 0; i < N; i++){
+    o = i * 4; m = mat[i]; s = shd[i];
+    if(m === EMPTY){ d[o + 3] = 0; continue; }
+    if(m === SAND){
+      v = (s >> 4) - 8;
+      d[o] = 228 + v * 2; d[o + 1] = 196 + v * 2; d[o + 2] = 110 + v; d[o + 3] = 255;
+    } else if(m === WATER){
+      v = (s >> 5) - 4;
+      d[o] = 40 + v * 3; d[o + 1] = 150 + v * 3; d[o + 2] = 230 + v * 2; d[o + 3] = 255;
+    } else if(m === FIRE){
+      v = (s + frame * 5) & 63;
+      d[o] = 255; d[o + 1] = 100 + v * 2; d[o + 2] = 30 + (v >> 1); d[o + 3] = 255;
+    } else if(m === WOOD){
+      v = (s >> 4) - 8;
+      var heat = aux[i] / 70;
+      if(heat > 1) heat = 1;
+      d[o] = 150 + v * 2 - heat * 90; d[o + 1] = 100 + v * 2 - heat * 70; d[o + 2] = 52 + v - heat * 20; d[o + 3] = 255;
+    } else if(m === OIL){
+      v = (s >> 4) - 8;
+      d[o] = 96 + v * 2; d[o + 1] = 58 + v * 2; d[o + 2] = 140 + v * 2; d[o + 3] = 255;
+    } else if(m === STEAM){
+      d[o] = 190; d[o + 1] = 210; d[o + 2] = 230; d[o + 3] = 110;
+    } else if(m === WALL){
+      v = (s >> 5) - 4;
+      d[o] = 44 + v * 2; d[o + 1] = 54 + v * 2; d[o + 2] = 72 + v * 2; d[o + 3] = 255;
+    } else if(m === SEED){
+      d[o] = 150; d[o + 1] = 255; d[o + 2] = 150; d[o + 3] = 255;
+    } else if(m === PLANT){
+      v = (s >> 4) - 8;
+      d[o] = 52 + v; d[o + 1] = 200 + v * 2; d[o + 2] = 90 + v; d[o + 3] = 255;
+    } else if(m === DRAIN){
+      if(s > 140){ d[o] = 34; d[o + 1] = 211; d[o + 2] = 238; }
+      else { d[o] = 16; d[o + 1] = 52; d[o + 2] = 64; }
+      d[o + 3] = 255;
+    }
+  }
+  octx.putImageData(img, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = "#070b10";
+  ctx.fillRect(0, 0, vw, vh);
+  ctx.drawImage(off, cox, coy, COLS * csc, ROWS * csc);
+  drawMarkers();
+  if(brushOn && painting && screen === "playing"){
+    var r = (curMat === -1 ? 5 : BRUSH[curMat]) * csc;
+    ctx.strokeStyle = "rgba(34,211,238,.8)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(brushX, brushY, r, 0, 6.2832); ctx.stroke();
+  }
+}
+function gx2cx(gx){ return cox + (gx + 0.5) * csc; }
+function gy2cy(gy){ return coy + (gy + 0.5) * csc; }
+function drawMarkers(){
+  ctx.font = "600 10px -apple-system, sans-serif";
+  ctx.textAlign = "center";
+  if(pIdx === 1 && (screen === "playing" || screen === "intro")){
+    ctx.fillStyle = "rgba(163,230,53,.95)";
+    ctx.fillText("seed", gx2cx(98), gy2cy(172));
+  }
+  if(pIdx === 3 && (screen === "playing" || screen === "intro")){
+    ctx.fillStyle = "rgba(232,200,106,.9)";
+    ctx.fillText("oil floats out", gx2cx(60), gy2cy(142));
+  }
+  if(pIdx === 4 && (screen === "playing" || screen === "intro")){
+    ctx.fillStyle = "rgba(34,211,238,.9)";
+    ctx.fillText("drain", gx2cx(106), gy2cy(154));
+  }
+}
+
+/* ================= HUD + main loop ================= */
+function updateHUD(){
+  var p = PUZZLES[pIdx];
+  timeEl.textContent = fmtTime(timeLeft);
+  clockEl.classList.toggle("low", timeLeft < 30);
+  var g = p.hud();
+  if(outOfPaint() && screen === "playing") g += ' &middot; <span class="warn">OUT OF PAINT</span>';
+  goalLine.innerHTML = g;
+}
+var acc = 0, lastT = 0, hudTick = 0;
+function loop(t){
+  requestAnimationFrame(loop);
+  if(!lastT) lastT = t;
+  var dt = (t - lastT) / 1000;
+  lastT = t;
+  if(dt > 0.25) dt = 0.25;
+  if(screen === "playing" || screen === "win" || screen === "lose" || screen === "victory"){
+    acc += dt;
+    var n = 0;
+    while(acc >= 1 / 60 && n < 4){ doStep(); acc -= 1 / 60; n++; }
+    if(n === 4) acc = 0;
+    if(screen === "playing"){
+      timeLeft -= dt;
+      if(timeLeft <= 0){ timeLeft = 0; losePuzzle("Time ran out."); }
+      else {
+        if(!sandbox && frame % 10 === 0){
+          var g = PUZZLES[pIdx].goal();
+          if(g === "win") winPuzzle();
+          else if(g && g.lose) losePuzzle(g.lose);
+        }
+        if(frame % 60 === 0){
+          var rate = changes - lastChanges;
+          lastChanges = changes;
+          if(outOfPaint() && rate < 60) stillN++;
+          else stillN = 0;
+          if(stillN >= 4) losePuzzle("Out of paint, and the tank has settled.");
+        }
+      }
+      hudTick++;
+      if(hudTick % 6 === 0){ updateHUD(); updateMatbar(); }
+    }
+  }
+  render();
+}
+
+/* ================= wiring ================= */
+$("startBtn").addEventListener("click", function(){ showIntro(0); });
+$("goBtn").addEventListener("click", function(){ loadPuzzle(pIdx); });
+$("nextBtn").addEventListener("click", function(){
+  if(pIdx < 4) showIntro(pIdx + 1);
+  else victory();
+});
+$("retryBtn").addEventListener("click", function(){ loadPuzzle(pIdx); });
+$("againBtn").addEventListener("click", function(){
+  puzzleScores = [0, 0, 0, 0, 0];
+  showTitle();
+});
+$("restartBtn").addEventListener("click", function(){
+  if(screen === "playing" || screen === "win" || screen === "lose") loadPuzzle(pIdx);
+});
+function wireReveal(btnId, trickId){
+  $(btnId).addEventListener("click", function(){
+    var tr = $(trickId), open = tr.hidden;
+    tr.hidden = !open;
+    $(btnId).textContent = open ? "hide the trick" : "reveal the trick";
+  });
+}
+wireReveal("revealBtn", "trick");
+wireReveal("revealBtn2", "trick2");
+window.addEventListener("resize", fit);
+window.addEventListener("orientationchange", function(){ setTimeout(fit, 120); });
+
+/* hidden test hook (no UI, no console output) */
+window.__sandDebug = {
+  get screen(){ return screen; },
+  get puzzle(){ return pIdx; },
+  get budgets(){ return budgets; },
+  start: function(){ showIntro(0); },
+  go: function(){ loadPuzzle(pIdx); },
+  load: function(i){ loadPuzzle(i); },
+  blank: function(){
+    mat.fill(0); aux.fill(0); shd.fill(0);
+    fireCount = 0; woodCount = 0; plantCount = 0;
+    sprouted = false; drainedWater = 0; rain = null; drip = null;
+    target = null; tank = null; woodTotal = 0; initWater = 0;
+    budgets = { 1: 1e9, 2: 1e9, 3: 1e9, 4: 1e9, 5: 1e9, 6: 1e9 };
+    initialBudgets = {};
+    screen = "playing";
+    sandbox = true;
+    hideAllOv();
+    updateMatbar();
+  },
+  select: selectMaterial,
+  paint: function(gx, gy, m, r){
+    var rad = (r === undefined) ? 3 : r;
+    for(var dy = -rad; dy <= rad; dy++)
+      for(var dx = -rad; dx <= rad; dx++){
+        if(dx * dx + dy * dy > rad * rad) continue;
+        var x = gx + dx, y = gy + dy;
+        if(x < 0 || x >= COLS || y < 0 || y >= ROWS) continue;
+        var i = y * COLS + x, cm = mat[i];
+        if(m === WATER){
+          if(cm === EMPTY) setM(i, WATER, 0);
+          else if(cm === FIRE) setM(i, STEAM, 140);
+        } else if(m === FIRE){
+          if(cm === EMPTY) setM(i, FIRE, FIRE_LIFE_PAINT);
+          else if(cm === WOOD) setM(i, FIRE, FIRE_LIFE_WOOD);
+          else if(cm === OIL) setM(i, FIRE, FIRE_LIFE_OIL);
+        } else if(cm === EMPTY) setM(i, m, 0);
+      }
+    return true;
+  },
+  step: function(n){ for(var k = 0; k < (n || 1); k++) doStep(); },
+  state: function(){
+    return {
+      screen: screen, puzzle: pIdx, fire: fireCount, wood: woodCount,
+      woodTotal: woodTotal, sprouted: sprouted, drained: drainedWater,
+      timeLeft: Math.round(timeLeft), changes: changes,
+      score: totalScore(), best: best
+    };
+  },
+  cell: function(x, y){ return mat[y * COLS + x]; },
+  count: function(m){
+    var c = 0;
+    for(var i = 0; i < N; i++) if(mat[i] === m) c++;
+    return c;
+  },
+  region: countRegion,
+  avgY: function(m){
+    var s = 0, c = 0;
+    for(var y = 0; y < ROWS; y++) for(var x = 0; x < COLS; x++)
+      if(mat[y * COLS + x] === m){ s += y; c++; }
+    return c ? s / c : -1;
+  },
+  bounds: function(m){
+    var x0 = COLS, x1 = -1, y0 = ROWS, y1 = -1;
+    for(var y = 0; y < ROWS; y++) for(var x = 0; x < COLS; x++)
+      if(mat[y * COLS + x] === m){
+        if(x < x0) x0 = x; if(x > x1) x1 = x;
+        if(y < y0) y0 = y; if(y > y1) y1 = y;
+      }
+    return { x0: x0, x1: x1, y0: y0, y1: y1 };
+  }
+};
+
+buildMatbar();
+fit();
+showTitle();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

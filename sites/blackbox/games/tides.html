@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>TIDES — BLACKBOX</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; overflow:hidden; background:#05070d; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:#e8f4ff;
+         display:flex; align-items:center; justify-content:center; }
+  #wrap { position:relative; width:100%; max-width:480px; height:100%; display:flex; flex-direction:column; }
+  #hud { display:flex; justify-content:space-between; align-items:center; z-index:5;
+         padding:calc(12px + env(safe-area-inset-top)) 18px 10px;
+         font-size:14px; letter-spacing:2px; color:#8fa3bf; }
+  #hud .time { color:#7df9ff; font-weight:700; font-size:20px; letter-spacing:1px;
+               text-shadow:0 0 14px #22d3ee; font-variant-numeric:tabular-nums; }
+  #hud .best { font-size:12px; }
+  #stage { position:relative; width:100%; aspect-ratio:1/1; margin:0 auto;
+           border-top:1px solid #22d3ee22; border-bottom:1px solid #22d3ee22; }
+  #water { position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  #fx { position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; pointer-events:none; }
+  #hint { padding:12px 20px 0; font-size:13px; line-height:1.6; color:#5b6b87; letter-spacing:1px;
+          text-align:center; }
+  #hint b { color:#7df9ff; }
+  .screen { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+            text-align:center; padding:24px; background:rgba(5,7,13,.9); z-index:10; }
+  .hidden { display:none !important; }
+  h1 { font-size:52px; letter-spacing:10px; color:#7df9ff; text-shadow:0 0 28px #22d3ee; margin-bottom:6px; }
+  h2 { font-size:32px; letter-spacing:4px; color:#7df9ff; text-shadow:0 0 20px #22d3ee; margin-bottom:8px; }
+  .sub { color:#8fa3bf; font-size:14px; margin-bottom:18px; line-height:1.5; letter-spacing:2px; }
+  .howto { color:#c8d8ee; font-size:16px; line-height:1.7; margin-bottom:26px; max-width:330px; }
+  .howto b { color:#7df9ff; }
+  button { touch-action:manipulation; font-size:18px; letter-spacing:2px; padding:14px 44px; border-radius:999px;
+           border:1px solid #22d3ee; background:rgba(34,211,238,.12); color:#a5f3fc; cursor:pointer;
+           font-family:inherit; }
+  button:active { background:rgba(34,211,238,.3); }
+  .trick { margin-top:20px; font-size:13px; color:#5b6b87; letter-spacing:1px; }
+  .trick b { color:#22d3ee; }
+  .big { font-size:52px; color:#fff; margin:4px 0 10px; text-shadow:0 0 30px #22d3ee;
+         font-variant-numeric:tabular-nums; }
+  .bestline { color:#8fa3bf; font-size:14px; letter-spacing:1px; margin-bottom:22px; }
+  .newbest { color:#f0abfc; font-size:14px; letter-spacing:2px; margin-bottom:8px;
+             text-shadow:0 0 12px #e879f9; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="hud">
+    <span class="time" id="hudTime">60.0</span>
+    <span class="best" id="hudBest">BEST —</span>
+  </div>
+  <div id="stage">
+    <canvas id="water" width="96" height="96"></canvas>
+    <canvas id="fx" width="480" height="480"></canvas>
+  </div>
+  <div id="hint"><b>TAP the water</b> to send waves that shove the paper boat into the glowing dock.</div>
+
+  <div id="titleScreen" class="screen">
+    <h1>TIDES</h1>
+    <div class="sub">BLACKBOX &middot; physics toy 07</div>
+    <div class="howto"><b>Tap the water</b> to drop ripples.<br>Waves bounce off the walls and push your paper boat.<br>Shove it into the <b>glowing dock</b> before the 60s run out.<br>Fastest docking wins.</div>
+    <button id="startBtn">DROP THE BOAT</button>
+  </div>
+
+  <div id="endScreen" class="screen hidden">
+    <h2 id="endTitle">DOCKED</h2>
+    <div class="sub" id="endSub">time to dock</div>
+    <div class="big" id="endScore">0.0s</div>
+    <div class="newbest hidden" id="newBest">NEW BEST</div>
+    <div class="bestline" id="bestLine"></div>
+    <button id="againBtn">SAIL AGAIN</button>
+    <div class="trick">reveal the trick: <b>damped wave equation</b></div>
+  </div>
+</div>
+<script>
+"use strict";
+(function(){
+  var N = 96;
+  var C = 0.5;            // wave speed (cells per step)
+  var DAMP = 0.9965;      // damping per step
+  var GAME_T = 60;        // seconds
+  var BEST_KEY = "bb-tides-best";
+
+  var cur = new Float32Array(N*N);
+  var prev = new Float32Array(N*N);
+  var nxt = new Float32Array(N*N);
+
+  var water = document.getElementById("water");
+  var wctx = water.getContext("2d");
+  var img = wctx.createImageData(N, N);
+  var px = img.data;
+
+  var fx = document.getElementById("fx");
+  var fctx = fx.getContext("2d");
+  var FX = 480; // overlay draw space (square stage)
+
+  var stage = document.getElementById("stage");
+  var hudTime = document.getElementById("hudTime");
+  var hudBest = document.getElementById("hudBest");
+  var titleScreen = document.getElementById("titleScreen");
+  var endScreen = document.getElementById("endScreen");
+  var endTitle = document.getElementById("endTitle");
+  var endSub = document.getElementById("endSub");
+  var endScore = document.getElementById("endScore");
+  var bestLine = document.getElementById("bestLine");
+  var newBestEl = document.getElementById("newBest");
+
+  var state = "title"; // title | playing | over
+  var boat = { x: 16, y: 48, vx: 0, vy: 0 };
+  var dock = { x: 80, y: 48 };
+  var startT = 0, elapsed = 0, frame = 0;
+  var rings = []; // tap flash rings: {x, y, r, a}
+  var best = null;
+
+  try {
+    var b = localStorage.getItem(BEST_KEY);
+    if (b !== null) best = parseFloat(b);
+  } catch (e) { best = null; }
+
+  function refreshBestHud() {
+    hudBest.textContent = (best === null || isNaN(best)) ? "BEST —" : ("BEST " + best.toFixed(1) + "s");
+  }
+  refreshBestHud();
+
+  function idx(x, y) { return y * N + x; }
+
+  function simStep() {
+    var c2 = C * C, i, x, y, l;
+    for (y = 1; y < N - 1; y++) {
+      var row = y * N;
+      for (x = 1; x < N - 1; x++) {
+        i = row + x;
+        l = cur[i-1] + cur[i+1] + cur[i-N] + cur[i+N] - 4 * cur[i];
+        nxt[i] = (2 * cur[i] - prev[i] + c2 * l) * DAMP;
+      }
+    }
+    // Dirichlet walls: zero the borders so waves reflect
+    for (x = 0; x < N; x++) { nxt[x] = 0; nxt[(N-1)*N + x] = 0; }
+    for (y = 0; y < N; y++) { nxt[y*N] = 0; nxt[y*N + N-1] = 0; }
+    var t = prev; prev = cur; cur = nxt; nxt = t;
+  }
+
+  function ripple(gx, gy, amp) {
+    var R = 7, sig2 = 2 * 2.2 * 2.2;
+    var x0 = Math.max(1, Math.floor(gx - R)), x1 = Math.min(N - 2, Math.ceil(gx + R));
+    var y0 = Math.max(1, Math.floor(gy - R)), y1 = Math.min(N - 2, Math.ceil(gy + R));
+    for (var y = y0; y <= y1; y++) {
+      for (var x = x0; x <= x1; x++) {
+        var dx = x - gx, dy = y - gy, d2 = dx*dx + dy*dy;
+        if (d2 > R*R) continue;
+        cur[idx(x, y)] += amp * Math.exp(-d2 / sig2);
+      }
+    }
+  }
+
+  function sampleH(x, y) {
+    x = Math.min(N - 1.001, Math.max(0, x)); y = Math.min(N - 1.001, Math.max(0, y));
+    var x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0;
+    var a = cur[idx(x0, y0)], b = cur[idx(x0+1, y0)];
+    var c = cur[idx(x0, y0+1)], d = cur[idx(x0+1, y0+1)];
+    return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
+  }
+
+  function boatStep() {
+    var e = 1.0;
+    var gx = (sampleH(boat.x + e, boat.y) - sampleH(boat.x - e, boat.y)) / (2 * e);
+    var gy = (sampleH(boat.x, boat.y + e) - sampleH(boat.x, boat.y - e)) / (2 * e);
+    var K = 0.38, ax = -K * gx, ay = -K * gy;
+    var am = Math.sqrt(ax*ax + ay*ay), AMAX = 0.18;
+    if (am > AMAX) { ax *= AMAX / am; ay *= AMAX / am; }
+    boat.vx = (boat.vx + ax) * 0.965;
+    boat.vy = (boat.vy + ay) * 0.965;
+    var sp = Math.sqrt(boat.vx*boat.vx + boat.vy*boat.vy), SMAX = 0.65;
+    if (sp > SMAX) { boat.vx *= SMAX / sp; boat.vy *= SMAX / sp; }
+    boat.x += boat.vx; boat.y += boat.vy;
+    // bounce off walls (boat stays in the open field)
+    if (boat.x < 3) { boat.x = 3; boat.vx = Math.abs(boat.vx); }
+    if (boat.x > N - 4) { boat.x = N - 4; boat.vx = -Math.abs(boat.vx); }
+    if (boat.y < 3) { boat.y = 3; boat.vy = Math.abs(boat.vy); }
+    if (boat.y > N - 4) { boat.y = N - 4; boat.vy = -Math.abs(boat.vy); }
+  }
+
+  function render() {
+    var s = 1.7;
+    var lx = 0.42, ly = 0.55, lz = 0.72;
+    var il = 1 / Math.sqrt(lx*lx + ly*ly + lz*lz);
+    lx *= il; ly *= il; lz *= il;
+    var p = 0;
+    for (var y = 0; y < N; y++) {
+      var row = y * N;
+      for (var x = 0; x < N; x++) {
+        var i = row + x;
+        var h = cur[i];
+        var gx = (x > 0 && x < N-1) ? cur[i+1] - cur[i-1] : 0;
+        var gy = (y > 0 && y < N-1) ? cur[i+N] - cur[i-N] : 0;
+        var nx = -gx * s, ny = -gy * s, nz = 1;
+        var in2 = 1 / Math.sqrt(nx*nx + ny*ny + 1);
+        var dn = (nx*lx + ny*ly + nz*lz) * in2;
+        var diff = dn > 0 ? dn : 0;
+        var rx = 2 * dn * nx * in2 - lx;
+        var ry = 2 * dn * ny * in2 - ly;
+        // cheap tight specular: (rz^2 / |r|^2)^8 instead of pow()
+        var rz = 2 * dn * nz * in2 - lz;
+        var rs = rx*rx + ry*ry + rz*rz;
+        var spec = 0;
+        if (rs > 0 && rz > 0) {
+          spec = (rz * rz) / rs;
+          spec = spec * spec; spec = spec * spec; spec = spec * spec;
+        }
+        var t = h * 0.4 + 0.5; if (t < 0) t = 0; else if (t > 1) t = 1;
+        var r = 9 * (0.55 + 0.45 * diff) + spec * 120 + t * 10;
+        var g = 24 * (0.55 + 0.45 * diff) + spec * 190 + diff * 26;
+        var b = 46 * (0.6 + 0.4 * diff) + spec * 255 + diff * 44;
+        px[p++] = r > 255 ? 255 : r;
+        px[p++] = g > 255 ? 255 : g;
+        px[p++] = b > 255 ? 255 : b;
+        px[p++] = 255;
+      }
+    }
+    wctx.putImageData(img, 0, 0);
+  }
+
+  var k = FX / N; // grid -> overlay px
+
+  function drawFx(now) {
+    fctx.clearRect(0, 0, FX, FX);
+    // dock: pulsing neon ring
+    var dx = dock.x * k, dy = dock.y * k;
+    var pulse = 1 + 0.12 * Math.sin(now / 280);
+    fctx.strokeStyle = "#22d3ee";
+    fctx.lineWidth = 3;
+    fctx.shadowColor = "#22d3ee";
+    fctx.shadowBlur = 18;
+    fctx.beginPath(); fctx.arc(dx, dy, 20 * pulse, 0, Math.PI * 2); fctx.stroke();
+    fctx.lineWidth = 1.5; fctx.shadowBlur = 8;
+    fctx.beginPath(); fctx.arc(dx, dy, 11, 0, Math.PI * 2); fctx.stroke();
+    fctx.shadowBlur = 0;
+    // tap rings
+    for (var i = rings.length - 1; i >= 0; i--) {
+      var rg = rings[i];
+      rg.r += 3.2; rg.a -= 0.045;
+      if (rg.a <= 0) { rings.splice(i, 1); continue; }
+      fctx.strokeStyle = "rgba(165,243,252," + rg.a.toFixed(3) + ")";
+      fctx.lineWidth = 2;
+      fctx.beginPath(); fctx.arc(rg.x * k, rg.y * k, rg.r, 0, Math.PI * 2); fctx.stroke();
+    }
+    // paper boat
+    var bx = boat.x * k, by = boat.y * k;
+    var ang = Math.atan2(boat.vy, boat.vx);
+    if (Math.sqrt(boat.vx*boat.vx + boat.vy*boat.vy) < 0.05) ang = -Math.PI / 2;
+    fctx.save();
+    fctx.translate(bx, by);
+    fctx.rotate(ang + Math.PI / 2);
+    fctx.shadowColor = "#a5f3fc"; fctx.shadowBlur = 12;
+    // hull
+    fctx.fillStyle = "#e8f4ff";
+    fctx.beginPath();
+    fctx.moveTo(0, 13); fctx.lineTo(-11, -4); fctx.lineTo(11, -4); fctx.closePath(); fctx.fill();
+    fctx.shadowBlur = 0;
+    // hull fold shading
+    fctx.fillStyle = "#9db8d6";
+    fctx.beginPath();
+    fctx.moveTo(0, 13); fctx.lineTo(0, -4); fctx.lineTo(11, -4); fctx.closePath(); fctx.fill();
+    // sail
+    fctx.fillStyle = "#f0abfc";
+    fctx.beginPath();
+    fctx.moveTo(0, -6); fctx.lineTo(0, -22); fctx.lineTo(9, -6); fctx.closePath(); fctx.fill();
+    // mast
+    fctx.strokeStyle = "#e8f4ff"; fctx.lineWidth = 2;
+    fctx.beginPath(); fctx.moveTo(0, -4); fctx.lineTo(0, -23); fctx.stroke();
+    fctx.restore();
+  }
+
+  function gridFromEvent(e) {
+    var r = stage.getBoundingClientRect();
+    var sx = (e.clientX - r.left) / r.width;
+    var sy = (e.clientY - r.top) / r.height;
+    return { x: sx * N, y: sy * N };
+  }
+
+  stage.addEventListener("pointerdown", function(e) {
+    if (state !== "playing") return;
+    e.preventDefault();
+    var g = gridFromEvent(e);
+    if (g.x < 1 || g.x > N - 2 || g.y < 1 || g.y > N - 2) return;
+    ripple(g.x, g.y, 3.0);
+    rings.push({ x: g.x, y: g.y, r: 6, a: 0.9 });
+  });
+  stage.addEventListener("contextmenu", function(e) { e.preventDefault(); });
+
+  function placeActors() {
+    boat.x = 10 + Math.random() * 8;
+    boat.y = 30 + Math.random() * 36;
+    boat.vx = 0; boat.vy = 0;
+    dock.x = 72 + Math.random() * 14;
+    dock.y = 12 + Math.random() * 72;
+    rings.length = 0;
+  }
+
+  function startGame() {
+    cur.fill(0); prev.fill(0); nxt.fill(0);
+    placeActors();
+    ripple(boat.x, boat.y, 1.2);
+    startT = performance.now();
+    elapsed = 0; frame = 0;
+    state = "playing";
+    titleScreen.classList.add("hidden");
+    endScreen.classList.add("hidden");
+    hudTime.textContent = GAME_T.toFixed(1);
+  }
+
+  function endGame(win) {
+    state = "over";
+    var isBest = false;
+    if (win) {
+      endTitle.textContent = "DOCKED";
+      endSub.textContent = "time to dock — lower is better";
+      endScore.textContent = elapsed.toFixed(1) + "s";
+      if (best === null || isNaN(best) || elapsed < best) {
+        best = elapsed; isBest = true;
+        try { localStorage.setItem(BEST_KEY, String(best)); } catch (e) {}
+      }
+    } else {
+      endTitle.textContent = "DRIFTED OUT";
+      endSub.textContent = "the 60s ran out";
+      endScore.textContent = "—";
+    }
+    newBestEl.classList.toggle("hidden", !isBest);
+    bestLine.textContent = (best === null || isNaN(best)) ? "no best yet" : ("best " + best.toFixed(1) + "s");
+    refreshBestHud();
+    endScreen.classList.remove("hidden");
+  }
+
+  document.getElementById("startBtn").addEventListener("click", startGame);
+  document.getElementById("againBtn").addEventListener("click", startGame);
+
+  var last = performance.now(), acc = 0;
+  var STEP = 1000 / 60;
+
+  function tick(now) {
+    requestAnimationFrame(tick);
+    var dt = now - last; last = now;
+    if (dt > 250) dt = 250;
+    if (state === "playing") {
+      acc += dt;
+      while (acc >= STEP) {
+        acc -= STEP; frame++;
+        simStep();
+        // faint ambient drizzle keeps the water alive
+        if (frame % 200 === 0) ripple(8 + Math.random() * 80, 8 + Math.random() * 80, 0.5);
+        boatStep();
+        elapsed = (now - startT) / 1000;
+        var bdx = boat.x - dock.x, bdy = boat.y - dock.y;
+        if (bdx*bdx + bdy*bdy < 25) { endGame(true); break; }
+        if (elapsed >= GAME_T) { endGame(false); break; }
+      }
+      hudTime.textContent = Math.max(0, GAME_T - elapsed).toFixed(1);
+    } else {
+      // idle waves behind the title screen
+      acc += dt;
+      while (acc >= STEP) {
+        acc -= STEP; frame++;
+        simStep();
+        if (frame % 140 === 0) ripple(8 + Math.random() * 80, 8 + Math.random() * 80, 1.4);
+      }
+    }
+    render();
+    drawFx(now);
+  }
+
+  // idle water under the title screen
+  cur.fill(0); prev.fill(0);
+  requestAnimationFrame(tick);
+
+  // test hooks (harmless in production)
+  window.__tides = {
+    state: function() { return state; },
+    start: startGame,
+    tap: function(gx, gy) { ripple(gx, gy, 3.0); },
+    boat: function() { return { x: boat.x, y: boat.y, vx: boat.vx, vy: boat.vy }; },
+    dock: function() { return { x: dock.x, y: dock.y }; },
+    heightAt: function(x, y) { return sampleH(x, y); },
+    step: function(n) { for (var i = 0; i < n; i++) { simStep(); boatStep(); } }
+  };
+})();
+</script>
+</body>
+</html>

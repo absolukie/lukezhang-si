@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>HORDE — BLACKBOX</title>
+<style>
+:root{
+  --bg:#05070d; --panel:#0a0f1e; --line:#1b2440;
+  --neon:#39ff9c; --neon2:#35e0ff; --amber:#ffb02e; --danger:#ff3b6b;
+  --dim:#8b93a7; --ink:#dfe6f5;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  overscroll-behavior:none;}
+body{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;
+  user-select:none;-webkit-user-select:none;}
+button{touch-action:manipulation;font-family:inherit;cursor:pointer;}
+#wrap{width:100%;max-width:660px;padding:10px 10px calc(10px + env(safe-area-inset-bottom));
+  display:flex;flex-direction:column;gap:8px;}
+.brand{display:flex;align-items:baseline;justify-content:space-between;}
+.brand h1{margin:0;font-size:20px;letter-spacing:4px;color:var(--neon);
+  text-shadow:0 0 12px rgba(57,255,156,.55);}
+.brand .sub{font-size:10px;letter-spacing:2px;color:var(--dim);}
+#hud{display:flex;gap:6px;}
+.stat{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:8px;
+  padding:6px 8px;display:flex;flex-direction:column;gap:2px;min-width:0;}
+.stat .lab{font-size:9px;letter-spacing:2px;color:var(--dim);}
+.stat .val{font-size:16px;color:var(--ink);white-space:nowrap;}
+#hpwrap{display:flex;align-items:center;gap:6px;}
+#hpbar{flex:1;height:8px;background:#141b31;border-radius:4px;overflow:hidden;}
+#hpfill{height:100%;width:100%;background:linear-gradient(90deg,var(--neon),var(--neon2));
+  border-radius:4px;transition:width .2s;}
+#stage{position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;
+  background:#04060b;}
+#stage::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.5) 100%);}
+#cv{display:block;width:100%;touch-action:none;}
+#tools{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;}
+.tool{background:var(--panel);border:1px solid var(--line);color:var(--dim);
+  border-radius:8px;padding:10px 4px;font-size:12px;letter-spacing:1px;}
+.tool b{color:var(--ink);font-weight:normal;}
+.tool.on{border-color:var(--neon);color:var(--neon);box-shadow:0 0 10px rgba(57,255,156,.25) inset;}
+.tool.on b{color:var(--neon);}
+#bField.on{border-color:var(--neon2);color:var(--neon2);box-shadow:0 0 10px rgba(53,224,255,.25) inset;}
+#tools.dim{opacity:.45;pointer-events:none;}
+#buildbar{display:flex;align-items:center;gap:8px;background:var(--panel);
+  border:1px solid var(--line);border-radius:8px;padding:8px 10px;}
+#buildInfo{flex:1;font-size:13px;color:var(--amber);}
+#bStart{background:var(--neon);border:none;color:#04120a;font-weight:bold;
+  border-radius:8px;padding:12px 16px;font-size:14px;letter-spacing:1px;}
+#bStart:active{transform:scale(.97);}
+#waveInfo{font-size:12px;color:var(--dim);text-align:center;min-height:16px;}
+footer{display:flex;flex-direction:column;align-items:center;gap:6px;padding:4px 0 2px;}
+#bHow{background:none;border:1px dashed #2a3556;color:var(--dim);border-radius:20px;
+  padding:8px 18px;font-size:11px;letter-spacing:2px;}
+#howAns{font-size:14px;color:var(--neon2);letter-spacing:1px;min-height:20px;}
+#howAns[hidden]{display:none;}
+#overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  background:rgba(4,6,11,.88);backdrop-filter:blur(2px);z-index:5;padding:20px;}
+#overlay[hidden]{display:none;}
+.screen{text-align:center;max-width:420px;display:flex;flex-direction:column;gap:12px;align-items:center;}
+.screen[hidden]{display:none;}
+.screen h2{margin:0;font-size:34px;letter-spacing:6px;}
+.screen h2.green{color:var(--neon);text-shadow:0 0 18px rgba(57,255,156,.6);}
+.screen h2.red{color:var(--danger);text-shadow:0 0 18px rgba(255,59,107,.6);}
+.screen p{margin:0;font-size:13px;line-height:1.6;color:var(--dim);}
+.screen p .hl{color:var(--neon);}
+.bigbtn{background:var(--neon);border:none;color:#04120a;font-weight:bold;border-radius:10px;
+  padding:14px 34px;font-size:16px;letter-spacing:2px;}
+.bigbtn:active{transform:scale(.97);}
+.scorebox{display:flex;gap:18px;font-size:13px;}
+.scorebox .lab{font-size:9px;letter-spacing:2px;color:var(--dim);display:block;}
+.scorebox .val{font-size:22px;color:var(--ink);}
+.howline{font-size:11px;color:var(--dim);letter-spacing:1px;}
+.howline b{color:var(--neon2);font-weight:normal;}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div class="brand"><h1>HORDE</h1><span class="sub">BLACKBOX // LAB 07</span></div>
+  <div id="hud">
+    <div class="stat"><span class="lab">WAVE</span><span class="val" id="hWave">–</span></div>
+    <div class="stat"><span class="lab">BASE HP</span><span class="val" id="hpwrap"><span id="hpbar"><span id="hpfill"></span></span><span id="hHP">120</span></span></div>
+    <div class="stat"><span class="lab">SCORE</span><span class="val" id="hScore">0</span></div>
+    <div class="stat"><span class="lab">KILLS</span><span class="val" id="hKills">0</span></div>
+  </div>
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <div id="overlay">
+      <div class="screen" id="scrTitle">
+        <h2 class="green">HORDE</h2>
+        <p>Every zombie walks downhill on <span class="hl">one shared distance map</span>.
+        Build walls to bend the horde, bait it with spike traps, keep the base alive for 5 waves.</p>
+        <p class="howline">TAP CELLS TO BUILD &nbsp;·&nbsp; WALLS REROUTE &nbsp;·&nbsp; TRAPS BAIT + KILL</p>
+        <button class="bigbtn" id="bEnter">ENTER THE LAB</button>
+        <p class="howline">BEST <b id="tBest">0</b></p>
+      </div>
+      <div class="screen" id="scrWin" hidden>
+        <h2 class="green">SURVIVED</h2>
+        <p>The horde broke against your maze.</p>
+        <div class="scorebox">
+          <div><span class="lab">SCORE</span><span class="val" id="wScore">0</span></div>
+          <div><span class="lab">KILLS</span><span class="val" id="wKills">0</span></div>
+          <div><span class="lab">BEST</span><span class="val" id="wBest">0</span></div>
+        </div>
+        <button class="bigbtn" id="bAgainW">RUN IT BACK</button>
+      </div>
+      <div class="screen" id="scrLose" hidden>
+        <h2 class="red">OVERRUN</h2>
+        <p>The base fell to the horde.</p>
+        <div class="scorebox">
+          <div><span class="lab">SCORE</span><span class="val" id="lScore">0</span></div>
+          <div><span class="lab">KILLS</span><span class="val" id="lKills">0</span></div>
+          <div><span class="lab">BEST</span><span class="val" id="lBest">0</span></div>
+        </div>
+        <button class="bigbtn" id="bAgainL">TRY AGAIN</button>
+      </div>
+    </div>
+  </div>
+  <div id="tools">
+    <button class="tool on" id="bWall">WALL <b id="nWall">12</b></button>
+    <button class="tool" id="bTrap">TRAP <b id="nTrap">6</b></button>
+    <button class="tool" id="bErase">ERASE</button>
+    <button class="tool" id="bField">FIELD</button>
+  </div>
+  <div id="buildbar"><span id="buildInfo">BUILD 0:30</span><button id="bStart">START WAVE</button></div>
+  <div id="waveInfo"></div>
+  <footer>
+    <button id="bHow">HOW DID THEY DO THAT?</button>
+    <div id="howAns" hidden>flow-field pathfinding.</div>
+  </footer>
+</div>
+<script>
+'use strict';
+/* ================= CONFIG ================= */
+var COLS=24, ROWS=16, NCELL=COLS*ROWS;
+var BASE_C0=10, BASE_R0=6;          // base is a 3x3 block of cells
+var COST=[1, 10, 0.5];             // open, wall barricade, spike trap
+var WALLS_PER_WAVE=12, TRAPS_PER_WAVE=6;
+var BUILD_SECS=30;
+var TRAP_DPS=60, TRAP_DUR=900;
+var BASE_MAX=120, BASE_HEAL=25, ZOMBIE_DMG=5;
+var WAVE_TOTALS=[80,140,200,250,300];
+var ALIVE_CAP=300;
+var BEST_KEY='bb-horde-best';
+
+/* ================= DOM ================= */
+function $(id){return document.getElementById(id);}
+var canvas=$('cv'), ctx=canvas.getContext('2d'), stage=$('stage');
+var hWave=$('hWave'), hHP=$('hHP'), hpfill=$('hpfill'), hScore=$('hScore'), hKills=$('hKills');
+var nWall=$('nWall'), nTrap=$('nTrap'), buildInfo=$('buildInfo'), waveInfo=$('waveInfo');
+var tools=$('tools'), buildbar=$('buildbar');
+var overlay=$('overlay'), scrTitle=$('scrTitle'), scrWin=$('scrWin'), scrLose=$('scrLose');
+
+/* ================= GRID / FIELD ================= */
+var cellType=new Uint8Array(NCELL);   // 0 open, 1 wall, 2 trap
+var trapHP=new Float32Array(NCELL);   // remaining durability per trap cell
+var dist=new Float32Array(NCELL);     // Dijkstra distance field
+var flowX=new Float32Array(NCELL), flowY=new Float32Array(NCELL); // flow field vectors
+var DC=[1,0,-1,0,1,1,-1,-1], DR=[0,1,0,-1,1,-1,1,-1];
+
+function inBase(c,r){return c>=BASE_C0 && c<BASE_C0+3 && r>=BASE_R0 && r<BASE_R0+3;}
+
+// One Dijkstra distance field over the cost grid, seeded from the 3x3 base.
+// Recomputed on every placement, trap break, etc.
+function computeField(){
+  dist.fill(Infinity);
+  var hi=[], hd=[];
+  function swap(a,b){var t=hi[a];hi[a]=hi[b];hi[b]=t;t=hd[a];hd[a]=hd[b];hd[b]=t;}
+  function push(i,d){hi.push(i);hd.push(d);var k=hi.length-1;
+    while(k>0){var p=(k-1)>>1;if(hd[p]<=hd[k])break;swap(p,k);k=p;}}
+  function pop(){var ti=hi[0],td=hd[0],li=hi.pop(),ld=hd.pop();
+    if(hi.length){hi[0]=li;hd[0]=ld;var k=0;
+      for(;;){var l=k*2+1,r=l+1,m=k;
+        if(l<hi.length&&hd[l]<hd[m])m=l;
+        if(r<hi.length&&hd[r]<hd[m])m=r;
+        if(m===k)break;swap(m,k);k=m;}}
+    return [ti,td];}
+  for(var r=0;r<ROWS;r++)for(var c=0;c<COLS;c++){
+    if(inBase(c,r)){var i=r*COLS+c;dist[i]=0;push(i,0);}
+  }
+  while(hi.length){
+    var pd=pop(), i=pd[0], d=pd[1];
+    if(d>dist[i]+1e-9)continue; // stale heap entry
+    var c=i%COLS, r=(i/COLS)|0;
+    for(var k=0;k<8;k++){
+      var nc=c+DC[k], nr=r+DR[k];
+      if(nc<0||nr<0||nc>=COLS||nr>=ROWS)continue;
+      var n=nr*COLS+nc;
+      var step=COST[cellType[n]]*(k<4?1:1.41421356);
+      var nd=d+step;
+      if(nd<dist[n]-1e-9){dist[n]=nd;push(n,nd);}
+    }
+  }
+  // Flow: each cell points at its lowest-distance neighbor. One lookup per zombie per tick.
+  for(var r2=0;r2<ROWS;r2++)for(var c2=0;c2<COLS;c2++){
+    var i2=r2*COLS+c2;
+    if(inBase(c2,r2)){flowX[i2]=0;flowY[i2]=0;continue;}
+    var best=dist[i2], bx=0, by=0;
+    for(var k2=0;k2<8;k2++){
+      var nc2=c2+DC[k2], nr2=r2+DR[k2];
+      if(nc2<0||nr2<0||nc2>=COLS||nr2>=ROWS)continue;
+      var dd=dist[nr2*COLS+nc2];
+      if(dd<best){best=dd;bx=DC[k2];by=DR[k2];}
+    }
+    var L=Math.sqrt(bx*bx+by*by)||1;
+    flowX[i2]=bx/L; flowY[i2]=by/L;
+  }
+}
+
+/* ================= STATE ================= */
+var mode='title';       // title | build | wave | win | lose
+var waveIdx=0, score=0, kills=0, baseHP=BASE_MAX;
+var wallsLeft=WALLS_PER_WAVE, trapsLeft=TRAPS_PER_WAVE;
+var buildT=BUILD_SECS, toSpawn=0, spawnT=0;
+var zombies=[], parts=[];
+var tool='wall', showField=false;
+var best=0;
+try{best=parseInt(localStorage.getItem(BEST_KEY),10)||0;}catch(e){}
+$('tBest').textContent=best;
+
+function zombieHP(){return 25+waveIdx*10;}
+function zombieSpeed(){return 2.1+waveIdx*0.22;}
+
+function newRun(){
+  cellType.fill(0); trapHP.fill(0);
+  computeField();
+  waveIdx=0; score=0; kills=0; baseHP=BASE_MAX;
+  zombies=[]; parts=[];
+  startBuild();
+}
+function startBuild(){
+  mode='build';
+  wallsLeft=WALLS_PER_WAVE; trapsLeft=TRAPS_PER_WAVE;
+  buildT=BUILD_SECS;
+  setTool('wall');
+  overlay.hidden=true;
+  tools.classList.remove('dim');
+  buildbar.style.display='flex';
+  waveInfo.textContent='Wave '+(waveIdx+1)+' of 5 incoming: '+WAVE_TOTALS[waveIdx]+' zombies';
+}
+function startWave(){
+  if(mode!=='build')return;
+  mode='wave'; toSpawn=WAVE_TOTALS[waveIdx]; spawnT=0;
+  tools.classList.add('dim');
+  buildbar.style.display='none';
+  waveInfo.textContent='';
+}
+function endWave(){
+  score+=200*(waveIdx+1);
+  if(waveIdx>=4){win();return;}
+  waveIdx++;
+  baseHP=Math.min(BASE_MAX, baseHP+BASE_HEAL);
+  startBuild();
+}
+function finishRun(won){
+  mode=won?'win':'lose';
+  waveInfo.textContent='';
+  if(score>best){best=score;try{localStorage.setItem(BEST_KEY,String(best));}catch(e){}}
+  $('tBest').textContent=best;
+  overlay.hidden=false;
+  scrTitle.hidden=true; scrWin.hidden=!won; scrLose.hidden=won;
+  if(won){$('wScore').textContent=score;$('wKills').textContent=kills;$('wBest').textContent=best;}
+  else{$('lScore').textContent=score;$('lKills').textContent=kills;$('lBest').textContent=best;}
+}
+function win(){finishRun(true);}
+function lose(){finishRun(false);burst(BASE_C0+1.5,BASE_R0+1.5,'#ff3b6b',60);}
+
+/* ================= ZOMBIES ================= */
+function spawnZombie(){
+  var c=0, r=0;
+  for(var tries=0;tries<10;tries++){ // never spawn inside a wall
+    var side=(Math.random()*4)|0;
+    if(side===0){c=0;r=(Math.random()*ROWS)|0;}
+    else if(side===1){c=COLS-1;r=(Math.random()*ROWS)|0;}
+    else if(side===2){r=0;c=(Math.random()*COLS)|0;}
+    else{r=ROWS-1;c=(Math.random()*COLS)|0;}
+    if(cellType[r*COLS+c]!==1)break;
+  }
+  zombies.push({x:c+0.5, y:r+0.5,
+    hp:zombieHP(),
+    speed:zombieSpeed()*(0.85+Math.random()*0.3),
+    ph:Math.random()*6.2832, fr:2+Math.random()*3, amp:0.25+Math.random()*0.3});
+}
+function killZombie(i){
+  var z=zombies[i];
+  burst(z.x,z.y,'#9dff57',6);
+  zombies[i]=zombies[zombies.length-1]; zombies.pop();
+  kills++; score+=10;
+}
+function explodeAtBase(z){
+  burst(z.x,z.y,'#ff3b6b',10);
+  baseHP-=ZOMBIE_DMG;
+  if(baseHP<=0){baseHP=0;lose();}
+}
+function updateSpawns(dt){
+  if(toSpawn<=0)return;
+  spawnT-=dt;
+  if(spawnT<=0&&zombies.length<ALIVE_CAP){
+    var n=Math.min(1+(waveIdx>>1), toSpawn, ALIVE_CAP-zombies.length);
+    for(var k=0;k<n;k++)spawnZombie();
+    toSpawn-=n;
+    spawnT=0.28;
+  }
+}
+function updateZombies(dt,t){
+  var i=0;
+  while(i<zombies.length){
+    var z=zombies[i];
+    var c=z.x|0, r=z.y|0;
+    if(c<0)c=0;else if(c>=COLS)c=COLS-1;
+    if(r<0)r=0;else if(r>=ROWS)r=ROWS-1;
+    if(inBase(c,r)){
+      explodeAtBase(z);
+      zombies[i]=zombies[zombies.length-1]; zombies.pop();
+      if(mode!=='wave')return; // base fell mid-update
+      continue;
+    }
+    var idx=r*COLS+c;
+    // THE trick: one shared field lookup + per-zombie wobble so they never stack
+    var vx=flowX[idx], vy=flowY[idx];
+    var onTrap=cellType[idx]===2; // spikes snag: baited in by low cost, slowed, shredded
+    var spd=z.speed*(onTrap?0.45:1);
+    var wob=Math.sin(t*z.fr+z.ph)*z.amp;
+    var cw=Math.cos(wob), sw=Math.sin(wob);
+    var dx=vx*cw-vy*sw, dy=vx*sw+vy*cw;
+    z.x+=dx*spd*dt; z.y+=dy*spd*dt;
+    if(z.x<0.1)z.x=0.1;else if(z.x>COLS-0.1)z.x=COLS-0.1;
+    if(z.y<0.1)z.y=0.1;else if(z.y>ROWS-0.1)z.y=ROWS-0.1;
+    if(onTrap){ // spike trap cell: 60 dps + limited durability
+      var dmg=TRAP_DPS*dt;
+      z.hp-=dmg; trapHP[idx]-=dmg;
+      if(trapHP[idx]<=0){cellType[idx]=0;trapHP[idx]=0;computeField();}
+      if(z.hp<=0){killZombie(i);continue;}
+    }
+    i++;
+  }
+  if(mode==='wave'&&toSpawn<=0&&zombies.length===0)endWave();
+}
+
+/* ================= PARTICLES ================= */
+function burst(x,y,color,n){
+  for(var k=0;k<n&&parts.length<240;k++){
+    var a=Math.random()*6.2832, s=1+Math.random()*4;
+    parts.push({x:x,y:y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:0.5+Math.random()*0.4,color:color});
+  }
+}
+function updateParts(dt){
+  for(var i=parts.length-1;i>=0;i--){
+    var p=parts[i];
+    p.life-=dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.vx*=0.96; p.vy*=0.96;
+    if(p.life<=0){parts[i]=parts[parts.length-1];parts.pop();}
+  }
+}
+
+/* ================= RENDER ================= */
+var cell=16, dpr=1;
+function resize(){
+  var w=stage.clientWidth;
+  cell=w/COLS;
+  var cssH=cell*ROWS;
+  canvas.style.height=cssH+'px';
+  dpr=Math.min(2,window.devicePixelRatio||1);
+  canvas.width=Math.round(w*dpr);
+  canvas.height=Math.round(cssH*dpr);
+}
+window.addEventListener('resize',resize);
+
+function render(t){
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  var W=COLS*cell, H=ROWS*cell;
+  ctx.fillStyle='#04060b';
+  ctx.fillRect(0,0,W,H);
+  // faint grid
+  ctx.strokeStyle='rgba(27,36,64,.5)'; ctx.lineWidth=1;
+  ctx.beginPath();
+  for(var g=1;g<COLS;g++){ctx.moveTo(g*cell+.5,0);ctx.lineTo(g*cell+.5,H);}
+  for(var g2=1;g2<ROWS;g2++){ctx.moveTo(0,g2*cell+.5);ctx.lineTo(W,g2*cell+.5);}
+  ctx.stroke();
+  // FIELD overlay: faint flow arrows expose the trick
+  if(showField){
+    ctx.strokeStyle='rgba(53,224,255,.30)'; ctx.lineWidth=1;
+    ctx.beginPath();
+    for(var r=0;r<ROWS;r++)for(var c=0;c<COLS;c++){
+      var i=r*COLS+c, fx=flowX[i], fy=flowY[i];
+      if(fx===0&&fy===0)continue;
+      var cx=(c+0.5)*cell, cy=(r+0.5)*cell;
+      ctx.moveTo(cx,cy);
+      ctx.lineTo(cx+fx*cell*0.38, cy+fy*cell*0.38);
+    }
+    ctx.stroke();
+  }
+  var c2,r2,i2;
+  // spike traps (batched): amber X, alpha fades as durability drains
+  ctx.lineWidth=Math.max(1.5,cell*0.09);
+  ctx.beginPath();
+  for(r2=0;r2<ROWS;r2++)for(c2=0;c2<COLS;c2++){
+    i2=r2*COLS+c2;
+    if(cellType[i2]!==2)continue;
+    var a=0.35+0.65*Math.max(0,trapHP[i2]/TRAP_DUR);
+    ctx.strokeStyle='rgba(255,176,46,'+a.toFixed(2)+')';
+    var x0=c2*cell+cell*0.22, x1=c2*cell+cell*0.78;
+    var y0=r2*cell+cell*0.22, y1=r2*cell+cell*0.78;
+    ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);
+    ctx.moveTo(x1,y0);ctx.lineTo(x0,y1);
+    ctx.moveTo((x0+x1)/2,y0);ctx.lineTo((x0+x1)/2,y1);
+  }
+  ctx.stroke();
+  // wall barricades (batched): neon amber blocks
+  ctx.fillStyle='#8a5a10';
+  for(r2=0;r2<ROWS;r2++)for(c2=0;c2<COLS;c2++){
+    if(cellType[r2*COLS+c2]!==1)continue;
+    ctx.fillRect(c2*cell+1,r2*cell+1,cell-2,cell-2);
+  }
+  ctx.strokeStyle='#ffb02e'; ctx.lineWidth=1.5;
+  ctx.beginPath();
+  for(r2=0;r2<ROWS;r2++)for(c2=0;c2<COLS;c2++){
+    if(cellType[r2*COLS+c2]!==1)continue;
+    ctx.rect(c2*cell+1.5,r2*cell+1.5,cell-3,cell-3);
+  }
+  ctx.stroke();
+  // base 3x3: neon green core, pulses red when hurt recently
+  var bx=BASE_C0*cell, by=BASE_R0*cell, bs=3*cell;
+  ctx.fillStyle='rgba(57,255,156,.10)';
+  ctx.fillRect(bx,by,bs,bs);
+  ctx.strokeStyle='#39ff9c'; ctx.lineWidth=2;
+  var pulse=1+Math.sin(t*4)*0.03;
+  var pb=bs*pulse;
+  ctx.strokeRect(bx+(bs-pb)/2,by+(bs-pb)/2,pb,pb);
+  ctx.fillStyle='#39ff9c';
+  ctx.font='bold '+Math.round(cell*0.9)+'px monospace';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('HQ',bx+bs/2,by+bs/2);
+  // zombies (batched): one path, one fill. 300 agents, zero per-agent state cost.
+  var zr=cell*0.30;
+  ctx.fillStyle='#9dff57';
+  ctx.beginPath();
+  for(var zi=0;zi<zombies.length;zi++){
+    var z=zombies[zi];
+    ctx.moveTo(z.x*cell+zr,z.y*cell);
+    ctx.arc(z.x*cell,z.y*cell,zr,0,6.2832);
+  }
+  ctx.fill();
+  // particles
+  for(var pi=0;pi<parts.length;pi++){
+    var p=parts[pi];
+    ctx.globalAlpha=Math.max(0,Math.min(1,p.life*2));
+    ctx.fillStyle=p.color;
+    ctx.fillRect(p.x*cell-1.5,p.y*cell-1.5,3,3);
+  }
+  ctx.globalAlpha=1;
+}
+
+/* ================= HUD ================= */
+var lastHud='';
+function hud(){
+  var s=mode+'|'+waveIdx+'|'+baseHP+'|'+score+'|'+kills+'|'+wallsLeft+'|'+trapsLeft+'|'+Math.ceil(buildT)+'|'+toSpawn+'|'+zombies.length;
+  if(s===lastHud)return; lastHud=s;
+  hWave.textContent=(mode==='title')?'–':(waveIdx+1)+'/5';
+  hHP.textContent=baseHP;
+  hpfill.style.width=(100*baseHP/BASE_MAX)+'%';
+  hScore.textContent=score;
+  hKills.textContent=kills;
+  nWall.textContent=wallsLeft;
+  nTrap.textContent=trapsLeft;
+  if(mode==='build'){
+    var mm=(buildT/60)|0, ss=Math.ceil(buildT%60);
+    buildInfo.textContent='BUILD '+mm+':'+(ss<10?'0':'')+ss+' — wave '+(waveIdx+1)+' next';
+  }
+  if(mode==='wave'){
+    waveInfo.textContent='zombies left: '+(toSpawn+zombies.length);
+  }
+}
+
+/* ================= INPUT ================= */
+function setTool(t){
+  tool=t;
+  $('bWall').classList.toggle('on',t==='wall');
+  $('bTrap').classList.toggle('on',t==='trap');
+  $('bErase').classList.toggle('on',t==='erase');
+}
+$('bWall').addEventListener('click',function(){setTool('wall');});
+$('bTrap').addEventListener('click',function(){setTool('trap');});
+$('bErase').addEventListener('click',function(){setTool('erase');});
+$('bField').addEventListener('click',function(){
+  showField=!showField;
+  $('bField').classList.toggle('on',showField);
+});
+$('bStart').addEventListener('click',startWave);
+$('bEnter').addEventListener('click',function(){newRun();});
+$('bAgainW').addEventListener('click',function(){newRun();});
+$('bAgainL').addEventListener('click',function(){newRun();});
+$('bHow').addEventListener('click',function(){
+  var a=$('howAns'); a.hidden=!a.hidden;
+});
+
+var painting=false, lastCell=-1;
+function cellFromEvent(e){
+  var rect=canvas.getBoundingClientRect();
+  var x=(e.clientX-rect.left)/rect.width*COLS;
+  var y=(e.clientY-rect.top)/rect.height*ROWS;
+  var c=x|0, r=y|0;
+  if(c<0||r<0||c>=COLS||r>=ROWS)return -1;
+  return r*COLS+c;
+}
+function applyTool(idx){
+  if(mode!=='build'||idx<0)return;
+  var c=idx%COLS, r=(idx/COLS)|0;
+  if(inBase(c,r))return; // the HQ is sacred
+  var t=cellType[idx];
+  if(tool==='wall'&&t!==1){
+    if(t===2){trapsLeft++;trapHP[idx]=0;}
+    if(wallsLeft<=0)return;
+    wallsLeft--; cellType[idx]=1; computeField();
+  }else if(tool==='trap'&&t!==2){
+    if(t===1){wallsLeft++;}
+    if(trapsLeft<=0)return;
+    trapsLeft--; cellType[idx]=2; trapHP[idx]=TRAP_DUR; computeField();
+  }else if(tool==='erase'&&t!==0){
+    if(t===1)wallsLeft++; else{trapsLeft++;trapHP[idx]=0;}
+    cellType[idx]=0; computeField();
+  }
+}
+canvas.addEventListener('pointerdown',function(e){
+  e.preventDefault();
+  painting=true; lastCell=-1;
+  var idx=cellFromEvent(e);
+  if(idx!==lastCell){lastCell=idx;applyTool(idx);}
+});
+canvas.addEventListener('pointermove',function(e){
+  if(!painting)return;
+  var idx=cellFromEvent(e);
+  if(idx!==lastCell){lastCell=idx;applyTool(idx);}
+});
+window.addEventListener('pointerup',function(){painting=false;});
+window.addEventListener('pointercancel',function(){painting=false;});
+
+/* ================= MAIN LOOP ================= */
+var lastT=0;
+function frame(ts){
+  requestAnimationFrame(frame);
+  var t=ts/1000;
+  var dt=t-lastT; lastT=t;
+  if(dt>0.06)dt=0.06; if(dt<0)dt=0;
+  if(mode==='build'){
+    buildT-=dt;
+    if(buildT<=0)startWave();
+  }else if(mode==='wave'){
+    updateSpawns(dt);
+    updateZombies(dt,t);
+  }
+  updateParts(dt);
+  render(t);
+  hud();
+}
+
+/* ================= DEBUG HOOK (for automated smoke tests) ================= */
+window.__horde={
+  get mode(){return mode;},
+  get tool(){return tool;},
+  get wave(){return waveIdx+1;},
+  get baseHP(){return baseHP;},
+  get score(){return score;},
+  get kills(){return kills;},
+  get alive(){return zombies.length;},
+  get toSpawn(){return toSpawn;},
+  get best(){try{return parseInt(localStorage.getItem(BEST_KEY),10)||0;}catch(e){return 0;}},
+  walls:function(){var n=0;for(var i=0;i<NCELL;i++)if(cellType[i]===1)n++;return n;},
+  traps:function(){var n=0;for(var i=0;i<NCELL;i++)if(cellType[i]===2)n++;return n;},
+  trapTotalHP:function(){var s=0;for(var i=0;i<NCELL;i++)s+=trapHP[i];return s;},
+  positions:function(){return zombies.map(function(z){return [z.x,z.y];});},
+  flowAt:function(c,r){var i=r*COLS+c;return [flowX[i],flowY[i]];},
+  zombiesNear:function(c,r,rad){
+    var n=0;for(var i=0;i<zombies.length;i++){var z=zombies[i];
+      if(Math.abs(z.x-c)<rad&&Math.abs(z.y-r)<rad)n++;}
+    return n;
+  },
+  skipBuild:function(){buildT=0;},
+  hurtBase:function(n){baseHP-=n;if(baseHP<=0){baseHP=0;lose();}},
+  killAll:function(){while(zombies.length)killZombie(0);toSpawn=0;}
+};
+
+computeField();
+resize();
+overlay.hidden=false;
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

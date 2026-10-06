@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>TENTACLE — BLACKBOX</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; overflow:hidden; background:#030b16; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif; color:#d9f6ff;
+         display:flex; align-items:center; justify-content:center; }
+  #wrap { position:relative; width:100%; max-width:480px; height:100%; }
+  canvas { position:absolute; inset:0; width:100%; height:100%; touch-action:none; display:block; }
+  .screen { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+            text-align:center; padding:24px; background:rgba(2,8,16,.86); z-index:10; }
+  .hidden { display:none !important; }
+  h1 { font-size:46px; letter-spacing:8px; color:#c084fc; text-shadow:0 0 26px #a855f7, 0 0 60px #a855f755; margin-bottom:6px; }
+  h2 { font-size:32px; letter-spacing:5px; color:#5eead4; text-shadow:0 0 20px #2dd4bf; margin-bottom:6px; }
+  .sub { color:#6f87a8; font-size:13px; letter-spacing:3px; margin-bottom:18px; }
+  .howto { color:#c4d9ee; font-size:16px; line-height:1.7; margin-bottom:26px; max-width:330px; }
+  .howto b { color:#5eead4; }
+  button { touch-action:manipulation; font-size:17px; letter-spacing:3px; padding:15px 46px; border-radius:999px;
+           border:1px solid #2dd4bf; background:rgba(45,212,191,.12); color:#99f6e4; cursor:pointer; font-weight:700; }
+  button:active { background:rgba(45,212,191,.32); transform:scale(.97); }
+  #hud { position:absolute; top:0; left:0; right:0; display:flex; justify-content:space-between; align-items:center;
+         padding:calc(12px + env(safe-area-inset-top)) 14px 10px; z-index:5; pointer-events:none;
+         font-size:13px; letter-spacing:1.5px; color:#6f87a8; font-weight:600; }
+  #hud .lvl { color:#c084fc; }
+  #hud .prl { color:#f9a8d4; }
+  #hud .tme { color:#5eead4; }
+  #hud .hit { color:#f87171; }
+  #toast { position:absolute; left:50%; top:16%; transform:translateX(-50%); z-index:6; color:#a5f3fc; white-space:nowrap;
+           background:rgba(6,12,24,.88); border:1px solid #2dd4bf66; border-radius:12px; padding:10px 20px;
+           font-size:15px; letter-spacing:2px; opacity:0; transition:opacity .35s; pointer-events:none; }
+  .trick { margin-top:20px; font-size:13px; color:#54678a; letter-spacing:1px; }
+  .trick b { color:#a855f7; }
+  .big { font-size:52px; color:#fff; margin:4px 0 10px; text-shadow:0 0 34px #2dd4bf; font-weight:800; letter-spacing:2px; }
+  .stats { color:#aebfd8; font-size:15px; line-height:2; letter-spacing:1px; margin-bottom:14px; }
+  .stats b { color:#fff; }
+  .newbest { color:#fde047; font-size:14px; letter-spacing:3px; margin-bottom:16px; min-height:20px;
+             text-shadow:0 0 14px #fde04788; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+  <div id="hud" class="hidden">
+    <span class="lvl" id="hudLvl">LV 1/3</span>
+    <span class="prl" id="hudPearls">PEARLS 0/5</span>
+    <span class="tme" id="hudTime">TIME 0s</span>
+    <span class="hit" id="hudHits">HITS 0</span>
+  </div>
+  <div id="toast"></div>
+
+  <div id="titleScreen" class="screen">
+    <h1>TENTACLE</h1>
+    <div class="sub">BLACKBOX &middot; DEEP SEA TOY</div>
+    <div class="howto">Tap anywhere and the arm reaches. Grab <b>5 pearls</b> per level. Dodge the <b>urchins</b>.</div>
+    <button id="startBtn" type="button">DIVE IN</button>
+    <div class="trick">The trick: <b>FABRIK inverse kinematics</b></div>
+  </div>
+
+  <div id="winScreen" class="screen hidden">
+    <h2>ALL PEARLS FOUND</h2>
+    <div class="sub">3 LEVELS CLEARED</div>
+    <div class="stats" id="winStats"></div>
+    <div class="big" id="winScore">0</div>
+    <div class="sub" id="winBest"></div>
+    <div class="newbest" id="winNewBest"></div>
+    <button id="againBtn" type="button">PLAY AGAIN</button>
+    <div class="trick">The trick: <b>FABRIK inverse kinematics</b></div>
+  </div>
+</div>
+<script>
+'use strict';
+/* TENTACLE: an octopus arm driven by real FABRIK inverse kinematics.
+   14 equal segments, base pinned bottom-center, 12 FABRIK iterations per
+   frame (forward pass pins tip at goal, backward pass re-pins the base). */
+var canvas = document.getElementById('game');
+var ctx = canvas.getContext('2d');
+
+var NSEG = 14;          // segments (15 joints)
+var ITERS = 12;         // FABRIK iterations per frame
+var LEVELS = 3, PER_LEVEL = 5;
+var BEST_KEY = 'bb-tentacle-best';
+
+var W = 0, H = 0;
+var base = { x: 0, y: 0 };
+var segLen = 30, reach = 420;
+var pts = [];           // joint positions, pts[0] = base, pts[14] = tip
+var tapPt = { x: 0, y: 0 };
+var state = 'title';    // title | play | win
+var level = 1, collected = 0, hits = 0, timeSec = 0;
+var pearls = [], urchins = [], parts = [], plankton = [];
+var invuln = 0;         // seconds of post-hit invulnerability left
+var lastScore = 0, lastTimeInt = 0;
+var dragging = false;
+var toastTimer = 0;
+
+var hud = document.getElementById('hud');
+var hudLvl = document.getElementById('hudLvl');
+var hudPearls = document.getElementById('hudPearls');
+var hudTime = document.getElementById('hudTime');
+var hudHits = document.getElementById('hudHits');
+var toastEl = document.getElementById('toast');
+var titleScreen = document.getElementById('titleScreen');
+var winScreen = document.getElementById('winScreen');
+
+function rnd(a, b) { return a + Math.random() * (b - a); }
+function dist(ax, ay, bx, by) { var dx = ax - bx, dy = ay - by; return Math.sqrt(dx * dx + dy * dy); }
+function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+
+function getBest() { try { return parseInt(localStorage.getItem(BEST_KEY), 10) || 0; } catch (e) { return 0; } }
+function setBest(v) { try { localStorage.setItem(BEST_KEY, String(v)); } catch (e) {} }
+
+function toast(msg, ms) {
+  toastEl.textContent = msg;
+  toastEl.style.opacity = '1';
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { toastEl.style.opacity = '0'; }, ms || 1400);
+}
+
+/* ---------- FABRIK ---------- */
+function fabrik(goal) {
+  for (var k = 0; k < ITERS; k++) {
+    // forward: pin tip at goal, walk back to base
+    pts[NSEG].x = goal.x; pts[NSEG].y = goal.y;
+    for (var i = NSEG - 1; i >= 0; i--) {
+      var dx = pts[i].x - pts[i + 1].x, dy = pts[i].y - pts[i + 1].y;
+      var d = Math.sqrt(dx * dx + dy * dy) || 1e-6;
+      var s = segLen / d;
+      pts[i].x = pts[i + 1].x + dx * s;
+      pts[i].y = pts[i + 1].y + dy * s;
+    }
+    // backward: pin base, walk forward to tip
+    pts[0].x = base.x; pts[0].y = base.y;
+    for (var j = 1; j <= NSEG; j++) {
+      var ex = pts[j].x - pts[j - 1].x, ey = pts[j].y - pts[j - 1].y;
+      var ed = Math.sqrt(ex * ex + ey * ey) || 1e-6;
+      var es = segLen / ed;
+      pts[j].x = pts[j - 1].x + ex * es;
+      pts[j].y = pts[j - 1].y + ey * es;
+    }
+  }
+}
+
+function armRadius(i) { return (27 - 18 * i / (NSEG - 1)) / 2; } // taper 27px -> 9px
+
+/* distance from point (px,py) to segment ab */
+function segDist(px, py, ax, ay, bx, by) {
+  var dx = bx - ax, dy = by - ay;
+  var l2 = dx * dx + dy * dy;
+  var t = l2 > 0 ? ((px - ax) * dx + (py - ay) * dy) / l2 : 0;
+  t = clamp(t, 0, 1);
+  return dist(px, py, ax + dx * t, ay + dy * t);
+}
+
+/* ---------- spawning ---------- */
+function spawnUrchins(lv) {
+  urchins = [];
+  var n = lv + 1; // 2, 3, 4
+  var tries = 0;
+  while (urchins.length < n && tries < 200) {
+    tries++;
+    var x = rnd(44, W - 44), y = rnd(96, base.y - 130);
+    if (dist(x, y, base.x, base.y) < 150) continue;
+    var ok = true;
+    for (var i = 0; i < urchins.length; i++) {
+      if (dist(x, y, urchins[i].x, urchins[i].y) < 110) { ok = false; break; }
+    }
+    // keep clear of the idle arm (straight up from base)
+    for (var s = 0; s <= NSEG && ok; s++) {
+      if (dist(x, y, base.x, base.y - s * segLen) < 70) ok = false;
+    }
+    if (!ok) continue;
+    var ang = rnd(0, Math.PI * 2), sp = rnd(18, 38) * (1 + 0.18 * (lv - 1));
+    urchins.push({ x: x, y: y, r: 15, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+                   spin: rnd(0, 6.28), spinV: rnd(-1.2, 1.2) });
+  }
+}
+
+function pearlClear(x, y, minU, minP) {
+  for (var i = 0; i < urchins.length; i++)
+    if (dist(x, y, urchins[i].x, urchins[i].y) < minU) return false;
+  for (var j = 0; j < pearls.length; j++)
+    if (dist(x, y, pearls[j].x, pearls[j].y) < minP) return false;
+  return true;
+}
+
+function spawnPearlAnywhere() {
+  for (var t = 0; t < 80; t++) {
+    var ang = -Math.PI / 2 + rnd(-1, 1) * (Math.PI / 2 - 0.22);
+    var r = rnd(reach * 0.34, reach * 0.95);
+    var x = clamp(base.x + Math.cos(ang) * r, 30, W - 30);
+    var y = clamp(base.y + Math.sin(ang) * r, 74, base.y - 40);
+    if (!pearlClear(x, y, 92, 74)) continue;
+    var nearArm = false;
+    for (var s = 0; s <= NSEG; s++) {
+      if (dist(x, y, base.x, base.y - s * segLen) < 52) { nearArm = true; break; }
+    }
+    if (nearArm) continue;
+    pearls.push({ x: x, y: y, bx: x, by: y, ph: rnd(0, 6.28) });
+    return true;
+  }
+  // fallback: accept looser spacing rather than fewer pearls
+  for (var u = 0; u < 40; u++) {
+    var a2 = -Math.PI / 2 + rnd(-1, 1) * 1.2;
+    var r2 = rnd(reach * 0.34, reach * 0.95);
+    var x2 = clamp(base.x + Math.cos(a2) * r2, 30, W - 30);
+    var y2 = clamp(base.y + Math.sin(a2) * r2, 74, base.y - 40);
+    if (!pearlClear(x2, y2, 60, 50)) continue;
+    pearls.push({ x: x2, y: y2, bx: x2, by: y2, ph: rnd(0, 6.28) });
+    return true;
+  }
+  return false;
+}
+
+/* dropped pearl respawns near the hit point, still in the reachable annulus */
+function respawnPearlNear(x, y) {
+  for (var t = 0; t < 60; t++) {
+    var ang = rnd(0, Math.PI * 2), rr = rnd(56, 130);
+    var px = x + Math.cos(ang) * rr, py = y + Math.sin(ang) * rr;
+    var dBase = dist(px, py, base.x, base.y);
+    if (dBase < reach * 0.3 || dBase > reach * 0.97) continue;
+    px = clamp(px, 30, W - 30); py = clamp(py, 74, base.y - 40);
+    if (!pearlClear(px, py, 70, 60)) continue;
+    pearls.push({ x: px, y: py, bx: px, by: py, ph: rnd(0, 6.28) });
+    return;
+  }
+  spawnPearlAnywhere();
+}
+
+function spawnLevel(lv) {
+  pearls = [];
+  spawnUrchins(lv);
+  for (var i = 0; i < PER_LEVEL; i++) spawnPearlAnywhere();
+  invuln = 0;
+}
+
+/* ---------- game flow ---------- */
+function startGame() {
+  level = 1; collected = 0; hits = 0; timeSec = 0;
+  tapPt.x = base.x; tapPt.y = base.y - reach * 0.7;
+  for (var i = 0; i <= NSEG; i++) { pts[i].x = base.x; pts[i].y = base.y - i * segLen; }
+  spawnLevel(1);
+  state = 'play';
+  titleScreen.classList.add('hidden');
+  winScreen.classList.add('hidden');
+  hud.classList.remove('hidden');
+  toast('LEVEL 1 · 5 PEARLS · 2 URCHINS');
+  updateHud();
+}
+
+function levelClear() {
+  burst(pts[NSEG].x, pts[NSEG].y, '#f9a8d4', 26);
+  if (level >= LEVELS) { winGame(); return; }
+  level++;
+  collected = 0;
+  spawnLevel(level);
+  toast('LEVEL ' + level + ' · 5 PEARLS · ' + (level + 1) + ' URCHINS');
+  updateHud();
+}
+
+function winGame() {
+  state = 'win';
+  lastTimeInt = Math.round(timeSec);
+  lastScore = Math.max(0, 30000 - 100 * lastTimeInt - 1500 * hits);
+  var best = getBest(), isNew = lastScore > best;
+  if (isNew) setBest(lastScore);
+  document.getElementById('winStats').innerHTML =
+    'TIME <b>' + lastTimeInt + 's</b> &nbsp;·&nbsp; HITS <b>' + hits + '</b> &nbsp;·&nbsp; PEARLS <b>15/15</b><br>SCORE';
+  document.getElementById('winScore').textContent = lastScore;
+  document.getElementById('winBest').textContent = 'BEST ' + Math.max(best, lastScore);
+  document.getElementById('winNewBest').textContent = isNew ? 'NEW BEST' : '';
+  hud.classList.add('hidden');
+  winScreen.classList.remove('hidden');
+}
+
+function urchinHit(u) {
+  hits++;
+  invuln = 1.4;
+  burst(u.x, u.y, '#f87171', 22);
+  if (collected > 0) {
+    collected--;
+    respawnPearlNear(u.x, u.y); // invariant: active pearls + collected stays 5
+    toast('OUCH · PEARL LOST');
+  } else {
+    toast('OUCH');
+  }
+  updateHud();
+}
+
+function burst(x, y, color, n) {
+  for (var i = 0; i < n; i++) {
+    var a = rnd(0, Math.PI * 2), sp = rnd(40, 190);
+    parts.push({ x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+                 life: rnd(0.35, 0.8), max: 0.8, color: color, size: rnd(2, 5) });
+  }
+}
+
+/* ---------- update ---------- */
+function update(dt, now) {
+  // target lerps toward the tap (dt-scaled), plus a subtle idle sway
+  var k = 1 - Math.exp(-7 * dt);
+  tapPt.x += (tapGoal.x - tapPt.x) * k;
+  tapPt.y += (tapGoal.y - tapPt.y) * k;
+  var sx = Math.sin(now * 1.1) * 9, sy = Math.cos(now * 1.6) * 7;
+  fabrik({ x: tapPt.x + sx, y: tapPt.y + sy });
+
+  var tip = pts[NSEG];
+
+  if (state === 'play') {
+    timeSec += dt;
+
+    // pearl bob + tip collection
+    for (var i = pearls.length - 1; i >= 0; i--) {
+      var p = pearls[i];
+      p.x = p.bx + Math.sin(now * 0.9 + p.ph) * 6;
+      p.y = p.by + Math.cos(now * 1.2 + p.ph) * 5;
+      if (dist(tip.x, tip.y, p.x, p.y) < 24) {
+        pearls.splice(i, 1);
+        collected++;
+        burst(p.x, p.y, '#fde68a', 16);
+        updateHud();
+        if (collected >= PER_LEVEL) { levelClear(); break; }
+      }
+    }
+
+    // urchins drift
+    for (var u = 0; u < urchins.length; u++) {
+      var ur = urchins[u];
+      ur.x += ur.vx * dt; ur.y += ur.vy * dt;
+      ur.spin += ur.spinV * dt;
+      if (ur.x < ur.r + 8) { ur.x = ur.r + 8; ur.vx = Math.abs(ur.vx); }
+      if (ur.x > W - ur.r - 8) { ur.x = W - ur.r - 8; ur.vx = -Math.abs(ur.vx); }
+      if (ur.y < 84) { ur.y = 84; ur.vy = Math.abs(ur.vy); }
+      if (ur.y > base.y - 90) { ur.y = base.y - 90; ur.vy = -Math.abs(ur.vy); }
+    }
+
+    // any arm segment vs any urchin
+    if (invuln > 0) invuln -= dt; else {
+      var hit = null;
+      outer:
+      for (var v = 0; v < urchins.length; v++) {
+        var uu = urchins[v];
+        for (var sgi = 0; sgi < NSEG; sgi++) {
+          if (segDist(uu.x, uu.y, pts[sgi].x, pts[sgi].y, pts[sgi + 1].x, pts[sgi + 1].y)
+              < uu.r + armRadius(sgi) * 0.85) { hit = uu; break outer; }
+        }
+      }
+      if (hit) urchinHit(hit);
+    }
+  }
+
+  // particles
+  for (var q = parts.length - 1; q >= 0; q--) {
+    var pt = parts[q];
+    pt.x += pt.vx * dt; pt.y += pt.vy * dt;
+    pt.vx *= (1 - 2.2 * dt); pt.vy *= (1 - 2.2 * dt);
+    pt.life -= dt;
+    if (pt.life <= 0) parts.splice(q, 1);
+  }
+  // plankton drift
+  for (var m = 0; m < plankton.length; m++) {
+    var pl = plankton[m];
+    pl.y -= pl.v * dt; pl.x += Math.sin(now * 0.7 + pl.ph) * 6 * dt;
+    if (pl.y < -6) { pl.y = H + 6; pl.x = rnd(0, W); }
+  }
+}
+
+/* tapGoal: where the player asked the arm to go (lerped target) */
+var tapGoal = { x: 0, y: 0 };
+
+/* ---------- render ---------- */
+function render(now) {
+  var g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#02060e');
+  g.addColorStop(0.55, '#04101f');
+  g.addColorStop(1, '#071a2b');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  // plankton
+  for (var i = 0; i < plankton.length; i++) {
+    var pl = plankton[i];
+    ctx.globalAlpha = pl.a;
+    ctx.fillStyle = '#7dd3fc';
+    ctx.beginPath(); ctx.arc(pl.x, pl.y, pl.s, 0, 6.2832); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // seabed mound anchoring the arm
+  ctx.fillStyle = '#0a1522';
+  ctx.beginPath();
+  ctx.ellipse(base.x, base.y + 34, 110, 44, 0, Math.PI, 0);
+  ctx.fill();
+  ctx.fillStyle = '#0e1d30';
+  ctx.beginPath();
+  ctx.ellipse(base.x - 40, base.y + 30, 34, 20, 0, Math.PI, 0);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(base.x + 52, base.y + 32, 26, 16, 0, Math.PI, 0);
+  ctx.fill();
+
+  // pearls
+  for (var pi = 0; pi < pearls.length; pi++) {
+    var p = pearls[pi];
+    var pg = ctx.createRadialGradient(p.x, p.y, 2, p.x, p.y, 26);
+    pg.addColorStop(0, 'rgba(249,168,212,.55)');
+    pg.addColorStop(1, 'rgba(249,168,212,0)');
+    ctx.fillStyle = pg;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 26, 0, 6.2832); ctx.fill();
+    var bg = ctx.createRadialGradient(p.x - 3, p.y - 4, 1, p.x, p.y, 12);
+    bg.addColorStop(0, '#ffffff');
+    bg.addColorStop(0.55, '#fbd3e8');
+    bg.addColorStop(1, '#e58bb8');
+    ctx.fillStyle = bg;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 11, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.9)';
+    ctx.beginPath(); ctx.arc(p.x - 3.5, p.y - 4.5, 2.6, 0, 6.2832); ctx.fill();
+  }
+
+  // urchins
+  for (var ui = 0; ui < urchins.length; ui++) {
+    var u = urchins[ui];
+    var ug = ctx.createRadialGradient(u.x, u.y, 2, u.x, u.y, u.r + 12);
+    ug.addColorStop(0, 'rgba(168,85,247,.35)');
+    ug.addColorStop(1, 'rgba(168,85,247,0)');
+    ctx.fillStyle = ug;
+    ctx.beginPath(); ctx.arc(u.x, u.y, u.r + 12, 0, 6.2832); ctx.fill();
+    ctx.strokeStyle = '#8b5cf6'; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
+    for (var sp = 0; sp < 12; sp++) {
+      var a = u.spin + sp * (Math.PI / 6);
+      ctx.beginPath();
+      ctx.moveTo(u.x + Math.cos(a) * u.r * 0.55, u.y + Math.sin(a) * u.r * 0.55);
+      ctx.lineTo(u.x + Math.cos(a) * (u.r + 9), u.y + Math.sin(a) * (u.r + 9));
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#170b2b';
+    ctx.beginPath(); ctx.arc(u.x, u.y, u.r, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = '#2dd4bf';
+    ctx.beginPath(); ctx.arc(u.x, u.y, 3.4, 0, 6.2832); ctx.fill();
+  }
+
+  // arm: tapered purple->teal strokes, round caps
+  var tip = pts[NSEG];
+  var ag = ctx.createLinearGradient(base.x, base.y, tip.x, tip.y);
+  ag.addColorStop(0, '#7c3aed');
+  ag.addColorStop(0.55, '#8b5cf6');
+  ag.addColorStop(1, '#2dd4bf');
+  var blink = (invuln > 0 && Math.floor(now * 9) % 2 === 0);
+  ctx.save();
+  if (blink) ctx.globalAlpha = 0.45;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = ag;
+  for (var sgi = 0; sgi < NSEG; sgi++) {
+    ctx.lineWidth = 27 - 18 * sgi / (NSEG - 1);
+    ctx.beginPath();
+    ctx.moveTo(pts[sgi].x, pts[sgi].y);
+    ctx.lineTo(pts[sgi + 1].x, pts[sgi + 1].y);
+    ctx.stroke();
+  }
+  // sucker dots along the arm
+  ctx.fillStyle = 'rgba(255,255,255,.28)';
+  for (var sk = 1; sk < NSEG; sk++) {
+    var mx = (pts[sk].x + pts[sk + 1].x) / 2, my = (pts[sk].y + pts[sk + 1].y) / 2;
+    var wdt = (27 - 18 * sk / (NSEG - 1)) * 0.15;
+    ctx.beginPath(); ctx.arc(mx, my, Math.max(1.4, wdt), 0, 6.2832); ctx.fill();
+  }
+  ctx.restore();
+
+  // glowing tip
+  var tg = ctx.createRadialGradient(tip.x, tip.y, 1, tip.x, tip.y, 26);
+  tg.addColorStop(0, 'rgba(153,246,228,.85)');
+  tg.addColorStop(1, 'rgba(45,212,191,0)');
+  ctx.fillStyle = tg;
+  ctx.beginPath(); ctx.arc(tip.x, tip.y, 26, 0, 6.2832); ctx.fill();
+  ctx.fillStyle = '#d9fff8';
+  ctx.beginPath(); ctx.arc(tip.x, tip.y, 5, 0, 6.2832); ctx.fill();
+
+  // particles
+  for (var qi = 0; qi < parts.length; qi++) {
+    var q2 = parts[qi];
+    ctx.globalAlpha = Math.max(0, q2.life / q2.max);
+    ctx.fillStyle = q2.color;
+    ctx.beginPath(); ctx.arc(q2.x, q2.y, q2.size, 0, 6.2832); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* ---------- HUD ---------- */
+var lastHud = '';
+function updateHud() {
+  var s = level + '|' + collected + '|' + Math.floor(timeSec) + '|' + hits;
+  if (s === lastHud) return;
+  lastHud = s;
+  hudLvl.textContent = 'LV ' + level + '/3';
+  hudPearls.textContent = 'PEARLS ' + collected + '/' + PER_LEVEL;
+  hudTime.textContent = 'TIME ' + Math.floor(timeSec) + 's';
+  hudHits.textContent = 'HITS ' + hits;
+}
+
+/* ---------- sizing ---------- */
+function resize() {
+  var r = canvas.getBoundingClientRect();
+  var dpr = Math.min(2, window.devicePixelRatio || 1);
+  W = Math.max(280, r.width); H = Math.max(480, r.height);
+  canvas.width = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  base.x = W / 2; base.y = H - 56;
+  reach = Math.min(H * 0.5, 430);
+  segLen = reach / NSEG;
+  if (!pts.length) {
+    for (var i = 0; i <= NSEG; i++) pts.push({ x: base.x, y: base.y - i * segLen });
+    tapGoal.x = base.x; tapGoal.y = base.y - reach * 0.7;
+    tapPt.x = tapGoal.x; tapPt.y = tapGoal.y;
+  }
+  for (var j = 0; j < pearls.length; j++) {
+    pearls[j].bx = clamp(pearls[j].bx, 30, W - 30);
+    pearls[j].by = clamp(pearls[j].by, 74, base.y - 40);
+  }
+  for (var k = 0; k < urchins.length; k++) {
+    urchins[k].x = clamp(urchins[k].x, 20, W - 20);
+    urchins[k].y = clamp(urchins[k].y, 84, base.y - 90);
+  }
+}
+
+/* ---------- input ---------- */
+function toGame(e) {
+  var r = canvas.getBoundingClientRect();
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
+}
+canvas.addEventListener('pointerdown', function (e) {
+  var p = toGame(e);
+  tapGoal.x = p.x; tapGoal.y = p.y;
+  dragging = true;
+  try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+});
+canvas.addEventListener('pointermove', function (e) {
+  if (!dragging) return;
+  var p = toGame(e);
+  tapGoal.x = p.x; tapGoal.y = p.y;
+});
+canvas.addEventListener('pointerup', function () { dragging = false; });
+canvas.addEventListener('pointercancel', function () { dragging = false; });
+canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('againBtn').addEventListener('click', startGame);
+window.addEventListener('resize', resize);
+
+/* ---------- main loop ---------- */
+var lastT = 0;
+function frame(nowMs) {
+  var now = nowMs / 1000;
+  var dt = lastT ? Math.min(0.05, now - lastT) : 0.016;
+  lastT = now;
+  update(dt, now);
+  render(now);
+  if (state === 'play') updateHud();
+  requestAnimationFrame(frame);
+}
+
+/* ---------- debug hooks (used by the smoke test bot) ---------- */
+Object.defineProperty(window, '__tip', {
+  configurable: true,
+  get: function () {
+    var t = pts[NSEG] || { x: 0, y: 0 };
+    return { x: t.x, y: t.y };
+  }
+});
+window.__tentacle = {
+  start: function () { startGame(); },
+  tap: function (x, y) { tapGoal.x = x; tapGoal.y = y; },
+  get state() { return state; },
+  get level() { return level; },
+  get collected() { return collected; },
+  get hits() { return hits; },
+  get timeSec() { return timeSec; },
+  get score() { return lastScore; },
+  get pearls() { return pearls.map(function (p) { return { x: p.x, y: p.y }; }); },
+  get urchins() { return urchins.map(function (u) { return { x: u.x, y: u.y, r: u.r }; }); },
+  get tip() { var t = pts[NSEG]; return { x: t.x, y: t.y }; },
+  get base() { return { x: base.x, y: base.y }; },
+  get reach() { return reach; }
+};
+
+/* ---------- boot ---------- */
+for (var pi = 0; pi < 46; pi++) {
+  plankton.push({ x: rnd(0, 400), y: rnd(0, 844), s: rnd(1, 2.6),
+                  a: rnd(0.12, 0.4), v: rnd(6, 22), ph: rnd(0, 6.28) });
+}
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

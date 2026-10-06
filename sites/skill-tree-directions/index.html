@@ -66,6 +66,41 @@
   .node.sel .halo { opacity: 1; }
   .node text { user-select: none; -webkit-user-select: none; pointer-events: none; }
 
+  .nextsteps { padding: 12px 14px 16px; border-top: 1px solid rgba(255,255,255,0.08); }
+  .ns-title {
+    font-size: 11px; font-weight: 800; letter-spacing: 1.6px; text-transform: uppercase;
+    opacity: 0.6; margin-bottom: 8px;
+  }
+  .ns-row {
+    display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+    padding: 12px; margin-bottom: 8px; border-radius: 12px; border: 1px solid;
+    font-size: 13.5px; font-weight: 700; font-family: inherit; color: inherit;
+    touch-action: manipulation; cursor: pointer; -webkit-tap-highlight-color: transparent;
+    background: transparent;
+  }
+  .ns-row:last-child { margin-bottom: 0; }
+  .ns-row:active { transform: scale(0.98); }
+  .ns-skill { flex: 0 0 auto; font-size: 12px; font-weight: 800; letter-spacing: 0.4px; opacity: 0.65; }
+  .ns-arrow { flex: 0 0 auto; opacity: 0.45; }
+  .ns-node { flex: 1 1 auto; }
+  .ns-nocturne { background: #070b18; color: #dfe6ff; }
+  .ns-nocturne .ns-row { border-color: #2a3560; background: #10162e; }
+  .ns-nocturne .ns-row.on { border-color: #8fa0ff; }
+  .ns-trailhead { background: #f7e7c3; color: #4a3a26; }
+  .ns-trailhead .ns-row { border-color: #d9c08e; background: #fdf3dd; }
+  .ns-trailhead .ns-row.on { border-color: #8a5a33; }
+  .ns-trailhead .ns-title { color: #8a6f45; opacity: 0.8; }
+  .ns-sumi { background: #faf7f0; color: #2b2b2b; }
+  .ns-sumi .ns-row { border-color: #d8d2c2; background: #ffffff; }
+  .ns-sumi .ns-row.on { border-color: #b3352b; }
+  .ns-sumi .ns-title { color: #8a8478; opacity: 0.9; }
+  .ns-arcade { background: #0a0a18; color: #c9cdf5; font-family: Menlo, Consolas, monospace; }
+  .ns-arcade .ns-row { border-color: #2a2a5e; background: #101024; }
+  .ns-arcade .ns-row.on { border-color: #00e5ff; }
+  .ns-canopy { background: #0d1117; color: #e6edf3; }
+  .ns-canopy .ns-row { border-color: #30363d; background: #161b22; }
+  .ns-canopy .ns-row.on { border-color: #39d353; }
+
   .sheet {
     margin-top: 12px; background: #141926; border: 1px solid #232c42;
     border-radius: 16px; padding: 14px 15px; min-height: 118px;
@@ -110,7 +145,7 @@
 <div class="wrap">
   <div class="hero">
     <h1>Skill Tree, <span class="accent">Round Two</span></h1>
-    <p>Five fresh visual directions for your gamified skill tree. Same real skill data in every one. <b>Tap any node</b> to see its level, XP, and next quest, then pick the direction that makes you grin.</p>
+    <p>Five fresh visual directions for your skill tree, each one grown as a real tree. Same real skill data in every one. <b>Tap any node</b> to see its level, XP, and next quest, then pick the direction that makes you grin.</p>
     <div class="rule"><b>The Level-Up Rule:</b> a node levels up only when you have tried it hands-on AND written down your take. Reading never counts.</div>
     <div class="legend" id="legend"></div>
   </div>
@@ -120,39 +155,83 @@
   <div class="sheet hint" id="sheet"><p>Tap any node above to see its level,<br>XP, and next quest.</p></div>
   <div class="foot">Sample data uses your real skill areas at honest beginner-to-intermediate levels.<br>Nothing here is maxed out. Nothing is fake.</div>
 </div>
-<div class="ver">v2026.10.06-night</div>
+<div class="ver">v2026.10.06-r2</div>
 <script>
 "use strict";
-/* ================= shared skill data (identical in every direction) ================= */
+/* ================= real skill trees: 4 skills, each 4+ levels deep ================= */
 /* states: op = opinionated (tried it + wrote the take), tried = tried hands-on, take not written yet,
    fog = undiscovered, star = shipped in the real world */
-var BRANCHES = [
-  { name: "Mandarin", nodes: [
-    { n: "Pinyin Reading",   s: "op",    lv: 2, xp: 78, q: "Write your take: what still trips you up between z/c/s and zh/ch/sh." },
-    { n: "Tone Pairs",       s: "tried", lv: 1, xp: 40, q: "Do 3 tone-pair drills this week, then write down the take." },
-    { n: "Survival Phrases", s: "fog",   lv: 0, xp: 0,  q: "Try one phrase with a real person before the China trip." }
-  ]},
-  { name: "Game Dev + Web Craft", nodes: [
-    { n: "Ship Weekly",      s: "op",    lv: 3, xp: 85, q: "Keep sharp: ship one small thing every week." },
-    { n: "Canvas Animation", s: "op",    lv: 2, xp: 60, q: "Try particles with requestAnimationFrame, then write the take." },
-    { n: "WebGL Shaders",    s: "tried", lv: 1, xp: 30, q: "Write one GLSL shader from scratch, foil-cards style." },
-    { n: "App Store Release",s: "fog",   lv: 0, xp: 0,  q: "Finish the Apple Developer signup and prep the Get Clocked listing." }
-  ]},
-  { name: "Cooking", nodes: [
-    { n: "Weekend Eggs",     s: "star",  lv: 3, xp: 92, q: "Keep sharp: eggs every weekend." },
-    { n: "Pasta Night",      s: "op",    lv: 2, xp: 65, q: "Write the take: your al-dente rule." },
-    { n: "Stir-Fry Basics",  s: "tried", lv: 1, xp: 45, q: "Cook one wok dish and note what burned." },
-    { n: "Knife Skills",     s: "fog",   lv: 0, xp: 0,  q: "Try julienning one onion." }
-  ]},
-  { name: "Communication", nodes: [
-    { n: "3-2-1 Framework",       s: "tried", lv: 1, xp: 50, q: "Use it in one work update, then write the take." },
-    { n: "Pause Before Reacting", s: "fog",   lv: 0, xp: 0,  q: "Try the pause drill in one real conversation." }
-  ]},
-  { name: "Fitness", nodes: [
-    { n: "Push-up Base",     s: "op",    lv: 2, xp: 70, q: "Write the take: what broke your last streak." },
-    { n: "Zone 2 Cardio",    s: "tried", lv: 1, xp: 40, q: "Three 30-minute sessions this week." },
-    { n: "Strength Program", s: "fog",   lv: 0, xp: 0,  q: "Try one full-body session." }
-  ]}
+var SKILLS = [
+  { name: "Mandarin", tag: "Mandarin", root:
+    { n: "Mandarin", s: "tried", lv: 1, xp: 40, q: "Do one 15 minute lesson a day until the China trip.", kids: [
+      { n: "Speak Aloud", s: "tried", lv: 1, xp: 38, q: "Say every practice line out loud, never in your head.", kids: [
+        { n: "Tone Pairs", s: "tried", lv: 1, xp: 42, q: "Drill the 3-2 and 2-4 pairs for 5 minutes a day.", kids: [
+          { n: "Sh Sounds", s: "op", lv: 2, xp: 68, q: "Write your take: which pairs still trip you up.", kids: [
+            { n: "Tongue Trick", s: "fog", lv: 0, xp: 0, q: "Try the tongue curl trick once and note if it helps.", kids: [] }
+          ] },
+          { n: "Falling Tone", s: "fog", lv: 0, xp: 0, q: "Try the falling tone drill once.", kids: [] }
+        ] },
+        { n: "Survival Phrases", s: "fog", lv: 0, xp: 0, q: "Try one phrase with a real person.", kids: [
+          { n: "Ask for the Bill", s: "fog", lv: 0, xp: 0, q: "Learn the bill phrase before December.", kids: [] }
+        ] }
+      ] },
+      { n: "Read Pinyin", s: "op", lv: 2, xp: 72, q: "Keep sharp: read one sign out loud each day.", kids: [
+        { n: "Menu Reading", s: "tried", lv: 1, xp: 35, q: "Read one real menu out loud.", kids: [
+          { n: "Food Words", s: "tried", lv: 1, xp: 30, q: "Learn 10 food words this week.", kids: [] }
+        ] }
+      ] }
+    ] }
+  },
+  { name: "Game Dev", tag: "Game Dev", root:
+    { n: "Game Dev", s: "op", lv: 3, xp: 82, q: "Ship one small thing every week.", kids: [
+      { n: "Ship Weekly", s: "op", lv: 3, xp: 85, q: "Keep the streak: one small thing a week.", kids: [
+        { n: "Tiny Games", s: "op", lv: 2, xp: 70, q: "Finish one tiny game a month.", kids: [
+          { n: "Ballz Recut", s: "star", lv: 4, xp: 95, q: "It is live. Point people at the link.", kids: [] },
+          { n: "One-Button Game", s: "tried", lv: 1, xp: 40, q: "Build it in one sitting.", kids: [
+            { n: "Juice Pass", s: "fog", lv: 0, xp: 0, q: "Add one juicy effect, then ship it.", kids: [] }
+          ] }
+        ] },
+        { n: "Shaders", s: "tried", lv: 1, xp: 30, q: "Write one shader from scratch.", kids: [
+          { n: "Foil Shine", s: "tried", lv: 1, xp: 28, q: "Recreate the foil card shine.", kids: [] }
+        ] }
+      ] },
+      { n: "App Release", s: "fog", lv: 0, xp: 0, q: "Finish the Apple Developer signup.", kids: [
+        { n: "Store Listing", s: "fog", lv: 0, xp: 0, q: "Prep the Get Clocked screenshots.", kids: [] }
+      ] }
+    ] }
+  },
+  { name: "Cooking", tag: "Cooking", root:
+    { n: "Cooking", s: "op", lv: 2, xp: 66, q: "Cook twice a week and note what worked.", kids: [
+      { n: "Weekend Eggs", s: "star", lv: 3, xp: 92, q: "Keep sharp: eggs every weekend.", kids: [
+        { n: "Soft Scramble", s: "op", lv: 2, xp: 75, q: "Write your take: your low heat rule.", kids: [
+          { n: "Heat Control", s: "op", lv: 2, xp: 70, q: "Write your take on your pan heat zones.", kids: [
+            { n: "Butter First", s: "tried", lv: 1, xp: 45, q: "Try butter before oil once and compare.", kids: [] }
+          ] }
+        ] },
+        { n: "Crispy Edges", s: "tried", lv: 1, xp: 50, q: "Get lacy edges on one fried egg.", kids: [] }
+      ] },
+      { n: "Stir Fry", s: "tried", lv: 1, xp: 45, q: "Cook one wok dish a week.", kids: [
+        { n: "Wok Heat", s: "tried", lv: 1, xp: 40, q: "Note what burned and why.", kids: [
+          { n: "Wok Smoke", s: "fog", lv: 0, xp: 0, q: "Chase the smoky flavor once.", kids: [] }
+        ] }
+      ] }
+    ] }
+  },
+  { name: "Communication", tag: "Comms", root:
+    { n: "Communication", s: "tried", lv: 1, xp: 48, q: "Use the 3-2-1 shape in one real update.", kids: [
+      { n: "3-2-1 Shape", s: "tried", lv: 1, xp: 50, q: "Use it in one work update this week.", kids: [
+        { n: "Short Updates", s: "tried", lv: 1, xp: 44, q: "Cut one long update in half.", kids: [
+          { n: "One Line Lead", s: "op", lv: 2, xp: 62, q: "Write your take: your lead line rule.", kids: [
+            { n: "Cut the Setup", s: "fog", lv: 0, xp: 0, q: "Delete your first sentence once and see what happens.", kids: [] }
+          ] }
+        ] },
+        { n: "Meeting Notes", s: "fog", lv: 0, xp: 0, q: "Try the shape in one meeting.", kids: [] }
+      ] },
+      { n: "Pause First", s: "fog", lv: 0, xp: 0, q: "Try the pause in one real conversation.", kids: [
+        { n: "Listen First", s: "fog", lv: 0, xp: 0, q: "Count to two before you reply, once.", kids: [] }
+      ] }
+    ] }
+  }
 ];
 var STATE_META = {
   op:    { label: "Opinionated",  c: "#34d399" },
@@ -184,320 +263,590 @@ function starPath(r){
   }
   return s + "Z";
 }
+
+/* ================= tree layout engine ================= */
+/* leaves spread across [x0,x1], internal node x = mean of children x, y = groundY - depth*levelH */
+function layoutTree(root, x0, x1, groundY, levelH){
+  var leaves = [];
+  (function walk(nd, d){
+    nd._d = d;
+    var k = nd.kids || [], i;
+    if (!k.length){ leaves.push(nd); }
+    else { for (i = 0; i < k.length; i++){ walk(k[i], d + 1); } }
+  })(root, 0);
+  var n = leaves.length, i;
+  for (i = 0; i < n; i++){ leaves[i]._x = (n === 1) ? (x0 + x1) / 2 : x0 + (x1 - x0) * i / (n - 1); }
+  (function setX(nd){
+    var k = nd.kids || [], i, sum = 0;
+    if (k.length){
+      for (i = 0; i < k.length; i++){ setX(k[i]); sum += k[i]._x; }
+      nd._x = sum / k.length;
+    }
+  })(root);
+  (function setY(nd){
+    nd._y = groundY - nd._d * levelH;
+    var k = nd.kids || [], i;
+    for (i = 0; i < k.length; i++){ setY(k[i]); }
+  })(root);
+}
+/* pre-order flatten of skill b into SKILLS[b].flat: [{nd,depth,x,y,px,py,b,i}] */
+function flattenSkill(b){
+  var flat = [], sk = SKILLS[b];
+  (function walk(nd, parent){
+    flat.push({ nd: nd, depth: nd._d, x: nd._x, y: nd._y,
+      px: parent ? parent._x : null, py: parent ? parent._y : null, b: b, i: flat.length });
+    var k = nd.kids || [], i;
+    for (i = 0; i < k.length; i++){ walk(k[i], nd); }
+  })(sk.root, null);
+  sk.flat = flat;
+  return flat;
+}
+/* most important unstarted node: shallowest fog node (breadth-first) */
+function nextStepFor(b){
+  var flat = SKILLS[b].flat, best = -1, bestD = 1e9, i;
+  for (i = 0; i < flat.length; i++){
+    if (flat[i].nd.s === "fog" && flat[i].depth < bestD){ bestD = flat[i].depth; best = i; }
+  }
+  return { i: best, node: flat[best].nd };
+}
+/* smooth branch curve: leaves parent vertically, sweeps into the child */
+function branchPath(px, py, cx, cy){
+  return "M" + px.toFixed(1) + " " + py.toFixed(1) +
+    " Q" + px.toFixed(1) + " " + cy.toFixed(1) + " " + cx.toFixed(1) + " " + cy.toFixed(1);
+}
+/* tapered filled trunk */
+function trunkPath(x, yBase, yTop, wBase, wTop, sway){
+  sway = sway || 0;
+  var f = function(v){ return v.toFixed(1); };
+  return "M" + f(x - wBase / 2) + " " + f(yBase) +
+    " C" + f(x - wBase / 2 + sway) + " " + f(yBase - (yBase - yTop) * 0.4) +
+    "," + f(x - wTop / 2 + sway) + " " + f(yTop + (yBase - yTop) * 0.4) +
+    "," + f(x - wTop / 2 + sway) + " " + f(yTop) +
+    " L" + f(x + wTop / 2 + sway) + " " + f(yTop) +
+    " C" + f(x + wTop / 2 + sway) + " " + f(yTop + (yBase - yTop) * 0.4) +
+    "," + f(x + wBase / 2 + sway) + " " + f(yBase - (yBase - yTop) * 0.4) +
+    "," + f(x + wBase / 2) + " " + f(yBase) + " Z";
+}
+/* wrap a name into at most 2 lines of maxLen chars */
+function wrapLines(s, maxLen){
+  var words = String(s).split(" "), lines = [], cur = "", w;
+  for (w = 0; w < words.length; w++){
+    var t = (cur + " " + words[w]).trim();
+    if (t.length <= maxLen){ cur = t; }
+    else { if (cur){ lines.push(cur); } cur = words[w]; }
+  }
+  if (cur){ lines.push(cur); }
+  var out = [], l;
+  for (l = 0; l < lines.length; l++){
+    var line = lines[l];
+    while (line.length > maxLen){ out.push(line.slice(0, maxLen)); line = line.slice(maxLen); }
+    out.push(line);
+  }
+  return out.slice(0, 2);
+}
+/* greedy non-overlapping labels; skill anchors first so they always win */
+function labelSVG(cands, nodes){
+  var boxes = [], s = "", k;
+  nodes.forEach(function(nd){ boxes.push({ x: nd.x - nd.r, y: nd.y - nd.r, w: nd.r * 2, h: nd.r * 2 }); });
+  cands.forEach(function(c){
+    var w = c.txt.length * c.size * 0.6 + 6, h = c.size * 1.3;
+    var bx = c.x - w / 2, by = c.ly - c.size;
+    if (bx < 4){ bx = 4; }
+    if (bx + w > 356){ bx = 356 - w; }
+    var cx = bx + w / 2;
+    for (k = 0; k < boxes.length; k++){
+      var p = boxes[k];
+      if (bx < p.x + p.w + 2 && bx + w + 2 > p.x && by < p.y + p.h + 2 && by + h + 2 > p.y){ return; }
+    }
+    boxes.push({ x: bx, y: by, w: w, h: h });
+    s += '<text x="' + cx.toFixed(1) + '" y="' + c.ly.toFixed(1) + '" text-anchor="middle" font-size="' + c.size +
+      '" fill="' + c.fill + '" font-weight="600"' +
+      (c.halo ? ' stroke="' + c.halo + '" stroke-width="3" paint-order="stroke"' : "") +
+      (c.mono ? ' font-family="Menlo, Consolas, monospace"' : "") +
+      (c.bold ? ' font-weight="800"' : "") +
+      (c.ls ? ' letter-spacing="' + c.ls + '"' : "") + '>' + esc(c.txt) + '</text>';
+  });
+  return s;
+}
+/* per-skill "next step" strip, tappable */
+function stripHTML(dirId, sel){
+  var h = '<div class="nextsteps ns-' + dirId + '"><div class="ns-title">Next steps</div>';
+  SKILLS.forEach(function(sk, b){
+    var ns = nextStepFor(b);
+    var on = (sel && sel.b === b && sel.i === ns.i) ? " on" : "";
+    h += '<button class="ns-row' + on + '" data-b="' + b + '" data-i="' + ns.i + '">' +
+      '<span class="ns-skill">' + esc(sk.name) + '</span><span class="ns-arrow">-&gt;</span>' +
+      '<span class="ns-node">' + esc(ns.node.n) + '</span></button>';
+  });
+  return h + '</div>';
+}
 </script>
 <script>
 "use strict";
-/* ================= DIRECTION 1: NOCTURNE (dark RPG constellation) ================= */
+/* ================= DIRECTION 1: NOCTURNE (one great celestial tree) ================= */
 function renderNocturne(sel){
-  var W = 360, H = 640, s = "";
+  var W = 360, H = 800, s = "";
   s += '<defs><radialGradient id="spN" cx="50%" cy="30%" r="90%">' +
     '<stop offset="0%" stop-color="#101a3a"/><stop offset="60%" stop-color="#0a0f22"/><stop offset="100%" stop-color="#05070f"/></radialGradient>' +
-    '<radialGradient id="fogN" cx="50%" cy="50%" r="50%">' +
-    '<stop offset="0%" stop-color="#1a2233" stop-opacity="0.95"/><stop offset="70%" stop-color="#141a29" stop-opacity="0.75"/><stop offset="100%" stop-color="#141a29" stop-opacity="0"/></radialGradient></defs>';
+    '<radialGradient id="horN" cx="50%" cy="50%" r="50%">' +
+    '<stop offset="0%" stop-color="#2a3a7a" stop-opacity="0.55"/><stop offset="100%" stop-color="#2a3a7a" stop-opacity="0"/></radialGradient></defs>';
   s += '<rect width="' + W + '" height="' + H + '" fill="url(#spN)"/>';
   var k;
-  for (k = 0; k < 70; k++){
-    var sx = (j(k * 3.1) * 0.5 + 0.5) * W, sy = (j(k * 7.7) * 0.5 + 0.5) * H;
-    s += '<circle class="tw" style="animation-delay:' + (k % 9 * 0.4).toFixed(1) + 's" cx="' + sx.toFixed(1) + '" cy="' + sy.toFixed(1) + '" r="' + (0.6 + (k % 3) * 0.5).toFixed(1) + '" fill="#cdd8ff"/>';
+  for (k = 0; k < 80; k++){
+    var sx = (j(k * 3.1) * 0.5 + 0.5) * W, sy = (j(k * 7.7) * 0.5 + 0.5) * 620;
+    s += '<circle class="tw" style="animation-delay:' + (k % 9 * 0.4).toFixed(1) + 's" cx="' + sx.toFixed(1) + '" cy="' + sy.toFixed(1) +
+      '" r="' + (0.6 + (k % 3) * 0.5).toFixed(1) + '" fill="#cdd8ff"/>';
   }
-  s += '<text x="180" y="34" text-anchor="middle" font-size="11" letter-spacing="4" fill="#8fa0cc" font-weight="700">YOUR SKY</text>';
-  var clusters = [
-    { cx: 80,  cy: 140, pts: [[48,118,-6,34],[112,128,8,34],[80,178,0,36]] },
-    { cx: 272, cy: 140, pts: [[228,108,-16,34],[302,118,10,-28],[244,164,-8,34],[306,174,8,34]] },
-    { cx: 84,  cy: 350, pts: [[46,324,-8,34],[122,334,8,-28],[60,380,-8,34],[118,390,0,36]] },
-    { cx: 272, cy: 350, pts: [[240,330,-16,34],[304,370,16,34]] },
-    { cx: 180, cy: 530, pts: [[126,510,-10,-28],[180,536,0,34],[234,512,10,-28]] }
-  ];
-  BRANCHES.forEach(function(br, b){
-    var cl = clusters[b];
-    s += '<text x="' + cl.cx + '" y="' + (cl.cy - 62) + '" text-anchor="middle" font-size="9.5" letter-spacing="2.4" fill="#7c8bb0" font-weight="700">' + esc(br.name.toUpperCase()) + '</text>';
-    var i;
-    for (i = 1; i < cl.pts.length; i++){
-      s += '<line x1="' + cl.pts[i-1][0] + '" y1="' + cl.pts[i-1][1] + '" x2="' + cl.pts[i][0] + '" y2="' + cl.pts[i][1] +
-        '" stroke="#3d4a72" stroke-width="1.2" stroke-dasharray="3 4" opacity="0.8"/>';
-    }
-    br.nodes.forEach(function(nd, i){
-      var x = cl.pts[i][0], y = cl.pts[i][1], m = STATE_META[nd.s], inner = "";
-      var isSel = sel && sel.b === b && sel.i === i;
-      if (nd.s === "fog"){
-        inner = '<circle r="13" fill="#232c44"/><g class="fogswirl"><circle r="24" fill="url(#fogN)"/></g>' +
-          '<text y="4" text-anchor="middle" font-size="11" fill="#5b6a94" font-weight="800">?</text>';
-      } else if (nd.s === "star"){
-        inner = '<circle class="gp" r="17" fill="' + m.c + '" opacity="0.22"/>' +
-          '<path d="' + starPath(13) + '" fill="' + m.c + '"/>' +
-          '<path d="' + starPath(6) + '" fill="#0a0f22" transform="translate(0,0.5)"/>' +
-          '<g color="' + m.c + '" transform="translate(0,0.5) scale(0.9)">' + GLYPH.op + '</g>';
-      } else {
-        inner = '<circle r="13" fill="#0d1322" stroke="' + m.c + '" stroke-width="2.4"/>' +
-          '<circle r="13" fill="' + m.c + '" opacity="0.14"/>' +
-          '<g color="' + m.c + '" transform="scale(0.95)">' + GLYPH[nd.s] + '</g>';
-        if (nd.s === "op"){ inner += '<circle class="tw" cx="9" cy="-9" r="1.8" fill="' + m.c + '"/>'; }
-      }
-      s += nodeG(b, i, x, y, isSel) +
-        '<circle class="halo" r="21" fill="none" stroke="#fff" stroke-width="1.6" stroke-dasharray="4 3"/>' + inner;
-      var lblTxt = nd.s === "fog" ? "???" : nd.n;
-      s += '<text x="' + cl.pts[i][2] + '" y="' + cl.pts[i][3] + '" text-anchor="middle" font-size="9.5" fill="' + (nd.s === "fog" ? "#4d5a80" : "#aeb9d6") + '" font-weight="600">' + esc(lblTxt) + '</text></g>';
+  s += '<circle cx="308" cy="86" r="34" fill="#f4f1de" opacity="0.12"/>' +
+       '<circle cx="308" cy="86" r="21" fill="#f4f1de" opacity="0.92"/>' +
+       '<circle cx="301" cy="80" r="18" fill="#0a0f22" opacity="0.16"/>';
+  s += '<text x="180" y="36" text-anchor="middle" font-size="11" letter-spacing="4" fill="#8fa0cc" font-weight="700">YOUR TREE</text>';
+
+  var V = { kids: SKILLS.map(function(sk){ return sk.root; }) };
+  var groundY = 648, levelH = 102;
+  layoutTree(V, 40, 320, groundY, levelH);
+  var flats = SKILLS.map(function(sk, b){ return flattenSkill(b); });
+  var vx = V._x;
+
+  /* ground */
+  s += '<ellipse cx="180" cy="656" rx="205" ry="30" fill="url(#horN)"/>';
+  s += '<ellipse cx="180" cy="660" rx="190" ry="22" fill="#0a0e1d"/>';
+
+  /* trunk: tapered, dark bark with a moonlit edge */
+  s += '<path d="' + trunkPath(vx, groundY + 2, groundY - 54, 30, 12, j(7) * 6) + '" fill="#10162e" stroke="#2a3560" stroke-width="1.4"/>';
+  s += '<path d="M' + (vx - 14).toFixed(1) + ' ' + (groundY + 2) + ' l-16 10 M' + (vx + 14).toFixed(1) + ' ' + (groundY + 2) +
+    ' l16 10 M' + vx.toFixed(1) + ' ' + (groundY + 2) + ' l0 14" stroke="#2a3560" stroke-width="4" stroke-linecap="round" fill="none"/>';
+  s += '<path d="M' + (vx - 6).toFixed(1) + ' ' + (groundY - 4) + ' Q' + (vx - 4).toFixed(1) + ' ' + (groundY - 30) + ' ' + (vx - 3).toFixed(1) + ' ' + (groundY - 50) +
+    '" stroke="#3d4a72" stroke-width="1.6" fill="none" opacity="0.8"/>';
+
+  /* limbs: trunk base to each skill root, then every branch */
+  var limbCols = ["#5a6db8", "#5a6db8", "#5a6db8", "#5a6db8"];
+  flats.forEach(function(flat, b){
+    flat.forEach(function(f){
+      var fromX = f.px === null ? vx : f.px, fromY = f.py === null ? groundY - 44 : f.py;
+      var w = Math.max(1.4, 7 - f.depth * 1.15);
+      s += '<path d="' + branchPath(fromX, fromY, f.x, f.y) + '" fill="none" stroke="' + limbCols[b] +
+        '" stroke-width="' + w.toFixed(1) + '" stroke-linecap="round" opacity="0.9" style="filter:drop-shadow(0 0 4px #5a6db866)"/>';
     });
   });
-  s += '<text x="150" y="614" text-anchor="middle" font-size="10" fill="#5b6a94" letter-spacing="1.5">FOG HIDES WHAT YOU HAVE NOT TRIED</text>';
-  return '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Nocturne constellation skill tree">' + s + "</svg>";
+
+  /* fireflies */
+  for (k = 0; k < 9; k++){
+    var fx = 60 + (j(k * 13.7) * 0.5 + 0.5) * 240, fy = 220 + (j(k * 29.3) * 0.5 + 0.5) * 380;
+    s += '<circle class="tw" style="animation-delay:' + (k * 0.7).toFixed(1) + 's" cx="' + fx.toFixed(1) + '" cy="' + fy.toFixed(1) + '" r="1.7" fill="#ffe9a3"/>';
+  }
+
+  /* nodes: glowing fruit on the branches */
+  var nodeBoxes = [], cands = [];
+  flats.forEach(function(flat, b){
+    flat.forEach(function(f){
+      var nd = f.nd, d = Math.min(f.depth, 5);
+      var r = [0, 14, 12.5, 11, 10, 9][d];
+      var inner = "", isSel = sel && sel.b === b && sel.i === f.i;
+      if (nd.s === "fog"){
+        inner = '<path d="M0,-11 C6.5,-4 6.5,4 0,9.5 C-6.5,4 -6.5,-4 0,-11 Z" fill="#141b31" stroke="#5b6579" stroke-width="1.8" stroke-dasharray="4 3"/>' +
+          '<text y="3.5" text-anchor="middle" font-size="9" fill="#5b6579" font-weight="800">?</text>';
+      } else if (nd.s === "star"){
+        inner = '<circle class="gp" r="' + (r + 5).toFixed(1) + '" fill="#ffd479" opacity="0.2"/>' +
+          '<path d="' + starPath(r) + '" fill="#ffd479"/>' +
+          '<g color="#7a5c00" transform="scale(0.55)">' + GLYPH.op + '</g>';
+      } else {
+        var c = STATE_META[nd.s].c;
+        inner = '<circle r="' + r + '" fill="#0c1424" stroke="' + c + '" stroke-width="2.2"/>' +
+          '<circle r="' + r + '" fill="' + c + '" opacity="0.12"/>' +
+          '<g color="' + c + '" transform="scale(0.9)">' + GLYPH[nd.s] + '</g>';
+        if (nd.s === "op"){
+          inner += '<circle class="tw" cx="' + (r - 4).toFixed(1) + '" cy="' + (-r + 4).toFixed(1) + '" r="1.6" fill="' + c + '"/>';
+        }
+      }
+      s += nodeG(b, f.i, f.x, f.y, isSel) +
+        '<circle class="halo" r="' + (r + 8).toFixed(1) + '" fill="none" stroke="#fff" stroke-width="1.6" stroke-dasharray="4 3"/>' + inner + '</g>';
+      nodeBoxes.push({ x: f.x, y: f.y, r: r });
+      if (f.depth === 1){
+        cands.unshift({ x: f.x, ly: f.y - r - 12, txt: SKILLS[b].tag, size: 11, fill: "#e6ecff", halo: "#05070f", bold: true, ls: "1.2" });
+      } else {
+        cands.push({ x: f.x, ly: f.y + r + 15, txt: nd.s === "fog" ? "???" : nd.n, size: 8,
+          fill: nd.s === "fog" ? "#4d5a80" : "#aeb9d6", halo: "#05070f" });
+      }
+    });
+  });
+  s += labelSVG(cands, nodeBoxes);
+  s += '<text x="180" y="716" text-anchor="middle" font-size="10" fill="#5b6a94" letter-spacing="1.5">BUDS OPEN WHEN YOU TRY THEM</text>';
+  return '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Nocturne celestial skill tree">' + s + "</svg>";
 }
 
-/* ================= DIRECTION 2: TRAILHEAD (cozy Duolingo-like map) ================= */
+/* ================= DIRECTION 2: TRAILHEAD (grove of 4 storybook trees) ================= */
 function renderTrailhead(sel){
-  var W = 360, H = 660, s = "";
+  var W = 360, H = 760, s = "";
   s += '<defs><linearGradient id="skyT" x1="0" y1="0" x2="0" y2="1">' +
     '<stop offset="0%" stop-color="#fdf3dd"/><stop offset="100%" stop-color="#f7e7c3"/></linearGradient></defs>';
   s += '<rect width="' + W + '" height="' + H + '" fill="url(#skyT)"/>';
-  s += '<g class="drift"><ellipse cx="70" cy="60" rx="34" ry="12" fill="#ffffff" opacity="0.9"/><ellipse cx="96" cy="56" rx="26" ry="10" fill="#ffffff" opacity="0.9"/></g>';
-  s += '<g class="drift" style="animation-delay:2s"><ellipse cx="280" cy="110" rx="30" ry="10" fill="#ffffff" opacity="0.85"/></g>';
-  s += '<ellipse cx="40" cy="660" rx="150" ry="120" fill="#dcebc0"/>';
-  s += '<ellipse cx="340" cy="660" rx="160" ry="130" fill="#d3e5b4"/>';
-  s += '<ellipse cx="180" cy="700" rx="220" ry="110" fill="#c9dfae"/>';
-  var N = 16, flat = [], branchStart = {};
-  (function(){
-    var kk = 0;
-    BRANCHES.forEach(function(br, b){
-      branchStart[kk] = br.name;
-      br.nodes.forEach(function(nd, i){ flat.push({ b: b, i: i, nd: nd, br: br.name }); kk++; });
+  /* sun, clouds, birds */
+  s += '<circle cx="62" cy="82" r="30" fill="#ffd34d"/>';
+  var r, a;
+  for (r = 0; r < 8; r++){
+    a = r * Math.PI / 4;
+    s += '<line x1="' + (62 + 38 * Math.cos(a)).toFixed(1) + '" y1="' + (82 + 38 * Math.sin(a)).toFixed(1) +
+      '" x2="' + (62 + 48 * Math.cos(a)).toFixed(1) + '" y2="' + (82 + 48 * Math.sin(a)).toFixed(1) + '" stroke="#ffd34d" stroke-width="4" stroke-linecap="round"/>';
+  }
+  s += '<g class="drift"><ellipse cx="200" cy="66" rx="34" ry="12" fill="#ffffff" opacity="0.9"/><ellipse cx="226" cy="62" rx="26" ry="10" fill="#ffffff" opacity="0.9"/></g>';
+  s += '<g class="drift" style="animation-delay:2.4s"><ellipse cx="310" cy="150" rx="28" ry="10" fill="#ffffff" opacity="0.85"/></g>';
+  s += '<path d="M150 120 q7 -8 14 0 q7 -8 14 0" stroke="#8a93a3" stroke-width="2" fill="none" stroke-linecap="round"/>';
+  s += '<path d="M250 96 q6 -7 12 0 q6 -7 12 0" stroke="#8a93a3" stroke-width="2" fill="none" stroke-linecap="round"/>';
+  /* hills */
+  s += '<ellipse cx="52" cy="712" rx="175" ry="95" fill="#cfe3ae"/>';
+  s += '<ellipse cx="312" cy="722" rx="185" ry="105" fill="#c2d89f"/>';
+  s += '<ellipse cx="180" cy="762" rx="270" ry="115" fill="#b5d191"/>';
+
+  var nodeBoxes = [], cands = [], k;
+  SKILLS.forEach(function(sk, b){
+    var x0 = b * 90 + 12, x1 = b * 90 + 78, groundY = 600, levelH = 86;
+    layoutTree(sk.root, x0, x1, groundY, levelH);
+    var flat = flattenSkill(b);
+    var cx = sk.root._x;
+
+    /* trunk rises from the hill, root node sits on top */
+    s += '<path d="' + trunkPath(cx, 654, 594, 22, 13, j(b * 3 + 1) * 5) + '" fill="#9c6b3f" stroke="#6e4525" stroke-width="1.5"/>';
+    s += '<path d="M' + (cx - 5).toFixed(1) + ' 640 Q' + (cx - 4).toFixed(1) + ' 618 ' + (cx - 3).toFixed(1) + ' 600" stroke="#6e4525" stroke-width="1.6" fill="none" opacity="0.7"/>';
+
+    /* branches */
+    flat.forEach(function(f){
+      if (f.depth === 0){ return; }
+      var w = Math.max(1.6, 6 - f.depth * 1.2);
+      s += '<path d="' + branchPath(f.px, f.py, f.x, f.y) + '" fill="none" stroke="#7d5230" stroke-width="' + w.toFixed(1) + '" stroke-linecap="round"/>';
     });
-  })();
-  var px = function(k){ return 180 + 108 * Math.sin(k * 0.82); };
-  var py = function(k){ return 78 + k * 35; };
-  var d = "M" + px(0).toFixed(1) + " " + py(0).toFixed(1);
-  var k;
-  for (k = 1; k < N; k++){ d += " L" + px(k).toFixed(1) + " " + py(k).toFixed(1); }
-  s += '<path d="' + d + '" fill="none" stroke="#e3cfa0" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>';
-  s += '<path d="' + d + '" fill="none" stroke="#c9ab72" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 14" opacity="0.55"/>';
-  var cur = -1;
-  flat.forEach(function(f, k){
-    if (f.nd.s === "tried" || f.nd.s === "op"){ cur = k; }
-  });
-  flat.forEach(function(f, k){
-    var x = px(k), y = py(k), nd = f.nd, m = STATE_META[nd.s], inner = "", isSel = sel && sel.b === f.b && sel.i === f.i;
-    var badge = nd.s === "star" ? "#ffd34d" : nd.s === "op" ? "#58cc5c" : nd.s === "tried" ? "#f5a623" : "#b9c0cc";
-    var dark = nd.s === "fog" ? "#9aa2b0" : nd.s === "op" ? "#3aa845" : nd.s === "tried" ? "#cf8618" : "#e0a92e";
-    if (nd.s === "star"){
-      inner = '<circle r="21" fill="' + badge + '"/><circle r="21" fill="none" stroke="' + dark + '" stroke-width="3"/>' +
-        '<g color="#7a5c00" transform="scale(1.35)">' + GLYPH.star + '</g>';
-    } else if (nd.s === "fog"){
-      inner = '<circle r="19" fill="#dfe3ea"/><circle r="19" fill="none" stroke="' + dark + '" stroke-width="3" stroke-dasharray="5 4"/>' +
-        '<g color="#8a93a3">' + GLYPH.fog + '</g>';
-    } else {
-      inner = '<circle r="21" fill="' + badge + '"/><circle r="21" fill="none" stroke="' + dark + '" stroke-width="3"/>' +
-        '<circle cx="-7" cy="-8" r="4.5" fill="#ffffff" opacity="0.35"/>' +
-        '<g color="#ffffff" transform="scale(1.15)">' + GLYPH[nd.s] + '</g>';
-    }
-    if (k === cur){
-      var bdx = 0, bdy = -54;
-      if (cur > 0){
-        var ddx = x - px(cur - 1), ddy = y - py(cur - 1);
-        var dl = Math.sqrt(ddx * ddx + ddy * ddy) || 1;
-        var nnx = -ddy / dl, nny = ddx / dl;
-        if (nny > 0){ nnx = -nnx; nny = -nny; }
-        bdx = nnx * 56; bdy = nny * 56;
+
+    /* soft leaf puffs along the branches */
+    flat.forEach(function(f){
+      if (f.depth < 2){ return; }
+      s += '<circle cx="' + (f.x + j(f.i * 5.3) * 9).toFixed(1) + '" cy="' + (f.y - 7).toFixed(1) + '" r="' + (13 + (f.i % 3) * 3).toFixed(1) + '" fill="#a9d684" opacity="0.5"/>';
+    });
+
+    /* fruit nodes */
+    flat.forEach(function(f){
+      var nd = f.nd, d = Math.min(f.depth, 4);
+      var r = [14, 12.5, 11, 10, 9][d];
+      var inner = "", isSel = sel && sel.b === b && sel.i === f.i;
+      if (nd.s === "fog"){
+        inner = '<path d="M0,-10 C6,-3.5 6,3.5 0,9 C-6,3.5 -6,-3.5 0,-10 Z" fill="#dfe3ea" stroke="#9aa2b0" stroke-width="1.8" stroke-dasharray="4 3"/>' +
+          '<text y="3" text-anchor="middle" font-size="9" fill="#8a93a3" font-weight="800">?</text>';
+      } else if (nd.s === "star"){
+        inner = '<circle r="' + r + '" fill="#ffd34d" stroke="#e0a92e" stroke-width="2.6"/>' +
+          '<circle cx="-4" cy="-5" r="3.4" fill="#ffffff" opacity="0.5"/>' +
+          '<g color="#7a5c00" transform="scale(1.05)">' + GLYPH.star + '</g>';
+      } else {
+        var badge = nd.s === "op" ? "#58cc5c" : "#f5a623";
+        var dark = nd.s === "op" ? "#3aa845" : "#cf8618";
+        inner = '<circle r="' + r + '" fill="' + badge + '" stroke="' + dark + '" stroke-width="2.6"/>' +
+          '<circle cx="-4" cy="-5" r="' + (r * 0.28).toFixed(1) + '" fill="#ffffff" opacity="0.35"/>' +
+          '<g color="#ffffff" transform="scale(0.95)">' + GLYPH[nd.s] + '</g>';
       }
-      inner += '<g class="bob"><g transform="translate(' + bdx.toFixed(1) + ',' + bdy.toFixed(1) + ')">' +
-        '<rect x="-42" y="-10" width="84" height="20" rx="10" fill="#2b2118"/>' +
-        '<text y="4" text-anchor="middle" font-size="10" fill="#ffd479" font-weight="800" letter-spacing="0.6">YOU ARE HERE</text></g></g>';
-    }
-    s += nodeG(f.b, f.i, x, y, isSel) +
-      '<circle class="halo" r="30" fill="none" stroke="#2b2118" stroke-width="2.4"/>' + inner;
-    /* labels live inside the translated node group, so offsets must be LOCAL */
-    var off = x < 180 ? 40 : -40, anchor = x < 180 ? "start" : "end";
-    var lblTxt = nd.s === "fog" ? "???" : nd.n;
-    var approxW = lblTxt.length * 6.1;
-    if (anchor === "start" && x + off + approxW > 354){ off = 354 - approxW - x; }
-    if (anchor === "end" && x + off - approxW < 6){ off = 6 + approxW - x; }
-    s += '<text x="' + off.toFixed(1) + '" y="4" text-anchor="' + anchor + '" font-size="11" fill="#5a4a33" font-weight="700" stroke="#f6e8c6" stroke-width="3.5" paint-order="stroke">' + esc(lblTxt) + '</text>';
-    if (branchStart[k] !== undefined){
-      var boff = off, bw = f.br.length * 6.9;
-      if (anchor === "start" && x + boff + bw > 354){ boff = 354 - bw - x; }
-      if (anchor === "end" && x + boff - bw < 6){ boff = 6 + bw - x; }
-      s += '<text x="' + boff.toFixed(1) + '" y="-13" text-anchor="' + anchor + '" font-size="9" fill="#a08b62" font-weight="800" letter-spacing="1.4" stroke="#f6e8c6" stroke-width="3" paint-order="stroke">' + esc(f.br.toUpperCase()) + '</text>';
-    }
-    s += "</g>";
+      s += nodeG(b, f.i, f.x, f.y, isSel) +
+        '<circle class="halo" r="' + (r + 8).toFixed(1) + '" fill="none" stroke="#2b2118" stroke-width="2.2"/>' + inner + '</g>';
+      nodeBoxes.push({ x: f.x, y: f.y, r: r });
+      if (f.depth > 0){
+        cands.push({ x: f.x, ly: f.y + r + 14, txt: nd.s === "fog" ? "???" : nd.n, size: 8, fill: "#5a4a33", halo: "#f6e8c6" });
+      }
+    });
+
+    /* wooden name sign staked on the trunk */
+    s += '<rect x="' + (cx - 34).toFixed(1) + '" y="614" width="68" height="22" rx="6" fill="#6e4525"/>' +
+      '<rect x="' + (cx - 34).toFixed(1) + '" y="614" width="68" height="22" rx="6" fill="none" stroke="#4a3a26" stroke-width="1.2"/>' +
+      '<text x="' + cx.toFixed(1) + '" y="629" text-anchor="middle" font-size="9.5" fill="#ffefd0" font-weight="800" letter-spacing="0.4">' + esc(sk.tag) + '</text>';
   });
-  return '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Trailhead cozy map skill tree">' + s + "</svg>";
+  s += labelSVG(cands, nodeBoxes);
+  /* flowers on the hills */
+  for (k = 0; k < 14; k++){
+    var fx = (j(k * 11.3) * 0.5 + 0.5) * 340 + 10, fy = 668 + (j(k * 17.9) * 0.5 + 0.5) * 60;
+    s += '<circle cx="' + fx.toFixed(1) + '" cy="' + fy.toFixed(1) + '" r="2.6" fill="' + (k % 3 === 0 ? "#ffffff" : k % 3 === 1 ? "#ffd34d" : "#ff9ec4") + '" opacity="0.9"/>';
+  }
+  return '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Trailhead cozy grove skill tree">' + s + "</svg>";
 }
 </script>
 <script>
 "use strict";
-/* ================= DIRECTION 3: SUMI (minimal Japanese ink) ================= */
+/* ================= DIRECTION 3: SUMI (four ink pines, zen garden) ================= */
 function renderSumi(sel){
-  var W = 360, H = 520, s = "";
-  s += '<rect width="' + W + '" height="' + H + '" fill="#faf7f0"/>';
-  s += '<text x="180" y="42" text-anchor="middle" font-size="20" fill="#2b2b2b" font-weight="600" font-family="Georgia, \'Times New Roman\', serif" letter-spacing="5">SKILL TREE</text>';
-  s += '<text x="180" y="62" text-anchor="middle" font-size="10" fill="#8a8478" letter-spacing="3">FIVE PATHS, ONE BRUSH</text>';
-  var cols = [36, 108, 180, 252, 324], y0 = 128, dy = 72, b, i;
-  var shortNames = ["Mandarin", "Game Dev", "Cooking", "Comms", "Fitness"];
+  var W = 360, H = 700, s = "";
   var PAPER = "#faf7f0";
-  BRANCHES.forEach(function(br, b){
-    var x = cols[b];
-    var n = br.nodes.length, yEnd = y0 + (n - 1) * dy + 26;
-    var wob = "M" + x + " " + (y0 - 38) + " C" + (x + j(b * 3) * 8).toFixed(1) + " " + (y0 - 10) + "," +
-      (x + j(b * 5) * 8).toFixed(1) + " " + (y0 + (n - 1) * dy * 0.5).toFixed(1) + "," + x + " " + yEnd;
-    s += '<path d="' + wob + '" fill="none" stroke="#2b2b2b" stroke-width="4.5" stroke-linecap="round" opacity="0.72"/>';
-    s += '<text x="' + x + '" y="' + (y0 - 50) + '" text-anchor="middle" font-size="10" fill="#2b2b2b" font-weight="700" letter-spacing="0.5" stroke="' + PAPER + '" stroke-width="4" paint-order="stroke">' + esc(shortNames[b]) + '</text>';
-    br.nodes.forEach(function(nd, i){
-      var y = y0 + i * dy, m = STATE_META[nd.s], inner = "";
-      var isSel = sel && sel.b === b && sel.i === i;
-      if (nd.s === "fog"){
-        inner = '<circle r="14" fill="none" stroke="#b9b2a2" stroke-width="1.6" stroke-dasharray="4 4"/>';
-      } else if (nd.s === "star"){
-        inner = '<rect x="-15" y="-15" width="30" height="30" rx="3" fill="#b3352b"/>' +
-          '<text y="5.5" text-anchor="middle" font-size="13" fill="#faf7f0" font-weight="800">LV</text>';
-      } else {
-        var col = nd.s === "op" ? "#2e7d4f" : "#b07a1e";
-        inner = '<circle r="14" fill="none" stroke="#2b2b2b" stroke-width="2.6"/>' +
-          '<circle r="14" fill="none" stroke="' + col + '" stroke-width="2.6" stroke-dasharray="' +
-          (nd.xp / 100 * 88).toFixed(1) + ' 88" stroke-linecap="round" transform="rotate(-90)"/>' +
-          '<g color="' + col + '" transform="scale(0.8)">' + GLYPH[nd.s] + '</g>';
-      }
-      s += nodeG(b, i, x, y, isSel) +
-        '<circle class="halo" r="22" fill="none" stroke="#b3352b" stroke-width="1.8"/>' + inner;
-      var lblTxt = nd.s === "fog" ? "not yet seen" : nd.n;
-      s += '<text y="34" text-anchor="middle" font-size="8.5" fill="' + (nd.s === "fog" ? "#b9b2a2" : "#5c5648") + '" stroke="' + PAPER + '" stroke-width="4" paint-order="stroke">' + esc(lblTxt) + '</text>';
-      if (nd.s !== "fog" && nd.s !== "star"){
-        s += '<text y="-22" text-anchor="middle" font-size="9" fill="#8a8478" font-weight="700" stroke="' + PAPER + '" stroke-width="3.5" paint-order="stroke">Lv ' + nd.lv + '</text>';
-      }
-      s += "</g>";
+  s += '<rect width="' + W + '" height="' + H + '" fill="' + PAPER + '"/>';
+  s += '<circle cx="306" cy="92" r="24" fill="#b3352b" opacity="0.88"/>';
+  s += '<text x="180" y="44" text-anchor="middle" font-size="19" fill="#2b2b2b" font-weight="600" font-family="Georgia, \'Times New Roman\', serif" letter-spacing="5">SKILL TREE</text>';
+  s += '<text x="180" y="64" text-anchor="middle" font-size="10" fill="#8a8478" letter-spacing="3">FOUR PINES, ONE BRUSH</text>';
+
+  /* one long ground stroke */
+  s += '<path d="M14 604 C120 600, 240 608, 346 602" stroke="#2b2b2b" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.7"/>';
+  s += '<path d="M40 616 C150 613, 260 619, 330 615" stroke="#2b2b2b" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.28"/>';
+
+  var nodeBoxes = [], cands = [];
+  SKILLS.forEach(function(sk, b){
+    var x0 = b * 90 + 14, x1 = b * 90 + 76, groundY = 560, levelH = 80;
+    layoutTree(sk.root, x0, x1, groundY, levelH);
+    var flat = flattenSkill(b);
+    var cx = sk.root._x, lean = j(b * 7 + 2) * 9;
+
+    /* ink trunk, slight lean like a windswept pine */
+    s += '<path d="' + trunkPath(cx, 606, 550, 13, 5, lean) + '" fill="#2b2b2b" opacity="0.82"/>';
+    /* a couple of exposed roots */
+    s += '<path d="M' + (cx - 5).toFixed(1) + ' 604 l-13 7 M' + (cx + 5).toFixed(1) + ' 604 l13 7" stroke="#2b2b2b" stroke-width="2.4" stroke-linecap="round" fill="none" opacity="0.6"/>';
+
+    /* sparse ink branches */
+    flat.forEach(function(f){
+      if (f.depth === 0){ return; }
+      var w = Math.max(1, 3.4 - f.depth * 0.6);
+      s += '<path d="' + branchPath(f.px, f.py, f.x, f.y) + '" fill="none" stroke="#2b2b2b" stroke-width="' + w.toFixed(1) + '" stroke-linecap="round" opacity="0.7"/>';
     });
+
+    /* pine needle tufts at the branch tips */
+    flat.forEach(function(f){
+      if (f.depth < 2){ return; }
+      var nx = f.x, ny = f.y - 12, a;
+      for (a = -1; a <= 1; a++){
+        s += '<line x1="' + nx.toFixed(1) + '" y1="' + ny.toFixed(1) + '" x2="' + (nx + a * 7 + j(f.i + a) * 3).toFixed(1) + '" y2="' + (ny - 8).toFixed(1) +
+          '" stroke="#2b2b2b" stroke-width="1.4" stroke-linecap="round" opacity="0.55"/>';
+      }
+    });
+
+    /* nodes: ink, with red seals for shipped */
+    flat.forEach(function(f){
+      var nd = f.nd, d = Math.min(f.depth, 4);
+      var r = [13, 11.5, 10, 9.5, 9][d];
+      var inner = "", isSel = sel && sel.b === b && sel.i === f.i;
+      if (nd.s === "fog"){
+        inner = '<circle r="' + r + '" fill="none" stroke="#b9b2a2" stroke-width="1.6" stroke-dasharray="4 4"/>' +
+          '<text y="3" text-anchor="middle" font-size="9" fill="#b9b2a2" font-weight="700">?</text>';
+      } else if (nd.s === "star"){
+        inner = '<rect x="' + (-r) + '" y="' + (-r) + '" width="' + (r * 2) + '" height="' + (r * 2) + '" rx="3" fill="#b3352b"/>' +
+          '<g color="#faf7f0" transform="scale(0.85)">' + GLYPH.star + '</g>';
+      } else if (nd.s === "op"){
+        inner = '<circle r="' + r + '" fill="none" stroke="#2b2b2b" stroke-width="2.4"/>' +
+          '<g color="#2e7d4f" transform="scale(0.85)">' + GLYPH.op + '</g>';
+      } else {
+        inner = '<circle r="' + r + '" fill="none" stroke="#2b2b2b" stroke-width="2"/>' +
+          '<g color="#b07a1e" transform="scale(0.8)">' + GLYPH.tried + '</g>';
+      }
+      s += nodeG(b, f.i, f.x, f.y, isSel) +
+        '<circle class="halo" r="' + (r + 8).toFixed(1) + '" fill="none" stroke="#b3352b" stroke-width="1.8"/>' + inner + '</g>';
+      nodeBoxes.push({ x: f.x, y: f.y, r: r });
+      if (f.depth > 0){
+        cands.push({ x: f.x, ly: f.y + r + 13, txt: nd.s === "fog" ? "???" : nd.n, size: 8, fill: "#5c5648", halo: PAPER });
+      }
+    });
+
+    /* garden label under the trunk */
+    s += '<text x="' + cx.toFixed(1) + '" y="634" text-anchor="middle" font-size="10" fill="#2b2b2b" font-weight="700" letter-spacing="0.5">' + esc(sk.tag) + '</text>';
   });
-  s += '<g transform="translate(318,458) rotate(-4)"><rect x="-22" y="-22" width="44" height="44" rx="4" fill="none" stroke="#b3352b" stroke-width="2.4"/>' +
-    '<text y="-2" text-anchor="middle" font-size="11" fill="#b3352b" font-weight="800" letter-spacing="1">TRY</text>' +
-    '<text y="12" text-anchor="middle" font-size="11" fill="#b3352b" font-weight="800" letter-spacing="1">WRITE</text></g>';
-  s += '<text x="24" y="490" font-size="10" fill="#8a8478">the ring fills as you do the work;</text>';
-  s += '<text x="24" y="504" font-size="10" fill="#8a8478">the seal marks what shipped.</text>';
-  return '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Sumi ink skill tree">' + s + "</svg>";
+  s += labelSVG(cands, nodeBoxes);
+
+  /* hanko seal + caption */
+  s += '<g transform="translate(316,656) rotate(-4)"><rect x="-21" y="-21" width="42" height="42" rx="4" fill="none" stroke="#b3352b" stroke-width="2.4"/>' +
+    '<text y="-1" text-anchor="middle" font-size="10.5" fill="#b3352b" font-weight="800" letter-spacing="1">TRY</text>' +
+    '<text y="13" text-anchor="middle" font-size="10.5" fill="#b3352b" font-weight="800" letter-spacing="1">WRITE</text></g>';
+  s += '<text x="24" y="652" font-size="10" fill="#8a8478">ink marks what you tried;</text>';
+  s += '<text x="24" y="666" font-size="10" fill="#8a8478">red seals what shipped.</text>';
+  return '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Sumi ink pine skill tree">' + s + "</svg>";
 }
 
-/* ================= DIRECTION 4: INSERT COIN (neon arcade) ================= */
+/* ================= DIRECTION 4: INSERT COIN (one neon arcade tree) ================= */
 function renderArcade(sel){
-  var W = 360, H = 660, s = "";
+  var W = 360, H = 800, s = "";
   s += '<defs><radialGradient id="bgA" cx="50%" cy="0%" r="120%">' +
-    '<stop offset="0%" stop-color="#141433"/><stop offset="100%" stop-color="#07070f"/></radialGradient></defs>';
+    '<stop offset="0%" stop-color="#141433"/><stop offset="100%" stop-color="#07070f"/></radialGradient>' +
+    '<pattern id="scanA" width="4" height="4" patternUnits="userSpaceOnUse">' +
+    '<rect width="4" height="1" fill="#ffffff" opacity="0.05"/></pattern></defs>';
   s += '<rect width="' + W + '" height="' + H + '" fill="url(#bgA)"/>';
-  var g, gx;
-  for (gx = 0; gx <= W; gx += 30){ s += '<line x1="' + gx + '" y1="0" x2="' + gx + '" y2="' + H + '" stroke="#1c1c44" stroke-width="1"/>'; }
-  for (g = 0; g <= H; g += 30){ s += '<line x1="0" y1="' + g + '" x2="' + W + '" y2="' + g + '" stroke="#1c1c44" stroke-width="1"/>'; }
+  var gx, g;
+  for (gx = 0; gx <= W; gx += 30){ s += '<line x1="' + gx + '" y1="0" x2="' + gx + '" y2="648" stroke="#1c1c44" stroke-width="1"/>'; }
+  for (g = 0; g <= 648; g += 30){ s += '<line x1="0" y1="' + g + '" x2="' + W + '" y2="' + g + '" stroke="#1c1c44" stroke-width="1"/>'; }
+  /* perspective floor */
+  for (gx = 0; gx <= W; gx += 40){
+    s += '<line x1="' + gx + '" y1="648" x2="' + ((gx - 180) * 2.4 + 180).toFixed(1) + '" y2="' + H + '" stroke="#23235c" stroke-width="1.2"/>';
+  }
+  [664, 688, 720, 758].forEach(function(fy){
+    s += '<line x1="0" y1="' + fy + '" x2="' + W + '" y2="' + fy + '" stroke="#23235c" stroke-width="1.2"/>';
+  });
+
   var combo = 0;
-  BRANCHES.forEach(function(br){ br.nodes.forEach(function(nd){ if (nd.s === "op" || nd.s === "star"){ combo++; } }); });
+  (function count(){ SKILLS.forEach(function(sk){
+    (function walk(nd){ if (nd.s === "op" || nd.s === "star"){ combo++; } (nd.kids || []).forEach(walk); })(sk.root);
+  }); })();
   s += '<text x="180" y="36" text-anchor="middle" font-size="13" fill="#ff2fb3" font-weight="800" letter-spacing="3" font-family="Menlo, Consolas, monospace">INSERT COIN</text>';
   s += '<g class="blink"><rect x="118" y="48" width="124" height="26" rx="6" fill="none" stroke="#00e5ff" stroke-width="1.6"/>' +
     '<text x="180" y="66" text-anchor="middle" font-size="12.5" fill="#00e5ff" font-weight="800" letter-spacing="2" font-family="Menlo, Consolas, monospace">COMBO x' + combo + '</text></g>';
-  var neon = { op: "#39ff6a", tried: "#ffb02f", fog: "#3a3f66", star: "#ffe14d" };
-  BRANCHES.forEach(function(br, b){
-    var y = 118 + b * 106, n = br.nodes.length;
-    s += '<text x="18" y="' + (y - 48) + '" font-size="10.5" fill="#8f96ff" font-weight="800" letter-spacing="1.6" font-family="Menlo, Consolas, monospace">' + esc(br.name.toUpperCase()) + '</text>';
-    s += '<line x1="18" y1="' + (y - 40) + '" x2="342" y2="' + (y - 40) + '" stroke="#2a2a5e" stroke-width="1.5"/>';
-    var x0 = 52, step = n > 1 ? 264 / (n - 1) : 0;
-    var prevX = null;
-    br.nodes.forEach(function(nd, i){
-      var x = x0 + i * step, c = neon[nd.s], inner = "";
-      var isSel = sel && sel.b === b && sel.i === i;
-      if (prevX !== null){
-        s += '<line x1="' + prevX + '" y1="' + y + '" x2="' + x + '" y2="' + y + '" stroke="' + c + '" stroke-width="2.5" opacity="0.5" pointer-events="none" style="filter:drop-shadow(0 0 5px ' + c + ')"/>';
-      }
-      prevX = x;
-      if (nd.s === "fog"){
-        inner = '<rect x="-19" y="-19" width="38" height="38" rx="9" fill="#101024" stroke="' + c + '" stroke-width="2" stroke-dasharray="5 4"/>' +
-          '<text y="6" text-anchor="middle" font-size="15" fill="#565b8c" font-weight="800" font-family="Menlo, Consolas, monospace">?</text>';
-      } else {
-        inner = '<rect x="-19" y="-19" width="38" height="38" rx="9" fill="#0d0d20" stroke="' + c + '" stroke-width="2.6" style="filter:drop-shadow(0 0 7px ' + c + ')"/>' +
-          '<g color="' + c + '" transform="scale(1.15)">' + GLYPH[nd.s] + '</g>';
-        if (nd.s === "star"){
-          inner += '<circle class="gp" r="26" fill="none" stroke="' + c + '" stroke-width="1.6" style="filter:drop-shadow(0 0 6px ' + c + ')"/>';
-        }
-      }
-      s += nodeG(b, i, x, y, isSel) +
-        '<rect class="halo" x="-27" y="-27" width="54" height="54" rx="13" fill="none" stroke="#ffffff" stroke-width="2"/>' + inner;
-      var lblTxt = nd.s === "fog" ? "???" : nd.n;
-      s += '<text y="36" text-anchor="middle" font-size="9.5" fill="' + (nd.s === "fog" ? "#565b8c" : "#c9cdf5") + '" font-weight="600" font-family="Menlo, Consolas, monospace">' + esc(lblTxt) + '</text>';
-      if (nd.s !== "fog"){
-        s += '<text y="-28" text-anchor="middle" font-size="9" fill="' + c + '" font-weight="800" font-family="Menlo, Consolas, monospace">LV ' + nd.lv + '</text>';
-      }
-      s += "</g>";
+
+  var V = { kids: SKILLS.map(function(sk){ return sk.root; }) };
+  var groundY = 648, levelH = 100;
+  layoutTree(V, 40, 320, groundY, levelH);
+  var limbCols = ["#ff2fb3", "#00e5ff", "#39ff6a", "#ffe14d"];
+  var flats = SKILLS.map(function(sk, b){ return flattenSkill(b); });
+  var vx = V._x;
+
+  /* neon trunk: dark core, electric edge */
+  s += '<rect x="' + (vx - 9).toFixed(1) + '" y="592" width="18" height="60" rx="9" fill="#0a2a33" stroke="#00e5ff" stroke-width="2.5" style="filter:drop-shadow(0 0 8px #00e5ff)"/>';
+  s += '<rect x="' + (vx - 22).toFixed(1) + '" y="646" width="44" height="8" rx="4" fill="#101024" stroke="#00e5ff" stroke-width="1.6" opacity="0.9"/>';
+  /* circuit notches on the trunk */
+  s += '<path d="M' + (vx - 9).toFixed(1) + ' 612 l-12 0 l0 10 M' + (vx + 9).toFixed(1) + ' 626 l12 0 l0 -10" stroke="#00e5ff" stroke-width="1.8" fill="none" opacity="0.8"/>';
+
+  /* limbs in four neon colors */
+  flats.forEach(function(flat, b){
+    var lc = limbCols[b];
+    flat.forEach(function(f){
+      var fromX = f.px === null ? vx : f.px, fromY = f.py === null ? 596 : f.py;
+      var w = Math.max(1.2, 5 - f.depth * 0.9);
+      s += '<path d="' + branchPath(fromX, fromY, f.x, f.y) + '" fill="none" stroke="' + lc +
+        '" stroke-width="' + w.toFixed(1) + '" stroke-linecap="round" opacity="0.85" style="filter:drop-shadow(0 0 4px ' + lc + ')"/>';
     });
   });
-  s += '<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="none" stroke="#00e5ff" stroke-width="3" opacity="0.25"/>';
+
+  /* floating coins */
+  var k;
+  for (k = 0; k < 7; k++){
+    var cx2 = 40 + (j(k * 23.1) * 0.5 + 0.5) * 280, cy2 = 180 + (j(k * 41.7) * 0.5 + 0.5) * 420;
+    s += '<g class="bob" style="animation-delay:' + (k * 0.4).toFixed(1) + 's"><circle cx="' + cx2.toFixed(1) + '" cy="' + cy2.toFixed(1) + '" r="4" fill="none" stroke="#ffe14d" stroke-width="1.6" opacity="0.7"/></g>';
+  }
+
+  /* nodes: glowing pixels on the traces */
+  var neon = { op: "#39ff6a", tried: "#ffb02f", fog: "#3a3f66", star: "#ffe14d" };
+  var nodeBoxes = [], cands = [];
+  flats.forEach(function(flat, b){
+    flat.forEach(function(f){
+      var nd = f.nd, d = Math.min(f.depth, 5);
+      var hr = [0, 12, 11, 10, 9.5, 9][d];
+      var c = neon[nd.s], inner = "", isSel = sel && sel.b === b && sel.i === f.i;
+      if (nd.s === "fog"){
+        inner = '<rect x="' + (-hr) + '" y="' + (-hr) + '" width="' + (hr * 2) + '" height="' + (hr * 2) + '" rx="6" fill="#101024" stroke="' + c + '" stroke-width="2" stroke-dasharray="5 4"/>' +
+          '<text y="5" text-anchor="middle" font-size="12" fill="#565b8c" font-weight="800" font-family="Menlo, Consolas, monospace">?</text>';
+      } else {
+        inner = '<rect x="' + (-hr) + '" y="' + (-hr) + '" width="' + (hr * 2) + '" height="' + (hr * 2) + '" rx="6" fill="#0d0d20" stroke="' + c + '" stroke-width="2.4" style="filter:drop-shadow(0 0 4px ' + c + ')"/>' +
+          '<g color="' + c + '" transform="scale(1.05)">' + GLYPH[nd.s] + '</g>';
+        if (nd.s === "star"){
+          inner += '<circle class="gp" r="' + (hr + 6).toFixed(1) + '" fill="none" stroke="' + c + '" stroke-width="1.6" style="filter:drop-shadow(0 0 5px ' + c + ')"/>';
+        }
+      }
+      s += nodeG(b, f.i, f.x, f.y, isSel) +
+        '<rect class="halo" x="' + (-hr - 8) + '" y="' + (-hr - 8) + '" width="' + (hr * 2 + 16) + '" height="' + (hr * 2 + 16) + '" rx="12" fill="none" stroke="#ffffff" stroke-width="2"/>' + inner + '</g>';
+      nodeBoxes.push({ x: f.x, y: f.y, r: hr });
+      if (f.depth === 1){
+        cands.unshift({ x: f.x, ly: f.y - hr - 12, txt: SKILLS[b].tag.toUpperCase(), size: 10, fill: limbCols[b], mono: true, bold: true, ls: "1" });
+      } else {
+        cands.push({ x: f.x, ly: f.y + hr + 14, txt: nd.s === "fog" ? "???" : nd.n, size: 7.5, fill: nd.s === "fog" ? "#565b8c" : "#c9cdf5", mono: true });
+      }
+    });
+  });
+  s += labelSVG(cands, nodeBoxes);
+
+  s += '<rect width="' + W + '" height="' + H + '" fill="url(#scanA)" pointer-events="none"/>';
+  s += '<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="none" stroke="#00e5ff" stroke-width="3" opacity="0.25" pointer-events="none"/>';
   return '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Insert Coin neon arcade skill tree">' + s + "</svg>";
 }
 </script>
 <script>
 "use strict";
-/* ================= DIRECTION 5: COMMIT CANOPY (contribution grid grown into a tree) ================= */
+/* ================= DIRECTION 5: COMMIT CANOPY (git-graph tree) ================= */
 function renderCanopy(sel){
-  var W = 360, H = 660, s = "";
+  var W = 360, H = 800, s = "";
   s += '<rect width="' + W + '" height="' + H + '" fill="#0d1117"/>';
   s += '<text x="20" y="36" font-size="15" fill="#e6edf3" font-weight="800">your year in skills</text>';
-  s += '<text x="20" y="56" font-size="11" fill="#7d8590">each cell is a node</text>';
-  s += '<text x="220" y="56" font-size="10" fill="#7d8590">less</text>';
-  var sw = ["#161b22", "#0e4429", "#006d32", "#26a641", "#39d353"], si;
-  for (si = 0; si < 5; si++){ s += '<rect x="' + (244 + si * 14) + '" y="47" width="11" height="11" rx="2.5" fill="' + sw[si] + '" stroke="#30363d" stroke-width="0.8"/>'; }
-  s += '<text x="316" y="56" font-size="10" fill="#7d8590">more</text>';
-  var cols = [36, 108, 180, 252, 324], cellY0 = 130, cellDy = 46;
-  var canopyNames = ["Mandarin", "Game Dev", "Cooking", "Comms", "Fitness"];
-  var trunkX = 180, trunkTop = 350, trunkBot = 600;
-  s += '<path d="M' + trunkX + ' ' + trunkTop + ' L' + trunkX + ' ' + trunkBot + '" fill="none" stroke="#3fb950" stroke-width="13" stroke-linecap="round" opacity="0.28"/>';
-  s += '<path d="M' + trunkX + ' ' + trunkTop + ' L' + trunkX + ' ' + trunkBot + '" fill="none" stroke="#238636" stroke-width="6" stroke-linecap="round"/>';
-  /* each branch drops below its column's labels, then sweeps to the shared crotch at the trunk top */
-  BRANCHES.forEach(function(br, b){
-    var x = cols[b], n = br.nodes.length;
-    var colBottom = cellY0 + (n - 1) * cellDy + 44;
-    s += '<path d="M' + x + ' ' + colBottom + ' C' + x + ' 350,' + trunkX + ' 350,' + trunkX + ' ' + trunkTop + '" fill="none" stroke="#238636" stroke-width="4" stroke-linecap="round" opacity="0.75"/>';
-  });
-  s += '<path d="M' + trunkX + ' ' + trunkBot + ' l-26 22 M' + trunkX + ' ' + trunkBot + ' l26 22 M' + trunkX + ' ' + (trunkBot - 14) + ' l-18 26 M' + trunkX + ' ' + (trunkBot - 14) + ' l18 26" stroke="#238636" stroke-width="5" stroke-linecap="round" fill="none"/>';
-  BRANCHES.forEach(function(br, b){
-    var x = cols[b];
-    s += '<text x="' + x + '" y="' + (cellY0 - 26) + '" text-anchor="middle" font-size="9.5" fill="#e6edf3" font-weight="700">' + esc(canopyNames[b]) + '</text>';
-    br.nodes.forEach(function(nd, i){
-      var y = cellY0 + i * cellDy, inner = "";
-      var isSel = sel && sel.b === b && sel.i === i;
-      var fill = nd.s === "op" ? "#39d353" : nd.s === "tried" ? "#d29922" : nd.s === "star" ? "#ffd479" : "#161b22";
-      var ring = nd.s === "fog" ? "#30363d" : fill;
-      inner = '<rect x="-15" y="-15" width="30" height="30" rx="6" fill="' + fill + '" stroke="' + ring + '" stroke-width="2"' +
-        (nd.s === "fog" ? ' stroke-dasharray="4 3"' : ' style="filter:drop-shadow(0 0 6px ' + fill + '66)"') + '/>';
-      if (nd.s === "star"){
-        inner += '<g color="#0d1117" transform="scale(0.9)">' + GLYPH.star + '</g>';
-      } else if (nd.s !== "fog"){
-        inner += '<g color="' + (nd.s === "tried" ? "#0d1117" : "#0d1117") + '" transform="scale(0.75)">' + GLYPH[nd.s] + '</g>';
+  s += '<text x="20" y="56" font-size="11" fill="#7d8590">every commit is a node. tap one.</text>';
+
+  /* git-graph layout: one lane per skill, each commit on its own row (pre-order),
+     x jogs by lane so parent links draw as elbows like a real graph */
+  var cols = [46, 135, 225, 314], baseY = 700, pitch = 56;
+  var branchCols = ["#39d353", "#1f6feb", "#d29922", "#a371f7"];
+  SKILLS.forEach(function(sk, b){
+    var row = 0;
+    (function walk(nd, d, lane){
+      nd._d = d; nd._row = row; row++;
+      nd._x = cols[b] + lane * 16; nd._y = baseY - nd._row * pitch;
+      var k = nd.kids || [], i;
+      for (i = 0; i < k.length; i++){
+        var kl = (k.length === 1) ? 0 : (i - (k.length - 1) / 2);
+        walk(k[i], d + 1, lane * 0.5 + kl);
       }
-      s += nodeG(b, i, x, y, isSel) +
-        '<rect class="halo" x="-21" y="-21" width="42" height="42" rx="10" fill="none" stroke="#f0f6fc" stroke-width="2"/>' + inner;
-      var lblTxt = nd.s === "fog" ? "???" : nd.n;
-      s += '<text y="31" text-anchor="middle" font-size="8" fill="' + (nd.s === "fog" ? "#484f58" : "#a5b3c2") + '">' + esc(lblTxt) + '</text>';
-      s += "</g>";
+    })(sk.root, 0, 0);
+    flattenSkill(b);
+  });
+
+  /* main trunk line */
+  var mainX = 180;
+  s += '<path d="M' + mainX + ' 736 L' + mainX + ' 648" fill="none" stroke="#238636" stroke-width="7" stroke-linecap="round"/>';
+  s += '<circle cx="' + mainX + '" cy="736" r="9" fill="#0d1117" stroke="#238636" stroke-width="3"/>';
+  s += '<text x="' + mainX + '" y="762" text-anchor="middle" font-size="9" fill="#7d8590" font-family="Menlo, Consolas, monospace">main</text>';
+
+  /* branch lines splitting off main, then parent-link elbows up each lane */
+  SKILLS.forEach(function(sk, b){
+    var splitY = 694 - b * 10, bc = branchCols[b], colX = cols[b];
+    var root = sk.flat[0];
+    s += '<path d="M' + mainX + ' ' + splitY + ' L' + mainX + ' ' + root.y + ' L' + root.x.toFixed(1) + ' ' + root.y + '"' +
+      ' fill="none" stroke="' + bc + '" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>';
+    sk.flat.forEach(function(f){
+      if (f.px === null){ return; }
+      s += '<path d="M' + f.px.toFixed(1) + ' ' + f.py.toFixed(1) + ' L' + f.px.toFixed(1) + ' ' + f.y.toFixed(1) + ' L' + f.x.toFixed(1) + ' ' + f.y.toFixed(1) + '"' +
+        ' fill="none" stroke="' + bc + '" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>';
+    });
+    /* branch tag above the top commit */
+    var topY = baseY - (sk.flat.length - 1) * pitch;
+    var tag = sk.tag, tw = tag.length * 5.6 + 16;
+    s += '<rect x="' + (colX - tw / 2).toFixed(1) + '" y="' + (topY - 46) + '" width="' + tw.toFixed(1) + '" height="20" rx="10" fill="#0d1117" stroke="' + bc + '" stroke-width="1.4"/>' +
+      '<text x="' + colX + '" y="' + (topY - 32) + '" text-anchor="middle" font-size="8.5" fill="' + bc + '" font-weight="800" font-family="Menlo, Consolas, monospace">' + esc(tag) + '</text>';
+  });
+
+  /* commits */
+  SKILLS.forEach(function(sk, b){
+    sk.flat.forEach(function(f){
+      var nd = f.nd, hr = 12, inner = "";
+      var isSel = sel && sel.b === b && sel.i === f.i;
+      if (nd.s === "fog"){
+        inner = '<rect x="' + (-hr) + '" y="' + (-hr) + '" width="' + (hr * 2) + '" height="' + (hr * 2) + '" rx="7" fill="#161b22" stroke="#30363d" stroke-width="2" stroke-dasharray="4 3"/>' +
+          '<text y="4.5" text-anchor="middle" font-size="12" fill="#484f58" font-weight="800">?</text>';
+      } else {
+        var fill = nd.s === "op" ? "#39d353" : nd.s === "tried" ? "#d29922" : "#ffd479";
+        inner = '<rect x="' + (-hr) + '" y="' + (-hr) + '" width="' + (hr * 2) + '" height="' + (hr * 2) + '" rx="7" fill="' + fill + '" style="filter:drop-shadow(0 0 6px ' + fill + '66)"/>' +
+          '<g color="#0d1117" transform="scale(0.85)">' + GLYPH[nd.s] + '</g>';
+        if (nd.s === "star"){
+          inner += '<circle class="gp" r="' + (hr + 6) + '" fill="none" stroke="' + fill + '" stroke-width="1.6"/>';
+        }
+      }
+      s += nodeG(b, f.i, f.x, f.y, isSel) +
+        '<rect class="halo" x="' + (-hr - 7) + '" y="' + (-hr - 7) + '" width="' + (hr * 2 + 14) + '" height="' + (hr * 2 + 14) + '" rx="11" fill="none" stroke="#f0f6fc" stroke-width="2"/>' + inner;
+      /* commit message under the commit; one commit per row so nothing collides */
+      var lines = wrapLines(nd.s === "fog" ? "???" : nd.n, 10);
+      lines.forEach(function(line, li){
+        s += '<text x="0" y="' + (hr + 13 + li * 10.5).toFixed(1) + '" text-anchor="middle" font-size="7.5" fill="' + (nd.s === "fog" ? "#484f58" : "#a5b3c2") + '" font-family="Menlo, Consolas, monospace" stroke="#0d1117" stroke-width="3" paint-order="stroke">' + esc(line) + '</text>';
+      });
+      s += '</g>';
     });
   });
-  s += '<text x="150" y="648" text-anchor="middle" font-size="10" fill="#484f58">16 nodes planted</text>';
-  return '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Commit Canopy git grid skill tree">' + s + "</svg>";
+  s += '<text x="180" y="786" text-anchor="middle" font-size="10" fill="#484f58" font-family="Menlo, Consolas, monospace">38 nodes planted</text>';
+  return '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Commit Canopy git graph skill tree">' + s + "</svg>";
 }
 
 /* ================= direction registry ================= */
 var DIRECTIONS = [
   { id: "nocturne", tab: "Nocturne", name: "NOCTURNE",
     vibe: "moody - celestial - mysterious - patient",
-    take: "For the late-night grinder. The mystery is the hook, but the fog can feel punishing on low-energy days.",
+    take: "For the late-night grinder. One great tree under a moonlit sky. The mystery is the hook, but the fog can feel punishing on low-energy days.",
     render: renderNocturne },
   { id: "trailhead", tab: "Trailhead", name: "TRAILHEAD",
     vibe: "friendly - bouncy - warm - encouraging",
-    take: "For the streak keeper. The friendliest on-ramp, though it can feel a bit young for serious skills.",
+    take: "For the streak keeper. A cozy grove where every skill is its own fruit tree. The friendliest on-ramp, though it can feel a bit young for serious skills.",
     render: renderTrailhead },
   { id: "sumi", tab: "Sumi", name: "SUMI",
     vibe: "quiet - deliberate - refined - calm",
-    take: "For the reflective journaler. Beautiful and calm, but progress is harder to read at a glance.",
+    take: "For the reflective journaler. Four windswept pines in a zen garden. Beautiful and calm, but progress is harder to read at a glance.",
     render: renderSumi },
   { id: "arcade", tab: "Insert Coin", name: "INSERT COIN",
     vibe: "loud - electric - competitive - juicy",
-    take: "For the competitor who chases combos. Maximum juice, but the noise could fatigue fast.",
+    take: "For the competitor who chases combos. One electric tree with four neon limbs. Maximum juice, but the noise could fatigue fast.",
     render: renderArcade },
   { id: "canopy", tab: "Commit Canopy", name: "COMMIT CANOPY",
     vibe: "nerdy - honest - compounding - real",
-    take: "For the dev who trusts the graph. Progress you can audit, though it reads more like work than play.",
+    take: "For the dev who trusts the graph. Your skills as git branches splitting off main. Progress you can audit, though it reads more like work than play.",
     render: renderCanopy }
 ];
-
+</script>
+<script>
+"use strict";
 /* ================= page wiring ================= */
 var cur = 0, selNode = null;
 var tabsEl = document.getElementById("tabs");
@@ -526,34 +875,56 @@ function showDirection(i){
   buildTabs();
   metaEl.innerHTML = "<h2>" + esc(d.name) + '</h2><div class="vibe">' + esc(d.vibe) + '</div>' +
     '<div class="take"><b>Kit\'s take:</b> ' + esc(d.take) + "</div>";
-  stageEl.innerHTML = d.render(null);
+  stageEl.innerHTML = d.render(null) + stripHTML(d.id, null);
   sheetEl.className = "sheet hint";
   sheetEl.innerHTML = "<p>Tap any node above to see its level,<br>XP, and next quest.</p>";
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 function showSheet(b, i){
-  var br = BRANCHES[b], nd = br.nodes[i], m = STATE_META[nd.s];
+  var entry = SKILLS[b].flat[i], nd = entry.nd, m = STATE_META[nd.s];
   sheetEl.className = "sheet";
   sheetEl.style.borderColor = m.c;
   var pct = Math.max(2, nd.xp);
   sheetEl.innerHTML =
     '<div class="sheet-top"><span class="pill" style="background:' + m.c + "22" + ";color:" + m.c + ";border:1px solid " + m.c + '">' + m.label + "</span>" +
     '<span class="sheet-name">' + esc(nd.n) + "</span></div>" +
-    '<div class="sheet-lv">' + esc(br.name) + " - Level " + nd.lv + " of 5 - " + nd.xp + "% XP</div>" +
+    '<div class="sheet-lv">' + esc(SKILLS[b].name) + " - Level " + nd.lv + " of 5 - " + nd.xp + "% XP</div>" +
     '<div class="xpbar"><i style="width:' + pct + "%;background:" + m.c + '"></i></div>' +
     '<div class="sheet-quest"><b>Next quest:</b> ' + esc(nd.q) + "</div>";
+}
+function selectNode(b, i){
+  selNode = { b: b, i: i };
+  stageEl.innerHTML = DIRECTIONS[cur].render(selNode) + stripHTML(DIRECTIONS[cur].id, selNode);
+  showSheet(b, i);
 }
 tabsEl.addEventListener("click", function(e){
   var t = e.target.closest(".tab");
   if (t){ showDirection(parseInt(t.getAttribute("data-i"), 10)); }
 });
 stageEl.addEventListener("click", function(e){
-  var g = e.target.closest(".node");
-  if (!g){ return; }
-  var b = parseInt(g.getAttribute("data-b"), 10), i = parseInt(g.getAttribute("data-i"), 10);
-  selNode = { b: b, i: i };
-  stageEl.innerHTML = DIRECTIONS[cur].render(selNode);
-  showSheet(b, i);
+  var row = e.target.closest(".ns-row");
+  if (row){
+    selectNode(parseInt(row.getAttribute("data-b"), 10), parseInt(row.getAttribute("data-i"), 10));
+    return;
+  }
+  /* dense trees have overlapping tap targets, so hit-test by nearest node center
+     instead of trusting which element is on top */
+  var svg = stageEl.querySelector("svg");
+  if (!svg){ return; }
+  var pt = svg.createSVGPoint();
+  pt.x = e.clientX; pt.y = e.clientY;
+  var loc = pt.matrixTransform(svg.getScreenCTM().inverse());
+  var nodes = stageEl.querySelectorAll(".node"), best = null, bestD = 1e9, k;
+  for (k = 0; k < nodes.length; k++){
+    var m = /translate\(([-\d.]+),([-\d.]+)\)/.exec(nodes[k].getAttribute("transform"));
+    if (!m){ continue; }
+    var dx = parseFloat(m[1]) - loc.x, dy = parseFloat(m[2]) - loc.y;
+    var d = Math.sqrt(dx * dx + dy * dy);
+    if (d < bestD){ bestD = d; best = nodes[k]; }
+  }
+  if (best && bestD < 34){
+    selectNode(parseInt(best.getAttribute("data-b"), 10), parseInt(best.getAttribute("data-i"), 10));
+  }
 });
 buildTabs();
 showDirection(0);

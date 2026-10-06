@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design a Leaderboard — System Design Explainer</title>
+<style>
+:root{
+  --paper:#FAF7F1;--panel:#FFFDF8;--ink:#201E1A;--muted:#6F675A;
+  --hair:#DED5C3;--codebg:#211E19;--accent:#B45309;--codeink:#F3EEE3;
+  --red:#B3261E;--amber:#B7791F;
+  --serif:Georgia,'Iowan Old Style','Palatino Linotype',Charter,serif;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --section-gap:64px;--radius:3px;--accent-dim:rgba(180,83,9,.10);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:24px}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.65}
+.wrap{max-width:960px;margin:0 auto;padding:0 20px var(--section-gap)}
+.hero{padding:48px 0 12px}
+.kicker{display:block;margin-bottom:20px;color:var(--accent);font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:lowercase}
+h1,h2{font-family:var(--serif);font-weight:400;text-wrap:balance}
+.hero h1{font-size:clamp(34px,7vw,56px);line-height:1.06;letter-spacing:-.035em;margin:0 0 20px}
+.hero .sub{color:var(--muted);font-size:17px;margin:0}
+.hero .q{font-size:17px;border-left:1px solid var(--ink);padding-left:18px;margin:28px 0 16px;font-style:italic}
+h2{font-size:28px;line-height:1.2;letter-spacing:-.02em;margin:32px 0 20px}
+.wrap > h2{border-top:1px solid var(--hair);padding-top:28px;margin-top:var(--section-gap)}
+h2 .n{display:block;margin-bottom:12px;color:var(--accent);font-family:var(--serif);font-size:40px;font-weight:400;line-height:1;letter-spacing:-.04em}
+h3{font-size:18px;line-height:1.4;font-weight:600;margin:28px 0 12px}
+p{margin:16px 0}
+a{color:var(--accent);text-underline-offset:4px;text-decoration-thickness:1px;touch-action:manipulation}
+a:hover{text-decoration:underline}
+a:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.card,.verdict,.myth,.algo,.stat{background:var(--panel);border:1px solid var(--ink);border-radius:var(--radius);padding:20px;margin:20px 0}
+.card > :first-child,.algo > :first-child{margin-top:0}
+.card > :last-child,.algo > :last-child{margin-bottom:0}
+.verdict{border-color:var(--hair);border-left:3px solid var(--accent);margin:32px 0;padding:24px 20px}
+.verdict h2{margin:0 0 20px}
+.verdict > p:first-of-type > b:first-child{display:block;font-family:var(--serif);font-size:24px;line-height:1.3;font-weight:400;letter-spacing:-.015em;margin-bottom:16px}
+.verdict > :last-child{margin-bottom:0}
+.myth{margin:28px 0}
+.myth .tag{color:var(--amber);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+.myth p:last-child{margin-bottom:0}
+ul,ol{padding-left:22px;margin:16px 0}
+li{margin:8px 0;padding-left:2px}
+code{font-family:var(--mono);background:var(--panel);border:1px solid var(--hair);border-radius:var(--radius);padding:1px 5px;font-size:.85em;overflow-wrap:anywhere;color:var(--ink)}
+pre,.log{background:var(--codebg);color:var(--codeink);border:1px solid var(--ink);border-radius:var(--radius);padding:18px;font-family:var(--mono);font-size:13px;line-height:1.65;overflow:auto}
+pre{margin:24px 0}
+pre code{background:none;border:0;padding:0;font-size:inherit;color:inherit;overflow-wrap:normal}
+pre.mermaid{background:var(--paper);color:var(--ink);padding:24px 16px;border-color:var(--hair)}
+pre.mermaid svg{display:block;max-width:100%;height:auto;margin:0 auto}
+table{display:block;width:100%;max-width:100%;border-collapse:collapse;font-size:14px;line-height:1.6;margin:20px 0;overflow-x:auto}
+th,td{text-align:left;padding:12px 10px;border-bottom:1px solid var(--hair);vertical-align:top;min-width:112px}
+th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.1em}
+tr:last-child td{border-bottom:0}
+details{background:var(--panel);border:1px solid var(--hair);border-radius:var(--radius);padding:0 18px;margin:20px 0}
+summary{cursor:pointer;color:var(--ink);font-family:var(--serif);font-size:18px;font-weight:600;line-height:1.4;padding:16px 0;touch-action:manipulation}
+details[open] summary{border-bottom:1px solid var(--hair);margin-bottom:16px}
+button{touch-action:manipulation;cursor:pointer;background:var(--accent);color:var(--panel);border:1px solid var(--accent);border-radius:var(--radius);min-height:44px;padding:11px 16px;font-family:inherit;font-size:15px;font-weight:600;line-height:1.4;margin:6px 4px 6px 0}
+button:active{transform:scale(.97)}
+button.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+button:disabled{opacity:.45;cursor:default}
+input,textarea,select{touch-action:manipulation}
+input[type=text],input[type=number],textarea,select{background:var(--panel);border:1px solid var(--ink);color:var(--ink);border-radius:var(--radius);padding:12px;min-height:44px;font-family:inherit;font-size:16px;line-height:1.5;width:100%;max-width:100%}
+textarea{display:block;resize:vertical}
+input[type=range]{display:block;width:100%;min-height:44px;margin:0;accent-color:var(--accent)}
+input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-offset:2px;border-color:var(--accent)}
+label{font-size:13px;color:var(--muted);display:block;margin:20px 0 6px;touch-action:manipulation}
+.log{max-height:260px;font-size:12.5px;line-height:1.8;overflow-wrap:anywhere}
+.log .ok{color:#A9D3AD}.log .warn{color:#E7BE78}.log .err{color:#FFA79D}.log .dim{color:#C1B7A5}.log .bl{color:var(--codeink)}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin:20px 0}
+.grid2 > *{min-width:0}
+.grid2 > .card,.grid2 > .stat,.grid2 > .algo{margin:0}
+.kv{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--hair);font-size:14px}
+.kv > *{min-width:0;overflow-wrap:anywhere}
+.kv b{font-weight:600;text-align:right}
+.kv:last-child{border-bottom:0}
+.stat{border-color:var(--hair);padding:20px 12px;text-align:center}
+.stat .v{font-family:var(--serif);font-size:36px;line-height:1.2;font-weight:400;color:var(--accent);overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.stat .l{font-size:12px;color:var(--muted);margin-top:8px}
+.toc{border-top:1px solid var(--hair);border-bottom:1px solid var(--hair);padding:20px 0;margin:20px 0 32px;font-size:14px;line-height:2;counter-reset:section-index}
+.toc > b{display:block;font-family:var(--sans);color:var(--accent);font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:lowercase;margin-bottom:8px}
+.toc a{display:inline-block;min-height:44px;padding:8px 0;color:var(--ink);font-family:var(--serif);font-size:17px;line-height:1.65;text-decoration:none}
+.toc a:hover{text-decoration:underline}
+.toc a.index-link::before{counter-increment:section-index;content:counter(section-index,decimal-leading-zero) ' ';color:var(--accent);font-variant-numeric:tabular-nums;margin-right:4px}
+.tok-chip{display:inline-flex;flex-direction:column;align-items:center;max-width:100%;background:var(--panel);border:1px solid var(--hair);border-radius:var(--radius);padding:6px 10px;margin:3px;font-family:var(--mono);vertical-align:top;overflow-wrap:anywhere}
+.tok-chip .t{font-size:14px;color:var(--ink)}
+.tok-chip .i{font-size:10px;color:var(--muted)}
+.tok-chip.merged{border-color:var(--accent)}
+.tok-chip.oov{border-color:var(--red)}
+.merges{max-height:220px;overflow-y:auto;font-family:var(--mono);font-size:12.5px}
+.merges .m{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--hair)}
+.merges .dim{color:var(--muted)}
+canvas.chart{width:100%;height:190px;background:var(--codebg);border:1px solid var(--ink);border-radius:var(--radius);display:block}
+.bucket{height:28px;background:var(--paper);border:1px solid var(--ink);border-radius:var(--radius);overflow:hidden;position:relative}
+.bucket > div:first-child{height:100%;background:var(--accent);transition:width .12s linear}
+.bucket .blabel{position:absolute;top:0;bottom:0;left:50%;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;width:max-content;max-width:100%;padding:0 8px;background:var(--panel);border-left:1px solid var(--ink);border-right:1px solid var(--ink);font-size:11px;font-weight:600;color:var(--ink);font-family:var(--mono)}
+.algo{padding:16px}
+.big{font-family:var(--serif);font-size:32px;font-weight:400;line-height:1.4;margin-top:16px;font-variant-numeric:tabular-nums}
+.big > span:not(.okn):not(.bad){font-family:var(--sans)}
+.big .okn{color:var(--accent)}.big .bad{color:var(--red)}
+.win-dots{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;min-height:22px}
+.win-dots span{width:12px;height:12px;border-radius:50%;background:var(--accent);display:inline-block}
+.win-dots span.old{background:var(--hair)}
+.site-footer{border-top:1px solid var(--hair)}
+.footer-colophon,.footer-inner{max-width:960px;margin:0 auto;padding:18px 20px}
+.footer-colophon{color:var(--muted);font-size:12px;line-height:1.7}
+.footer-band{background:var(--accent);color:var(--paper)}
+.footer-inner{display:flex;flex-direction:column;align-items:flex-start;gap:20px;padding-top:32px;padding-bottom:72px}
+.footer-title{font-family:var(--serif);font-size:clamp(28px,5vw,40px);line-height:1.15;letter-spacing:-.025em}
+.footer-band a{color:var(--paper);font-size:14px;min-height:44px;display:inline-flex;align-items:center}
+.footer-band a:focus-visible{outline-color:var(--paper)}
+.ver-badge{position:fixed;right:12px;bottom:12px;background:var(--panel);border:1px solid var(--ink);color:var(--ink);font-size:11px;padding:5px 10px;border-radius:var(--radius);z-index:50;font-family:var(--mono)}
+@media(max-width:719px){
+  .ver-badge{position:static;display:block;width:max-content;margin:28px auto 12px}
+  .footer-inner{padding-bottom:32px}
+  table thead{display:none}
+  table tr:has(th):not(:has(td)){display:none}
+  table,table tbody,table tr,table td,table th{display:block;width:100%;max-width:100%}
+  table{overflow-x:visible;margin:16px 0}
+  table tr{border-top:1px solid var(--hair);padding:10px 0}
+  table td,table th{border-bottom:0;padding:6px 0;min-width:0}
+  table td:first-child{font-weight:700}
+}
+@media(min-width:720px){
+  body{font-size:17px}
+  .wrap{padding-right:32px;padding-left:32px}
+  .hero{padding-top:72px}
+  .hero .q{max-width:760px;margin-top:32px}
+  .grid2{grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
+  .card,.verdict,.myth{padding:28px}
+  .algo{padding:20px}
+  pre.mermaid{padding:32px}
+  table{display:table}
+  th,td{min-width:0}
+  .footer-colophon,.footer-inner{padding-right:32px;padding-left:32px}
+  .footer-inner{flex-direction:row;justify-content:space-between;align-items:center;padding-top:40px;padding-bottom:56px}
+}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .bucket > div:first-child{transition:none}
+  button:active{transform:none}
+}
+
+/* ---- site supplement (remapped) ---- */
+header.hero{padding:44px 0 10px}
+.eyebrow{color:var(--accent);text-transform:uppercase;letter-spacing:2.5px;font-size:12px;font-weight:700}
+.sub{color:var(--muted);font-size:17px;margin:0 0 8px}
+.verdict strong{color:var(--accent)}
+.muted{color:var(--muted)}
+.misconception{border-left:4px solid var(--amber);background:rgba(226,168,126,.07);padding:12px 16px;border-radius:0 12px 12px 0;margin:18px 0}
+.misconception .tag{color:var(--amber);font-weight:800;text-transform:uppercase;font-size:12px;letter-spacing:1.5px}
+pre.code{background:var(--panel);border:1px solid var(--hair);border-radius:12px;padding:14px;overflow-x:auto;font-size:13px;line-height:1.5}
+pre.code code{color:var(--ink);background:none;padding:0}
+button,.btn{touch-action:manipulation;background:var(--panel);color:var(--ink);border:1px solid var(--hair);border-radius:10px;padding:11px 16px;font-size:15px;cursor:pointer;font-family:inherit}
+button:active,.btn:active{transform:scale(.97)}
+button.primary{background:var(--accent);color:var(--paper);font-weight:800;border:none}
+.mermaid{background:var(--panel);border:1px solid var(--hair);border-radius:12px;padding:14px;overflow-x:auto;margin:14px 0}
+.mermaid svg{max-width:100%;height:auto;display:block;margin:0 auto}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0}
+.stat b{color:var(--accent);font-size:15px}
+.pill{display:inline-block;background:var(--panel);border:1px solid var(--hair);border-radius:999px;padding:4px 12px;font-size:13px;margin:2px 4px 2px 0}
+.lb-row{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--hair);border-radius:10px;padding:9px 12px;margin:6px 0;transition:transform .35s ease,border-color .35s ease}
+.lb-row.bump{border-color:var(--accent);transform:scale(1.015)}
+.lb-rank{font-weight:800;color:var(--muted);width:34px;font-size:15px}
+.lb-row:nth-child(1) .lb-rank{color:var(--gold)}
+.lb-name{flex:1;font-weight:600}
+.lb-score{font-variant-numeric:tabular-nums;color:var(--accent);font-weight:700}
+.lb-bar{height:6px;background:var(--panel);border-radius:4px;overflow:hidden;margin-top:4px}
+.lb-bar i{display:block;height:100%;background:var(--accent);border-radius:4px;transition:width .35s ease}
+.lb-meta{width:100%}
+/* ---- variant adapter ---- */
+
+.wrap{counter-reset:sdsec}
+.wrap > h2{counter-increment:sdsec;font-family:var(--serif);font-size:28px;font-weight:400;line-height:1.2;letter-spacing:-.02em;border-top:1px solid var(--hair);padding-top:28px;margin:64px 0 20px}
+.wrap > h2::before{content:counter(sdsec,decimal-leading-zero);display:block;margin-bottom:12px;color:var(--accent);font-family:var(--serif);font-size:40px;font-weight:400;line-height:1;letter-spacing:-.04em}
+.wrap > h2:first-of-type{counter-increment:none;border-top:0;padding-top:0;margin-top:32px}
+.wrap > h2:first-of-type::before{content:none}
+.misconception{background:var(--panel);border:1px solid var(--hair);border-radius:3px;padding:20px;margin:28px 0}
+.misconception .tag{color:var(--amber);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+.eyebrow{display:block;margin-bottom:20px;color:var(--accent);font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:lowercase}
+.sub{color:var(--muted);font-size:17px;margin:0}
+.mermaid{background:var(--paper);border:1px solid var(--hair);border-radius:3px;padding:24px 16px;overflow-x:auto;margin:20px 0}
+.mermaid svg{display:block;max-width:100%;height:auto;margin:0 auto}
+button.primary,button.on{background:var(--accent);color:var(--paper);border-color:var(--accent)}
+pre.code{color:var(--ink)}pre.code code{color:var(--ink)}
+</style>
+<script src="mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{
+  primaryColor:'#FFFDF8',primaryBorderColor:'#B45309',primaryTextColor:'#201E1A',
+  lineColor:'#201E1A',secondaryColor:'#F0E9DA',tertiaryColor:'#FAF7F1',
+  textColor:'#201E1A',background:'#FAF7F1',mainBkg:'#FFFDF8',nodeBorder:'#201E1A',
+  clusterBkg:'#F4EDDE',clusterBorder:'#DED5C3',edgeLabelBackground:'#FAF7F1',
+  actorBkg:'#FFFDF8',actorBorder:'#B45309',actorTextColor:'#201E1A',actorLineColor:'#201E1A',
+  signalColor:'#201E1A',signalTextColor:'#201E1A',labelBoxBkgColor:'#FFFDF8',
+  labelBoxBorderColor:'#201E1A',labelTextColor:'#201E1A',loopTextColor:'#201E1A',
+  activationBkgColor:'#EFE6D2',activationBorderColor:'#201E1A',
+  noteBkgColor:'#FFFDF8',noteBorderColor:'#DED5C3',noteTextColor:'#201E1A',
+  fontFamily:'-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif',fontSize:'16px'
+}});</script>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+<div class="eyebrow">System design interview · backend</div>
+<h1>Design a real-time leaderboard</h1>
+<p class="sub">"A mobile game with <b>1 million daily players</b> needs a live global leaderboard. Scores update constantly, ranks must feel instant, and it has to survive tournament spikes without melting."</p>
+</header>
+
+<h2>⚡ The takeaway first</h2>
+<div class="verdict">
+<strong>A leaderboard is a sorted set, not a SQL table.</strong> Keep one ordered structure per game where every score update re-sorts in <b>O(log n)</b>, read the top 100 straight off the top, and answer "what's my rank?" with a single rank lookup. Then <b>shard by game</b> — each game's leaderboard lives on its own shard, so nothing global ever needs a lock.
+</div>
+
+<h2>📋 Requirements</h2>
+<div class="card">
+<h3>Functional</h3>
+<ul>
+<li>Submit a score for a player in a game; keep the player's <b>best</b> score.</li>
+<li>Read top-N (N ≤ 100) for a game, and "players around me" (rank ± 10).</li>
+<li>Rank query: "what is my rank right now?"</li>
+<li>Seasonal resets (weekly tournaments start fresh).</li>
+</ul>
+<h3>Non-functional</h3>
+<ul>
+<li><b>Writes:</b> ~2k score updates/sec sustained, 20k/sec tournament spikes.</li>
+<li><b>Reads:</b> 20k top-N reads/sec — reads dominate writes ~10:1.</li>
+<li><b>Freshness:</b> a new high score is visible within ~1 second.</li>
+<li><b>Scale:</b> 1M players per popular game, thousands of games.</li>
+</ul>
+</div>
+
+<div class="misconception">
+<div class="tag">🚫 Common misconception</div>
+<p><b>"Just store scores in Postgres and ORDER BY score DESC LIMIT 100."</b> That sorts a million rows on every page view — or leans on an index that must be rewritten on every single score update, turning each write into index churn. A sorted set (Redis <code>ZADD</code>/<code>ZREVRANK</code>) keeps the order incrementally: updates cost <b>O(log n)</b>, top-N reads are O(log n + N), and rank is a single lookup. That's the entire data structure decision, and it's the one interviewers are waiting for.</p>
+</div>
+
+<h2>🧮 Back-of-the-envelope math</h2>
+<div class="card">
+<table>
+<tr><th>Assumption</th><th>Value</th></tr>
+<tr><td>Players per popular game</td><td>1,000,000</td></tr>
+<tr><td>Bytes per entry (player id + score)</td><td>~64 bytes</td></tr>
+<tr><td><b>Memory per leaderboard</b></td><td>1M × 64 B ≈ <b>64 MB</b> — fits in RAM easily</td></tr>
+<tr><td>Write rate (peak)</td><td><b>20k ZADD/sec</b> per game</td></tr>
+<tr><td>Read rate</td><td><b>200k reads/sec</b> across games (top-N + rank)</td></tr>
+<tr><td>ZADD cost at 1M members</td><td>O(log 1M) ≈ 20 comparisons ≈ <b>sub-millisecond</b></td></tr>
+</table>
+<p class="muted">One Redis shard handles ~100k ops/sec comfortably. So a single game needs 2–3 shards at peak, and 1,000 quiet games share shards by hashing game id. Memory for 1,000 games × 100k players avg ≈ 6.4 GB. This is a <b>small</b> system that looks big — the interview trap is over-architecting it.</p>
+<details><summary>Go deeper: why not just cache the top 100?</summary>
+<p>You could recompute top-100 every second and serve from cache — and many games do exactly this for the <i>displayed</i> board. But "what's my rank?" for player #483,201 still needs the full ordering, and rank lookups are the long tail of reads. The sorted set answers both from the same structure, so keep it as source of truth and cache only the rendered top-N page.</p>
+</details>
+</div>
+
+<h2>🏗️ Architecture</h2>
+<p>The centerpiece: shard by game, sorted set per shard, thin API in front.</p>
+<pre class="mermaid">
+flowchart TD
+    A[Game clients] --> B[API Gateway<br/>auth, rate limit]
+    B --> C[Leaderboard service<br/>stateless]
+    C --> D{Shard router<br/>hash game_id}
+    D --> E[Shard 1<br/>game:42 → ZSET]
+    D --> F[Shard 2<br/>game:43 → ZSET]
+    D --> G[Shard N<br/>game:44 → ZSET]
+    E --> H[(Redis replica<br/>read scaling)]
+    F --> H
+    C --> I[(Season archive<br/>S3 - past tournaments)]
+    J[Score events<br/>Kafka] --> C
+</pre>
+<p><b>Think of it like a tournament bracket board per game:</b> each game gets its own whiteboard (shard) with names already in order. Updating a score is erasing one name and rewriting it in the right slot — you never re-sort the whole board. The router just makes sure everyone playing game 42 walks to the same whiteboard.</p>
+
+<h2>🔍 Component deep-dives</h2>
+<h3>Score submit — best-score-wins, one round trip</h3>
+<pre class="mermaid">
+sequenceDiagram
+    participant C as Game client
+    participant S as Leaderboard service
+    participant R as Redis shard
+    C->>S: POST /games/42/scores {player, score:9500}
+    S->>R: ZADD gt game:42 9500 player:7
+    Note over R: GT flag: only update if greater.<br/>O(log n), atomic.
+    R->>R: ZREVRANK game:42 player:7
+    R-->>S: rank 1,203
+    S-->>C: 200 {rank: 1203, top: [...]}
+</pre>
+<p>The <code>GT</code> flag matters: "keep my best score" becomes atomic — no read-modify-write race between two concurrent submissions from the same player.</p>
+
+<h3>Rank query + "around me" — two lookups, no scans</h3>
+<pre class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant S as Leaderboard service
+    participant R as Redis shard
+    C->>S: GET /games/42/rank?player=7
+    S->>R: ZREVRANK game:42 player:7
+    R-->>S: 1202 (0-indexed)
+    S->>R: ZREVRANGE game:42 1192 1212 WITHSCORES
+    R-->>S: 21 entries around the player
+    S-->>C: {rank: 1203, neighbors: [...]}
+</pre>
+<p>Two O(log n) operations. The client renders "you are #1,203, here are the 10 above and below you" — which is the view players actually care about, not the global top 100.</p>
+
+<h2>🔌 API + data model</h2>
+<div class="card">
+<h3>API</h3>
+<pre class="code"><code>POST /v1/games/{gameId}/scores
+  { "playerId": "p7", "score": 9500 }        → { "rank": 1203, "isBest": true }
+
+GET  /v1/games/{gameId}/top?n=100           → [{playerId, score, rank}...]
+GET  /v1/games/{gameId}/rank/{playerId}     → { rank, score, neighbors:[...] }
+POST /v1/games/{gameId}/seasons             → snapshot + reset (weekly)</code></pre>
+<h3>Data model</h3>
+<ul>
+<li><b>Key:</b> <code>lb:{gameId}:{season}</code> → Redis <b>sorted set</b>, member = playerId, score = best score. Ties: member suffix or score micro-offset keeps ordering deterministic.</li>
+<li><b>Shard map:</b> <code>hash(gameId) → shard</code> — a game never spans shards, so no cross-shard queries exist.</li>
+<li><b>Archive:</b> on season reset, <code>ZRANGE</code> the final board to S3 as JSON/Parquet; serve "last season's winners" from there.</li>
+</ul>
+</div>
+
+<h2>⚖️ Trade-offs</h2>
+<div class="card">
+<table>
+<tr><th>Decision</th><th>Option A</th><th>Option B</th><th>Pick</th></tr>
+<tr><td>Shard key</td><td>By player</td><td><b>By game</b></td><td><b>B</b> — every query is "within a game"; sharding by player would scatter one leaderboard across shards</td></tr>
+<tr><td>Freshness</td><td>Recompute top-100 every 1s, cache it</td><td>Read live from the ZSET</td><td><b>Both</b>: live ZSET is source of truth; cache rendered top-100 pages for 1s to absorb read spikes</td></tr>
+<tr><td>Ties</td><td>Arbitrary order</td><td>Earlier achiever ranks higher</td><td><b>B</b> — encode as score + tiny time-based epsilon; players accept "first to get it wins"</td></tr>
+<tr><td>Cheat scores</td><td>Trust the client</td><td>Server-side validation</td><td><b>Validate</b>: max plausible score per game + anomaly flagging; leaderboards are cheat magnets</td></tr>
+</table>
+</div>
+
+<h2>🔥 Failure modes</h2>
+<div class="card">
+<ul>
+<li><b>Tournament thundering herd</b> — 20× write spike at season start. Mitigation: client-side score batching (submit at most 1/sec), gateway rate limits per player, shards scale by game popularity.</li>
+<li><b>Hot shard</b> — one viral game saturates its Redis. Mitigation: read replicas for top-N/rank reads; split the game's ZSET across 2 shards by player-hash only if truly needed (rank then needs a merge — avoid unless forced).</li>
+<li><b>Clock/ordering disputes</b> — "I submitted first!" Mitigation: server timestamp on write; tie-break documented in the rules.</li>
+<li><b>Season reset race</b> — scores landing mid-snapshot. Mitigation: freeze writes for ~1s during snapshot (return 503 with Retry-After), or snapshot-then-replay.</li>
+</ul>
+</div>
+
+<h2>🛠️ What I'd actually build</h2>
+<div class="card">
+<p><b>Redis Cluster</b> (or Upstash/ElastiCache Serverless if I want zero ops) as the entire stateful layer — sorted sets are the product. Stateless <b>Go or Node API</b> behind a gateway, sharded by <code>hash(gameId)</code> with a static shard map in config. Score events also published to <b>Kafka</b> for anti-cheat analytics offline. Season snapshots to <b>S3</b>. Client SDK batches submissions and polls rank at most every 5s. Total custom code: a few hundred lines. The interview answer is "Redis sorted sets + shard by game" — everything else is operational detail.</p>
+</div>
+
+<h2>🎤 Interview tips</h2>
+<div class="card">
+<ul>
+<li><b>Lead with the data structure:</b> "sorted set per game, sharded by game id" in the first 60 seconds.</li>
+<li>When they ask about scale, do the <b>64 MB per million players</b> math out loud — it shows the problem fits in RAM and deflates the urge to over-design.</li>
+<li>Mention the <code>GT</code> flag / best-score atomicity — it's a small detail that signals real Redis knowledge.</li>
+<li>Always bring up <b>cheating</b> unprompted; leaderboard interviews are secretly about trust.</li>
+<li>If they ask for global cross-game rank ("best player across all games"), push back: that's a different product — aggregate asynchronously, never on the read path.</li>
+</ul>
+<details><summary>Go deeper: percentile ranks and "top 1%"</summary>
+<p><code>ZCOUNT</code> gives "how many players are below X" in O(log n) — so "top 1%" badges are one extra lookup: <code>rank / ZCARD</code>. No new infrastructure, just arithmetic on values you already have.</p>
+</details>
+</div>
+
+<h2>🎮 Interactive widget: live score race</h2>
+<div class="card">
+<p>Eight players are grinding right now — scores tick up in real time and the board re-sorts itself, exactly like a sorted set would. <b>Add points to anyone</b> and watch their rank jump.</p>
+<div class="row">
+<button id="raceBtn" class="primary">⏸ Pause race</button>
+<span class="stat">rank query: <b>ZREVRANK</b> · O(log n) · <b id="qms">0.18</b> ms</span>
+<span class="pill">shard: <b>game:42</b> → shard 3</span>
+</div>
+<div id="board"></div>
+<div class="row">
+<select id="who" aria-label="player"></select>
+<input id="pts" type="number" value="500" min="1" max="10000" style="width:110px" aria-label="points">
+<button id="addBtn" class="primary">+ Add points</button>
+</div>
+<p class="stat" id="rankNote"></p>
+<p class="muted" style="font-size:13px">💡 <b>Sharding note:</b> game 42's entire board lives on shard 3. Game 43 lives on shard 1 — no query ever crosses shards, so no global lock exists. That's why this scales: each shard is an independent race.</p>
+</div>
+
+</div>
+<footer class="site-footer">
+<p class="footer-colophon">Built as a single self-contained file · diagrams render locally, no CDN</p>
+<div class="footer-band"><div class="footer-inner">
+<span class="footer-title">Design a real-time leaderboard</span>
+<a href="#takeaway">back to the takeaway ↑</a>
+</div></div>
+</footer>
+<div class="ver-badge">v2026.10.03-02</div>
+<script>
+(function(){
+"use strict";
+var names=['Nova','Kaito','Priya','Diego','Amara','Felix','Yuki','Zara'];
+var players=names.map(function(n,i){return {name:n,score:1200+Math.floor(Math.random()*3800),prev:0};});
+var board=document.getElementById('board'),who=document.getElementById('who');
+players.forEach(function(p,i){var o=document.createElement('option');o.value=i;o.textContent=p.name;who.appendChild(o);});
+var racing=true,bumped={};
+function render(){
+  var sorted=players.slice().sort(function(a,b){return b.score-a.score;});
+  var max=sorted[0].score;
+  board.innerHTML='';
+  sorted.forEach(function(p,i){
+    var row=document.createElement('div');row.className='lb-row'+(bumped[p.name]?' bump':'');
+    row.innerHTML='<div class="lb-rank">#'+(i+1)+'</div>'+
+      '<div class="lb-meta"><div style="display:flex;justify-content:space-between"><span class="lb-name">'+p.name+'</span>'+
+      '<span class="lb-score">'+p.score.toLocaleString()+'</span></div>'+
+      '<div class="lb-bar"><i style="width:'+Math.round(p.score/max*100)+'%"></i></div></div>';
+    board.appendChild(row);
+  });
+  bumped={};
+}
+function rankOf(p){return players.slice().sort(function(a,b){return b.score-a.score;}).indexOf(p)+1;}
+function step(){
+  if(!racing)return;
+  players.forEach(function(p){var g=Math.floor(Math.random()*90);if(g>0){p.score+=g;if(Math.random()<0.25)bumped[p.name]=1;}});
+  render();
+  document.getElementById('qms').textContent=(0.1+Math.random()*0.25).toFixed(2);
+}
+render();setInterval(step,900);
+document.getElementById('raceBtn').onclick=function(){racing=!racing;this.textContent=racing?'⏸ Pause race':'▶ Resume race';this.classList.toggle('primary',racing);};
+document.getElementById('addBtn').onclick=function(){
+  var p=players[+who.value],pts=Math.max(1,Math.min(10000,+document.getElementById('pts').value||0));
+  var before=rankOf(p);p.score+=pts;bumped[p.name]=1;render();
+  var after=rankOf(p);
+  document.getElementById('rankNote').innerHTML='⚡ <b>'+p.name+'</b> gained <b>+'+pts.toLocaleString()+'</b> → rank <b>#'+before+'</b> → <b>#'+after+'</b> '+
+    (after<before?'📈 climbed '+(before-after)+' spots!':after>before?'📉 slipped '+(after-before)+' spots.':'— rank unchanged.')+
+    ' <span class="muted">(two Redis calls: ZADD GT + ZREVRANK)</span>';
+};
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design a Social Feed — System Design Explainer</title>
+<style>
+:root{
+  --paper:#FAF7F1;--panel:#FFFDF8;--ink:#201E1A;--muted:#6F675A;
+  --hair:#DED5C3;--codebg:#211E19;--accent:#A16207;--codeink:#F3EEE3;
+  --red:#B3261E;--amber:#B7791F;
+  --serif:Georgia,'Iowan Old Style','Palatino Linotype',Charter,serif;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --section-gap:64px;--radius:3px;--accent-dim:rgba(161,98,7,.10);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:24px}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.65}
+.wrap{max-width:960px;margin:0 auto;padding:0 20px var(--section-gap)}
+.hero{padding:48px 0 12px}
+.kicker{display:block;margin-bottom:20px;color:var(--accent);font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:lowercase}
+h1,h2{font-family:var(--serif);font-weight:400;text-wrap:balance}
+.hero h1{font-size:clamp(34px,7vw,56px);line-height:1.06;letter-spacing:-.035em;margin:0 0 20px}
+.hero .sub{color:var(--muted);font-size:17px;margin:0}
+.hero .q{font-size:17px;border-left:1px solid var(--ink);padding-left:18px;margin:28px 0 16px;font-style:italic}
+h2{font-size:28px;line-height:1.2;letter-spacing:-.02em;margin:32px 0 20px}
+.wrap > h2{border-top:1px solid var(--hair);padding-top:28px;margin-top:var(--section-gap)}
+h2 .n{display:block;margin-bottom:12px;color:var(--accent);font-family:var(--serif);font-size:40px;font-weight:400;line-height:1;letter-spacing:-.04em}
+h3{font-size:18px;line-height:1.4;font-weight:600;margin:28px 0 12px}
+p{margin:16px 0}
+a{color:var(--accent);text-underline-offset:4px;text-decoration-thickness:1px;touch-action:manipulation}
+a:hover{text-decoration:underline}
+a:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.card,.verdict,.myth,.algo,.stat{background:var(--panel);border:1px solid var(--ink);border-radius:var(--radius);padding:20px;margin:20px 0}
+.card > :first-child,.algo > :first-child{margin-top:0}
+.card > :last-child,.algo > :last-child{margin-bottom:0}
+.verdict{border-color:var(--hair);border-left:3px solid var(--accent);margin:32px 0;padding:24px 20px}
+.verdict h2{margin:0 0 20px}
+.verdict > p:first-of-type > b:first-child{display:block;font-family:var(--serif);font-size:24px;line-height:1.3;font-weight:400;letter-spacing:-.015em;margin-bottom:16px}
+.verdict > :last-child{margin-bottom:0}
+.myth{margin:28px 0}
+.myth .tag{color:var(--amber);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+.myth p:last-child{margin-bottom:0}
+ul,ol{padding-left:22px;margin:16px 0}
+li{margin:8px 0;padding-left:2px}
+code{font-family:var(--mono);background:var(--panel);border:1px solid var(--hair);border-radius:var(--radius);padding:1px 5px;font-size:.85em;overflow-wrap:anywhere;color:var(--ink)}
+pre,.log{background:var(--codebg);color:var(--codeink);border:1px solid var(--ink);border-radius:var(--radius);padding:18px;font-family:var(--mono);font-size:13px;line-height:1.65;overflow:auto}
+pre{margin:24px 0}
+pre code{background:none;border:0;padding:0;font-size:inherit;color:inherit;overflow-wrap:normal}
+pre.mermaid{background:var(--paper);color:var(--ink);padding:24px 16px;border-color:var(--hair)}
+pre.mermaid svg{display:block;max-width:100%;height:auto;margin:0 auto}
+table{display:block;width:100%;max-width:100%;border-collapse:collapse;font-size:14px;line-height:1.6;margin:20px 0;overflow-x:auto}
+th,td{text-align:left;padding:12px 10px;border-bottom:1px solid var(--hair);vertical-align:top;min-width:112px}
+th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.1em}
+tr:last-child td{border-bottom:0}
+details{background:var(--panel);border:1px solid var(--hair);border-radius:var(--radius);padding:0 18px;margin:20px 0}
+summary{cursor:pointer;color:var(--ink);font-family:var(--serif);font-size:18px;font-weight:600;line-height:1.4;padding:16px 0;touch-action:manipulation}
+details[open] summary{border-bottom:1px solid var(--hair);margin-bottom:16px}
+button{touch-action:manipulation;cursor:pointer;background:var(--accent);color:var(--panel);border:1px solid var(--accent);border-radius:var(--radius);min-height:44px;padding:11px 16px;font-family:inherit;font-size:15px;font-weight:600;line-height:1.4;margin:6px 4px 6px 0}
+button:active{transform:scale(.97)}
+button.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+button:disabled{opacity:.45;cursor:default}
+input,textarea,select{touch-action:manipulation}
+input[type=text],input[type=number],textarea,select{background:var(--panel);border:1px solid var(--ink);color:var(--ink);border-radius:var(--radius);padding:12px;min-height:44px;font-family:inherit;font-size:16px;line-height:1.5;width:100%;max-width:100%}
+textarea{display:block;resize:vertical}
+input[type=range]{display:block;width:100%;min-height:44px;margin:0;accent-color:var(--accent)}
+input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-offset:2px;border-color:var(--accent)}
+label{font-size:13px;color:var(--muted);display:block;margin:20px 0 6px;touch-action:manipulation}
+.log{max-height:260px;font-size:12.5px;line-height:1.8;overflow-wrap:anywhere}
+.log .ok{color:#A9D3AD}.log .warn{color:#E7BE78}.log .err{color:#FFA79D}.log .dim{color:#C1B7A5}.log .bl{color:var(--codeink)}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin:20px 0}
+.grid2 > *{min-width:0}
+.grid2 > .card,.grid2 > .stat,.grid2 > .algo{margin:0}
+.kv{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--hair);font-size:14px}
+.kv > *{min-width:0;overflow-wrap:anywhere}
+.kv b{font-weight:600;text-align:right}
+.kv:last-child{border-bottom:0}
+.stat{border-color:var(--hair);padding:20px 12px;text-align:center}
+.stat .v{font-family:var(--serif);font-size:36px;line-height:1.2;font-weight:400;color:var(--accent);overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.stat .l{font-size:12px;color:var(--muted);margin-top:8px}
+.toc{border-top:1px solid var(--hair);border-bottom:1px solid var(--hair);padding:20px 0;margin:20px 0 32px;font-size:14px;line-height:2;counter-reset:section-index}
+.toc > b{display:block;font-family:var(--sans);color:var(--accent);font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:lowercase;margin-bottom:8px}
+.toc a{display:inline-block;min-height:44px;padding:8px 0;color:var(--ink);font-family:var(--serif);font-size:17px;line-height:1.65;text-decoration:none}
+.toc a:hover{text-decoration:underline}
+.toc a.index-link::before{counter-increment:section-index;content:counter(section-index,decimal-leading-zero) ' ';color:var(--accent);font-variant-numeric:tabular-nums;margin-right:4px}
+.tok-chip{display:inline-flex;flex-direction:column;align-items:center;max-width:100%;background:var(--panel);border:1px solid var(--hair);border-radius:var(--radius);padding:6px 10px;margin:3px;font-family:var(--mono);vertical-align:top;overflow-wrap:anywhere}
+.tok-chip .t{font-size:14px;color:var(--ink)}
+.tok-chip .i{font-size:10px;color:var(--muted)}
+.tok-chip.merged{border-color:var(--accent)}
+.tok-chip.oov{border-color:var(--red)}
+.merges{max-height:220px;overflow-y:auto;font-family:var(--mono);font-size:12.5px}
+.merges .m{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--hair)}
+.merges .dim{color:var(--muted)}
+canvas.chart{width:100%;height:190px;background:var(--codebg);border:1px solid var(--ink);border-radius:var(--radius);display:block}
+.bucket{height:28px;background:var(--paper);border:1px solid var(--ink);border-radius:var(--radius);overflow:hidden;position:relative}
+.bucket > div:first-child{height:100%;background:var(--accent);transition:width .12s linear}
+.bucket .blabel{position:absolute;top:0;bottom:0;left:50%;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;width:max-content;max-width:100%;padding:0 8px;background:var(--panel);border-left:1px solid var(--ink);border-right:1px solid var(--ink);font-size:11px;font-weight:600;color:var(--ink);font-family:var(--mono)}
+.algo{padding:16px}
+.big{font-family:var(--serif);font-size:32px;font-weight:400;line-height:1.4;margin-top:16px;font-variant-numeric:tabular-nums}
+.big > span:not(.okn):not(.bad){font-family:var(--sans)}
+.big .okn{color:var(--accent)}.big .bad{color:var(--red)}
+.win-dots{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;min-height:22px}
+.win-dots span{width:12px;height:12px;border-radius:50%;background:var(--accent);display:inline-block}
+.win-dots span.old{background:var(--hair)}
+.site-footer{border-top:1px solid var(--hair)}
+.footer-colophon,.footer-inner{max-width:960px;margin:0 auto;padding:18px 20px}
+.footer-colophon{color:var(--muted);font-size:12px;line-height:1.7}
+.footer-band{background:var(--accent);color:var(--paper)}
+.footer-inner{display:flex;flex-direction:column;align-items:flex-start;gap:20px;padding-top:32px;padding-bottom:72px}
+.footer-title{font-family:var(--serif);font-size:clamp(28px,5vw,40px);line-height:1.15;letter-spacing:-.025em}
+.footer-band a{color:var(--paper);font-size:14px;min-height:44px;display:inline-flex;align-items:center}
+.footer-band a:focus-visible{outline-color:var(--paper)}
+.ver-badge{position:fixed;right:12px;bottom:12px;background:var(--panel);border:1px solid var(--ink);color:var(--ink);font-size:11px;padding:5px 10px;border-radius:var(--radius);z-index:50;font-family:var(--mono)}
+@media(max-width:719px){
+  .ver-badge{position:static;display:block;width:max-content;margin:28px auto 12px}
+  .footer-inner{padding-bottom:32px}
+  table thead{display:none}
+  table tr:has(th):not(:has(td)){display:none}
+  table,table tbody,table tr,table td,table th{display:block;width:100%;max-width:100%}
+  table{overflow-x:visible;margin:16px 0}
+  table tr{border-top:1px solid var(--hair);padding:10px 0}
+  table td,table th{border-bottom:0;padding:6px 0;min-width:0}
+  table td:first-child{font-weight:700}
+}
+@media(min-width:720px){
+  body{font-size:17px}
+  .wrap{padding-right:32px;padding-left:32px}
+  .hero{padding-top:72px}
+  .hero .q{max-width:760px;margin-top:32px}
+  .grid2{grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
+  .card,.verdict,.myth{padding:28px}
+  .algo{padding:20px}
+  pre.mermaid{padding:32px}
+  table{display:table}
+  th,td{min-width:0}
+  .footer-colophon,.footer-inner{padding-right:32px;padding-left:32px}
+  .footer-inner{flex-direction:row;justify-content:space-between;align-items:center;padding-top:40px;padding-bottom:56px}
+}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .bucket > div:first-child{transition:none}
+  button:active{transform:none}
+}
+
+/* ---- site supplement (remapped) ---- */
+main{max-width:880px;margin:0 auto;padding:0 18px 100px}
+.hero .lede{color:var(--muted);font-size:17px;margin:0;max-width:640px}
+.card>h2{margin:0 0 4px;font-size:22px;letter-spacing:-.01em}
+.card .sub{color:var(--muted);font-size:14px;margin:0 0 14px}
+.verdict p{font-size:17px;margin:10px 0 0}
+.verdict p strong{color:var(--accent)}
+.myth h3{color:var(--amber);margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.1em}
+.myth p{margin:6px 0}
+.req-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:640px){.req-grid{grid-template-columns:1fr}}
+.req-grid h3{margin:0 0 8px;font-size:15px;color:var(--accent)}
+.req-grid ul{margin:0;padding-left:20px;color:var(--ink);font-size:15px}
+.req-grid li{margin:6px 0}
+.tbl{width:100%;border-collapse:collapse;font-size:14px;margin:12px 0}
+.tbl th,.tbl td{border:1px solid var(--hair);padding:9px 11px;text-align:left;vertical-align:top}
+.tbl th{background:var(--panel);color:var(--accent);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.tbl td b{color:var(--ink)}
+pre.code{background:var(--panel);border:1px solid var(--hair);border-radius:10px;padding:14px;overflow-x:auto;font-size:13px;line-height:1.55;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ink)}
+details p,details ul{font-size:15px;color:var(--ink)}
+.btn{background:var(--accent);color:var(--paper);border:0;border-radius:10px;padding:13px 20px;font-weight:750;font-size:15px;touch-action:manipulation;cursor:pointer;display:inline-block}
+.btn:active{transform:scale(.97)}
+.btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.btn.warn{background:var(--amber)}
+.btn:disabled{opacity:.45;cursor:default;transform:none}
+.seg{display:inline-flex;background:var(--panel);border:1px solid var(--hair);border-radius:12px;padding:4px;gap:4px;flex-wrap:wrap}
+.seg button{background:transparent;border:0;color:var(--muted);padding:10px 16px;border-radius:8px;font-weight:650;font-size:14px;touch-action:manipulation;cursor:pointer}
+.seg button.on{background:var(--accent);color:var(--paper)}
+label.f{display:block;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin:16px 0 8px;font-weight:700}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:10px;margin:16px 0}
+.stat b{display:block;font-size:21px;color:var(--accent);font-variant-numeric:tabular-nums}
+.stat b.bad{color:var(--red)}
+.stat b.warn{color:var(--amber)}
+.stat span{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.progress{height:10px;background:var(--panel);border:1px solid var(--hair);border-radius:20px;overflow:hidden;margin:12px 0}
+.progress>i{display:block;height:100%;width:0;background:var(--accent);border-radius:20px;transition:width .12s linear}
+.note{font-size:13.5px;color:var(--muted)}
+.tips li{margin:9px 0}
+h3.sec{font-size:17px;margin:22px 0 8px;color:var(--ink)}
+.flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:12px 0}
+.chip{background:var(--panel);border:1px solid var(--hair);border-radius:9px;padding:8px 13px;font-size:13.5px;font-weight:600}
+.chip.hot{border-color:var(--accent);color:var(--accent)}
+.chip.skip{border-color:var(--red);color:var(--red);opacity:.85}
+.arrow{color:var(--muted);font-weight:700}
+.fgrid{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0;min-height:30px}
+.dot{width:14px;height:14px;border-radius:4px;background:var(--panel);border:1px solid var(--hair);transition:background .12s,box-shadow .12s}
+.dot.lit{background:var(--accent);border-color:var(--accent);box-shadow:0 0 7px rgba(161,98,7,.75)}
+.dot.merge{background:var(--accent);border-color:var(--accent);box-shadow:0 0 7px rgba(161,98,7,.75)}
+.preview{background:var(--panel);border:1px solid var(--hair);border-radius:12px;padding:6px 14px;max-width:400px;margin-top:8px}
+.tweet{border-bottom:1px solid var(--hair);padding:10px 2px;font-size:14px}
+.tweet:last-child{border-bottom:0}
+.tweet .who{font-weight:700;font-size:13px}
+.tweet .who span{color:var(--muted);font-weight:400}
+.tweet.new{background:rgba(161,98,7,.09);border:1px solid var(--accent);border-radius:8px;padding:10px;margin:8px 0;animation:pop .5s ease}
+@keyframes pop{0%{transform:scale(.96);opacity:0}100%{transform:scale(1);opacity:1}}
+.verdictline{font-size:16px;border-left:3px solid var(--accent);padding:8px 14px;margin:16px 0 0;background:rgba(161,98,7,.05);border-radius:0 8px 8px 0}
+.verdictline.bad{border-color:var(--red);background:rgba(179,38,30,.06)}
+/* ---- variant adapter ---- */
+
+main{max-width:960px;margin:0 auto;padding:0 20px var(--section-gap)}
+header.hero{max-width:960px;margin:0 auto;padding:48px 20px 12px}
+main{counter-reset:sdsec}
+section.card:not(.verdict){counter-increment:sdsec}
+section.card:not(.verdict) > h2::before{content:counter(sdsec,decimal-leading-zero);display:block;margin-bottom:12px;color:var(--accent);font-family:var(--serif);font-size:40px;font-weight:400;line-height:1;letter-spacing:-.04em}
+section.card > h2{font-family:var(--serif);font-size:28px;font-weight:400;line-height:1.2;letter-spacing:-.02em;margin:0 0 20px}
+h3.sec{font-size:18px;line-height:1.4;font-weight:600;margin:28px 0 12px;color:var(--ink)}
+.myth h3{color:var(--amber);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin:0 0 8px}
+.tbl{width:100%;border-collapse:collapse;font-size:14px;line-height:1.6;margin:20px 0}
+.tbl th,.tbl td{text-align:left;padding:12px 10px;border-bottom:1px solid var(--hair);vertical-align:top}
+.tbl th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.1em}
+@media(max-width:719px){
+.tbl thead{display:none}
+.tbl tr:has(th):not(:has(td)){display:none}
+.tbl,.tbl tbody,.tbl tr,.tbl td,.tbl th{display:block;width:100%;max-width:100%}
+.tbl{overflow-x:visible}
+.tbl tr{border-top:1px solid var(--hair);padding:10px 0}
+.tbl td,.tbl th{border:0;padding:6px 0}
+.tbl td b{display:block;margin-bottom:4px}
+}
+.req-grid h3{font-family:var(--serif);font-size:20px;font-weight:400}
+.seg button{background:transparent;border:0;color:var(--muted)}
+.seg button.on{background:var(--accent);color:var(--paper)}
+.btn{color:var(--paper)}
+.btn.ghost{color:var(--accent)}
+pre.code{color:var(--ink)}
+</style>
+<script src="mermaid.min.js"></script>
+</head>
+<body>
+<header class="hero">
+<p class="kicker">System design interview · Social</p>
+<h1>Design a social feed like X / Twitter</h1>
+<p class="lede">The interview question behind every timeline you've ever scrolled. The whole design hinges on one decision: when someone posts, do you write it into every follower's timeline <em>now</em> — or assemble it when they open the app?</p>
+</header>
+<main>
+
+<section class="card verdict">
+<h2>🎯 The takeaway, first</h2>
+<p><strong>Push for normal users, pull for celebrities — run both.</strong> Precompute timelines for the 99.9% of users with small follower counts, and assemble celebrity posts at read time. Think of it like a newspaper: regular columnists get their article printed into every subscriber's paper overnight (push); the once-a-year royal wedding special gets inserted only when someone actually opens that page (pull). Anyone who says it's push <em>or</em> pull hasn't built one at scale.</p>
+</section>
+
+<div class="myth">
+<h3>🚫 Misconception, busted</h3>
+<p><strong>"You must choose push OR pull fan-out."</strong> Nearly every write-up frames this as a binary choice. In reality, every large feed runs a <strong>hybrid</strong>: push below a follower-count threshold, pull above it. The interesting interview discussion isn't which one — it's <em>where you draw the line</em> and how the two paths merge at read time.</p>
+</div>
+
+<section class="card">
+<h2>Requirements</h2>
+<p class="sub">Say these out loud before drawing a single box. Interviewers score this.</p>
+<div class="req-grid">
+<div><h3>Functional</h3><ul>
+<li>Post (text ≤ 280 chars, optional media)</li>
+<li>Follow / unfollow users</li>
+<li>Home timeline, reverse-chronological, paginated</li>
+<li>View any user's own posts (profile timeline)</li>
+<li>Likes / reposts (mention, don't deep-dive unless asked)</li>
+</ul></div>
+<div><h3>Non-functional</h3><ul>
+<li>Timeline read <strong>p99 &lt; 200ms</strong></li>
+<li>99.9% availability; reads must survive partial outages</li>
+<li>Eventual consistency is fine — a post visible in seconds, not ms</li>
+<li>Scale: ~300M MAU; one celebrity post must not take down the system</li>
+<li>Media uploads shouldn't block posting</li>
+</ul></div>
+</div>
+</section>
+
+<section class="card">
+<h2>Back-of-the-envelope math</h2>
+<p class="sub">X-scale, circa 2020. Assumptions labeled — interviewers care that you state them.</p>
+<table class="tbl">
+<tr><th>What</th><th>Assumption</th><th>Math</th></tr>
+<tr><td>Daily posts</td><td>200M posts/day</td><td><b>≈ 2,300 writes/s</b> avg, ~5× peak ≈ <b>12K/s</b></td></tr>
+<tr><td>Timeline reads</td><td>100M DAU × 50 views</td><td>5B/day → <b>≈ 58K reads/s</b> avg</td></tr>
+<tr><td>Post storage</td><td>~1 KB per post (text + metadata)</td><td>200 GB/day → <b>~73 TB/year</b> before media</td></tr>
+<tr><td>Median fan-out</td><td>median user ≈ 200 followers</td><td>2,300 × 200 = <b>460K timeline writes/s</b></td></tr>
+<tr><td>Celebrity post</td><td>1 user with 100M followers posts once</td><td><b>100M writes from a single post</b> — more than a full day of normal traffic</td></tr>
+<tr><td>Timeline cache</td><td>300M users × top 800 posts × 16 B/post-id</td><td>≈ <b>3.8 TB</b> of hot Redis — very shoppable, shard it</td></tr>
+</table>
+<details><summary>Go deeper: why 800 posts per cached timeline?</summary>
+<p>A timeline page is ~20 posts; users rarely scroll past ~40 pages. Caching 800 covers the realistic scroll depth. Older posts fall back to a "load more" path that reads the post store directly. The cache is a <em>window</em>, not the archive — this is what keeps the 3.8 TB number sane instead of ballooning to petabytes.</p>
+</details>
+</section>
+
+<section class="card">
+<h2>Architecture</h2>
+<p class="sub">The centerpiece. Write path fans out; read path merges.</p>
+<pre class="mermaid">flowchart LR
+    C[Mobile / Web client] --> G[API Gateway]
+    G --> PS[Post Service]
+    G --> TS[Timeline Service]
+    PS --> PDB[(Post Store<br/>Postgres / Cassandra)]
+    PS --> M[Media Service]
+    M --> BS[(Blob Store<br/>S3 + CDN)]
+    PS --> K[Fan-out Queue<br/>Kafka]
+    K --> FW[Fan-out Workers]
+    FW --> GR[(Follow Graph<br/>Postgres)]
+    FW -->|normal user| RC[(Timeline Cache<br/>Redis Cluster<br/>sorted set per user)]
+    FW -->|celebrity| CI[(Celebrity Index<br/>recent posts of top ~10K accounts)]
+    TS --> RC
+    TS --> CI
+    TS --> PDB
+    TS --> C
+</pre>
+<p>Two write paths, one read path. A post from a normal user is fanned out by workers into each follower's Redis sorted set (<code>timeline:{user_id}</code>, score = timestamp). A post from a celebrity skips the fan-out entirely and lands in the Celebrity Index. At read time the Timeline Service pulls the precomputed timeline <em>and</em> recent posts from followed celebrities, merges them by timestamp, and returns one list. Media never touches the post path — it uploads straight to the blob store and the post just carries media IDs.</p>
+<details><summary>Go deeper: how do you decide who's a "celebrity"?</summary>
+<p>A follower-count threshold (say, 100K–1M) recomputed by an offline job, plus a manual override list. Edge case: an account <em>becoming</em> famous mid-day. Handle it with a promotion job that stops their push fan-out and backfills the Celebrity Index — their older posts stay in followers' cached timelines, new ones get pulled. Slight duplication at the merge step is fine; dedupe by post ID.</p>
+</details>
+</section>
+
+<section class="card">
+<h2>Component deep-dives</h2>
+<h3 class="sec">Posting as a normal user — push fan-out</h3>
+<pre class="mermaid">sequenceDiagram
+    participant C as Client
+    participant API as Post Service
+    participant DB as Post Store
+    participant K as Kafka fan-out topic
+    participant W as Fan-out Worker
+    participant G as Follow Graph
+    participant R as Redis Timelines
+    C->>API: POST /v1/posts {text}
+    API->>DB: INSERT post (durable first!)
+    API->>K: enqueue {post_id, author_id}
+    API-->>C: 201 Created (fast — fan-out is async)
+    W->>K: consume job
+    W->>G: get follower IDs (paginated)
+    loop each follower batch
+        W->>R: ZADD timeline:{fid} ts post_id
+        W->>R: ZREMRANGEBYRANK (trim to 800)
+    end
+</pre>
+<p class="note">The post is durable <em>before</em> the user gets a 201. Fan-out is async — the user sees their own post instantly via a read-your-own-writes path, followers catch up within seconds.</p>
+<h3 class="sec">Reading a timeline — hybrid merge</h3>
+<pre class="mermaid">sequenceDiagram
+    participant C as Client
+    participant T as Timeline Service
+    participant R as Redis Timelines
+    participant I as Celebrity Index
+    participant D as Post Store
+    C->>T: GET /v1/timeline?cursor=
+    par fetch both paths
+        T->>R: ZRANGE timeline:{me} (precomputed)
+    and
+        T->>I: recent posts from followed celebrities
+    end
+    T->>T: merge by timestamp, dedupe post IDs
+    T->>D: hydrate post bodies for IDs (MGET cache first)
+    T-->>C: 20 posts + next cursor
+</pre>
+<details><summary>Go deeper: cursor pagination, not offsets</summary>
+<p><code>OFFSET 400 LIMIT 20</code> breaks the moment a new post lands — items shift and users see duplicates or gaps. Use a cursor: <code>?before_ts=&before_id=</code>. The client passes the oldest timestamp+ID it has; the server returns the next 20 older items. Stable under concurrent writes, and it composes cleanly with the merge step.</p>
+</details>
+</section>
+
+<section class="card">
+<h2>API + data model</h2>
+<pre class="code">POST   /v1/posts              { "text": "...", "media_ids": [] } → 201 { "post_id": "p_9f2..." }
+GET    /v1/timeline?before_ts=&before_id=&limit=20
+GET    /v1/users/{id}/posts   (profile timeline — reads post store directly)
+POST   /v1/follow/{user_id}   → 204
+DELETE /v1/follow/{user_id}   → 204</pre>
+<pre class="code">posts(post_id PK, author_id, text, media_ids[], created_at)
+follows(follower_id, followee_id, created_at)   -- PK (follower_id, followee_id)
+
+Redis:
+  timeline:{user_id}  →  ZSET, score = created_at_ms, member = post_id   (trimmed to 800)
+  celeb:{user_id}     →  ZSET of recent posts, only for top ~10K accounts
+  post:{post_id}      →  HASH of hydrated post body (cache, short TTL)</pre>
+</section>
+
+<section class="card">
+<h2>Trade-offs</h2>
+<table class="tbl">
+<tr><th>Decision</th><th>Option A</th><th>Option B</th><th>Pick</th></tr>
+<tr><td>Fan-out</td><td>Push: fast reads, write amplification</td><td>Pull: cheap writes, slow reads</td><td><b>Hybrid</b> — push under the celebrity threshold</td></tr>
+<tr><td>Timeline store</td><td>Redis sorted sets (fast range queries)</td><td>Cassandra wide rows (cheaper, colder)</td><td><b>Redis</b> for hot window; Cassandra as the archive</td></tr>
+<tr><td>Fan-out delivery</td><td>At-least-once (dupes possible)</td><td>Exactly-once (slow, complex)</td><td><b>At-least-once</b> + dedupe by post ID at merge</td></tr>
+<tr><td>Consistency</td><td>Strong (followers see post instantly)</td><td>Eventual (seconds of lag OK)</td><td><b>Eventual</b> — nobody riots over a 3s delay</td></tr>
+</table>
+</section>
+
+<section class="card">
+<h2>Failure modes</h2>
+<div class="kv"><span>Fan-out worker dies mid-fan-out (400K of 460K writes done)</span><b>Jobs are idempotent (ZADD is a set) — just re-consume from Kafka offset</b></div>
+<div class="kv"><span>Celebrity posts during the World Cup final</span><b>Pull path absorbs it: 1 write, merges at read. Push would queue for minutes</b></div>
+<div class="kv"><span>Redis evicts a cold user's timeline</span><b>Rebuild on read from post store + follow graph; mark rebuilding to avoid stampede</b></div>
+<div class="kv"><span>Kafka backlog grows (traffic spike)</span><b>Backpressure: shed celebrity-adjacent traffic first, autoscale workers, alert on lag &gt; 60s</b></div>
+<div class="kv"><span>Follow graph replica lags → new follower misses posts</span><b>Acceptable under eventual consistency; fan-out uses the primary for freshness</b></div>
+</section>
+
+<section class="card">
+<h2>What I'd actually build</h2>
+<p class="sub">Opinionated. Steal this for the interview.</p>
+<p><strong>Stack:</strong> Go API services (fast, boring, great JSON throughput) behind an ALB. <strong>Kafka</strong> for the fan-out queue with idempotent consumers. <strong>Redis Cluster</strong> sorted sets for timelines, <strong>Postgres</strong> (partitioned by month) for posts + follows with read replicas, <strong>S3 + CloudFront</strong> for media. Celebrity detection: nightly Spark/batch job over the follow graph + manual override list. Deploy on Kubernetes with HPA on the fan-out workers keyed to Kafka consumer lag. Pagination cursors everywhere; feature-flag the celebrity threshold so you can tune it live.</p>
+<p class="note">Why not Cassandra for posts? At 73 TB/year, Postgres with monthly partitions and read replicas is simpler to operate and plenty fast for point lookups by post ID. Reach for Cassandra when a single region's Postgres can't keep up — that's a year-3 problem, not an interview problem.</p>
+</section>
+
+<section class="card tips">
+<h2>Interview tips</h2>
+<ul>
+<li><strong>Open with the numbers.</strong> "200M posts/day, 58K timeline reads/s, and one celebrity post = 100M writes" frames every decision after it.</li>
+<li><strong>Name the celebrity problem before they do.</strong> It's the question behind the question. Say "the naive push design dies on the first celebrity post" in minute five.</li>
+<li><strong>Drive to hybrid yourself.</strong> Don't wait to be led — propose the threshold and the merge step, then discuss tuning it.</li>
+<li><strong>Mention read-your-own-writes.</strong> Async fan-out means the author must see their post instantly; handle it as a special case.</li>
+<li><strong>Close with ranking.</strong> "Reverse-chron is v1; v2 is ranked — that's a separate ML system reading the same stores." Shows scope control.</li>
+</ul>
+</section>
+<section class="card" id="widget">
+<h2>🔬 Interactive: fan-out simulator</h2>
+<p class="sub">Post as a normal user or a celebrity, under push, pull, or hybrid — and watch the write amplification happen.</p>
+
+<label class="f">Who's posting?</label>
+<div class="seg" id="seg-user">
+<button class="on" data-val="normal">Normal user · 240 followers</button>
+<button data-val="celeb">Celebrity · 12M followers</button>
+</div>
+<label class="f">Fan-out strategy</label>
+<div class="seg" id="seg-strategy">
+<button class="on" data-val="push">Push</button>
+<button data-val="pull">Pull</button>
+<button data-val="hybrid">Hybrid</button>
+</div>
+<div style="margin:18px 0 4px"><button class="btn" id="btn-post">📣 Post!</button></div>
+<div class="progress"><i id="post-progress"></i></div>
+<div class="stats">
+<div class="stat"><b id="stat-writes">0</b><span>timeline writes</span></div>
+<div class="stat"><b id="stat-amp">–</b><span>write amplification</span></div>
+<div class="stat"><b id="stat-readlat">–</b><span>follower read p50</span></div>
+<div class="stat"><b id="stat-time">–</b><span>fan-out time</span></div>
+</div>
+<label class="f">Follower timelines <span class="note" id="dots-note"></span></label>
+<div class="fgrid" id="follower-grid"></div>
+<label class="f">A follower's timeline</label>
+<div class="preview" id="preview"><div id="preview-tweets">
+<div class="tweet"><div class="who">maya <span>@maya · 2m</span></div>just tried the new ramen spot on 5th. life changing 🍜</div>
+<div class="tweet"><div class="who">devon <span>@devon · 9m</span></div>hot take: tabs vs spaces is a solved problem and spaces won</div>
+<div class="tweet"><div class="who">priya <span>@priya · 14m</span></div>shipped the migration. zero downtime. going to sleep for a week</div>
+</div></div>
+<p class="verdictline" id="sim-verdict" style="display:none"></p>
+<p class="note" style="margin-top:14px">Analogy check: <b>push</b> = printing the article into every subscriber's paper overnight. <b>Pull</b> = inserting it only when someone opens that page. <b>Hybrid</b> = the newsroom picks per author.</p>
+</section>
+
+</main>
+<footer class="site-footer">
+<p class="footer-colophon">Built as a single self-contained file · diagrams render locally, no CDN</p>
+<div class="footer-band"><div class="footer-inner">
+<span class="footer-title">Design a social feed like X / Twitter</span>
+<a href="#takeaway">back to the takeaway ↑</a>
+</div></div>
+</footer>
+<div class="ver-badge">v2026.10.03-02</div>
+<script>
+mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{
+  primaryColor:'#FFFDF8',primaryBorderColor:'#A16207',primaryTextColor:'#201E1A',
+  lineColor:'#201E1A',secondaryColor:'#F0E9DA',tertiaryColor:'#FAF7F1',
+  textColor:'#201E1A',background:'#FAF7F1',mainBkg:'#FFFDF8',nodeBorder:'#201E1A',
+  clusterBkg:'#F4EDDE',clusterBorder:'#DED5C3',edgeLabelBackground:'#FAF7F1',
+  actorBkg:'#FFFDF8',actorBorder:'#A16207',actorTextColor:'#201E1A',actorLineColor:'#201E1A',
+  signalColor:'#201E1A',signalTextColor:'#201E1A',labelBoxBkgColor:'#FFFDF8',
+  labelBoxBorderColor:'#201E1A',labelTextColor:'#201E1A',loopTextColor:'#201E1A',
+  activationBkgColor:'#EFE6D2',activationBorderColor:'#201E1A',
+  noteBkgColor:'#FFFDF8',noteBorderColor:'#DED5C3',noteTextColor:'#201E1A',
+  fontFamily:'-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif',fontSize:'16px'
+}});
+</script>
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const DOTS=120, WRITE_RATE=50000;
+const grid=$('follower-grid');
+for(let i=0;i<DOTS;i++){const d=document.createElement('div');d.className='dot';grid.appendChild(d);}
+const dots=[...grid.children];
+const fmtC=n=>n.toLocaleString('en-US');
+const fmtK=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1)+'K':''+n;
+let busy=false;
+document.querySelectorAll('.seg').forEach(seg=>seg.addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b||busy)return;
+  seg.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+}));
+function countTo(el,target,dur,done){
+  const t0=performance.now();
+  (function f(t){const p=Math.min(1,(t-t0)/dur),e=1-Math.pow(1-p,3);
+    el.textContent=fmtC(Math.round(target*e));
+    if(p<1)requestAnimationFrame(f);else done&&done();})(t0);
+}
+const VERDICTS={
+ 'normal+push':['Push: 240 writes. Trivial for the queue — every follower gets the post precomputed, reads stay at 8ms. Push wins for normal users.',false],
+ 'normal+pull':['Pull: only 1 write, but all 240 followers now pay a merge penalty on <em>every</em> timeline read. You saved pennies on writes and taxed every read. Wasteful.',true],
+ 'normal+hybrid':['Hybrid: behaves exactly like push here — normal users always push. The hybrid rule only kicks in above the celebrity threshold.',false],
+ 'celeb+push':['Push: <b>12,000,000 writes from one post.</b> At 50K writes/s that is 4 minutes of queue burn — and the next celebrity post queues behind it. This is how you take down the feed during the World Cup final.',true],
+ 'celeb+pull':['Pull: 1 write. Followers pay ~45ms of merge cost at read time instead. Slightly slower reads, infinitely safer writes. This is the correct call.',false],
+ 'celeb+hybrid':['Hybrid: celebrities pull, everyone else pushes — <b>this is the production answer.</b> 1 write, safe queue, acceptable read cost.',false]
+};
+$('btn-post').addEventListener('click',async()=>{
+  if(busy)return; busy=true; $('btn-post').disabled=true;
+  const user=document.querySelector('#seg-user .on').dataset.val;
+  const strat=document.querySelector('#seg-strategy .on').dataset.val;
+  const followers=user==='celeb'?12000000:240;
+  const eff=user==='celeb'?(strat==='push'?'push':'pull'):(strat==='pull'?'pull':'push');
+  dots.forEach(d=>d.className='dot');
+  const bar=$('post-progress'); bar.style.width='0%';
+  const wEl=$('stat-writes'),aEl=$('stat-amp'),rEl=$('stat-readlat'),tEl=$('stat-time');
+  [wEl,aEl,rEl,tEl].forEach(el=>el.className='');
+  const verdict=$('sim-verdict'); verdict.style.display='none';
+  const perDot=user==='celeb'?'each dot ≈ 100K timelines':'showing 120 of 240';
+  $('dots-note').textContent='('+perDot+')';
+  const key=user+'+'+strat, [txt,bad]=VERDICTS[key];
+  if(eff==='push'){
+    const secs=followers/WRITE_RATE;
+    tEl.textContent=secs<60?secs.toFixed(1)+'s':'≈ '+(secs/60).toFixed(1)+' min';
+    if(secs>30){tEl.className='bad';wEl.className='bad';}
+    const waves=12, per=Math.ceil(DOTS/waves);
+    const cd=countTo(wEl,followers,user==='celeb'?2200:1500);
+    for(let wv=0;wv<waves;wv++){
+      for(let i=wv*per;i<Math.min(DOTS,(wv+1)*per);i++)dots[i].classList.add('lit');
+      bar.style.width=Math.round(((wv+1)/waves)*100)+'%';
+      await sleep(user==='celeb'?170:110);
+    }
+    aEl.textContent=fmtK(followers)+'×'; if(user==='celeb')aEl.className='bad';
+    rEl.textContent='8 ms';
+    wEl.textContent=fmtC(followers);
+  }else{
+    wEl.textContent='1'; aEl.textContent='1×'; tEl.textContent='instant';
+    rEl.textContent=user==='celeb'?'45 ms':'38 ms'; rEl.className='warn';
+    const waves=8, per=Math.ceil(DOTS/waves);
+    for(let wv=0;wv<waves;wv++){
+      for(let i=wv*per;i<Math.min(DOTS,(wv+1)*per);i++)dots[i].classList.add('merge');
+      bar.style.width=Math.round(((wv+1)/waves)*100)+'%';
+      await sleep(110);
+    }
+    await sleep(250);
+  }
+  const tw=document.createElement('div');
+  tw.className='tweet new';
+  tw.innerHTML='<div class="who">'+(user==='celeb'?'superstar <span>@superstar · now</span>':'you <span>@you · now</span>')+'</div>'+(user==='celeb'?'🌍 hello to my 12 million closest friends':'🚀 just shipped my side project! try it out');
+  const pt=$('preview-tweets'); pt.prepend(tw);
+  while(pt.children.length>4)pt.removeChild(pt.lastChild);
+  verdict.innerHTML=txt; verdict.className='verdictline'+(bad?' bad':''); verdict.style.display='block';
+  busy=false; $('btn-post').disabled=false;
+});
+})();
+</script>
+</body>
+</html>

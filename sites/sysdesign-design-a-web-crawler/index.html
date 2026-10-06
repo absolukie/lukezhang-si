@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design a Web Crawler — System Design Explainer</title>
+<style>
+:root{
+  --paper:#FAF7F1;--panel:#FFFDF8;--ink:#201E1A;--muted:#6F675A;
+  --hair:#DED5C3;--codebg:#211E19;--accent:#4D7C0F;--codeink:#F3EEE3;
+  --red:#B3261E;--amber:#B7791F;
+  --serif:Georgia,'Iowan Old Style','Palatino Linotype',Charter,serif;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --section-gap:64px;--radius:3px;--accent-dim:rgba(77,124,15,.10);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:24px}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.65}
+.wrap{max-width:960px;margin:0 auto;padding:0 20px var(--section-gap)}
+.hero{padding:48px 0 12px}
+.kicker{display:block;margin-bottom:20px;color:var(--accent);font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:lowercase}
+h1,h2{font-family:var(--serif);font-weight:400;text-wrap:balance}
+.hero h1{font-size:clamp(34px,7vw,56px);line-height:1.06;letter-spacing:-.035em;margin:0 0 20px}
+.hero .sub{color:var(--muted);font-size:17px;margin:0}
+.hero .q{font-size:17px;border-left:1px solid var(--ink);padding-left:18px;margin:28px 0 16px;font-style:italic}
+h2{font-size:28px;line-height:1.2;letter-spacing:-.02em;margin:32px 0 20px}
+.wrap > h2{border-top:1px solid var(--hair);padding-top:28px;margin-top:var(--section-gap)}
+h2 .n{display:block;margin-bottom:12px;color:var(--accent);font-family:var(--serif);font-size:40px;font-weight:400;line-height:1;letter-spacing:-.04em}
+h3{font-size:18px;line-height:1.4;font-weight:600;margin:28px 0 12px}
+p{margin:16px 0}
+a{color:var(--accent);text-underline-offset:4px;text-decoration-thickness:1px;touch-action:manipulation}
+a:hover{text-decoration:underline}
+a:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.card,.verdict,.myth,.algo,.stat{background:var(--panel);border:1px solid var(--ink);border-radius:var(--radius);padding:20px;margin:20px 0}
+.card > :first-child,.algo > :first-child{margin-top:0}
+.card > :last-child,.algo > :last-child{margin-bottom:0}
+.verdict{border-color:var(--hair);border-left:3px solid var(--accent);margin:32px 0;padding:24px 20px}
+.verdict h2{margin:0 0 20px}
+.verdict > p:first-of-type > b:first-child{display:block;font-family:var(--serif);font-size:24px;line-height:1.3;font-weight:400;letter-spacing:-.015em;margin-bottom:16px}
+.verdict > :last-child{margin-bottom:0}
+.myth{margin:28px 0}
+.myth .tag{color:var(--amber);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+.myth p:last-child{margin-bottom:0}
+ul,ol{padding-left:22px;margin:16px 0}
+li{margin:8px 0;padding-left:2px}
+code{font-family:var(--mono);background:var(--panel);border:1px solid var(--hair);border-radius:var(--radius);padding:1px 5px;font-size:.85em;overflow-wrap:anywhere;color:var(--ink)}
+pre,.log{background:var(--codebg);color:var(--codeink);border:1px solid var(--ink);border-radius:var(--radius);padding:18px;font-family:var(--mono);font-size:13px;line-height:1.65;overflow:auto}
+pre{margin:24px 0}
+pre code{background:none;border:0;padding:0;font-size:inherit;color:inherit;overflow-wrap:normal}
+pre.mermaid{background:var(--paper);color:var(--ink);padding:24px 16px;border-color:var(--hair)}
+pre.mermaid svg{display:block;max-width:100%;height:auto;margin:0 auto}
+table{display:block;width:100%;max-width:100%;border-collapse:collapse;font-size:14px;line-height:1.6;margin:20px 0;overflow-x:auto}
+th,td{text-align:left;padding:12px 10px;border-bottom:1px solid var(--hair);vertical-align:top;min-width:112px}
+th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.1em}
+tr:last-child td{border-bottom:0}
+details{background:var(--panel);border:1px solid var(--hair);border-radius:var(--radius);padding:0 18px;margin:20px 0}
+summary{cursor:pointer;color:var(--ink);font-family:var(--serif);font-size:18px;font-weight:600;line-height:1.4;padding:16px 0;touch-action:manipulation}
+details[open] summary{border-bottom:1px solid var(--hair);margin-bottom:16px}
+button{touch-action:manipulation;cursor:pointer;background:var(--accent);color:var(--panel);border:1px solid var(--accent);border-radius:var(--radius);min-height:44px;padding:11px 16px;font-family:inherit;font-size:15px;font-weight:600;line-height:1.4;margin:6px 4px 6px 0}
+button:active{transform:scale(.97)}
+button.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+button:disabled{opacity:.45;cursor:default}
+input,textarea,select{touch-action:manipulation}
+input[type=text],input[type=number],textarea,select{background:var(--panel);border:1px solid var(--ink);color:var(--ink);border-radius:var(--radius);padding:12px;min-height:44px;font-family:inherit;font-size:16px;line-height:1.5;width:100%;max-width:100%}
+textarea{display:block;resize:vertical}
+input[type=range]{display:block;width:100%;min-height:44px;margin:0;accent-color:var(--accent)}
+input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-offset:2px;border-color:var(--accent)}
+label{font-size:13px;color:var(--muted);display:block;margin:20px 0 6px;touch-action:manipulation}
+.log{max-height:260px;font-size:12.5px;line-height:1.8;overflow-wrap:anywhere}
+.log .ok{color:#A9D3AD}.log .warn{color:#E7BE78}.log .err{color:#FFA79D}.log .dim{color:#C1B7A5}.log .bl{color:var(--codeink)}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin:20px 0}
+.grid2 > *{min-width:0}
+.grid2 > .card,.grid2 > .stat,.grid2 > .algo{margin:0}
+.kv{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--hair);font-size:14px}
+.kv > *{min-width:0;overflow-wrap:anywhere}
+.kv b{font-weight:600;text-align:right}
+.kv:last-child{border-bottom:0}
+.stat{border-color:var(--hair);padding:20px 12px;text-align:center}
+.stat .v{font-family:var(--serif);font-size:36px;line-height:1.2;font-weight:400;color:var(--accent);overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.stat .l{font-size:12px;color:var(--muted);margin-top:8px}
+.toc{border-top:1px solid var(--hair);border-bottom:1px solid var(--hair);padding:20px 0;margin:20px 0 32px;font-size:14px;line-height:2;counter-reset:section-index}
+.toc > b{display:block;font-family:var(--sans);color:var(--accent);font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:lowercase;margin-bottom:8px}
+.toc a{display:inline-block;min-height:44px;padding:8px 0;color:var(--ink);font-family:var(--serif);font-size:17px;line-height:1.65;text-decoration:none}
+.toc a:hover{text-decoration:underline}
+.toc a.index-link::before{counter-increment:section-index;content:counter(section-index,decimal-leading-zero) ' ';color:var(--accent);font-variant-numeric:tabular-nums;margin-right:4px}
+.tok-chip{display:inline-flex;flex-direction:column;align-items:center;max-width:100%;background:var(--panel);border:1px solid var(--hair);border-radius:var(--radius);padding:6px 10px;margin:3px;font-family:var(--mono);vertical-align:top;overflow-wrap:anywhere}
+.tok-chip .t{font-size:14px;color:var(--ink)}
+.tok-chip .i{font-size:10px;color:var(--muted)}
+.tok-chip.merged{border-color:var(--accent)}
+.tok-chip.oov{border-color:var(--red)}
+.merges{max-height:220px;overflow-y:auto;font-family:var(--mono);font-size:12.5px}
+.merges .m{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--hair)}
+.merges .dim{color:var(--muted)}
+canvas.chart{width:100%;height:190px;background:var(--codebg);border:1px solid var(--ink);border-radius:var(--radius);display:block}
+.bucket{height:28px;background:var(--paper);border:1px solid var(--ink);border-radius:var(--radius);overflow:hidden;position:relative}
+.bucket > div:first-child{height:100%;background:var(--accent);transition:width .12s linear}
+.bucket .blabel{position:absolute;top:0;bottom:0;left:50%;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;width:max-content;max-width:100%;padding:0 8px;background:var(--panel);border-left:1px solid var(--ink);border-right:1px solid var(--ink);font-size:11px;font-weight:600;color:var(--ink);font-family:var(--mono)}
+.algo{padding:16px}
+.big{font-family:var(--serif);font-size:32px;font-weight:400;line-height:1.4;margin-top:16px;font-variant-numeric:tabular-nums}
+.big > span:not(.okn):not(.bad){font-family:var(--sans)}
+.big .okn{color:var(--accent)}.big .bad{color:var(--red)}
+.win-dots{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;min-height:22px}
+.win-dots span{width:12px;height:12px;border-radius:50%;background:var(--accent);display:inline-block}
+.win-dots span.old{background:var(--hair)}
+.site-footer{border-top:1px solid var(--hair)}
+.footer-colophon,.footer-inner{max-width:960px;margin:0 auto;padding:18px 20px}
+.footer-colophon{color:var(--muted);font-size:12px;line-height:1.7}
+.footer-band{background:var(--accent);color:var(--paper)}
+.footer-inner{display:flex;flex-direction:column;align-items:flex-start;gap:20px;padding-top:32px;padding-bottom:72px}
+.footer-title{font-family:var(--serif);font-size:clamp(28px,5vw,40px);line-height:1.15;letter-spacing:-.025em}
+.footer-band a{color:var(--paper);font-size:14px;min-height:44px;display:inline-flex;align-items:center}
+.footer-band a:focus-visible{outline-color:var(--paper)}
+.ver-badge{position:fixed;right:12px;bottom:12px;background:var(--panel);border:1px solid var(--ink);color:var(--ink);font-size:11px;padding:5px 10px;border-radius:var(--radius);z-index:50;font-family:var(--mono)}
+@media(max-width:719px){
+  .ver-badge{position:static;display:block;width:max-content;margin:28px auto 12px}
+  .footer-inner{padding-bottom:32px}
+  table thead{display:none}
+  table tr:has(th):not(:has(td)){display:none}
+  table,table tbody,table tr,table td,table th{display:block;width:100%;max-width:100%}
+  table{overflow-x:visible;margin:16px 0}
+  table tr{border-top:1px solid var(--hair);padding:10px 0}
+  table td,table th{border-bottom:0;padding:6px 0;min-width:0}
+  table td:first-child{font-weight:700}
+}
+@media(min-width:720px){
+  body{font-size:17px}
+  .wrap{padding-right:32px;padding-left:32px}
+  .hero{padding-top:72px}
+  .hero .q{max-width:760px;margin-top:32px}
+  .grid2{grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
+  .card,.verdict,.myth{padding:28px}
+  .algo{padding:20px}
+  pre.mermaid{padding:32px}
+  table{display:table}
+  th,td{min-width:0}
+  .footer-colophon,.footer-inner{padding-right:32px;padding-left:32px}
+  .footer-inner{flex-direction:row;justify-content:space-between;align-items:center;padding-top:40px;padding-bottom:56px}
+}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .bucket > div:first-child{transition:none}
+  button:active{transform:none}
+}
+
+/* ---- site supplement (remapped) ---- */
+main{max-width:880px;margin:0 auto;padding:0 18px 100px}
+.hero .lede{color:var(--muted);font-size:17px;margin:0;max-width:640px}
+.card>h2{margin:0 0 4px;font-size:22px;letter-spacing:-.01em}
+.card .sub{color:var(--muted);font-size:14px;margin:0 0 14px}
+.verdict p{font-size:17px;margin:10px 0 0}
+.verdict p strong{color:var(--accent)}
+.myth h3{color:var(--amber);margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.1em}
+.myth p{margin:6px 0}
+.req-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:640px){.req-grid{grid-template-columns:1fr}}
+.req-grid h3{margin:0 0 8px;font-size:15px;color:var(--accent)}
+.req-grid ul{margin:0;padding-left:20px;font-size:15px}
+.req-grid li{margin:6px 0}
+.tbl{width:100%;border-collapse:collapse;font-size:14px;margin:12px 0}
+.tbl th,.tbl td{border:1px solid var(--hair);padding:9px 11px;text-align:left;vertical-align:top}
+.tbl th{background:var(--panel);color:var(--accent);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.tbl td b{color:var(--ink)}
+pre.code{background:var(--panel);border:1px solid var(--hair);border-radius:10px;padding:14px;overflow-x:auto;font-size:13px;line-height:1.55;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+details p,details ul{font-size:15px}
+.btn{background:var(--accent);color:var(--paper);border:0;border-radius:10px;padding:13px 20px;font-weight:750;font-size:15px;touch-action:manipulation;cursor:pointer;display:inline-block}
+.btn:active{transform:scale(.97)}
+.btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.btn:disabled{opacity:.45;cursor:default;transform:none}
+label.f{display:block;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin:16px 0 8px;font-weight:700}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:10px;margin:16px 0}
+.stat b{display:block;font-size:21px;color:var(--accent);font-variant-numeric:tabular-nums}
+.stat b.bad{color:var(--red)}
+.stat b.warn{color:var(--amber)}
+.stat span{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.note{font-size:13.5px;color:var(--muted)}
+.tips li{margin:9px 0}
+h3.sec{font-size:17px;margin:22px 0 8px}
+#crawl-svg{width:100%;max-width:430px;height:auto;background:var(--panel);border:1px solid var(--hair);border-radius:12px;display:block;margin:0 auto}
+#crawl-svg .edge{stroke:#3a4666;stroke-width:1.5}
+#crawl-svg .nd{fill:var(--panel);stroke:#3a4666;stroke-width:1.5;transition:all .25s}
+#crawl-svg .nl{fill:var(--muted);font-size:10px;text-anchor:middle}
+#crawl-svg .hl{fill:var(--accent);font-size:10px;font-weight:700;text-anchor:middle}
+#crawl-svg g.q .nd{stroke:var(--amber)}
+#crawl-svg g.act .nd{stroke:var(--accent);stroke-width:3;filter:drop-shadow(0 0 6px rgba(77,124,15,.8))}
+#crawl-svg g.done .nd{fill:rgba(77,124,15,.25);stroke:var(--accent)}
+#crawl-svg g.done .nl{fill:var(--accent)}
+#crawl-svg g.robots .nd{fill:rgba(179,38,30,.18);stroke:var(--red);stroke-dasharray:4 3}
+#crawl-svg g.robots .nl{fill:var(--red)}
+#crawl-svg g.dup .nd{stroke:var(--muted);stroke-dasharray:3 3}
+#crawl-svg g.dup .nl{fill:var(--muted);text-decoration:line-through}
+#crawl-svg g.trapb .nd{fill:rgba(179,38,30,.12);stroke:var(--amber);stroke-dasharray:5 3}
+#crawl-svg g.trapb .nl{fill:var(--amber)}
+.hostchips{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.hchip{background:var(--panel);border:1px solid var(--hair);border-radius:9px;padding:7px 12px;font-size:12.5px}
+.hchip b{color:var(--accent)}
+.hchip .w{color:var(--amber);font-variant-numeric:tabular-nums}
+#queue-list{display:flex;flex-wrap:wrap;gap:6px;min-height:34px;margin:8px 0}
+.qchip{background:var(--panel);border:1px solid var(--amber);color:var(--amber);border-radius:7px;padding:4px 10px;font-size:12px;font-family:ui-monospace,monospace}
+#crawl-log{max-height:140px;overflow-y:auto;font-size:12.5px;background:var(--paper);border:1px solid var(--hair);border-radius:8px;padding:10px;margin-top:10px;font-family:ui-monospace,monospace}
+#crawl-log div{margin:3px 0;color:var(--muted)}
+#crawl-log div b{color:var(--ink)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:8px 0}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+/* ---- variant adapter ---- */
+
+main{max-width:960px;margin:0 auto;padding:0 20px var(--section-gap)}
+header.hero{max-width:960px;margin:0 auto;padding:48px 20px 12px}
+main{counter-reset:sdsec}
+section.card:not(.verdict){counter-increment:sdsec}
+section.card:not(.verdict) > h2::before{content:counter(sdsec,decimal-leading-zero);display:block;margin-bottom:12px;color:var(--accent);font-family:var(--serif);font-size:40px;font-weight:400;line-height:1;letter-spacing:-.04em}
+section.card > h2{font-family:var(--serif);font-size:28px;font-weight:400;line-height:1.2;letter-spacing:-.02em;margin:0 0 20px}
+h3.sec{font-size:18px;line-height:1.4;font-weight:600;margin:28px 0 12px;color:var(--ink)}
+.myth h3{color:var(--amber);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin:0 0 8px}
+.tbl{width:100%;border-collapse:collapse;font-size:14px;line-height:1.6;margin:20px 0}
+.tbl th,.tbl td{text-align:left;padding:12px 10px;border-bottom:1px solid var(--hair);vertical-align:top}
+.tbl th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.1em}
+@media(max-width:719px){
+.tbl thead{display:none}
+.tbl tr:has(th):not(:has(td)){display:none}
+.tbl,.tbl tbody,.tbl tr,.tbl td,.tbl th{display:block;width:100%;max-width:100%}
+.tbl{overflow-x:visible}
+.tbl tr{border-top:1px solid var(--hair);padding:10px 0}
+.tbl td,.tbl th{border:0;padding:6px 0}
+.tbl td b{display:block;margin-bottom:4px}
+}
+.req-grid h3{font-family:var(--serif);font-size:20px;font-weight:400}
+.seg button{background:transparent;border:0;color:var(--muted)}
+.seg button.on{background:var(--accent);color:var(--paper)}
+.btn{color:var(--paper)}
+.btn.ghost{color:var(--accent)}
+pre.code{color:var(--ink)}
+</style>
+<script src="mermaid.min.js"></script>
+</head>
+<body>
+<header class="hero">
+<p class="kicker">System design interview · Search</p>
+<h1>Design a web crawler</h1>
+<p class="lede">Googlebot's job interview. Downloading pages is the easy 5% — the other 95% is deciding <em>what</em> to fetch next, being polite about it, and never fetching the same page twice.</p>
+</header>
+<main>
+
+<section class="card verdict">
+<h2>🎯 The takeaway, first</h2>
+<p><strong>The frontier is the system.</strong> A crawler is a polite, deduplicating, trap-avoiding URL scheduler with a downloader attached — like a librarian who must copy every book in the city but may only knock on each door once every few seconds, must obey "do not disturb" signs, and refuses to copy the same book twice. If your design starts with "fetch fast," you've missed the point: <strong>the binding constraint is courtesy, and the scale problem is the queue.</strong></p>
+</section>
+
+<div class="myth">
+<h3>🚫 Misconception, busted</h3>
+<p><strong>"A crawler just downloads pages as fast as possible."</strong> Speed is the one thing you are <em>not</em> allowed to maximize. Every host gets a politeness delay (default ~1 request/second, more if their <code>robots.txt</code> says so), and <strong>spider traps</strong> — infinite calendars, faceted-search URLs like <code>?color=red&amp;size=m&amp;page=48291</code> — will eat an impolite crawler alive. Most of the engineering is scheduling and dedup, not fetching.</p>
+</div>
+
+<section class="card">
+<h2>Requirements</h2>
+<p class="sub">Say these out loud before drawing a single box.</p>
+<div class="req-grid">
+<div><h3>Functional</h3><ul>
+<li>Start from seed URLs, discover new URLs from page links</li>
+<li>Fetch pages and extract outbound links</li>
+<li>Respect <code>robots.txt</code> (allow/disallow, crawl-delay)</li>
+<li>Deduplicate URLs <em>and</em> near-duplicate content</li>
+<li>Store fetched pages for the indexer</li>
+</ul></div>
+<div><h3>Non-functional</h3><ul>
+<li><strong>10B+ pages/day</strong> fetch capacity (~115K/s)</li>
+<li>Politeness: default ≤ 1 req/s per host, honor crawl-delay</li>
+<li>A dead host must not stall the crawl</li>
+<li>Freshness: recrawl important pages (news hourly, blogs weekly)</li>
+<li>Survive traps: no infinite loops, bounded per-host budgets</li>
+</ul></div>
+</div>
+</section>
+
+<section class="card">
+<h2>Back-of-the-envelope math</h2>
+<p class="sub">Google-scale-ish. Assumptions labeled.</p>
+<table class="tbl">
+<tr><th>What</th><th>Assumption</th><th>Math</th></tr>
+<tr><td>Fetch rate</td><td>10B pages/day</td><td><b>≈ 115K fetches/s</b> sustained</td></tr>
+<tr><td>Bandwidth</td><td>avg page 50 KB</td><td>115K × 50 KB ≈ <b>5.8 GB/s</b> + DNS/TLS overhead</td></tr>
+<tr><td>Frontier size</td><td>web holds trillions of known URLs</td><td>queue must hold <b>100B+ URLs</b> — it lives on disk, not RAM</td></tr>
+<tr><td>Seen-URL dedup</td><td>Bloom filter, 1T URLs, 1% false positives ≈ 9.6 bits/URL</td><td>≈ <b>1.2 TB</b> — sharded, or segmented per crawl batch</td></tr>
+<tr><td>Politeness paradox</td><td>100M hosts × 1 req/s politeness</td><td>To feed 115K fetchers you need <b>115K distinct hosts</b> with ripe queues at all times — <em>that's</em> the scheduling crux</td></tr>
+<tr><td>Robots cache</td><td>100M hosts × ~2 KB rules, 24h TTL</td><td>≈ <b>200 GB</b> — fits in a shared cache, refetched daily</td></tr>
+</table>
+<details><summary>Go deeper: why a Bloom filter and not a hash set?</summary>
+<p>An exact set of 1 trillion URLs at ~60 bytes each is 60 TB — you can't keep it in RAM and disk lookups at 115K/s would melt. A Bloom filter answers "have we seen this URL?" in O(1) with a few hash computations and ~10 bits per URL. The cost: ~1% false positives — we occasionally skip a page we <em>hadn't</em> seen. For a crawler that's a fine trade: the page will likely be rediscovered via another link later. Probabilistic data structures are the correct answer to web-scale dedup; say so confidently.</p>
+</details>
+</section>
+
+<section class="card">
+<h2>Architecture</h2>
+<p class="sub">The centerpiece: everything orbits the frontier.</p>
+<pre class="mermaid">flowchart LR
+    SEED[Seed URLs] --> FR[Frontier<br/>per-host queues + priority]
+    FR --> SCH[Scheduler<br/>politeness gate]
+    SCH --> FE[Fetcher Pool]
+    FE --> DNS[(DNS Cache)]
+    FE --> RC[(Robots Cache)]
+    RC -->|disallow| SKIP[Skip]
+    RC -->|allow| GET[HTTP GET]
+    GET --> PA[Parser]
+    PA --> DED[Dedup<br/>URL Bloom + content simhash]
+    DED -->|new| PS[(Page Store)]
+    DED -->|duplicate| DROP[Drop]
+    PA --> LE[Link Extractor]
+    LE --> NORM[URL Normalizer<br/>strip tracking params, fragments]
+    NORM --> FR
+    PS --> IDX[Indexer<br/>downstream]
+</pre>
+<p>The frontier holds one queue <strong>per host</strong> — this is the key structural decision, because politeness is per-host. The scheduler only hands a fetcher a URL whose host's delay has expired. Fetched pages go through robots check (cached), parse, dedup (URL-level Bloom filter, then content-level simhash for near-duplicates), and link extraction feeds normalized URLs back into the frontier. The indexer consumes the page store downstream and never talks to the crawl loop.</p>
+<details><summary>Go deeper: why partition the frontier by host?</summary>
+<p>Two reasons. First, politeness becomes local: a scheduler owning <code>example.com</code>'s queue just tracks one "next allowed fetch" timestamp. Second, failure isolation: if a host hangs or blackholes connections, only its queue stalls — the other 99,999,999 hosts keep flowing. In a distributed build you'd consistent-hash hosts across frontier shards, so all URLs for one host always land on the same scheduler.</p>
+</details>
+</section>
+
+<section class="card">
+<h2>Component deep-dives</h2>
+<h3 class="sec">Fetching with politeness</h3>
+<pre class="mermaid">sequenceDiagram
+    participant S as Scheduler
+    participant F as Frontier (per-host queue)
+    participant R as Robots Cache
+    participant W as Fetcher Worker
+    participant H as example.com
+    S->>F: next ripe host? (delay expired)
+    F-->>S: example.com → /blog/post-9
+    S->>R: robots rules for example.com?
+    alt cache miss
+        S->>H: GET /robots.txt
+        H-->>S: rules (cache 24h)
+    end
+    alt disallowed
+        S->>F: drop URL, note the rule
+    else allowed
+        S->>W: fetch /blog/post-9
+        W->>H: GET (1 req — then the host goes quiet)
+        H-->>W: 200 HTML
+        W->>F: mark host next-allowed = now + delay
+    end
+</pre>
+<h3 class="sec">Dedup — two gates</h3>
+<pre class="mermaid">sequenceDiagram
+    participant P as Parser
+    participant B as URL Bloom Filter
+    participant C as Content Simhash Index
+    participant S as Page Store
+    P->>P: normalize URL (lowercase host, strip ?utm_*, #frag)
+    P->>B: seen this URL?
+    alt yes → drop (URL dupe)
+        B-->>P: probably seen — skip fetch entirely
+    else no
+        P->>P: fetch + parse
+        P->>C: simhash(content) near-duplicate?
+        alt near-dupe of known page → drop
+            C-->>P: Hamming distance < 3 — skip
+        else new
+            P->>S: store page
+            P->>B: add URL
+        end
+    end
+</pre>
+</section>
+
+<section class="card">
+<h2>API + data model</h2>
+<p class="note">A crawler has no public API — its "API" is the frontier's internal contract. This is what the scheduler reads and writes:</p>
+<pre class="code">frontier_entry { url, host, priority_score, next_fetch_at, retries, discovered_from }
+page           { url_hash PK, url, content_hash, fetched_at, content_ptr → blob store }
+robots_cache   { host PK, rules, crawl_delay_s, fetched_at }   -- 24h TTL
+host_stats     { host PK, urls_seen, urls_fetched, errors_24h, budget_remaining }</pre>
+</section>
+
+<section class="card">
+<h2>Trade-offs</h2>
+<table class="tbl">
+<tr><th>Decision</th><th>Option A</th><th>Option B</th><th>Pick</th></tr>
+<tr><td>Crawl order</td><td>BFS (fair, simple)</td><td>Priority (PageRank-ish, important pages first)</td><td><b>Priority</b> — freshness where it matters; BFS starves news</td></tr>
+<tr><td>URL dedup</td><td>Exact hash set (no false drops)</td><td>Bloom filter (tiny, 1% false drops)</td><td><b>Bloom</b> — a skipped page gets rediscovered</td></tr>
+<tr><td>Frontier</td><td>Central queue</td><td>Sharded by host hash</td><td><b>Sharded</b> — politeness stays local, failures contained</td></tr>
+<tr><td>Fetching</td><td>Raw HTTP</td><td>Headless browser (renders JS)</td><td><b>Raw HTTP first</b>; headless only for JS-heavy hosts, budgeted separately</td></tr>
+<tr><td>robots.txt fetch fails</td><td>Fail open (crawl anyway)</td><td>Fail closed (skip host)</td><td><b>Fail closed, retry later</b> — politeness is the brand</td></tr>
+</table>
+</section>
+
+<section class="card">
+<h2>Failure modes</h2>
+<div class="kv"><span>Spider trap: /calendar/2026/01 → /02 → /03 … forever</span><b>Per-host URL budget + pattern detection (same path prefix exploding) → quarantine host</b></div>
+<div class="kv"><span>Host blackholes connections (hangs)</span><b>Aggressive timeouts; per-host circuit breaker; only that host's queue stalls</b></div>
+<div class="kv"><span>DNS slow/poisoned</span><b>Shared DNS cache with TTL; cap concurrent DNS lookups; DNS failure = host paused, not worker blocked</b></div>
+<div class="kv"><span>Content farm: 1M near-duplicate pages</span><b>Simhash gate drops them before the page store; host budget still applies</b></div>
+<div class="kv"><span>Frontier shard dies</span><b>Host→shard mapping is deterministic; replay the shard's queue from durable log onto a new node</b></div>
+</section>
+
+<section class="card">
+<h2>What I'd actually build</h2>
+<p class="sub">Opinionated. Steal this for the interview.</p>
+<p><strong>Stack:</strong> <strong>Go</strong> fetcher pool (great at 100K concurrent connections). Frontier as <strong>Kafka topics partitioned by host hash</strong> + <strong>Redis</strong> per-host "next allowed at" timestamps (token-bucket politeness). Seen-URL Bloom segments in <strong>RocksDB</strong>. Page content in <strong>S3</strong>, metadata in <strong>Postgres</strong>. Robots cache in Redis, 24h TTL, fail closed. A separate small headless-Chrome fleet for JS-heavy hosts with its own strict budget. Nightly job recomputes priority scores from the link graph.</p>
+</section>
+
+<section class="card tips">
+<h2>Interview tips</h2>
+<ul>
+<li><strong>Say "politeness" in the first two minutes.</strong> It's the constraint the whole design hangs on — interviewers are listening for it.</li>
+<li><strong>Draw the frontier as the centerpiece</strong>, not the fetcher. The queue is the system; fetching is plumbing.</li>
+<li><strong>Mention robots.txt before they ask.</strong> Cache it, honor crawl-delay, fail closed — three phrases, full marks.</li>
+<li><strong>Traps are your best "what breaks" answer.</strong> Infinite calendars and faceted URLs show you've thought adversarially.</li>
+<li><strong>Close with freshness.</strong> Recrawl scheduling (news hourly, blogs weekly) turns a one-shot crawler into a real system.</li>
+</ul>
+</section>
+<section class="card" id="widget">
+<h2>🔬 Interactive: crawl frontier simulator</h2>
+<p class="sub">A tiny 3-host web. Watch BFS crawl it — with politeness delays, a robots.txt wall, a duplicate URL, and a calendar trap.</p>
+
+<div class="hostchips" id="host-chips"></div>
+<svg id="crawl-svg" viewBox="0 0 400 480" role="img" aria-label="site graph"></svg>
+<div class="legend">
+<span><i style="background:rgba(126,226,168,.4)"></i>fetched</span>
+<span><i style="background:transparent;border:1px solid var(--warn)"></i>queued</span>
+<span><i style="background:rgba(239,111,111,.4)"></i>robots-blocked</span>
+<span><i style="background:transparent;border:1px dashed var(--muted)"></i>duplicate skipped</span>
+<span><i style="background:transparent;border:1px dashed var(--warn)"></i>trap blocked</span>
+</div>
+<label class="f">Politeness delay per host: <span id="polite-val" style="color:var(--accent)">300ms</span></label>
+<input type="range" id="polite-slider" min="100" max="2000" step="50" value="300">
+<div style="display:flex;gap:10px;margin:16px 0;flex-wrap:wrap">
+<button class="btn" id="btn-crawl-start">▶ Start crawl</button>
+<button class="btn ghost" id="btn-crawl-reset">Reset</button>
+</div>
+<div class="stats">
+<div class="stat"><b id="stat-fetched">0</b><span>fetched</span></div>
+<div class="stat"><b id="stat-queued">0</b><span>in frontier</span></div>
+<div class="stat"><b id="stat-robots">0</b><span>robots-blocked</span></div>
+<div class="stat"><b id="stat-dupes">0</b><span>dupes skipped</span></div>
+<div class="stat"><b id="stat-trap">0</b><span>trap blocked</span></div>
+</div>
+<label class="f">Frontier queue (BFS order)</label>
+<div id="queue-list"></div>
+<div id="crawl-log"></div>
+<div class="myth" style="margin-top:18px">
+<h3>🔍 Bloom filter note</h3>
+<p>Every discovered URL is hashed into a <strong>Bloom filter</strong> before fetching: O(1) "have we seen this?", ~10 bits per URL. Watch <code>/p1?ref=sidebar</code> — it normalizes to the same canonical URL as <code>/p1</code>, the filter says <em>seen</em>, and we skip the fetch. ~1% false positives just mean occasionally skipping a page that gets rediscovered later anyway.</p>
+</div>
+</section>
+
+</main>
+<footer class="site-footer">
+<p class="footer-colophon">Built as a single self-contained file · diagrams render locally, no CDN</p>
+<div class="footer-band"><div class="footer-inner">
+<span class="footer-title">Design a web crawler</span>
+<a href="#takeaway">back to the takeaway ↑</a>
+</div></div>
+</footer>
+<div class="ver-badge">v2026.10.03-02</div>
+<script>
+mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{
+  primaryColor:'#FFFDF8',primaryBorderColor:'#4D7C0F',primaryTextColor:'#201E1A',
+  lineColor:'#201E1A',secondaryColor:'#F0E9DA',tertiaryColor:'#FAF7F1',
+  textColor:'#201E1A',background:'#FAF7F1',mainBkg:'#FFFDF8',nodeBorder:'#201E1A',
+  clusterBkg:'#F4EDDE',clusterBorder:'#DED5C3',edgeLabelBackground:'#FAF7F1',
+  actorBkg:'#FFFDF8',actorBorder:'#4D7C0F',actorTextColor:'#201E1A',actorLineColor:'#201E1A',
+  signalColor:'#201E1A',signalTextColor:'#201E1A',labelBoxBkgColor:'#FFFDF8',
+  labelBoxBorderColor:'#201E1A',labelTextColor:'#201E1A',loopTextColor:'#201E1A',
+  activationBkgColor:'#EFE6D2',activationBorderColor:'#201E1A',
+  noteBkgColor:'#FFFDF8',noteBorderColor:'#DED5C3',noteTextColor:'#201E1A',
+  fontFamily:'-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif',fontSize:'16px'
+}});
+</script>
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const NS='http://www.w3.org/2000/svg';
+const NODES=[
+ {id:'n-home',host:'news.example',label:'/',x:70,y:64},
+ {id:'n-a1',host:'news.example',label:'/a1',x:70,y:154},
+ {id:'n-a2',host:'news.example',label:'/a2',x:70,y:244},
+ {id:'s-home',host:'shop.example',label:'/',x:200,y:64},
+ {id:'s-p1',host:'shop.example',label:'/p1',x:200,y:154,canon:'shop.example/p1'},
+ {id:'s-p1dup',host:'shop.example',label:'/p1?ref=x',x:200,y:244,canon:'shop.example/p1'},
+ {id:'s-secret',host:'shop.example',label:'/secret',x:200,y:334,robots:true},
+ {id:'c-home',host:'cal.example',label:'/',x:330,y:64},
+ {id:'c-01',host:'cal.example',label:'/cal/01',x:330,y:154,trap:true},
+ {id:'c-02',host:'cal.example',label:'/cal/02',x:330,y:244,trap:true},
+ {id:'c-03',host:'cal.example',label:'/cal/03',x:330,y:334,trap:true},
+ {id:'c-04',host:'cal.example',label:'/cal/04',x:330,y:424,trap:true},
+];
+NODES.forEach(n=>{if(!n.canon)n.canon=n.host+n.label;});
+const EDGES=[['n-home','n-a1'],['n-home','n-a2'],['n-a1','n-a2'],['s-home','s-p1'],['s-home','s-p1dup'],
+ ['s-home','s-secret'],['c-home','c-01'],['c-home','c-02'],['c-01','c-03'],['c-02','c-04']];
+const byId={};NODES.forEach(n=>byId[n.id]=n);
+const HOSTS=['news.example','shop.example','cal.example'];
+const TRAP_BUDGET=2;
+/* ---- build SVG ---- */
+const svg=$('crawl-svg');
+const defs=document.createElementNS(NS,'defs');
+defs.innerHTML='<marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#3a4666"/></marker>';
+svg.appendChild(defs);
+EDGES.forEach(([a,b])=>{const A=byId[a],B=byId[b];const l=document.createElementNS(NS,'line');
+ l.setAttribute('x1',A.x);l.setAttribute('y1',A.y+20);l.setAttribute('x2',B.x);l.setAttribute('y2',B.y-24);
+ l.setAttribute('class','edge');l.setAttribute('marker-end','url(#ah)');svg.appendChild(l);});
+HOSTS.forEach((h,i)=>{const t=document.createElementNS(NS,'text');t.setAttribute('x',70+i*130);t.setAttribute('y',22);
+ t.setAttribute('class','hl');t.textContent=h;svg.appendChild(t);});
+const gEls={};
+NODES.forEach(n=>{const g=document.createElementNS(NS,'g');g.setAttribute('class','');
+ const c=document.createElementNS(NS,'circle');c.setAttribute('cx',n.x);c.setAttribute('cy',n.y);c.setAttribute('r',20);c.setAttribute('class','nd');
+ const t=document.createElementNS(NS,'text');t.setAttribute('x',n.x);t.setAttribute('y',n.y+38);t.setAttribute('class','nl');t.textContent=n.label;
+ g.appendChild(c);g.appendChild(t);svg.appendChild(g);gEls[n.id]=g;});
+/* ---- host chips ---- */
+const hc={};
+HOSTS.forEach(h=>{const d=document.createElement('div');d.className='hchip';
+ d.innerHTML='<b>'+h+'</b> · <span class="w" id="hc-'+h+'">ready</span>';
+ $('host-chips').appendChild(d);hc[h]=$('hc-'+h);});
+/* ---- sim state ---- */
+let frontier=[],running=false,politeMs=300,lastFetch={},bloom=new Set(),processed=new Set(),trapCount={};
+let stats={fetched:0,robots:0,dupes:0,trap:0};
+function log(html){const d=document.createElement('div');d.innerHTML=html;const L=$('crawl-log');L.prepend(d);while(L.children.length>10)L.removeChild(L.lastChild);}
+function setState(n,s){gEls[n.id].setAttribute('class',s);}
+function renderQueue(){const q=$('queue-list');q.innerHTML='';
+ frontier.slice(0,10).forEach(n=>{const c=document.createElement('span');c.className='qchip';c.textContent=n.label;q.appendChild(c);});
+ if(frontier.length>10){const c=document.createElement('span');c.className='qchip';c.textContent='+'+(frontier.length-10)+' more';q.appendChild(c);}
+ if(!frontier.length)q.innerHTML='<span class="note">frontier empty — crawl complete</span>';
+ $('stat-queued').textContent=frontier.length;}
+function updStats(){$('stat-fetched').textContent=stats.fetched;$('stat-robots').textContent=stats.robots;
+ $('stat-dupes').textContent=stats.dupes;$('stat-trap').textContent=stats.trap;renderQueue();}
+function reset(){
+ running=false;$('btn-crawl-start').textContent='▶ Start crawl';
+ frontier=[byId['n-home'],byId['s-home'],byId['c-home']];
+ lastFetch={};bloom=new Set();processed=new Set();trapCount={};
+ stats={fetched:0,robots:0,dupes:0,trap:0};
+ NODES.forEach(n=>setState(n,''));
+ frontier.forEach(n=>setState(n,'q'));
+ $('crawl-log').innerHTML='';HOSTS.forEach(h=>hc[h].textContent='ready');
+ log('<b>frontier seeded</b> with 3 URLs. Press Start.');updStats();}
+$('polite-slider').addEventListener('input',e=>{politeMs=parseInt(e.target.value,10);$('polite-val').textContent=politeMs+'ms';});
+$('btn-crawl-reset').addEventListener('click',reset);
+$('btn-crawl-start').addEventListener('click',()=>{
+ if(running){running=false;$('btn-crawl-start').textContent='▶ Resume';return;}
+ running=true;$('btn-crawl-start').textContent='⏸ Pause';crawl();});
+async function crawl(){
+ log('<b>crawl started</b> — politeness '+politeMs+'ms/host');
+ while(running&&frontier.length){
+  const now=Date.now();
+  let idx=frontier.findIndex(n=>(now-(lastFetch[n.host]||0))>=politeMs);
+  if(idx<0){
+   HOSTS.forEach(h=>{const wait=Math.max(0,politeMs-(now-(lastFetch[h]||0)));
+    hc[h].textContent=wait>0?('⏳ '+(wait/1000).toFixed(1)+'s'):'ready';});
+   await sleep(150);continue;
+  }
+  HOSTS.forEach(h=>hc[h].textContent='ready');
+  const node=frontier.splice(idx,1)[0];
+  setState(node,'act');renderQueue();
+  log('GET <b>'+node.host+node.label+'</b>');
+  await sleep(420);
+  if(!running)break;
+  lastFetch[node.host]=Date.now();
+  processed.add(node.id);
+  if(node.robots){setState(node,'robots');stats.robots++;log('🚫 <b>robots.txt disallows</b> '+node.label+' — skipped, not fetched');}
+  else if(bloom.has(node.canon)){setState(node,'dup');stats.dupes++;log('🔁 <b>bloom: seen</b> '+node.label+' → same canonical URL — fetch skipped');}
+  else if(node.trap&&(trapCount[node.host]||0)>=TRAP_BUDGET){setState(node,'trapb');stats.trap++;
+   log('🪤 <b>trap blocked</b> '+node.label+' — per-host calendar budget ('+TRAP_BUDGET+') exceeded');}
+  else{bloom.add(node.canon);setState(node,'done');stats.fetched++;
+   if(node.trap)trapCount[node.host]=(trapCount[node.host]||0)+1;
+   EDGES.forEach(([a,b])=>{if(a===node.id&&!processed.has(b)&&!frontier.includes(byId[b])){
+    frontier.push(byId[b]);setState(byId[b],'q');}});}
+  updStats();
+ }
+ if(frontier.length===0&&running){log('<b>✔ crawl complete</b> — frontier drained. Trap and robots guards held.');}
+ running=false;$('btn-crawl-start').textContent='▶ Start crawl';
+}
+reset();
+})();
+</script>
+</body>
+</html>

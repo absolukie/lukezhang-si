@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design a Payment System — System Design Explainer</title>
+<style>
+:root{
+  --paper:#FAF7F1;--panel:#FFFDF8;--ink:#201E1A;--muted:#6F675A;
+  --hair:#DED5C3;--codebg:#211E19;--accent:#166534;--codeink:#F3EEE3;
+  --red:#B3261E;--amber:#B7791F;
+  --serif:Georgia,'Iowan Old Style','Palatino Linotype',Charter,serif;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --section-gap:64px;--radius:3px;--accent-dim:rgba(22,101,52,.10);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:24px}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.65}
+.wrap{max-width:960px;margin:0 auto;padding:0 20px var(--section-gap)}
+.hero{padding:48px 0 12px}
+.kicker{display:block;margin-bottom:20px;color:var(--accent);font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:lowercase}
+h1,h2{font-family:var(--serif);font-weight:400;text-wrap:balance}
+.hero h1{font-size:clamp(34px,7vw,56px);line-height:1.06;letter-spacing:-.035em;margin:0 0 20px}
+.hero .sub{color:var(--muted);font-size:17px;margin:0}
+.hero .q{font-size:17px;border-left:1px solid var(--ink);padding-left:18px;margin:28px 0 16px;font-style:italic}
+h2{font-size:28px;line-height:1.2;letter-spacing:-.02em;margin:32px 0 20px}
+.wrap > h2{border-top:1px solid var(--hair);padding-top:28px;margin-top:var(--section-gap)}
+h2 .n{display:block;margin-bottom:12px;color:var(--accent);font-family:var(--serif);font-size:40px;font-weight:400;line-height:1;letter-spacing:-.04em}
+h3{font-size:18px;line-height:1.4;font-weight:600;margin:28px 0 12px}
+p{margin:16px 0}
+a{color:var(--accent);text-underline-offset:4px;text-decoration-thickness:1px;touch-action:manipulation}
+a:hover{text-decoration:underline}
+a:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.card,.verdict,.myth,.algo,.stat{background:var(--panel);border:1px solid var(--ink);border-radius:var(--radius);padding:20px;margin:20px 0}
+.card > :first-child,.algo > :first-child{margin-top:0}
+.card > :last-child,.algo > :last-child{margin-bottom:0}
+.verdict{border-color:var(--hair);border-left:3px solid var(--accent);margin:32px 0;padding:24px 20px}
+.verdict h2{margin:0 0 20px}
+.verdict > p:first-of-type > b:first-child{display:block;font-family:var(--serif);font-size:24px;line-height:1.3;font-weight:400;letter-spacing:-.015em;margin-bottom:16px}
+.verdict > :last-child{margin-bottom:0}
+.myth{margin:28px 0}
+.myth .tag{color:var(--amber);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+.myth p:last-child{margin-bottom:0}
+ul,ol{padding-left:22px;margin:16px 0}
+li{margin:8px 0;padding-left:2px}
+code{font-family:var(--mono);background:var(--panel);border:1px solid var(--hair);border-radius:var(--radius);padding:1px 5px;font-size:.85em;overflow-wrap:anywhere;color:var(--ink)}
+pre,.log{background:var(--codebg);color:var(--codeink);border:1px solid var(--ink);border-radius:var(--radius);padding:18px;font-family:var(--mono);font-size:13px;line-height:1.65;overflow:auto}
+pre{margin:24px 0}
+pre code{background:none;border:0;padding:0;font-size:inherit;color:inherit;overflow-wrap:normal}
+pre.mermaid{background:var(--paper);color:var(--ink);padding:24px 16px;border-color:var(--hair)}
+pre.mermaid svg{display:block;max-width:100%;height:auto;margin:0 auto}
+table{display:block;width:100%;max-width:100%;border-collapse:collapse;font-size:14px;line-height:1.6;margin:20px 0;overflow-x:auto}
+th,td{text-align:left;padding:12px 10px;border-bottom:1px solid var(--hair);vertical-align:top;min-width:112px}
+th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.1em}
+tr:last-child td{border-bottom:0}
+details{background:var(--panel);border:1px solid var(--hair);border-radius:var(--radius);padding:0 18px;margin:20px 0}
+summary{cursor:pointer;color:var(--ink);font-family:var(--serif);font-size:18px;font-weight:600;line-height:1.4;padding:16px 0;touch-action:manipulation}
+details[open] summary{border-bottom:1px solid var(--hair);margin-bottom:16px}
+button{touch-action:manipulation;cursor:pointer;background:var(--accent);color:var(--panel);border:1px solid var(--accent);border-radius:var(--radius);min-height:44px;padding:11px 16px;font-family:inherit;font-size:15px;font-weight:600;line-height:1.4;margin:6px 4px 6px 0}
+button:active{transform:scale(.97)}
+button.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+button:disabled{opacity:.45;cursor:default}
+input,textarea,select{touch-action:manipulation}
+input[type=text],input[type=number],textarea,select{background:var(--panel);border:1px solid var(--ink);color:var(--ink);border-radius:var(--radius);padding:12px;min-height:44px;font-family:inherit;font-size:16px;line-height:1.5;width:100%;max-width:100%}
+textarea{display:block;resize:vertical}
+input[type=range]{display:block;width:100%;min-height:44px;margin:0;accent-color:var(--accent)}
+input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-offset:2px;border-color:var(--accent)}
+label{font-size:13px;color:var(--muted);display:block;margin:20px 0 6px;touch-action:manipulation}
+.log{max-height:260px;font-size:12.5px;line-height:1.8;overflow-wrap:anywhere}
+.log .ok{color:#A9D3AD}.log .warn{color:#E7BE78}.log .err{color:#FFA79D}.log .dim{color:#C1B7A5}.log .bl{color:var(--codeink)}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin:20px 0}
+.grid2 > *{min-width:0}
+.grid2 > .card,.grid2 > .stat,.grid2 > .algo{margin:0}
+.kv{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--hair);font-size:14px}
+.kv > *{min-width:0;overflow-wrap:anywhere}
+.kv b{font-weight:600;text-align:right}
+.kv:last-child{border-bottom:0}
+.stat{border-color:var(--hair);padding:20px 12px;text-align:center}
+.stat .v{font-family:var(--serif);font-size:36px;line-height:1.2;font-weight:400;color:var(--accent);overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.stat .l{font-size:12px;color:var(--muted);margin-top:8px}
+.toc{border-top:1px solid var(--hair);border-bottom:1px solid var(--hair);padding:20px 0;margin:20px 0 32px;font-size:14px;line-height:2;counter-reset:section-index}
+.toc > b{display:block;font-family:var(--sans);color:var(--accent);font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:lowercase;margin-bottom:8px}
+.toc a{display:inline-block;min-height:44px;padding:8px 0;color:var(--ink);font-family:var(--serif);font-size:17px;line-height:1.65;text-decoration:none}
+.toc a:hover{text-decoration:underline}
+.toc a.index-link::before{counter-increment:section-index;content:counter(section-index,decimal-leading-zero) ' ';color:var(--accent);font-variant-numeric:tabular-nums;margin-right:4px}
+.tok-chip{display:inline-flex;flex-direction:column;align-items:center;max-width:100%;background:var(--panel);border:1px solid var(--hair);border-radius:var(--radius);padding:6px 10px;margin:3px;font-family:var(--mono);vertical-align:top;overflow-wrap:anywhere}
+.tok-chip .t{font-size:14px;color:var(--ink)}
+.tok-chip .i{font-size:10px;color:var(--muted)}
+.tok-chip.merged{border-color:var(--accent)}
+.tok-chip.oov{border-color:var(--red)}
+.merges{max-height:220px;overflow-y:auto;font-family:var(--mono);font-size:12.5px}
+.merges .m{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--hair)}
+.merges .dim{color:var(--muted)}
+canvas.chart{width:100%;height:190px;background:var(--codebg);border:1px solid var(--ink);border-radius:var(--radius);display:block}
+.bucket{height:28px;background:var(--paper);border:1px solid var(--ink);border-radius:var(--radius);overflow:hidden;position:relative}
+.bucket > div:first-child{height:100%;background:var(--accent);transition:width .12s linear}
+.bucket .blabel{position:absolute;top:0;bottom:0;left:50%;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;width:max-content;max-width:100%;padding:0 8px;background:var(--panel);border-left:1px solid var(--ink);border-right:1px solid var(--ink);font-size:11px;font-weight:600;color:var(--ink);font-family:var(--mono)}
+.algo{padding:16px}
+.big{font-family:var(--serif);font-size:32px;font-weight:400;line-height:1.4;margin-top:16px;font-variant-numeric:tabular-nums}
+.big > span:not(.okn):not(.bad){font-family:var(--sans)}
+.big .okn{color:var(--accent)}.big .bad{color:var(--red)}
+.win-dots{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;min-height:22px}
+.win-dots span{width:12px;height:12px;border-radius:50%;background:var(--accent);display:inline-block}
+.win-dots span.old{background:var(--hair)}
+.site-footer{border-top:1px solid var(--hair)}
+.footer-colophon,.footer-inner{max-width:960px;margin:0 auto;padding:18px 20px}
+.footer-colophon{color:var(--muted);font-size:12px;line-height:1.7}
+.footer-band{background:var(--accent);color:var(--paper)}
+.footer-inner{display:flex;flex-direction:column;align-items:flex-start;gap:20px;padding-top:32px;padding-bottom:72px}
+.footer-title{font-family:var(--serif);font-size:clamp(28px,5vw,40px);line-height:1.15;letter-spacing:-.025em}
+.footer-band a{color:var(--paper);font-size:14px;min-height:44px;display:inline-flex;align-items:center}
+.footer-band a:focus-visible{outline-color:var(--paper)}
+.ver-badge{position:fixed;right:12px;bottom:12px;background:var(--panel);border:1px solid var(--ink);color:var(--ink);font-size:11px;padding:5px 10px;border-radius:var(--radius);z-index:50;font-family:var(--mono)}
+@media(max-width:719px){
+  .ver-badge{position:static;display:block;width:max-content;margin:28px auto 12px}
+  .footer-inner{padding-bottom:32px}
+  table thead{display:none}
+  table tr:has(th):not(:has(td)){display:none}
+  table,table tbody,table tr,table td,table th{display:block;width:100%;max-width:100%}
+  table{overflow-x:visible;margin:16px 0}
+  table tr{border-top:1px solid var(--hair);padding:10px 0}
+  table td,table th{border-bottom:0;padding:6px 0;min-width:0}
+  table td:first-child{font-weight:700}
+}
+@media(min-width:720px){
+  body{font-size:17px}
+  .wrap{padding-right:32px;padding-left:32px}
+  .hero{padding-top:72px}
+  .hero .q{max-width:760px;margin-top:32px}
+  .grid2{grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
+  .card,.verdict,.myth{padding:28px}
+  .algo{padding:20px}
+  pre.mermaid{padding:32px}
+  table{display:table}
+  th,td{min-width:0}
+  .footer-colophon,.footer-inner{padding-right:32px;padding-left:32px}
+  .footer-inner{flex-direction:row;justify-content:space-between;align-items:center;padding-top:40px;padding-bottom:56px}
+}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .bucket > div:first-child{transition:none}
+  button:active{transform:none}
+}
+
+/* ---- site supplement (remapped) ---- */
+.hero p.lede{color:var(--muted);font-size:18px;margin:0;max-width:660px}
+section.block{background:var(--panel);border:1px solid var(--hair);border-radius:14px;padding:22px 20px;margin:26px 0}
+section.block h2{margin:0 0 8px;font-size:22px}
+.eyebrow{color:var(--muted);font-size:13px;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px}
+.takeaway{border-left:4px solid var(--accent);background:var(--accent-dim);border-radius:0 12px 12px 0;padding:18px 20px;margin:26px 0}
+.takeaway h2{margin:0 0 8px;font-size:20px;color:var(--accent)}
+.takeaway p{margin:0;font-size:17px}
+.mermaid-wrap{background:var(--panel);border:1px solid var(--hair);border-radius:10px;padding:10px 6px;overflow-x:auto;margin:12px 0}
+.mermaid{margin:0;min-width:520px}
+.misc{background:rgba(183,121,31,.07);border:1px solid rgba(183,121,31,.45);border-radius:12px;padding:16px 18px;margin:18px 0}
+.misc h3{margin:0 0 6px;color:var(--amber);font-size:16px}
+.misc p{margin:6px 0}
+.btn{display:inline-block;background:var(--accent);color:#06281a;font-weight:700;border:0;border-radius:10px;padding:12px 20px;font-size:16px;cursor:pointer;margin:6px 8px 6px 0}
+.btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.btn.warn{background:var(--amber);color:#2a1c05}
+.btn.danger{background:transparent;color:var(--red);border:1px solid var(--red)}
+.chip{display:inline-block;background:var(--panel);border:1px solid var(--hair);border-radius:999px;padding:4px 12px;font-size:13px;margin:2px 4px 2px 0}
+.log div{padding:5px 0;border-bottom:1px dashed var(--hair)}
+ul.tight li,ol.tight li{margin-bottom:8px}
+footer{color:var(--muted);font-size:13px;padding:30px 0 80px;text-align:center}
+.stat-row{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.stat b{color:var(--accent)}
+label.check{display:flex;align-items:center;gap:10px;margin:12px 0;cursor:pointer;font-size:15px}
+label.check input{width:20px;height:20px;accent-color:var(--accent)}
+.widget-note{color:var(--muted);font-size:14px;margin-top:10px}
+.charge{background:var(--panel);border:1px solid var(--accent);border-radius:10px;padding:10px 14px;margin:8px 0;font-size:14px}
+.keytag{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--accent)}
+.ok{color:var(--accent);font-weight:700}
+.dedup{color:var(--amber);font-weight:700}
+.bad{color:var(--red);font-weight:700}
+table.reqs td:first-child{font-family:ui-monospace,Menlo,monospace;font-size:12px}
+/* ---- variant adapter ---- */
+
+.wrap{counter-reset:sdsec}
+section.block{counter-increment:sdsec;background:var(--panel);border:1px solid var(--ink);border-radius:3px;padding:20px;margin:20px 0}
+section.block h2{font-family:var(--serif);font-size:28px;font-weight:400;line-height:1.2;letter-spacing:-.02em;margin:0 0 20px}
+section.block h2::before{content:counter(sdsec,decimal-leading-zero);display:block;margin-bottom:12px;color:var(--accent);font-family:var(--serif);font-size:40px;font-weight:400;line-height:1;letter-spacing:-.04em}
+.takeaway{border:1px solid var(--hair);border-left:3px solid var(--accent);border-radius:3px;background:var(--panel);padding:24px 20px;margin:32px 0}
+.takeaway h2{font-family:var(--serif);font-size:24px;line-height:1.3;font-weight:400;letter-spacing:-.015em;margin:0 0 16px;color:var(--ink)}
+.takeaway p{margin:0;font-size:17px}
+.eyebrow{display:block;margin-bottom:20px;color:var(--accent);font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:lowercase}
+.hero p.lede{color:var(--muted);font-size:17px;margin:0;max-width:660px}
+.mermaid-wrap{background:var(--paper);border:1px solid var(--hair);border-radius:3px;padding:24px 16px;overflow-x:auto;margin:20px 0}
+.mermaid{margin:0;min-width:0}
+.misc{background:var(--panel);border:1px solid var(--hair);border-radius:3px;padding:20px;margin:20px 0}
+.misc h3{color:var(--amber);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin:0 0 8px}
+.misc p{margin:6px 0}
+.btn{color:var(--paper)}
+.btn.ghost{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+<p class="kicker">System design explainer</p>
+<h1>Design a payment system</h1>
+<p class="lede">The interview question behind every "Pay" button: the user double-clicks, the network retries, the app times out — and you must never charge twice. How do you build a system where retries are safe?</p>
+</header>
+
+<div class="takeaway">
+<h2>The takeaway, up front</h2>
+<p>You cannot have exactly-once <i>delivery</i> in a distributed system — but you can have exactly-once <i>effects</i>. The trick is <b>idempotency keys</b>: the client tags each payment intent with a unique key, the server stores the key alongside the result, and any retry carrying the same key gets the stored result instead of a second charge. Retries become safe. Double-charges become impossible by construction. That one mechanism is the entire answer.</p>
+</div>
+
+<section class="block">
+<div class="eyebrow">1 · Requirements</div>
+<h2>What are we actually building?</h2>
+<p>The analogy: paying online is like <b>mailing a check that might get delivered twice</b>. You can't stop the post office from duplicating the envelope — so instead you write a unique serial number on every check, and the bank cashes each serial number exactly once, no matter how many copies arrive. The idempotency key is the serial number.</p>
+<div class="grid2">
+<div>
+<h3>Functional</h3>
+<ul class="tight">
+<li>Charge a card: amount, currency, payment method</li>
+<li>Safe retries — client or network may resend any request</li>
+<li>Refunds and partial refunds</li>
+<li>Query charge status; webhooks for async events</li>
+<li>Full audit trail of every money movement</li>
+</ul>
+</div>
+<div>
+<h3>Non-functional</h3>
+<ul class="tight">
+<li><b>Correctness:</b> never double-charge — this is a never-event, not a metric</li>
+<li><b>Latency:</b> p99 under 2s (bounded by the card processor)</li>
+<li><b>Durability:</b> the ledger is append-only and never loses a write</li>
+<li><b>Scale:</b> hundreds of charges/sec at peak, keys retained for days</li>
+<li><b>Compliance:</b> card data stays with the processor (PCI scope minimized)</li>
+</ul>
+</div>
+</div>
+<div class="misc">
+<h3>🚫 Common misconception</h3>
+<p><b>"Retries cause double charges, so a payment system should avoid retrying."</b> Backwards. Networks fail — retries are inevitable, so the system must make them safe instead of forbidding them. The rule is: <b>never retry without an idempotency key; with a key, retry aggressively.</b> The key is what makes retries safe, not the absence of retries.</p>
+</div>
+</section>
+
+<section class="block">
+<div class="eyebrow">2 · Back-of-the-envelope</div>
+<h2>Capacity math</h2>
+<table>
+<tr><th>Assumption</th><th>Value</th></tr>
+<tr><td>Charges per day (mid-size processor)</td><td>20,000,000</td></tr>
+<tr><td>Charge QPS</td><td>20M ÷ 86,400 ≈ <b>231 avg</b> · peak 3× ≈ <b>700 QPS</b></td></tr>
+<tr><td>Idempotency keys retained</td><td>72 hours → 60M keys × ~200 bytes ≈ <b>12 GB</b> in Redis — trivial</td></tr>
+<tr><td>Ledger growth</td><td>20M × 500 bytes ≈ <b>10 GB/day</b> · ~3.6 TB/year, append-only</td></tr>
+<tr><td>Retry rate</td><td>~2% of requests retried → dedupe saves ~400k charges/day from double-processing</td></tr>
+<tr><td>PSP latency</td><td>300–800ms per authorization — dominates our p99, not our code</td></tr>
+</table>
+<p>The line to say out loud: <i>"The dedupe store is 12 GB — the cheapest insurance in the architecture. The ledger is append-only because money movement is a fact, and facts don't get updated."</i></p>
+<details>
+<summary>Go deeper: how long do you keep a key?</summary>
+<p>Long enough to cover every plausible retry — client timeouts, webhook redelivery, and the finance team re-running yesterday's batch. 24–72 hours covers operations; some systems keep keys for months because storage is cheap and a duplicate charge is expensive. The real answer: keep them as long as your longest retry window, then age them out with a TTL. "Forever" is defensible if you can afford the storage.</p>
+</details>
+</section>
+
+<section class="block">
+<div class="eyebrow">3 · Architecture</div>
+<h2>The system, end to end</h2>
+<div class="mermaid-wrap">
+<pre class="mermaid">
+flowchart TB
+    CL["Client app"]
+    GW["API gateway"]
+    IDF["Idempotency filter<br/>Redis: key → stored response"]
+    PS["Payment service"]
+    PSP["Card processor<br/>(Stripe / Adyen)"]
+    LED[("Ledger<br/>Postgres, append-only")]
+    WH["Webhook handler"]
+    REC["Reconciler<br/>daily PSP settlement check"]
+
+    CL --> GW
+    GW --> IDF
+    IDF -->|"key unseen"| PS
+    IDF -->|"key seen"| CL
+    PS --> PSP
+    PS --> LED
+    PSP -. "async events" .-> WH
+    WH --> LED
+    REC --> PSP
+    REC --> LED
+</pre>
+</div>
+<p>The idempotency filter sits <b>in front of</b> the payment service — a duplicate never reaches the charging logic at all. And note the belt-and-suspenders: a <code>UNIQUE</code> constraint on the key column in Postgres means even if Redis loses a key, the database refuses the second charge.</p>
+</section>
+
+<section class="block">
+<div class="eyebrow">4 · Component deep-dives</div>
+<h2>First charge vs retry</h2>
+<div class="mermaid-wrap">
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant F as Idempotency filter
+    participant P as Payment service
+    participant S as Card processor
+    participant L as Ledger
+    C->>F: POST /charges {key: k1, $19.99}
+    F->>F: k1 unseen
+    F->>P: forward
+    P->>S: authorize $19.99
+    S-->>P: approved (ch_8f2k)
+    P->>L: append charge + key k1
+    P->>F: store k1 → receipt
+    F-->>C: 200 charged (ch_8f2k)
+    Note over C,S: network retry — same key k1
+    C->>F: POST /charges {key: k1, $19.99}
+    F->>F: k1 seen → return stored receipt
+    F-->>C: 200 charged (ch_8f2k) — no new charge
+</pre>
+</div>
+<h3>The key lifecycle</h3>
+<div class="mermaid-wrap">
+<pre class="mermaid">
+flowchart TB
+    A["Client creates payment intent<br/>generates UUID key"] --> B["Send request with<br/>Idempotency-Key header"]
+    B --> C{"key in store?"}
+    C -->|"yes"| D["Return stored response<br/>200, no side effects"]
+    C -->|"no"| E["Reserve key: processing"]
+    E --> F["Charge via processor"]
+    F --> G["Append to ledger"]
+    G --> H["Store key → full response<br/>TTL 72h"]
+    H --> I["Return 200 to client"]
+    F -->|"timeout, unknown outcome"| J["Reconcile: query processor<br/>by key before deciding"]
+    J --> G
+</pre>
+</div>
+<details>
+<summary>Go deeper: the "unknown outcome" problem</summary>
+<p>The scariest moment in payments: you sent the charge to the processor and the response never came back. Did it charge or not? You cannot guess — guessing wrong double-charges or loses money. The correct move: query the processor for the charge <i>by your idempotency key</i> (processors support this), and only then decide. This is the distributed-systems "two generals" problem wearing a suit, and idempotency keys are the practical truce.</p>
+</details>
+<details>
+<summary>Go deeper: who generates the key?</summary>
+<p>The client — because the client owns the intent ("the user clicked Pay for cart #1234"). A good key is deterministic per intent, e.g. <code>user_88:cart_1234:attempt_1</code> or a UUID generated once when the checkout page loads. If the server generated it, a retry couldn't present the same key and the whole scheme collapses. Interviewers love this question — it's a one-sentence trap for memorized answers.</p>
+</details>
+</section>
+
+<section class="block">
+<div class="eyebrow">5 · API + data model</div>
+<h2>The contract</h2>
+<pre><code>POST /v1/charges
+Idempotency-Key: 7f3a9c2e-…          # required, client-generated
+{"amount": 1999, "currency": "usd", "payment_method": "pm_123"}
+→ 200 OK {"charge_id": "ch_8f2k", "status": "succeeded", "amount": 1999}
+
+# same key again → identical 200, no new charge
+POST /v1/charges/{id}/refunds {"amount": 1999}
+GET  /v1/charges/ch_8f2k</code></pre>
+<p><b>Data model:</b> <code>Charge {id, idempotency_key UNIQUE, amount, currency, status, processor_ref, created_at}</code> — the unique constraint is the last line of defense. <code>IdempotencyRecord {key, response_body, status_code, expires_at}</code> in Redis for the fast path. <code>LedgerEntry {id, charge_id, type: charge/refund, amount}</code>, append-only, immutable.</p>
+</section>
+
+<section class="block">
+<div class="eyebrow">6 · Trade-offs</div>
+<h2>What you give up, on purpose</h2>
+<table>
+<tr><th>Decision</th><th>Why</th><th>Cost</th></tr>
+<tr><td>Client-generated keys (required)</td><td>Only the client knows the intent</td><td>Clients must implement it correctly — SDKs help</td></tr>
+<tr><td>Redis fast path + DB unique constraint</td><td>Speed plus a backstop that can't be evicted</td><td>Two systems to keep consistent; DB is source of truth</td></tr>
+<tr><td>Store the full response, not just "seen"</td><td>Retry returns the identical receipt</td><td>More bytes per key — still trivial</td></tr>
+<tr><td>72h key TTL</td><td>Covers every realistic retry window</td><td>Edge-case duplicates after expiry — accepted, logged, refundable</td></tr>
+<tr><td>Processor as the money mover</td><td>PCI scope stays tiny</td><td>You're bounded by their latency and API</td></tr>
+</table>
+</section>
+
+<section class="block">
+<div class="eyebrow">7 · Failure modes</div>
+<h2>What breaks, and what saves you</h2>
+<ul class="tight">
+<li><b>Processor timeout, unknown outcome</b> → never guess; reconcile by idempotency key before deciding. This is the one that actually causes double-charges in the wild.</li>
+<li><b>Redis evicts a key early</b> → the Postgres <code>UNIQUE</code> constraint rejects the duplicate write. Defense in depth.</li>
+<li><b>Client reuses one key for two different carts</b> (client bug) → second request returns the <i>first</i> cart's receipt. Mitigate: keys should embed the intent (cart id); document it loudly.</li>
+<li><b>Double-click before first response</b> → both requests carry the same key (generated at page load); the "processing" reservation makes the second wait for the first.</li>
+<li><b>Webhook delivered twice</b> → webhook handler is idempotent too — event IDs deduped the same way.</li>
+</ul>
+</section>
+
+<section class="block">
+<div class="eyebrow">8 · What I'd actually build</div>
+<h2>Opinionated, concrete, shippable</h2>
+<p><b>API:</b> Node or Go service, <code>Idempotency-Key</code> header required on all mutating endpoints. <b>Dedupe:</b> Redis with 72h TTL in front, Postgres <code>UNIQUE(idempotency_key)</code> as the backstop. <b>Money:</b> Stripe as the processor — don't build card handling. <b>Ledger:</b> append-only Postgres table; daily reconciliation job against Stripe. <b>Webhooks:</b> outbox pattern, idempotent handlers. Two engineers, one month, and the demo below is the core loop.</p>
+</section>
+
+<section class="block">
+<div class="eyebrow">9 · Interview tips</div>
+<h2>How to run the room</h2>
+<ol class="tight">
+<li><b>Say "exactly-once effects, not exactly-once delivery" early.</b> It shows you know the theory and the practice.</li>
+<li>Draw the idempotency filter <i>before</i> the payment service in your diagram — placement is the insight.</li>
+<li>Name the DB unique constraint as defense in depth. Interviewers light up at backstops.</li>
+<li>Have the processor-timeout story ready — it's the hardest question and the most realistic failure.</li>
+<li>State who generates the key and why (the client owns the intent). It's a classic follow-up.</li>
+<li>End with the never-event framing: "double-charge isn't a metric we monitor, it's a property we guarantee."</li>
+</ol>
+</section>
+
+<section class="block">
+<div class="eyebrow">10 · Interactive widget</div>
+<h2>Idempotency demo — double-click all you want</h2>
+<p>A real idempotency filter running in this page. <b>Pay</b> creates a payment intent with a fresh key. <b>Retry</b> resends the <i>same</i> key — like a network retry or a double-click. <b>Triple-submit</b> fires three concurrent requests with one key. Watch the request log: retries return the stored receipt, and the ledger below records <b>exactly one charge per key</b>.</p>
+<div class="stat-row">
+<span class="stat">Cart total: <b>$19.99</b></span>
+<span class="stat">Last key: <span class="keytag" id="pay-lastkey">—</span></span>
+</div>
+<div>
+<button class="btn" id="btn-pay-new">💳 Pay $19.99 (new order)</button>
+<button class="btn ghost" id="btn-retry">↻ Retry last payment</button>
+<button class="btn warn" id="btn-triple">⚡ Triple-submit (double-click chaos)</button>
+<button class="btn danger" id="btn-nokey">☠️ Pay twice with NO key (the bad old way)</button>
+</div>
+<label class="check"><input type="checkbox" id="flaky-toggle" checked> Flaky network (random delays — retries arrive out of order)</label>
+<div class="stat-row">
+<span class="stat">Requests: <b id="pay-reqs">0</b></span>
+<span class="stat">Charged: <b id="pay-charged">0</b></span>
+<span class="stat">Deduped: <b id="pay-deduped">0</b></span>
+<span class="stat">Ledger total: <b id="pay-total">$0.00</b></span>
+</div>
+<div class="grid2">
+<div>
+<div class="eyebrow">Request log</div>
+<div class="log" id="pay-log" aria-live="polite"></div>
+</div>
+<div>
+<div class="eyebrow">Ledger — money actually moved</div>
+<div id="ledger"><p class="widget-note">No charges yet.</p></div>
+</div>
+</div>
+<p class="widget-note">The server logic is 6 lines: <code>if (store.has(key)) return store.get(key)</code> — check the key <i>before</i> touching money. Everything else in this article is making that check fast, durable, and impossible to skip.</p>
+<details>
+<summary>Go deeper: try the bad path, then read this</summary>
+<p>The "no key" button charged you twice for one cart — that's what the entire payments industry looked like before idempotency keys. Notice the failure needed no malice: just two requests and no serial number. Keys don't prevent duplicate <i>requests</i>; they make duplicate requests <i>harmless</i>. That distinction is the whole design.</p>
+</details>
+</section>
+
+<footer class="site-footer">
+<p class="footer-colophon">Built as a single self-contained file · diagrams render locally, no CDN</p>
+<div class="footer-band"><div class="footer-inner">
+<span class="footer-title">Design a payment system</span>
+<a href="#takeaway">back to the takeaway ↑</a>
+</div></div>
+</footer>
+</div>
+<div class="ver-badge">v2026.10.03-02</div>
+
+<script src="mermaid.min.js"></script>
+<script>
+mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{
+  primaryColor:'#FFFDF8',primaryBorderColor:'#166534',primaryTextColor:'#201E1A',
+  lineColor:'#201E1A',secondaryColor:'#F0E9DA',tertiaryColor:'#FAF7F1',
+  textColor:'#201E1A',background:'#FAF7F1',mainBkg:'#FFFDF8',nodeBorder:'#201E1A',
+  clusterBkg:'#F4EDDE',clusterBorder:'#DED5C3',edgeLabelBackground:'#FAF7F1',
+  actorBkg:'#FFFDF8',actorBorder:'#166534',actorTextColor:'#201E1A',actorLineColor:'#201E1A',
+  signalColor:'#201E1A',signalTextColor:'#201E1A',labelBoxBkgColor:'#FFFDF8',
+  labelBoxBorderColor:'#201E1A',labelTextColor:'#201E1A',loopTextColor:'#201E1A',
+  activationBkgColor:'#EFE6D2',activationBorderColor:'#201E1A',
+  noteBkgColor:'#FFFDF8',noteBorderColor:'#DED5C3',noteTextColor:'#201E1A',
+  fontFamily:'-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif',fontSize:'16px'
+}});
+</script>
+<script>
+(function(){
+"use strict";
+var AMOUNT=19.99;
+var store={};            // idempotency key -> receipt  (the "server")
+var ledger=[];           // charges actually made
+var lastKey=null, reqSeq=0, chargeSeq=0;
+var flaky=true;
+var logEl=document.getElementById("pay-log"), ledgerEl=document.getElementById("ledger");
+function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function rnd(a,b){return a+Math.random()*(b-a);}
+function uuid(){
+  return "xxxxxxxx-xxxx-4xxx".replace(/x/g,function(){return Math.floor(Math.random()*16).toString(16);});
+}
+function shortKey(k){return k.slice(0,8)+"…";}
+function updateStats(){
+  var deduped=0;
+  for(var i=0;i<reqLog.length;i++)if(reqLog[i].deduped)deduped++;
+  document.getElementById("pay-reqs").textContent=reqLog.length;
+  document.getElementById("pay-charged").textContent=ledger.length;
+  document.getElementById("pay-deduped").textContent=deduped;
+  var total=0;for(i=0;i<ledger.length;i++)total+=ledger[i].amount;
+  document.getElementById("pay-total").textContent="$"+total.toFixed(2);
+}
+var reqLog=[];
+function logReq(kind,key){
+  reqSeq++;
+  var entry={n:reqSeq,kind:kind,key:key,deduped:null,latency:null,el:null};
+  reqLog.push(entry);
+  var d=document.createElement("div");
+  d.innerHTML="<b>#"+reqSeq+"</b> "+esc(kind)+' · key <span class="keytag">'+esc(key?shortKey(key):"none")+'</span> · <span style="color:var(--muted)">in flight…</span>';
+  entry.el=d;
+  logEl.insertBefore(d,logEl.firstChild);
+  while(logEl.children.length>40)logEl.removeChild(logEl.lastChild);
+  return entry;
+}
+function finishReq(entry,deduped,chargeId,latency){
+  entry.deduped=deduped;entry.latency=latency;
+  var res=deduped?'<span class="dedup">200 deduped</span> — key seen, stored receipt returned'
+                 :'<span class="ok">200 charged</span> — new charge <b>'+esc(chargeId)+'</b>';
+  entry.el.innerHTML="<b>#"+entry.n+"</b> "+esc(entry.kind)+' · key <span class="keytag">'+esc(entry.key?shortKey(entry.key):"none")+"</span> · "+res+' <span style="color:var(--muted)">('+Math.round(latency)+'ms)</span>';
+  updateStats();
+}
+function renderLedger(){
+  if(!ledger.length){ledgerEl.innerHTML='<p class="widget-note">No charges yet.</p>';return;}
+  var html="";
+  for(var i=0;i<ledger.length;i++){
+    var c=ledger[i];
+    html+='<div class="charge">💰 <b>'+esc(c.id)+'</b> · $'+c.amount.toFixed(2)+
+      ' · key <span class="keytag">'+esc(shortKey(c.key))+'</span>'+
+      (c.noKey?' · <span class="bad">NO KEY — duplicate!</span>':"")+'</div>';
+  }
+  ledgerEl.innerHTML=html;
+}
+// ---- the "server": idempotency filter + charge ----
+function serverCharge(key,amount){
+  // THE six lines that matter:
+  if(key&&store[key]){return {deduped:true,receipt:store[key]};}
+  chargeSeq++;
+  var receipt={chargeId:"ch_"+("000"+chargeSeq).slice(-4),amount:amount,key:key||null,time:new Date().toLocaleTimeString()};
+  if(key)store[key]=receipt;   // remember the key -> response
+  ledger.push({id:receipt.chargeId,amount:amount,key:key||"(none)",noKey:!key});
+  renderLedger();
+  return {deduped:false,receipt:receipt};
+}
+function send(key,kind){
+  var entry=logReq(kind,key);
+  var t0=performance.now();
+  var delay=flaky?rnd(250,1600):rnd(60,200);
+  setTimeout(function(){
+    var r=serverCharge(key,AMOUNT);
+    finishReq(entry,r.deduped,r.receipt.chargeId,performance.now()-t0);
+  },delay);
+}
+document.getElementById("btn-pay-new").addEventListener("click",function(){
+  lastKey=uuid();
+  document.getElementById("pay-lastkey").textContent=shortKey(lastKey);
+  send(lastKey,"new payment");
+});
+document.getElementById("btn-retry").addEventListener("click",function(){
+  if(!lastKey){
+    var d=document.createElement("div");
+    d.innerHTML='<span style="color:var(--muted)">Pay first — there is no key to retry yet.</span>';
+    logEl.insertBefore(d,logEl.firstChild);
+    return;
+  }
+  send(lastKey,"retry (same key)");
+});
+document.getElementById("btn-triple").addEventListener("click",function(){
+  if(!lastKey){lastKey=uuid();document.getElementById("pay-lastkey").textContent=shortKey(lastKey);}
+  send(lastKey,"triple-submit 1/3");
+  send(lastKey,"triple-submit 2/3");
+  send(lastKey,"triple-submit 3/3");
+});
+document.getElementById("btn-nokey").addEventListener("click",function(){
+  send(null,"NO KEY — legacy client");
+  setTimeout(function(){send(null,"NO KEY — accidental resend");},flaky?400:120);
+});
+document.getElementById("flaky-toggle").addEventListener("change",function(e){flaky=e.target.checked;});
+renderLedger();updateStats();
+})();
+</script>
+</body>
+</html>

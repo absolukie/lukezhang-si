@@ -63,6 +63,20 @@ function notFound() {
   });
 }
 
+// Fetch a static asset by path, following the asset system's one-hop
+// canonicalization redirect (e.g. /sites/x/index.html → /sites/x/).
+async function fetchAsset(request, env, path) {
+  const url = new URL(request.url);
+  let res = await env.ASSETS.fetch(new Request(new URL(path, url), request));
+  if (res.status >= 300 && res.status < 400) {
+    const loc = res.headers.get("location");
+    if (loc) {
+      res = await env.ASSETS.fetch(new Request(new URL(loc, url), request));
+    }
+  }
+  return res;
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -79,7 +93,7 @@ export default {
       const segs = url.pathname.split("/").filter(Boolean);
       if (segs.length === 0) {
         // Hub landing page.
-        const landing = await env.ASSETS.fetch(new Request(new URL("/sites/index.html", url), request));
+        const landing = await fetchAsset(request, env, "/sites/index.html");
         return landing.status === 404 ? notFound() : landing;
       }
       site = segs[0].toLowerCase();
@@ -113,7 +127,7 @@ export default {
       return notFound();
     }
 
-    const res = await env.ASSETS.fetch(new Request(new URL(finalPath, url), request));
+    const res = await fetchAsset(request, env, finalPath);
     if (res.status === 404) return notFound();
     return res;
   },

@@ -21,6 +21,19 @@ project is ever needed per site (the account hit the 100-project soft cap).
   on this Workers project wrangler tries to upload it as a static asset and the
   build fails ("Uploading a Pages _worker.js file as an asset"). (Hit 2026-10-05,
   fixed by renaming to `worker.js`.)
+- **`wrangler.toml` must declare `binding = "ASSETS"` under `[assets]`.**
+  Without an explicit binding name, wrangler creates NO binding — `env.ASSETS`
+  is undefined and the worker throws 1101 on any asset fetch. (Hit 2026-10-05:
+  `/ergosphere/` 500'd while the main site worked, because static-first serving
+  masked the missing binding. Proven via minimal repro.)
+- **`wrangler.toml` must set `run_worker_first = true` under `[assets]`.**
+  Without it, static assets are served BEFORE the worker runs: host-based
+  routing never fires for `/` (the hub would show the cat site instead), and
+  `worker.js` itself is served publicly as an asset (source exposed — the
+  in-worker 404 block never executes). (Hit 2026-10-05: `/worker.js` returned
+  200 with the full source.)
+- The asset system 307-redirects `/x/index.html` → `/x/`; the worker's
+  `fetchAsset()` helper follows that one-hop redirect automatically.
 - The entrypoint lives inside the assets directory, so the router itself refuses
   to serve `/worker.js` (returns 404) — the source is never exposed.
 - Site files live in `sites/<name>/` (`index.html` required).

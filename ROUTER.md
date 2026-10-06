@@ -14,9 +14,15 @@ project is ever needed per site (the account hit the 100-project soft cap).
 
 ## How it works
 
-- `_worker.js` (repo root) is the Worker's entrypoint (Cloudflare Static Assets
-  convention). It routes by `Host` header and serves static files through the
-  automatic `env.ASSETS` binding.
+- `worker.js` (repo root) is the Worker's entrypoint, wired via `wrangler.toml`
+  (`main = "worker.js"`). It routes by `Host` header and serves static files
+  through the automatic `env.ASSETS` binding.
+- **Never name the entrypoint `_worker.js`.** That is a Pages-only convention —
+  on this Workers project wrangler tries to upload it as a static asset and the
+  build fails ("Uploading a Pages _worker.js file as an asset"). (Hit 2026-10-05,
+  fixed by renaming to `worker.js`.)
+- The entrypoint lives inside the assets directory, so the router itself refuses
+  to serve `/worker.js` (returns 404) — the source is never exposed.
 - Site files live in `sites/<name>/` (`index.html` required).
 - `lukezhang.si`, `www.lukezhang.si`, and every other host fall through to
   `env.ASSETS.fetch(request)` — byte-for-byte today's behavior. The router only
@@ -27,7 +33,7 @@ project is ever needed per site (the account hit the 100-project soft cap).
 ## Adding a new site
 
 1. Put the site's files in `sites/<name>/` with `index.html` at its root.
-2. Add `"<name>"` to the `SITES` array at the top of `_worker.js`.
+2. Add `"<name>"` to the `SITES` array at the top of `worker.js`.
 3. Fix the subpath gotcha (below).
 4. Push with `~/workspace/skills/github/bin/gh_push.py --repo lukezhang-si --dir <dir>`
    (additive — existing files are preserved). Verify via API read-back, then
@@ -66,8 +72,8 @@ On `lukezhang.si`: `/` (cat), `/blog/*`, `/design`, `/atlas`, `/draw`, `/polish`
 
 ## If something breaks
 
-The change is one additive file (`_worker.js`) plus new `sites/` folders; the
-default path is a pure passthrough. To roll back: Workers & Pages →
+The change is two additive files (`worker.js`, `wrangler.toml`) plus new `sites/`
+folders; the default path is a pure passthrough. To roll back: Workers & Pages →
 lukezhang-si → Deployments → roll back to the previous deployment.
 
 ## Limits (verified 2026-10-05)

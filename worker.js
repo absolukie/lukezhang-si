@@ -107,7 +107,9 @@ const SITES = ["leetcode-games", "ergosphere", "illusion-bowling", "shotgrep", "
   "spf-blog-post",
   "birds-of-a-feather",
   "unsolved-lab",
-  "second-brain-search"];
+  "second-brain-search",
+  "todo-1000",
+  "peggie-preview"];
 // Trade Compass: proxies Yahoo Finance quotes via v8 chart API.
 async function handleTradeCompassQuotes(request) {
   const url = new URL(request.url);

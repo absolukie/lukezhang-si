@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#f6dbe8">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Peggie">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Peggie — a kitten's dream</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+
+  <!-- HUD: balls (big), depth, enemy HP bar. Nothing else. -->
+  <div id="hud" class="hidden">
+    <div class="hud-left">
+      <div id="hud-level">DEPTH 1</div>
+      <div id="hud-balls">🧶×9</div>
+      <div id="hud-treats">🐟 0</div>
+      <div id="hud-orange" class="hidden"></div>
+    </div>
+    <div class="hud-right">
+      <button id="hud-sound" aria-label="toggle sound">🔊</button>
+    </div>
+  </div>
+
+  <!-- enemy HP plate floats above the canvas enemy -->
+  <div id="enemy" class="hidden">
+    <div id="enemy-name"></div>
+    <div id="enemy-hpbar"><div id="enemy-hp-fill"></div></div>
+    <div id="enemy-tell"></div>
+  </div>
+
+  <div id="fade"></div>
+  <div id="hint" class="hidden"></div>
+  <div id="feat" class="hidden"><div id="feat-name"></div><div id="feat-sub"></div></div>
+
+  <!-- chapter / boss banner -->
+  <div id="boss-banner" class="hidden">
+    <div id="boss-banner-icon"></div>
+    <div id="boss-banner-name"></div>
+    <div id="boss-banner-sub"></div>
+  </div>
+
+  <!-- menu: New Run / Continue / mute only -->
+  <div class="overlay" id="menu">
+    <div class="home-art" aria-hidden="true">
+      <div class="home-kitten">
+        <div class="hk-ear l"></div>
+        <div class="hk-ear r"></div>
+        <div class="hk-face">
+          <div class="hk-eye l"></div>
+          <div class="hk-eye r"></div>
+          <div class="hk-blush l"></div>
+          <div class="hk-blush r"></div>
+          <div class="hk-nose"></div>
+          <div class="hk-mouth"></div>
+        </div>
+      </div>
+      <div class="home-yarn"><div class="hy-ball"></div><div class="hy-string"></div></div>
+    </div>
+    <div class="title">PEGGIE</div>
+    <div class="tagline">a kitten's dream, one bounce at a time</div>
+    <button class="big-btn primary" id="btn-newrun">✨ New Run</button>
+    <button class="big-btn" id="btn-continue" style="display:none">📖 Continue</button>
+    <div id="run-best"></div>
+    <div id="menu-global" class="hint"></div>
+    <button class="ghost-btn" id="btn-menu-sound">🔊 sound on</button>
+    <div id="ver">v1.4.5-pounce</div>
+  </div>
+
+  <!-- saga map: a bottom-up branching DAG (Candy-Crush climb) — tap a glowing node -->
+  <div class="overlay hidden" id="map">
+    <div id="map-title">CHOOSE YOUR PATH</div>
+    <div id="map-stats"></div>
+    <div id="map-track-wrap"><div id="map-track"></div></div>
+    <div class="hint">tap a glowing node to choose</div>
+  </div>
+
+  <!-- upgrade: exactly one offer — the card itself is the button -->
+  <div class="overlay hidden" id="upgrade">
+    <div id="upgrade-title">CHOOSE AN UPGRADE</div>
+    <div id="upgrade-owned"></div>
+    <div id="upgrade-single"></div>
+    <button class="skip-link" id="btn-skip">skip →</button>
+  </div>
+
+  <!-- shop: spend treats, no fighting -->
+  <div class="overlay hidden" id="shop">
+    <div id="shop-title">🏪 KITTEN SHOP</div>
+    <div id="shop-sub">spend treats — no fighting here</div>
+    <div id="shop-treats"></div>
+    <div id="shop-grid"></div>
+    <button class="big-btn primary" id="btn-leave">leave shop →</button>
+  </div>
+
+  <!-- fail / death -->
+  <div class="overlay hidden" id="result">
+    <div id="result-title"></div>
+    <div id="result-sub"></div>
+    <div id="result-score"></div>
+    <div id="result-stats" class="hidden"></div>
+    <div id="result-best"></div>
+    <div class="btn-row">
+      <button class="big-btn primary" id="btn-retry"></button>
+      <button class="big-btn" id="btn-giveup" style="display:none"></button>
+      <button class="big-btn" id="btn-next" style="display:none"></button>
+      <button class="ghost-btn" id="btn-menu" style="display:none">menu</button>
+    </div>
+  </div>
+
+  <!-- victory -->
+  <div class="overlay hidden" id="victory">
+    <div id="victory-title">STORY COMPLETE</div>
+    <div id="victory-stats"></div>
+    <div class="btn-row">
+      <button class="big-btn primary" id="btn-again">✨ New Run</button>
+      <button class="ghost-btn" id="btn-vmenu">menu</button>
+    </div>
+  </div>
+
+  <!-- AD_STUB: rewarded-ad placeholder -->
+  <div class="overlay hidden" id="adstub">
+    <div style="font-size:64px">📺</div>
+    <div class="title" style="font-size:40px">AD BREAK</div>
+    <p class="hint">Rewarded ads plug in here — have this one on us 🐾</p>
+    <button class="big-btn primary" id="btn-ad-done">Continue</button>
+  </div>
+</div>
+<script src="game.js"></script>
+<script>
+// Dev mode: ?dev=1 loads dev.js (jump-anywhere testing). Inert otherwise.
+if (/([?#&])dev=1\b/.test(location.search + location.hash)) {
+  var ds = document.createElement("script");
+  ds.src = "dev.js";
+  document.head.appendChild(ds);
+}
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("sw.js").then(function () {
+      // When a new service worker takes control, reload once so the player
+      // is always on the latest build — no more stale-version limbo.
+      // (Guarded to once per tab session; first install fires no event.)
+      navigator.serviceWorker.addEventListener("controllerchange", function () {
+        try {
+          if (sessionStorage.getItem("peggie-swr") === "1") return;
+          sessionStorage.setItem("peggie-swr", "1");
+        } catch (e) { return; }
+        window.location.reload();
+      });
+    }).catch(function () {});
+  });
+}
+</script>
+</body>
+</html>

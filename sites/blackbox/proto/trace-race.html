@@ -37,6 +37,7 @@
   #status{flex:1 1 auto;font-size:15px;font-weight:600;color:#c9c9dd;line-height:1.4;}
   #status .big{font-size:26px;font-weight:800;color:var(--cyan);}
   #status .quip{color:var(--magenta);font-weight:700;}
+  #status .vsline{display:block;margin-top:2px;font-size:12px;color:#8a8aa5;font-weight:600;}
   button{
     touch-action:manipulation;
     font-family:inherit;font-size:15px;font-weight:700;
@@ -67,11 +68,6 @@
   #resTotal b{color:var(--cyan);font-size:34px;}
   #newBest{font-size:15px;font-weight:800;color:var(--magenta);
     text-shadow:0 0 14px rgba(255,79,216,.6);}
-  #resRows{display:flex;flex-direction:column;gap:6px;min-width:230px;}
-  .rrow{display:flex;justify-content:space-between;font-size:14px;color:#c9c9dd;
-    background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
-    border-radius:10px;padding:8px 14px;}
-  .rrow b{color:var(--cyan);}
   #challengeLbl{font-size:14px;color:var(--magenta);font-weight:700;letter-spacing:1px;}
   #friendBtn{margin-top:4px;}
   #shareRow{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;margin-top:6px;}
@@ -120,17 +116,15 @@
   <h1 id="resTitle">DONE</h1>
   <div id="resTotal"></div>
   <div id="newBest" class="hidden">NEW BEST!</div>
-  <div id="resRows"></div>
-  <div class="bestline" id="resBest"></div>
+  <div id="boardWrap" class="hidden">
+    <div class="boardTitle">LEADERBOARD &middot; <span id="boardChallenge"></span></div>
+    <div id="boardRows"></div>
+  </div>
   <div id="shareRow">
     <input id="nameInput" maxlength="16" placeholder="Your name" autocomplete="off" autocapitalize="words">
     <button id="postBtn" class="primary">Post score</button>
   </div>
   <div class="bestline" id="postMsg"></div>
-  <div id="boardWrap" class="hidden">
-    <div class="boardTitle">LEADERBOARD &middot; <span id="boardChallenge"></span></div>
-    <div id="boardRows"></div>
-  </div>
   <div class="rowbtns">
     <button id="shareBtn">Share this race</button>
     <button id="againBtn" class="primary">Play again</button>
@@ -556,6 +550,12 @@ function challengeURL(id){
   if(id.charAt(0) === 'd') return base + '?d=' + id.slice(1);
   return base + '?c=' + id.slice(1);
 }
+// Bump when the shape pool changes: old leaderboard entries used different shapes,
+// so each pool version gets its own board.
+var POOL_V = 2;
+function apiChallenge(){
+  return CH.id + 'p' + POOL_V;
+}
 var CH = getChallenge();
 function challengeLabel(){
   if(CH.kind === 'daily'){
@@ -634,11 +634,45 @@ function startGame(){
   game.roundIdx = 0;
   game.total = 0;
   game.scores = [];
+  game.drawings = [];
   game.posted = false;
   game.myId = null;
+  game.revealStep = 'you';
+  game.rival = null;
   titleEl.classList.add('hidden');
   resultsEl.classList.add('hidden');
+  fetchRival();
   startRound();
+}
+
+/* Fetch the top entries (with drawings) so each round can show a rival. */
+function fetchRival(){
+  fetch(API + '/rival?challenge=' + encodeURIComponent(apiChallenge()))
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(!d || !d.top || !d.top.length) return;
+      var me = playerName();
+      var pick = null;
+      for(var i = 0; i < d.top.length; i++){
+        var t = d.top[i];
+        if(t.drawings && t.drawings.length === 5){ pick = t; break; }
+      }
+      if(pick && me && pick.name === me && d.top.length > 1){
+        for(var j = 0; j < d.top.length; j++){
+          var t2 = d.top[j];
+          if(t2.drawings && t2.drawings.length === 5 && t2.name !== me){ pick = t2; break; }
+        }
+      }
+      if(pick) game.rival = pick;
+    })
+    .catch(function(){});
+}
+
+function rivalForRound(){
+  var r = game.rival;
+  if(!r || !r.drawings || r.drawings.length !== 5) return null;
+  if(typeof r.scores[game.roundIdx] !== 'number') return null;
+  return r;
 }
 
 function layoutTarget(){
@@ -647,6 +681,23 @@ function layoutTarget(){
   var mapped = game.design.map(function(p){ return [cxp + p[0] * s, cyp - p[1] * s]; });
   game.targetPx = resampleClosed(mapped, N);
   game.targetN = normalize(game.targetPx);
+  // px extent + centroid, so a rival's normalized drawing maps back to this canvas
+  var minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity, cx = 0, cy = 0, i;
+  for(i = 0; i < N; i++){
+    var p = game.targetPx[i];
+    if(p[0] < minx) minx = p[0]; if(p[0] > maxx) maxx = p[0];
+    if(p[1] < miny) miny = p[1]; if(p[1] > maxy) maxy = p[1];
+    cx += p[0]; cy += p[1];
+  }
+  game.pxExtent = Math.max(maxx - minx, maxy - miny) || 1;
+  game.pxC = [cx / N, cy / N];
+}
+
+function rivalToPx(npts){
+  var out = [], i;
+  for(i = 0; i < npts.length; i++)
+    out.push([game.pxC[0] + npts[i][0] * game.pxExtent, game.pxC[1] + npts[i][1] * game.pxExtent]);
+  return out;
 }
 
 function startRound(){
@@ -679,14 +730,50 @@ function lockInStroke(){
   game.lastScore = score;
   game.total += score;
   game.scores.push({ label: game.shapeLabel, score: score });
+  // normalized 64-pt drawing, stored for rival replays
+  var normed = normalize(resampleClosed(game.raw, N));
+  var small = [], di;
+  for(di = 0; di < N; di += 4)
+    small.push([+normed[di][0].toFixed(4), +normed[di][1].toFixed(4)]);
+  game.drawings.push(small);
   game.phase = 'reveal';
+  game.revealStep = 'you';
+  game.rivalPx = null;
   totalLbl.innerHTML = '<b>' + game.total + '</b> pts';
-  statusEl.innerHTML = '<span class="big">' + score + '</span> <span class="quip">' + quip(score) + '</span>';
+  showYourReveal();
+}
+
+function showYourReveal(){
+  game.revealStep = 'you';
+  statusEl.innerHTML = '<span class="big">' + game.lastScore + '</span> <span class="quip">' + quip(game.lastScore) + '</span>';
+  nextBtn.textContent = rivalForRound() ? 'See rival →'
+    : (game.roundIdx === 4 ? 'See results →' : 'Next shape →');
+  nextBtn.classList.remove('hidden');
+}
+
+function showRivalReveal(){
+  var r = rivalForRound();
+  if(!r){ advanceRound(); return; }
+  game.revealStep = 'rival';
+  game.rivalPx = rivalToPx(r.drawings[game.roundIdx]);
+  var rs = r.scores[game.roundIdx], mine = game.lastScore;
+  var line = mine > rs ? 'You beat ' + escHtml(r.name) + '!'
+    : mine < rs ? escHtml(r.name) + ' beat you.' : 'Dead even.';
+  statusEl.innerHTML = '<span class="big">' + rs + '</span> <span class="quip">' + escHtml(r.name) + '</span>' +
+    '<br><span class="vsline">you: ' + mine + ' · ' + line + '</span>';
   nextBtn.textContent = (game.roundIdx === 4) ? 'See results →' : 'Next shape →';
   nextBtn.classList.remove('hidden');
 }
 
-function nextRound(){
+function onNext(){
+  if(game.phase === 'reveal' && game.revealStep === 'you' && rivalForRound()){
+    showRivalReveal();
+    return;
+  }
+  advanceRound();
+}
+
+function advanceRound(){
   game.roundIdx++;
   if(game.roundIdx >= 5) showResults();
   else startRound();
@@ -698,15 +785,6 @@ function showResults(){
   if(isBest){ game.best = game.total; saveBest(game.total); }
   document.getElementById('resTotal').innerHTML = '<b>' + game.total + '</b> / 500';
   document.getElementById('newBest').classList.toggle('hidden', !isBest);
-  var rows = document.getElementById('resRows');
-  rows.innerHTML = '';
-  game.scores.forEach(function(r){
-    var d = document.createElement('div');
-    d.className = 'rrow';
-    d.innerHTML = '<span>' + r.label + '</span><b>' + r.score + '</b>';
-    rows.appendChild(d);
-  });
-  document.getElementById('resBest').innerHTML = 'best: <b>' + game.best + '</b> / 500';
   // reset the share/post UI, then pull the shared board
   document.getElementById('postBtn').disabled = false;
   document.getElementById('postMsg').textContent = '';
@@ -761,10 +839,11 @@ async function postScore(){
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        challenge: CH.id,
+        challenge: apiChallenge(),
         name: name,
         total: game.total,
-        scores: game.scores.map(function(s){ return s.score; })
+        scores: game.scores.map(function(s){ return s.score; }),
+        drawings: game.drawings
       })
     });
     if(res.status === 429){ msg.textContent = 'Slow down — try again in a bit.'; return; }
@@ -782,7 +861,7 @@ async function postScore(){
 async function loadBoard(){
   var wrap = document.getElementById('boardWrap');
   try{
-    var res = await fetch(API + '/scores?challenge=' + encodeURIComponent(CH.id));
+    var res = await fetch(API + '/scores?challenge=' + encodeURIComponent(apiChallenge()));
     if(!res.ok) return;
     var data = await res.json();
     renderBoard(data);
@@ -813,15 +892,6 @@ function renderBoard(data){
       escHtml(s.name) + sub + '</span><b>' + s.total + '</b>';
     rows.appendChild(d);
   });
-  if(rb.length === 5 && game.scores.length === 5){
-    var cmp = document.createElement('div');
-    cmp.className = 'brow';
-    var parts = [], k2;
-    for(k2 = 0; k2 < 5; k2++) parts.push(game.scores[k2].score + '/' + rb[k2]);
-    cmp.innerHTML = '<span class="rk">YOU</span><span>you vs best<span class="vs">' +
-      escHtml(parts.join(' · ')) + '</span></span><b></b>';
-    rows.appendChild(cmp);
-  }
 }
 
 /* ---------- canvas ---------- */
@@ -868,7 +938,20 @@ function frame(now){
       strokePath(game.raw, false);
       ctx.shadowBlur = 0;
     }
-    if(game.phase === 'reveal'){
+    if(game.phase === 'reveal' && game.revealStep === 'rival' && game.rivalPx){
+      // rival's drawing: magenta vs the ghost, yours kept faint underneath
+      var drawn2 = resampleClosed(game.raw, N);
+      ctx.strokeStyle = 'rgba(0,229,255,0.28)';
+      ctx.lineWidth = 2;
+      strokePath(drawn2, true);
+      ctx.strokeStyle = 'rgba(255,46,136,0.95)';
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = '#ff2e88';
+      ctx.shadowBlur = 10;
+      strokePath(game.rivalPx, true);
+      ctx.shadowBlur = 0;
+    }
+    else if(game.phase === 'reveal'){
       var drawn = resampleClosed(game.raw, N);
       ctx.strokeStyle = 'rgba(0,229,255,0.95)';
       ctx.lineWidth = 2.5;
@@ -941,7 +1024,7 @@ document.addEventListener('touchmove', function(e){
 
 document.getElementById('startBtn').addEventListener('click', startGame);
 document.getElementById('againBtn').addEventListener('click', startGame);
-nextBtn.addEventListener('click', nextRound);
+nextBtn.addEventListener('click', onNext);
 document.getElementById('postBtn').addEventListener('click', postScore);
 document.getElementById('shareBtn').addEventListener('click', function(){
   var msg = document.getElementById('postMsg');
@@ -973,8 +1056,12 @@ window.__test = {
   lastRMS: function(){ return game.lastRMS; },
   lastScore: function(){ return game.lastScore; },
   scores: function(){ return game.scores.map(function(s){ return s.score; }); },
-  next: function(){ nextRound(); },
+  next: function(){ onNext(); },
   challenge: function(){ return CH.id; },
+  apiChallenge: function(){ return apiChallenge(); },
+  revealStep: function(){ return game.revealStep; },
+  setRival: function(r){ game.rival = r; },
+  drawings: function(){ return game.drawings; },
   order: function(){ return game.order.slice(); },
   challengeURL: function(id){ return challengeURL(id); },
   targetClient: function(){

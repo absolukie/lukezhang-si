@@ -62,14 +62,14 @@
   </a>
 
   <h2>1. The bug</h2>
-  <p>Jonas Javier <a href="https://dev.to/jonasjavier/how-i-built-a-black-hole-in-webgl-2gc1">wrote it up</a> while building his own black hole for the web: give the disk realistic spin and "within minutes the disk turned into concentric rings thinner than a pixel." The inner part of the disk orbits faster than the outer part, so any pattern on it gets stretched into thinner and thinner streaks until they blur into perfect rings. Graphics programmers add extra code specifically to kill this.</p>
+  <p>Jonas Javier <a href="https://dev.to/jonasjavier/how-i-built-a-black-hole-in-webgl-2gc1">wrote it up</a> while building his own black hole for the web: give the disk realistic spin and "within minutes the disk turned into concentric rings thinner than a pixel." The inner part of the disk orbits faster than the outer part, so any pattern on it gets stretched into thinner and thinner streaks until they blur into perfect rings. Graphics programmers add extra code specifically to kill this. Their loss.</p>
   <p>Real science pictures don't look like this either. NASA's famous black hole renders show the gas churned into <strong>spiral light-and-dark lanes</strong>: streaky, not grooved. The black hole in Interstellar is smooth, fading from hot to cool colors. The vinyl-record look is pure style. Which is exactly why it belongs on my page.</p>
 
   <h2>2. How the disk actually moves</h2>
   <p>The one thing worth getting right is the spin. A real black hole disk doesn't spin like a record. The inner edge orbits way faster than the outer edge. There's a physics rule (Kepler's third law) that says orbit speed drops off as <code>r^(-3/2)</code>, so the code draws the disk's pattern in <strong>coordinates that spin along with the gas itself</strong>:</p>
   <pre><code>angle = atan(z, x) - t * OMEGA(r)
 OMEGA(r) = OMEGA_IN * (rIn / r)^1.5</code></pre>
-  <p>Each ring of the disk effectively has its own clock. The pattern is also stretched so it keeps the same look at every distance, from the blazing inner edge to the faint outer edge. Get this wrong and the disk looks like a spinning sticker; get it right and it feels like orbiting gas even before you add any detail.</p>
+  <p>Each ring of the disk effectively has its own clock. The pattern is also stretched so it keeps the same look at every distance, from the blazing inner edge to the faint outer edge. Get this wrong and the disk looks like a spinning sticker; get it right and it feels like orbiting gas even before you add any detail. Nobody wants a spinning sticker. Stickers are for laptops.</p>
   <p>One catch: perfectly round bands can't show spin at all. They look the same from every angle by design. So the disk also has <strong>bright knots and spiral streaks</strong> that move with the spinning gas. Those are what your eye actually follows as the inner disk laps the outer.</p>
 
   <h2>3. The trick that keeps it spinning forever</h2>
@@ -77,12 +77,12 @@ OMEGA(r) = OMEGA_IN * (rIn / r)^1.5</code></pre>
   <ul>
     <li>Draw <strong>two copies</strong> of the disk pattern, half a cycle apart (my cycle is 20 seconds).</li>
     <li><strong>Cross-fade</strong> between them with a smooth sine-squared blend.</li>
-    <li>Each layer fades to exactly <strong>zero</strong> right when its clock resets, so the restart is invisible.</li>
+    <li>Each layer fades to exactly <strong>zero</strong> right when its clock resets, so the restart is invisible. The disk spins forever with no loading screen. Take notes, YouTube.</li>
   </ul>
   <p>Total twist never builds up past one 20-second cycle, so the bands stay crisp forever. A separate shimmer layer runs on the <strong>real</strong> clock (not each layer's own clock), which glues the two layers together during the fade instead of showing the seam.</p>
 
   <h2>4. The step bug that deleted the sky</h2>
-  <p>The nastiest bug in the whole build wasn't in how things looked. It was in the structure. The renderer draws the scene by walking light rays forward in fixed steps (<code>dt = 0.14</code>), 96 steps max, covering about 13 units. But the default camera sits 20+ units out. Rays aimed above the shadow <strong>ran out of steps</strong> while looping around the photon sphere (the zone where light itself orbits the hole). Never caught, never crossing the disk, just giving up. The arcs of bent light above the shadow, the signature Interstellar look, were never drawn at all. The disk looked like a separate lump floating under the shadow.</p>
+  <p>The nastiest bug in the whole build wasn't in how things looked. It was in the structure. The renderer draws the scene by walking light rays forward in fixed steps (<code>dt = 0.14</code>), 96 steps max, covering about 13 units. But the default camera sits 20+ units out. Rays aimed above the shadow <strong>ran out of steps</strong> while looping around the photon sphere (the zone where light itself orbits the hole). Never caught, never crossing the disk, just giving up. The arcs of bent light above the shadow, the signature Interstellar look, were never drawn at all. My black hole had a blind spot exactly where its best feature should be. The disk looked like a separate lump floating under the shadow.</p>
   <p>The fix is <strong>steps that adapt</strong>: <code>dt = clamp(0.09 * r, 0.035, 0.9)</code>. Long strides cover the empty far regions where gravity barely matters; tiny steps handle the intense light-bending near the hole. Same number of steps, but now the bent rays finish their journey, and the arcs appeared. Lesson: when your lighting looks wrong, check whether your rays are even finishing the trip.</p>
 
   <h2>5. The hidden seam in the texture</h2>
@@ -93,7 +93,7 @@ OMEGA(r) = OMEGA_IN * (rIn / r)^1.5</code></pre>
   <ul>
     <li><strong>Heat colors:</strong> white-hot inner edge <code>(1.00, 0.96, 0.88)</code> cooling through vivid amber to deep red-orange at the outer edge.</li>
     <li><strong>Doppler beaming:</strong> the side of the disk spinning toward you gets boosted by roughly <code>pow(g, 3)</code>: more than twice as bright, glowing hot amber-white against the far side's deep red ember. This is real physics, and it's the biggest reason it reads as a black hole. (Careful: push the tint too blue and the whole disk goes pastel. I learned that one the ugly way.)</li>
-    <li><strong>Thin photon ring:</strong> a tight glow hugging the shadow's edge, bright but narrow. A thick one looks like a glowing donut.</li>
+    <li><strong>Thin photon ring:</strong> a tight glow hugging the shadow's edge, bright but narrow. A thick one looks like a glowing donut, and nobody is afraid of a donut.</li>
   </ul>
 
   <h2>7. What the math gives you for free</h2>
@@ -106,7 +106,7 @@ OMEGA(r) = OMEGA_IN * (rIn / r)^1.5</code></pre>
     <li><a href="https://www.shadertoy.com/view/ltBGWh">Koiava's Shadertoy black hole</a> and <a href="https://github.com/sirxemic/Interstellar">sirxemic/Interstellar</a>: more stylized versions worth studying.</li>
     <li>NASA Goddard / Jeremy Schnittman's visualizations: the science reference for what a real disk looks like (streaky lanes, not grooves).</li>
   </ul>
-  <p>The bigger lesson: sometimes the bug <em>is</em> the look. The difference between a bug and a style is whether you understand it well enough to control it.</p>
+  <p>The bigger lesson: sometimes the bug <em>is</em> the look. The difference between a bug and a style is whether you understand it well enough to control it. Bugs you understand are called features. Bugs you understand <em>and</em> like are called style.</p>
 
   <footer>Built with <a href="https://projects.lukezhang.si/ergosphere/">Ergosphere</a> · <a href="/blog/">more posts</a></footer>
 </div>

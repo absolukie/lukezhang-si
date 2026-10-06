@@ -18,7 +18,7 @@
  * to SITES below, push. See ROUTER.md.
  */
 
-const SITES = ["ergosphere", "illusion-bowling", "shotgrep"];
+const SITES = ["ergosphere", "illusion-bowling", "shotgrep", "ui-candy"];
 const PROJECTS_HOST = "projects.lukezhang.si";
 const SITE_HOST_RE = /^([a-z0-9-]+)\.lukezhang\.si$/;
 

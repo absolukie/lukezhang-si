@@ -24,7 +24,10 @@ const SITES = ["ergosphere", "illusion-bowling", "shotgrep", "ui-candy", "takes"
   "swipe-cards-yes-no",
   "notes-triage-oct-5",
   "comparison-slider",
-  "ab-toggle"];
+  "ab-toggle",
+  "hairball",
+  "peggie",
+  "get-clocked"];
 const PROJECTS_HOST = "projects.lukezhang.si";
 const SITE_HOST_RE = /^([a-z0-9-]+)\.lukezhang\.si$/;
 

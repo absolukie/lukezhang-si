@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Peggie Level Lab</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; font-family: -apple-system, system-ui, sans-serif; background: #14101d; color: #f2ecff; }
+  header { position: sticky; top: 0; z-index: 5; background: #1d1629ee; backdrop-filter: blur(8px);
+    padding: 12px 16px; border-bottom: 1px solid #ffffff18; }
+  header h1 { margin: 0; font-size: 18px; }
+  header p { margin: 2px 0 0; font-size: 12px; color: #b9aee0; }
+  main { padding: 12px 12px 48px; max-width: 720px; margin: 0 auto; }
+  .card { background: #1e1730; border: 1px solid #ffffff14; border-radius: 14px; padding: 14px; margin-bottom: 14px; }
+  .card h3 { margin: 0 0 10px; font-size: 14px; color: #d9ccff; text-transform: uppercase; letter-spacing: .06em; }
+  .row-flex { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+  label.lbl { font-size: 13px; color: #b9aee0; min-width: 86px; }
+  output.val { font-size: 13px; color: #fff; min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+  input[type=range] { flex: 1; min-width: 120px; accent-color: #c77dff; }
+  input[type=number] { width: 90px; font-size: 16px; padding: 8px; border-radius: 10px; border: 1px solid #ffffff2a;
+    background: #120d1c; color: #fff; }
+  .seg { display: flex; background: #120d1c; border-radius: 12px; padding: 3px; gap: 3px; }
+  .seg button { flex: 1; border: 0; border-radius: 9px; padding: 9px 4px; font-size: 13px; font-weight: 700;
+    background: transparent; color: #b9aee0; }
+  .seg button.on[data-band=EASY] { background: #4dffa6; color: #08240f; }
+  .seg button.on[data-band=MEDIUM] { background: #ffd166; color: #2e1f00; }
+  .seg button.on[data-band=HARD] { background: #ff6b81; color: #2e000a; }
+  .seg button.on[data-band=ALL] { background: #c77dff; color: #1c0b2e; }
+  .btn { border: 0; border-radius: 12px; padding: 12px 16px; font-size: 15px; font-weight: 700; cursor: pointer; }
+  .btn.primary { background: #c77dff; color: #1c0b2e; flex: 1; }
+  .btn.ghost { background: #ffffff14; color: #f2ecff; }
+  .btnrow { display: flex; gap: 10px; margin-top: 4px; }
+  h2.band { font-size: 15px; margin: 18px 4px 8px; letter-spacing: .08em; }
+  h2.band .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
+  .dot.easy { background: #4dffa6; } .dot.medium { background: #ffd166; } .dot.hard { background: #ff6b81; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .bcard { background: #1e1730; border: 1px solid #ffffff14; border-radius: 14px; overflow: hidden; }
+  .bcard canvas { width: 100%; display: block; background: #0f0b18; }
+  .bcard .meta { padding: 8px 10px 10px; font-size: 12px; }
+  .bcard .meta .score { font-size: 15px; font-weight: 800; }
+  .bcard .meta .sub { color: #b9aee0; margin-top: 2px; line-height: 1.45; }
+  .bcard .meta .seedline { color: #8f86ad; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .pill { display: inline-block; font-size: 10px; font-weight: 800; border-radius: 20px; padding: 2px 8px; margin-left: 6px;
+    vertical-align: 1px; }
+  .pill.easy { background: #4dffa633; color: #4dffa6; }
+  .pill.medium { background: #ffd16633; color: #ffd166; }
+  .pill.hard { background: #ff6b8133; color: #ff6b81; }
+  .pill.fallback { background: #ffffff22; color: #cfc8ea; }
+  #single canvas { width: 100%; max-width: 420px; display: block; margin: 0 auto; background: #0f0b18; border-radius: 14px; }
+  #single .meta { text-align: center; margin-top: 10px; font-size: 14px; }
+  .note { font-size: 12px; color: #8f86ad; line-height: 1.6; }
+  .spinner { text-align: center; padding: 24px; color: #b9aee0; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎡 Peggie Level Lab</h1>
+  <p>Procedural boards, measured difficulty. Tap any board for a big view.</p>
+</header>
+<main>
+  <section class="card" id="controls">
+    <h3>Generate</h3>
+    <div class="row-flex">
+      <label class="lbl">Band</label>
+      <div class="seg" id="bandseg" style="flex:1">
+        <button data-band="EASY">Easy</button>
+        <button data-band="MEDIUM" class="on">Medium</button>
+        <button data-band="HARD">Hard</button>
+        <button data-band="ALL">All</button>
+      </div>
+    </div>
+    <div class="row-flex">
+      <label class="lbl">Seed</label>
+      <input type="number" id="seed" value="42" min="1">
+      <button class="btn ghost" id="dice" style="padding:10px 14px">🎲</button>
+    </div>
+    <div class="row-flex"><label class="lbl">Oranges</label>
+      <input type="range" id="oranges" min="3" max="8" step="1" value="5"><output class="val" id="orangesv">5</output></div>
+    <div class="row-flex"><label class="lbl">Greens</label>
+      <input type="range" id="greens" min="0" max="5" step="1" value="3"><output class="val" id="greensv">3</output></div>
+    <div class="row-flex"><label class="lbl">Spacing</label>
+      <input type="range" id="spacing" min="0.85" max="1.3" step="0.01" value="1.02"><output class="val" id="spacingv">1.02</output></div>
+    <div class="row-flex"><label class="lbl">Shape mix</label>
+      <div class="seg" id="jitterseg" style="flex:1">
+        <button data-j="0">Classic</button>
+        <button data-j="1" class="on">Varied</button>
+        <button data-j="2">Wild</button>
+      </div>
+    </div>
+    <div class="btnrow">
+      <button class="btn primary" id="gen6">Generate gallery</button>
+      <button class="btn ghost" id="gen1">1 board</button>
+    </div>
+  </section>
+
+  <section id="single" hidden>
+    <canvas id="singlecanvas" width="360" height="420"></canvas>
+    <div class="meta" id="singlemeta"></div>
+    <div class="btnrow" style="max-width:420px;margin:10px auto 0">
+      <button class="btn ghost" id="back">← Gallery</button>
+      <button class="btn primary" id="regen">Regenerate</button>
+    </div>
+  </section>
+
+  <section id="gallery">
+    <div id="sec-easy"><h2 class="band"><span class="dot easy"></span>EASY <span class="note">· clears in &lt;10.5 balls</span></h2><div class="grid" id="row-easy"></div></div>
+    <div id="sec-medium"><h2 class="band"><span class="dot medium"></span>MEDIUM <span class="note">· 10.5–14 balls</span></h2><div class="grid" id="row-medium"></div></div>
+    <div id="sec-hard"><h2 class="band"><span class="dot hard"></span>HARD <span class="note">· &gt;14 balls</span></h2><div class="grid" id="row-hard"></div></div>
+  </section>
+
+  <section class="card"><h3>How the score works</h3>
+    <p class="note">Score = <b>expected balls to clear every orange</b>, measured by simulating
+    64 full attempts with the game's real ball physics — a mix of random aim and a greedy
+    "aim at the orange cluster" player. Plain balls only (no bucket refunds, powers, or
+    Dream Burst), so it's conservative. Bands were calibrated from today's boards:
+    the depth-1 heart scores ~8–10, typical normals ~11–13, elites ~15+.</p>
+  </section>
+</main>
+<script src="game.js"></script>
+<script>
+"use strict";
+var S = Peggie.sim;
+var COLORS = { blue: "#6fb7e8", orange: "#f4842c", green: "#4dffa6", purple: "#c77dff", junk: "#5a5470" };
+var CROP_TOP = 120, CROP_H = 560; // board region of the 480x800 design space
+
+function drawBoard(canvas, pegs) {
+  var sx = canvas.width / 480, sy = canvas.height / CROP_H;
+  var ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (var i = 0; i < pegs.length; i++) {
+    var p = pegs[i];
+    ctx.beginPath();
+    ctx.arc(p.x * sx, (p.y - CROP_TOP) * sy, Math.max(2.2, p.r * sx), 0, 6.3);
+    ctx.fillStyle = COLORS[p.type] || COLORS.blue;
+    ctx.fill();
+  }
+}
+
+function specFromUI(band, seed) {
+  var o = +document.getElementById("oranges").value;
+  var g = +document.getElementById("greens").value;
+  var sp = +document.getElementById("spacing").value;
+  var j = document.querySelector("#jitterseg button.on").dataset.j;
+  var spec = {
+    band: band, seed: seed, depth: 5, tries: 40, trials: 48,
+    oranges: [Math.max(3, o - 1), Math.min(8, o + 1)],
+    greens: [Math.max(0, g - 1), Math.min(5, g + 1)],
+    spacing: [Math.max(0.85, sp - 0.05), Math.min(1.3, sp + 0.05)],
+  };
+  if (j === "0") spec.jitter = false;
+  if (j === "2") spec.wild = true;
+  return spec;
+}
+
+function genOne(band, seed) {
+  var spec = specFromUI(band, seed);
+  if (spec.wild) {
+    // wild: all 10 shapes in the pool (incl. hex + moon) + stronger jitter
+    spec.shapes = S.recipes.map(function (r) { return r.name; });
+    spec.scaleRange = [0.9, 1.12];
+  }
+  return S.generateBoard(spec);
+}
+
+function pillFor(res) {
+  var b = S.bandOf(res.score.expectedBalls);
+  var cls = b.toLowerCase();
+  var h = '<span class="pill ' + cls + '">' + b + "</span>";
+  if (res.fallback) h += '<span class="pill fallback">≈ closest</span>';
+  return h;
+}
+
+function cardHTML(res, seed) {
+  var c = res.candidate;
+  return '<div class="bcard" data-seed="' + seed + '" data-band="' + res.band + '">' +
+    '<canvas width="240" height="280"></canvas>' +
+    '<div class="meta"><span class="score">' + res.score.expectedBalls.toFixed(1) + "</span> balls" +
+    pillFor(res) +
+    '<div class="sub">' + escapeHtml(c.recipe.name) + " · " + c.oranges + "🟠 " + c.greens + "🟢 · sp " +
+    c.spacing.toFixed(2) + "<br>clear @" + "9 balls: " + Math.round(res.score.clearProb * 100) + "%</div>" +
+    '<div class="seedline">seed ' + seed + " · " + res.tries + " tries</div></div></div>";
+}
+
+function escapeHtml(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+function currentBand() { return document.querySelector("#bandseg button.on").dataset.band; }
+
+function renderGallery() {
+  var band = currentBand();
+  var seed = +document.getElementById("seed").value || 1;
+  var bands = band === "ALL" ? ["EASY", "MEDIUM", "HARD"] : [band];
+  ["EASY", "MEDIUM", "HARD"].forEach(function (b) {
+    document.getElementById("sec-" + b.toLowerCase()).hidden = bands.indexOf(b) < 0;
+  });
+  var jobs = [];
+  bands.forEach(function (b) {
+    for (var k = 0; k < 6; k++) jobs.push({ band: b, seed: seed * 100 + k * 17 + (b === "EASY" ? 1 : b === "MEDIUM" ? 2 : 3) });
+  });
+  var rows = { EASY: document.getElementById("row-easy"), MEDIUM: document.getElementById("row-medium"), HARD: document.getElementById("row-hard") };
+  bands.forEach(function (b) { rows[b].innerHTML = '<div class="spinner">generating…</div>'; });
+  var i = 0;
+  function step() {
+    var end = Math.min(jobs.length, i + 2);
+    for (; i < end; i++) {
+      var j = jobs[i];
+      var res = genOne(j.band, j.seed);
+      var row = rows[j.band];
+      if (row.querySelector(".spinner")) row.innerHTML = "";
+      var div = document.createElement("div");
+      div.innerHTML = cardHTML(res, j.seed);
+      var card = div.firstChild;
+      row.appendChild(card);
+      drawBoard(card.querySelector("canvas"), res.pegs);
+      (function (c2, res2) {
+        c2.addEventListener("click", function () { showSingle(+c2.dataset.seed, c2.dataset.band, res2); });
+      })(card, res);
+    }
+    if (i < jobs.length) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+var lastSingle = null;
+function showSingle(seed, band, res) {
+  res = res || genOne(band, seed);
+  lastSingle = { seed: seed, band: band };
+  document.getElementById("gallery").hidden = true;
+  document.getElementById("controls").hidden = true;
+  var sec = document.getElementById("single");
+  sec.hidden = false;
+  drawBoard(document.getElementById("singlecanvas"), res.pegs);
+  var c = res.candidate;
+  document.getElementById("singlemeta").innerHTML =
+    '<span class="score" style="font-size:20px;font-weight:800">' + res.score.expectedBalls.toFixed(1) + "</span> balls " +
+    pillFor(res) + "<br><span class='note'>" + escapeHtml(c.recipe.name) + " · seed " + seed +
+    " · " + c.oranges + " oranges, " + c.greens + " greens, spacing " + c.spacing.toFixed(2) +
+    "<br>clear probability: " + Math.round(res.score.clearProb * 100) + "% · " + res.tries + " tries</span>";
+  window.scrollTo(0, 0);
+}
+function backToGallery() {
+  document.getElementById("single").hidden = true;
+  document.getElementById("gallery").hidden = false;
+  document.getElementById("controls").hidden = false;
+}
+
+// wire controls
+document.querySelectorAll("#bandseg button").forEach(function (b) {
+  b.addEventListener("click", function () {
+    document.querySelectorAll("#bandseg button").forEach(function (x) { x.classList.remove("on"); });
+    b.classList.add("on");
+  });
+});
+document.querySelectorAll("#jitterseg button").forEach(function (b) {
+  b.addEventListener("click", function () {
+    document.querySelectorAll("#jitterseg button").forEach(function (x) { x.classList.remove("on"); });
+    b.classList.add("on");
+  });
+});
+[["oranges", "orangesv"], ["greens", "greensv"], ["spacing", "spacingv"]].forEach(function (pair) {
+  var el = document.getElementById(pair[0]);
+  el.addEventListener("input", function () { document.getElementById(pair[1]).textContent = el.value; });
+});
+document.getElementById("dice").addEventListener("click", function () {
+  document.getElementById("seed").value = 1 + Math.floor(Math.random() * 9999);
+});
+document.getElementById("gen6").addEventListener("click", function () { backToGallery(); renderGallery(); });
+document.getElementById("gen1").addEventListener("click", function () {
+  showSingle(+document.getElementById("seed").value || 1, currentBand() === "ALL" ? "MEDIUM" : currentBand());
+});
+document.getElementById("back").addEventListener("click", backToGallery);
+document.getElementById("regen").addEventListener("click", function () {
+  if (lastSingle) showSingle(lastSingle.seed + 1, lastSingle.band);
+});
+
+// deep link: ?seed=42&band=HARD renders one big board (for screenshots/sharing)
+(function () {
+  var q = {};
+  location.search.replace(/^\?/, "").split("&").forEach(function (kv) {
+    var p = kv.split("="); if (p[0]) q[p[0]] = decodeURIComponent(p[1] || "");
+  });
+  if (q.seed) {
+    var band = (q.band || "MEDIUM").toUpperCase();
+    showSingle(+q.seed, band);
+  } else {
+    renderGallery();
+  }
+})();
+</script>
+</body>
+</html>

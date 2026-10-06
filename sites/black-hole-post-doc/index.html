@@ -70,7 +70,17 @@
   #btnCopy { background: rgba(232,161,92,0.14); color: #ffd9a8; }
   #btnSubmit { background: #e8a15c; color: #241610; border-color: #e8a15c; }
   #btnCopy:active, #btnSubmit:active { transform: scale(0.98); }
-  .saved { font-size: 12px; color: rgba(243,226,205,0.4); text-align: center; margin-top: 10px; }
+  .savepill { flex: 0 0 auto; display: flex; align-items: center; font-size: 12px;
+    color: rgba(243,226,205,0.6); white-space: nowrap; padding: 0 2px; }
+  .savepill .dot { width: 7px; height: 7px; border-radius: 50%; background: #7fd08a; margin-right: 6px; flex: 0 0 auto; }
+  .savepill.saving .dot { background: #e8a15c; animation: pulse 0.8s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.3; } }
+  #btnSubmit .spin { display: inline-block; width: 16px; height: 16px; flex: 0 0 auto;
+    border: 2px solid rgba(36,22,16,0.35); border-top-color: #241610; border-radius: 50%;
+    animation: rot 0.7s linear infinite; vertical-align: -3px; margin-right: 8px; }
+  @keyframes rot { to { transform: rotate(360deg); } }
+  #btnSubmit:disabled { opacity: 0.8; }
+  #btnSubmit:disabled:active { transform: none; }
   #toast { position: fixed; left: 50%; transform: translateX(-50%) translateY(20px);
     bottom: calc(96px + env(safe-area-inset-bottom)); z-index: 60;
     background: #e8a15c; color: #241610; font-weight: 700; font-size: 15px;
@@ -93,10 +103,10 @@
   <p class="meta-line">October 5, 2026 · webgl · shaders</p>
   <p class="sub">Tap through the post paragraph by paragraph: pick the wording you want, or write your own. Read the live post <a href="https://lukezhang.si/blog/black-hole-disk-animation/">here</a>. Everything autosaves.</p>
   <div id="cards"></div>
-  <p class="saved" id="savedLine">All changes saved on this device.</p>
   <p class="done">That's the whole post. Hit Copy or Submit below.</p>
 </div>
 <div class="footer">
+  <div class="savepill" id="savePill" role="status"><span class="dot"></span><span id="saveTxt">Saved</span></div>
   <button id="btnCopy" type="button">Copy answers</button>
   <button id="btnSubmit" type="button">Submit</button>
 </div>
@@ -233,12 +243,20 @@ try {
   if (raw) state = Object.assign(state, JSON.parse(raw));
 } catch (e) {}
 let saveT = null;
+function setSaveState(mode) {
+  const pill = document.getElementById("savePill");
+  const txt = document.getElementById("saveTxt");
+  if (!pill || !txt) return;
+  pill.classList.toggle("saving", mode === "saving");
+  txt.textContent = mode === "saving" ? "Saving…" :
+    "Saved " + new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
 function save() {
+  setSaveState("saving");
   clearTimeout(saveT);
   saveT = setTimeout(() => {
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
-    const el = document.getElementById("savedLine");
-    if (el) el.textContent = "All changes saved on this device · " + new Date().toLocaleTimeString();
+    setSaveState("saved");
   }, 250);
 }
 
@@ -357,6 +375,11 @@ document.getElementById("btnCopy").addEventListener("click", async () => {
   toast("✓ Answers copied");
 });
 document.getElementById("btnSubmit").addEventListener("click", async () => {
+  const btn = document.getElementById("btnSubmit");
+  if (btn.disabled) return;
+  btn.disabled = true;
+  const orig = btn.innerHTML;
+  btn.innerHTML = '<span class="spin"></span>Submitting…';
   const payload = { slug: SLUG, picks: state.picks, notes: state.notes, final: state.final, otherNotes: state.otherNotes };
   try {
     const r = await fetch("/api/decision/submit", {
@@ -369,6 +392,8 @@ document.getElementById("btnSubmit").addEventListener("click", async () => {
   } catch (e) {
     toast("Submit failed, try again");
   }
+  btn.disabled = false;
+  btn.innerHTML = orig;
 });
 </script>
 </body>

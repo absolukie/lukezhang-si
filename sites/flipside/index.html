@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Flipside — rotational ambigram studio</title>
+<meta name="description" content="Flipside is a rotational ambigram design studio. Type a word, flip it 180°, overlay the rotated copy, nudge letters until both readings click.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;700&family=Unbounded:wght@700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b0b0d; --panel:#131316; --panel2:#17171b; --line:rgba(255,255,255,.09);
+  --ink:#f2f0ea; --mut:#9a97a3; --acc:#d7ff3e; --acc-ink:#0b0b0d;
+  --acc-dim:rgba(215,255,62,.13); --danger:#ff6b6b;
+  --r:16px;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html{-webkit-text-size-adjust:100%;}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"Space Grotesk",system-ui,-apple-system,sans-serif;
+  font-size:16px; line-height:1.5;
+  min-height:100dvh;
+}
+button{touch-action:manipulation; font:inherit; color:inherit; cursor:pointer;}
+input{touch-action:manipulation;}
+.wrap{max-width:620px; margin:0 auto; padding:20px 16px 64px;}
+
+/* header */
+.top{padding:26px 4px 18px; text-align:center;}
+.wordmark{
+  font-family:"Archivo Black",sans-serif; font-size:clamp(40px,11vw,64px);
+  letter-spacing:.04em; line-height:1; margin:0;
+}
+.wordmark .s{color:var(--acc);}
+.tag{color:var(--mut); margin:8px 0 0; font-size:14px; letter-spacing:.28em; text-transform:uppercase;}
+.tag b{color:var(--ink); font-weight:500;}
+
+/* stage */
+.stage-wrap{position:relative; margin:6px 0 18px;}
+#stage{
+  display:block; width:100%; aspect-ratio:1/1; max-height:70vw;
+  background:
+    radial-gradient(120% 120% at 50% 0%, rgba(215,255,62,.05), transparent 55%),
+    #0e0e11;
+  border:1px solid var(--line); border-radius:var(--r);
+  touch-action:manipulation; cursor:crosshair;
+}
+.stage-hint{
+  position:absolute; left:0; right:0; bottom:10px; text-align:center;
+  color:var(--mut); font-size:12px; letter-spacing:.08em; pointer-events:none;
+  text-transform:uppercase;
+}
+
+/* panels */
+.panel{
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--r);
+  padding:16px; margin:0 0 14px;
+}
+.panel > h2{
+  font-family:"Archivo Black",sans-serif; font-size:13px; letter-spacing:.22em;
+  text-transform:uppercase; color:var(--mut); margin:0 0 12px; font-weight:400;
+}
+.panel > h2 .micro{letter-spacing:.02em; text-transform:none; font-family:"Space Grotesk",sans-serif; font-size:12px;}
+.micro{color:var(--mut); font-size:13px; margin:10px 0 0;}
+.row{display:flex; gap:10px; align-items:center;}
+.row.wrap{flex-wrap:wrap;}
+
+/* word input */
+.fld{display:block; margin-bottom:12px;}
+.fld > span{display:block; font-size:13px; letter-spacing:.18em; text-transform:uppercase; color:var(--mut); margin-bottom:8px;}
+.wordrow{display:flex; gap:10px;}
+#word{
+  flex:1; min-width:0; font-size:18px; padding:14px 16px;
+  background:var(--panel2); border:1px solid var(--line); border-radius:12px; color:var(--ink);
+  outline:none;
+}
+#word:focus{border-color:var(--acc);}
+#caseBtn{
+  flex:0 0 auto; padding:0 18px; border-radius:12px; border:1px solid var(--line);
+  background:var(--panel2); font-weight:700; letter-spacing:.06em; min-height:52px;
+}
+#caseBtn.on{background:var(--acc-dim); border-color:var(--acc); color:var(--acc);}
+
+/* sliders */
+input[type=range]{width:100%; accent-color:var(--acc); height:32px; font-size:16px;}
+.sl-row{display:grid; grid-template-columns:1fr auto; gap:4px 12px; align-items:center; margin-top:6px;}
+.sl-row label{font-size:14px; color:var(--mut);}
+.sl-row output{font-variant-numeric:tabular-nums; color:var(--ink); font-size:14px;}
+
+/* buttons */
+.btn{
+  border:1px solid var(--line); background:var(--panel2); color:var(--ink);
+  border-radius:12px; padding:13px 16px; font-weight:500; min-height:50px;
+  display:inline-flex; align-items:center; justify-content:center; gap:10px;
+  transition:transform .06s ease, background .15s ease, border-color .15s ease;
+}
+.btn:active{transform:scale(.97);}
+.btn.big{
+  width:100%; background:var(--acc); border-color:var(--acc); color:var(--acc-ink);
+  font-family:"Archivo Black",sans-serif; font-size:18px; letter-spacing:.06em;
+  padding:18px; border-radius:var(--r);
+}
+.btn.ghost{background:transparent;}
+.btn.toggle.on{background:var(--acc-dim); border-color:var(--acc); color:var(--acc);}
+.btn svg{width:22px; height:22px; flex:0 0 auto;}
+.chips{display:flex; flex-wrap:wrap; gap:8px;}
+.chips .btn{padding:10px 16px; min-height:46px; font-size:15px;}
+.chips .btn.on{background:var(--acc); border-color:var(--acc); color:var(--acc-ink); font-weight:700;}
+
+/* nudge pad */
+.nudge{
+  display:grid; grid-template-columns:repeat(3,64px); grid-template-rows:repeat(3,56px);
+  gap:8px; justify-content:center; margin:12px 0;
+}
+.nudge .btn{padding:0; min-height:0;}
+.nudge .btn svg{width:20px; height:20px;}
+.nudge .mid{
+  display:flex; align-items:center; justify-content:center;
+  color:var(--mut); font-size:12px; letter-spacing:.1em; text-transform:uppercase;
+}
+.stepper{display:flex; gap:10px; align-items:center; justify-content:center; margin-bottom:4px;}
+.stepper .btn{width:56px; padding:0; font-size:24px; line-height:1;}
+#selLabel{
+  min-width:120px; text-align:center; font-family:"Archivo Black",sans-serif;
+  font-size:20px; letter-spacing:.04em;
+}
+#selLabel small{display:block; font-family:"Space Grotesk",sans-serif; font-size:11px; color:var(--mut); letter-spacing:.2em;}
+
+/* gallery */
+.gallery{display:flex; flex-wrap:wrap; gap:8px;}
+.gchip{
+  border:1px solid var(--line); background:var(--panel2); border-radius:999px;
+  padding:10px 18px; font-size:16px; font-weight:700; letter-spacing:.03em; min-height:48px;
+}
+.gchip small{color:var(--mut); font-weight:400; margin-left:6px; font-size:13px;}
+.gchip:active{background:var(--acc-dim); border-color:var(--acc);}
+
+/* about */
+.about{padding:8px 4px 0; color:var(--mut); font-size:14px;}
+.about h2{
+  font-family:"Archivo Black",sans-serif; font-size:13px; letter-spacing:.22em;
+  text-transform:uppercase; color:var(--ink); margin:18px 0 8px; font-weight:400;
+}
+.about p{margin:0 0 10px;}
+.about b{color:var(--ink); font-weight:500;}
+.ver{color:var(--mut); font-size:12px; text-align:center; margin-top:28px; letter-spacing:.14em; text-transform:uppercase;}
+
+@media (min-width:640px){
+  #stage{max-height:560px;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <h1 class="wordmark">FLIP<span class="s">SIDE</span></h1>
+    <p class="tag">rotational <b>ambigram</b> studio</p>
+  </header>
+
+  <section class="stage-wrap">
+    <canvas id="stage" aria-label="ambigram canvas"></canvas>
+    <div class="stage-hint">tap a letter to select it</div>
+  </section>
+
+  <section class="panel">
+    <label class="fld" for="word"><span>Your word</span></label>
+    <div class="wordrow">
+      <input id="word" type="text" value="swims" maxlength="14" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="word to ambigram">
+      <button id="caseBtn" class="on" aria-pressed="false" title="toggle uppercase">abc</button>
+    </div>
+    <div class="sl-row">
+      <label for="tracking">Letter spacing</label><output id="trackingOut">4%</output>
+      <input id="tracking" type="range" min="0" max="30" value="4" step="1" style="grid-column:1/-1">
+    </div>
+    <div style="height:12px"></div>
+    <button id="flipBtn" class="btn big">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+      <span id="flipLabel">FLIP 180°</span>
+    </button>
+    <p class="micro">Spin the word upside down to read the other side. Real ambigrams read both ways.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Overlay</h2>
+    <div class="row">
+      <button id="overlayBtn" class="btn toggle" aria-pressed="false" style="flex:1">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3" y="3" width="13" height="13" rx="2"/><rect x="8" y="8" width="13" height="13" rx="2"/></svg>
+        Overlay
+      </button>
+    </div>
+    <div class="sl-row">
+      <label for="alpha">Rotated copy opacity</label><output id="alphaOut">45%</output>
+      <input id="alpha" type="range" min="5" max="100" value="45" step="1" style="grid-column:1/-1">
+    </div>
+    <p class="micro">Superimpose the word with its 180° twin — the actual sketch technique ambigram artists use.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Guides</h2>
+    <div class="chips">
+      <button id="gCenter" class="btn toggle on" aria-pressed="true">Center lines</button>
+      <button id="gPivot" class="btn toggle on" aria-pressed="true">Pivot</button>
+      <button id="gGrid" class="btn toggle" aria-pressed="false">Grid</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Typeface</h2>
+    <div class="chips" id="faces">
+      <button class="btn on" data-face="archivo">Archivo</button>
+      <button class="btn" data-face="grotesk">Grotesk</button>
+      <button class="btn" data-face="unbound">Unbound</button>
+    </div>
+    <p class="micro">Heavy geometric faces read best upside down. Dots on i's drop below the line when flipped — artists usually redraw them.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Tweak letters</h2>
+    <div class="stepper">
+      <button id="prevL" class="btn" aria-label="previous letter">‹</button>
+      <div id="selLabel">—<small>NO LETTER</small></div>
+      <button id="nextL" class="btn" aria-label="next letter">›</button>
+    </div>
+    <div class="nudge" role="group" aria-label="nudge selected letter">
+      <span></span>
+      <button id="nUp" class="btn" aria-label="nudge up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg></button>
+      <span></span>
+      <button id="nLeft" class="btn" aria-label="nudge left"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg></button>
+      <div class="mid">nudge</div>
+      <button id="nRight" class="btn" aria-label="nudge right"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></button>
+      <span></span>
+      <button id="nDown" class="btn" aria-label="nudge down"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M19 12l-7 7-7-7"/></svg></button>
+      <span></span>
+    </div>
+    <div class="sl-row">
+      <label for="rot">Rotate letter</label><output id="rotOut">0°</output>
+      <input id="rot" type="range" min="-45" max="45" value="0" step="1" style="grid-column:1/-1">
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="resetL" class="btn ghost" style="flex:1">Reset letter</button>
+      <button id="resetAll" class="btn ghost" style="flex:1">Reset all</button>
+    </div>
+    <p class="micro">Tap a letter on the canvas (or step with ‹ ›), then nudge and rotate it. Arrow keys work too.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Gallery <span class="micro">— verified rotational ambigrams</span></h2>
+    <div class="gallery" id="gallery"></div>
+    <p class="micro">Every word here genuinely reads upside down — hand-checked letter by letter. "bud" didn't make the cut: flipped, it reads "pnq".</p>
+  </section>
+
+  <section class="panel">
+    <button id="dlBtn" class="btn big ghost" style="background:transparent; color:var(--ink); border:1px solid var(--line)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+      DOWNLOAD PNG
+    </button>
+    <p class="micro">Exports your current view at 2048px, guides hidden.</p>
+  </section>
+
+  <section class="about">
+    <h2>What is this</h2>
+    <p>A <b>rotational ambigram</b> reads as one word right-side up and another — or the same — word rotated 180°. "swims" upside down is still "swims". "wow" upside down reads "mom".</p>
+    <h2>Honest disclaimer</h2>
+    <p>This is a <b>design playground, not a generator</b>. No algorithm truly invents ambigrams — they're hand-crafted, letter by letter. That's exactly what the tools here are for: flip to preview, overlay at low opacity to sketch, nudge and rotate letters until both readings click. The gallery words are natural ambigrams that already work; use them as starting points.</p>
+    <h2>How to read one</h2>
+    <p>Type any word and hit <b>FLIP 180°</b>. Watch what each letter becomes: d↔p, n↔u, m↔w, b↔q, while o, s, x, z, l, i stay themselves. Words built from those pairs are where ambigrams hide.</p>
+  </section>
+
+  <div class="ver">flipside · v1.0</div>
+</div>
+<script>
+'use strict';
+/* ============================== state ============================== */
+const S = {
+  word: 'swims',
+  upper: false,
+  face: 'archivo',
+  tracking: 0.04,
+  tweaks: new Map(),
+  flip: 0,
+  flipping: false,
+  overlay: false,
+  alpha: 0.45,
+  guides: { center: true, grid: false, pivot: true },
+  sel: -1,
+};
+
+const FACES = {
+  archivo: { css: '"Archivo Black","Arial Black",sans-serif', weight: 400 },
+  grotesk: { css: '"Space Grotesk",sans-serif',                weight: 700 },
+  unbound: { css: '"Unbounded",sans-serif',                    weight: 800 },
+};
+
+const GALLERY = [
+  { w: 'swims' }, { w: 'dollop' }, { w: 'NOON', upper: true },
+  { w: 'pod' }, { w: 'suns' }, { w: 'dip' }, { w: 'mow' },
+  { w: 'lol' }, { w: 'solos' }, { w: 'sos' }, { w: 'sis' },
+  { w: 'un' }, { w: 'nu' }, { w: 'wim' }, { w: 'OXO', upper: true },
+  { w: 'wow', flip: 'mom' }, { w: 'pip', flip: 'did' }, { w: 'uns', flip: 'sun' },
+];
+
+/* ============================== canvas ============================== */
+const stage = document.getElementById('stage');
+const ctx = stage.getContext('2d');
+let cssSize = 0;
+let lastLayout = null;
+
+const ACC = '#d7ff3e', INK = '#f2f0ea';
+
+function effWord() { return S.upper ? S.word.toUpperCase() : S.word; }
+function fontOf(px) { const f = FACES[S.face]; return f.weight + ' ' + px + 'px ' + f.css; }
+
+function fit() {
+  const r = stage.getBoundingClientRect();
+  cssSize = Math.max(240, Math.min(r.width, 560));
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  stage.width = Math.round(cssSize * dpr);
+  stage.height = Math.round(cssSize * dpr);
+  stage.style.height = cssSize + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function measureWord(px) {
+  ctx.font = fontOf(px);
+  const word = effWord() || ' ';
+  const positions = [];
+  let x = 0;
+  const tr = S.tracking * px;
+  for (const ch of word) {
+    const w = ctx.measureText(ch).width;
+    positions.push({ ch, x, w });
+    x += w + tr;
+  }
+  return { positions, totalW: Math.max(x - tr, 1) };
+}
+
+function rr(c, x, y, w, h, r) {
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+  c.closePath();
+}
+
+function drawWord(c, L, x0, cy, px, alpha, forExport) {
+  c.save();
+  c.globalAlpha = alpha;
+  c.font = fontOf(px);
+  c.textAlign = 'left';
+  c.textBaseline = 'middle';
+  c.fillStyle = INK;
+  L.positions.forEach((p, i) => {
+    const t = S.tweaks.get(i) || { dx: 0, dy: 0, rot: 0 };
+    const bx = x0 + p.x;
+    c.save();
+    c.translate(bx + p.w / 2 + t.dx, cy + t.dy);
+    c.rotate(t.rot * Math.PI / 180);
+    c.fillText(p.ch, -p.w / 2, 0);
+    c.restore();
+    if (!forExport && i === S.sel) {
+      c.save();
+      c.strokeStyle = ACC;
+      c.lineWidth = Math.max(2, px * 0.022);
+      rr(c, bx - 5 + t.dx, cy - px * 0.66 + t.dy, p.w + 10, px * 1.32, 9);
+      c.stroke();
+      c.restore();
+    }
+  });
+  c.restore();
+}
+
+function drawScene(c, size, forExport) {
+  c.clearRect(0, 0, size, size);
+  const cx = size / 2, cy = size / 2;
+
+  const probe = measureWord(100);
+  let px = 100 * (size * 0.84) / probe.totalW;
+  px = Math.min(px, size * 0.40);
+  const L = measureWord(px);
+  const x0 = cx - L.totalW / 2;
+  lastLayout = { positions: L.positions, x0, cy, px, size };
+
+  if (!forExport && S.guides.grid) {
+    c.save();
+    c.strokeStyle = 'rgba(255,255,255,0.055)';
+    c.lineWidth = 1;
+    const step = size / 10;
+    c.beginPath();
+    for (let i = 1; i < 10; i++) {
+      c.moveTo(i * step, 0); c.lineTo(i * step, size);
+      c.moveTo(0, i * step); c.lineTo(size, i * step);
+    }
+    c.stroke();
+    c.restore();
+  }
+
+  const word = effWord();
+  c.save();
+  c.translate(cx, cy); c.rotate(S.flip); c.translate(-cx, -cy);
+  if (word) {
+    drawWord(c, L, x0, cy, px, 1, forExport);
+    if (S.overlay) {
+      c.save();
+      c.translate(cx, cy); c.rotate(Math.PI); c.translate(-cx, -cy);
+      drawWord(c, L, x0, cy, px, S.alpha, forExport);
+      c.restore();
+    }
+  } else if (!forExport) {
+    c.save();
+    c.globalAlpha = 0.14;
+    c.font = fontOf(px * 0.5);
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillStyle = INK;
+    c.fillText('type a word', cx, cy);
+    c.restore();
+  }
+  c.restore();
+
+  if (!forExport) {
+    if (S.guides.center) {
+      c.save();
+      c.strokeStyle = 'rgba(215,255,62,0.30)';
+      c.lineWidth = 1;
+      c.setLineDash([7, 7]);
+      c.beginPath();
+      c.moveTo(cx, 0); c.lineTo(cx, size);
+      c.moveTo(0, cy); c.lineTo(size, cy);
+      c.stroke();
+      c.restore();
+    }
+    if (S.guides.pivot) {
+      c.save();
+      c.strokeStyle = ACC;
+      c.lineWidth = 2;
+      const r = Math.max(10, size * 0.022);
+      c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.stroke();
+      c.beginPath();
+      c.moveTo(cx - r - 7, cy); c.lineTo(cx - r + 3, cy);
+      c.moveTo(cx + r - 3, cy); c.lineTo(cx + r + 7, cy);
+      c.moveTo(cx, cy - r - 7); c.lineTo(cx, cy - r + 3);
+      c.moveTo(cx, cy + r - 3); c.lineTo(cx, cy + r + 7);
+      c.stroke();
+      c.restore();
+    }
+  }
+}
+
+function render() { drawScene(ctx, cssSize, false); }
+
+/* ============================== flip animation ============================== */
+function easeInOut(k) { return k < 0.5 ? 4*k*k*k : 1 - Math.pow(-2*k + 2, 3) / 2; }
+
+function doFlip() {
+  if (S.flipping) return;
+  S.flipping = true;
+  const from = S.flip, to = S.flip + Math.PI;
+  const t0 = performance.now(), dur = 900;
+  (function frame(t) {
+    const k = Math.min(1, (t - t0) / dur);
+    S.flip = from + (to - from) * easeInOut(k);
+    render();
+    if (k < 1) requestAnimationFrame(frame);
+    else {
+      S.flip = to % (Math.PI * 2);
+      S.flipping = false;
+      render();
+    }
+  })(t0);
+}
+
+/* ============================== selection & nudge ============================== */
+const selLabel = document.getElementById('selLabel');
+function tweakOf(i) {
+  let t = S.tweaks.get(i);
+  if (!t) { t = { dx: 0, dy: 0, rot: 0 }; S.tweaks.set(i, t); }
+  return t;
+}
+function refreshSelUI() {
+  const word = effWord();
+  if (S.sel >= 0 && S.sel < word.length) {
+    selLabel.textContent = '';
+    const big = document.createElement('span'); big.textContent = word[S.sel];
+    const sm = document.createElement('small');
+    sm.textContent = 'LETTER ' + (S.sel + 1) + ' / ' + word.length;
+    selLabel.appendChild(big); selLabel.appendChild(sm);
+    const t = S.tweaks.get(S.sel) || { rot: 0 };
+    document.getElementById('rot').value = t.rot;
+    document.getElementById('rotOut').textContent = t.rot + '°';
+  } else {
+    selLabel.innerHTML = '—<small>NO LETTER</small>';
+  }
+}
+function select(i) {
+  const n = effWord().length;
+  S.sel = (i >= 0 && i < n) ? i : -1;
+  refreshSelUI();
+  render();
+}
+stage.addEventListener('pointerdown', (e) => {
+  if (!lastLayout || S.flipping) return;
+  const r = stage.getBoundingClientRect();
+  const sc = cssSize / r.width;
+  const qx = (e.clientX - r.left) * sc, qy = (e.clientY - r.top) * sc;
+  const dx = qx - cssSize / 2, dy = qy - cssSize / 2;
+  const a = -S.flip;
+  const ix = dx * Math.cos(a) - dy * Math.sin(a) + cssSize / 2;
+  const iy = dx * Math.sin(a) + dy * Math.cos(a) + cssSize / 2;
+  const pos = lastLayout.positions, x0 = lastLayout.x0, cy = lastLayout.cy, fpx = lastLayout.px;
+  let hit = -1;
+  pos.forEach((p, i) => {
+    const t = S.tweaks.get(i) || { dx: 0, dy: 0 };
+    const bx = x0 + p.x + t.dx, by = cy + t.dy;
+    if (ix >= bx - 8 && ix <= bx + p.w + 8 && Math.abs(iy - by) < fpx * 0.75) hit = i;
+  });
+  select(hit);
+});
+
+function nudge(dx, dy) {
+  if (S.sel < 0) return;
+  const t = tweakOf(S.sel);
+  t.dx += dx; t.dy += dy;
+  render();
+}
+document.getElementById('nUp').addEventListener('click', () => nudge(0, -3));
+document.getElementById('nDown').addEventListener('click', () => nudge(0, 3));
+document.getElementById('nLeft').addEventListener('click', () => nudge(-3, 0));
+document.getElementById('nRight').addEventListener('click', () => nudge(3, 0));
+document.getElementById('prevL').addEventListener('click', () => {
+  const n = effWord().length; if (!n) return;
+  select(S.sel <= 0 ? n - 1 : S.sel - 1);
+});
+document.getElementById('nextL').addEventListener('click', () => {
+  const n = effWord().length; if (!n) return;
+  select(S.sel < 0 || S.sel >= n - 1 ? 0 : S.sel + 1);
+});
+document.getElementById('resetL').addEventListener('click', () => {
+  if (S.sel < 0) return;
+  S.tweaks.delete(S.sel); refreshSelUI(); render();
+});
+document.getElementById('resetAll').addEventListener('click', () => {
+  S.tweaks.clear(); refreshSelUI(); render();
+});
+document.getElementById('rot').addEventListener('input', (e) => {
+  if (S.sel < 0) return;
+  const t = tweakOf(S.sel);
+  t.rot = parseInt(e.target.value, 10);
+  document.getElementById('rotOut').textContent = t.rot + '°';
+  render();
+});
+window.addEventListener('keydown', (e) => {
+  if (S.sel < 0) return;
+  const ae = document.activeElement;
+  if (ae && /INPUT|TEXTAREA/.test(ae.tagName)) return;
+  const step = e.shiftKey ? 10 : 3;
+  if (e.key === 'ArrowUp') { nudge(0, -step); e.preventDefault(); }
+  else if (e.key === 'ArrowDown') { nudge(0, step); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft') { nudge(-step, 0); e.preventDefault(); }
+  else if (e.key === 'ArrowRight') { nudge(step, 0); e.preventDefault(); }
+  else if (e.key === 'Escape') select(-1);
+});
+
+/* ============================== controls ============================== */
+const wordInput = document.getElementById('word');
+wordInput.addEventListener('input', () => {
+  S.word = wordInput.value.slice(0, 14);
+  S.tweaks.clear(); S.sel = -1;
+  refreshSelUI(); render();
+});
+const caseBtn = document.getElementById('caseBtn');
+caseBtn.addEventListener('click', () => {
+  S.upper = !S.upper;
+  caseBtn.classList.toggle('on', !S.upper);
+  caseBtn.setAttribute('aria-pressed', String(S.upper));
+  caseBtn.textContent = S.upper ? 'ABC' : 'abc';
+  S.tweaks.clear(); S.sel = -1;
+  refreshSelUI(); render();
+});
+document.getElementById('tracking').addEventListener('input', (e) => {
+  S.tracking = parseInt(e.target.value, 10) / 100;
+  document.getElementById('trackingOut').textContent = e.target.value + '%';
+  render();
+});
+document.getElementById('flipBtn').addEventListener('click', doFlip);
+
+const overlayBtn = document.getElementById('overlayBtn');
+overlayBtn.addEventListener('click', () => {
+  S.overlay = !S.overlay;
+  overlayBtn.classList.toggle('on', S.overlay);
+  overlayBtn.setAttribute('aria-pressed', String(S.overlay));
+  render();
+});
+document.getElementById('alpha').addEventListener('input', (e) => {
+  S.alpha = parseInt(e.target.value, 10) / 100;
+  document.getElementById('alphaOut').textContent = e.target.value + '%';
+  if (S.overlay) render();
+});
+
+function guideToggle(id, key) {
+  const b = document.getElementById(id);
+  b.addEventListener('click', () => {
+    S.guides[key] = !S.guides[key];
+    b.classList.toggle('on', S.guides[key]);
+    b.setAttribute('aria-pressed', String(S.guides[key]));
+    render();
+  });
+}
+guideToggle('gCenter', 'center');
+guideToggle('gPivot', 'pivot');
+guideToggle('gGrid', 'grid');
+
+document.getElementById('faces').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-face]');
+  if (!b) return;
+  S.face = b.dataset.face;
+  document.querySelectorAll('#faces .btn').forEach(x => x.classList.toggle('on', x === b));
+  render();
+});
+
+const gal = document.getElementById('gallery');
+GALLERY.forEach(g => {
+  const b = document.createElement('button');
+  b.className = 'gchip';
+  b.type = 'button';
+  b.textContent = g.w;
+  if (g.flip) {
+    const s = document.createElement('small');
+    s.textContent = ' ⇄ ' + g.flip;
+    b.appendChild(s);
+  }
+  b.addEventListener('click', () => {
+    S.word = g.w; S.upper = !!g.upper;
+    wordInput.value = g.w;
+    caseBtn.classList.toggle('on', !S.upper);
+    caseBtn.setAttribute('aria-pressed', String(S.upper));
+    caseBtn.textContent = S.upper ? 'ABC' : 'abc';
+    S.tweaks.clear(); S.sel = -1;
+    refreshSelUI(); render();
+    stage.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+  gal.appendChild(b);
+});
+
+document.getElementById('dlBtn').addEventListener('click', () => {
+  const N = 2048;
+  const off = document.createElement('canvas');
+  off.width = N; off.height = N;
+  const c2 = off.getContext('2d');
+  c2.fillStyle = '#0b0b0d';
+  c2.fillRect(0, 0, N, N);
+  drawScene(c2, N, true);
+  const a = document.createElement('a');
+  const name = (effWord() || 'ambigram').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+  a.download = 'flipside-' + name + '.png';
+  a.href = off.toDataURL('image/png');
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+});
+
+/* ============================== boot ============================== */
+function boot() {
+  fit();
+  refreshSelUI();
+  render();
+}
+new ResizeObserver(() => { fit(); render(); }).observe(stage);
+window.addEventListener('orientationchange', () => setTimeout(boot, 120));
+if (document.fonts && document.fonts.load) {
+  Promise.all([
+    document.fonts.load('400 100px "Archivo Black"'),
+    document.fonts.load('700 100px "Space Grotesk"'),
+    document.fonts.load('800 100px "Unbounded"'),
+  ]).catch(() => {}).then(boot);
+  document.fonts.ready.then(() => render());
+} else {
+  boot();
+}
+boot();
+</script>
+</body>
+</html>

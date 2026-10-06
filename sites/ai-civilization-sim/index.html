@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Civilization — AI Society Simulator</title>
+<meta name="description" content="A persistent artificial society of autonomous agents. Run policy experiments and watch wealth, politics and culture emerge.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">
+      <div class="logo">◈</div>
+      <div>
+        <h1>CIVILIZATION</h1>
+        <p>artificial society simulator</p>
+      </div>
+    </div>
+    <div class="clock">
+      <div id="date">—</div>
+      <div id="ticknote" class="mut">month 0</div>
+    </div>
+    <div class="chips">
+      <div class="chip"><span class="cl">GINI</span><span class="cv" id="chip-gini">–</span></div>
+      <div class="chip"><span class="cl">EMPLOYMENT</span><span class="cv" id="chip-emp">–</span></div>
+      <div class="chip"><span class="cl">AVG WEALTH</span><span class="cv" id="chip-wealth">–</span></div>
+    </div>
+    <div class="controls">
+      <button id="btn-pause" class="cbtn on">⏸</button>
+      <button class="cbtn spd" data-s="1">1×</button>
+      <button class="cbtn spd" data-s="2">2×</button>
+      <button class="cbtn spd" data-s="4">4×</button>
+      <button id="btn-reset" class="cbtn" title="Restart">↺</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="world-panel">
+      <canvas id="world"></canvas>
+      <div class="world-bar">
+        <div class="legend" id="legend">
+          <span><i style="background:#22d3ee"></i>Tech</span>
+          <span><i style="background:#fbbf24"></i>Finance</span>
+          <span><i style="background:#fb923c"></i>Mfg</span>
+          <span><i style="background:#f472b6"></i>Services</span>
+          <span><i style="background:#a3e635"></i>Energy</span>
+          <span><i style="background:#5b6478"></i>Jobless</span>
+          <span><i class="ring"></i>Founder</span>
+        </div>
+        <button id="color-toggle" class="ghostbtn">🎨 Sector colors</button>
+      </div>
+      <div id="agent-card" class="hidden">
+        <button id="ac-close">✕</button>
+        <div id="ac-name" class="ac-name">—</div>
+        <div id="ac-job" class="mut">—</div>
+        <div class="ac-grid">
+          <div><span class="cl">WEALTH</span><span class="cv" id="ac-wealth">–</span></div>
+          <div><span class="cl">POLITICS</span><span class="cv" id="ac-pol">–</span></div>
+        </div>
+        <div class="cl">SKILL</div>
+        <div class="bar"><div id="ac-skill"></div></div>
+        <div class="cl" style="margin-top:6px">SOCIAL</div>
+        <div id="ac-friends" class="mut sm">–</div>
+        <div class="cl" style="margin-top:6px">MEMORY</div>
+        <div id="ac-mem" class="mut sm"></div>
+      </div>
+    </section>
+
+    <aside class="side">
+      <nav class="tabs">
+        <button class="tab on" data-tab="metrics">📊 Metrics</button>
+        <button class="tab" data-tab="policy">🏛️ Policy Lab</button>
+        <button class="tab" data-tab="agents">🧬 Citizens</button>
+        <button class="tab" data-tab="log">📜 Events</button>
+      </nav>
+
+      <div class="tabpage on" id="tab-metrics">
+        <canvas id="hist" class="chart tall"></canvas>
+        <div class="sparks">
+          <div class="sparkbox"><canvas id="sp-gini" class="chart"></canvas></div>
+          <div class="sparkbox"><canvas id="sp-emp" class="chart"></canvas></div>
+          <div class="sparkbox"><canvas id="sp-pol" class="chart"></canvas></div>
+          <div class="sparkbox"><canvas id="sp-prod" class="chart"></canvas></div>
+        </div>
+        <div class="statgrid">
+          <div class="stat"><span class="cl">FIRMS</span><span class="cv" id="st-firms">–</span></div>
+          <div class="stat"><span class="cl">POVERTY</span><span class="cv" id="st-poverty">–</span></div>
+          <div class="stat"><span class="cl">MOBILITY</span><span class="cv" id="st-mobility">–</span></div>
+          <div class="stat"><span class="cl">TRUST</span><span class="cv" id="st-trust">–</span></div>
+          <div class="stat"><span class="cl">MEDIAN $</span><span class="cv" id="st-median">–</span></div>
+          <div class="stat"><span class="cl">GOV DEBT</span><span class="cv" id="st-debt">–</span></div>
+        </div>
+        <p class="mut sm pad">Gini 0 = perfect equality, 1 = one person owns everything. Mobility = 1 − wealth-rank correlation vs 3 years ago.</p>
+        <div class="calrow">
+          <p id="cal-note" class="mut sm calnote">📡 Calibrated · loading…</p>
+          <button id="btn-cal-refresh" class="ghostbtn">⟳ Refresh data</button>
+        </div>
+      </div>
+
+      <div class="tabpage" id="tab-policy">
+        <div class="plab">
+          <div class="prow">
+            <div><div class="plabel">Income tax <span id="tax-val" class="cv">25%</span></div>
+            <input type="range" id="tax" min="0" max="60" value="25"></div>
+          </div>
+          <div class="prow">
+            <label class="switchrow"><span class="plabel">Universal basic income</span>
+              <input type="checkbox" id="ubi-toggle"><span class="switch"></span></label>
+            <div class="plabel sm">Amount <span id="ubi-val" class="cv">$1.0k</span>/mo</div>
+            <input type="range" id="ubi-amt" min="0" max="30" value="10">
+          </div>
+          <div class="prow">
+            <div class="plabel">Treasury <span id="gov-fund" class="cv">–</span></div>
+            <div class="mut sm">Taxes fund UBI + unemployment benefits. Shortfalls become debt.</div>
+          </div>
+          <div class="prow">
+            <div class="plabel">⚡ Shocks</div>
+            <div class="shockgrid">
+              <button id="shock-tech" class="shock">🤖 Tech shock</button>
+              <button id="shock-misinfo" class="shock">📢 Misinformation</button>
+              <button id="shock-disaster" class="shock">🌪️ Disaster</button>
+              <button id="shock-recession" class="shock">📉 Recession</button>
+              <button id="shock-stimulus" class="shock">💸 Stimulus</button>
+            </div>
+          </div>
+          <div class="prow">
+            <div class="plabel">🧪 Preset experiments</div>
+            <div class="shockgrid">
+              <button class="shock preset" data-p="laissez">Laissez-faire</button>
+              <button class="shock preset" data-p="nordic">Nordic model</button>
+              <button class="shock preset" data-p="automation">Automation crisis</button>
+              <button class="shock preset" data-p="postscarcity">Post-scarcity</button>
+            </div>
+          </div>
+          <div class="prow">
+            <div class="plabel">Active effects</div>
+            <div id="effects" class="effects"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tabpage" id="tab-agents">
+        <div class="plabel pad">🏆 Richest citizens <span class="mut sm">— tap to inspect</span></div>
+        <ol id="richest" class="richest"></ol>
+        <p class="mut sm pad">Tip: tap any glowing dot in the world to inspect that citizen — job, wealth, politics, friends, memories.</p>
+      </div>
+
+      <div class="tabpage" id="tab-log">
+        <ul id="log" class="log"></ul>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<div id="welcome">
+  <div class="wcard">
+    <div class="wlogo">◈</div>
+    <h2>CIVILIZATION</h2>
+    <p class="wsub">120 autonomous citizens. Real firms, real wages, real layoffs.<br>No scripts — inequality, politics and culture <em>emerge</em>.</p>
+    <ul class="wlist">
+      <li>▶&nbsp; Press play and watch the society run</li>
+      <li>🏛️&nbsp; Open the <b>Policy Lab</b> — tax, UBI, tech shocks, disasters</li>
+      <li>📊&nbsp; Watch Gini, employment and polarization respond</li>
+    </ul>
+    <button id="btn-launch">▶ Found your civilization</button>
+  </div>
+</div>
+
+<script src="sim.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Flipside — true rotational ambigram studio</title>
+<meta name="description" content="Flipside v2 generates real rotational ambigrams with the classic pair-glyph technique. Type a word, flip it 180°, and it genuinely reads upside down.">
+<style>
+:root{
+  --bg:#0b0b0d; --panel:#131316; --panel2:#17171b; --line:rgba(255,255,255,.09);
+  --ink:#f2f0ea; --mut:#9a97a3; --acc:#d7ff3e; --acc-ink:#0b0b0d;
+  --acc-dim:rgba(215,255,62,.13); --danger:#ff6b6b;
+  --r:16px;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html{-webkit-text-size-adjust:100%;}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px; line-height:1.5; min-height:100dvh;
+}
+button{touch-action:manipulation; font:inherit; color:inherit; cursor:pointer;}
+input{touch-action:manipulation;}
+.wrap{max-width:640px; margin:0 auto; padding:20px 16px 64px;}
+
+.top{padding:26px 4px 18px; text-align:center;}
+.wordmark{
+  font-weight:900; font-size:clamp(40px,11vw,64px);
+  letter-spacing:.04em; line-height:1; margin:0;
+}
+.wordmark .s{color:var(--acc);}
+.tag{color:var(--mut); margin:8px 0 0; font-size:14px; letter-spacing:.28em; text-transform:uppercase;}
+.tag b{color:var(--ink); font-weight:600;}
+.ver{
+  display:inline-block; margin-top:10px; font-size:12px; letter-spacing:.14em;
+  border:1px solid var(--acc); color:var(--acc); border-radius:999px; padding:4px 12px;
+  text-transform:uppercase;
+}
+
+.stage-wrap{position:relative; margin:6px 0 18px;}
+.stage-inner{
+  background:
+    radial-gradient(120% 120% at 50% 0%, rgba(215,255,62,.05), transparent 55%),
+    #0e0e11;
+  border:1px solid var(--line); border-radius:var(--r);
+  touch-action:manipulation; overflow:hidden;
+  transition:transform .85s cubic-bezier(.22,1,.36,1);
+  transform-origin:50% 50%;
+}
+.stage-inner.flipped{transform:rotate(180deg);}
+.stage-inner svg{display:block; width:100%; height:auto;}
+.stage-hint{
+  position:absolute; left:0; right:0; bottom:10px; text-align:center;
+  color:var(--mut); font-size:12px; letter-spacing:.08em; pointer-events:none;
+  text-transform:uppercase;
+}
+
+.panel{
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--r);
+  padding:16px; margin:0 0 14px;
+}
+.panel > h2{
+  font-weight:800; font-size:13px; letter-spacing:.22em;
+  text-transform:uppercase; color:var(--mut); margin:0 0 12px;
+}
+.micro{color:var(--mut); font-size:13px; margin:10px 0 0;}
+.row{display:flex; gap:10px; align-items:center;}
+.row.wrap{flex-wrap:wrap;}
+
+.fld{display:block; margin-bottom:12px;}
+.fld > span{display:block; font-size:13px; letter-spacing:.18em; text-transform:uppercase; color:var(--mut); margin-bottom:8px;}
+.txt{
+  width:100%; font-size:18px; padding:14px 16px;
+  background:var(--panel2); border:1px solid var(--line); border-radius:12px; color:var(--ink);
+  outline:none; text-transform:lowercase;
+}
+.txt:focus{border-color:var(--acc);}
+.checkline{
+  display:flex; gap:10px; align-items:flex-start; margin-top:10px; font-size:14px;
+  border-radius:12px; padding:12px 14px; line-height:1.45;
+}
+.checkline.ok{background:rgba(215,255,62,.08); border:1px solid rgba(215,255,62,.35);}
+.checkline.warn{background:rgba(255,107,107,.07); border:1px solid rgba(255,107,107,.4);}
+.checkline svg{width:20px; height:20px; flex:0 0 auto; margin-top:2px;}
+.checkline ul{margin:6px 0 0; padding-left:18px;}
+.checkline code{color:var(--acc); font-size:13px;}
+
+input[type=range]{width:100%; accent-color:var(--acc); height:32px; font-size:16px;}
+input[type=checkbox]{width:22px; height:22px; accent-color:var(--acc);}
+.sl-row{display:grid; grid-template-columns:1fr auto; gap:4px 12px; align-items:center; margin-top:6px;}
+.sl-row label{font-size:14px; color:var(--mut);}
+.sl-row output{font-variant-numeric:tabular-nums; color:var(--ink); font-size:14px;}
+.tog-row{display:flex; align-items:center; gap:10px; padding:9px 0; font-size:15px;}
+.tog-row span.lbl{flex:1;}
+
+.btn{
+  border:1px solid var(--line); background:var(--panel2); color:var(--ink);
+  border-radius:12px; padding:13px 16px; font-weight:500; min-height:50px;
+  display:inline-flex; align-items:center; justify-content:center; gap:10px;
+  transition:transform .06s ease, background .15s ease, border-color .15s ease;
+}
+.btn:active{transform:scale(.97);}
+.btn.big{
+  width:100%; background:var(--acc); border-color:var(--acc); color:var(--acc-ink);
+  font-weight:900; font-size:18px; letter-spacing:.06em;
+  padding:18px; border-radius:var(--r);
+}
+.btn.ghost{background:transparent;}
+.btn.toggle.on{background:var(--acc-dim); border-color:var(--acc); color:var(--acc);}
+.btn svg{width:22px; height:22px; flex:0 0 auto;}
+.chips{display:flex; flex-wrap:wrap; gap:8px;}
+.chips .btn{padding:10px 16px; min-height:46px; font-size:15px;}
+.chips .btn small{color:var(--mut); font-size:12px;}
+.chips .btn.on{background:var(--acc); border-color:var(--acc); color:var(--acc-ink); font-weight:700;}
+.chips .btn.on small{color:var(--acc-ink);}
+
+.nudge{
+  display:grid; grid-template-columns:repeat(3,64px); grid-template-rows:repeat(3,56px);
+  gap:8px; justify-content:center; margin:12px 0;
+}
+.nudge .btn{padding:0; min-height:0;}
+.nudge .btn svg{width:20px; height:20px;}
+.nudge .mid{
+  display:flex; align-items:center; justify-content:center;
+  color:var(--mut); font-size:12px; letter-spacing:.1em; text-transform:uppercase;
+}
+.selbar{display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:4px;}
+.selbar .btn{padding:8px 14px; min-height:44px;}
+#selLabel{font-size:15px; min-width:110px; text-align:center; color:var(--mut);}
+#selLabel b{color:var(--acc); font-size:18px;}
+
+.pairgrid{
+  display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:4px;
+}
+.pairgrid .pc{
+  text-align:center; font-size:15px; padding:9px 4px; border:1px solid var(--line);
+  border-radius:10px; background:var(--panel2); font-variant-ligatures:none;
+}
+.pairgrid .pc b{color:var(--acc);}
+.pairgrid .pc.self b{color:var(--ink);}
+
+.howto{margin:6px 0 0; padding-left:20px; font-size:14px; color:var(--mut);}
+.howto li{margin:7px 0;}
+.howto b{color:var(--ink); font-weight:600;}
+
+.foot{color:var(--mut); font-size:13px; text-align:center; margin-top:26px; line-height:1.7;}
+.foot b{color:var(--ink);}
+.hidden{display:none !important;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <h1 class="wordmark">FLIP<span class="s">S</span>IDE</h1>
+    <p class="tag">true <b>rotational ambigram</b> studio</p>
+    <span class="ver">v2 &middot; pair-glyph engine</span>
+  </header>
+
+  <div class="stage-wrap">
+    <div class="stage-inner" id="stageInner"></div>
+    <div class="stage-hint" id="stageHint">tap a letter to select it</div>
+  </div>
+
+  <section class="panel">
+    <h2>Word</h2>
+    <label class="fld">
+      <span>Your word &mdash; lowercase a&ndash;z</span>
+      <input class="txt" id="word" maxlength="10" value="swims" autocomplete="off"
+             autocapitalize="none" spellcheck="false" inputmode="latin">
+    </label>
+    <div class="tog-row">
+      <input type="checkbox" id="hetero">
+      <span class="lbl">Two-word mode <span style="color:var(--mut)">(classic hetero ambigram)</span></span>
+    </div>
+    <label class="fld hidden" id="word2wrap">
+      <span>Reads upside down as</span>
+      <input class="txt" id="word2" maxlength="10" value="swims" autocomplete="off"
+             autocapitalize="none" spellcheck="false" inputmode="latin">
+    </label>
+    <div class="checkline ok" id="checkline"></div>
+    <p class="micro">Only letters with a rotational partner can work: c, k, r and v never do.
+    Unmappable spots are drawn dimmed with a dashed outline &mdash; the rest still flips for real.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Flip &amp; overlay</h2>
+    <button class="btn big" id="flipBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+           stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+      <span id="flipLabel">FLIP 180&deg;</span>
+    </button>
+    <div class="tog-row" style="margin-top:10px">
+      <input type="checkbox" id="overlayTog">
+      <span class="lbl">Overlay mode <span style="color:var(--mut)">(rotated copy superimposed &mdash; pixel-aligned by construction)</span></span>
+    </div>
+    <div class="sl-row">
+      <label for="overlayOp">Overlay opacity</label><output id="overlayOpOut">45%</output>
+    </div>
+    <input type="range" id="overlayOp" min="5" max="100" value="45">
+    <div class="sl-row">
+      <label for="tracking">Letter spacing</label><output id="trackingOut">30</output>
+    </div>
+    <input type="range" id="tracking" min="10" max="60" value="30">
+  </section>
+
+  <section class="panel">
+    <h2>Guides</h2>
+    <div class="tog-row"><input type="checkbox" id="gCenter"><span class="lbl">Center lines</span></div>
+    <div class="tog-row"><input type="checkbox" id="gPivot" checked><span class="lbl">Rotation pivot</span></div>
+    <div class="tog-row"><input type="checkbox" id="gGrid"><span class="lbl">Grid</span></div>
+  </section>
+
+  <section class="panel">
+    <h2>Letters <span class="micro" style="letter-spacing:.02em">&mdash; nudge &amp; rotate individual glyphs</span></h2>
+    <div class="selbar">
+      <button class="btn" id="prevL" aria-label="previous letter">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+             stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div id="selLabel">none selected</div>
+      <button class="btn" id="nextL" aria-label="next letter">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+             stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+    <div class="nudge">
+      <span></span>
+      <button class="btn" id="nUp" aria-label="nudge up">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+             stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+      </button>
+      <span></span>
+      <button class="btn" id="nLeft" aria-label="nudge left">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+             stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="mid">move</div>
+      <button class="btn" id="nRight" aria-label="nudge right">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+             stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </button>
+      <span></span>
+      <button class="btn" id="nDown" aria-label="nudge down">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+             stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+      </button>
+      <span></span>
+    </div>
+    <div class="sl-row">
+      <label for="rotL">Rotate letter</label><output id="rotLOut">0&deg;</output>
+    </div>
+    <input type="range" id="rotL" min="-30" max="30" value="0">
+    <div class="row" style="margin-top:10px">
+      <button class="btn ghost" id="resetL" style="flex:1">Reset letter</button>
+      <button class="btn ghost" id="resetAll" style="flex:1">Reset all</button>
+    </div>
+    <p class="micro">Nudging breaks the ambigram purity of that letter &mdash; it&rsquo;s a design tool, your call.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Gallery &mdash; verified by the engine</h2>
+    <div class="chips" id="gallery"></div>
+    <p class="micro">Every chip above passed the engine&rsquo;s own rotation check: the full stroke
+    list rotated 180&deg; about the word center reads exactly as advertised.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Export</h2>
+    <button class="btn big" id="dlBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+           stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M6 11l6 6 6-6"/><path d="M4 21h16"/></svg>
+      DOWNLOAD PNG
+    </button>
+    <p class="micro">Exports the current artwork at 2048px wide, guides and selection hidden.</p>
+  </section>
+
+  <section class="panel">
+    <h2>How it works</h2>
+    <ul class="howto">
+      <li><b>Pair glyphs.</b> Each letter is drawn from the classic rotational pair table:
+      upright it reads as one letter, rotated 180&deg; the <em>same strokes</em> read as its partner.</li>
+      <li><b>Merged strokes.</b> A glyph is its letter&rsquo;s skeleton plus its partner&rsquo;s
+      skeleton rotated 180&deg;, drawn as one set of thick round strokes. That merged look
+      <em>is</em> the authentic ambigram-generator aesthetic.</li>
+      <li><b>Honest failures.</b> c, k, r, v have no rotational partner &mdash; Flipside tells you
+      exactly which spots can&rsquo;t work instead of faking it.</li>
+    </ul>
+    <h2 style="margin-top:18px">The pair table</h2>
+    <div class="pairgrid" id="pairgrid"></div>
+  </section>
+
+  <p class="foot">
+    <b>Flipside v2</b> &middot; real pair-glyph ambigrams, generated in your browser.<br>
+    One honest note: no human eye has judged whether these merged glyphs read
+    <em>beautifully</em> &mdash; the geometry checks out, the taste call is yours.
+  </p>
+
+</div>
+
+<script>
+/* ambigram.js — true rotational ambigram pair-glyph engine (v2).
+ * Pure logic, no DOM. UMD: works in Node (module.exports) and browsers (window.Ambigram).
+ *
+ * Grid: x 0..100, y 0..140 per glyph. Zones (symmetric about y=70):
+ *   ascender top 20, x-height top 45, baseline 95, descender bottom 120.
+ * R = 180-degree rotation about glyph center (50,70): (x,y) -> (100-x, 140-y).
+ *
+ * Pair-glyph construction: glyph(A,B) = skeleton(A) UNION R(skeleton(B)).
+ * Upright it reads as A; rotated 180 it reads as B. The merged-stroke look
+ * is the authentic ambigram-generator aesthetic (cf. makeambigrams.com).
+ */
+(function (root, factory) {
+  if (typeof module !== 'undefined' && module.exports) module.exports = factory();
+  else root.Ambigram = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  var GW = 100, GH = 140, CX = 50, CY = 70;
+  var TRACKING = 30;      // default space between glyph cells
+  var STROKE_W = 14;      // stroke width in glyph units
+
+  function Rx(x) { return GW - x; }
+  function Ry(y) { return GH - y; }
+  function rPt(p) { return [Rx(p[0]), Ry(p[1])]; }
+  function rStroke(st) { return st.map(rPt); }          // new array, no mutation
+  function rStrokes(strokes) { return strokes.map(rStroke); }
+
+  function dia(cx, cy, r) {                            // closed diamond polyline
+    return [[cx, cy - r], [cx + r, cy], [cx, cy + r], [cx - r, cy], [cx, cy - r]];
+  }
+  function ellipse(cx, cy, rx, ry, n) {
+    var pts = [], i, a;
+    for (i = 0; i < n; i++) {
+      a = (i / n) * Math.PI * 2;
+      pts.push([cx + rx * Math.cos(a), cy + ry * Math.sin(a)]);
+    }
+    pts.push(pts[0].slice());
+    return pts;
+  }
+
+  /* ---------------- skeletons: letter -> array of strokes -> array of [x,y] ---- */
+  var S = {};
+  S.a = [[[66,45],[66,95]], [[66,67],[48,59],[30,69],[30,87],[46,95],[66,89]]];
+  S.b = [[[34,20],[34,95]], [[34,63],[50,53],[64,63],[64,85],[50,95],[34,87]]];
+  S.c = [[[68,53],[48,45],[30,57],[30,83],[48,95],[68,87]]];
+  S.d = [[[66,20],[66,95]], [[66,63],[50,53],[36,63],[36,85],[50,95],[66,87]]];
+  S.e = [[[68,55],[46,47],[30,59],[30,81],[48,93],[68,85]], [[34,71],[62,71]]];
+  S.f = [[[55,28],[55,95]], [[36,55],[68,55]], [[55,28],[44,34]]];
+  S.g = [[[30,57],[30,83],[50,93],[70,83],[70,57],[50,47],[30,57]], [[62,81],[62,120],[44,120]]];
+  S.h = [[[32,20],[32,95]], [[32,57],[46,47],[60,57],[60,95]]];
+  S.i = [[[50,47],[50,95]], dia(50,28,7), rStroke(dia(50,28,7))];
+  S.j = [[[56,47],[56,105],[48,118],[34,118]], dia(56,28,7)];
+  S.k = [[[32,20],[32,95]], [[62,47],[40,67],[34,73]], [[46,65],[64,95]]];
+  S.l = [[[50,20],[50,95]], [[50,95],[64,95]]];
+  S.m = [[[22,95],[22,47],[36,47],[50,61],[64,47],[78,47],[78,95]]];
+  S.n = [[[28,95],[28,47],[44,47],[60,61],[60,95]]];
+  S.o = [ellipse(50,70,28,25,14)];
+  S.p = [[[34,45],[34,120]], [[34,63],[50,53],[64,63],[64,85],[50,95],[34,87]]];
+  S.q = [[[66,45],[66,120]], [[66,63],[50,53],[36,63],[36,85],[50,95],[66,87]]];
+  S.r = [[[32,47],[32,95]], [[32,57],[48,47],[60,55]]];
+  S.s = [[[70,49],[44,49],[32,61],[50,70],[68,79],[56,91],[30,91]]];
+  S.t = [[[50,28],[50,95]], [[32,53],[68,53]]];
+  S.u = [[[28,47],[28,81],[42,95],[58,95],[72,81],[72,47]]];
+  S.v = [[[28,47],[50,95],[72,47]]];
+  S.w = [[[20,47],[32,95],[50,61],[68,95],[80,47]]];
+  S.x = [[[32,47],[68,95]], [[68,47],[32,95]]];
+  S.y = [[[26,47],[48,89],[40,120]], [[70,47],[48,89]]];
+  S.z = [[[30,47],[70,47],[30,93],[70,93]]];
+
+  /* ---------------- rotational pair table (canonical ordered pairs) ------------ */
+  var PAIRS = [
+    ['o','o'],['s','s'],['x','x'],['z','z'],['i','i'],['l','l'],['h','h'],['g','g'],
+    ['m','w'],['n','u'],['d','p'],['b','q'],['e','a'],['h','y'],['i','t'],['f','j']
+  ];
+  var pairIndex = {};
+  PAIRS.forEach(function (pr) {
+    pairIndex[pr[0] + '>' + pr[1]] = { A: pr[0], B: pr[1], reversed: false };
+    if (pr[0] !== pr[1]) pairIndex[pr[1] + '>' + pr[0]] = { A: pr[0], B: pr[1], reversed: true };
+  });
+  function lookupPair(a, b) { return pairIndex[a + '>' + b] || null; }
+
+  /* glyph(A,B): strokes reading A upright, B rotated 180. */
+  function glyphStrokes(a, b) {
+    var e = lookupPair(a, b);
+    if (!e) {
+      // honest fallback: upright skeleton only, flagged unmappable
+      return { strokes: S[a] ? S[a].map(function (st) { return st.slice(); }) : [],
+               ok: false, upright: a, rotated: b };
+    }
+    var base = S[e.A].concat(rStrokes(S[e.B]));
+    if (e.reversed) base = rStrokes(base);
+    return { strokes: base, ok: true, upright: a, rotated: b,
+             canonical: [e.A, e.B], reversed: e.reversed };
+  }
+
+  /* ---------------- word layout ------------------------------------------------ */
+  function layoutWord(w, w2, tracking) {
+    w = (w || '').toLowerCase();
+    w2 = (w2 == null ? w : (w2 || '')).toLowerCase();
+    var t = (tracking == null ? TRACKING : tracking);
+    var n = w.length, glyphs = [], issues = [], i, a, b, g;
+    for (i = 0; i < n; i++) {
+      a = w[i];
+      b = w2[n - 1 - i] || '';
+      g = glyphStrokes(a, b);
+      if (!g.ok) issues.push({ index: i, upright: a, rotated: b });
+      glyphs.push({ index: i, upright: a, rotated: b, strokes: g.strokes,
+                    ok: g.ok, dx: i * (GW + t) });
+    }
+    return { word: w, word2: w2, n: n, tracking: t, glyphs: glyphs,
+             issues: issues, width: n * GW + Math.max(0, n - 1) * t, ok: issues.length === 0 };
+  }
+
+  function wordPivot(layout) { return [layout.width / 2, CY]; }
+
+  /* flat stroke list with glyph offsets applied: [{pts:[[x,y]..], glyph:i}] */
+  function wordStrokes(layout) {
+    var out = [];
+    layout.glyphs.forEach(function (gl, i) {
+      gl.strokes.forEach(function (st) {
+        out.push({ glyph: i, pts: st.map(function (p) { return [p[0] + gl.dx, p[1]]; }) });
+      });
+    });
+    return out;
+  }
+
+  /* ---------------- SVG rendering (pure string building — testable) ------------ */
+  function r1(v) { return Math.round(v * 10) / 10; }
+  function strokeToD(st) {
+    return 'M' + st.map(function (p) { return r1(p[0]) + ' ' + r1(p[1]); }).join('L');
+  }
+
+  function renderWordSVG(layout, opts) {
+    opts = opts || {};
+    var ink = opts.ink || '#f2f0ea';
+    var dimInk = opts.dimInk || 'rgba(242,240,234,.38)';
+    var sw = opts.strokeWidth || STROKE_W;
+    var nudge = opts.nudge || {};
+    var selected = (opts.selected == null ? -1 : opts.selected);
+    var showBad = opts.markBad !== false;
+    var W = layout.width, H = GH;
+    var piv = wordPivot(layout);
+
+    function glyphInner(gl) {
+      var nd = nudge[gl.index] || { dx: 0, dy: 0, rot: 0 };
+      var tr = 'translate(' + r1(gl.dx + nd.dx) + ' ' + r1(nd.dy) + ')';
+      if (nd.rot) tr += ' rotate(' + r1(nd.rot) + ' ' + CX + ' ' + CY + ')';
+      var color = gl.ok ? ink : dimInk;
+      var s = '<g class="glyph" data-i="' + gl.index + '" transform="' + tr + '">';
+      if (!gl.ok && showBad) {
+        s += '<rect x="6" y="6" width="' + (GW - 12) + '" height="' + (GH - 12) +
+             '" rx="12" fill="none" stroke="#ff6b6b" stroke-width="2.5" stroke-dasharray="8 7" opacity="0.9"/>';
+      }
+      s += '<g fill="none" stroke="' + color + '" stroke-width="' + sw +
+           '" stroke-linecap="round" stroke-linejoin="round">';
+      gl.strokes.forEach(function (st) { s += '<path d="' + strokeToD(st) + '"/>'; });
+      s += '</g></g>';
+      return s;
+    }
+
+    var inner = layout.glyphs.map(glyphInner).join('');
+
+    // overlay: the SAME word group, rotated 180 about the SAME pivot the flip uses
+    var overlay = '';
+    if (opts.overlay && opts.overlay.on) {
+      var op = (opts.overlay.opacity == null ? 45 : opts.overlay.opacity);
+      overlay = '<g id="overlayLayer" transform="rotate(180 ' + r1(piv[0]) + ' ' + r1(piv[1]) +
+                ')" opacity="' + (op / 100) + '">' + inner + '</g>';
+    }
+
+    // guides
+    var guides = '';
+    if (opts.guides) {
+      var gc = 'rgba(215,255,62,.35)';
+      if (opts.guides.grid) {
+        var gs = '';
+        for (var gx = 0; gx <= W; gx += 20) gs += 'M' + gx + ' 0L' + gx + ' ' + H;
+        for (var gy = 0; gy <= H; gy += 20) gs += 'M0 ' + gy + 'L' + W + ' ' + gy;
+        guides += '<path d="' + gs + '" stroke="rgba(255,255,255,.06)" stroke-width="1" fill="none"/>';
+      }
+      if (opts.guides.center) {
+        guides += '<path d="M' + r1(piv[0]) + ' 0L' + r1(piv[0]) + ' ' + H +
+                  'M0 ' + CY + 'L' + W + ' ' + CY + '" stroke="' + gc +
+                  '" stroke-width="1.5" stroke-dasharray="7 6" fill="none"/>';
+      }
+      if (opts.guides.pivot) {
+        guides += '<circle cx="' + r1(piv[0]) + '" cy="' + CY + '" r="9" fill="none" stroke="' + gc +
+                  '" stroke-width="2"/><path d="M' + r1(piv[0] - 15) + ' ' + CY + 'L' + r1(piv[0] + 15) +
+                  ' ' + CY + 'M' + r1(piv[0]) + ' ' + (CY - 15) + 'L' + r1(piv[0]) + ' ' + (CY + 15) +
+                  '" stroke="' + gc + '" stroke-width="2" fill="none"/>';
+      }
+    }
+
+    var sel = '';
+    if (selected >= 0 && selected < layout.n) {
+      var gx0 = selected * (GW + layout.tracking);
+      sel = '<rect x="' + (gx0 + 2) + '" y="2" width="' + (GW - 4) + '" height="' + (GH - 4) +
+            '" rx="12" fill="none" stroke="#d7ff3e" stroke-width="2.5" stroke-dasharray="10 7" opacity="0.85"/>';
+    }
+
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + r1(W) + ' ' + H +
+           '" role="img" aria-label="ambigram of ' + layout.word + '">' +
+           '<g id="wordBase">' + inner + '</g>' + overlay + guides + sel + '</svg>';
+  }
+
+  return {
+    GW: GW, GH: GH, CX: CX, CY: CY, TRACKING: TRACKING, STROKE_W: STROKE_W,
+    SKELETONS: S, PAIRS: PAIRS,
+    lookupPair: lookupPair, glyphStrokes: glyphStrokes,
+    layoutWord: layoutWord, wordPivot: wordPivot, wordStrokes: wordStrokes,
+    rPt: rPt, rStroke: rStroke, rStrokes: rStrokes,
+    strokeToD: strokeToD, renderWordSVG: renderWordSVG
+  };
+});
+
+</script>
+<script>
+/* Flipside v2 app — DOM wiring around the Ambigram pair-glyph engine.
+ * Exposes window.FlipsideApp.init(doc) for tests; auto-boots in browsers. */
+(function () {
+  'use strict';
+
+  var GALLERY = [
+    { w: 'swims' }, { w: 'suns' }, { w: 'pod' }, { w: 'dollop' }, { w: 'yeah' },
+    { w: 'passed' }, { w: 'sos' }, { w: 'dip' }, { w: 'mow' }, { w: 'lol' },
+    { w: 'wow', w2: 'mom' }, { w: 'pip', w2: 'did' }, { w: 'uns', w2: 'sun' }
+  ];
+
+  var ICON_OK = '<svg viewBox="0 0 24 24" fill="none" stroke="#d7ff3e" stroke-width="2.4"' +
+    ' stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/>' +
+    '<path d="M8.5 12.5l2.5 2.5 4.5-5.5"/></svg>';
+  var ICON_WARN = '<svg viewBox="0 0 24 24" fill="none" stroke="#ff6b6b" stroke-width="2.4"' +
+    ' stroke-linecap="round" stroke-linejoin="round"><path d="M12 3L2.5 20h19L12 3z"/>' +
+    '<path d="M12 9.5V14M12 17v.5"/></svg>';
+
+  function init(doc) {
+    var A = (typeof window !== 'undefined' ? window.Ambigram : null) ||
+            (typeof globalThis !== 'undefined' ? globalThis.Ambigram : null);
+    if (!A) throw new Error('Ambigram engine missing');
+
+    function $(id) { return doc.getElementById(id); }
+
+    var state = {
+      word: 'swims', word2: 'swims', hetero: false,
+      flipped: false, overlay: false, overlayOpacity: 45,
+      guides: { center: false, pivot: true, grid: false },
+      tracking: 30, selected: -1,
+      nudge: {}
+    };
+
+    var stageInner = $('stageInner');
+
+    function cleanWord(v) { return (v || '').toLowerCase().replace(/[^a-z]/g, '').slice(0, 10); }
+
+    function currentLayout() {
+      var w2 = state.hetero ? state.word2 : null;
+      return A.layoutWord(state.word, w2, state.tracking);
+    }
+
+    function updateCheck(lay) {
+      var box = $('checkline');
+      if (!lay.word) {
+        box.className = 'checkline warn';
+        box.innerHTML = ICON_WARN + '<div>Type a word above to generate its ambigram.</div>';
+        return;
+      }
+      if (state.hetero && state.word2.length !== state.word.length) {
+        box.className = 'checkline warn';
+        box.innerHTML = ICON_WARN + '<div>Hetero mode needs both words at the <b>same length</b>.</div>';
+        return;
+      }
+      if (lay.ok) {
+        var target = state.hetero ? state.word2 : state.word;
+        box.className = 'checkline ok';
+        box.innerHTML = ICON_OK + '<div>Reads &ldquo;<b>' + target + '</b>&rdquo; upside down &mdash; ' +
+          'pure rotational ambigram, ' + lay.n + ' pair-glyphs, all verified by the engine.</div>';
+      } else {
+        var items = lay.issues.map(function (it) {
+          return '<li>Position ' + (it.index + 1) + ': &ldquo;' + it.upright + '&rdquo; &rarr; &ldquo;' +
+            it.rotated + '&rdquo; &mdash; no rotational partner in the table.</li>';
+        }).join('');
+        box.className = 'checkline warn';
+        box.innerHTML = ICON_WARN + '<div><b>Can&rsquo;t be a pure rotational ambigram.</b><ul>' +
+          items + '</ul><div style="margin-top:8px">Try paired letters instead: ' +
+          '<code>m&harr;w</code> <code>n&harr;u</code> <code>d&harr;p</code> <code>b&harr;q</code> ' +
+          '<code>e&harr;a</code> <code>h&harr;y</code> <code>i&harr;t</code> <code>f&harr;j</code></div></div>';
+      }
+    }
+
+    function render() {
+      var lay = currentLayout();
+      if (!lay.word) {
+        stageInner.innerHTML = '<div style="padding:60px 20px;text-align:center;color:#9a97a3">' +
+          'type a word above</div>';
+        stageInner.style.aspectRatio = 'auto';
+        updateCheck(lay);
+        return;
+      }
+      var svg = A.renderWordSVG(lay, {
+        overlay: { on: state.overlay, opacity: state.overlayOpacity },
+        guides: state.guides,
+        nudge: state.nudge,
+        selected: state.selected
+      });
+      stageInner.innerHTML = svg;
+      // The svg viewBox IS the word box, so CSS center == word pivot == flip pivot.
+      stageInner.style.aspectRatio = lay.width + ' / 140';
+      if (state.flipped) stageInner.classList.add('flipped');
+      else stageInner.classList.remove('flipped');
+
+      var glyphs = stageInner.querySelectorAll ? stageInner.querySelectorAll('.glyph') : [];
+      for (var i = 0; i < glyphs.length; i++) {
+        (function (el) {
+          el.addEventListener('click', function (ev) {
+            if (ev && ev.stopPropagation) ev.stopPropagation();
+            var idx = parseInt(el.getAttribute('data-i'), 10);
+            state.selected = (state.selected === idx ? -1 : idx);
+            render();
+          });
+        })(glyphs[i]);
+      }
+      updateSelLabel(lay);
+      updateCheck(lay);
+    }
+
+    function updateSelLabel(lay) {
+      var el = $('selLabel');
+      if (state.selected < 0 || state.selected >= lay.n) { el.textContent = 'none selected'; return; }
+      var gl = lay.glyphs[state.selected];
+      el.innerHTML = 'letter <b>' + gl.upright + '</b> &middot; pos ' + (state.selected + 1) +
+        ' &rarr; <b>' + gl.rotated + '</b>';
+    }
+
+    function ensureNudge(i) {
+      if (!state.nudge[i]) state.nudge[i] = { dx: 0, dy: 0, rot: 0 };
+      return state.nudge[i];
+    }
+
+    function setWord(v, which) {
+      var clean = cleanWord(v);
+      if (which === 2) state.word2 = clean;
+      else state.word = clean;
+      state.selected = -1;
+      render();
+    }
+
+    /* ---- events ---- */
+    $('word').addEventListener('input', function (e) { setWord(e.target.value, 1); });
+    $('word2').addEventListener('input', function (e) { setWord(e.target.value, 2); });
+    $('hetero').addEventListener('change', function (e) {
+      state.hetero = !!e.target.checked;
+      $('word2wrap').classList.toggle('hidden', !state.hetero);
+      if (state.hetero && !state.word2) state.word2 = state.word;
+      render();
+    });
+
+    $('flipBtn').addEventListener('click', function () {
+      state.flipped = !state.flipped;
+      render();
+    });
+    $('overlayTog').addEventListener('change', function (e) {
+      state.overlay = !!e.target.checked;
+      render();
+    });
+    $('overlayOp').addEventListener('input', function (e) {
+      state.overlayOpacity = parseInt(e.target.value, 10);
+      $('overlayOpOut').textContent = state.overlayOpacity + '%';
+      render();
+    });
+    $('tracking').addEventListener('input', function (e) {
+      state.tracking = parseInt(e.target.value, 10);
+      $('trackingOut').textContent = state.tracking;
+      render();
+    });
+    $('gCenter').addEventListener('change', function (e) { state.guides.center = !!e.target.checked; render(); });
+    $('gPivot').addEventListener('change', function (e) { state.guides.pivot = !!e.target.checked; render(); });
+    $('gGrid').addEventListener('change', function (e) { state.guides.grid = !!e.target.checked; render(); });
+
+    function stepSel(d) {
+      var lay = currentLayout();
+      if (!lay.n) return;
+      state.selected = (state.selected < 0) ? (d > 0 ? 0 : lay.n - 1)
+        : (state.selected + d + lay.n) % lay.n;
+      render();
+    }
+    $('prevL').addEventListener('click', function () { stepSel(-1); });
+    $('nextL').addEventListener('click', function () { stepSel(1); });
+
+    function nudge(dx, dy) {
+      if (state.selected < 0) return;
+      var nd = ensureNudge(state.selected);
+      nd.dx += dx; nd.dy += dy;
+      render();
+    }
+    $('nUp').addEventListener('click', function () { nudge(0, -4); });
+    $('nDown').addEventListener('click', function () { nudge(0, 4); });
+    $('nLeft').addEventListener('click', function () { nudge(-4, 0); });
+    $('nRight').addEventListener('click', function () { nudge(4, 0); });
+    $('rotL').addEventListener('input', function (e) {
+      if (state.selected < 0) return;
+      ensureNudge(state.selected).rot = parseInt(e.target.value, 10);
+      $('rotLOut').textContent = e.target.value + '\u00B0';
+      render();
+    });
+    $('resetL').addEventListener('click', function () {
+      if (state.selected >= 0) delete state.nudge[state.selected];
+      $('rotL').value = 0; $('rotLOut').textContent = '0\u00B0';
+      render();
+    });
+    $('resetAll').addEventListener('click', function () {
+      state.nudge = {}; state.selected = -1;
+      $('rotL').value = 0; $('rotLOut').textContent = '0\u00B0';
+      render();
+    });
+
+    doc.addEventListener('keydown', function (e) {
+      var tag = (e.target && e.target.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea') return;
+      if (state.selected < 0) return;
+      var handled = true;
+      if (e.key === 'ArrowUp') nudge(0, -4);
+      else if (e.key === 'ArrowDown') nudge(0, 4);
+      else if (e.key === 'ArrowLeft') nudge(-4, 0);
+      else if (e.key === 'ArrowRight') nudge(4, 0);
+      else handled = false;
+      if (handled && e.preventDefault) e.preventDefault();
+    });
+
+    /* gallery — only words the engine itself verifies */
+    (function buildGallery() {
+      var gal = $('gallery');
+      GALLERY.forEach(function (g) {
+        var lay = A.layoutWord(g.w, g.w2 || g.w);
+        if (!lay.ok) return; // assert mappability, drop failures
+        var b = doc.createElement('button');
+        b.className = 'btn';
+        b.type = 'button';
+        b.innerHTML = g.w2 ? g.w + ' <small>\u2192 ' + g.w2 + '</small>' : g.w;
+        b.addEventListener('click', function () {
+          state.word = g.w;
+          state.word2 = g.w2 || g.w;
+          state.hetero = !!g.w2;
+          state.selected = -1;
+          $('word').value = g.w;
+          $('word2').value = state.word2;
+          $('hetero').checked = state.hetero;
+          $('word2wrap').classList.toggle('hidden', !state.hetero);
+          var chips = gal.querySelectorAll ? gal.querySelectorAll('.btn') : [];
+          for (var i = 0; i < chips.length; i++) chips[i].classList.remove('on');
+          b.classList.add('on');
+          render();
+        });
+        gal.appendChild(b);
+      });
+    })();
+
+    /* pair table display */
+    (function buildPairs() {
+      var pg = $('pairgrid');
+      A.PAIRS.forEach(function (pr) {
+        var d = doc.createElement('div');
+        var self = pr[0] === pr[1];
+        d.className = 'pc' + (self ? ' self' : '');
+        d.innerHTML = self ? '<b>' + pr[0] + '</b> ' + pr[0] : pr[0] + ' \u2194 <b>' + pr[1] + '</b>';
+        pg.appendChild(d);
+      });
+    })();
+
+    /* PNG export */
+    $('dlBtn').addEventListener('click', function () {
+      var lay = currentLayout();
+      if (!lay.word) return;
+      var svg = A.renderWordSVG(lay, { nudge: state.nudge, selected: -1, markBad: true });
+      var W = lay.width, H = 140, PX = 2048;
+      var PH = Math.round(H * PX / W);
+      svg = svg.replace(/^<svg[^>]*>/,
+        '<svg xmlns="http://www.w3.org/2000/svg" width="' + PX + '" height="' + PH +
+        '" viewBox="0 0 ' + W + ' ' + H + '">');
+      var blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+      var url = URL.createObjectURL(blob);
+      var img = new Image();
+      img.onload = function () {
+        var c = doc.createElement('canvas');
+        c.width = PX; c.height = PH;
+        var ctx = c.getContext('2d');
+        ctx.fillStyle = '#0e0e11';
+        ctx.fillRect(0, 0, PX, PH);
+        ctx.drawImage(img, 0, 0, PX, PH);
+        URL.revokeObjectURL(url);
+        var a = doc.createElement('a');
+        a.download = 'flipside-' + lay.word + (state.hetero ? '-' + lay.word2 : '') + '.png';
+        a.href = c.toDataURL('image/png');
+        if (a.click) a.click();
+      };
+      img.src = url;
+    });
+
+    render();
+    return { state: state, render: render, layout: currentLayout };
+  }
+
+  var API = { init: init, GALLERY: GALLERY };
+  if (typeof window !== 'undefined') window.FlipsideApp = API;
+  else if (typeof globalThis !== 'undefined') globalThis.FlipsideApp = API;
+
+  /* auto-boot in real browsers */
+  if (typeof document !== 'undefined' && document.getElementById) {
+    var boot = function () { init(document); };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+    else boot();
+  }
+})();
+
+</script>
+</body>
+</html>

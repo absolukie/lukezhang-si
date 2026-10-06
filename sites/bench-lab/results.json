@@ -1,0 +1,310 @@
+{
+ "meta": {
+  "date": "2026-10-02",
+  "vm": "2cpu/8gb",
+  "runs": 5,
+  "versions": {
+   "g++": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+   "python": "Python 3.12.3",
+   "go": "go version go1.25.1 linux/amd64",
+   "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+   "cargo": "cargo 1.98.1 (797e8a9bc 2026-08-05)",
+   "bend": "bend 2.0.34",
+   "grpcio": "1.84.0"
+  },
+  "notes": [
+   "Each program prints '<bench> <lang> <ms> <checksum>'; ms = compute wall time measured inside the program.",
+   "Median of 5 runs. Checksums must agree across languages per benchmark (checksums_agree).",
+   "C++ compiled with -O3 -march=native -ffp-contract=off -fopenmp; the -ffp-contract=off flag disables FMA contraction so checksums are bit-identical with Go/Rust/Python (strict IEEE-754 double rounding).",
+   "nbody uses 100 Euler steps (not 200000): the step count is tuned so CPython finishes in reasonable time; the workload is otherwise identical in all languages (same N=1024, dt, softening, LCG init, two-phase update).",
+   "Threading: 2 CPU cores; parallel benchmarks use all cores where natural (OpenMP/rayon/goroutines); Python is serial.",
+   "bend2 (Bend 2.0.34 installed OK): omitted from measurements -- Bend's Base library currently provides only U32/F32 numerics (no F64/U64), so the f64 workloads cannot be ported with checksum-identical results, and its tree-based Array makes a 1e8 sieve / JSON parsing impractical."
+  ]
+ },
+ "benchmarks": [
+  {
+   "id": "mandelbrot",
+   "name": "Mandelbrot 1280x800, 500 iter",
+   "unit": "ms",
+   "results": {
+    "cpp": 473.0,
+    "go": 484.0,
+    "python": 23342.0,
+    "rust": 408.0
+   },
+   "checksums": {
+    "cpp": "115573002",
+    "go": "115573002",
+    "python": "115573002",
+    "rust": "115573002"
+   },
+   "checksums_agree": true,
+   "runs_ms": {
+    "cpp": [
+     384.0,
+     566.0,
+     510.0,
+     443.0,
+     473.0
+    ],
+    "go": [
+     427.0,
+     540.0,
+     535.0,
+     484.0,
+     460.0
+    ],
+    "python": [
+     20820.0,
+     25328.0,
+     23342.0,
+     23166.0,
+     24997.0
+    ],
+    "rust": [
+     408.0,
+     410.0,
+     407.0,
+     398.0,
+     429.0
+    ]
+   },
+   "notes": "1280x800, max_iter 500, escape-time. Parallel over rows (C++ OpenMP, Rust rayon, Go goroutines; Python serial). Checksum = u64 sum of per-pixel iteration counts."
+  },
+  {
+   "id": "nbody",
+   "name": "N-body 1024 bodies, Euler O(n^2)",
+   "unit": "ms",
+   "results": {
+    "cpp": 759.0,
+    "go": 563.0,
+    "python": 39878.0,
+    "rust": 514.0
+   },
+   "checksums": {
+    "cpp": "10272289",
+    "go": "10272289",
+    "python": "10272289",
+    "rust": "10272289"
+   },
+   "checksums_agree": true,
+   "runs_ms": {
+    "cpp": [
+     834.0,
+     754.0,
+     759.0,
+     636.0,
+     894.0
+    ],
+    "go": [
+     715.0,
+     559.0,
+     727.0,
+     544.0,
+     563.0
+    ],
+    "python": [
+     41972.0,
+     40055.0,
+     39878.0,
+     36439.0,
+     38749.0
+    ],
+    "rust": [
+     514.0,
+     514.0,
+     527.0,
+     497.0,
+     549.0
+    ]
+   },
+   "notes": "1024 bodies, 100 Euler O(n^2) steps, dt=0.01, softening 1e-9, two-phase (forces then updates). Parallel over bodies in C++/Rust/Go with deterministic per-body results; Python serial. Checksum = round(sum(x+y+z)*1e6)."
+  },
+  {
+   "id": "primes",
+   "name": "Sieve of Eratosthenes to 1e8",
+   "unit": "ms",
+   "results": {
+    "cpp": 419.0,
+    "go": 610.0,
+    "python": 754.0,
+    "rust": 446.0
+   },
+   "checksums": {
+    "cpp": "5761455",
+    "go": "5761455",
+    "python": "5761455",
+    "rust": "5761455"
+   },
+   "checksums_agree": true,
+   "runs_ms": {
+    "cpp": [
+     423.0,
+     415.0,
+     415.0,
+     430.0,
+     419.0
+    ],
+    "go": [
+     677.0,
+     542.0,
+     523.0,
+     689.0,
+     610.0
+    ],
+    "python": [
+     754.0,
+     728.0,
+     725.0,
+     891.0,
+     763.0
+    ],
+    "rust": [
+     570.0,
+     444.0,
+     446.0,
+     450.0,
+     435.0
+    ]
+   },
+   "notes": "Sieve of Eratosthenes to 100,000,000; count must equal 5761455. Python uses slice-assignment marking (same sieve algorithm, idiomatic bulk ops)."
+  },
+  {
+   "id": "matmul",
+   "name": "Matmul 768x768 f64 naive",
+   "unit": "ms",
+   "results": {
+    "cpp": 351.0,
+    "go": 1182.0,
+    "python": 60011.0,
+    "rust": 1720.0
+   },
+   "checksums": {
+    "cpp": "113107250801",
+    "go": "113107250801",
+    "python": "113107250801",
+    "rust": "113107250801"
+   },
+   "checksums_agree": true,
+   "runs_ms": {
+    "cpp": [
+     350.0,
+     355.0,
+     352.0,
+     351.0,
+     346.0
+    ],
+    "go": [
+     1358.0,
+     1238.0,
+     1182.0,
+     1140.0,
+     1172.0
+    ],
+    "python": [
+     60011.0,
+     64924.0,
+     59800.0,
+     60780.0,
+     59897.0
+    ],
+    "rust": [
+     1651.0,
+     1754.0,
+     1627.0,
+     2004.0,
+     1720.0
+    ]
+   },
+   "notes": "768x768 f64, naive i-j-k triple loop, serial in all languages. Checksum = round(sum(C)*1000)."
+  },
+  {
+   "id": "json",
+   "name": "JSON parse+serialize ~5MB x20",
+   "unit": "ms",
+   "results": {
+    "cpp": 3262.0,
+    "go": 4576.0,
+    "python": 15729.0,
+    "rust": 1491.0
+   },
+   "checksums": {
+    "cpp": "36b76f04c3f2d167",
+    "go": "36b76f04c3f2d167",
+    "python": "36b76f04c3f2d167",
+    "rust": "36b76f04c3f2d167"
+   },
+   "checksums_agree": true,
+   "runs_ms": {
+    "cpp": [
+     3276.0,
+     3256.0,
+     3662.0,
+     3262.0,
+     3178.0
+    ],
+    "go": [
+     4865.0,
+     4576.0,
+     4858.0,
+     4461.0,
+     4543.0
+    ],
+    "python": [
+     15633.0,
+     15729.0,
+     16494.0,
+     15897.0,
+     15546.0
+    ],
+    "rust": [
+     1694.0,
+     1704.0,
+     1491.0,
+     1477.0,
+     1471.0
+    ]
+   },
+   "notes": "~5MB generated payload (payload.json), 20 iterations of parse+canonical-reserialize (sorted keys, compact separators), FNV-1a-64 asserted == 36b76f04c3f2d167 each iteration."
+  }
+ ],
+ "rpc": {
+  "payloads": [
+   "1KB",
+   "256KB"
+  ],
+  "grpc": {
+   "1KB": {
+    "latency_p50_ms": 0.393,
+    "latency_p99_ms": 1.271,
+    "seq_n": 2000,
+    "throughput_rps": 2375.3,
+    "conc_total": 11887
+   },
+   "256KB": {
+    "latency_p50_ms": 2.409,
+    "latency_p99_ms": 7.296,
+    "seq_n": 2000,
+    "throughput_rps": 640.1,
+    "conc_total": 3205
+   }
+  },
+  "rest": {
+   "1KB": {
+    "latency_p50_ms": 0.578,
+    "latency_p99_ms": 1.235,
+    "seq_n": 2000,
+    "throughput_rps": 1892.8,
+    "conc_total": 9720
+   },
+   "256KB": {
+    "latency_p50_ms": 0.695,
+    "latency_p99_ms": 3.491,
+    "seq_n": 2000,
+    "throughput_rps": 1275.8,
+    "conc_total": 6797
+   }
+  },
+  "notes": "Python localhost. gRPC: grpcio server (16 worker threads) over a Unix-domain socket (TCP localhost was unusable: this VM's egress proxy env vars hijack grpc's HTTP/2 client connections). REST: stdlib ThreadingHTTPServer on 127.0.0.1:8000, POST /echo. Sequential: 2000 calls, p50/p99 per-call latency. Concurrent: 8 clients x 5s, throughput req/s. Deterministic payload bytes (random.Random(1234))."
+ }
+}

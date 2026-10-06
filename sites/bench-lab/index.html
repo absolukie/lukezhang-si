@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bench Lab — Language Benchmarks, measured live</title>
+<meta name="description" content="Real measured benchmarks: Rust vs Go vs C++ vs Python across 5 workloads. Every number measured on the same VM.">
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#12161f; --panel2:#171c27; --text:#e8ecf4; --muted:#9aa4b8;
+    --line:#232a3a; --accent:#7cc4ff;
+    --rust:#e8845c; --go:#4cc3d9; --cpp:#7c9ff5; --python:#e8c547;
+    --grpc:#8be89b; --rest:#f5a97c;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.55;font-size:16px}
+  button{touch-action:manipulation}
+  .wrap{max-width:860px;margin:0 auto;padding:0 16px 80px}
+  header{padding:28px 0 8px}
+  .kicker{color:var(--muted);font-size:13px;letter-spacing:.12em;text-transform:uppercase}
+  h1{font-size:30px;line-height:1.2;margin:6px 0 8px;letter-spacing:-.01em}
+  h1 .live{display:inline-block;font-size:12px;vertical-align:middle;margin-left:8px;
+    color:#0b0e14;background:#8be89b;border-radius:999px;padding:3px 10px;font-weight:700;letter-spacing:.06em}
+  .sub{color:var(--muted);font-size:15px;max-width:60ch}
+  .badge{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font-size:12.5px;color:var(--muted);
+    border:1px solid var(--line);border-radius:999px;padding:4px 12px;background:var(--panel)}
+  .badge svg{width:14px;height:14px}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:18px 16px;margin:18px 0}
+  section h2{font-size:19px;margin:0 0 4px}
+  section .desc{color:var(--muted);font-size:13.5px;margin:0 0 12px}
+  .toggle{display:inline-flex;background:var(--panel2);border:1px solid var(--line);
+    border-radius:999px;padding:3px;margin:0 0 12px}
+  .toggle button{border:0;background:transparent;color:var(--muted);font-size:13.5px;
+    padding:7px 16px;border-radius:999px;cursor:pointer;font-weight:600}
+  .toggle button[aria-pressed="true"]{background:var(--accent);color:#0b0e14}
+  svg.chart{width:100%;height:auto;display:block}
+  .bar-label{font-size:12.5px;fill:var(--text);font-weight:600}
+  .bar-value{font-size:12px;fill:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .axis{font-size:10.5px;fill:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  table{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px}
+  th,td{padding:9px 8px;text-align:right;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  th{color:var(--muted);font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.05em}
+  td.num{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums}
+  .langdot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:7px;vertical-align:baseline}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;word-break:break-all}
+  .method{font-size:14px;color:var(--muted)}
+  .method li{margin:7px 0}
+  .method code{color:var(--text);background:var(--panel2);padding:1px 6px;border-radius:6px;font-size:12.5px}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13.5px;margin-top:8px}
+  .kv dt{color:var(--muted)} .kv dd{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
+  footer{color:var(--muted);font-size:12.5px;text-align:center;padding:24px 0}
+  .err{background:#3a1d1d;border:1px solid #7c2d2d;color:#f5c6c6;border-radius:12px;padding:16px;margin:18px 0}
+  @media (min-width:640px){ h1{font-size:36px} section{padding:22px 22px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">Measured on real hardware</div>
+    <h1>Bench Lab <span class="live">LIVE DATA</span></h1>
+    <p class="sub">Five identical workloads in Rust, Go, C++ and Python.
+      Every number below was measured on the same 2-core VM. No simulations, no estimates.</p>
+    <div class="badge">
+      <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.5" stroke="#7cc4ff" stroke-width="1.6"/><path d="M8 4.5V8l2.4 1.6" stroke="#7cc4ff" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <span>build <strong id="buildVersion" class="mono">v2026.10.01-21.19</strong></span>
+      <span aria-hidden="true">·</span><span id="metaLine">loading…</span>
+    </div>
+  </header>
+
+  <div id="loadError"></div>
+  <div id="content" hidden>
+    <section id="secBars">
+      <h2>Benchmark results</h2>
+      <p class="desc">Wall-clock compute time per workload. Lower is faster. Toggle log scale to compare across orders of magnitude.</p>
+      <div class="toggle" role="group" aria-label="Scale">
+        <button id="btnLin" aria-pressed="true">Linear</button>
+        <button id="btnLog" aria-pressed="false">Log</button>
+      </div>
+      <div id="barCharts"></div>
+    </section>
+
+    <section>
+      <h2>Speedup vs Python</h2>
+      <p class="desc">How many times faster each language is than Python on the same workload (higher is better).</p>
+      <div style="overflow-x:auto"><table id="speedupTable" aria-label="Speedup versus Python"></table></div>
+    </section>
+
+    <section>
+      <h2>Checksums</h2>
+      <p class="desc">Every language computed bit-identical results per workload (C++ uses <span class="mono">-ffp-contract=off</span> for strict IEEE-754). If any of these differed, the run would be rejected.</p>
+      <div style="overflow-x:auto"><table id="checksumTable"></table></div>
+    </section>
+
+    <section>
+      <h2>Methodology</h2>
+      <ul class="method" id="methodList"></ul>
+      <h3 style="font-size:15px;margin:16px 0 4px">Toolchain versions</h3>
+      <dl class="kv" id="versionList"></dl>
+    </section>
+  </div>
+
+  <footer>Bench Lab · every figure measured on this VM · <span class="mono" id="footVersion"></span></footer>
+</div>
+
+<script>
+"use strict";
+const BUILD_VERSION = document.getElementById("buildVersion").textContent.trim();
+document.getElementById("footVersion").textContent = BUILD_VERSION;
+
+const LANGS = [
+  {id:"rust",   name:"Rust",   color:"#e8845c"},
+  {id:"go",     name:"Go",     color:"#4cc3d9"},
+  {id:"cpp",    name:"C++",    color:"#7c9ff5"},
+  {id:"python", name:"Python", color:"#e8c547"},
+];
+
+const fmtMs = v => v >= 1000 ? (v/1000).toFixed(2)+" s" : v >= 100 ? v.toFixed(0)+" ms" : v.toFixed(1)+" ms";
+
+let DATA = null, logScale = false;
+
+/* ---------- horizontal bar chart ---------- */
+function barChartSVG(title, series, unit){
+  // series: [{label, value, color}]
+  const W = 640, rowH = 34, top = 8, labelW = 92, valW = 92, padR = 8;
+  const plotW = W - labelW - valW - padR;
+  const H = top + series.length*rowH + 26;
+  const vals = series.map(s=>s.value);
+  const mn = Math.min(...vals), mx = Math.max(...vals);
+  const scale = v => {
+    if(!logScale){ return (v/mx)*plotW; }
+    const lmn = Math.log10(Math.max(mn,1e-9)), lmx = Math.log10(Math.max(mx,1e-9));
+    if(lmx===lmn) return plotW;
+    return ((Math.log10(Math.max(v,1e-9))-lmn)/(lmx-lmn))*plotW;
+  };
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${title}">`;
+  s += `<text x="0" y="16" font-size="14" font-weight="700" fill="var(--text)">${title}</text>`;
+  series.forEach((d,i)=>{
+    const y = top + 18 + i*rowH;
+    const bw = Math.max(3, scale(d.value));
+    s += `<text class="bar-label" x="0" y="${y+13}">${d.label}</text>`;
+    s += `<rect x="${labelW}" y="${y}" width="${bw.toFixed(1)}" height="18" rx="4" fill="${d.color}"/>`;
+    s += `<text class="bar-value" x="${labelW+bw+8}" y="${y+13}">${fmtMs(d.value)}</text>`;
+  });
+  // axis ticks
+  const ticks = logScale
+    ? (()=>{const out=[];let p=Math.pow(10,Math.floor(Math.log10(Math.max(mn,1e-9))));while(p<=mx*1.0001){out.push(p);p*=10;}return out;})()
+    : [0, mx/2, mx];
+  ticks.forEach(t=>{
+    const x = labelW + scale(t);
+    s += `<line x1="${x}" y1="${top+14}" x2="${x}" y2="${H-22}" stroke="var(--line)" stroke-width="1"/>`;
+    s += `<text class="axis" x="${x}" y="${H-8}" text-anchor="middle">${fmtMs(t)}</text>`;
+  });
+  return s + "</svg>";
+}
+
+function renderBars(){
+  const el = document.getElementById("barCharts");
+  el.innerHTML = DATA.benchmarks.map(b=>{
+    const series = LANGS.filter(l=>b.results[l.id]!=null)
+      .map(l=>({label:l.name, value:b.results[l.id], color:l.color}))
+      .sort((a,c)=>a.value-c.value);
+    return barChartSVG(b.name, series);
+  }).join("");
+}
+
+function renderSpeedup(){
+  const t = document.getElementById("speedupTable");
+  let h = "<tr><th>Workload</th>"+LANGS.filter(l=>l.id!=="python")
+    .map(l=>`<th><span class="langdot" style="background:${l.color}"></span>${l.name}</th>`).join("")+"</tr>";
+  DATA.benchmarks.forEach(b=>{
+    const py = b.results.python;
+    h += `<tr><td>${b.name}</td>` + LANGS.filter(l=>l.id!=="python").map(l=>{
+      const v = b.results[l.id];
+      const sp = (v && py) ? (py/v) : null;
+      return `<td class="num">${sp==null?"—":sp.toFixed(1)+"×"}</td>`;
+    }).join("") + "</tr>";
+  });
+  t.innerHTML = h;
+}
+
+function renderChecksums(){
+  const t = document.getElementById("checksumTable");
+  let h = "<tr><th>Workload</th><th>Checksum (all languages)</th><th>Agree</th></tr>";
+  DATA.benchmarks.forEach(b=>{
+    const vals = Object.values(b.checksums||{});
+    const uniq = [...new Set(vals)];
+    h += `<tr><td>${b.name}</td><td class="mono">${uniq.join(", ")||"—"}</td>`+
+         `<td>${b.checksums_agree
+            ? '<svg width="16" height="16" viewBox="0 0 16 16" aria-label="agree"><circle cx="8" cy="8" r="7" fill="#1d3a24"/><path d="M5 8.2l2 2 4-4.4" stroke="#8be89b" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>'
+            : '<span style="color:#f5a97c">MISMATCH</span>'}</td></tr>`;
+  });
+  t.innerHTML = h;
+}
+
+function renderMeta(){
+  const m = DATA.meta;
+  document.getElementById("metaLine").textContent =
+    `${m.date} · ${m.vm} · median of ${m.runs} runs`;
+  const ul = document.getElementById("methodList");
+  ul.innerHTML =
+    `<li>Each program prints <span class="mono">&lt;bench&gt; &lt;lang&gt; &lt;ms&gt; &lt;checksum&gt;</span>; ms is compute wall time measured inside the program. Median of ${m.runs} runs.</li>` +
+    m.notes.map(n=>`<li>${n}</li>`).join("");
+  const dl = document.getElementById("versionList");
+  dl.innerHTML = Object.entries(m.versions||{}).map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join("");
+}
+
+async function init(){
+  try{
+    const r = await fetch("results.json", {cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    DATA = await r.json();
+  }catch(e){
+    document.getElementById("loadError").innerHTML =
+      `<div class="err"><strong>Could not load results.json.</strong><br>${e.message}<br>`+
+      `Serve this directory over HTTP (e.g. <span class="mono">python3 -m http.server</span>) so fetch() works.</div>`;
+    return;
+  }
+  document.getElementById("content").hidden = false;
+  renderBars(); renderSpeedup(); renderChecksums(); renderMeta();
+  const bL = document.getElementById("btnLin"), bG = document.getElementById("btnLog");
+  bL.onclick = ()=>{ logScale=false; bL.setAttribute("aria-pressed","true"); bG.setAttribute("aria-pressed","false"); renderBars(); };
+  bG.onclick = ()=>{ logScale=true; bL.setAttribute("aria-pressed","false"); bG.setAttribute("aria-pressed","true"); renderBars(); };
+}
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>How an LLM Works — an interactive blueprint</title>
+<meta name="description" content="A tappable, interactive diagram explaining how a large language model works — tokenization, embeddings, attention, sampling — with live toy-scale demos. Runs entirely in your browser.">
+<meta name="theme-color" content="#0b101c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="How LLMs Work">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="hero">
+  <p class="kicker">An interactive blueprint · tap any stage</p>
+  <h1>How a large<br>language model works</h1>
+  <p class="lede">A language model does one trick: it guesses the next word. To pull it off, it turns your words into numbers, runs them through a stack of identical blocks that mix in context, then rolls weighted dice to pick what comes next — one word at a time, hundreds of times per answer. Tap any stage below and play with the working toys.</p>
+  <p class="flow-note" aria-hidden="true"><span class="flow-arrow">↓</span> data flows down</p>
+</header>
+
+<main>
+  <figure class="flow-fig">
+        <div class="flow-scroll">
+  <svg width="1030" height="224" viewBox="0 0 1030 224" role="img" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" aria-label="End-to-end inference pipeline: raw text, tokenizer, token IDs, embeddings, transformer blocks, logits, sampling, text out, with an autoregressive feedback loop">
+  <defs><marker id="arrA" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e9a13b"/></marker></defs>
+  <g font-size="12" fill="#ece7d8" text-anchor="middle">
+  <rect x="6" y="32" width="108" height="56" rx="8" fill="#0d1424" stroke="#62b6a4" stroke-width="1.5"/>
+  <text x="60" y="62">raw text</text>
+  <rect x="136" y="32" width="108" height="56" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+  <text x="190" y="62">tokenizer</text>
+  <rect x="266" y="32" width="108" height="56" rx="8" fill="#0d1424" stroke="#62b6a4" stroke-width="1.5"/>
+  <text x="320" y="62">token IDs</text>
+  <rect x="396" y="32" width="108" height="56" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+  <text x="450" y="62">embeddings</text>
+  <rect x="526" y="32" width="108" height="56" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+  <text x="580" y="55">transformer</text><text x="580" y="71">blocks ×N</text>
+  <rect x="656" y="32" width="108" height="56" rx="8" fill="#0d1424" stroke="#62b6a4" stroke-width="1.5"/>
+  <text x="710" y="62">logits</text>
+  <rect x="786" y="32" width="108" height="56" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+  <text x="840" y="62">sampling</text>
+  <rect x="916" y="32" width="108" height="56" rx="8" fill="#0d1424" stroke="#62b6a4" stroke-width="1.5"/>
+  <text x="970" y="62">text out</text>
+  </g>
+  <g stroke="#e9a13b" stroke-width="1.5" fill="none">
+  <path d="M114,60 H132" marker-end="url(#arrA)"/>
+  <path d="M244,60 H262" marker-end="url(#arrA)"/>
+  <path d="M374,60 H392" marker-end="url(#arrA)"/>
+  <path d="M504,60 H522" marker-end="url(#arrA)"/>
+  <path d="M634,60 H652" marker-end="url(#arrA)"/>
+  <path d="M764,60 H782" marker-end="url(#arrA)"/>
+  <path d="M894,60 H912" marker-end="url(#arrA)"/>
+  </g>
+  <path d="M970,88 V196 H320 V94" fill="none" stroke="#e9a13b" stroke-width="1.5" stroke-dasharray="6 5" marker-end="url(#arrA)"/>
+  <text x="645" y="184" font-size="11" fill="#98a0b3" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">append token &amp; repeat</text>
+  </svg>
+        </div>
+        <figcaption class="flow-cap">One token’s journey: text → numbers → the machine → a dice roll → text, then the loop repeats.</figcaption>
+      </figure>
+
+<section class="pipeline" aria-label="The LLM pipeline, top to bottom">
+  <span class="pulse" aria-hidden="true"></span><span class="pulse p2" aria-hidden="true"></span><span class="pulse p3" aria-hidden="true"></span>
+
+  <!-- 1 · TOKENIZER -->
+  <article class="node" id="st-tokenizer">
+    <button class="node-head" aria-expanded="false" aria-controls="st-tokenizer-body">
+      <span class="num" aria-hidden="true">1</span>
+      <span class="head-text">
+        <span class="stage-name">Tokenizer</span>
+        <span class="teaser">Text in, numbers out.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-tokenizer-body" hidden>
+      <p class="plain">Computers can't read letters — only numbers. So the first thing any language model does is chop your text into pieces called <b>tokens</b>: whole words, word chunks, sometimes single letters. Each piece gets an ID number. From this point on, the model never sees your words — only the numbers.</p>
+      <aside class="analogy"><p><span class="who">Analogy</span><b>Think of it like…</b> cutting a sentence into Scrabble tiles. Common letter-groups like <i>un</i> or <i>ing</i> earn their own printed tile; rare words get spelled out letter by letter. Either way, every tile gets a number stamped on the back.</p></aside>
+      <p class="plain">Why chop text at all? Because the model only speaks numbers — and the vocabulary size is a tradeoff. Too few tiles and every sentence becomes a long crawl of letters; too many and the final layer, which scores <i>every</i> tile, gets enormous and slow. Real vocabularies land around 100,000–200,000 tiles: the compromise between short sequences and a manageable output layer.</p>
+      <p class="plain">The standard recipe for learning those tiles is <b>BPE</b> — byte-pair encoding: start from single characters, repeatedly merge the most frequent neighboring pair, stop at the target size. The playground below runs the genuine algorithm, trained live on a toy corpus in your browser.</p>
+      <p class="plain">What do the little numbers mean — like the <b>41</b> stamped on “un”? Each one is the tile's address in the <b>vocabulary</b>: one giant numbered list of every tile the model knows. “un” is entry #41, so your text reaches the model as the number 41 — it never sees the letters u-n at all. The numbers themselves are arbitrary (another model's “un” might be #9,204); what matters is that words become a list of numbers the model can compute with. In the next stage, each number gets traded in for its starting meaning.</p>
+      <div class="demo">
+        <p class="demo-label">Simplified illustration · live toy model</p>
+        <h3>Tokenizer playground</h3>
+        <p class="demo-note" id="tok-note">A genuine BPE tokenizer — “byte-pair encoding”, the standard trick tokenizers use to learn their pieces — trained live in your browser on 49 tiny sentences. Toy vocabulary: 75 pieces. GPT's real one learns exactly this way, at vastly larger scale.</p>
+        <label class="field">
+          <span>Type something <em>(toy vocab: a–z and spaces only)</em></span>
+          <input id="tok-input" type="text" value="unbelievable" maxlength="120" autocomplete="off" autocapitalize="off" spellcheck="false">
+        </label>
+        <div class="tok-out" id="tok-out" aria-live="polite"></div>
+        <p class="tok-stats" id="tok-stats"></p>
+        <div class="merge-wrap">
+          <p class="merge-title">Merge trace for “<span id="merge-word">unbelievable</span>” <em>— every BPE merge, in order</em></p>
+          <div class="merge-steps" id="merge-steps"></div>
+          <div class="merge-ctrl">
+            <button type="button" class="ghost-btn" id="merge-play">▶ Play merges</button>
+            <button type="button" class="ghost-btn" id="merge-step">Step →</button>
+            <button type="button" class="ghost-btn" id="merge-back">← Back</button>
+            <button type="button" class="ghost-btn" id="merge-reset">Reset</button>
+          </div>
+        </div>
+      </div>
+      <div class="ex-car">
+        <div class="ex-top"><h4>Fifty tokenizations, up close</h4>
+          <div class="ex-nav"><button type="button" class="ex-prev" aria-label="Previous example">&larr;</button><button type="button" class="ex-next" aria-label="Next example">&rarr;</button></div>
+        </div>
+        <div class="ex-track" id="tok-ex-track" tabindex="0" role="region" aria-label="Tokenizer examples &mdash; swipe to browse"></div>
+      </div>
+      <p class="plain">How close is the toy to the real thing? Closer than it looks: the playground above runs the genuine BPE merge loop — count adjacent pairs, merge the most frequent, repeat — the same core algorithm inside GPT-2's tokenizer, tiktoken's BPE mode, and SentencePiece's BPE mode. The tokenizer family differs in details, not in the idea. Six of them, side by side:</p>
+      <div class="ex-car">
+        <div class="ex-top"><h4>The tokenizer family</h4>
+          <div class="ex-nav"><button type="button" class="ex-prev" aria-label="Previous example">&larr;</button><button type="button" class="ex-next" aria-label="Next example">&rarr;</button></div>
+        </div>
+        <div class="ex-track" tabindex="0" role="region" aria-label="Tokenizer family — swipe to browse">
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">The tokenizer family · real algorithms in use today</p>
+            <p class="ex-input"><b>BPE</b> — the toy's own family</p>
+            <p class="ex-why"><b>Who uses it:</b> GPT-2, RoBERTa (~50k pieces).<br><b>How it works:</b> start from single characters, repeatedly merge the most frequent neighboring pair.<br><b>Vs the toy:</b> the identical algorithm — the only differences are scale (75 tiles vs 50,000) and training data (49 sentences vs half the internet).</p>
+          </div><p class="ex-count">1 / 6</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">The tokenizer family · real algorithms in use today</p>
+            <p class="ex-input"><b>Byte-level BPE</b> — tiktoken</p>
+            <p class="ex-why"><b>Who uses it:</b> GPT-3.5, GPT-4, GPT-4o (~100k–200k pieces).<br><b>How it works:</b> BPE on raw UTF-8 bytes instead of characters — any text in any language always breaks down cleanly, so there is no “unknown” tile.<br><b>Vs the toy:</b> the same merge loop; the toy drops anything outside a–z, tiktoken never drops a single byte.</p>
+          </div><p class="ex-count">2 / 6</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">The tokenizer family · real algorithms in use today</p>
+            <p class="ex-input"><b>WordPiece</b></p>
+            <p class="ex-why"><b>Who uses it:</b> BERT (~30k pieces).<br><b>How it works:</b> greedy longest-match from the left; merges are chosen to maximize the likelihood of the training data, not raw pair frequency.<br><b>Vs the toy:</b> the same goal — frequent chunks earn their own tiles — with a different scoreboard for which pair merges.</p>
+          </div><p class="ex-count">3 / 6</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">The tokenizer family · real algorithms in use today</p>
+            <p class="ex-input"><b>SentencePiece</b></p>
+            <p class="ex-why"><b>Who uses it:</b> LLaMA, Gemma, T5.<br><b>How it works:</b> treats the space as just another character, so it trains on raw text with no pre-splitting — cleaner across languages. Can run BPE or Unigram underneath.<br><b>Vs the toy:</b> the merge engine can be the very same BPE; the upgrade is how spaces are handled.</p>
+          </div><p class="ex-count">4 / 6</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">The tokenizer family · real algorithms in use today</p>
+            <p class="ex-input"><b>Unigram</b></p>
+            <p class="ex-why"><b>Who uses it:</b> T5, ALBERT.<br><b>How it works:</b> starts with a huge pile of candidate tiles and prunes by probability — each word is split whichever way is most likely, and it can offer several candidate splits.<br><b>Vs the toy:</b> the same destination (probable chunks become tiles), reached by probability instead of frequency counting.</p>
+          </div><p class="ex-count">5 / 6</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">The tokenizer family · real algorithms in use today</p>
+            <p class="ex-input"><b>Tokenizer-free</b> — the radical option</p>
+            <p class="ex-why"><b>Who uses it:</b> ByT5, CANINE, BLT (Meta, 2024).<br><b>How it works:</b> no fixed tile list at all — the model reads raw bytes or characters and learns its own chunking during training.<br><b>Vs the toy:</b> the opposite bet; proof that a fixed vocabulary is a choice, not a law. The tradeoff: longer sequences and more compute.</p>
+          </div><p class="ex-count">6 / 6</p></div></div>
+        </div>
+      </div>
+      <p class="plain">Why should you care how text gets chopped? Three ways it bites in real life. The model can&rsquo;t truly see spelling &mdash; &ldquo;the&rdquo; is one tile but &ldquo;teh&rdquo; is three, so a typo looks like a different word entirely. It can&rsquo;t do arithmetic &mdash; numbers arrive as digit confetti, never as values. And other languages pay more &mdash; English gets roughly a tile per word while Chinese often costs a tile per character, making the same meaning longer, slower, and pricier to process.</p>
+      <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;The model never sees words &mdash; only numbered tiles. &lsquo;Unbelievable&rsquo; is tile 41 + tile 51 to the model, and it has no idea what either &lsquo;means&rsquo; yet.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think the model reads text like we do &mdash; <b>actually &ldquo;the&rdquo; is a single tile while the typo &ldquo;teh&rdquo; shatters into three, so a one-letter slip looks like a completely different input.</b></p></aside>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p>Most tokenizers learn their vocabulary with <b>byte-pair encoding</b>: start from single characters and repeatedly merge the most frequent adjacent pair, until the vocabulary hits its target size — tens of thousands of pieces. Frequent words earn their own token; rare words get spelled out in chunks, so <i>any</i> text can be represented. Rule of thumb: about 4 characters ≈ 1 token in English. The tokenizer is frozen before training and shared by the model forever — which is why a model can never learn a new word's spelling after the fact.</p>
+      </div>
+    </div>
+  </article>
+
+  <!-- 2 · EMBEDDINGS -->
+  <article class="node" id="st-embed">
+    <button class="node-head" aria-expanded="false" aria-controls="st-embed-body">
+      <span class="num" aria-hidden="true">2</span>
+      <span class="head-text">
+        <span class="stage-name">Embeddings <span class="amp">+</span> position</span>
+        <span class="teaser">Every piece gets a personality — and a seat number.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-embed-body" hidden>
+      <p class="plain">Each token's ID is swapped for a long list of numbers — its <b>embedding</b>. Think of those numbers as coordinates on a map: words with similar meanings end up as neighbors. <i>King</i> lands near <i>queen</i>, far from <i>carburetor</i>. Then every vector gets stamped with its <b>position</b> — because <i>dog bites man</i> and <i>man bites dog</i> use the same words in a different order, and order changes everything.</p>
+      <aside class="analogy"><p><span class="who">Analogy</span><b>Think of it like…</b> giving every Scrabble tile a personality, then placing it on a giant map where similar meanings live in the same neighborhood. And like seat numbers at a dinner table, each tile is also stamped with where it sits — move the seats, change the conversation.</p></aside>
+      <div class="demo">
+        <p class="demo-label">Simplified illustration · toy data</p>
+        <h3>Embedding space in 3D</h3>
+        <p class="demo-note">All 75 pieces of the toy vocabulary, each one a point floating in meaning-space. Drag to spin it; tap a point to see which piece it is. Real models use thousands of dimensions — squashed to 3 here so you can look at it.</p>
+        <div class="pc-wrap"><canvas id="pc-canvas"></canvas></div>
+        <p class="pc-read" id="pc-read">Drag to rotate · tap a point to name it.</p>
+      </div>
+      <div class="ex-car">
+        <div class="ex-top"><h4>What “meaning as distance” feels like</h4>
+          <div class="ex-nav"><button type="button" class="ex-prev" aria-label="Previous example">←</button><button type="button" class="ex-next" aria-label="Next example">→</button></div>
+        </div>
+        <div class="ex-track" tabindex="0" role="region" aria-label="Embedding examples — swipe to browse">
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">Simplified illustration · sketch, not real data</p>
+            <svg class="minisvg" viewBox="0 0 300 130" role="img" aria-label="king and queen plotted close together, carburetor far away">
+              <circle cx="90" cy="55" r="7" fill="#62b6a4"/><text x="90" y="80" text-anchor="middle" fill="#ece7d8" font-size="12" font-family="ui-monospace,monospace">king</text>
+              <circle cx="130" cy="70" r="7" fill="#62b6a4"/><text x="130" y="95" text-anchor="middle" fill="#ece7d8" font-size="12" font-family="ui-monospace,monospace">queen</text>
+              <circle cx="250" cy="50" r="7" fill="#e9a13b"/><text x="250" y="75" text-anchor="middle" fill="#ece7d8" font-size="12" font-family="ui-monospace,monospace">carburetor</text>
+              <line x1="97" y1="58" x2="123" y2="67" stroke="#98a0b3" stroke-dasharray="4 3"/><text x="108" y="52" text-anchor="middle" fill="#98a0b3" font-size="10" font-family="ui-monospace,monospace">close</text>
+              <line x1="137" y1="68" x2="243" y2="52" stroke="#98a0b3" stroke-dasharray="4 3"/><text x="192" y="48" text-anchor="middle" fill="#98a0b3" font-size="10" font-family="ui-monospace,monospace">far</text>
+            </svg>
+            <p class="ex-why"><b>Meaning is distance.</b> Words that show up in similar sentences get pulled together during training. <i>King</i> and <i>queen</i> are neighbors; <i>carburetor</i> lives across town.</p>
+          </div><p class="ex-count">1 / 7</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">Simplified illustration · sketch, not real data</p>
+            <svg class="minisvg" viewBox="0 0 300 130" role="img" aria-label="two clusters: a river cluster and a money cluster, each containing its own bank">
+              <ellipse cx="80" cy="60" rx="62" ry="42" fill="rgba(98,182,164,.12)" stroke="#62b6a4" stroke-dasharray="5 4"/>
+              <text x="80" y="18" text-anchor="middle" fill="#62b6a4" font-size="11" font-family="ui-monospace,monospace">river things</text>
+              <circle cx="55" cy="60" r="6" fill="#62b6a4"/><text x="55" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">river</text>
+              <circle cx="105" cy="60" r="6" fill="#62b6a4"/><text x="105" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">bank¹</text>
+              <ellipse cx="225" cy="60" rx="62" ry="42" fill="rgba(233,161,59,.10)" stroke="#e9a13b" stroke-dasharray="5 4"/>
+              <text x="225" y="18" text-anchor="middle" fill="#e9a13b" font-size="11" font-family="ui-monospace,monospace">money things</text>
+              <circle cx="200" cy="60" r="6" fill="#e9a13b"/><text x="200" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">money</text>
+              <circle cx="250" cy="60" r="6" fill="#e9a13b"/><text x="250" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">bank²</text>
+            </svg>
+            <p class="ex-why"><b>One spelling, two neighborhoods.</b> <i>Bank</i> sits in the river cluster when the sentence is about water, and in the money cluster when it's about cash. Context picks the address.</p>
+          </div><p class="ex-count">2 / 7</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">Simplified illustration · sketch, not real data</p>
+            <svg class="minisvg" viewBox="0 0 300 130" role="img" aria-label="two sentence points far apart: dog bites man versus man bites dog">
+              <circle cx="70" cy="60" r="8" fill="#62b6a4"/><text x="70" y="88" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">dog bites man</text>
+              <circle cx="230" cy="60" r="8" fill="#e9a13b"/><text x="230" y="88" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">man bites dog</text>
+              <line x1="78" y1="60" x2="222" y2="60" stroke="#98a0b3" stroke-dasharray="4 3"/><text x="150" y="48" text-anchor="middle" fill="#98a0b3" font-size="10" font-family="ui-monospace,monospace">same words — far apart</text>
+              <text x="150" y="118" text-anchor="middle" fill="#98a0b3" font-size="10" font-family="ui-monospace,monospace">position stamps make the difference</text>
+            </svg>
+            <p class="ex-why"><b>Order changes meaning.</b> Identical words, shuffled — and the sentence lands somewhere completely different. Without the position stamp, the model couldn't tell them apart.</p>
+          </div><p class="ex-count">3 / 7</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">Simplified illustration · sketch, not real data</p>
+            <svg class="minisvg" viewBox="0 0 300 130" role="img" aria-label="king minus man plus woman lands near queen">
+              <circle cx="50" cy="60" r="6" fill="#62b6a4"/><text x="50" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">king</text>
+              <text x="86" y="64" text-anchor="middle" fill="#98a0b3" font-size="14" font-family="ui-monospace,monospace">−</text>
+              <circle cx="115" cy="60" r="6" fill="#98a0b3"/><text x="115" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">man</text>
+              <text x="150" y="64" text-anchor="middle" fill="#98a0b3" font-size="14" font-family="ui-monospace,monospace">+</text>
+              <circle cx="180" cy="60" r="6" fill="#98a0b3"/><text x="180" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">woman</text>
+              <text x="208" y="64" text-anchor="middle" fill="#e9a13b" font-size="14" font-family="ui-monospace,monospace">≈</text>
+              <circle cx="245" cy="60" r="7" fill="#e9a13b"/><text x="245" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">queen</text>
+            </svg>
+            <p class="ex-why"><b>Directions mean things.</b> The famous party trick: walk from <i>man</i> toward <i>woman</i> starting at <i>king</i>, and you land near <i>queen</i>. Researchers really do observe this in trained models.</p>
+          </div><p class="ex-count">4 / 7</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">Simplified illustration · sketch, not real data</p>
+            <svg class="minisvg" viewBox="0 0 300 130" role="img" aria-label="paris minus france plus italy lands near rome">
+              <circle cx="50" cy="60" r="6" fill="#62b6a4"/><text x="50" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">paris</text>
+              <text x="86" y="64" text-anchor="middle" fill="#98a0b3" font-size="14" font-family="ui-monospace,monospace">−</text>
+              <circle cx="115" cy="60" r="6" fill="#98a0b3"/><text x="115" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">france</text>
+              <text x="150" y="64" text-anchor="middle" fill="#98a0b3" font-size="14" font-family="ui-monospace,monospace">+</text>
+              <circle cx="180" cy="60" r="6" fill="#98a0b3"/><text x="180" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">italy</text>
+              <text x="208" y="64" text-anchor="middle" fill="#e9a13b" font-size="14" font-family="ui-monospace,monospace">≈</text>
+              <circle cx="245" cy="60" r="7" fill="#e9a13b"/><text x="245" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">rome</text>
+            </svg>
+            <p class="ex-why"><b>Geography has a direction too.</b> Step from <i>france</i> toward <i>italy</i> starting at <i>paris</i>, and you land near <i>rome</i> — the capital–of relationship points the same way every time.</p>
+          </div><p class="ex-count">5 / 7</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">Simplified illustration · sketch, not real data</p>
+            <svg class="minisvg" viewBox="0 0 300 130" role="img" aria-label="big minus bigger plus small lands near smaller">
+              <circle cx="50" cy="60" r="6" fill="#62b6a4"/><text x="50" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">big</text>
+              <text x="86" y="64" text-anchor="middle" fill="#98a0b3" font-size="14" font-family="ui-monospace,monospace">−</text>
+              <circle cx="115" cy="60" r="6" fill="#98a0b3"/><text x="115" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">bigger</text>
+              <text x="150" y="64" text-anchor="middle" fill="#98a0b3" font-size="14" font-family="ui-monospace,monospace">+</text>
+              <circle cx="180" cy="60" r="6" fill="#98a0b3"/><text x="180" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">small</text>
+              <text x="208" y="64" text-anchor="middle" fill="#e9a13b" font-size="14" font-family="ui-monospace,monospace">≈</text>
+              <circle cx="245" cy="60" r="7" fill="#e9a13b"/><text x="245" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">smaller</text>
+            </svg>
+            <p class="ex-why"><b>Grammar is geometry too.</b> The “one step more” direction that carries <i>big</i> to <i>bigger</i> carries <i>small</i> to <i>smaller</i> — comparatives all point the same way.</p>
+          </div><p class="ex-count">6 / 7</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">Simplified illustration · sketch, not real data</p>
+            <svg class="minisvg" viewBox="0 0 300 130" role="img" aria-label="cat minus cats plus dogs lands near dog">
+              <circle cx="50" cy="60" r="6" fill="#62b6a4"/><text x="50" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">cat</text>
+              <text x="86" y="64" text-anchor="middle" fill="#98a0b3" font-size="14" font-family="ui-monospace,monospace">−</text>
+              <circle cx="115" cy="60" r="6" fill="#98a0b3"/><text x="115" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">cats</text>
+              <text x="150" y="64" text-anchor="middle" fill="#98a0b3" font-size="14" font-family="ui-monospace,monospace">+</text>
+              <circle cx="180" cy="60" r="6" fill="#98a0b3"/><text x="180" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">dogs</text>
+              <text x="208" y="64" text-anchor="middle" fill="#e9a13b" font-size="14" font-family="ui-monospace,monospace">≈</text>
+              <circle cx="245" cy="60" r="7" fill="#e9a13b"/><text x="245" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">dog</text>
+            </svg>
+            <p class="ex-why"><b>Even plurals line up.</b> The one→many direction from <i>cat</i> to <i>cats</i> also carries <i>dogs</i> back to <i>dog</i> — the plural shift is one consistent arrow.</p>
+          </div><p class="ex-count">7 / 7</p></div></div>
+        </div>
+      </div>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p>The lookup table is the <b>embedding matrix</b> — vocabulary-size × model-width, thousands of numbers per token in real models — and it is <i>learned</i> during training: words appearing in similar contexts get pushed together. Position used to be added as fixed sine waves or learned offsets; modern models bake rotation into the attention step itself (<b>RoPE</b>) — and stretch it to huge contexts with rescaling tricks like <b>YaRN</b>, one way open models reach quarter-million-token windows. The resulting vector joins the <b>residual stream</b>: one vector per token that flows through the entire network, refined at every block.</p>
+      </div>      <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;Meaning is geometry: words that behave alike live in the same neighborhood of a thousand-dimensional map.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think each word gets a fixed definition &mdash; <b>actually a word&rsquo;s vector is just a starting address; its meaning gets rewritten by every block that follows. And order isn&rsquo;t built in &mdash; position has to be stamped on.</b></p></aside>
+
+    </div>
+  </article>
+
+  <!-- 3 · TRANSFORMER BLOCKS -->
+  <article class="node" id="st-blocks">
+    <button class="node-head" aria-expanded="false" aria-controls="st-blocks-body">
+      <span class="num" aria-hidden="true">3</span>
+      <span class="head-text">
+        <span class="stage-name">Transformer blocks <span class="times">×N</span></span>
+        <span class="teaser">The engine room — repeated dozens of times.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-blocks-body" hidden>
+      <p class="plain">This is where the understanding gets built. Your vectors march through a tall stack of identical <b>transformer blocks</b> — 96 of them in GPT-3. In each block, tokens trade information with each other, then every vector gets polished on its own. With every block, each word is understood a little more <i>in context</i> — by the last block, <i>bank</i> next to <i>river</i> and <i>bank</i> next to <i>money</i> have become two completely different vectors. Open each part:</p>
+      <aside class="analogy"><p><span class="who">Analogy</span><b>Think of it like…</b> an editorial pass. Each block takes every word's sticky note, lets the words compare notes with each other, then rewrites each note a little smarter. Run 96 passes and the notes get very wise.</p></aside>
+
+      <figure class="flow-fig">
+            <div class="flow-scroll">
+      <svg width="340" height="484" viewBox="0 0 340 484" role="img" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" aria-label="Inside one transformer block: input, layer norm, self-attention, residual add, layer norm, feed-forward network, residual add, output">
+      <defs><marker id="arrB" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e9a13b"/></marker></defs>
+      <defs><marker id="arrBt" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#62b6a4"/></marker></defs>
+      <g font-size="12" fill="#ece7d8" text-anchor="middle">
+      <rect x="40" y="8" width="220" height="44" rx="8" fill="#0d1424" stroke="#62b6a4" stroke-width="1.5"/>
+      <text x="150" y="34">input x · residual stream</text>
+      <rect x="80" y="72" width="140" height="40" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+      <text x="150" y="97">LayerNorm</text>
+      <rect x="60" y="132" width="180" height="44" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+      <text x="150" y="159">self-attention</text>
+      <circle cx="150" cy="216" r="14" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+      <text x="150" y="222" font-size="16" fill="#e9a13b">+</text>
+      <rect x="80" y="250" width="140" height="40" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+      <text x="150" y="275">LayerNorm</text>
+      <rect x="60" y="310" width="180" height="44" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+      <text x="150" y="337">feed-forward net</text>
+      <circle cx="150" cy="394" r="14" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+      <text x="150" y="400" font-size="16" fill="#e9a13b">+</text>
+      <rect x="40" y="428" width="220" height="44" rx="8" fill="#0d1424" stroke="#62b6a4" stroke-width="1.5"/>
+      <text x="150" y="455">output → next block</text>
+      </g>
+      <g stroke="#e9a13b" stroke-width="1.5" fill="none">
+      <path d="M150,52 V68" marker-end="url(#arrB)"/>
+      <path d="M150,112 V128" marker-end="url(#arrB)"/>
+      <path d="M150,176 V198" marker-end="url(#arrB)"/>
+      <path d="M150,230 V246" marker-end="url(#arrB)"/>
+      <path d="M150,290 V306" marker-end="url(#arrB)"/>
+      <path d="M150,354 V376" marker-end="url(#arrB)"/>
+      <path d="M150,408 V424" marker-end="url(#arrB)"/>
+      </g>
+      <path d="M260,30 H296 V394" fill="none" stroke="#62b6a4" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <path d="M296,216 H172" fill="none" stroke="#62b6a4" stroke-width="1.5" marker-end="url(#arrBt)"/>
+      <path d="M296,394 H172" fill="none" stroke="#62b6a4" stroke-width="1.5" marker-end="url(#arrBt)"/>
+      <text transform="translate(310,100) rotate(90)" font-size="10.5" fill="#62b6a4" text-anchor="start" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">residual</text>
+      </svg>
+            </div>
+            <figcaption class="flow-cap">Inside one block: normalize → attend → add back — normalize → feed-forward → add back.</figcaption>
+          </figure>
+
+      <div class="subnode">
+        <button class="sub-head" aria-expanded="false" aria-controls="sub-attn-body">
+          <span class="sub-name">Self-attention <span class="mono-tag">Q · K · V</span></span>
+          <span class="chev sm" aria-hidden="true"></span>
+        </button>
+        <div class="sub-body" id="sub-attn-body" hidden>
+          <p class="plain">The cleverest part of the machine. Every token asks three questions: <b>what am I looking for?</b> (query), <b>what do I offer?</b> (key), and <b>what will I share if chosen?</b> (value). Each token compares its query against everyone else's key — good match, strong link — then mixes in the winners' values. In <i>the cat licked its paw</i>, the word <i>its</i> goes looking for something that could own a paw, and finds <i>cat</i>. Tap through the examples, then try the live heatmap.</p>
+          <aside class="analogy"><p><span class="who">Analogy</span><b>Think of it like…</b> a group chat. Before anyone speaks, each person decides who to listen to: the pronoun checks with the noun, the verb checks with its subject. Attention is just that — every word choosing whose input matters most.</p></aside>
+          <div class="ex-car">
+            <div class="ex-top"><h4>Who listens to whom</h4>
+              <div class="ex-nav"><button type="button" class="ex-prev" aria-label="Previous example">←</button><button type="button" class="ex-next" aria-label="Next example">→</button></div>
+            </div>
+            <div class="ex-track" tabindex="0" role="region" aria-label="Attention examples — swipe to browse">
+              <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+                <p class="ex-kicker">Simplified illustration · hand-set weights</p>
+                <div class="attn-mini" data-ex="0"><div class="am-words"></div><p class="am-note"></p></div>
+                <p class="ex-why"><b>The headline:</b> “its” finds “cat”. Tap any word to see who <b>it</b> listens to — brighter means a stronger pull.</p>
+              </div><p class="ex-count">1 / 4</p></div></div>
+              <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+                <p class="ex-kicker">Simplified illustration · hand-set weights</p>
+                <div class="attn-mini" data-ex="1"><div class="am-words"></div><p class="am-note"></p></div>
+                <p class="ex-why"><b>The headline:</b> the verb looks back at its subject. Tap any word to see who <b>it</b> listens to — brighter means a stronger pull.</p>
+              </div><p class="ex-count">2 / 4</p></div></div>
+              <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+                <p class="ex-kicker">Simplified illustration · hand-set weights</p>
+                <div class="attn-mini" data-ex="2"><div class="am-words"></div><p class="am-note"></p></div>
+                <p class="ex-why"><b>The headline:</b> “not” poisons “good” — negation works by listening. Tap any word to see who <b>it</b> listens to — brighter means a stronger pull.</p>
+              </div><p class="ex-count">3 / 4</p></div></div>
+              <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+                <p class="ex-kicker">Simplified illustration · hand-set weights</p>
+                <div class="attn-mini" data-ex="3"><div class="am-words"></div><p class="am-note"></p></div>
+                <p class="ex-why"><b>The headline:</b> same trick, new sentence — the pattern <b>generalizes</b>. Tap any word to see who <b>it</b> listens to — brighter means a stronger pull.</p>
+              </div><p class="ex-count">4 / 4</p></div></div>
+            </div>
+          </div>
+          <div class="demo">
+            <p class="demo-label">Simplified illustration · real math, toy data</p>
+            <h3>Attention heatmap</h3>
+            <p class="demo-note">Real attention math, computed live — but on random 8-number toy embeddings. A real model <em>learns</em> these numbers; here they're dice rolls, so shuffle them and watch the pattern change. Rows ask, columns answer: how much does each word listen to each other word?</p>
+          <figure class="flow-fig">
+                <div class="flow-scroll">
+          <svg width="640" height="244" viewBox="0 0 640 244" role="img" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" aria-label="Self-attention flow: queries and keys form scores, softmax makes weights, weights mix the values">
+          <defs><marker id="arrC" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e9a13b"/></marker></defs>
+          <g font-size="12" fill="#ece7d8" text-anchor="middle">
+          <rect x="10" y="16" width="140" height="56" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+          <text x="80" y="39">Q · queries</text>
+          <text x="80" y="57" font-size="10" fill="#98a0b3">what I look for</text>
+          <rect x="10" y="92" width="140" height="56" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+          <text x="80" y="115">K · keys</text>
+          <text x="80" y="133" font-size="10" fill="#98a0b3">what I contain</text>
+          <rect x="10" y="168" width="140" height="56" rx="8" fill="#0d1424" stroke="#62b6a4" stroke-width="1.5"/>
+          <text x="80" y="191">V · values</text>
+          <text x="80" y="209" font-size="10" fill="#98a0b3">what I share</text>
+          <rect x="240" y="64" width="150" height="60" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+          <text x="315" y="89">scores</text>
+          <text x="315" y="107" font-size="11" fill="#98a0b3">Q·K / √d</text>
+          <rect x="440" y="64" width="110" height="60" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+          <text x="495" y="89">softmax</text>
+          <text x="495" y="107" font-size="11" fill="#98a0b3">→ weights</text>
+          <rect x="440" y="168" width="150" height="56" rx="8" fill="#0d1424" stroke="#62b6a4" stroke-width="1.5"/>
+          <text x="515" y="191">× V</text>
+          <text x="515" y="209" font-size="10" fill="#98a0b3">weighted output</text>
+          </g>
+          <g stroke="#e9a13b" stroke-width="1.5" fill="none">
+          <path d="M150,44 H200 V94 H236" marker-end="url(#arrC)"/>
+          <path d="M150,120 H200 V94 H236" marker-end="url(#arrC)"/>
+          <path d="M390,94 H436" marker-end="url(#arrC)"/>
+          <path d="M495,124 V164" marker-end="url(#arrC)"/>
+          <path d="M150,196 H436" marker-end="url(#arrC)"/>
+          <path d="M590,196 H622" marker-end="url(#arrC)"/>
+          </g>
+          </svg>
+                </div>
+                <figcaption class="flow-cap">Attention in one glance: queries meet keys, the weights pick the values.</figcaption>
+              </figure>
+            <div class="seg" role="group" aria-label="Example sentence" id="attn-sentences">
+              <button type="button" data-s="0" class="on">cat / mat</button>
+              <button type="button" data-s="1">dog / ball</button>
+              <button type="button" data-s="2">umbrella</button>
+            </div>
+            <div class="heat-wrap"><div class="heat" id="attn-heat" role="img" aria-label="Attention weight heatmap"></div></div>
+            <p class="heat-read" id="attn-read" aria-live="polite">Tap any cell to read its weight.</p>
+            <button type="button" class="btn" id="attn-shuffle">Shuffle embeddings</button>
+          </div>
+          <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+          <div class="deeper" hidden>
+            <p>For input matrix X, each head computes Q=XW<sub>Q</sub>, K=XW<sub>K</sub>, V=XW<sub>V</sub>; scores = QK<sup>T</sup>/√d<sub>k</sub>; a <b>causal mask</b> blanks out future positions — a token may only attend to the left, which is what makes step-by-step generation possible; softmax turns each row of scores into weights; output = weights·V. The pairwise comparison is why attention costs grow with the square of sequence length — the famous O(n²) bottleneck, and the reason frontier labs now compress it: <b>latent attention</b> (MLA) or <b>sparse attention</b> that skips most of the distant past, unlocking million-token contexts.</p>
+          </div>          <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;Every word re-reads the whole sentence and decides who to listen to before it speaks &mdash; &lsquo;it&rsquo; in &lsquo;the cat licked its paw&rsquo; is mostly listening to &lsquo;cat&rsquo;.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think the model reads left-to-right like we do &mdash; <b>actually every token compares itself against all previous tokens at once, in parallel. The &lsquo;reading order&rsquo; is an illusion; the comparison is simultaneous.</b></p></aside>
+
+        </div>
+      </div>
+
+      <div class="subnode">
+        <button class="sub-head" aria-expanded="false" aria-controls="sub-mh-body">
+          <span class="sub-name">Multi-head attention</span>
+          <span class="chev sm" aria-hidden="true"></span>
+        </button>
+        <div class="sub-body" id="sub-mh-body" hidden>
+          <p class="plain">One attention pattern isn't enough, so each block runs many <b>in parallel</b> — called heads. One head might link pronouns to nouns, another might track verb tense, a third might watch punctuation. Their outputs are glued back together into a single vector.</p>
+          <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+          <div class="deeper" hidden>
+            <p>Each head gets its own W<sub>Q</sub>, W<sub>K</sub>, W<sub>V</sub>, projecting to a smaller width d<sub>k</sub> = d<sub>model</sub>/h (GPT-3: 96 heads × 128 dims each). All heads run simultaneously on the same input; their results are concatenated and re-projected with W<sub>O</sub>. Most modern models also share key/value heads across query groups (<b>grouped-query attention</b>), shrinking the memory cache several-fold for nearly free. Heads genuinely specialize during training — researchers have found heads that do nothing but resolve pronouns or match opening brackets to closing ones.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="subnode">
+        <button class="sub-head" aria-expanded="false" aria-controls="sub-ffn-body">
+          <span class="sub-name">Feed-forward network</span>
+          <span class="chev sm" aria-hidden="true"></span>
+        </button>
+        <div class="sub-body" id="sub-ffn-body" hidden>
+          <p class="plain">Attention mixes information <i>between</i> tokens; the feed-forward network works on each token <i>alone</i>. It's a tiny two-layer neural net applied to every position identically — and it's where most of the model's factual “knowledge” lives, as millions of learned associations.</p>
+          <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+          <div class="deeper" hidden>
+            <p>FFN(x) = W<sub>2</sub>·SwiGLU(W<sub>1</sub>x) in most modern models: the vector is expanded to a few times its width, passed through a gated nonlinearity, and squeezed back down. Roughly two-thirds of a transformer's parameters sit in these layers. A useful mental image: the first matrix detects patterns (“this looks like a capital-city context”), the second writes the conclusion back into the vector.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="subnode">
+        <button class="sub-head" aria-expanded="false" aria-controls="sub-nr-body">
+          <span class="sub-name">Layer norm <span class="amp">+</span> residuals</span>
+          <span class="chev sm" aria-hidden="true"></span>
+        </button>
+        <div class="sub-body" id="sub-nr-body" hidden>
+          <p class="plain">Each sub-step is wrapped in two safety rails. The <b>residual connection</b> adds the input back to the output — information can never be destroyed, only refined. <b>Layer normalization</b> rescales the numbers to keep them well-behaved across a hundred layers.</p>
+          <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+          <div class="deeper" hidden>
+            <p>Modern blocks use <b>pre-norm</b>: x + Sublayer(LayerNorm(x)). Residuals give gradients a clean highway back through all N blocks — that's what makes training 100-layer networks possible at all; without them the signal would vanish or explode. Normalization keeps every activation in a range the next layer expects, stabilizing the whole stack.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="ex-car">
+        <div class="ex-top"><h4>One block, before → after</h4>
+          <div class="ex-nav"><button type="button" class="ex-prev" aria-label="Previous example">←</button><button type="button" class="ex-next" aria-label="Next example">→</button></div>
+        </div>
+        <div class="ex-track" tabindex="0" role="region" aria-label="Transformer block examples — swipe to browse">
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">Simplified illustration · what a block does</p>
+            <p class="ex-input">“…deposited money at the <b>bank</b>”</p>
+            <div class="sticky-row">
+              <div class="sticky">block 1 · “bank” = ??? <span class="sticky-arrow">(ambiguous)</span></div>
+              <div class="sticky-arrow">↓ 96 editorial passes ↓</div>
+              <div class="sticky after">final block · “bank” = <b>financial institution</b></div>
+            </div>
+            <p class="ex-why">The word <i>money</i> kept voting for the finance meaning, pass after pass, until the sticky note was rewritten.</p>
+          </div><p class="ex-count">1 / 4</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">Simplified illustration · what a block does</p>
+            <p class="ex-input">“…sat by the river <b>bank</b>”</p>
+            <div class="sticky-row">
+              <div class="sticky">block 1 · “bank” = ??? <span class="sticky-arrow">(ambiguous)</span></div>
+              <div class="sticky-arrow">↓ 96 editorial passes ↓</div>
+              <div class="sticky after">final block · “bank” = <b>sloping land by water</b></div>
+            </div>
+            <p class="ex-why">Same starting note as the money sentence — different neighbors, different ending. <b>Same word, two vectors.</b></p>
+          </div><p class="ex-count">2 / 4</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">Simplified illustration · what a block does</p>
+            <p class="ex-input">“…played the <b>bass</b> guitar” vs “…caught a huge <b>bass</b>”</p>
+            <div class="sticky-row">
+              <div class="sticky">block 1 · “bass” = ??? <span class="sticky-arrow">(ambiguous)</span></div>
+              <div class="sticky-arrow">↓ 96 editorial passes ↓</div>
+              <div class="sticky after">final block · <b>low musical instrument</b> vs <b>fish</b></div>
+            </div>
+            <p class="ex-why">One spelling, two meanings, resolved purely by which words showed up nearby. No dictionary — just context votes.</p>
+          </div><p class="ex-count">3 / 4</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">Simplified illustration · what a block does</p>
+            <p class="ex-input">“the <b>crane</b> lifted the beam” vs “the <b>crane</b> nested in the marsh”</p>
+            <div class="sticky-row">
+              <div class="sticky">block 1 · “crane” = ??? <span class="sticky-arrow">(ambiguous)</span></div>
+              <div class="sticky-arrow">↓ 96 editorial passes ↓</div>
+              <div class="sticky after">final block · <b>construction machine</b> vs <b>tall wading bird</b></div>
+            </div>
+            <p class="ex-why">Early blocks notice grammar and word shape; later blocks settle meaning. Disambiguation is the stack's day job.</p>
+          </div><p class="ex-count">4 / 4</p></div></div>
+        </div>
+      </div>
+
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper on the stack</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p>Every block has the same two moves — multi-head self-attention, then the feed-forward net — each in a residual + normalization sandwich. Blocks share a shape but not weights, so early blocks tend to handle surface patterns (word shape, grammar) while later blocks handle abstract ones (logic, long-range references). Nearly all of the model's parameters — and nearly all the compute — live in this stack.</p>
+        <p>One more 2024–2026 twist: the biggest models are <b>mixture-of-experts</b>. Each block's feed-forward net is split into dozens or hundreds of specialist sub-networks (“experts”), and a tiny router wakes only a handful per token — plus one shared expert that always runs. Moonshot's open-weight Kimi K2 reports about a trillion total parameters with only ~32B active per token; DeepSeek-V4-Pro reports ~1.6T total with ~49B active. Parameters scale up; the bill per token barely moves.</p>
+      </div>      <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;Each transformer block is an editorial pass that rewrites every word&rsquo;s sticky note with more context &mdash; &lsquo;bank&rsquo; becomes a different word near &lsquo;river&rsquo; than near &lsquo;money&rsquo;.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think the model &lsquo;understands&rsquo; a sentence in one go &mdash; <b>actually comprehension is refined gradually: early blocks handle spelling and grammar, later blocks handle logic and long-range references. There is no single moment of understanding.</b></p></aside>
+
+    </div>
+  </article>
+
+  <!-- 4 · OUTPUT HEAD -->
+  <article class="node" id="st-head">
+    <button class="node-head" aria-expanded="false" aria-controls="st-head-body">
+      <span class="num" aria-hidden="true">4</span>
+      <span class="head-text">
+        <span class="stage-name">Output head <span class="mono-tag">unembedding</span></span>
+        <span class="teaser">Vectors become scores over every word.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-head-body" hidden>
+      <p class="plain">After the last block, the model takes the final vector — the one holding the whole sentence's meaning — and scores <b>every word it knows</b> as a candidate for what comes next. Each raw score is called a <b>logit</b>. Plain English: the model turns a volume knob for every word in its vocabulary at once. Most knobs sit near zero; a few get cranked high.</p>
+      <aside class="analogy"><p><span class="who">Analogy</span><b>Think of it like…</b> a talent-show scorecard. Every word in the dictionary gets judged on one question — “how likely are you to come next?” — and most score near zero while a handful score high.</p></aside>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p>This is the <b>unembedding</b>: a d<sub>model</sub> × vocabulary matrix — sometimes literally the same weights as the input embedding, tied. One matrix multiply turns one vector into ~100k scores. During training this happens at <i>every</i> position at once (each position predicts the token after it); during generation, only the last position matters.</p>
+      </div>
+    </div>
+  </article>
+
+  <!-- 5 · SOFTMAX -->
+  <article class="node" id="st-softmax">
+    <button class="node-head" aria-expanded="false" aria-controls="st-softmax-body">
+      <span class="num" aria-hidden="true">5</span>
+      <span class="head-text">
+        <span class="stage-name">Softmax</span>
+        <span class="teaser">Raw scores become honest probabilities.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-softmax-body" hidden>
+      <p class="plain">Those raw scores are hard to read: they can be negative, and they don't add up to anything. <b>Softmax</b> translates them into proper percentages that sum to 100%. It also exaggerates — a word scoring just a little higher can end up <i>a lot</i> more likely. What comes out is the model's honest uncertainty about what comes next.</p>
+      <aside class="analogy"><p><span class="who">Analogy</span><b>Think of it like…</b> slicing a pie. The raw scores decide how big each slice is, and softmax guarantees the slices always add up to exactly one whole pie: 100%.</p></aside>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p>p<sub>i</sub> = e<sup>z<sub>i</sub></sup> / Σ<sub>j</sub> e<sup>z<sub>j</sub></sup>. Because of the exponential, the top few tokens usually hog nearly all the probability while the long tail shares crumbs. Softmax has no learned parameters — it's pure arithmetic, and it's the same formula used inside the attention step back in stage 3.</p>
+      </div>      <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;The model doesn&rsquo;t pick a word &mdash; it scores every word it knows, then slices the scores into a pie that always sums to 100%.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think there&rsquo;s a &lsquo;right answer&rsquo; slot the model fills &mdash; <b>actually it produces a full ranking over 100,000+ words at every step; the &lsquo;answer&rsquo; is just whichever slice the dice lands on.</b></p></aside>
+
+    </div>
+  </article>
+
+  <!-- 6 · SAMPLING -->
+  <article class="node" id="st-sample">
+    <button class="node-head" aria-expanded="false" aria-controls="st-sample-body">
+      <span class="num" aria-hidden="true">6</span>
+      <span class="head-text">
+        <span class="stage-name">Sampling</span>
+        <span class="teaser">Rolling weighted dice — where creativity comes from.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-sample-body" hidden>
+      <p class="plain">The model doesn't have to pick the top word. Instead it rolls <b>weighted dice</b> over the percentages. <b>Temperature</b> is the knob: turn it down and the favorite almost always wins — focused, but repetitive. Turn it up and long shots get real chances — creative, but weird. <b>Top-k</b> and <b>top-p</b> first cross the strangest options off the list entirely. Same prompt, different rolls, different answers — which is why asking twice gives you two replies.</p>
+      <aside class="analogy"><p><span class="who">Analogy</span><b>Think of it like…</b> a roulette wheel with slices sized by probability. <b>Temperature</b> is how adventurous the spin is: ice-cold and the ball nearly always lands on the biggest slice; hot and it can land almost anywhere.</p></aside>
+      <div class="demo">
+        <p class="demo-label">Simplified illustration · real math, toy data</p>
+        <h3>Sampling lab</h3>
+        <p class="demo-note">Eight candidate next-words with fixed scores. Real softmax, real dice. Drag the temperature down and watch the favorite become inevitable; crank it up and watch chaos. Hit “Sample 20×” to <i>feel</i> the odds.</p>
+        <div class="cslider-row">
+          <div class="cslider-head"><span>Temperature</span><b id="tmp-val">1.00</b></div>
+          <div class="cslider-line">
+            <button type="button" class="stepper" id="tmp-dec" aria-label="Lower temperature">−</button>
+            <div class="cslider" id="sl-temp" role="slider" tabindex="0" aria-label="Temperature" aria-valuemin="0.1" aria-valuemax="2" aria-valuenow="1" aria-valuetext="1.00">
+              <div class="cslider-track"><div class="cslider-fill"></div><div class="cslider-thumb"></div></div>
+            </div>
+            <button type="button" class="stepper" id="tmp-inc" aria-label="Raise temperature">+</button>
+          </div>
+        </div>
+        <div class="cslider-row">
+          <div class="cslider-head"><span>Top-k</span><b id="topk-val">8</b></div>
+          <div class="cslider-line">
+            <button type="button" class="stepper" id="topk-dec" aria-label="Lower top-k">−</button>
+            <div class="cslider" id="sl-topk" role="slider" tabindex="0" aria-label="Top-k" aria-valuemin="1" aria-valuemax="8" aria-valuenow="8" aria-valuetext="8">
+              <div class="cslider-track"><div class="cslider-fill"></div><div class="cslider-thumb"></div></div>
+            </div>
+            <button type="button" class="stepper" id="topk-inc" aria-label="Raise top-k">+</button>
+          </div>
+        </div>
+        <div class="samp-viz">
+          <div class="donut-wrap">
+            <svg id="samp-donut" viewBox="0 0 140 140" role="img" aria-label="Probability wheel">
+              <circle cx="70" cy="70" r="54" fill="none" stroke="rgba(236,231,216,.08)" stroke-width="18"></circle>
+              <g id="donut-segs" transform="rotate(-90 70 70)"></g>
+              <text id="donut-top" x="70" y="67" text-anchor="middle" class="donut-top"></text>
+              <text id="donut-pct" x="70" y="85" text-anchor="middle" class="donut-pct"></text>
+            </svg>
+          </div>
+          <div class="bars" id="samp-bars"></div>
+        </div>
+        <div class="samp-row">
+          <button type="button" class="btn" id="samp-once">Sample once</button>
+          <button type="button" class="btn ghost" id="samp-20">Sample 20×</button>
+          <button type="button" class="btn ghost" id="samp-clear">Clear</button>
+        </div>
+        <p class="samp-pick" id="samp-pick" aria-live="polite">Press “Sample once”.</p>
+        <div class="samp-seq" id="samp-seq" aria-live="polite" aria-label="Sampled tokens"></div>
+      </div>
+      <div class="ex-car">
+        <div class="ex-top"><h4>Same scores, four different dice</h4>
+          <div class="ex-nav"><button type="button" class="ex-prev" aria-label="Previous example">←</button><button type="button" class="ex-next" aria-label="Next example">→</button></div>
+        </div>
+        <div class="ex-track" tabindex="0" role="region" aria-label="Sampling examples — swipe to browse">
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">Simplified illustration · exact softmax of the lab's 8 scores</p>
+            <p class="ex-input">Temperature 0.2 — ice cold</p>
+            <div class="ex-bars">
+              <div class="ex-bar-row"><span class="w">the</span><span class="ex-bar-track"><span class="ex-bar-fill" style="width:96.4%"></span></span><span class="ex-bar-pct">96.4%</span></div>
+              <div class="ex-bar-row"><span class="w">cat</span><span class="ex-bar-track"><span class="ex-bar-fill" style="width:2.9%"></span></span><span class="ex-bar-pct">2.9%</span></div>
+              <div class="ex-bar-row"><span class="w">dog</span><span class="ex-bar-track"><span class="ex-bar-fill" style="width:0.6%"></span></span><span class="ex-bar-pct">0.6%</span></div>
+              <div class="ex-bar-row"><span class="w">mat…</span><span class="ex-bar-track"><span class="ex-bar-fill" style="width:0.1%"></span></span><span class="ex-bar-pct">~0%</span></div>
+            </div>
+            <p class="ex-why">Twenty rolls: <b>the the the the the…</b> The favorite is nearly inevitable. Great for facts; boring for poetry.</p>
+          </div><p class="ex-count">1 / 4</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">Simplified illustration · exact softmax of the lab's 8 scores</p>
+            <p class="ex-input">Temperature 1.0 — balanced</p>
+            <div class="ex-bars">
+              <div class="ex-bar-row"><span class="w">the</span><span class="ex-bar-track"><span class="ex-bar-fill" style="width:42.7%"></span></span><span class="ex-bar-pct">42.7%</span></div>
+              <div class="ex-bar-row"><span class="w">cat</span><span class="ex-bar-track"><span class="ex-bar-fill" style="width:21.2%"></span></span><span class="ex-bar-pct">21.2%</span></div>
+              <div class="ex-bar-row"><span class="w">dog</span><span class="ex-bar-track"><span class="ex-bar-fill" style="width:15.7%"></span></span><span class="ex-bar-pct">15.7%</span></div>
+              <div class="ex-bar-row"><span class="w">mat</span><span class="ex-bar-track"><span class="ex-bar-fill" style="width:10.5%"></span></span><span class="ex-bar-pct">10.5%</span></div>
+            </div>
+            <p class="ex-why">Twenty rolls: <b>the cat dog the mat the moon cat…</b> Real variety — but the ranking still rules. This is the default zone.</p>
+          </div><p class="ex-count">2 / 4</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">Simplified illustration · exact softmax of the lab's 8 scores</p>
+            <p class="ex-input">Temperature 1.5 — adventurous</p>
+            <div class="ex-bars">
+              <div class="ex-bar-row"><span class="w">the</span><span class="ex-bar-track"><span class="ex-bar-fill" style="width:32.3%"></span></span><span class="ex-bar-pct">32.3%</span></div>
+              <div class="ex-bar-row"><span class="w">cat</span><span class="ex-bar-track"><span class="ex-bar-fill" style="width:20.3%"></span></span><span class="ex-bar-pct">20.3%</span></div>
+              <div class="ex-bar-row"><span class="w">moon</span><span class="ex-bar-track"><span class="ex-bar-fill" style="width:8%"></span></span><span class="ex-bar-pct">8.0%</span></div>
+              <div class="ex-bar-row"><span class="w">zebra</span><span class="ex-bar-track"><span class="ex-bar-fill" style="width:5%"></span></span><span class="ex-bar-pct">5.0%</span></div>
+            </div>
+            <p class="ex-why">Twenty rolls might include <b>zebra</b>. Creative — and occasionally unhinged. High temperature is why models sometimes surprise you.</p>
+          </div><p class="ex-count">3 / 4</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">Simplified illustration · exact softmax of the lab's 8 scores</p>
+            <p class="ex-input">Top-k = 2 — bouncer mode</p>
+            <div class="ex-bars">
+              <div class="ex-bar-row"><span class="w">the</span><span class="ex-bar-track"><span class="ex-bar-fill" style="width:66.8%"></span></span><span class="ex-bar-pct">66.8%</span></div>
+              <div class="ex-bar-row"><span class="w">cat</span><span class="ex-bar-track"><span class="ex-bar-fill" style="width:33.2%"></span></span><span class="ex-bar-pct">33.2%</span></div>
+              <div class="ex-bar-row cut"><span class="w">dog…</span><span class="ex-bar-track"><span class="ex-bar-fill" style="width:4%"></span></span><span class="ex-bar-pct">cut</span></div>
+              <div class="ex-bar-row cut"><span class="w">+5 more</span><span class="ex-bar-track"><span class="ex-bar-fill" style="width:4%"></span></span><span class="ex-bar-pct">cut</span></div>
+            </div>
+            <p class="ex-why">Before any dice roll, the six strangest options are crossed off. Only two tickets in the hat — safety rails for the roulette wheel.</p>
+          </div><p class="ex-count">4 / 4</p></div></div>
+        </div>
+      </div>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p>Temperature T rescales the logits before softmax: p<sub>i</sub> ∝ e<sup>z<sub>i</sub>/T</sup>. As T→0 this approaches argmax — greedy decoding, always the top token; T=1 leaves probabilities untouched; T&gt;1 flattens them. <b>Top-k</b> keeps only the k highest-scoring tokens; <b>top-p</b> (nucleus sampling) keeps the smallest set whose probabilities sum to p. Chatbots typically sample around T≈0.7 with top-p≈0.9: lively, but the truly weird options never get a ticket. Reasoning models add one more knob — <b>thinking effort</b> (low → max in current APIs): how many tokens the model may spend reasoning before it answers. More thinking, better answers, bigger bill — inference-time compute as a dial, not a fixed cost.</p>
+      </div>      <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;Temperature doesn&rsquo;t make the model smarter or dumber &mdash; it only changes how adventurous the dice roll is.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think a low temperature is &lsquo;more correct&rsquo; &mdash; <b>actually it just makes the model more repetitive. Correctness comes from training, not temperature; turn it to zero and you get the most likely answer, not the truest one.</b></p></aside>
+
+    </div>
+  </article>
+
+  <!-- 7 · AUTOREGRESSIVE LOOP -->
+  <article class="node" id="st-loop">
+    <button class="node-head" aria-expanded="false" aria-controls="st-loop-body">
+      <span class="num" aria-hidden="true">7</span>
+      <span class="head-text">
+        <span class="stage-name">The autoregressive loop</span>
+        <span class="teaser">One token at a time, feeding itself.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-loop-body" hidden>
+      <p class="plain">The winning word gets glued onto the end of your text — and the <i>whole pipeline runs again</i>. And again. Until the model plays a special stop word. It never “writes a paragraph”; it predicts one next word, hundreds of times in a row. That loop has a name — <b>autoregressive</b> generation — which just means each step's output becomes the next step's input.</p>
+      <aside class="analogy"><p><span class="who">Analogy</span><b>Think of it like…</b> a relay race where each runner hands the baton to the next version of themselves. One word per lap, hundreds of laps per answer — and the baton is everything said so far.</p></aside>
+      <figure class="flow-fig">
+            <div class="flow-scroll">
+      <svg width="700" height="290" viewBox="0 0 700 290" role="img" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" aria-label="Generation loop with KV cache: new token computes Q K V, attends using cached keys and values, samples the next token, appends and repeats">
+      <defs><marker id="arrE" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e9a13b"/></marker></defs>
+      <defs><marker id="arrEt" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#62b6a4"/></marker></defs>
+      <g font-size="12" fill="#ece7d8" text-anchor="middle">
+      <rect x="10" y="100" width="110" height="56" rx="8" fill="#0d1424" stroke="#62b6a4" stroke-width="1.5"/>
+      <text x="65" y="124">prompt</text>
+      <text x="65" y="142" font-size="10.5" fill="#98a0b3">tokens</text>
+      <rect x="170" y="100" width="130" height="56" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+      <text x="235" y="124">Q · K · V</text>
+      <text x="235" y="142" font-size="10.5" fill="#98a0b3">new token only</text>
+      <rect x="350" y="100" width="150" height="56" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+      <text x="425" y="124">attend</text>
+      <text x="425" y="142" font-size="10.5" fill="#98a0b3">Q × cached K,V</text>
+      <rect x="550" y="100" width="90" height="56" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+      <text x="595" y="124">sample</text>
+      <text x="595" y="142" font-size="10.5" fill="#98a0b3">next token</text>
+      <rect x="350" y="196" width="150" height="52" rx="8" fill="#62b6a4" fill-opacity="0.07" stroke="#62b6a4" stroke-width="1.2" stroke-dasharray="5 4"/>
+      <text x="425" y="218">KV cache</text>
+      <text x="425" y="236" font-size="10.5" fill="#98a0b3">K,V of past tokens</text>
+      </g>
+      <g stroke="#e9a13b" stroke-width="1.5" fill="none">
+      <path d="M120,128 H166" marker-end="url(#arrE)"/>
+      <path d="M300,128 H346" marker-end="url(#arrE)"/>
+      <path d="M500,128 H546" marker-end="url(#arrE)"/>
+      <path d="M405,192 V160" marker-end="url(#arrE)"/>
+      <path d="M595,156 V262 H65 V160" marker-end="url(#arrE)"/>
+      </g>
+      <path d="M235,156 V222 H445 V200" fill="none" stroke="#62b6a4" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#arrEt)"/>
+      <text x="252" y="214" font-size="10" fill="#62b6a4" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">store</text>
+      <text x="330" y="282" font-size="11" fill="#98a0b3" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">append token · repeat</text>
+      <text x="586" y="190" font-size="10.5" fill="#98a0b3" text-anchor="end" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">stop token → done</text>
+      </svg>
+            </div>
+            <figcaption class="flow-cap">Generation is thrifty: only the new token is computed — the past lives in the KV cache.</figcaption>
+          </figure>
+      <aside class="analogy"><p><span class="who">Analogy</span><b>Think of it like…</b> keeping your notes instead of re-reading the whole book for every new page. The model saves each word's keys and values after computing them once (the <b>KV cache</b>), so every new step only does fresh math for the newcomer.</p></aside>
+      <div class="ex-car">
+        <div class="ex-top"><h4>Three steps, watch the cache grow</h4>
+          <div class="ex-nav"><button type="button" class="ex-prev" aria-label="Previous example">←</button><button type="button" class="ex-next" aria-label="Next example">→</button></div>
+        </div>
+        <div class="ex-track" tabindex="0" role="region" aria-label="KV cache walkthrough — swipe to browse">
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">Simplified illustration · “The cat” → ?</p>
+            <p class="legend"><span><span class="sw a"></span>computed now</span><span><span class="sw t"></span>reused from cache</span></p>
+            <div class="loop-toks">
+              <span class="ltok new">The<i>computed</i></span>
+              <span class="ltok new">cat<i>computed</i></span>
+            </div>
+            <p class="ex-input">→ samples “sat”</p>
+            <p class="ex-why"><b>Step 1 — everything is new.</b> First pass: the model computes keys &amp; values for every token and saves them in the cache.</p>
+          </div><p class="ex-count">1 / 3</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">Simplified illustration · “The cat sat” → ?</p>
+            <p class="legend"><span><span class="sw a"></span>computed now</span><span><span class="sw t"></span>reused from cache</span></p>
+            <div class="loop-toks">
+              <span class="ltok cached">The<i>cached</i></span>
+              <span class="ltok cached">cat<i>cached</i></span>
+              <span class="ltok new">sat<i>computed</i></span>
+            </div>
+            <p class="ex-input">→ samples “on”</p>
+            <p class="ex-why"><b>Step 2 — only the newcomer.</b> “The” and “cat” are reused straight from the cache. Only “sat” does fresh math.</p>
+          </div><p class="ex-count">2 / 3</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">Simplified illustration · “The cat sat on” → ?</p>
+            <p class="legend"><span><span class="sw a"></span>computed now</span><span><span class="sw t"></span>reused from cache</span></p>
+            <div class="loop-toks">
+              <span class="ltok cached">The<i>cached</i></span>
+              <span class="ltok cached">cat<i>cached</i></span>
+              <span class="ltok cached">sat<i>cached</i></span>
+              <span class="ltok new">on<i>computed</i></span>
+            </div>
+            <p class="ex-input">→ samples “the” …repeat until stop</p>
+            <p class="ex-why"><b>Step 3 — repeat.</b> A 1,000-word answer reuses the cache 1,000 times. That's why generation is fast — and why very long chats get expensive.</p>
+          </div><p class="ex-count">3 / 3</p></div></div>
+        </div>
+      </div>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p>Recomputing everything each step would be quadratic; the <b>KV cache</b> avoids it by saving every token's keys and values after its first pass, so each new step only computes the newcomer. The <b>context window</b> is how many tokens the model can juggle at once — a few thousand in early models, a <b>million</b> in current frontier ones, afforded by the compressed-attention tricks from stage 3; past the limit, the oldest tokens fall off. Generation halts on a learned end-of-text token or a length cap. And the loop no longer runs alone: modern systems call <b>tools</b> mid-generation — running code, searching the web, checking a calculator — which multiplies what the raw next-token engine can do without changing its weights.</p>
+      </div>      <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;The model writes one tile at a time and can never take one back &mdash; every sentence is a one-way trip.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think the model plans a sentence and then writes it &mdash; <b>actually it plans nothing; each tile is chosen with only the past to lean on. The KV cache is just its notebook, so it doesn&rsquo;t re-read the whole book for every new word.</b></p></aside>
+
+    </div>
+  </article>
+
+</section>
+
+<!-- HOW IT LEARNED -->
+<section class="learned" aria-label="How the model learned">
+  <p class="kicker">Separate track</p>
+  <h2>How it learned</h2>
+  <p class="lede-sm">Everything above is the performance. This is the rehearsal. Nobody programmed any of it — every number in the machine started as random noise, and training shaped them in four phases. Same prompt, four different behaviors:</p>
+
+  <figure class="flow-fig">
+        <div class="flow-scroll">
+  <svg width="870" height="244" viewBox="0 0 870 244" role="img" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" aria-label="Training journey: pretraining, fine-tuning, reasoning with RL, RLHF alignment">
+  <defs><marker id="arrD" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e9a13b"/></marker></defs>
+  <g font-size="12" fill="#ece7d8" text-anchor="middle">
+  <rect x="10" y="16" width="190" height="44" rx="8" fill="#62b6a4" fill-opacity="0.07" stroke="#62b6a4" stroke-width="1.2"/>
+  <text x="105" y="34" font-size="10.5">web · books · code</text>
+  <text x="105" y="50" font-size="10.5" fill="#98a0b3">trillions of tokens</text>
+  <rect x="10" y="88" width="190" height="72" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+  <text x="105" y="116">A · pretraining</text>
+  <text x="105" y="134" font-size="10.5" fill="#98a0b3">predict next token</text>
+  <text x="105" y="196" font-size="11.5" fill="#98a0b3">→ base model</text>
+  <rect x="230" y="16" width="190" height="44" rx="8" fill="#62b6a4" fill-opacity="0.07" stroke="#62b6a4" stroke-width="1.2"/>
+  <text x="325" y="34" font-size="10.5">instruction demos</text>
+  <text x="325" y="50" font-size="10.5" fill="#98a0b3">Q → good answer</text>
+  <rect x="230" y="88" width="190" height="72" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+  <text x="325" y="116">B · fine-tuning</text>
+  <text x="325" y="134" font-size="10.5" fill="#98a0b3">learn from demos (SFT)</text>
+  <text x="325" y="196" font-size="11.5" fill="#98a0b3">→ assistant</text>
+  <rect x="450" y="16" width="190" height="44" rx="8" fill="#62b6a4" fill-opacity="0.07" stroke="#62b6a4" stroke-width="1.2"/>
+  <text x="545" y="34" font-size="10.5">math · code · tools</text>
+  <text x="545" y="50" font-size="10.5" fill="#98a0b3">answers that check</text>
+  <rect x="450" y="88" width="190" height="72" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+  <text x="545" y="116">C · reasoning RL</text>
+  <text x="545" y="134" font-size="10.5" fill="#98a0b3">reward what checks out</text>
+  <text x="545" y="196" font-size="11.5" fill="#98a0b3">→ thinking model</text>
+  <rect x="670" y="16" width="190" height="44" rx="8" fill="#62b6a4" fill-opacity="0.07" stroke="#62b6a4" stroke-width="1.2"/>
+  <text x="765" y="34" font-size="10.5">human rankings</text>
+  <text x="765" y="50" font-size="10.5" fill="#98a0b3">best → worst</text>
+  <rect x="670" y="88" width="190" height="72" rx="8" fill="#0d1424" stroke="#e9a13b" stroke-width="1.5"/>
+  <text x="765" y="116">D · RLHF</text>
+  <text x="765" y="134" font-size="10.5" fill="#98a0b3">prefer what humans like</text>
+  <text x="765" y="196" font-size="11.5" fill="#98a0b3">→ aligned assistant</text>
+  </g>
+  <g stroke="#e9a13b" stroke-width="1.5" fill="none">
+  <path d="M105,60 V84" marker-end="url(#arrD)"/>
+  <path d="M325,60 V84" marker-end="url(#arrD)"/>
+  <path d="M545,60 V84" marker-end="url(#arrD)"/>
+  <path d="M765,60 V84" marker-end="url(#arrD)"/>
+  <path d="M200,124 H226" marker-end="url(#arrD)"/>
+  <path d="M420,124 H446" marker-end="url(#arrD)"/>
+  <path d="M640,124 H666" marker-end="url(#arrD)"/>
+  </g>
+  </svg>
+        </div>
+        <figcaption class="flow-cap">Training in four phases: raw capability, then shape, then reasoning, then taste.</figcaption>
+      </figure>
+
+  <article class="node" id="st-pretrain">
+    <button class="node-head" aria-expanded="false" aria-controls="st-pretrain-body">
+      <span class="num alt" aria-hidden="true">A</span>
+      <span class="head-text">
+        <span class="stage-name">Pretraining</span>
+        <span class="teaser">Predict the next word, trillions of times.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-pretrain-body" hidden>
+      <p class="plain">The model reads an enormous slice of the internet — books, articles, code, forums — with a single job: <b>guess the next word</b>, trillions of times. Every wrong guess nudges its billions of numbers a hair in the right direction. Grammar, facts, even step-by-step reasoning show up on their own — side effects of getting extremely good at next-word prediction.</p>
+      <aside class="analogy"><p><span class="who">Analogy</span><b>Think of it like…</b> school. Read the whole library, take ten trillion pop quizzes (guess the next word), and knowledge soaks in as a side effect of all that practice.</p></aside>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p>This is <b>self-supervised learning</b>: the data labels itself, because the next word is always right there in the text — no human annotation needed. The loss is <b>cross-entropy</b> between the predicted and actual next token. Scale is the story: frontier runs now train on <b>tens of trillions</b> of tokens — open labs report 15T+ for Kimi K2, 32T+ for DeepSeek-V4-Pro — with up to trillions of parameters, costing millions of dollars in compute — and capabilities nobody explicitly taught tend to <b>emerge</b> past certain scales.</p>
+      </div>      <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;Nobody taught the model a single fact &mdash; it absorbed grammar, facts, and reasoning as side effects of guessing the next word trillions of times.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think the model looks up facts in a database &mdash; <b>actually everything it &lsquo;knows&rsquo; is smeared across billions of weights. There is no fact shelf to open.</b></p></aside>
+
+    </div>
+  </article>
+
+  <article class="node" id="st-finetune">
+    <button class="node-head" aria-expanded="false" aria-controls="st-finetune-body">
+      <span class="num alt" aria-hidden="true">B</span>
+      <span class="head-text">
+        <span class="stage-name">Fine-tuning</span>
+        <span class="teaser">From mimic to assistant.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-finetune-body" hidden>
+      <p class="plain">A pretrained model is a brilliant mimic with no manners — ask it a question and it might reply with five more questions. <b>Fine-tuning</b> trains it further on curated examples: instructions paired with good responses. It learns the <i>shape</i> of being helpful — answer the question, follow the format, hold the tone.</p>
+      <aside class="analogy"><p><span class="who">Analogy</span><b>Think of it like…</b> an apprenticeship. School gave you knowledge; now you shadow a master and learn the craft — how to actually be useful to someone.</p></aside>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p>Usually <b>supervised fine-tuning (SFT)</b> on tens of thousands of high-quality demonstrations. Same next-token objective, new data distribution. It's cheap next to pretraining — hours to days — but it decisively steers behavior. Since 2025 the recipe has partly flipped: labs now grow behaviors with reinforcement learning <i>first</i> (next stage), then use SFT to distill the best of those behaviors back into the model. Most of what you experience as “the assistant's personality” is still set here, not in pretraining.</p>
+      </div>      <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;Pretraining teaches the model how the world talks; fine-tuning teaches it how to be helpful.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think fine-tuning adds knowledge &mdash; <b>actually it mostly teaches manners and shape: answer the question, follow the format. The knowledge was already there; fine-tuning just teaches it how to act.</b></p></aside>
+
+    </div>
+  </article>
+
+  <article class="node" id="st-reasonrl">
+    <button class="node-head" aria-expanded="false" aria-controls="st-reasonrl-body">
+      <span class="num alt" aria-hidden="true">C</span>
+      <span class="head-text">
+        <span class="stage-name">Reasoning with RL</span>
+        <span class="teaser">Taught to think by checking its work.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-reasonrl-body" hidden>
+      <p class="plain">Some answers can be <b>checked</b> — a math proof, a program that runs, a tool call that succeeds. So the lab lets the model attempt thousands of problems, rewards the tries that get verifiably <i>right</i> answers, and reinforces the long chains of thought that led there. Nobody writes out the reasoning for it; the model discovers working thought patterns through trial, error, and a scoreboard. This is the breakthrough behind every “thinking” model since late 2024, starting with OpenAI's o1-preview (September 2024).</p>
+      <aside class="analogy"><p><span class="who">Analogy</span><b>Think of it like…</b> a coach with a whistle and a scoreboard. Run the play thousands of times; the attempts that score get repeated until the thinking itself gets sharper.</p></aside>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p>The technique is <b>RLVR</b> — reinforcement learning with <i>verifiable</i> rewards. No human judges, no learned reward model: the reward is “did the code pass its tests?” Variants of the GRPO algorithm update the model toward attempts that beat the average of their group. The usual recipe: a little supervised fine-tuning on long reasoning examples to cold-start the behavior, then large-scale RL, then distilling the best traces back with SFT. The newest models even blend thinking and non-thinking in one set of weights, with reasoning switched on or off per request.</p>
+      </div>      <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;The model learned to think by getting rewarded for right answers &mdash; nobody ever showed it how to reason.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think &lsquo;thinking&rsquo; models were taught logic step by step &mdash; <b>actually they discovered working thought patterns through trial and error against checkable answers. The reasoning was never written down by a human.</b></p></aside>
+
+    </div>
+  </article>
+
+  <article class="node" id="st-rlhf">
+    <button class="node-head" aria-expanded="false" aria-controls="st-rlhf-body">
+      <span class="num alt" aria-hidden="true">D</span>
+      <span class="head-text">
+        <span class="stage-name">RLHF <span class="amp">/</span> alignment</span>
+        <span class="teaser">Steered toward what humans prefer.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-rlhf-body" hidden>
+      <p class="plain">Some things can't be checked with a scoreboard — taste, tone, honesty, safety. Here humans rank several candidate answers from best to worst, and the model is tuned toward what people prefer. This is the layer that teaches it to refuse harmful requests, admit when it's unsure, and generally act like the assistant you actually want to talk to.</p>
+      <aside class="analogy"><p><span class="who">Analogy</span><b>Think of it like…</b> a manners coach. Kindness, taste, honesty — none of these can be scored automatically, so humans rank your answers and you learn what people prefer.</p></aside>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p><b>RLHF</b> — reinforcement learning from human feedback (modern variants like DPO skip the RL and optimize preferences directly). The model is nudged, not rewritten, toward preferred outputs, with a penalty for drifting too far from its tuned self (the KL constraint) — which keeps it from gaming the reward model into nonsense. In the 2026 recipe this stage handles <i>preference</i> — style, safety, helpfulness — while raw reasoning ability increasingly comes from the verifiable-reward stage before it. Alignment is steering, not a guarantee: it's why the model <i>usually</i> refuses, not a proof that it always will.</p>
+      </div>      <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;Taste can&rsquo;t be computed, so humans ranked answers and the model learned what people prefer &mdash; alignment is steering, not a guarantee.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think RLHF makes the model safe and honest &mdash; <b>actually it teaches the model what humans reward, which is not the same as true. It&rsquo;s why the model <i>usually</i> refuses, not a proof it always will.</b></p></aside>
+
+    </div>
+  </article>
+
+  <div class="ex-car">
+    <div class="ex-top"><h4>One prompt, four trainings</h4>
+      <div class="ex-nav"><button type="button" class="ex-prev" aria-label="Previous example">←</button><button type="button" class="ex-next" aria-label="Next example">→</button></div>
+    </div>
+    <div class="ex-track" tabindex="0" role="region" aria-label="Training phase examples — swipe to browse">
+      <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+        <p class="ex-kicker">Simplified illustration · same prompt: “Why is the sky blue?”</p>
+        <p class="ex-draft">“Why is the sky blue? Great question! Here are 10 more questions about the sky: 1. Why is the ocean blue? 2. What makes sunsets red? 3. …”</p>
+        <p class="ex-why"><b>After pretraining:</b> a brilliant mimic, not an assistant. It <i>continues</i> the text instead of answering — it never learned that questions want answers.</p>
+      </div><p class="ex-count">1 / 4 · pretraining</p></div></div>
+      <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+        <p class="ex-kicker">Simplified illustration · same prompt: “Why is the sky blue?”</p>
+        <p class="ex-draft">“Sunlight scatters off air molecules, and blue light scatters the most — so blue arrives at your eyes from every direction. That's the short version!”</p>
+        <p class="ex-why"><b>After fine-tuning:</b> now it knows the <i>shape</i> of helpful — answer the question, keep it tight, hold a friendly tone.</p>
+      </div><p class="ex-count">2 / 4 · fine-tuning</p></div></div>
+      <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+        <p class="ex-kicker">Simplified illustration · same prompt: “Why is the sky blue?”</p>
+        <p class="ex-draft think">“Let me think it through: sunlight hits air molecules → Rayleigh scattering, strength ∝ 1/λ⁴ → blue (short λ) scatters ~5× more than red → blue comes from all directions. Checking: that also explains red sunsets (blue scattered away). Confident.”</p>
+        <p class="ex-why"><b>After reasoning RL:</b> it learned to <i>show its work</i> — because attempts with checkable reasoning got rewarded. The thinking is the product.</p>
+      </div><p class="ex-count">3 / 4 · reasoning RL</p></div></div>
+      <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+        <p class="ex-kicker">Simplified illustration · same prompt: “Why is the sky blue?”</p>
+        <p class="ex-draft">“Great question! In short: air scatters blue sunlight more than other colors, so the whole sky glows blue. (That's the simplified version — happy to go deeper into the physics if you'd like!)”</p>
+        <p class="ex-why"><b>After RLHF:</b> same facts, better manners — warm, humble about simplifications, invites follow-up. Tuned toward what humans prefer.</p>
+      </div><p class="ex-count">4 / 4 · RLHF</p></div></div>
+    </div>
+  </div>
+  <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;Pretraining teaches the model how the world talks; fine-tuning teaches it how to be helpful; RL teaches it manners and persistence.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think there&rsquo;s one training event &mdash; <b>actually it&rsquo;s four jobs in sequence: absorb the world, learn the assistant&rsquo;s shape, practice thinking against a scoreboard, then learn human taste. Skip any layer and you get a different creature.</b></p></aside>
+  <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;An LLM is a next-tile predictor wearing a very convincing understanding costume &mdash; and the costume is the product.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think fluency means comprehension &mdash; <b>actually the model is fluent because it mastered the statistics of how humans sound, not because it checked anything against reality. Treat it like a brilliant improviser, not a database.</b></p></aside>
+</section>
+</main>
+
+<footer>
+  <p class="fine">The playgrounds and example carousels are <b>simplified illustrations</b> — real algorithms running on toy-scale data, entirely in your browser. No servers, no tracking, no data leaves your device. The math is the same math the big models use; only the scale differs.</p>
+  <p class="fine dim">A handmade explainer · set in system type · drawn with CSS · model notes current as of September 2026</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

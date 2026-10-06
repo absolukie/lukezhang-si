@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>GovMap — Every country's front door</title>
+<meta name="description" content="Click any country to open its official government portal. 177 places, one map.">
+<style>
+  :root{
+    --bg0:#070b16; --bg1:#0d1528;
+    --land:#22334f; --land-hover:#3d5f96; --selected:#f5a524;
+    --ink:#f2f5fb; --muted:#8b98b8; --card:rgba(13,20,38,.92);
+    --line:rgba(255,255,255,.09);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%; margin:0;}
+  body{
+    background:radial-gradient(1200px 800px at 50% 30%, var(--bg1), var(--bg0));
+    color:var(--ink);
+    font-family:ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    overflow:hidden;
+  }
+  button, input, a{ touch-action:manipulation; }
+  #stage{position:fixed; inset:0; display:flex; align-items:center; justify-content:center;}
+  #mapwrap{width:min(1200px,100vw); padding:0 8px;}
+  #map{width:100%; height:auto; display:block; overflow:visible;}
+  #map path{fill:var(--land); stroke:#0a0f1e; stroke-width:.7; cursor:pointer; transition:fill .18s ease;}
+  #map path:hover{fill:var(--land-hover);}
+  #map path.sel{fill:var(--selected); filter:drop-shadow(0 0 10px rgba(245,165,36,.55));}
+  #tip{
+    position:fixed; pointer-events:none; z-index:40; display:none;
+    background:rgba(7,11,22,.92); border:1px solid var(--line); color:var(--ink);
+    font-size:13px; padding:6px 10px; border-radius:8px; white-space:nowrap;
+    transform:translate(-50%,-140%);
+  }
+  header{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:flex-start; justify-content:space-between;
+    padding:18px 22px; pointer-events:none;
+  }
+  header .brand{pointer-events:auto;}
+  .wordmark{font-size:22px; font-weight:800; letter-spacing:-.02em;}
+  .wordmark span{color:var(--selected);}
+  .tagline{font-size:13px; color:var(--muted); margin-top:2px;}
+  .controls{pointer-events:auto; display:flex; gap:8px; align-items:center; position:relative;}
+  #search{
+    width:min(240px,42vw); padding:10px 14px; font-size:14px; color:var(--ink);
+    background:var(--card); border:1px solid var(--line); border-radius:999px; outline:none;
+    backdrop-filter:blur(8px);
+  }
+  #search::placeholder{color:var(--muted);}
+  #search:focus{border-color:var(--selected);}
+  #dice{
+    width:42px; height:42px; border-radius:50%; border:1px solid var(--line);
+    background:var(--card); color:var(--ink); font-size:19px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; backdrop-filter:blur(8px);
+  }
+  #dice:hover{border-color:var(--selected);}
+  #results{
+    position:absolute; top:50px; right:56px; width:min(260px,60vw); z-index:35;
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    backdrop-filter:blur(12px); overflow:hidden; display:none; max-height:46vh; overflow-y:auto;
+  }
+  #results button{
+    display:flex; align-items:center; gap:10px; width:100%; text-align:left;
+    background:none; border:none; color:var(--ink); font-size:14px;
+    padding:10px 14px; cursor:pointer;
+  }
+  #results button:hover{background:rgba(245,165,36,.12);}
+  #results img{width:26px; height:auto; border-radius:4px;}
+  #panel{
+    position:fixed; z-index:30; left:50%; transform:translate(-50%, 24px);
+    bottom:calc(20px + env(safe-area-inset-bottom));
+    width:min(480px, calc(100vw - 32px));
+    background:var(--card); border:1px solid var(--line); border-radius:20px;
+    backdrop-filter:blur(14px); padding:20px 22px;
+    opacity:0; pointer-events:none; transition:opacity .22s ease, transform .22s ease;
+    box-shadow:0 24px 60px rgba(0,0,0,.5);
+  }
+  #panel.open{opacity:1; pointer-events:auto; transform:translate(-50%,0);}
+  #panel .row{display:flex; gap:14px; align-items:center;}
+  #flag{width:56px; height:auto; border-radius:8px; box-shadow:0 4px 14px rgba(0,0,0,.4); flex:none;}
+  #flag.hidden{display:none;}
+  #cname{font-size:22px; font-weight:800; letter-spacing:-.01em; margin:0;}
+  .eyebrow{font-size:11px; letter-spacing:.14em; color:var(--muted); margin:14px 0 4px; font-weight:700;}
+  #domain{font-size:19px; font-weight:700; color:var(--selected); word-break:break-all; margin:0;}
+  #note{font-size:13px; color:var(--muted); margin:8px 0 0; display:none;}
+  #visit{
+    display:block; text-align:center; margin-top:16px; padding:14px;
+    background:var(--selected); color:#1a1206; font-weight:800; font-size:16px;
+    border-radius:14px; text-decoration:none;
+  }
+  #visit:active{transform:scale(.98);}
+  #visit.disabled{background:#2a3550; color:var(--muted); pointer-events:none;}
+  #close{
+    position:absolute; top:10px; right:12px; width:32px; height:32px; border-radius:50%;
+    border:none; background:rgba(255,255,255,.07); color:var(--muted);
+    font-size:16px; cursor:pointer;
+  }
+  footer{
+    position:fixed; left:22px; right:22px; bottom:calc(14px + env(safe-area-inset-bottom));
+    display:flex; justify-content:space-between; align-items:center; z-index:20;
+    font-size:12px; color:var(--muted); pointer-events:none;
+  }
+  #badge{pointer-events:auto; background:rgba(7,11,22,.7); border:1px solid var(--line);
+    padding:4px 10px; border-radius:999px; font-variant-numeric:tabular-nums;}
+  @media (min-width:760px){
+    #panel{left:auto; right:26px; bottom:26px; transform:translate(24px,0); width:380px;}
+    #panel.open{transform:translate(0,0);}
+    .wordmark{font-size:26px;}
+  }
+</style>
+</head>
+<body>
+<div id="stage"><div id="mapwrap">__SVG__</div></div>
+<div id="tip"></div>
+
+<header>
+  <div class="brand">
+    <div class="wordmark">Gov<span>Map</span></div>
+    <div class="tagline">Tap any country for its official front door.</div>
+  </div>
+  <div class="controls">
+    <input id="search" type="search" placeholder="Search countries…" autocomplete="off" aria-label="Search countries">
+    <button id="dice" title="Random country" aria-label="Random country">⚄</button>
+    <div id="results"></div>
+  </div>
+</header>
+
+<div id="panel" role="dialog" aria-live="polite">
+  <button id="close" aria-label="Close">✕</button>
+  <div class="row">
+    <img id="flag" alt="">
+    <h2 id="cname"></h2>
+  </div>
+  <div class="eyebrow">OFFICIAL PORTAL</div>
+  <p id="domain"></p>
+  <p id="note"></p>
+  <a id="visit" href="#" target="_blank" rel="noopener">Visit official portal ↗</a>
+</div>
+
+<footer>
+  <span id="count"></span>
+  <span id="badge">v2026.10.01-01.30</span>
+</footer>
+
+<script>
+__DATA__
+(function(){
+  var svg = document.getElementById('map');
+  var tip = document.getElementById('tip');
+  var panel = document.getElementById('panel');
+  var cname = document.getElementById('cname');
+  var flag = document.getElementById('flag');
+  var domain = document.getElementById('domain');
+  var note = document.getElementById('note');
+  var visit = document.getElementById('visit');
+  var search = document.getElementById('search');
+  var results = document.getElementById('results');
+  var sel = null;
+
+  var byName = {};
+  Object.keys(PORTALS).forEach(function(id){
+    byName[PORTALS[id].n.toLowerCase()] = id;
+  });
+  document.getElementById('count').textContent = Object.keys(PORTALS).length + ' places on the map';
+
+  function showTip(name, x, y){
+    tip.textContent = name;
+    tip.style.display = 'block';
+    tip.style.left = x + 'px';
+    tip.style.top = y + 'px';
+  }
+  function hideTip(){ tip.style.display = 'none'; }
+
+  function select(id){
+    if(sel) sel.classList.remove('sel');
+    sel = document.getElementById('c-' + id);
+    if(sel) sel.classList.add('sel');
+    var p = PORTALS[id];
+    if(!p) return;
+    cname.textContent = p.n;
+    if(p.c){
+      flag.src = 'https://flagcdn.com/w160/' + p.c + '.png';
+      flag.alt = p.n + ' flag';
+      flag.classList.remove('hidden');
+      flag.onerror = function(){ flag.classList.add('hidden'); };
+    } else {
+      flag.classList.add('hidden');
+    }
+    if(p.u){
+      var d = p.u.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      domain.textContent = d;
+      visit.href = p.u;
+      visit.classList.remove('disabled');
+      visit.textContent = 'Visit official portal ↗';
+    } else {
+      domain.textContent = 'Portal not confirmed yet';
+      visit.classList.add('disabled');
+      visit.textContent = 'No confirmed link';
+    }
+    if(p.note){ note.textContent = p.note; note.style.display = 'block'; }
+    else { note.style.display = 'none'; }
+    panel.classList.add('open');
+  }
+  function deselect(){
+    if(sel) sel.classList.remove('sel');
+    sel = null;
+    panel.classList.remove('open');
+    hideTip();
+  }
+
+  svg.addEventListener('click', function(e){
+    var t = e.target;
+    if(t && t.tagName === 'path' && t.id.indexOf('c-') === 0){
+      var id = t.id.slice(2);
+      if(sel === t){ deselect(); } else { select(id); }
+    } else {
+      deselect();
+    }
+  });
+  svg.addEventListener('mousemove', function(e){
+    var t = e.target;
+    if(t && t.tagName === 'path' && t.id.indexOf('c-') === 0){
+      var p = PORTALS[t.id.slice(2)];
+      showTip(p ? p.n : t.getAttribute('data-name'), e.clientX, e.clientY);
+    } else hideTip();
+  });
+  svg.addEventListener('mouseleave', hideTip);
+  document.getElementById('close').addEventListener('click', deselect);
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape'){ deselect(); results.style.display = 'none'; search.blur(); }
+    if(e.key === '/' && document.activeElement !== search){ e.preventDefault(); search.focus(); }
+  });
+
+  document.getElementById('dice').addEventListener('click', function(){
+    var ids = Object.keys(PORTALS);
+    select(ids[Math.floor(Math.random() * ids.length)]);
+  });
+
+  function doSearch(){
+    var q = search.value.trim().toLowerCase();
+    results.innerHTML = '';
+    if(q.length < 2){ results.style.display = 'none'; return; }
+    var hits = [];
+    Object.keys(PORTALS).forEach(function(id){
+      var n = PORTALS[id].n;
+      if(n.toLowerCase().indexOf(q) !== -1) hits.push([n, id]);
+    });
+    hits.sort(function(a,b){ return a[0].toLowerCase().indexOf(q) - b[0].toLowerCase().indexOf(q); });
+    hits = hits.slice(0, 8);
+    if(!hits.length){ results.style.display = 'none'; return; }
+    hits.forEach(function(h){
+      var b = document.createElement('button');
+      var p = PORTALS[h[1]];
+      b.innerHTML = (p.c ? '<img src="https://flagcdn.com/w40/' + p.c + '.png" alt="" onerror="this.remove()"> ' : '') + '<span></span>';
+      b.querySelector('span').textContent = h[0];
+      b.addEventListener('click', function(){
+        select(h[1]);
+        results.style.display = 'none';
+        search.value = '';
+        search.blur();
+      });
+      results.appendChild(b);
+    });
+    results.style.display = 'block';
+  }
+  search.addEventListener('input', doSearch);
+  document.addEventListener('click', function(e){
+    if(!e.target.closest('.controls')) results.style.display = 'none';
+  });
+})();
+</script>
+</body>
+</html>

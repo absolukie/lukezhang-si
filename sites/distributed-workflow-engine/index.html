@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Durable Flow — Temporal-style workflow engine</title>
+<meta name="description" content="Interactive demo of a durable workflow engine: event-sourced execution, crash recovery, retries, timers, signals, sagas.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="topbar">
+  <div class="brand"><span class="logo">◈</span> DURABLE&nbsp;FLOW</div>
+  <div class="modeseg" id="modeseg" role="group" aria-label="mode">
+    <button data-mode="sandbox" class="on">⚙ Sandbox</button><button data-mode="live">◉ Live</button>
+  </div>
+  <div class="ns">namespace <b>demo-prod</b></div>
+  <div class="livebadge" id="livebadge">◉ LIVE · real GitHub Actions data</div>
+  <div class="clockbox">
+    <div class="vclock" id="vclock">T+0s</div>
+    <div class="speedrow" id="speedrow" role="group" aria-label="simulation speed"></div>
+  </div>
+</header>
+
+<div id="stats" class="stats"></div>
+
+<main id="grid">
+  <section class="panel" id="p-workflows">
+    <div class="phead"><h2>Workflows</h2><span class="psub">definitions → runs</span></div>
+    <div id="defs"></div>
+    <div id="runtabs"></div>
+    <div id="dagwrap"><div id="dag"></div></div>
+    <div id="runmeta"></div>
+    <div id="livewrap">
+      <div id="liverepo"></div>
+      <div id="liveruns" class="runtabs-live"></div>
+      <div id="dagwrap-live"><div id="livedag" class="dag-live"></div></div>
+      <div id="liverunmeta" class="runmeta"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-map">
+    <div class="phead"><h2>How it maps</h2><span class="psub">GitHub Actions → durable execution</span></div>
+    <div class="maplist">
+      <div><b>workflow file</b><span>→ definition (the DAG's shape)</span></div>
+      <div><b>workflow run</b><span>→ run, with real wall-clock timestamps — no virtual clock</span></div>
+      <div><b>job</b><span>→ parallel task — jobs fan out like the ETL transforms</span></div>
+      <div><b>step</b><span>→ sequential node inside its job's DAG</span></div>
+      <div><b>conclusion</b><span>→ terminal state: success / failure / cancelled / skipped</span></div>
+      <div><b>run_attempt</b><span>→ retry count, shown in the run header</span></div>
+    </div>
+    <p class="hint">Live shows history, not a live tail — GitHub's API reports completed steps; in-progress steps update when you hit ⟳ refresh. Workers, heartbeats, timers, signals and the chaos panel only exist in the Sandbox.</p>
+  </section>
+
+  <section class="panel" id="p-log">
+    <div class="phead">
+      <h2>Event log <span class="src">— the source of truth</span></h2>
+      <div class="logctl">
+        <select id="logfilter" aria-label="filter events">
+          <option value="all">all</option>
+          <option value="task">tasks</option>
+          <option value="timer">timers</option>
+          <option value="signal">signals</option>
+          <option value="worker">workers</option>
+          <option value="chaos">chaos</option>
+        </select>
+        <button id="btn-replay" class="btn xs" title="Rebuild all UI state by folding the event log from scratch">⟲ replay log</button>
+        <label class="stick"><input type="checkbox" id="autoscroll" checked> follow</label>
+      </div>
+    </div>
+    <div id="elog" class="elog" aria-live="off"></div>
+  </section>
+
+  <section class="panel" id="p-workers">
+    <div class="phead"><h2>Worker pool</h2><span class="psub" id="queueinfo"></span></div>
+    <div id="workers"></div>
+    <div class="phead sub"><h3>☠ Chaos panel</h3></div>
+    <div class="chaos">
+      <button id="btn-failnext" class="btn danger">💥 Fail next task</button>
+      <button id="btn-skip" class="btn">⏩ Skip to next timer</button>
+      <button id="btn-cron" class="btn toggle" aria-pressed="false">🕑 Cron: off</button>
+      <button id="btn-reset" class="btn ghost">↺ Reset cluster</button>
+    </div>
+    <p class="hint">Kill a worker mid-task and watch: heartbeat flatlines → 3 missed beats → task requeued with backoff → another worker replays and resumes.</p>
+  </section>
+
+  <section class="panel" id="p-waits">
+    <div class="phead"><h2>Timers &amp; signals</h2></div>
+    <div id="timers"></div>
+    <div id="signals"></div>
+  </section>
+</main>
+
+<footer>
+  <p><b>Two modes.</b> <b>Sandbox</b> is a deterministic in-browser simulation — but the event log is real:
+  every durable fact on this page (runs, steps, queue, timers, signals, worker liveness, stats) is derived by folding that log (<button id="btn-replay2" class="linklike">⟲ replay it</button> and see);
+  only volatile live-process detail — a task's remaining-seconds countdown, heartbeat ages — isn't. Deliberately so: partial progress is always discarded on recovery, exactly like a real worker restart.
+  Task durations, flaky steps and virtual time are simulated; the recovery semantics — heartbeats, leases, backoff, idempotent replay, saga compensation — are implemented, not animated.
+  <b>Live</b> shows your actual GitHub Actions runs instead: real timestamps, durations and conclusions fetched from api.github.com (cached aggressively; 60 calls/hour without a token).</p>
+</footer>
+
+<div id="toast" class="hidden"></div>
+<script src="engine.js"></script>
+<script src="live.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

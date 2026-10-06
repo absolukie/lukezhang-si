@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MCP vs API — How They Differ</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    background: #0b0e14; color: #e8ecf3; padding: 28px 18px 60px; }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 30px; letter-spacing: -0.8px; text-align: center; }
+  h1 .g { color: #7ee2a8; }
+  .sub { text-align: center; color: #8b93a7; font-size: 14px; margin: 8px 0 30px; }
+  h2 { font-size: 19px; margin: 34px 0 14px; letter-spacing: -0.3px; }
+  h2 .n { display: inline-block; background: #1d2538; border: 1px solid #2c3a5c; color: #9db4e8;
+    font-size: 13px; border-radius: 999px; padding: 2px 10px; margin-right: 8px; vertical-align: 2px; }
+  .flow { background: #11161f; border: 1px solid #232c42; border-radius: 18px; padding: 20px 16px; }
+  .row { display: flex; align-items: stretch; gap: 0; margin: 10px 0; }
+  .box { flex: 1; background: #1a2230; border: 1px solid #2c3a5c; border-radius: 12px;
+    padding: 12px 10px; text-align: center; font-size: 13px; line-height: 1.4; }
+  .box b { display: block; font-size: 14px; margin-bottom: 3px; }
+  .box .t { color: #8b93a7; font-size: 11.5px; }
+  .box.hi { border-color: #7ee2a8; background: #16261d; }
+  .box.hi b { color: #7ee2a8; }
+  .arr { display: flex; align-items: center; justify-content: center; padding: 0 7px;
+    color: #7ee2a8; font-size: 20px; font-weight: 700; flex: 0 0 auto; }
+  .arr small { display: block; font-size: 10px; color: #8b93a7; font-weight: 400; }
+  .arrcol { display: flex; flex-direction: column; align-items: center; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+    background: #0b0e14; border: 1px solid #232c42; border-radius: 6px; padding: 1px 6px; color: #9db4e8; }
+  .note { font-size: 13px; color: #8b93a7; margin-top: 12px; line-height: 1.55; }
+  .callout { background: #14231a; border: 1px solid #2fa36b; border-radius: 16px;
+    padding: 18px; margin-top: 26px; font-size: 14.5px; line-height: 1.6; }
+  .callout b { color: #7ee2a8; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #1e2635; vertical-align: top; }
+  th { color: #7ee2a8; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; }
+  td:first-child { color: #9db4e8; font-weight: 600; white-space: nowrap; }
+  .seq { counter-reset: s; margin-top: 8px; }
+  .seq div { position: relative; padding: 10px 10px 10px 44px; font-size: 13.5px;
+    border-bottom: 1px solid #1e2635; line-height: 1.5; color: #c6cfdb; }
+  .seq div::before { counter-increment: s; content: counter(s); position: absolute; left: 8px; top: 10px;
+    width: 24px; height: 24px; border-radius: 50%; background: #1d2538; border: 1px solid #2c3a5c;
+    color: #9db4e8; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .yours { background: #11161f; border: 1px solid #232c42; border-radius: 18px; padding: 20px 16px; }
+  .yours .row .box { font-size: 12px; }
+  #ver { text-align: center; color: #4a5568; font-size: 11px; margin-top: 40px; }
+  a { color: #7ea2ff; }
+  @media (max-width: 600px) {
+    .yours .row { flex-direction: column; }
+    .yours .arr { padding: 4px 0; transform: rotate(90deg); align-self: center; }
+    .yours .box { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>MCP <span class="g">vs</span> API</h1>
+  <p class="sub">How the Model Context Protocol works — and how it differs from a traditional API</p>
+
+  <h2><span class="n">1</span>The traditional API</h2>
+  <div class="flow">
+    <div class="row">
+      <div class="box"><b>Your code</b><span class="t">You decide what to call, when, with what args</span></div>
+      <div class="arr"><div class="arrcol">→<small>HTTP</small></div></div>
+      <div class="box"><b>api.example.com</b><span class="t">Fixed endpoints:<br><code>GET /v1/users</code><br><code>POST /v1/orders</code></span></div>
+      <div class="arr"><div class="arrcol">→<small>JSON</small></div></div>
+      <div class="box"><b>Your code</b><span class="t">Parses the fixed response shape you coded against</span></div>
+    </div>
+    <p class="note">Every integration is bespoke: you read the docs, hand-write a client for that
+    service's endpoints, and update it whenever the API changes. One service = one custom integration.</p>
+  </div>
+
+  <h2><span class="n">2</span>The MCP way</h2>
+  <div class="flow">
+    <div class="row">
+      <div class="box hi"><b>AI Host</b><span class="t">Claude Desktop, Codex, Muse…<br>runs the model</span></div>
+      <div class="arr"><div class="arrcol">→<small>embeds</small></div></div>
+      <div class="box hi"><b>MCP Client</b><span class="t">One per server.<br>Speaks the protocol.</span></div>
+    </div>
+    <div class="row">
+      <div class="box" style="text-align:center; flex: 0 0 100%; background: transparent; border-style: dashed;">
+        <span class="t">JSON-RPC 2.0 over <code>stdio</code> (local) or HTTP + SSE (remote) — two-way, stateful</span>
+        <div style="font-size:20px; color:#7ee2a8; margin: 2px 0;">↕</div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="box"><b>MCP Server</b><span class="t">Advertises what it can do:<br><b>Tools</b> · <b>Resources</b> · <b>Prompts</b></span></div>
+    </div>
+    <div class="seq">
+      <div><b>Discovery.</b> Client connects; server answers <code>tools/list</code> with every tool's name, description, and input schema. No docs to read — the server describes itself.</div>
+      <div><b>Decision.</b> The <b>model</b> reads those descriptions and decides which tool to call, with what arguments — at runtime, per conversation.</div>
+      <div><b>Execution.</b> Client sends <code>tools/call</code>; the server runs it (search a corpus, query a DB, hit an API) and returns the result.</div>
+      <div><b>Answer.</b> The model folds the result into its reply to you.</div>
+    </div>
+    <p class="note">One protocol, unlimited servers. Write the server once; every MCP-compatible host can use it with zero per-client integration code.</p>
+  </div>
+
+  <div class="callout">
+    <b>The key insight:</b> with an API, <b>you</b> write the integration — you decide every call
+    in code, ahead of time. With MCP, you <b>describe capabilities</b> and the <b>model writes the
+    integration at runtime</b>, choosing tools the way a developer would. The intelligence moves
+    from your code into the conversation.
+  </div>
+
+  <h2><span class="n">3</span>Side-by-side</h2>
+  <div class="flow" style="padding: 8px 10px;">
+  <table>
+    <tr><th></th><th>Traditional API</th><th>MCP</th></tr>
+    <tr><td>Who decides what to call</td><td>You, in code, ahead of time</td><td>The model, per conversation, from tool descriptions</td></tr>
+    <tr><td>Discovery</td><td>Read the docs, hand-write a client</td><td><code>tools/list</code> — the server describes itself</td></tr>
+    <tr><td>Integration cost</td><td>Bespoke per service</td><td>One protocol; any host works with any server</td></tr>
+    <tr><td>Transport</td><td>Usually HTTP REST</td><td>JSON-RPC 2.0 over stdio or HTTP+SSE</td></tr>
+    <tr><td>Primitives</td><td>Endpoints with fixed shapes</td><td>Tools (actions), Resources (data), Prompts (templates)</td></tr>
+    <tr><td>Data access</td><td>Remote service, API keys</td><td>Often local — the server runs next to your data</td></tr>
+    <tr><td>Changes</td><td>Client code breaks, you patch it</td><td>Server updates its descriptions; model adapts</td></tr>
+  </table>
+  </div>
+
+  <h2><span class="n">4</span>Your Luke OS MCP, mapped</h2>
+  <div class="yours">
+    <div class="row">
+      <div class="box"><b>Codex / Claude Desktop</b><span class="t">the host</span></div>
+      <div class="arr">→</div>
+      <div class="box"><b>MCP client</b><span class="t"><code>tools/list</code> → sees 4 tools</span></div>
+      <div class="arr">↕</div>
+      <div class="box hi"><b>server.py</b><span class="t">your MCP server</span></div>
+      <div class="arr">→</div>
+      <div class="box"><b>data.json</b><span class="t">the Luke OS corpus</span></div>
+    </div>
+    <p class="note" style="margin-top:14px;">You ask <i>"what needs my eyes?"</i> → the model sees the
+    <code>tracking</code> tool description → calls <code>tracking(status="needs-eyes")</code> →
+    server.py reads data.json → the model summarizes the result. No endpoint was hard-coded for
+    that question — the model composed it from the tool's description.</p>
+  </div>
+
+  <div id="ver">v2026.10.02-19.20</div>
+</div>
+</body>
+</html>

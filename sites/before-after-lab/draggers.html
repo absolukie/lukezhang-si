@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dragger designs · before/after feel lab</title>
+<style>
+  :root{
+    --bg:#0e100e; --panel:#161a16; --panel2:#1c211c; --line:#2b332b;
+    --ink:#f2efe6; --muted:#a8a396; --faint:#6f6b60; --accent:#e8a33d;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,"Segoe UI",sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0;}
+  body{background:var(--bg); color:var(--ink); font-family:var(--sans); line-height:1.55;
+       padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
+  .wrap{max-width:760px; margin:0 auto; padding:34px 20px 80px;}
+  .kicker{font-family:var(--mono); font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:var(--accent); margin:0 0 10px;}
+  h1{font-size:34px; line-height:1.15; margin:0 0 10px; letter-spacing:-.01em;}
+  .lede{color:var(--muted); font-size:16px; margin:0 0 8px; max-width:58ch;}
+  .backlink{display:inline-block; margin:0 0 26px; color:var(--accent); font-size:14px; text-decoration:none;}
+  /* ---------- variant card ---------- */
+  .variant{background:var(--panel); border:1px solid var(--line); border-radius:18px;
+           padding:20px; margin-bottom:28px;}
+  .vhead{display:flex; align-items:baseline; gap:12px; margin-bottom:14px;}
+  .vletter{font-family:var(--mono); font-weight:700; font-size:14px; color:#14100a; background:var(--accent);
+           width:30px; height:30px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex:0 0 auto;}
+  .vhead h2{font-size:17px; margin:0;}
+  .vhead p{margin:2px 0 0; font-size:13.5px; color:var(--muted);}
+  /* ---------- slider base ---------- */
+  .ba{position:relative; aspect-ratio:3/2; border-radius:14px; overflow:hidden;
+      border:1px solid var(--line); background:#000; cursor:ew-resize;
+      touch-action:none; user-select:none; -webkit-user-select:none;}
+  .ba img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+          pointer-events:none; -webkit-user-drag:none;}
+  .ba-before{will-change:clip-path;}
+  .ba-divider{position:absolute; top:0; bottom:0; left:0; width:0; will-change:transform; z-index:3;}
+  .ba-tag{position:absolute; top:10px; z-index:2; font-family:var(--mono); font-size:11px; font-weight:700;
+          letter-spacing:.12em; text-transform:uppercase; color:#fff; background:rgba(10,12,10,.55);
+          border:1px solid rgba(255,255,255,.22); border-radius:999px; padding:5px 12px;
+          backdrop-filter:blur(6px); pointer-events:none;}
+  .tag-before{left:10px;} .tag-after{right:10px;}
+  /* ----- A: slim circle ----- */
+  .dv-a .ba-line{position:absolute; top:0; bottom:0; left:-1px; width:2px; background:#fff; box-shadow:0 0 10px rgba(0,0,0,.5);}
+  .dv-a .ba-handle{position:absolute; top:50%; left:0; transform:translate(-50%,-50%);
+      width:36px; height:36px; border-radius:50%; background:rgba(12,14,12,.85); border:1.5px solid #fff;
+      display:flex; align-items:center; justify-content:center; gap:1px;
+      box-shadow:0 3px 14px rgba(0,0,0,.5); backdrop-filter:blur(4px);
+      transition:transform .18s cubic-bezier(.34,1.56,.64,1);}
+  .dv-a .ba-handle svg{width:15px; height:15px; stroke:#fff; stroke-width:2.6; fill:none; stroke-linecap:round; stroke-linejoin:round;}
+  .dv-a.dragging .ba-handle{transform:translate(-50%,-50%) scale(1.15);}
+  /* ----- B: horizontal pill ----- */
+  .dv-b .ba-line{position:absolute; top:0; bottom:0; left:-1px; width:2px; background:#fff; box-shadow:0 0 10px rgba(0,0,0,.5);}
+  .dv-b .ba-handle{position:absolute; top:50%; left:0; transform:translate(-50%,-50%);
+      width:52px; height:32px; border-radius:999px; background:rgba(12,14,12,.85); border:1.5px solid #fff;
+      display:flex; align-items:center; justify-content:center; gap:4px;
+      box-shadow:0 3px 14px rgba(0,0,0,.5); backdrop-filter:blur(4px);
+      transition:transform .18s cubic-bezier(.34,1.56,.64,1);}
+  .dv-b .ba-handle svg{width:13px; height:13px; stroke:#fff; stroke-width:2.6; fill:none; stroke-linecap:round; stroke-linejoin:round;}
+  .dv-b.dragging .ba-handle{transform:translate(-50%,-50%) scale(1.12);}
+  /* ----- C: accent dot ----- */
+  .dv-c .ba-line{position:absolute; top:0; bottom:0; left:-1.5px; width:3px; background:var(--accent); box-shadow:0 0 10px rgba(0,0,0,.5);}
+  .dv-c .ba-handle{position:absolute; top:50%; left:0; transform:translate(-50%,-50%);
+      width:22px; height:22px; border-radius:50%; background:var(--accent);
+      box-shadow:0 2px 12px rgba(0,0,0,.55), 0 0 0 4px rgba(232,163,61,.22);
+      transition:transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .18s;}
+  .dv-c.dragging .ba-handle{transform:translate(-50%,-50%) scale(1.5); box-shadow:0 2px 14px rgba(0,0,0,.55), 0 0 0 7px rgba(232,163,61,.18);}
+  /* ----- D: glass ring ----- */
+  .dv-d .ba-line{position:absolute; top:0; bottom:0; left:-0.75px; width:1.5px; background:rgba(255,255,255,.9);}
+  .dv-d .ba-handle{position:absolute; top:50%; left:0; transform:translate(-50%,-50%);
+      width:44px; height:44px; border-radius:50%;
+      background:rgba(255,255,255,.14); border:1.5px solid rgba(255,255,255,.85);
+      backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+      display:flex; align-items:center; justify-content:center; gap:2px;
+      box-shadow:0 4px 20px rgba(0,0,0,.35);
+      transition:transform .18s cubic-bezier(.34,1.56,.64,1);}
+  .dv-d .ba-handle svg{width:16px; height:16px; stroke:#fff; stroke-width:2.2; fill:none; stroke-linecap:round; stroke-linejoin:round;}
+  .dv-d.dragging .ba-handle{transform:translate(-50%,-50%) scale(1.14);}
+  /* ----- E: grip bar ----- */
+  .dv-e .ba-line{position:absolute; top:0; bottom:0; left:-1px; width:2px; background:rgba(255,255,255,.85);}
+  .dv-e .ba-handle{position:absolute; top:50%; left:0; transform:translate(-50%,-50%);
+      width:30px; height:54px; border-radius:999px; background:rgba(12,14,12,.88); border:1.5px solid #fff;
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px;
+      box-shadow:0 3px 14px rgba(0,0,0,.5);
+      transition:transform .18s cubic-bezier(.34,1.56,.64,1);}
+  .dv-e .ba-handle i{width:4px; height:4px; border-radius:50%; background:#fff; opacity:.9;}
+  .dv-e.dragging .ba-handle{transform:translate(-50%,-50%) scale(1.12);}
+  /* ----- F: edge tabs ----- */
+  .dv-f .ba-line{position:absolute; top:0; bottom:0; left:-1px; width:2px; background:#fff; box-shadow:0 0 10px rgba(0,0,0,.5);}
+  .dv-f .ba-tab{position:absolute; left:0; transform:translate(-50%,-50%);
+      width:40px; height:26px; border-radius:999px; background:rgba(12,14,12,.88); border:1.5px solid #fff;
+      display:flex; align-items:center; justify-content:center;
+      box-shadow:0 3px 12px rgba(0,0,0,.5);}
+  .dv-f .ba-tab.top{top:34px;} .dv-f .ba-tab.bot{top:calc(100% - 34px);}
+  .dv-f .ba-tab svg{width:12px; height:12px; stroke:#fff; stroke-width:2.6; fill:none; stroke-linecap:round; stroke-linejoin:round;}
+  /* ----- round 2: even smaller ----- */
+  .dv-g .ba-line{position:absolute; top:0; bottom:0; left:-0.75px; width:1.5px; background:#fff; box-shadow:0 0 8px rgba(0,0,0,.5);}
+  .dv-g .ba-handle{position:absolute; top:50%; left:0; transform:translate(-50%,-50%);
+      width:14px; height:14px; border-radius:50%; background:#fff;
+      box-shadow:0 1px 8px rgba(0,0,0,.5); transition:transform .18s cubic-bezier(.34,1.56,.64,1);}
+  .dv-g.dragging .ba-handle{transform:translate(-50%,-50%) scale(1.5);}
+  .dv-h .ba-line{position:absolute; top:0; bottom:0; left:-1px; width:2px; background:rgba(255,255,255,.9);
+      box-shadow:0 0 8px rgba(0,0,0,.5); transition:background .18s, box-shadow .18s;}
+  .dv-h .ba-handle{display:none;}
+  .dv-h.dragging .ba-line{background:var(--accent); box-shadow:0 0 18px rgba(232,163,61,.9);}
+  .dv-i .ba-line{position:absolute; top:0; bottom:0; left:-0.75px; width:1.5px; background:rgba(255,255,255,.85);}
+  .dv-i .ba-handle{position:absolute; top:50%; left:0; transform:translate(-50%,-50%);
+      display:flex; align-items:center; gap:0; transition:transform .18s cubic-bezier(.34,1.56,.64,1);}
+  .dv-i .ba-handle svg{width:17px; height:17px; stroke:#fff; stroke-width:3; fill:none;
+      stroke-linecap:round; stroke-linejoin:round; filter:drop-shadow(0 1px 5px rgba(0,0,0,.9));}
+  .dv-i.dragging .ba-handle{transform:translate(-50%,-50%) scale(1.25);}
+  .dv-j .ba-line{position:absolute; top:0; bottom:0; left:-0.75px; width:1.5px; background:rgba(255,255,255,.85);}
+  .dv-j .ba-handle{position:absolute; top:50%; left:0; transform:translate(-50%,-50%);
+      width:26px; height:26px; border-radius:50%; border:1.5px solid #fff; background:transparent;
+      box-shadow:0 1px 8px rgba(0,0,0,.4); transition:transform .18s cubic-bezier(.34,1.56,.64,1);}
+  .dv-j.dragging .ba-handle{transform:translate(-50%,-50%) scale(1.3);}
+  .dv-k .ba-line{position:absolute; top:0; bottom:0; left:-1px; width:2px; background:rgba(255,255,255,.9);}
+  .dv-k .ba-handle{position:absolute; top:50%; left:0; transform:translate(-50%,-50%);
+      width:6px; height:24px; border-radius:999px; background:#fff;
+      box-shadow:0 1px 10px rgba(0,0,0,.55); transition:transform .18s cubic-bezier(.34,1.56,.64,1);}
+  .dv-k.dragging .ba-handle{transform:translate(-50%,-50%) scale(1.35);}
+  .dv-l .ba-line{position:absolute; top:0; bottom:0; left:-1px; width:2px; background:var(--accent);
+      box-shadow:0 0 14px rgba(232,163,61,.75);}
+  .dv-l .ba-handle{position:absolute; top:50%; left:0; transform:translate(-50%,-50%);
+      width:16px; height:16px; border-radius:50%;
+      background:radial-gradient(circle, #ffd9a0 0%, var(--accent) 55%, rgba(232,163,61,0) 75%);
+      transition:transform .18s cubic-bezier(.34,1.56,.64,1);}
+  .dv-l.dragging .ba-handle{transform:translate(-50%,-50%) scale(1.6);}
+  .roundhead{font-family:var(--mono); font-size:12px; letter-spacing:.22em; text-transform:uppercase;
+             color:var(--faint); margin:34px 0 16px;}
+  .roundhead:first-of-type{margin-top:0;}
+  .vfoot{display:flex; justify-content:space-between; margin-top:10px; font-size:12.5px; color:var(--faint);}
+  footer{margin-top:20px; font-size:13px; color:var(--faint);}
+  @media (max-width:480px){ h1{font-size:28px;} .variant{padding:14px;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="kicker">Explainer tools · feel lab 02b</p>
+  <h1>Dragger designs.</h1>
+  <p class="lede">Twelve handles on the same slider — same drag physics, same photos. Round 2 is the minimal set. Grab each one and tell me the letter.</p>
+  <a class="backlink" href="index.html">← back to the drag feel lab</a>
+  <div id="gallery"></div>
+  <footer>Six dragger candidates · pick a letter</footer>
+</div>
+
+<script>
+const CHEV_L = '<svg viewBox="0 0 24 24"><path d="M14 6l-6 6 6 6"/></svg>';
+const CHEV_R = '<svg viewBox="0 0 24 24"><path d="M10 6l6 6-6 6"/></svg>';
+const VARIANTS = [
+  {round:1, id:'a', name:'Slim circle', desc:'The current handle, shrunk: 36px circle, 2px line, thinner chevrons.',
+   handle: CHEV_L + CHEV_R, tabs:false},
+  {round:1, id:'b', name:'Pill', desc:'Horizontal pill, 52×32. Lower profile, same grip.',
+   handle: CHEV_L + CHEV_R, tabs:false},
+  {round:1, id:'c', name:'Accent dot', desc:'No chrome at all — a 22px dot on an amber line. Grows while dragging.',
+   handle: '', tabs:false},
+  {round:1, id:'d', name:'Glass ring', desc:'Frosted-glass ring, hairline divider. The iOS-native look.',
+   handle: CHEV_L + CHEV_R, tabs:false},
+  {round:1, id:'e', name:'Grip bar', desc:'Vertical bar with three grip dots — reads as "grab me" without arrows.',
+   handle: '<i></i><i></i><i></i>', tabs:false},
+  {round:1, id:'f', name:'Edge tabs', desc:'No center handle — two small tabs ride the top and bottom edges instead.',
+   handle: '', tabs:true},
+  {round:2, id:'g', name:'Hairline dot', desc:'1.5px line, 14px dot. Barely there.',
+   handle: '', tabs:false},
+  {round:2, id:'h', name:'Line only', desc:'No handle at all — the line is the control. Glows amber while dragging.',
+   handle: '', tabs:false},
+  {round:2, id:'i', name:'Floating chevrons', desc:'Just ‹ › sitting on the line. No circle, no background.',
+   handle: CHEV_L + CHEV_R, tabs:false},
+  {round:2, id:'j', name:'Micro ring', desc:'26px empty ring, 1.5px border, nothing inside.',
+   handle: '', tabs:false},
+  {round:2, id:'k', name:'Notch', desc:'A 6×24px tick straddling the line, like a physical slider.',
+   handle: '', tabs:false},
+  {round:2, id:'l', name:'Glow', desc:'Amber luminous line and dot — all glow, no hard chrome.',
+   handle: '', tabs:false},
+];
+const clamp = (v,a,b) => Math.min(b, Math.max(a,v));
+
+function buildSlider(root, v){
+  root.innerHTML =
+    '<img src="after.jpg" alt="Edited photo" draggable="false">' +
+    '<img class="ba-before" src="before.jpg" alt="Unedited photo" draggable="false">' +
+    '<div class="ba-divider dv-' + v.id + '" role="presentation">' +
+      '<div class="ba-line"></div>' +
+      (v.tabs
+        ? '<div class="ba-tab top">' + CHEV_L + CHEV_R + '</div><div class="ba-tab bot">' + CHEV_L + CHEV_R + '</div>'
+        : '<div class="ba-handle">' + v.handle + '</div>') +
+    '</div>' +
+    '<span class="ba-tag tag-before">Unedited</span>' +
+    '<span class="ba-tag tag-after">Edited</span>';
+  const before = root.querySelector('.ba-before');
+  const divider = root.querySelector('.ba-divider');
+  let pos = .5, dragging = false, mode = null, moved = 0, raf = 0, glideAnim = null, scrollAnim = null;
+  let sx = 0, sy = 0, downT = 0, sScrollY = 0, trail = [];
+  function paint(){
+    raf = 0;
+    const w = root.clientWidth, x = pos * w;
+    divider.style.transform = 'translateX(' + x + 'px)';
+    before.style.clipPath = 'inset(0 ' + (w - x) + 'px 0 0)';
+  }
+  function glideTo(cx){
+    const target = clamp((cx - root.getBoundingClientRect().left) / root.clientWidth, .02, .98);
+    if(glideAnim) cancelAnimationFrame(glideAnim);
+    const from = pos, t0 = performance.now(), dur = 380;
+    const step = t => {
+      const k = clamp((t - t0) / dur, 0, 1), e = 1 - Math.pow(1 - k, 3);
+      pos = from + (target - from) * e; paint();
+      glideAnim = k < 1 ? requestAnimationFrame(step) : null;
+    };
+    glideAnim = requestAnimationFrame(step);
+  }
+  function momentum(v){
+    let last = performance.now();
+    const maxY = () => document.documentElement.scrollHeight - window.innerHeight;
+    const step = t => {
+      const dt = Math.min(50, t - last); last = t;
+      let y = window.scrollY + v * dt;
+      v *= Math.pow(0.94, dt / 16.7);
+      if(y <= 0){ y = 0; v = 0; } else if(y >= maxY()){ y = maxY(); v = 0; }
+      window.scrollTo(0, y);
+      scrollAnim = Math.abs(v) > 0.05 ? requestAnimationFrame(step) : null;
+    };
+    scrollAnim = requestAnimationFrame(step);
+  }
+  root.addEventListener('pointerdown', e => {
+    if(glideAnim){ cancelAnimationFrame(glideAnim); glideAnim = null; }
+    if(scrollAnim){ cancelAnimationFrame(scrollAnim); scrollAnim = null; }
+    dragging = true; mode = null; moved = 0;
+    sx = e.clientX; sy = e.clientY; downT = performance.now();
+    trail = [{y: e.clientY, t: downT}];
+    try{ root.setPointerCapture(e.pointerId); }catch(err){}
+    root.classList.add('dragging');
+  });
+  root.addEventListener('pointermove', e => {
+    if(!dragging) return;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    moved = Math.max(moved, Math.hypot(dx, dy));
+    if(!mode && moved > 12){
+      mode = Math.abs(dx) > Math.abs(dy) ? 'slider' : 'scroll';
+      if(mode === 'scroll') sScrollY = window.scrollY;
+    }
+    if(mode === 'slider'){
+      pos = clamp((e.clientX - root.getBoundingClientRect().left) / root.clientWidth, .02, .98);
+      if(!raf) raf = requestAnimationFrame(paint);
+    } else if(mode === 'scroll'){
+      window.scrollTo(0, sScrollY - (e.clientY - sy));
+      trail.push({y: e.clientY, t: performance.now()});
+      if(trail.length > 6) trail.shift();
+    }
+  });
+  const end = e => {
+    if(!dragging) return;
+    dragging = false; root.classList.remove('dragging');
+    if(mode === 'slider' || (mode === null && moved < 6)){
+      if(moved < 6 && performance.now() - downT < 300) glideTo(e.clientX);
+    } else if(mode === 'scroll' && trail.length >= 2){
+      const a = trail[0], b = trail[trail.length - 1], dt = b.t - a.t;
+      let v = dt > 0 ? -((b.y - a.y) / dt) : 0;
+      v = clamp(v, -3, 3);
+      if(Math.abs(v) > 0.15) momentum(v);
+    }
+    mode = null;
+  };
+  root.addEventListener('pointerup', end);
+  root.addEventListener('pointercancel', () => { dragging = false; mode = null; root.classList.remove('dragging'); });
+  root.setAttribute('tabindex','0');
+  root.setAttribute('role','slider');
+  root.setAttribute('aria-label','Before and after comparison, design ' + v.id.toUpperCase());
+  root.addEventListener('keydown', e => {
+    if(e.key === 'ArrowLeft'){ pos = clamp(pos - .04, .02, .98); paint(); e.preventDefault(); }
+    else if(e.key === 'ArrowRight'){ pos = clamp(pos + .04, .02, .98); paint(); e.preventDefault(); }
+  });
+  window.addEventListener('resize', paint);
+  paint();
+}
+
+const gal = document.getElementById('gallery');
+[1, 2].forEach(round => {
+  const head = document.createElement('p');
+  head.className = 'roundhead';
+  head.textContent = round === 1 ? 'Round 1' : 'Round 2 — even smaller';
+  gal.appendChild(head);
+  VARIANTS.filter(v => v.round === round).forEach(v => {
+    const card = document.createElement('div');
+    card.className = 'variant';
+    card.innerHTML = '<div class="vhead"><span class="vletter">' + v.id.toUpperCase() +
+      '</span><div><h2>' + v.name + '</h2><p>' + v.desc + '</p></div></div>' +
+      '<div class="ba dv-' + v.id + '"></div>' +
+      '<div class="vfoot"><span>drag · tap to glide · ← → nudge</span><span>design ' + v.id.toUpperCase() + '</span></div>';
+    gal.appendChild(card);
+    buildSlider(card.querySelector('.ba'), v);
+  });
+});
+</script>
+</body>
+</html>

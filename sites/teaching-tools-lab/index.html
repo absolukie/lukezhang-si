@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Teaching tools · feel lab 02</title>
+<style>
+  :root{
+    --bg:#0e100e; --panel:#161a16; --panel2:#1c211c; --line:#2b332b;
+    --ink:#f2efe6; --muted:#a8a396; --faint:#6f6b60;
+    --accent:#e8a33d; --accent-soft:rgba(232,163,61,.14);
+    --green:#7fc96b; --green-soft:rgba(127,201,107,.14);
+    --red:#e0685c; --red-soft:rgba(224,104,92,.13);
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,"Segoe UI",sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0;}
+  body{background:var(--bg); color:var(--ink); font-family:var(--sans); line-height:1.55;
+       padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
+  .wrap{max-width:720px; margin:0 auto; padding:34px 20px 80px;}
+  .kicker{font-family:var(--mono); font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:var(--accent); margin:0 0 10px;}
+  h1{font-size:34px; line-height:1.15; margin:0 0 10px; letter-spacing:-.01em;}
+  .lede{color:var(--muted); font-size:16px; margin:0 0 8px; max-width:60ch;}
+  /* rooms */
+  .room{margin-top:44px;}
+  .roomhead{display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:12px;}
+  .roomk{font-family:var(--mono); font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--faint); margin:0 0 4px;}
+  .roomhead h2{font-size:22px; margin:0 0 6px; letter-spacing:-.01em;}
+  .roomdesc{color:var(--muted); font-size:14px; margin:0; max-width:52ch;}
+  .roomdesc .honest{color:var(--faint); font-size:13px;}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:24px 20px;}
+  .variant.hidden{display:none;}
+  /* segmented variant switcher */
+  .seg{display:flex; background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:4px; gap:4px; flex:0 0 auto;}
+  .seg button{font-family:var(--sans); font-weight:700; font-size:13px; color:var(--muted);
+    background:transparent; border:1px solid transparent; border-radius:8px; padding:9px 12px;
+    cursor:pointer; touch-action:manipulation; white-space:nowrap;}
+  .seg button.on{color:var(--accent); background:var(--accent-soft); border-color:var(--accent);}
+  /* stage (room 1) */
+  .wordrow{display:flex; gap:8px; align-items:center; margin-bottom:14px; flex-wrap:wrap;}
+  .wchip{font-family:var(--mono); font-size:14px; font-weight:700; color:var(--muted);
+    background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:8px 14px;
+    cursor:pointer; touch-action:manipulation;}
+  .wchip.on{color:var(--accent); border-color:var(--accent); background:var(--accent-soft);}
+  .streak{margin-left:auto; font-family:var(--mono); font-size:12px; letter-spacing:.12em; color:var(--faint);}
+  .streak b{color:var(--accent); font-size:15px;}
+  .stage{background:var(--panel2); border:1px solid var(--line); border-radius:14px; padding:24px 16px 18px; margin-bottom:16px; overflow:hidden;}
+  .chips{display:flex; gap:10px; justify-content:center; flex-wrap:wrap; align-items:center; align-content:center;}
+  .chip{font-family:var(--mono); font-size:22px; font-weight:700; background:#242b24; border:1px solid var(--line);
+        color:var(--ink); border-radius:12px; padding:10px 18px; position:relative;}
+  .chip.merged{border-color:var(--accent); background:var(--accent-soft); color:var(--accent);}
+  .chip.pickable{cursor:pointer; touch-action:manipulation;}
+  .chip.pickable:hover{border-color:var(--accent);}
+  .chip.sel{border-color:var(--accent); background:var(--accent-soft); color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft);}
+  .prompt{margin:18px 0 0; display:flex; gap:10px; justify-content:center; flex-wrap:wrap; align-items:center;}
+  .prompt .instr{color:var(--muted); font-size:14px; text-align:center; margin:0; width:100%;}
+  .prompt .result{font-size:15px; text-align:center; margin:0; width:100%;}
+  .result.good{color:var(--green);} .result.bad{color:var(--red);}
+  .cand{font-family:var(--mono); font-size:17px; font-weight:700; color:var(--ink);
+    background:#242b24; border:1px solid var(--line); border-radius:12px; padding:10px 16px;
+    cursor:pointer; touch-action:manipulation; user-select:none; -webkit-user-select:none;}
+  .cand:active{transform:scale(.95);}
+  .cand.right{border-color:var(--green); background:var(--green-soft); color:var(--green);}
+  .cand.wrong{border-color:var(--red); background:var(--red-soft); color:var(--red);}
+  .wbtns{display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; justify-content:center;}
+  .wbtn{font-family:var(--sans); font-size:16px; font-weight:800; color:#14100a;
+    background:var(--accent); border:1px solid var(--accent); border-radius:12px; padding:12px 20px;
+    cursor:pointer; touch-action:manipulation; user-select:none; -webkit-user-select:none;}
+  .wbtn:active{transform:scale(.95);}
+  .wbtn.ghost{background:transparent; color:var(--muted); border:1px solid var(--line); font-weight:600;}
+  .wbtn kbd{opacity:.55; font-size:12px; margin-left:6px;}
+  .autonext{color:var(--faint); font-size:13px; margin:10px 0 0; text-align:center;}
+  .best{color:var(--muted); font-size:14px; margin:8px 0 0; text-align:center;}
+  .caption{text-align:center; color:var(--muted); font-size:14px; margin:14px 0 0;}
+  .caption b{color:var(--ink);}
+  .caption .rank{font-family:var(--mono); color:var(--accent);}
+  .prog{height:6px; background:#242b24; border-radius:99px; margin-top:14px; overflow:hidden;}
+  .prog i{display:block; height:100%; width:0%; background:var(--accent); border-radius:99px; transition:width .4s cubic-bezier(.22,.8,.3,1);}
+  .controls{display:flex; gap:12px; align-items:stretch;}
+  .btn{font-family:var(--sans); touch-action:manipulation; cursor:pointer; border-radius:16px;
+       user-select:none; -webkit-user-select:none;}
+  .btn-back{flex:0 0 112px; font-size:16px; font-weight:600; color:var(--muted);
+            background:transparent; border:1px solid var(--line);}
+  .btn-back:disabled{opacity:.32; cursor:default;}
+  .btn-next{flex:1; font-size:19px; font-weight:800; color:#14100a; background:var(--accent);
+            border:1px solid var(--accent); min-height:64px; letter-spacing:.01em;
+            box-shadow:0 8px 28px rgba(232,163,61,.28); will-change:transform;}
+  .btn-next:disabled{opacity:.35; box-shadow:none; cursor:default;}
+  .btn-next .arrow{display:inline-block; margin-left:8px;}
+  .hints{display:flex; justify-content:space-between; margin-top:12px; font-size:12.5px; color:var(--faint);}
+  .hints kbd{font-family:var(--mono); background:var(--panel2); border:1px solid var(--line);
+             border-radius:6px; padding:1px 7px; font-size:12px;}
+  .soundrow{display:flex; align-items:center; gap:10px; margin-top:14px; font-size:14px; color:var(--muted);}
+  .switch{position:relative; width:46px; height:27px; border-radius:99px; background:#2b332b; border:1px solid var(--line);
+          cursor:pointer; touch-action:manipulation; transition:background .15s; flex:0 0 auto; padding:0;}
+  .switch::after{content:""; position:absolute; top:2px; left:2px; width:21px; height:21px; border-radius:50%;
+                 background:var(--muted); transition:left .15s, background .15s;}
+  .switch.on{background:var(--accent-soft); border-color:var(--accent);}
+  .switch.on::after{left:21px; background:var(--accent);}
+  /* press physics (glide) */
+  .pressable.pressed{transform:scale(.96); transition:transform .16s ease-in;}
+  .pressable:not(.pressed){transition:transform .3s cubic-bezier(.22,.8,.3,1);}
+  /* chip entrance */
+  @keyframes chipIn{from{opacity:0; transform:translateY(10px) scale(.96);}to{opacity:1; transform:none;}}
+  .chip.enter{animation:chipIn .34s cubic-bezier(.22,.8,.3,1) both;}
+  @keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-7px);}50%{transform:translateX(6px);}75%{transform:translateX(-4px);}}
+  .shake{animation:shake .32s ease;}
+  @keyframes pulseG{0%{box-shadow:0 0 0 0 rgba(127,201,107,.55);}100%{box-shadow:0 0 0 14px rgba(127,201,107,0);}}
+  .pulse-g{animation:pulseG .5s ease-out;}
+  /* room 2 */
+  .presetrow{display:flex; gap:8px; margin-bottom:6px; flex-wrap:wrap;}
+  .pchip{font-family:var(--sans); font-size:13.5px; font-weight:600; color:var(--muted);
+    background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:9px 14px;
+    cursor:pointer; touch-action:manipulation;}
+  .pchip.on{color:var(--accent); border-color:var(--accent); background:var(--accent-soft);}
+  .mocknote{font-size:12.5px; color:var(--faint); margin:8px 2px 14px; font-style:italic;}
+  .eq{background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:16px;}
+  .eq-main{font-family:var(--mono); font-size:17px; color:var(--ink); text-align:center;}
+  .eq-main .tvar{color:var(--accent);}
+  .eq-live{font-family:var(--mono); font-size:13px; color:var(--muted); text-align:center; margin-top:8px; min-height:20px;}
+  .eq-live b{color:var(--accent);}
+  .bars{display:flex; flex-direction:column; gap:8px; margin-bottom:6px;}
+  .brow{display:flex; align-items:center; gap:10px;}
+  .btok{font-family:var(--mono); font-size:14px; font-weight:700; width:88px; flex:0 0 auto; text-align:right;
+        overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .btrack{flex:1; height:36px; background:#242b24; border:1px solid var(--line); border-radius:9px;
+          position:relative; overflow:hidden;}
+  .bfill{position:absolute; inset:0 auto 0 0; width:0%; background:var(--accent); border-radius:8px;
+         transition:width .35s cubic-bezier(.22,.8,.3,1);}
+  .brow.dragging .bfill{transition:none;}
+  .brow.out .bfill{background:#3a413a;}
+  .brow.out{opacity:.45;}
+  .brow.flick .bfill{background:var(--ink);}
+  .bpct{position:absolute; right:9px; top:50%; transform:translateY(-50%); font-family:var(--mono);
+        font-size:12.5px; font-weight:700; color:var(--ink); mix-blend-mode:normal; text-shadow:0 1px 3px rgba(0,0,0,.6);}
+  .bz{font-family:var(--mono); font-size:12px; color:var(--faint); width:62px; flex:0 0 auto; text-align:left;}
+  .btrack.grab{cursor:ns-resize; touch-action:none;}
+  .draghint{font-size:12.5px; color:var(--faint); text-align:center; margin:8px 0 0;}
+  .srow{display:flex; align-items:center; gap:12px; margin-top:12px;}
+  .srow label{font-size:13.5px; color:var(--muted); width:118px; flex:0 0 auto;}
+  .srow output{font-family:var(--mono); font-size:13px; color:var(--accent); width:44px; flex:0 0 auto; text-align:right;}
+  input[type=range]{flex:1; -webkit-appearance:none; appearance:none; height:6px; border-radius:99px;
+    background:#242b24; outline:none; cursor:pointer; touch-action:manipulation; min-width:0;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:26px; height:26px; border-radius:50%;
+    background:var(--accent); border:3px solid #14100a; box-shadow:0 2px 10px rgba(232,163,61,.4);}
+  input[type=range]::-moz-range-thumb{width:22px; height:22px; border-radius:50%;
+    background:var(--accent); border:3px solid #14100a;}
+  .samplerow{display:flex; gap:12px; align-items:center; margin-top:16px; flex-wrap:wrap;}
+  .btn-sample{font-family:var(--sans); font-size:16px; font-weight:800; color:#14100a; background:var(--accent);
+    border:1px solid var(--accent); border-radius:14px; padding:13px 26px; cursor:pointer; touch-action:manipulation;}
+  .btn-sample:disabled{opacity:.4;}
+  .sample-out{font-family:var(--mono); font-size:14px; color:var(--muted); min-height:22px;}
+  .sample-out b{color:var(--accent);}
+  /* room 3 */
+  .crumbs{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; align-items:center;}
+  .crumb{font-family:var(--sans); font-size:12.5px; font-weight:600; color:var(--muted);
+    background:var(--panel2); border:1px solid var(--line); border-radius:99px; padding:6px 12px;
+    cursor:pointer; touch-action:manipulation; max-width:170px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .crumb.cur{color:var(--accent); border-color:var(--accent); background:var(--accent-soft); cursor:default;}
+  .crumb-sep{color:var(--faint); font-size:12px;}
+  .tree{margin:4px 0 6px;}
+  .tkids{border-left:2px solid var(--line); margin:8px 0 8px 12px; padding-left:14px; display:flex; flex-direction:column; gap:8px;}
+  .tchip{font-family:var(--sans); font-size:14.5px; color:var(--ink); background:#242b24;
+    border:1px solid var(--line); border-radius:10px; padding:9px 14px; text-align:left; line-height:1.45;}
+  button.tchip{cursor:pointer; touch-action:manipulation;}
+  button.tchip.choice{border-color:var(--accent); color:var(--accent); background:var(--accent-soft); font-weight:600;}
+  button.tchip.choice:active{transform:scale(.97);}
+  .tchip.dim{opacity:.42;}
+  .tchip.cur{background:var(--accent-soft); border-color:var(--accent); color:var(--accent); font-weight:600;}
+  .endbadge{display:inline-block; font-family:var(--mono); font-size:10px; letter-spacing:.14em; color:var(--green);
+    border:1px solid var(--green); border-radius:6px; padding:2px 7px; margin-left:8px; vertical-align:2px;}
+  .recap{background:var(--panel2); border:1px solid var(--accent); border-radius:12px; padding:14px 16px; margin-top:14px;}
+  .recap h4{font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--accent); margin:0 0 6px;}
+  .recap p{margin:0; font-size:15px;}
+  .recap .found{margin-top:8px; font-size:12.5px; color:var(--faint); font-family:var(--mono);}
+  .resetrow{margin-top:14px; display:flex; justify-content:flex-end;}
+  .btn-reset{font-family:var(--sans); font-size:14px; font-weight:600; color:var(--muted);
+    background:transparent; border:1px solid var(--line); border-radius:12px; padding:10px 18px;
+    cursor:pointer; touch-action:manipulation;}
+  /* variant B path */
+  .stepper{display:flex; gap:4px; overflow-x:auto; padding:8px 2px; align-items:center; margin-bottom:8px;
+    -webkit-overflow-scrolling:touch;}
+  .step{display:flex; align-items:center; gap:4px; flex:0 0 auto;}
+  .step button{font-family:var(--sans); font-size:13px; font-weight:600; color:var(--muted);
+    background:var(--panel2); border:1px solid var(--line); border-radius:99px; padding:8px 14px;
+    cursor:pointer; touch-action:manipulation; max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .step button.cur{color:#14100a; background:var(--accent); border-color:var(--accent);}
+  .step svg{flex:0 0 auto; opacity:.5;}
+  .sentence{font-size:16px; color:var(--ink); background:var(--panel2); border:1px solid var(--line);
+    border-radius:12px; padding:14px 16px; margin:0 0 12px; line-height:1.6; min-height:58px;}
+  .sentence .prompt0{color:var(--faint);}
+  .choicesrow{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:6px;}
+  .tried h4{font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--faint); margin:16px 0 8px;}
+  .tried-empty{font-size:13.5px; color:var(--faint); margin:0 0 4px;}
+  .trycard{background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:8px; font-size:14px;}
+  .trycard .e{color:var(--green);}
+  footer{margin-top:52px; font-size:13px; color:var(--faint);}
+  @media (max-width:480px){
+    h1{font-size:28px;} .card{padding:18px 12px;} .btn-next{min-height:60px;}
+    .chip{font-size:19px; padding:9px 14px;} .btok{width:70px;} .bz{width:54px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="kicker">Explainer tools · feel lab 02</p>
+  <h1>Teaching tools, three rooms.</h1>
+  <p class="lede">Two feels each for three new explainer tools. Room 1 quizzes you on real o200k merges before they happen. Room 2 makes the softmax equation tactile. Room 3 lets you wander a story tree and backtrack instantly. Everything here is a candidate — tap around and pick what feels right.</p>
+
+  <!-- ================= ROOM 1 · predict then reveal ================= -->
+  <section class="room" id="room1">
+    <div class="roomhead">
+      <div>
+        <p class="roomk">Room 1</p>
+        <h2>Predict, then reveal</h2>
+        <p class="roomdesc">The step-through animator, but it asks what merges next before showing it. <span class="honest">Real o200k merges — traced with the byte-identical from-scratch tokenizer, never invented.</span></p>
+      </div>
+      <div class="seg" role="tablist" aria-label="Room 1 variant">
+        <button class="on" data-room="r1" data-v="a" role="tab" aria-selected="true">A · Choices</button>
+        <button data-room="r1" data-v="b" role="tab" aria-selected="false">B · Tap the pair</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="variant" id="r1a">
+        <div class="wordrow">
+          <button class="wchip on" data-w="token">token</button>
+          <button class="wchip" data-w="hello">hello</button>
+          <button class="wchip" data-w="string">string</button>
+          <span class="streak">STREAK <b id="r1a-streak">0</b></span>
+        </div>
+        <div class="stage" id="r1a-stage">
+          <div class="chips" id="r1a-chips"></div>
+          <div class="prompt" id="r1a-prompt"></div>
+          <p class="caption" id="r1a-cap"></p>
+          <div class="prog"><i id="r1a-fill"></i></div>
+        </div>
+        <div class="controls">
+          <button class="btn btn-back pressable" id="r1a-back">← Back</button>
+          <button class="btn btn-next pressable" id="r1a-next"><span id="r1a-nextlabel">Next pair</span><span class="arrow">→</span></button>
+        </div>
+        <div class="hints"><span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> pick · <kbd>←</kbd> back · <kbd>→</kbd> next</span><span id="r1a-count"></span></div>
+        <div class="soundrow">
+          <button class="switch on" id="r1-sound" role="switch" aria-checked="true" aria-label="Sound"></button>
+          <span>Sound <span style="color:var(--faint)">— tiny synth, made in code</span></span>
+        </div>
+      </div>
+      <div class="variant hidden" id="r1b">
+        <div class="wordrow">
+          <button class="wchip on" data-w="token">token</button>
+          <button class="wchip" data-w="hello">hello</button>
+          <button class="wchip" data-w="string">string</button>
+          <span class="streak">STREAK <b id="r1b-streak">0</b></span>
+        </div>
+        <div class="stage" id="r1b-stage">
+          <div class="chips" id="r1b-chips"></div>
+          <div class="prompt" id="r1b-prompt"></div>
+          <p class="caption" id="r1b-cap"></p>
+          <div class="prog"><i id="r1b-fill"></i></div>
+        </div>
+        <div class="controls">
+          <button class="btn btn-back pressable" id="r1b-back">← Back</button>
+          <button class="btn btn-next pressable" id="r1b-next"><span id="r1b-nextlabel">Next pair</span><span class="arrow">→</span></button>
+        </div>
+        <div class="hints"><span>Tap two chips · <kbd>←</kbd> back · <kbd>→</kbd> next</span><span id="r1b-count"></span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ROOM 2 · live equation ================= -->
+  <section class="room" id="room2">
+    <div class="roomhead">
+      <div>
+        <p class="roomk">Room 2</p>
+        <h2>Live equation</h2>
+        <p class="roomdesc">Softmax with its guts showing — change the temperature or the logits and watch every probability move. <span class="honest">Illustrative logits: hand-written mock numbers for feel-testing, not a real model.</span></p>
+      </div>
+      <div class="seg" role="tablist" aria-label="Room 2 variant">
+        <button class="on" data-room="r2" data-v="a" role="tab" aria-selected="true">A · Sliders</button>
+        <button data-room="r2" data-v="b" role="tab" aria-selected="false">B · Drag the bars</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="variant" id="r2a">
+        <div class="presetrow" id="r2a-presets"></div>
+        <p class="mocknote">Illustrative logits — mock numbers for feel-testing, not a real model.</p>
+        <div class="eq">
+          <div class="eq-main">p<sub>i</sub> = e<sup>(z<sub>i</sub> <span class="tvar">/ T</span>)</sup> ⁄ Σ<sub>j</sub> e<sup>(z<sub>j</sub> <span class="tvar">/ T</span>)</sup></div>
+          <div class="eq-live" id="r2a-eqlive"></div>
+        </div>
+        <div class="bars" id="r2a-bars"></div>
+        <div class="srow">
+          <label for="r2a-temp">Temperature</label>
+          <input type="range" id="r2a-temp" min="0.1" max="2" step="0.05" value="1">
+          <output id="r2a-tempout">1.00</output>
+        </div>
+        <div class="srow">
+          <label for="r2a-topk">Top-k cutoff</label>
+          <input type="range" id="r2a-topk" min="1" max="5" step="1" value="5">
+          <output id="r2a-topkout">5</output>
+        </div>
+        <div class="samplerow">
+          <button class="btn-sample pressable" id="r2a-sample">Sample</button>
+          <span class="sample-out" id="r2a-out"></span>
+        </div>
+      </div>
+      <div class="variant hidden" id="r2b">
+        <div class="presetrow" id="r2b-presets"></div>
+        <p class="mocknote">Illustrative logits — mock numbers for feel-testing, not a real model.</p>
+        <div class="eq">
+          <div class="eq-main">p<sub>i</sub> = e<sup>(z<sub>i</sub> <span class="tvar">/ T</span>)</sup> ⁄ Σ<sub>j</sub> e<sup>(z<sub>j</sub> <span class="tvar">/ T</span>)</sup></div>
+          <div class="eq-live" id="r2b-eqlive"></div>
+        </div>
+        <div class="bars" id="r2b-bars"></div>
+        <p class="draghint">Drag a bar up or down to change its logit — the page still scrolls from everywhere else.</p>
+        <div class="srow">
+          <label for="r2b-temp">Temperature</label>
+          <input type="range" id="r2b-temp" min="0.1" max="2" step="0.05" value="1">
+          <output id="r2b-tempout">1.00</output>
+        </div>
+        <div class="srow">
+          <label for="r2b-topk">Top-k cutoff</label>
+          <input type="range" id="r2b-topk" min="1" max="5" step="1" value="5">
+          <output id="r2b-topkout">5</output>
+        </div>
+        <div class="samplerow">
+          <button class="btn-sample pressable" id="r2b-sample">Sample</button>
+          <span class="sample-out" id="r2b-out"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ROOM 3 · branch explorer ================= -->
+  <section class="room" id="room3">
+    <div class="roomhead">
+      <div>
+        <p class="roomk">Room 3</p>
+        <h2>Branch explorer</h2>
+        <p class="roomdesc">One prompt, many paths. Descend the tree, tap any ancestor to backtrack instantly, compare endings. <span class="honest">Illustrative story tree — hand-written, not generated.</span></p>
+      </div>
+      <div class="seg" role="tablist" aria-label="Room 3 variant">
+        <button class="on" data-room="r3" data-v="a" role="tab" aria-selected="true">A · Tree</button>
+        <button data-room="r3" data-v="b" role="tab" aria-selected="false">B · Path</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="variant" id="r3a">
+        <div class="crumbs" id="r3a-crumbs"></div>
+        <div class="tree" id="r3a-tree"></div>
+        <div class="recap" id="r3a-recap" style="display:none"></div>
+        <div class="resetrow"><button class="btn-reset pressable" id="r3a-reset">Reset tree</button></div>
+      </div>
+      <div class="variant hidden" id="r3b">
+        <div class="stepper" id="r3b-steps"></div>
+        <p class="sentence" id="r3b-sent"></p>
+        <div class="choicesrow" id="r3b-choices"></div>
+        <div class="tried">
+          <h4>Paths you tried</h4>
+          <div id="r3b-tried"><p class="tried-empty">None yet — descend to an ending and it lands here.</p></div>
+        </div>
+        <div class="resetrow"><button class="btn-reset pressable" id="r3b-reset">Reset explorer</button></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>Feel lab 02 · teaching tools · Room 1 uses real o200k merge data · Rooms 2–3 are labeled mock content · v1</footer>
+</div>
+
+<script>
+"use strict";
+/* ================= shared ================= */
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/* variant switchers — toggle only, never scroll the page */
+document.querySelectorAll('.seg').forEach(seg => {
+  seg.addEventListener('click', e => {
+    const b = e.target.closest('button'); if(!b) return;
+    const room = b.dataset.room;
+    seg.querySelectorAll('button').forEach(x => {
+      const on = x === b;
+      x.classList.toggle('on', on); x.setAttribute('aria-selected', on);
+    });
+    $(''+room+'a').classList.toggle('hidden', b.dataset.v !== 'a');
+    $(''+room+'b').classList.toggle('hidden', b.dataset.v !== 'b');
+    if(room === 'r1'){ clearQT(r1a); clearQT(r1b); stabilizeR1(); }
+  });
+});
+
+/* tiny synth (room 1) */
+let actx = null, soundOn = true;
+try{ soundOn = localStorage.getItem('teachLabSound') !== 'off'; }catch(e){}
+function ensureAudio(){
+  if(actx || !soundOn) return;
+  try{ actx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){}
+}
+function tone(f0, f1, dur, type, vol){
+  if(!actx || !soundOn) return;
+  try{
+    const t0 = actx.currentTime, o = actx.createOscillator(), g = actx.createGain();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(f0, t0);
+    o.frequency.exponentialRampToValueAtTime(Math.max(1,f1), t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol || .2, t0 + .015);
+    g.gain.exponentialRampToValueAtTime(.0001, t0 + dur);
+    o.connect(g); g.connect(actx.destination);
+    o.start(t0); o.stop(t0 + dur + .02);
+  }catch(e){}
+}
+const sfx = {
+  good(){ tone(520, 880, .14, 'sine', .22); setTimeout(()=>tone(780, 1170, .12, 'sine', .18), 70); },
+  bad(){ tone(220, 110, .2, 'square', .1); },
+  merge(){ tone(300, 140, .12, 'sine', .2); }
+};
+
+/* ================= ROOM 1 · predict then reveal ================= */
+/* Real o200k merges, traced with the byte-identical from-scratch
+   implementation (~/workspace/tokenizer). rounds[i] = chip state before
+   merge i; merges[i] turns rounds[i] into rounds[i+1]. */
+const PAIR_RANK = {to:935,ok:525,ke:1272,en:262,ken:2144,tok:43620,oken:2488,token:10346,
+  he:273,el:296,ll:680,lo:746,hel:4161,hell:10844,llo:72807,hello:24912,
+  st:302,tr:371,ri:872,in:258,ng:892,rin:23910,ing:289,ring:18173,str:689,string:1655};
+const WORDS = {
+  token: {
+    rounds: [['t','o','k','e','n'],['t','o','k','en'],['t','ok','en'],['t','oken'],['token']],
+    merges: [
+      {merged:'en',   rank:262,   note:'<b>en</b> fuses first — rank <span class="rank">#262</span>, the most frequent pair in t·o·k·e·n.'},
+      {merged:'ok',   rank:525,   note:'<b>ok</b> next — rank <span class="rank">#525</span>. Lowest rank wins, not leftmost.'},
+      {merged:'oken', rank:2488,  note:'<b>oken</b> — rank <span class="rank">#2,488</span>. Chunks fuse, never by meaning.'},
+      {merged:'token',rank:10346, note:'<b>token</b> — rank <span class="rank">#10,346</span>. Four merges, one token id.'}
+    ]
+  },
+  hello: {
+    rounds: [['h','e','l','l','o'],['he','l','l','o'],['he','ll','o'],['hell','o'],['hello']],
+    merges: [
+      {merged:'he',   rank:273,   note:'<b>he</b> — rank <span class="rank">#273</span>. A common digraph goes early.'},
+      {merged:'ll',   rank:680,   note:'<b>ll</b> — rank <span class="rank">#680</span>. The double-l fuses before touching <b>he</b>.'},
+      {merged:'hell', rank:10844, note:'<b>hell</b> — rank <span class="rank">#10,844</span>. Two chunks become one.'},
+      {merged:'hello',rank:24912, note:'<b>hello</b> — rank <span class="rank">#24,912</span>. One token id.'}
+    ]
+  },
+  string: {
+    rounds: [['s','t','r','i','n','g'],['s','t','r','in','g'],['s','t','r','ing'],['st','r','ing'],['str','ing'],['string']],
+    merges: [
+      {merged:'in',    rank:258,  note:'<b>in</b> — rank <span class="rank">#258</span>, the most frequent pair here.'},
+      {merged:'ing',   rank:289,  note:'<b>ing</b> — rank <span class="rank">#289</span>. Suffixes are merge magnets.'},
+      {merged:'st',    rank:302,  note:'<b>st</b> — rank <span class="rank">#302</span>, now the lowest-ranked pair left.'},
+      {merged:'str',   rank:689,  note:'<b>str</b> — rank <span class="rank">#689</span>.'},
+      {merged:'string',rank:1655, note:'<b>string</b> — rank <span class="rank">#1,655</span>. Five merges, one token.'}
+    ]
+  }
+};
+const WORD_ORDER = ['token','hello','string'];
+
+/* derived: correct pair index + candidate list per round */
+function pairInfo(w, r){
+  const parts = WORDS[w].rounds[r], m = WORDS[w].merges[r];
+  const pairs = [];
+  for(let j = 0; j < parts.length - 1; j++){
+    const joined = parts[j] + parts[j+1];
+    pairs.push({j, label: parts[j] + ' + ' + parts[j+1], joined,
+      correct: joined === m.merged, rank: PAIR_RANK[joined] == null ? 1e9 : PAIR_RANK[joined]});
+  }
+  const correct = pairs.find(p => p.correct);
+  const distract = pairs.filter(p => !p.correct).sort((a,b) => a.rank - b.rank).slice(0, 2);
+  /* shuffle: correct position varies */
+  const cands = [correct, ...distract];
+  for(let i = cands.length - 1; i > 0; i--){
+    const k = Math.floor(Math.random() * (i + 1));
+    [cands[i], cands[k]] = [cands[k], cands[i]];
+  }
+  return {pairs, correct, cands};
+}
+
+/* ---------- room 1 state ----------
+   queue = round indices still to answer, in order; qi = position.
+   A wrong answer offers try-again (same question) or skip-for-later
+   (question moves to the end of the queue). Correct answers auto-advance. */
+function freshR1(){ return {word:'token', queue:[], qi:0, doneCount:0, best:0,
+  lastDone:null, reviewing:null, firstTry:true, phase:'ask',
+  streak:0, sel:[], lastPick:null, _cands:null, _timer:null}; }
+const r1a = freshR1(), r1b = freshR1();
+function initQuiz(s){
+  s.queue = WORDS[s.word].merges.map((_, i) => i);
+}
+function cur(s){ return s.queue[s.qi]; }
+function clearQT(s){ if(s._timer){ clearTimeout(s._timer); s._timer = null; } }
+function wrongPromptHTML(){
+  return '<p class="result bad">Not quite — no streak this time.</p>' +
+    '<div class="wbtns">' +
+    '<button class="wbtn pressable" data-w="retry">Try again<kbd>T</kbd></button>' +
+    '<button class="wbtn ghost pressable" data-w="skip">Skip for later<kbd>S</kbd></button>' +
+    '</div>';
+}
+function autoNext(s, v){
+  clearQT(s);
+  if(s.phase !== 'reveal') return;
+  s.qi++; s.firstTry = true; s.sel = []; s.lastPick = null;
+  s.phase = s.qi >= s.queue.length ? 'done' : 'ask';
+  if(s.phase === 'done') sfx.good();
+  (v === 'a' ? renderR1A : renderR1B)();
+}
+function tryAgain(s, v){
+  if(s.phase !== 'wrong') return;
+  clearQT(s);
+  s.phase = 'ask'; s.sel = []; s.lastPick = null;
+  if(v === 'a') s._cands = pairInfo(s.word, cur(s)).cands; /* fresh shuffle */
+  (v === 'a' ? renderR1A : renderR1B)();
+}
+function skipLater(s, v){
+  if(s.phase !== 'wrong') return;
+  clearQT(s);
+  s.queue.push(s.queue[s.qi]);
+  s.queue.splice(s.qi, 1);
+  s.phase = 'ask'; s.firstTry = true; s.sel = []; s.lastPick = null;
+  (v === 'a' ? renderR1A : renderR1B)();
+}
+
+function askCaption(w){
+  const n = WORDS[w].rounds[0].length;
+  return '“' + esc(w) + '” — ' + n + ' bytes, ' + WORDS[w].merges.length + ' merges. Predict each one before it happens.';
+}
+function chipsHTML(parts, mergedIdx, pickable, sel){
+  return parts.map((p,i) => {
+    let cls = 'chip enter';
+    if(mergedIdx === i) cls += ' merged';
+    if(pickable) cls += ' pickable';
+    if(sel && sel.includes(i)) cls += ' sel';
+    return '<span class="' + cls + '" data-i="' + i + '">' + esc(p) + '</span>';
+  }).join('');
+}
+/* merged chip index inside rounds[r+1] */
+function mergedIdx(w, r){
+  return WORDS[w].rounds[r+1].indexOf(WORDS[w].merges[r].merged);
+}
+
+/* ---------- variant A · choices ---------- */
+function renderR1A(){
+  const s = r1a, W = WORDS[s.word], total = W.merges.length;
+  const done = s.phase === 'done';
+  $('r1a-streak').textContent = s.streak;
+  document.querySelectorAll('#r1a .wchip').forEach(b => b.classList.toggle('on', b.dataset.w === s.word));
+
+  let chips, prompt, cap;
+  const rv = s.reviewing;
+  if(rv != null){
+    chips = chipsHTML(W.rounds[rv+1], mergedIdx(s.word, rv), false, null);
+    prompt = '<p class="result">Reviewing — “' + esc(W.merges[rv].merged) + '”.</p>';
+    cap = W.merges[rv].note;
+  } else if(done){
+    chips = chipsHTML(W.rounds[total], -1, false, null);
+    const m = W.merges[total-1];
+    prompt = '<p class="result good">“' + esc(s.word) + '” is one token — id #' + m.rank.toLocaleString() + '.</p>' +
+             '<p class="best">Best streak: ' + s.best + '</p>';
+    cap = 'All ' + total + ' merges complete. Pick another word, or replay.';
+  } else if(s.phase === 'ask'){
+    const r = cur(s);
+    chips = chipsHTML(W.rounds[r], -1, false, null);
+    const info = pairInfo(s.word, r);
+    s._cands = info.cands;
+    prompt = '<p class="instr">Which pair merges next?</p>' +
+      info.cands.map((c,i) => '<button class="cand pressable" data-ci="' + i + '"><span style="color:var(--faint);font-size:12px;margin-right:6px;">' + (i+1) + '</span>' + esc(c.label) + '</button>').join('');
+    cap = askCaption(s.word);
+  } else if(s.phase === 'wrong'){
+    chips = chipsHTML(W.rounds[cur(s)], -1, false, null);
+    prompt = wrongPromptHTML();
+    cap = askCaption(s.word);
+  } else { /* reveal — correct, auto-advancing */
+    const r = cur(s), m = W.merges[r];
+    chips = chipsHTML(W.rounds[r+1], mergedIdx(s.word, r), false, null);
+    prompt = s.firstTry
+      ? '<p class="result good">Correct — “' + esc(m.merged) + '” it is. Streak ' + s.streak + '.</p>'
+      : '<p class="result good">Got it — “' + esc(m.merged) + '” merges.</p>';
+    prompt += '<p class="autonext">next question…</p>';
+    cap = m.note;
+  }
+  $('r1a-chips').innerHTML = chips;
+  $('r1a-prompt').innerHTML = prompt;
+  $('r1a-cap').innerHTML = cap;
+  $('r1a-fill').style.width = (s.doneCount / total * 100) + '%';
+  $('r1a-count').textContent = s.doneCount + ' / ' + total + ' merges';
+  const nx = $('r1a-next');
+  nx.style.visibility = (done && rv == null) ? 'visible' : 'hidden';
+  nx.disabled = !done;
+  $('r1a-nextlabel').textContent = 'Replay';
+  $('r1a-back').disabled = !((s.phase === 'ask' || done) && (rv != null || s.lastDone != null));
+  $('r1a-prompt').querySelectorAll('.cand').forEach(b =>
+    b.addEventListener('click', () => pickA(parseInt(b.dataset.ci, 10))));
+  $('r1a-prompt').querySelectorAll('.wbtn').forEach(b =>
+    b.addEventListener('click', () => b.dataset.w === 'retry' ? tryAgain(r1a, 'a') : skipLater(r1a, 'a')));
+}
+function pickA(ci){
+  const s = r1a;
+  if(s.phase !== 'ask' || s.reviewing != null) return;
+  const r = cur(s);
+  if(r == null || r >= WORDS[s.word].merges.length) return;
+  clearQT(s);
+  const c = s._cands[ci];
+  if(c.correct){
+    if(s.firstTry){ s.streak++; s.best = Math.max(s.best, s.streak); }
+    s.doneCount++; s.lastDone = r;
+    s.phase = 'reveal';
+    sfx.good(); setTimeout(() => sfx.merge(), 90);
+    renderR1A();
+    s._timer = setTimeout(() => autoNext(s, 'a'), 1800);
+  } else {
+    s.streak = 0; s.firstTry = false;
+    s.phase = 'wrong';
+    sfx.bad();
+    renderR1A();
+  }
+}
+/* Next now only replays a finished word — the quiz itself auto-advances. */
+function nextR1(s, v){
+  if(s.phase !== 'done') return;
+  clearQT(s);
+  const w = s.word;
+  Object.assign(s, freshR1(), {word: w});
+  initQuiz(s);
+  (v === 'a' ? renderR1A : renderR1B)();
+}
+/* Back reviews the last answered question; press again to return. */
+function backR1(s, v){
+  if(s.phase !== 'ask' && s.phase !== 'done') return;
+  if(s.reviewing != null) s.reviewing = null;
+  else if(s.lastDone != null) s.reviewing = s.lastDone;
+  else return;
+  (v === 'a' ? renderR1A : renderR1B)();
+}
+function bindPress(btn, onTap){
+  btn.addEventListener('pointerdown', e => { e.preventDefault(); btn.classList.add('pressed'); ensureAudio(); if(actx && actx.state === 'suspended') actx.resume(); });
+  btn.addEventListener('pointerup', () => { if(btn.disabled) { btn.classList.remove('pressed'); return; } btn.classList.remove('pressed'); onTap(); });
+  btn.addEventListener('pointercancel', () => btn.classList.remove('pressed'));
+  btn.addEventListener('pointerleave', () => btn.classList.remove('pressed'));
+}
+bindPress($('r1a-next'), () => nextR1(r1a, 'a'));
+bindPress($('r1a-back'), () => backR1(r1a, 'a'));
+bindPress($('r1b-next'), () => nextR1(r1b, 'b'));
+bindPress($('r1b-back'), () => backR1(r1b, 'b'));
+document.querySelectorAll('#r1a .wchip, #r1b .wchip').forEach(b =>
+  b.addEventListener('click', () => {
+    const v = b.closest('.variant').id === 'r1a' ? 'a' : 'b';
+    const s = v === 'a' ? r1a : r1b;
+    clearQT(s);
+    Object.assign(s, freshR1(), {word: b.dataset.w});
+    initQuiz(s);
+    (v === 'a' ? renderR1A : renderR1B)();
+  }));
+
+/* ---------- variant B · tap the pair ---------- */
+function renderR1B(){
+  const s = r1b, W = WORDS[s.word], total = W.merges.length;
+  const done = s.phase === 'done';
+  $('r1b-streak').textContent = s.streak;
+  document.querySelectorAll('#r1b .wchip').forEach(b => b.classList.toggle('on', b.dataset.w === s.word));
+
+  let chips, prompt, cap;
+  const rv = s.reviewing;
+  if(rv != null){
+    chips = chipsHTML(W.rounds[rv+1], mergedIdx(s.word, rv), false, null);
+    prompt = '<p class="result">Reviewing — “' + esc(W.merges[rv].merged) + '”.</p>';
+    cap = W.merges[rv].note;
+  } else if(done){
+    chips = chipsHTML(W.rounds[total], -1, false, null);
+    const m = W.merges[total-1];
+    prompt = '<p class="result good">“' + esc(s.word) + '” is one token — id #' + m.rank.toLocaleString() + '.</p>' +
+             '<p class="best">Best streak: ' + s.best + '</p>';
+    cap = 'All ' + total + ' merges complete. Pick another word, or replay.';
+  } else if(s.phase === 'ask'){
+    const r = cur(s);
+    chips = chipsHTML(W.rounds[r], -1, true, s.sel);
+    prompt = '<p class="instr">' + (s.sel.length ? 'Now tap the chip beside it.' : 'Tap the two chips that merge next.') + '</p>';
+    cap = askCaption(s.word);
+  } else if(s.phase === 'wrong'){
+    chips = chipsHTML(W.rounds[cur(s)], -1, true, null);
+    prompt = wrongPromptHTML();
+    cap = askCaption(s.word);
+  } else { /* reveal — correct, auto-advancing */
+    const r = cur(s), m = W.merges[r];
+    chips = chipsHTML(W.rounds[r+1], mergedIdx(s.word, r), false, null);
+    prompt = s.firstTry
+      ? '<p class="result good">“' + esc(m.merged) + '” — rank #' + m.rank.toLocaleString() + '. Streak ' + s.streak + '.</p>'
+      : '<p class="result good">Got it — “' + esc(m.merged) + '” merges.</p>';
+    prompt += '<p class="autonext">next question…</p>';
+    cap = m.note;
+  }
+  const box = $('r1b-chips');
+  box.innerHTML = chips;
+  $('r1b-prompt').innerHTML = prompt;
+  $('r1b-cap').innerHTML = cap;
+  $('r1b-fill').style.width = (s.doneCount / total * 100) + '%';
+  $('r1b-count').textContent = s.doneCount + ' / ' + total + ' merges';
+  const nx = $('r1b-next');
+  nx.style.visibility = (done && rv == null) ? 'visible' : 'hidden';
+  nx.disabled = !done;
+  $('r1b-nextlabel').textContent = 'Replay';
+  $('r1b-back').disabled = !((s.phase === 'ask' || done) && (rv != null || s.lastDone != null));
+  box.querySelectorAll('.chip').forEach(c =>
+    c.addEventListener('pointerup', () => tapChipB(parseInt(c.dataset.i, 10))));
+  $('r1b-prompt').querySelectorAll('.wbtn').forEach(b =>
+    b.addEventListener('click', () => b.dataset.w === 'retry' ? tryAgain(r1b, 'b') : skipLater(r1b, 'b')));
+}
+function tapChipB(i){
+  const s = r1b, W = WORDS[s.word];
+  if(s.phase !== 'ask' || s.reviewing != null) return;
+  const r = cur(s);
+  if(r == null || r >= W.merges.length) return;
+  ensureAudio();
+  if(!s.sel.length){ s.sel = [i]; renderR1B(); return; }
+  const a = s.sel[0];
+  if(a === i){ s.sel = []; renderR1B(); return; }
+  clearQT(s);
+  const lo = Math.min(a,i), hi = Math.max(a,i);
+  const parts = W.rounds[r], m = W.merges[r];
+  const ok = (hi === lo + 1) && (parts[lo] + parts[hi] === m.merged);
+  if(ok){
+    if(s.firstTry){ s.streak++; s.best = Math.max(s.best, s.streak); }
+    s.doneCount++; s.lastDone = r;
+    s.phase = 'reveal'; s.sel = [];
+    sfx.good(); setTimeout(() => sfx.merge(), 90);
+    renderR1B();
+    s._timer = setTimeout(() => autoNext(s, 'b'), 1800);
+  } else {
+    s.streak = 0; s.firstTry = false; s.sel = [];
+    s.phase = 'wrong';
+    sfx.bad();
+    renderR1B();
+    const box = $('r1b-chips');
+    box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake');
+  }
+}
+
+/* ---------- no-move rule: pin every region to its tallest state ----------
+   Probe every word × round × phase for both variants at the real stage
+   width, then pin min-heights so the Next button never moves. */
+function stabilizeR1(){
+  ['a','b'].forEach(v => {
+    const stage = $('r1' + v + '-stage');
+    const stageW = stage.clientWidth;
+    if(!stageW) return;
+    const st = getComputedStyle(stage);
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:absolute;top:0;left:0;visibility:hidden;pointer-events:none;' +
+      'padding:' + st.padding + ';width:' + stageW + 'px;';
+    probe.innerHTML = '<div class="chips"></div><div class="prompt"></div><p class="caption"></p>';
+    document.body.appendChild(probe);
+    const pc = probe.children[0], pp = probe.children[1], cc = probe.children[2];
+    let mhC = 0, mhP = 0, mhCap = 0;
+    WORD_ORDER.forEach(w => {
+      const W = WORDS[w], total = W.merges.length;
+      for(let r = 0; r <= total; r++){
+        const done = r >= total;
+        /* ask state */
+        if(!done){
+          pc.innerHTML = chipsHTML(W.rounds[r], -1, v === 'b', null);
+          pp.innerHTML = v === 'a'
+            ? '<p class="instr">Which pair merges next?</p>' + pairInfo(w, r).cands.map(c => '<button class="cand">' + esc(c.label) + '</button>').join('')
+            : '<p class="instr">Tap the two chips that merge next.</p>';
+          cc.innerHTML = askCaption(w);
+        } else {
+          const rr = total - 1, m = W.merges[rr];
+          pc.innerHTML = chipsHTML(W.rounds[rr+1], mergedIdx(w, rr), false, null);
+          pp.innerHTML = '<p class="result good">Correct — “' + esc(m.merged) + '” it is. Streak 9.</p>';
+          cc.innerHTML = m.note;
+        }
+        mhC = Math.max(mhC, pc.offsetHeight);
+        mhP = Math.max(mhP, pp.offsetHeight);
+        mhCap = Math.max(mhCap, cc.offsetHeight);
+        /* reveal state (correct — auto-advancing) */
+        if(!done){
+          const m = W.merges[r];
+          pc.innerHTML = chipsHTML(W.rounds[r+1], mergedIdx(w, r), false, null);
+          pp.innerHTML = '<p class="result good">Correct — “' + esc(m.merged) + '” it is. Streak 9.</p><p class="autonext">next question…</p>';
+          cc.innerHTML = m.note;
+          mhC = Math.max(mhC, pc.offsetHeight);
+          mhP = Math.max(mhP, pp.offsetHeight);
+          mhCap = Math.max(mhCap, cc.offsetHeight);
+          /* wrong state (try-again / skip-for-later) */
+          pc.innerHTML = chipsHTML(W.rounds[r], -1, v === 'b', null);
+          pp.innerHTML = wrongPromptHTML();
+          cc.innerHTML = askCaption(w);
+          mhC = Math.max(mhC, pc.offsetHeight);
+          mhP = Math.max(mhP, pp.offsetHeight);
+          mhCap = Math.max(mhCap, cc.offsetHeight);
+        }
+      }
+    });
+    document.body.removeChild(probe);
+    $('r1' + v + '-chips').style.minHeight = (Math.ceil(mhC) + 1) + 'px';
+    $('r1' + v + '-prompt').style.minHeight = (Math.ceil(mhP) + 1) + 'px';
+    $('r1' + v + '-cap').style.minHeight = (Math.ceil(mhCap) + 1) + 'px';
+  });
+}
+let stabT = null;
+window.addEventListener('resize', () => { clearTimeout(stabT); stabT = setTimeout(stabilizeR1, 150); });
+
+/* keyboard: 1/2/3 for variant A choices, T/S on a wrong answer,
+   arrows for back / advance-now during the reveal pause */
+document.addEventListener('keydown', e => {
+  const t = e.target;
+  if(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+  const aVis = !$('r1a').classList.contains('hidden');
+  const s = aVis ? r1a : r1b, v = aVis ? 'a' : 'b';
+  const nextBtn = v === 'a' ? $('r1a-next') : $('r1b-next');
+  const backBtn = v === 'a' ? $('r1a-back') : $('r1b-back');
+  if(aVis && s.phase === 'ask' && ['1','2','3'].includes(e.key)){
+    const i = parseInt(e.key, 10) - 1;
+    if(s._cands && s._cands[i]) pickA(i);
+    return;
+  }
+  if(s.phase === 'wrong' && (e.key === 't' || e.key === 'T')){ tryAgain(s, v); return; }
+  if(s.phase === 'wrong' && (e.key === 's' || e.key === 'S')){ skipLater(s, v); return; }
+  if(e.key === 'ArrowRight'){
+    if(s.phase === 'reveal') autoNext(s, v);
+    else if(!nextBtn.disabled) nextR1(s, v);
+  }
+  else if(e.key === 'ArrowLeft' && !backBtn.disabled) backR1(s, v);
+});
+
+/* sound toggle */
+const soundSw = $('r1-sound');
+function paintSound(){ soundSw.classList.toggle('on', soundOn); soundSw.setAttribute('aria-checked', soundOn); }
+soundSw.addEventListener('click', () => {
+  soundOn = !soundOn;
+  try{ localStorage.setItem('teachLabSound', soundOn ? 'on' : 'off'); }catch(e){}
+  paintSound();
+});
+paintSound();
+
+/* ================= ROOM 2 · live equation ================= */
+/* Illustrative logits — hand-written mock numbers for feel-testing. */
+const PRESETS = {
+  france: {label:'Capital of France', toks:[' Paris',' London',' Lyon',' Berlin',' frog'],  z:[4.2, 1.1, 2.4, 0.3,-1.5]},
+  story:  {label:'Story opening',     toks:[' Once',' The',' In',' Suddenly',' Banana'],      z:[3.1, 2.8, 1.2, 0.9,-2.0]},
+  code:   {label:'Code completion',   toks:[' return',' print',' if',' pass',' pizza'],      z:[3.8, 2.1, 2.6, 0.2,-3.0]}
+};
+function freshR2(){ return {preset:'france', T:1.0, topk:5, z:PRESETS.france.z.slice(), sampled:-1}; }
+const R2 = {a: freshR2(), b: freshR2()};
+
+function distOf(s){
+  const n = s.z.length;
+  const order = [...Array(n).keys()].sort((x,y) => s.z[y] - s.z[x]);
+  const keptSet = new Set(order.slice(0, s.topk));
+  let denom = 0;
+  order.forEach(i => { if(keptSet.has(i)) denom += Math.exp(s.z[i] / s.T); });
+  return {p: s.z.map((z,i) => keptSet.has(i) ? Math.exp(z / s.T) / denom : 0),
+          kept: s.z.map((_,i) => keptSet.has(i)), top: order[0]};
+}
+function tokName(t){ return '“' + t.trim() + '”'; }
+
+function buildR2(v){
+  const s = R2[v], P = PRESETS[s.preset];
+  /* preset chips */
+  $('r2'+v+'-presets').innerHTML = Object.keys(PRESETS).map(k =>
+    '<button class="pchip' + (k === s.preset ? ' on' : '') + '" data-p="' + k + '">' + PRESETS[k].label + '</button>').join('');
+  $('r2'+v+'-presets').querySelectorAll('.pchip').forEach(b =>
+    b.addEventListener('click', () => {
+      s.preset = b.dataset.p; s.z = PRESETS[s.preset].z.slice(); s.sampled = -1;
+      buildR2(v);
+    }));
+  /* bars */
+  const bars = $('r2'+v+'-bars');
+  bars.innerHTML = P.toks.map((t,i) =>
+    '<div class="brow" data-i="' + i + '">' +
+      '<span class="btok">' + esc(t) + '</span>' +
+      '<div class="btrack' + (v === 'b' ? ' grab' : '') + '"><div class="bfill"></div><span class="bpct"></span></div>' +
+      '<span class="bz"></span>' +
+    '</div>').join('');
+  /* sliders */
+  const temp = $('r2'+v+'-temp'), topk = $('r2'+v+'-topk');
+  temp.value = s.T; $('r2'+v+'-tempout').textContent = s.T.toFixed(2);
+  topk.value = s.topk; $('r2'+v+'-topkout').textContent = s.topk;
+  updateR2(v);
+  $('r2'+v+'-out').textContent = '';
+}
+function updateR2(v){
+  const s = R2[v], P = PRESETS[s.preset], d = distOf(s);
+  const topTok = P.toks[d.top];
+  $('r2'+v+'-eqlive').innerHTML =
+    'T = ' + s.T.toFixed(2) + ' · top-k = ' + s.topk +
+    ' · p(' + esc(tokName(topTok)) + ') = e<sup>(' + s.z[d.top].toFixed(2) + '/' + s.T.toFixed(2) + ')</sup>/Σ = <b>' + (d.p[d.top]*100).toFixed(1) + '%</b>';
+  $('r2'+v+'-bars').querySelectorAll('.brow').forEach(row => {
+    const i = parseInt(row.dataset.i, 10);
+    row.classList.toggle('out', !d.kept[i]);
+    row.querySelector('.bfill').style.width = (d.p[i] * 100).toFixed(2) + '%';
+    row.querySelector('.bpct').textContent = (d.p[i] * 100).toFixed(1) + '%';
+    row.querySelector('.bz').textContent = 'z ' + s.z[i].toFixed(2);
+  });
+  if(s.sampled >= 0){
+    $('r2'+v+'-out').innerHTML = 'Sampled <b>' + esc(tokName(P.toks[s.sampled])) + '</b> — ' + (d.p[s.sampled]*100).toFixed(1) + '% of the mass';
+  }
+}
+['a','b'].forEach(v => {
+  $('r2'+v+'-temp').addEventListener('input', e => {
+    R2[v].T = parseFloat(e.target.value);
+    $('r2'+v+'-tempout').textContent = R2[v].T.toFixed(2);
+    updateR2(v);
+  });
+  $('r2'+v+'-topk').addEventListener('input', e => {
+    R2[v].topk = parseInt(e.target.value, 10);
+    $('r2'+v+'-topkout').textContent = R2[v].topk;
+    R2[v].sampled = -1; $('r2'+v+'-out').textContent = '';
+    updateR2(v);
+  });
+  $('r2'+v+'-sample').addEventListener('click', () => sampleR2(v));
+});
+function sampleR2(v){
+  const s = R2[v], d = distOf(s);
+  const btn = $('r2'+v+'-sample');
+  const rows = [...$('r2'+v+'-bars').querySelectorAll('.brow')];
+  const order = rows.map(r => parseInt(r.dataset.i,10)).filter(i => d.kept[i]);
+  if(!order.length) return;
+  btn.disabled = true;
+  s.sampled = -1;
+  let n = 0;
+  const timer = setInterval(() => {
+    rows.forEach(r => r.classList.remove('flick'));
+    rows.find(r => parseInt(r.dataset.i,10) === order[Math.floor(Math.random()*order.length)]).classList.add('flick');
+    if(++n >= 7){
+      clearInterval(timer);
+      let x = Math.random(), acc = 0, pick = order[0];
+      for(const i of order){ acc += d.p[i]; if(x <= acc){ pick = i; break; } }
+      rows.forEach(r => r.classList.remove('flick'));
+      s.sampled = pick;
+      updateR2(v);
+      btn.disabled = false;
+    }
+  }, 70);
+}
+/* variant B: drag a bar vertically to change its logit */
+(function(){
+  let drag = null;
+  const bars = $('r2b-bars');
+  bars.addEventListener('pointerdown', e => {
+    const track = e.target.closest('.btrack'); if(!track) return;
+    e.preventDefault();
+    const row = track.closest('.brow');
+    const i = parseInt(row.dataset.i, 10);
+    drag = {i, y0: e.clientY, z0: R2.b.z[i]};
+    try{ track.setPointerCapture(e.pointerId); }catch(err){}
+    row.classList.add('dragging');
+    R2.b.sampled = -1; $('r2b-out').textContent = '';
+  });
+  bars.addEventListener('pointermove', e => {
+    if(!drag) return;
+    R2.b.z[drag.i] = clamp(drag.z0 + (drag.y0 - e.clientY) / 50, -4, 8);
+    updateR2('b');
+  });
+  const end = () => {
+    if(!drag) return;
+    drag = null;
+    bars.querySelectorAll('.brow').forEach(r => r.classList.remove('dragging'));
+  };
+  bars.addEventListener('pointerup', end);
+  bars.addEventListener('pointercancel', end);
+})();
+buildR2('a'); buildR2('b');
+
+/* ================= ROOM 3 · branch explorer ================= */
+/* Illustrative story tree — hand-written, not generated. */
+const STORY = {t:'The dragon opened the ___', kids:[
+  {t:'door', kids:[
+    {t:'and found a library where the books shelved themselves', kids:[
+      {t:'The dragon became head librarian and never hoarded gold again.', end:true},
+      {t:'The books unionized and alphabetized the dragon.', end:true}]},
+    {t:'onto a kitchen that smelled of cinnamon', kids:[
+      {t:'It traded fire-breathing for baking and opened a pie shop.', end:true}]}]},
+  {t:'eye', kids:[
+    {t:'and saw three hundred years of birthdays at once', kids:[
+      {t:'It cried one perfect tear, then finally took a nap.', end:true}]},
+    {t:'but it was only dreaming', kids:[
+      {t:'The dream filed a complaint and woke up first.', end:true}]}]},
+  {t:'the letter', kids:[
+    {t:'addressed to THE DRAGON, URGENT', kids:[
+      {t:'Jury duty. The dragon served with complete honor.', end:true}]},
+    {t:'written in its own clawwriting', kids:[
+      {t:'It just said: drink more water. Wise words.', end:true}]}]}
+]};
+function nodeAt(path){
+  let n = STORY;
+  for(const i of path) n = n.kids[i];
+  return n;
+}
+function countEnds(n){
+  if(n.end) return 1;
+  return (n.kids||[]).reduce((a,k) => a + countEnds(k), 0);
+}
+const TOTAL_ENDS = countEnds(STORY);
+function shortLabel(t, depth){
+  if(depth <= 1) return t;
+  return t.length > 30 ? t.slice(0, 30) + '…' : t;
+}
+
+/* ---------- variant A · tree ---------- */
+let r3a = {path: [], visited: new Set(['root'])};
+const keyOf = p => p.length ? p.join('/') : 'root';
+
+function buildTreeA(node, key, depth){
+  const s = r3a;
+  const kp = key === 'root' ? [] : key.split('/').map(Number);
+  const isCurrent = kp.join(',') === s.path.join(',');
+  const onPath = kp.every((v,i) => s.path[i] === v);
+  const label = key === 'root' ? 'The dragon opened the <b>___</b>' : esc(node.t);
+  const eb = node.end ? '<span class="endbadge">ENDING</span>' : '';
+  let inner;
+  if(isCurrent && !node.end){
+    inner = '<span class="tchip cur">' + label + '</span>';
+    const kids = (node.kids||[]).map((k, ci) => {
+      const ck = key === 'root' ? '' + ci : key + '/' + ci;
+      const onCurPath = onPath && s.path.length > kp.length && s.path[kp.length] === ci;
+      if(onCurPath) return buildTreeA(k, ck, depth + 1);
+      const keb = k.end ? '<span class="endbadge">ENDING</span>' : '';
+      return '<div class="tnode">' + (s.visited.has(ck)
+        ? '<span class="tchip dim">' + esc(k.t) + keb + '</span>'
+        : '<button class="tchip choice" data-go="' + ck + '">' + esc(k.t) + keb + '</button>') + '</div>';
+    }).join('');
+    inner += '<div class="tkids">' + kids + '</div>';
+  } else if(isCurrent && node.end){
+    inner = '<span class="tchip cur">' + label + eb + '</span>';
+  } else if(onPath){
+    inner = '<span class="tchip">' + label + eb + '</span>';
+    const kids = (node.kids||[]).map((k, ci) => {
+      const ck = key === 'root' ? '' + ci : key + '/' + ci;
+      const onCurPath = s.path.length > kp.length && s.path[kp.length] === ci;
+      if(onCurPath) return buildTreeA(k, ck, depth + 1);
+      if(s.visited.has(ck)) return '<div class="tnode"><span class="tchip dim">' + esc(k.t) + (k.end?'<span class="endbadge">ENDING</span>':'') + '</span></div>';
+      return '';
+    }).join('');
+    if(kids) inner += '<div class="tkids">' + kids + '</div>';
+  } else {
+    inner = '<span class="tchip dim">' + label + eb + '</span>';
+  }
+  return '<div class="tnode">' + inner + '</div>';
+}
+function pathSentence(path){
+  const parts = [];
+  let n = STORY;
+  path.forEach(i => { n = n.kids[i]; parts.push(n.t); });
+  if(!parts.length) return '';
+  const end = n.end ? parts.pop() : null;
+  let s = 'The dragon opened ' + (parts[0].startsWith('the ') ? '' : 'the ') + parts.join(', ');
+  if(end) s += ' — ' + end;
+  return s + '.';
+}
+function renderR3A(){
+  const s = r3a;
+  /* crumbs */
+  let crumbs = '<button class="crumb' + (s.path.length === 0 ? ' cur' : '') + '" data-jump="0">the ___</button>';
+  let n = STORY;
+  s.path.forEach((pi, di) => {
+    n = n.kids[pi];
+    crumbs += '<span class="crumb-sep">›</span><button class="crumb' + (di === s.path.length - 1 ? ' cur' : '') + '" data-jump="' + (di+1) + '">' + esc(shortLabel(n.t, di+1)) + '</button>';
+  });
+  $('r3a-crumbs').innerHTML = crumbs;
+  $('r3a-crumbs').querySelectorAll('.crumb:not(.cur)').forEach(b =>
+    b.addEventListener('click', () => {
+      s.path = s.path.slice(0, parseInt(b.dataset.jump, 10));
+      renderR3A();
+    }));
+  /* tree */
+  $('r3a-tree').innerHTML = buildTreeA(STORY, 'root', 0);
+  /* recap */
+  const cur = nodeAt(s.path);
+  const recap = $('r3a-recap');
+  if(cur.end){
+    const found = [...s.visited].filter(k => {
+      if(k === 'root') return false;
+      return nodeAt(k.split('/').map(Number)).end;
+    }).length;
+    recap.style.display = '';
+    recap.innerHTML = '<h4>Your path</h4><p>' + esc(pathSentence(s.path)) + '</p>' +
+      '<p class="found">endings found: ' + found + ' / ' + TOTAL_ENDS + ' — jump back and try another branch</p>';
+  } else {
+    recap.style.display = 'none';
+  }
+}
+$('r3a-tree').addEventListener('click', e => {
+  const b = e.target.closest('button[data-go]'); if(!b) return;
+  const ck = b.dataset.go;
+  r3a.path = ck.split('/').map(Number);
+  r3a.visited.add(ck);
+  renderR3A();
+});
+bindPress($('r3a-reset'), () => { r3a = {path: [], visited: new Set(['root'])}; renderR3A(); });
+
+/* ---------- variant B · path ---------- */
+let r3b = {path: [], tried: []};
+const CHEV = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 2.5L9.5 7L5 11.5" stroke="#a8a396" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function renderR3B(){
+  const s = r3b, cur = nodeAt(s.path);
+  /* stepper */
+  let html = '<div class="step"><button data-jump="0" class="' + (s.path.length === 0 ? 'cur' : '') + '">the ___</button></div>';
+  let n = STORY;
+  s.path.forEach((pi, di) => {
+    n = n.kids[pi];
+    html += CHEV + '<div class="step"><button data-jump="' + (di+1) + '" class="' + (di === s.path.length - 1 ? 'cur' : '') + '">' + esc(shortLabel(n.t, di+1)) + '</button></div>';
+  });
+  const steps = $('r3b-steps');
+  steps.innerHTML = html;
+  steps.querySelectorAll('button[data-jump]').forEach(b =>
+    b.addEventListener('click', () => {
+      const j = parseInt(b.dataset.jump, 10);
+      if(j !== s.path.length){ s.path = s.path.slice(0, j); renderR3B(); }
+    }));
+  /* sentence */
+  $('r3b-sent').innerHTML = s.path.length
+    ? esc(pathSentence(s.path))
+    : '<span class="prompt0">The dragon opened the ___ — pick a word to begin.</span>';
+  /* choices */
+  const box = $('r3b-choices');
+  if(cur.end){
+    box.innerHTML = '<span class="tchip cur" style="cursor:default">' + esc(cur.t) + '<span class="endbadge">ENDING</span></span>';
+  } else {
+    box.innerHTML = (cur.kids||[]).map((k, i) =>
+      '<button class="tchip choice" data-pick="' + i + '">' + esc(k.t) + (k.end ? '<span class="endbadge">ENDING</span>' : '') + '</button>').join('');
+    box.querySelectorAll('button[data-pick]').forEach(b =>
+      b.addEventListener('click', () => {
+        const i = parseInt(b.dataset.pick, 10);
+        const kid = nodeAt(s.path).kids[i];
+        s.path = s.path.concat(i);
+        if(kid.end){
+          const key = s.path.join('/');
+          if(!s.tried.some(t => t.key === key)) s.tried.push({key, sent: pathSentence(s.path)});
+        }
+        renderR3B();
+      }));
+  }
+  /* tried */
+  const tried = $('r3b-tried');
+  tried.innerHTML = s.tried.length
+    ? s.tried.map(t => '<div class="trycard">' + esc(t.sent).replace(/ — ([^.]+)\.$/, ' — <span class="e">$1.</span>') + '</div>').join('')
+    : '<p class="tried-empty">None yet — descend to an ending and it lands here.</p>';
+}
+bindPress($('r3b-reset'), () => { r3b = {path: [], tried: []}; renderR3B(); });
+
+/* ================= init ================= */
+initQuiz(r1a); initQuiz(r1b);
+renderR1A();
+renderR1B();
+renderR3A();
+renderR3B();
+stabilizeR1();
+window.addEventListener('load', () => setTimeout(stabilizeR1, 60));
+</script>
+</body>
+</html>

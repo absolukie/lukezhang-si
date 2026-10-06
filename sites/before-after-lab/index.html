@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The drag · before/after feel lab</title>
+<style>
+  :root{
+    --bg:#0e100e; --panel:#161a16; --panel2:#1c211c; --line:#2b332b;
+    --ink:#f2efe6; --muted:#a8a396; --faint:#6f6b60;
+    --accent:#e8a33d;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,"Segoe UI",sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0;}
+  body{background:var(--bg); color:var(--ink); font-family:var(--sans); line-height:1.55;
+       padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
+  .wrap{max-width:760px; margin:0 auto; padding:34px 20px 80px;}
+  .kicker{font-family:var(--mono); font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:var(--accent); margin:0 0 10px;}
+  h1{font-size:34px; line-height:1.15; margin:0 0 10px; letter-spacing:-.01em;}
+  .lede{color:var(--muted); font-size:16px; margin:0 0 26px; max-width:58ch;}
+  .lede b{color:var(--ink);}
+  /* ---------- the slider ---------- */
+  .ba{position:relative; aspect-ratio:3/2; border-radius:18px; overflow:hidden;
+      border:1px solid var(--line); background:#000; cursor:ew-resize;
+      touch-action:none; user-select:none; -webkit-user-select:none;}
+  .ba img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+          pointer-events:none; -webkit-user-drag:none;}
+  .ba-before{will-change:clip-path;}
+  .ba-divider{position:absolute; top:0; bottom:0; left:0; width:0; will-change:transform; z-index:3;}
+  .ba-line{position:absolute; top:0; bottom:0; left:-1px; width:2px; background:rgba(255,255,255,.9);
+           box-shadow:0 0 10px rgba(0,0,0,.5);}
+  .ba-handle{position:absolute; top:50%; left:0; transform:translate(-50%,-50%) scale(1);
+             width:6px; height:24px; border-radius:999px; background:#fff;
+             box-shadow:0 1px 10px rgba(0,0,0,.55);
+             transition:transform .18s cubic-bezier(.34,1.56,.64,1);}
+  .ba.dragging .ba-handle{transform:translate(-50%,-50%) scale(1.35);}
+  .ba-tag{position:absolute; top:14px; z-index:2; font-family:var(--mono); font-size:12px; font-weight:700;
+          letter-spacing:.14em; text-transform:uppercase; color:#fff; background:rgba(10,12,10,.62);
+          border:1px solid rgba(255,255,255,.25); border-radius:999px; padding:6px 14px;
+          backdrop-filter:blur(6px); pointer-events:none;}
+  .tag-before{left:14px;}
+  .tag-after{right:14px;}
+  .ba-hint{position:absolute; left:50%; bottom:16px; transform:translateX(-50%); z-index:2;
+           font-size:13px; font-weight:600; color:#fff; background:rgba(10,12,10,.62);
+           border:1px solid rgba(255,255,255,.25); border-radius:999px; padding:8px 16px;
+           backdrop-filter:blur(6px); pointer-events:none; transition:opacity .4s; white-space:nowrap;}
+  .ba.hid-hint .ba-hint{opacity:0;}
+  .meta{display:flex; justify-content:space-between; align-items:center; margin-top:12px;
+        font-size:13px; color:var(--faint);}
+  .meta kbd{font-family:var(--mono); background:var(--panel2); border:1px solid var(--line);
+            border-radius:6px; padding:1px 7px; font-size:12px; color:var(--muted);}
+  .editlist{margin:26px 0 0; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px 20px;}
+  .editlist h2{font-size:15px; margin:0 0 10px;}
+  .editlist ul{margin:0; padding-left:20px; color:var(--muted); font-size:14px;}
+  .editlist li{margin:4px 0;}
+  .editlist code{font-family:var(--mono); font-size:12.5px; color:var(--ink); background:var(--panel2);
+                 padding:1px 6px; border-radius:6px;}
+  .steal{margin-top:30px;}
+  .steal h2{font-size:20px; margin:0 0 8px;}
+  .steal p{color:var(--muted); font-size:14px; margin:0 0 12px;}
+  .steal p b{color:var(--ink);}
+  pre{background:#0a0c0a; border:1px solid var(--line); border-radius:12px; padding:16px; overflow-x:auto;
+      font-family:var(--mono); font-size:12.5px; line-height:1.6; color:#c9c4b4;}
+  footer{margin-top:44px; font-size:13px; color:var(--faint);}
+  @media (max-width:480px){ h1{font-size:28px;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="kicker">Explainer tools · feel lab 02</p>
+  <h1>The drag.</h1>
+  <p class="lede">A before/after photo slider for showing edits: <b>Unedited</b> on the left, <b>edited</b> on the right. Grab the divider any time — even mid-scroll. Drag horizontally to compare, drag vertically and the page scrolls like normal, tap to glide, arrow keys nudge. The edit itself was done in code (PIL), listed below.</p>
+  <p style="margin:0 0 22px"><a href="draggers.html" style="color:var(--accent); font-size:14px; text-decoration:none;">Trying six dragger designs →</a></p>
+
+  <div class="ba" id="ba" role="slider" aria-label="Before and after comparison" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" tabindex="0">
+    <img src="after.jpg" alt="Edited photo" draggable="false">
+    <img class="ba-before" id="baBefore" src="before.jpg" alt="Unedited photo" draggable="false">
+    <div class="ba-divider" id="baDivider">
+      <div class="ba-line"></div>
+      <div class="ba-handle" aria-hidden="true"></div>
+    </div>
+    <span class="ba-tag tag-before">Unedited</span>
+    <span class="ba-tag tag-after">Edited</span>
+    <span class="ba-hint" id="baHint">← drag →</span>
+  </div>
+  <div class="meta"><span><kbd>←</kbd> <kbd>→</kbd> nudge · tap to glide</span><span id="posRead">50%</span></div>
+
+  <div class="editlist">
+    <h2>The edit, in code</h2>
+    <ul>
+      <li>Warm grade: red channel <code>×1.05 + 7</code>, blue channel <code>×0.93</code></li>
+      <li>Contrast <code>×1.18</code> — dehazes the mountains</li>
+      <li>Saturation <code>×1.30</code> — the pines go deep green</li>
+      <li>Brightness <code>×1.03</code>, sharpen <code>×1.4</code></li>
+    </ul>
+  </div>
+
+  <div class="steal">
+    <h2>Steal this</h2>
+    <p>The divider and the clip both move in <b>pixel space via transform / clip-path</b> — no layout, ever. The container's <b>aspect-ratio is fixed</b>, so dragging can't shift the page. The slider owns every touch (<b>touch-action: none</b>), so it's grabbable even mid-scroll — after 12px the gesture <b>locks by direction</b>: horizontal drives the divider, vertical scrolls the page 1:1 with momentum on release.</p>
+<pre>ba.addEventListener('pointerdown', e => {
+  dragging = true; mode = null;          // undecided yet
+  sx = e.clientX; sy = e.clientY;
+  ba.setPointerCapture(e.pointerId);     // the slider owns this touch
+});
+ba.addEventListener('pointermove', e => {
+  if(!dragging) return;
+  const dx = e.clientX - sx, dy = e.clientY - sy;
+  if(!mode && Math.hypot(dx, dy) > 12)
+    mode = Math.abs(dx) > Math.abs(dy) ? 'slider' : 'scroll';
+  if(mode === 'slider'){
+    pos = clamp((e.clientX - rect.left) / width, .02, .98);
+    requestAnimationFrame(paint);        // transform + clip-path only
+  } else if(mode === 'scroll'){
+    window.scrollTo(0, startScrollY - (e.clientY - sy)); // 1:1
+    trackVelocity(e);                    // momentum on release
+  }
+});</pre>
+  </div>
+
+  <footer>Feel lab 02 · before/after slider · photos generated + graded in code</footer>
+</div>
+
+<script>
+const ba = document.getElementById('ba');
+const before = document.getElementById('baBefore');
+const divider = document.getElementById('baDivider');
+const hint = document.getElementById('baHint');
+const posRead = document.getElementById('posRead');
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+let pos = .5, dragging = false, mode = null, moved = 0;
+let sx = 0, sy = 0, downT = 0, raf = 0, glideAnim = null, scrollAnim = null;
+let sScrollY = 0, trail = [];
+
+function paint(){
+  raf = 0;
+  const w = ba.clientWidth;
+  const x = pos * w;
+  divider.style.transform = 'translateX(' + x + 'px)';
+  before.style.clipPath = 'inset(0 ' + (w - x) + 'px 0 0)';
+  ba.setAttribute('aria-valuenow', Math.round(pos * 100));
+  posRead.textContent = Math.round(pos * 100) + '%';
+}
+function hideHint(){ ba.classList.add('hid-hint'); }
+
+/* tap-to-glide: animate the divider with an ease-out, cancellable by grabbing */
+function glideTo(clientX){
+  const target = clamp((clientX - ba.getBoundingClientRect().left) / ba.clientWidth, .02, .98);
+  if(glideAnim) cancelAnimationFrame(glideAnim);
+  const from = pos, t0 = performance.now(), dur = 380;
+  const step = t => {
+    const k = clamp((t - t0) / dur, 0, 1);
+    const e = 1 - Math.pow(1 - k, 3);
+    pos = from + (target - from) * e;
+    paint();
+    glideAnim = k < 1 ? requestAnimationFrame(step) : null;
+  };
+  glideAnim = requestAnimationFrame(step);
+}
+
+/* page-scroll momentum after a vertical drag */
+function momentum(v){
+  let last = performance.now();
+  const maxY = () => document.documentElement.scrollHeight - window.innerHeight;
+  const step = t => {
+    const dt = Math.min(50, t - last); last = t;
+    let y = window.scrollY + v * dt;
+    v *= Math.pow(0.94, dt / 16.7);
+    if(y <= 0){ y = 0; v = 0; } else if(y >= maxY()){ y = maxY(); v = 0; }
+    window.scrollTo(0, y);
+    scrollAnim = Math.abs(v) > 0.05 ? requestAnimationFrame(step) : null;
+  };
+  scrollAnim = requestAnimationFrame(step);
+}
+
+/* Grab-anytime gestures: the slider owns the touch from pointerdown
+   (touch-action:none), so it answers even mid-scroll. After 12px of
+   movement the gesture locks: mostly-horizontal drives the divider,
+   mostly-vertical scrolls the page 1:1 with momentum on release. */
+ba.addEventListener('pointerdown', e => {
+  if(glideAnim){ cancelAnimationFrame(glideAnim); glideAnim = null; }
+  if(scrollAnim){ cancelAnimationFrame(scrollAnim); scrollAnim = null; }
+  dragging = true; mode = null; moved = 0;
+  sx = e.clientX; sy = e.clientY; downT = performance.now();
+  trail = [{y: e.clientY, t: downT}];
+  try{ ba.setPointerCapture(e.pointerId); }catch(err){}
+});
+ba.addEventListener('pointermove', e => {
+  if(!dragging) return;
+  const dx = e.clientX - sx, dy = e.clientY - sy;
+  moved = Math.max(moved, Math.hypot(dx, dy));
+  if(!mode && moved > 12){
+    mode = Math.abs(dx) > Math.abs(dy) ? 'slider' : 'scroll';
+    if(mode === 'slider'){ ba.classList.add('dragging'); hideHint(); }
+    else sScrollY = window.scrollY;
+  }
+  if(mode === 'slider'){
+    pos = clamp((e.clientX - ba.getBoundingClientRect().left) / ba.clientWidth, .02, .98);
+    if(!raf) raf = requestAnimationFrame(paint);
+  } else if(mode === 'scroll'){
+    window.scrollTo(0, sScrollY - (e.clientY - sy));
+    trail.push({y: e.clientY, t: performance.now()});
+    if(trail.length > 6) trail.shift();
+  }
+});
+function endDrag(e){
+  if(!dragging) return;
+  dragging = false;
+  ba.classList.remove('dragging');
+  if(mode === 'slider' || (mode === null && moved < 6)){
+    if(moved < 6 && performance.now() - downT < 300) glideTo(e.clientX);
+  } else if(mode === 'scroll' && trail.length >= 2){
+    const a = trail[0], b = trail[trail.length - 1], dt = b.t - a.t;
+    let v = dt > 0 ? -((b.y - a.y) / dt) : 0;
+    v = clamp(v, -3, 3);
+    if(Math.abs(v) > 0.15) momentum(v);
+  }
+  mode = null;
+}
+ba.addEventListener('pointerup', endDrag);
+ba.addEventListener('pointercancel', () => { dragging = false; mode = null; ba.classList.remove('dragging'); });
+ba.addEventListener('keydown', e => {
+  if(e.key === 'ArrowLeft'){ pos = clamp(pos - .04, 0, 1); paint(); hideHint(); e.preventDefault(); }
+  else if(e.key === 'ArrowRight'){ pos = clamp(pos + .04, 0, 1); paint(); hideHint(); e.preventDefault(); }
+  else if(e.key === 'Home'){ pos = .02; paint(); e.preventDefault(); }
+  else if(e.key === 'End'){ pos = .98; paint(); e.preventDefault(); }
+});
+window.addEventListener('resize', () => paint());
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(paint);
+paint();
+</script>
+</body>
+</html>

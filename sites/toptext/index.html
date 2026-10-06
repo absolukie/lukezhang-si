@@ -76,6 +76,23 @@ textarea:focus{outline:none;border-color:var(--accent)}
 #recDot i{width:10px;height:10px;border-radius:50%;background:#ff5f56;animation:blink 1s infinite}
 @keyframes blink{50%{opacity:.2}}
 .fine{font-size:12px;color:var(--faint);margin-top:10px;line-height:1.5}
+.gifbtn{width:100%;margin-top:10px;background:#1c1c24;border:1px solid var(--line);color:var(--text);
+  font-weight:800;padding:15px;border-radius:13px;font-size:16px;cursor:pointer}
+.gifbtn:disabled{opacity:.45}
+.gifbtn:active{transform:scale(.98)}
+#gifProg{display:none;margin-top:12px;background:#0c0c10;border:1px solid var(--line);
+  border-radius:10px;height:36px;position:relative;overflow:hidden}
+#gifProg.show{display:block}
+#gifBar{height:100%;width:0%;background:linear-gradient(90deg,#f74c00,#ff2e88);transition:width .2s}
+#gifPct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:700;font-family:ui-monospace,Menlo,monospace}
+#gifResult{display:none;margin-top:12px;text-align:center}
+#gifResult.show{display:block}
+#gifImg{width:100%;border-radius:12px;border:1px solid var(--line);background:#000}
+#shareBtn{width:100%;margin-top:10px;background:var(--accent);border:none;color:#171106;
+  font-weight:800;padding:15px;border-radius:13px;font-size:16px;cursor:pointer}
+#shareBtn:active{transform:scale(.98)}
+#gifDl{display:inline-block;margin-top:10px;color:var(--muted);font-size:14px}
 #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);
   background:var(--card);border:1px solid var(--line);color:var(--text);padding:12px 22px;
   border-radius:12px;font-size:14px;transition:transform .3s ease;z-index:50;max-width:92vw;text-align:center}
@@ -127,8 +144,16 @@ footer{text-align:center;color:var(--faint);font-size:12px;margin-top:44px;line-
       <button id="exportBtn" disabled>Add a clip first</button>
       <a id="dlLink" download="toptext-meme.webm">Download</a>
     </div>
+    <button class="gifbtn" id="gifBtn" disabled>Export GIF for Photos</button>
+    <div id="gifProg"><div id="gifBar"></div><span id="gifPct">0%</span></div>
     <div id="recDot"><i></i> recording…</div>
-    <p class="fine">Exports as .webm video (plays everywhere, easy to share). GIF uploads keep their animation. Tip: X and TikTok links won't load — those sites hide the raw file. Use a direct link or upload the file.</p>
+    <div id="gifResult">
+      <img id="gifImg" alt="your meme as a GIF">
+      <button id="shareBtn">Save to Photos</button><br>
+      <a id="gifDl" download="toptext-meme.gif">download the .gif file instead</a>
+      <p class="fine">On iPhone, Save to Photos opens the share sheet — tap Save Image and it's in your library. Or long-press the GIF above → Add to Photos.</p>
+    </div>
+    <p class="fine">Video export gives you a .webm file. GIF export gives you a real GIF (480px, 10fps, up to 5s) — best for Photos, iMessage, and group chats. GIFs take a few seconds to encode.</p>
   </div>
 
   <footer>made for the group chat<br>your clips never leave your device — everything renders locally</footer>
@@ -210,6 +235,7 @@ function setMedia(el, kind, name){
   mi.querySelector("b").textContent = name;
   var eb = document.getElementById("exportBtn");
   eb.disabled = false; eb.textContent = "Export meme video";
+  document.getElementById("gifBtn").disabled = false;
   document.getElementById("dlLink").classList.remove("show");
   document.getElementById("stage").scrollIntoView({behavior:"smooth", block:"nearest"});
 }
@@ -275,7 +301,104 @@ document.getElementById("capIn").addEventListener("input", function(){
   document.getElementById("dlLink").classList.remove("show");
 });
 
-/* export */
+/* GIF export (for Photos / iMessage / group chats) */
+var gifBlob = null;
+function loadScript(src){
+  return new Promise(function(res, rej){
+    if(document.querySelector('script[src="' + src + '"]')) return res();
+    var s = document.createElement("script");
+    s.src = src; s.onload = function(){ res(); }; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+function seekTo(v, t){
+  return new Promise(function(res){
+    var done = false;
+    function h(){ if(done) return; done = true; v.removeEventListener("seeked", h); res(); }
+    v.addEventListener("seeked", h);
+    try{ v.currentTime = Math.min(t, Math.max(0, (v.duration || t + 1) - 0.08)); }
+    catch(e){ h(); }
+    setTimeout(h, 1500);
+  });
+}
+document.getElementById("gifBtn").addEventListener("click", async function(){
+  if(!media){ showToast("Add a clip first"); return; }
+  var btn = this;
+  btn.disabled = true;
+  var prog = document.getElementById("gifProg"),
+      bar = document.getElementById("gifBar"),
+      pct = document.getElementById("gifPct");
+  prog.classList.add("show");
+  document.getElementById("gifResult").classList.remove("show");
+  function setP(p){ p = Math.max(0, Math.min(1, p));
+    bar.style.width = Math.round(p * 100) + "%"; pct.textContent = Math.round(p * 100) + "%"; }
+  setP(0.02);
+  try{
+    try{ await document.fonts.load('800 68px "Baloo 2"'); }catch(e){}
+    if(!window.GIF) await loadScript("https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js");
+    var workerCode = await (await fetch("https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js")).text();
+    var workerUrl = URL.createObjectURL(new Blob([workerCode], {type: "application/javascript"}));
+    var fps = 10, maxSec = 5;
+    var dur = (mediaKind === "video" && media.duration && isFinite(media.duration))
+      ? Math.min(media.duration, maxSec) : maxSec;
+    var n = Math.max(4, Math.round(dur * fps));
+    var gw = 480, gh = Math.round(480 * cv.height / cv.width);
+    var off = document.createElement("canvas"); off.width = gw; off.height = gh;
+    var octx = off.getContext("2d");
+    var gif = new GIF({workers: 2, quality: 10, width: gw, height: gh, workerScript: workerUrl});
+    async function snap(){
+      await new Promise(function(r){ requestAnimationFrame(function(){ requestAnimationFrame(r); }); });
+      octx.drawImage(cv, 0, 0, gw, gh);
+    }
+    if(mediaKind === "video"){
+      var wasPaused = media.paused;
+      for(var i = 0; i < n; i++){
+        await seekTo(media, i / fps);
+        await snap();
+        gif.addFrame(off, {copy: true, delay: Math.round(1000 / fps)});
+        setP(0.4 * (i + 1) / n);
+      }
+      if(!wasPaused){ try{ media.play(); }catch(e){} }
+    } else {
+      for(var j = 0; j < n; j++){
+        await snap();
+        gif.addFrame(off, {copy: true, delay: Math.round(1000 / fps)});
+        setP(0.4 * (j + 1) / n);
+        await new Promise(function(r){ setTimeout(r, 1000 / fps); });
+      }
+    }
+    gif.on("progress", function(p){ setP(0.4 + 0.6 * p); });
+    gifBlob = await new Promise(function(res){ gif.on("finished", res); gif.render(); });
+    setP(1);
+    var gurl = URL.createObjectURL(gifBlob);
+    document.getElementById("gifImg").src = gurl;
+    document.getElementById("gifDl").href = gurl;
+    document.getElementById("gifResult").classList.add("show");
+    showToast("GIF ready");
+    document.getElementById("gifResult").scrollIntoView({behavior: "smooth", block: "nearest"});
+  }catch(err){
+    showToast("GIF export failed — check your connection and try again");
+  }finally{
+    btn.disabled = false;
+    setTimeout(function(){ prog.classList.remove("show"); }, 900);
+  }
+});
+document.getElementById("shareBtn").addEventListener("click", async function(){
+  if(!gifBlob) return;
+  var file = new File([gifBlob], "toptext-meme.gif", {type: "image/gif"});
+  try{
+    if(navigator.canShare && navigator.canShare({files: [file]})){
+      await navigator.share({files: [file], title: "TopText meme"});
+      return;
+    }
+  }catch(e){ /* user cancelled — fall through to download */ }
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(gifBlob); a.download = "toptext-meme.gif";
+  document.body.appendChild(a); a.click(); a.remove();
+  showToast("Downloaded — long-press the GIF above → Add to Photos");
+});
+
+/* video export */
 document.getElementById("exportBtn").addEventListener("click", async function(){
   if(!media){ showToast("Add a clip first"); return; }
   try{ await document.fonts.load('800 68px "Baloo 2"'); }catch(e){}

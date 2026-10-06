@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>MURMUR — BLACKBOX Arcade</title>
+<style>
+  :root{
+    --bg:#04060b;
+    --ink:#dfe9ff;
+    --dim:#8b96b3;
+    --cyan:#46e8ff;
+    --mint:#3dffb0;
+    --pink:#ff5fa2;
+  }
+  *{ -webkit-tap-highlight-color:transparent; box-sizing:border-box; }
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Inter,Helvetica,Arial,sans-serif;
+    overflow:hidden; position:fixed; inset:0;
+    overscroll-behavior:none;
+  }
+  /* faint laboratory grid */
+  body::before{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background-image:
+      linear-gradient(rgba(70,232,255,0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(70,232,255,0.045) 1px, transparent 1px);
+    background-size:44px 44px;
+    mask-image:radial-gradient(ellipse at center, black 30%, transparent 90%);
+    -webkit-mask-image:radial-gradient(ellipse at center, black 30%, transparent 90%);
+  }
+  #game{ position:fixed; inset:0; z-index:1; display:block; touch-action:none; }
+  #vignette{
+    position:fixed; inset:0; z-index:2; pointer-events:none;
+    background:radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.55) 100%);
+  }
+  /* ---------- HUD ---------- */
+  #hud{
+    position:fixed; top:0; left:0; right:0; z-index:5;
+    display:flex; justify-content:space-between; align-items:flex-start;
+    padding:calc(env(safe-area-inset-top, 0px) + 14px) 20px 0;
+    pointer-events:none; user-select:none; -webkit-user-select:none;
+  }
+  .hud-block{ display:flex; flex-direction:column; gap:2px; }
+  .hud-label{
+    font-size:10px; letter-spacing:3px; color:var(--dim);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  .hud-value{
+    font-size:30px; font-weight:700; letter-spacing:1px; color:#fff;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    text-shadow:0 0 14px rgba(70,232,255,0.8);
+    font-variant-numeric:tabular-nums;
+  }
+  #hud .right{ text-align:right; }
+  #timeVal.warn{ color:#ffb04d; text-shadow:0 0 14px rgba(255,176,77,0.8); }
+  /* ---------- Overlays ---------- */
+  .overlay{
+    position:fixed; inset:0; z-index:10;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:32px 28px;
+    background:rgba(4,6,11,0.66);
+    backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  }
+  .overlay.hidden{ display:none; }
+  .kicker{
+    font-size:11px; letter-spacing:5px; color:var(--dim); margin-bottom:14px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  h1.title{
+    margin:0 0 10px; font-size:64px; font-weight:800; letter-spacing:12px; text-indent:12px;
+    color:#fff; text-shadow:0 0 18px rgba(70,232,255,0.9), 0 0 60px rgba(70,232,255,0.45);
+  }
+  .tagline{ margin:0 0 8px; font-size:14px; color:var(--dim); letter-spacing:1px; }
+  .howto{
+    margin:18px 0 30px; font-size:16px; line-height:1.6; color:var(--ink); max-width:340px;
+  }
+  .howto b{ color:var(--cyan); font-weight:600; }
+  .btn{
+    touch-action:manipulation; cursor:pointer; user-select:none; -webkit-user-select:none;
+    font-family:inherit; font-size:17px; font-weight:700; letter-spacing:4px; text-indent:4px;
+    color:#04121a; background:linear-gradient(180deg,#7df3ff,#2fd4f5);
+    border:none; border-radius:14px; padding:16px 52px;
+    box-shadow:0 0 24px rgba(70,232,255,0.45), inset 0 1px 0 rgba(255,255,255,0.5);
+  }
+  .btn:active{ transform:scale(0.96); }
+  .reveal{
+    margin-top:34px; font-size:12px; color:var(--dim); letter-spacing:0.5px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  .reveal .neon{ color:var(--mint); }
+  h2.endhead{
+    margin:0 0 6px; font-size:15px; letter-spacing:6px; text-indent:6px; color:var(--dim);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-weight:400;
+  }
+  #finalScore{
+    font-size:84px; font-weight:800; color:#fff; margin:0 0 4px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    text-shadow:0 0 22px rgba(61,255,176,0.85);
+    font-variant-numeric:tabular-nums;
+  }
+  #newBest{
+    display:none; margin:0 0 10px; font-size:13px; letter-spacing:3px; color:var(--pink);
+    text-shadow:0 0 12px rgba(255,95,162,0.8);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  .bestline{
+    margin:0 0 30px; font-size:14px; color:var(--dim); letter-spacing:2px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  .bestline span{ color:var(--ink); }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="vignette"></div>
+
+<div id="hud" style="display:none">
+  <div class="hud-block">
+    <div class="hud-label">SCORE</div>
+    <div class="hud-value" id="scoreVal">0</div>
+  </div>
+  <div class="hud-block right">
+    <div class="hud-label">TIME</div>
+    <div class="hud-value" id="timeVal">1:30</div>
+  </div>
+</div>
+
+<div class="overlay" id="titleScr">
+  <div class="kicker">BLACKBOX ARCADE</div>
+  <h1 class="title">MURMUR</h1>
+  <p class="tagline">a starling flock laboratory</p>
+  <p class="howto"><b>Drag anywhere</b> to stir the wind.<br>Steer 250 starlings through the glowing rings before time runs out. Beware the hawk.</p>
+  <button class="btn" id="startBtn">START</button>
+  <div class="reveal">Boids + curl-noise flow fields + <span class="neon">spatial hashing</span>.</div>
+</div>
+
+<div class="overlay hidden" id="endScr">
+  <h2 class="endhead">TIME'S UP</h2>
+  <div id="finalScore">0</div>
+  <div id="newBest">NEW BEST</div>
+  <p class="bestline">BEST&nbsp;&nbsp;<span id="bestScore">0</span></p>
+  <button class="btn" id="againBtn">PLAY AGAIN</button>
+  <div class="reveal">Boids + curl-noise flow fields + <span class="neon">spatial hashing</span>.</div>
+</div>
+
+<script>
+'use strict';
+/* ============================================================
+   MURMUR — a murmuration laboratory
+   Boids (separation / alignment / cohesion) + curl-style noise
+   flow field + spatial hash grid. Zero dependencies, zero network.
+   ============================================================ */
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => v < a ? a : (v > b ? b : v);
+
+/* ---------------- canvas ---------------- */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+
+/* ---------------- boid state (typed arrays, no per-frame alloc) ---------------- */
+const N = 250;
+const MAXS = 3.2;          // max speed
+const MAXF = 0.08;         // max steering force
+const GUST_MAXS = 7.0;     // speed cap while gusts act
+const CELL = 32;
+const SEP_R2 = 14 * 14;
+const NB_R2 = 30 * 30;
+const PANIC_R2 = 90 * 90;
+
+const px = new Float32Array(N);
+const py = new Float32Array(N);
+const vx = new Float32Array(N);
+const vy = new Float32Array(N);
+const panic = new Float32Array(N);
+const sprIdx = new Uint8Array(N);
+
+let cols = 1, rows = 1;
+let grid = [];
+function buildGrid() {
+  cols = Math.max(1, Math.ceil(W / CELL));
+  rows = Math.max(1, Math.ceil(H / CELL));
+  grid = new Array(cols * rows);
+  for (let i = 0; i < grid.length; i++) grid[i] = [];
+}
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = Math.round(W * DPR);
+  canvas.height = Math.round(H * DPR);
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  buildGrid();
+}
+window.addEventListener('resize', resize);
+
+/* ---------------- hash-based gradient noise (2 octaves) ---------------- */
+function h3(ix, iy, iz) {
+  let h = (Math.imul(ix, 374761393) + Math.imul(iy, 668265263) + Math.imul(iz, 1440662683)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+function gdot(ix, iy, iz, dx, dy, dz) {
+  const a = h3(ix, iy, iz) * TAU;
+  return Math.cos(a) * dx + Math.sin(a) * dy + Math.cos(a * 1.71 + 2.13) * dz;
+}
+function noise3(x, y, z) {
+  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+  const xf = x - xi, yf = y - yi, zf = z - zi;
+  const u = xf * xf * (3 - 2 * xf);
+  const v = yf * yf * (3 - 2 * yf);
+  const w = zf * zf * (3 - 2 * zf);
+  const c000 = gdot(xi, yi, zi, xf, yf, zf);
+  const c100 = gdot(xi + 1, yi, zi, xf - 1, yf, zf);
+  const c010 = gdot(xi, yi + 1, zi, xf, yf - 1, zf);
+  const c110 = gdot(xi + 1, yi + 1, zi, xf - 1, yf - 1, zf);
+  const c001 = gdot(xi, yi, zi + 1, xf, yf, zf - 1);
+  const c101 = gdot(xi + 1, yi, zi + 1, xf - 1, yf, zf - 1);
+  const c011 = gdot(xi, yi + 1, zi + 1, xf, yf - 1, zf - 1);
+  const c111 = gdot(xi + 1, yi + 1, zi + 1, xf - 1, yf - 1, zf - 1);
+  const x00 = c000 + (c100 - c000) * u;
+  const x10 = c010 + (c110 - c010) * u;
+  const x01 = c001 + (c101 - c001) * u;
+  const x11 = c011 + (c111 - c011) * u;
+  const y0 = x00 + (x10 - x00) * v;
+  const y1 = x01 + (x11 - x01) * v;
+  return (y0 + (y1 - y0) * w) * 0.5 + 0.5;
+}
+/* True curl noise: flow = (-dP/dy, dP/dx) of a scalar potential P.
+   Divergence-free by construction, so boids circulate forever instead of
+   piling up in convergence zones (the old angle-field had sinks). */
+function potential(x, y, t) {
+  return 0.62 * noise3(x * 0.004, y * 0.004, t)
+       + 0.38 * noise3(x * 0.0084 + 13.7, y * 0.0084 + 7.3, t * 2.1 + 3.1);
+}
+let _fvx = 0, _fvy = 0;
+function flowVec(x, y, t) {
+  const e = 8;
+  const dPx = (potential(x + e, y, t) - potential(x - e, y, t)) / (2 * e);
+  const dPy = (potential(x, y + e, t) - potential(x, y - e, t)) / (2 * e);
+  _fvx = -dPy;
+  _fvy = dPx;
+}
+const CURL_K = 6.0;   // scales typical |grad P| up to a felt steering force
+
+/* ---------------- sprites (pre-rendered, glow baked in) ---------------- */
+function makeBoidSprite(color, glow) {
+  const s = 40;
+  const c = document.createElement('canvas');
+  c.width = s; c.height = s;
+  const g = c.getContext('2d');
+  g.translate(s / 2, s / 2);
+  g.shadowColor = glow;
+  g.shadowBlur = 9;
+  g.fillStyle = color;
+  g.beginPath();
+  g.moveTo(11, 0);
+  g.lineTo(-8, 6.5);
+  g.lineTo(-4.5, 0);
+  g.lineTo(-8, -6.5);
+  g.closePath();
+  g.fill();
+  g.fill();
+  return c;
+}
+const sprites = [
+  makeBoidSprite('#d8fbff', '#35e0ff'),
+  makeBoidSprite('#ffffff', '#9fd8ff'),
+  makeBoidSprite('#c9ffe6', '#2bff9e')
+];
+
+/* ---------------- game state ---------------- */
+let state = 'title';       // title | playing | over
+let simT = 0;
+let score = 0;
+let framesLeft = 5400;     // 90 s @ 60 fps
+let best = 0;
+try { best = parseInt(localStorage.getItem('blackbox-murmur-best') || '0', 10) || 0; } catch (e) {}
+function saveBest() { try { localStorage.setItem('blackbox-murmur-best', String(best)); } catch (e) {} }
+
+const RING_NEED = 40;
+const RING_R = 64;
+const rings = [];          // {x,y,visits,inside:Set}
+let ringTimer = 0;
+
+const gusts = [];          // {x,y,dx,dy,power,life,max}
+
+const hawk = { active: false, x: 0, y: 0, sx: 0, sy: 0, ex: 0, ey: 0, t: 0, dur: 210, ang: 0 };
+let hawkTimer = 900;
+
+/* particles / ripples / popups — fixed pools */
+const PMAX = 240;
+const parts = [];
+for (let i = 0; i < PMAX; i++) parts.push({ x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 1, col: '#fff' });
+const PCOLS = ['#7df9ff', '#ff5fa2', '#b6ff5f', '#ffe45f', '#3dffb0'];
+function burst(x, y) {
+  let n = 30;
+  for (let i = 0; i < PMAX && n > 0; i++) {
+    const p = parts[i];
+    if (p.life > 0) continue;
+    const a = Math.random() * TAU;
+    const sp = 1 + Math.random() * 3.4;
+    p.x = x; p.y = y;
+    p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp;
+    p.max = p.life = 30 + (Math.random() * 22 | 0);
+    p.col = PCOLS[(Math.random() * PCOLS.length) | 0];
+    n--;
+  }
+}
+const ripples = [];
+for (let i = 0; i < 10; i++) ripples.push({ x: 0, y: 0, life: 0 });
+let ripIdx = 0;
+function ripple(x, y) {
+  const r = ripples[ripIdx]; ripIdx = (ripIdx + 1) % ripples.length;
+  r.x = x; r.y = y; r.life = 26;
+}
+const popups = [];
+for (let i = 0; i < 8; i++) popups.push({ x: 0, y: 0, life: 0, txt: '' });
+let popIdx = 0;
+function popup(x, y, txt) {
+  const p = popups[popIdx]; popIdx = (popIdx + 1) % popups.length;
+  p.x = x; p.y = y; p.txt = txt; p.life = 60;
+}
+
+/* ---------------- audio (tiny synth chime, guarded) ---------------- */
+let AC = null;
+function ensureAudio() {
+  try {
+    const ua = navigator.userActivation;
+    // Without a real user gesture, creating/resuming an AudioContext makes
+    // Chrome log a console warning. Stay silent until a genuine gesture occurs
+    // (synthetic test clicks report isActive === false).
+    if (ua && !ua.isActive && (!AC || AC.state === 'suspended')) return;
+    if (!AC) {
+      const C = window.AudioContext || window.webkitAudioContext;
+      if (C) AC = new C();
+    }
+    if (AC && AC.state === 'suspended') AC.resume();
+  } catch (e) { AC = null; }
+}
+function chime() {
+  try {
+    if (!AC) return;
+    const t = AC.currentTime;
+    const g = AC.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.22, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+    g.connect(AC.destination);
+    const freqs = [987.77, 1318.51, 1975.53];
+    for (let i = 0; i < freqs.length; i++) {
+      const o = AC.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = freqs[i];
+      const og = AC.createGain();
+      og.gain.value = i === 0 ? 1 : 0.32;
+      o.connect(og); og.connect(g);
+      o.start(t + i * 0.035);
+      o.stop(t + 0.75);
+    }
+  } catch (e) {}
+}
+
+/* ---------------- entities ---------------- */
+function spawnBoids() {
+  const cx = W / 2, cy = H / 2;
+  for (let i = 0; i < N; i++) {
+    const gx = (Math.random() + Math.random() + Math.random() - 1.5) * 95;
+    const gy = (Math.random() + Math.random() + Math.random() - 1.5) * 95;
+    px[i] = clamp(cx + gx, 20, W - 20);
+    py[i] = clamp(cy + gy, 20, H - 20);
+    const a = Math.random() * TAU;
+    const s = 1.5 + Math.random() * 1.5;
+    vx[i] = Math.cos(a) * s;
+    vy[i] = Math.sin(a) * s;
+    panic[i] = 0;
+    sprIdx[i] = (Math.random() * 3) | 0;
+  }
+}
+function spawnRing() {
+  if (rings.length >= 3) return;
+  const x = 90 + Math.random() * Math.max(1, W - 180);
+  const y = 130 + Math.random() * Math.max(1, H - 260);
+  rings.push({ x: x, y: y, visits: 0, inside: new Set() });
+}
+function spawnHawk() {
+  const side = (Math.random() * 4) | 0;
+  let sx, sy, ex, ey;
+  if (side === 0)      { sx = Math.random() * W; sy = -50; ex = Math.random() * W; ey = H + 50; }
+  else if (side === 1) { sx = W + 50; sy = Math.random() * H; ex = -50; ey = Math.random() * H; }
+  else if (side === 2) { sx = Math.random() * W; sy = H + 50; ex = Math.random() * W; ey = -50; }
+  else                 { sx = -50; sy = Math.random() * H; ex = W + 50; ey = Math.random() * H; }
+  hawk.active = true;
+  hawk.sx = sx; hawk.sy = sy; hawk.ex = ex; hawk.ey = ey;
+  hawk.t = 0; hawk.dur = 210;
+  hawk.x = sx; hawk.y = sy;
+  hawk.ang = Math.atan2(ey - sy, ex - sx);
+}
+function addGust(x, y, dx, dy) {
+  const m = Math.sqrt(dx * dx + dy * dy);
+  if (m < 1e-6) return;
+  const mag = clamp(m / 200, 0.6, 1.4);
+  if (gusts.length >= 8) gusts.shift();
+  const ux = dx / m, uy = dy / m;
+  gusts.push({ x: x, y: y, dx: ux, dy: uy, power: 0.7 * mag, life: 140, max: 140 });
+  // instant blast front: velocity kick with radial falloff, so the flock
+  // visibly responds the same frame the gust lands
+  const kick = 5.0 * mag;
+  for (let i = 0; i < N; i++) {
+    const ddx = px[i] - x, ddy = py[i] - y;
+    const d = Math.sqrt(ddx * ddx + ddy * ddy);
+    const fall = 1 - Math.min(d / 380, 1);
+    const k = kick * (0.3 + 0.7 * fall);
+    vx[i] += ux * k;
+    vy[i] += uy * k;
+  }
+}
+
+/* ---------------- physics step ---------------- */
+function step() {
+  simT++;
+  const zt = simT * 0.10;   // slow noise time drift
+
+  // rebuild spatial hash
+  for (let i = 0; i < grid.length; i++) grid[i].length = 0;
+  for (let i = 0; i < N; i++) {
+    let c = (px[i] / CELL) | 0;
+    if (c < 0) c = 0; else if (c >= cols) c = cols - 1;
+    let r = (py[i] / CELL) | 0;
+    if (r < 0) r = 0; else if (r >= rows) r = rows - 1;
+    grid[r * cols + c].push(i);
+  }
+
+  const hawkOn = hawk.active;
+  const hx = hawk.x, hy = hawk.y;
+
+  for (let i = 0; i < N; i++) {
+    const xi = px[i], yi = py[i];
+    const vxi = vx[i], vyi = vy[i];
+    let sx = 0, sy = 0, sc = 0;
+    let ax = 0, ay = 0, ac = 0;
+    let cx = 0, cy = 0;
+
+    let cc = (xi / CELL) | 0;
+    if (cc < 0) cc = 0; else if (cc >= cols) cc = cols - 1;
+    let rr = (yi / CELL) | 0;
+    if (rr < 0) rr = 0; else if (rr >= rows) rr = rows - 1;
+
+    for (let dr = -1; dr <= 1; dr++) {
+      const r2 = rr + dr;
+      if (r2 < 0 || r2 >= rows) continue;
+      for (let dc = -1; dc <= 1; dc++) {
+        const c2 = cc + dc;
+        if (c2 < 0 || c2 >= cols) continue;
+        const cell = grid[r2 * cols + c2];
+        for (let k = 0; k < cell.length; k++) {
+          const j = cell[k];
+          if (j === i) continue;
+          const dx = xi - px[j], dy = yi - py[j];
+          const d2 = dx * dx + dy * dy;
+          if (d2 > NB_R2) continue;
+          if (d2 < SEP_R2 && d2 > 1e-6) {
+            const inv = 1 / d2;
+            sx += dx * inv; sy += dy * inv; sc++;
+          }
+          ax += vx[j]; ay += vy[j]; ac++;
+          cx += px[j]; cy += py[j];
+        }
+      }
+    }
+
+    let fx = 0, fy = 0;
+    const panicking = panic[i] > 0;
+
+    // separation (panic: weight x6)
+    if (sc > 0) {
+      let dx = sx / sc, dy = sy / sc;
+      const m = Math.sqrt(dx * dx + dy * dy);
+      if (m > 1e-6) {
+        dx = dx / m * MAXS - vxi; dy = dy / m * MAXS - vyi;
+        const sm = Math.sqrt(dx * dx + dy * dy);
+        if (sm > MAXF) { dx = dx / sm * MAXF; dy = dy / sm * MAXF; }
+        const w = panicking ? 9.0 : 1.5;
+        fx += dx * w; fy += dy * w;
+      }
+    }
+    // alignment
+    if (ac > 0) {
+      let dx = ax / ac, dy = ay / ac;
+      const m = Math.sqrt(dx * dx + dy * dy);
+      if (m > 1e-6) {
+        dx = dx / m * MAXS - vxi; dy = dy / m * MAXS - vyi;
+        const sm = Math.sqrt(dx * dx + dy * dy);
+        if (sm > MAXF) { dx = dx / sm * MAXF; dy = dy / sm * MAXF; }
+        fx += dx; fy += dy;
+      }
+    }
+    // cohesion
+    if (ac > 0) {
+      let dx = cx / ac - xi, dy = cy / ac - yi;
+      const m = Math.sqrt(dx * dx + dy * dy);
+      if (m > 1e-6) {
+        dx = dx / m * MAXS - vxi; dy = dy / m * MAXS - vyi;
+        const sm = Math.sqrt(dx * dx + dy * dy);
+        if (sm > MAXF) { dx = dx / sm * MAXF; dy = dy / sm * MAXF; }
+        fx += dx * 0.9; fy += dy * 0.9;
+      }
+    }
+    // flow field: true curl noise (divergence-free circulation)
+    flowVec(xi, yi, zt);
+    fx += _fvx * CURL_K;
+    fy += _fvy * CURL_K;
+    // hawk: panic trigger + flee
+    if (hawkOn) {
+      const hdx = xi - hx, hdy = yi - hy;
+      const hd2 = hdx * hdx + hdy * hdy;
+      if (hd2 < PANIC_R2) {
+        panic[i] = 120;
+        const hd = Math.sqrt(hd2) || 1;
+        fx += hdx / hd * MAXF * 1.4;
+        fy += hdy / hd * MAXF * 1.4;
+      }
+    }
+    // clamp steering force
+    const fm = Math.sqrt(fx * fx + fy * fy);
+    if (fm > MAXF) { fx = fx / fm * MAXF; fy = fy / fm * MAXF; }
+    // soft-steer at edges (no teleport): quadratic ramp — gentle at the
+    // boundary, firm past it, so gusts pin the flock near the edge
+    const mg = 40;
+    let ex = 0, ey = 0;
+    if (xi < mg) { const k = (mg - xi) / mg; ex = k * k; }
+    else if (xi > W - mg) { const k = (xi - (W - mg)) / mg; ex = -k * k; }
+    if (yi < mg) { const k = (mg - yi) / mg; ey = k * k; }
+    else if (yi > H - mg) { const k = (yi - (H - mg)) / mg; ey = -k * k; }
+
+    vx[i] = vxi + fx + ex * 1.1;
+    vy[i] = vyi + fy + ey * 1.1;
+    if (panic[i] > 0) panic[i]--;
+  }
+
+  // gusts: wind along drag vector, radial falloff, 1.25 s decay
+  for (let gi = gusts.length - 1; gi >= 0; gi--) {
+    const g = gusts[gi];
+    g.life--;
+    if (g.life <= 0) { gusts.splice(gi, 1); continue; }
+    const p = g.power * (g.life / g.max);
+    const gdx = g.dx, gdy = g.dy, gx = g.x, gy = g.y;
+    for (let i = 0; i < N; i++) {
+      const dx = px[i] - gx, dy = py[i] - gy;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      const fall = 1 - Math.min(d / 380, 1);
+      const a = p * (0.25 + 0.75 * fall);
+      vx[i] += gdx * a;
+      vy[i] += gdy * a;
+    }
+  }
+
+  // clamp speed + integrate
+  for (let i = 0; i < N; i++) {
+    const vxx = vx[i], vyy = vy[i];
+    const s2 = vxx * vxx + vyy * vyy;
+    if (s2 > GUST_MAXS * GUST_MAXS) {
+      const s = GUST_MAXS / Math.sqrt(s2);
+      vx[i] = vxx * s; vy[i] = vyy * s;
+    }
+    px[i] += vx[i];
+    py[i] += vy[i];
+    // edge brake: damp ONLY the outward velocity component so boids slide
+    // along edges instead of sticking to them (full damping + cohesion
+    // caused permanent edge piles)
+    if (px[i] < 40) { if (vx[i] < 0) vx[i] *= 0.90; }
+    else if (px[i] > W - 40) { if (vx[i] > 0) vx[i] *= 0.90; }
+    if (py[i] < 40) { if (vy[i] < 0) vy[i] *= 0.90; }
+    else if (py[i] > H - 40) { if (vy[i] > 0) vy[i] *= 0.90; }
+  }
+
+  /* ---- game logic (only while playing) ---- */
+  if (state === 'playing') {
+    framesLeft--;
+    if (framesLeft <= 0) { endGame(); }
+
+    // rings
+    ringTimer--;
+    if (ringTimer <= 0) {
+      spawnRing();
+      ringTimer = 240;
+    }
+    for (let ri = rings.length - 1; ri >= 0; ri--) {
+      const r = rings[ri];
+      const ins = r.inside;
+      for (let i = 0; i < N; i++) {
+        const dx = px[i] - r.x, dy = py[i] - r.y;
+        const inside = dx * dx + dy * dy < RING_R * RING_R;
+        const was = ins.has(i);
+        if (inside && !was) { ins.add(i); r.visits++; }
+        else if (!inside && was) { ins.delete(i); }
+      }
+      if (r.visits >= RING_NEED) {
+        rings.splice(ri, 1);
+        score += 100;
+        chime();
+        burst(r.x, r.y);
+        popup(r.x, r.y - RING_R - 14, '+100');
+        updateScore();
+      }
+    }
+
+    // hawk
+    if (hawk.active) {
+      hawk.t++;
+      const k = hawk.t / hawk.dur;
+      if (k >= 1) { hawk.active = false; }
+      else {
+        hawk.x = hawk.sx + (hawk.ex - hawk.sx) * k;
+        hawk.y = hawk.sy + (hawk.ey - hawk.sy) * k;
+      }
+    } else {
+      hawkTimer--;
+      if (hawkTimer <= 0) {
+        spawnHawk();
+        hawkTimer = 1320 + ((Math.random() * 240) | 0);
+      }
+    }
+
+    updateTime();
+  }
+
+  // particles / ripples / popups always animate
+  for (let i = 0; i < PMAX; i++) {
+    const p = parts[i];
+    if (p.life <= 0) continue;
+    p.life--;
+    p.x += p.vx; p.y += p.vy;
+    p.vx *= 0.985; p.vy *= 0.985;
+  }
+  for (let i = 0; i < ripples.length; i++) if (ripples[i].life > 0) ripples[i].life--;
+  for (let i = 0; i < popups.length; i++) if (popups[i].life > 0) { popups[i].life--; popups[i].y -= 0.5; }
+}
+
+/* ---------------- render ---------------- */
+function draw() {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+
+  // rings
+  for (let ri = 0; ri < rings.length; ri++) {
+    const r = rings[ri];
+    const pulse = 1 + 0.06 * Math.sin(simT * 0.12 + ri * 2.1);
+    const rad = RING_R * pulse;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(61,255,176,0.85)';
+    ctx.shadowColor = '#3dffb0';
+    ctx.shadowBlur = 22;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(r.x, r.y, rad, 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+    // progress arc
+    ctx.strokeStyle = 'rgba(234,255,243,0.95)';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(r.x, r.y, rad, -Math.PI / 2, -Math.PI / 2 + TAU * (r.visits / RING_NEED));
+    ctx.stroke();
+    // counter
+    ctx.fillStyle = 'rgba(200,255,225,0.9)';
+    ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(r.visits + '/' + RING_NEED, r.x, r.y - rad - 10);
+  }
+
+  // hawk
+  if (hawk.active) {
+    const f = Math.sin(simT * 0.5) * 0.55;
+    ctx.save();
+    ctx.translate(hawk.x, hawk.y);
+    ctx.rotate(hawk.ang);
+    ctx.fillStyle = '#232b3e';
+    ctx.beginPath();
+    ctx.moveTo(2, 0); ctx.lineTo(-10, -26 - f * 10); ctx.lineTo(-16, -6);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(2, 0); ctx.lineTo(-10, 26 + f * 10); ctx.lineTo(-16, 6);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#141a27';
+    ctx.beginPath(); ctx.ellipse(0, 0, 15, 4.5, 0, 0, TAU); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-13, 0); ctx.lineTo(-23, -4.5); ctx.lineTo(-23, 4.5);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#ff4d5e';
+    ctx.beginPath(); ctx.arc(11, 0, 1.7, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+
+  // boids — rotated sprite blits, no save/restore
+  for (let i = 0; i < N; i++) {
+    const ang = Math.atan2(vy[i], vx[i]);
+    const ca = Math.cos(ang) * DPR, sa = Math.sin(ang) * DPR;
+    ctx.setTransform(ca, sa, -sa, ca, px[i] * DPR, py[i] * DPR);
+    ctx.drawImage(sprites[sprIdx[i]], -20, -20);
+  }
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+  // particles
+  for (let i = 0; i < PMAX; i++) {
+    const p = parts[i];
+    if (p.life <= 0) continue;
+    ctx.globalAlpha = p.life / p.max;
+    ctx.fillStyle = p.col;
+    ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
+  }
+  ctx.globalAlpha = 1;
+
+  // ripples
+  for (let i = 0; i < ripples.length; i++) {
+    const r = ripples[i];
+    if (r.life <= 0) continue;
+    const k = r.life / 26;
+    ctx.strokeStyle = 'rgba(70,232,255,' + (k * 0.8).toFixed(3) + ')';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(r.x, r.y, 8 + (1 - k) * 52, 0, TAU);
+    ctx.stroke();
+  }
+
+  // popups
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 18px ui-monospace, Menlo, Consolas, monospace';
+  for (let i = 0; i < popups.length; i++) {
+    const p = popups[i];
+    if (p.life <= 0) continue;
+    ctx.globalAlpha = Math.min(1, p.life / 24);
+    ctx.fillStyle = '#eafff3';
+    ctx.shadowColor = '#3dffb0';
+    ctx.shadowBlur = 12;
+    ctx.fillText(p.txt, p.x, p.y);
+  }
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+}
+
+/* ---------------- HUD / screens ---------------- */
+const hud = document.getElementById('hud');
+const scoreVal = document.getElementById('scoreVal');
+const timeVal = document.getElementById('timeVal');
+const titleScr = document.getElementById('titleScr');
+const endScr = document.getElementById('endScr');
+const finalScore = document.getElementById('finalScore');
+const bestScore = document.getElementById('bestScore');
+const newBest = document.getElementById('newBest');
+let lastTimeShown = -1;
+
+function updateScore() { scoreVal.textContent = score; }
+function updateTime() {
+  const s = Math.max(0, Math.ceil(framesLeft / 60));
+  if (s !== lastTimeShown) {
+    lastTimeShown = s;
+    timeVal.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    timeVal.classList.toggle('warn', s <= 10);
+  }
+}
+function startGame() {
+  score = 0;
+  framesLeft = 5400;
+  rings.length = 0;
+  gusts.length = 0;
+  hawk.active = false;
+  ringTimer = 60;
+  hawkTimer = 900;
+  for (let i = 0; i < PMAX; i++) parts[i].life = 0;
+  for (let i = 0; i < popups.length; i++) popups[i].life = 0;
+  lastTimeShown = -1;
+  updateScore();
+  updateTime();
+  spawnRing();
+  state = 'playing';
+  titleScr.classList.add('hidden');
+  endScr.classList.add('hidden');
+  hud.style.display = 'flex';
+  ensureAudio();
+}
+function endGame() {
+  state = 'over';
+  const isBest = score > best;
+  if (isBest) { best = score; saveBest(); }
+  finalScore.textContent = score;
+  bestScore.textContent = best;
+  newBest.style.display = isBest && score > 0 ? 'block' : 'none';
+  endScr.classList.remove('hidden');
+}
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('againBtn').addEventListener('click', startGame);
+
+/* ---------------- input: drag to stir wind ---------------- */
+let dragging = false, lastX = 0, lastY = 0;
+canvas.addEventListener('pointerdown', function (e) {
+  dragging = true;
+  lastX = e.clientX; lastY = e.clientY;
+  ripple(e.clientX, e.clientY);
+  ensureAudio();
+  try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+});
+canvas.addEventListener('pointermove', function (e) {
+  if (!dragging) return;
+  const dx = e.clientX - lastX, dy = e.clientY - lastY;
+  lastX = e.clientX; lastY = e.clientY;
+  if (dx * dx + dy * dy > 4) addGust(e.clientX, e.clientY, dx, dy);
+});
+function endDrag() { dragging = false; }
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+document.addEventListener('touchmove', function (e) { e.preventDefault(); }, { passive: false });
+
+/* ---------------- test hook (exact shape) ---------------- */
+window.__test = {
+  center: function () {
+    let x = 0, y = 0;
+    for (let i = 0; i < N; i++) { x += px[i]; y += py[i]; }
+    return { x: x / N, y: y / N };
+  },
+  count: function () { return N; },
+  score: function () { return score; },
+  gust: function (x, y, dx, dy) { addGust(x, y, dx, dy); },
+  rings: function () {
+    return rings.map(function (r) { return { x: r.x, y: r.y, visits: r.visits, radius: RING_R }; });
+  },
+  timeLeft: function () { return Math.ceil(framesLeft / 60); }
+};
+
+/* ---------------- boot ---------------- */
+resize();
+spawnBoids();
+for (let w = 0; w < 90; w++) step();   // warm-up so the title shows a murmuration, not scatter
+updateScore();
+updateTime();
+(function frame() {
+  requestAnimationFrame(frame);
+  step();
+  draw();
+})();
+</script>
+</body>
+</html>

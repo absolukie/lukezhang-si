@@ -18,7 +18,24 @@
  * to SITES below, push. See ROUTER.md.
  */
 
-const SITES = ["leetcode-games", "ergosphere", "illusion-bowling", "shotgrep", "ui-candy", "takes", "rust-vs-go", "toptext", "america-gov-privacy", "ballz-1000-decisions", "ballz-recreation", "boygames-hub", "cat-cafe-tycoon", "coffee-game", "comeback-kit", "company-site", "comparison-lab", "design-docs", "desk-setup-showdown", "emotion-engine", "fall-foliage-sim", "foil-cards", "grok-bot-recreation", "leetcode-games-browser", "liquid-glass-demo", "make-100k", "model-bench-site", "nicomachus-visual", "oobleck-lab", "reaction-studio", "screenshot-ctrl-f", "skill-tree", "ballz-1000-levels", "theme-names", "swipe-cards-yes-no", "notes-triage-oct-5", "comparison-slider", "ab-toggle", "hairball", "peggie", "get-clocked", "redemption-post-doc", "black-hole-post-doc", "china-korea-hq", "us-book-dr"];
+const SITES = ["leetcode-games", "ergosphere", "illusion-bowling", "shotgrep", "ui-candy", "takes", "rust-vs-go", "toptext", "america-gov-privacy", "ballz-1000-decisions", "ballz-recreation", "boygames-hub", "cat-cafe-tycoon", "coffee-game", "comeback-kit", "company-site", "comparison-lab", "design-docs", "desk-setup-showdown", "emotion-engine", "fall-foliage-sim", "foil-cards", "grok-bot-recreation", "leetcode-games-browser", "liquid-glass-demo", "make-100k", "model-bench-site", "nicomachus-visual", "oobleck-lab", "reaction-studio", "screenshot-ctrl-f", "skill-tree",
+  "ballz-1000-levels",
+  "theme-names",
+  "swipe-cards-yes-no",
+  "notes-triage-oct-5",
+  "comparison-slider",
+  "ab-toggle",
+  "hairball",
+  "peggie",
+  "get-clocked",
+  "blog-decision-doc",
+  "black-hole-post-doc",
+  "china-korea-hq",
+  "draw-guess",
+  "liverpool-rummy",
+  "redemption-post-doc",
+  "us-book-dr",
+  "wikimari"];
 const PROJECTS_HOST = "projects.lukezhang.si";
 const SITE_HOST_RE = /^([a-z0-9-]+)\.lukezhang\.si$/;
 
@@ -203,18 +220,6 @@ async function handleDecision(request, env) {
     return json({ ok: true, id: id }, 201);
   }
 
-  if (request.method === "POST" && action === "autosave") {
-    var aip = request.headers.get("cf-connecting-ip") || "unknown";
-    if (!(await rateLimit(kv, "dd:auto:" + aip, 120, 3600))) return err("slow down", 429);
-    var abody = await request.json().catch(function () { return null; });
-    var aslug = abody && abody.slug;
-    if (!aslug || !SLUG_RE.test(aslug)) return err("bad slug", 400);
-    var apicks = abody.picks && typeof abody.picks === "object" ? abody.picks : {};
-    var anotes = abody.notes && typeof abody.notes === "object" ? abody.notes : {};
-    await kv.put("dd:draft:" + aslug, JSON.stringify({ slug: aslug, picks: apicks, notes: anotes, updatedAt: Date.now() }).slice(0, 20000));
-    return json({ ok: true });
-  }
-
   if (request.method === "GET" && action === "responses") {
     if (url.searchParams.get("key") !== DD_READ_KEY) return err("forbidden", 403);
     var rslug = url.searchParams.get("slug") || "";
@@ -225,11 +230,85 @@ async function handleDecision(request, env) {
       var r = await kv.get("dd:sub:" + rslug + ":" + ridx[i], "json");
       if (r) out.push(r);
     }
-    var draft = await kv.get("dd:draft:" + rslug, "json");
-    return json({ slug: rslug, responses: out, draft: draft || null });
+    return json({ slug: rslug, responses: out });
   }
 
   return err("not found", 404);
+}
+
+// ---- Game backend proxies ----
+// Lets backend-backed games live on projects.lukezhang.si with same-origin
+// API calls. The backends keep running where they are; the router forwards.
+// No CORS issues, no secret migration.
+
+// Wikimari: Grokipedia sends no CORS headers, so fetch it server-side.
+// (Logic mirrored from absolukie/wikimari functions/api/grok.js.)
+function grokiJson(data, status) {
+  return new Response(JSON.stringify(data), {
+    status: status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "public, max-age=300",
+    },
+  });
+}
+async function handleWikimariApi(request) {
+  var url = new URL(request.url);
+  if (url.pathname === "/wikimari/api/grok") {
+    var slug = url.searchParams.get("slug") || "";
+    if (!slug || slug.length > 200 || !/^[A-Za-z0-9_()%,.'!-]+$/.test(slug)) {
+      return grokiJson({ found: false, error: "bad slug" }, 400);
+    }
+    try {
+      var r = await fetch(
+        "https://grokipedia.com/api/page-preview?slug=" + encodeURIComponent(slug),
+        { headers: { "User-Agent": "Wikimari/1.0 (+https://projects.lukezhang.si/wikimari/)" } }
+      );
+      if (!r.ok) return grokiJson({ found: false, error: "upstream " + r.status }, 502);
+      return grokiJson(await r.json(), 200);
+    } catch (e) {
+      return grokiJson({ found: false, error: "upstream unreachable" }, 502);
+    }
+  }
+  if (url.pathname === "/wikimari/api/grok-search") {
+    var q = url.searchParams.get("q") || "";
+    if (!q || q.length > 100) return grokiJson({ results: [] }, 400);
+    try {
+      var rs = await fetch(
+        "https://grokipedia.com/api/typeahead?v=2&query=" + encodeURIComponent(q),
+        { headers: { "User-Agent": "Wikimari/1.0 (+https://projects.lukezhang.si/wikimari/)" } }
+      );
+      if (!rs.ok) return grokiJson({ results: [] }, 502);
+      var data = await rs.json();
+      var results = Array.isArray(data.results)
+        ? data.results.slice(0, 5).map(function (x) {
+            return {
+              slug: x.slug,
+              title: String(x.title || "").replace(/[*_~`#]+/g, ""),
+              snippet: String(x.snippet || "").slice(0, 140),
+            };
+          })
+        : [];
+      return grokiJson({ results: results }, 200);
+    } catch (e) {
+      return grokiJson({ results: [] }, 502);
+    }
+  }
+  return notFound();
+}
+
+// Dumb reverse proxy: forwards method, headers (minus host), and body.
+// WebSocket upgrades pass through transparently.
+async function proxyTo(request, backend, stripPrefix) {
+  var url = new URL(request.url);
+  var target = backend + url.pathname.slice(stripPrefix.length) + url.search;
+  var headers = new Headers();
+  request.headers.forEach(function (v, k) {
+    if (k.toLowerCase() !== "host") headers.append(k, v);
+  });
+  var init = { method: request.method, headers: headers, redirect: "manual" };
+  if (request.method !== "GET" && request.method !== "HEAD") init.body = request.body;
+  return fetch(target, init);
 }
 
 export default {
@@ -255,6 +334,26 @@ export default {
       (host === PROJECTS_HOST || host === "takes.lukezhang.si")
     ) {
       return handleTakeTemp(request, env);
+    }
+
+    // Game backend APIs (same-origin for the ported games).
+    if (host === PROJECTS_HOST) {
+      if (
+        url.pathname === "/wikimari/api/grok" ||
+        url.pathname === "/wikimari/api/grok-search"
+      ) {
+        return handleWikimariApi(request);
+      }
+      if (url.pathname.startsWith("/draw-guess/api/")) {
+        return proxyTo(request, "https://draw-and-guess-103.pages.dev/api", "/draw-guess/api");
+      }
+      if (url.pathname.startsWith("/liverpool-rummy/api/")) {
+        return proxyTo(
+          request,
+          "https://liverpool-rummy-rooms.absolukie.workers.dev",
+          "/liverpool-rummy/api"
+        );
+      }
     }
 
     let site = null;      // sites/<site>/… to serve

@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>EVERDUNGEON — Blackbox Arcade</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  margin:0;background:#04060a;color:#d9e6ff;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  overflow:hidden;touch-action:manipulation;-webkit-user-select:none;user-select:none;
+}
+#app{height:100vh;height:100dvh;max-width:640px;margin:0 auto;display:flex;flex-direction:column}
+#hud{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 16px;border-bottom:1px solid rgba(120,180,255,.14);
+  background:rgba(8,12,22,.92);min-height:60px;flex:0 0 auto;z-index:6;
+}
+.hud-item{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:56px}
+.label{font-size:10px;letter-spacing:2px;color:#5f7bb0;font-weight:600}
+.val{font-size:19px;font-weight:800;line-height:1}
+#depth{color:#5ff2ff;text-shadow:0 0 10px rgba(95,242,255,.55)}
+#score{color:#ffd75f}
+#coins{color:#9fe8ff}
+#hearts{display:flex;gap:5px;align-items:center;min-height:20px}
+.heart svg{display:block;fill:#3a1a20}
+.heart.on svg{fill:#ff5f6b;filter:drop-shadow(0 0 5px rgba(255,95,107,.9))}
+#wrap{
+  flex:1 1 auto;position:relative;display:flex;align-items:center;justify-content:center;
+  overflow:hidden;background:radial-gradient(ellipse at 50% 42%, #0a1020 0%, #04060a 72%);
+}
+canvas{
+  touch-action:none;border:1px solid rgba(120,180,255,.16);border-radius:10px;
+  background:#04060a;box-shadow:0 0 44px rgba(60,140,255,.09);
+}
+.overlay{
+  position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:15px;background:rgba(4,6,10,.87);text-align:center;padding:26px;z-index:5;
+}
+.overlay.hidden{display:none}
+h1.title{margin:0;font-size:40px;font-weight:800;letter-spacing:5px;color:#eafcff;text-shadow:0 0 20px rgba(95,242,255,.7)}
+h1.title.small{font-size:30px;letter-spacing:3px}
+.tag{font-size:12px;letter-spacing:4px;color:#5ff2ff;font-weight:700}
+.howto{color:#c7d8f5;font-size:15px;line-height:1.55;max-width:330px;margin:0}
+.reveal{font-size:12px;letter-spacing:1px;color:#5f7bb0}
+button.btn{
+  touch-action:manipulation;font:inherit;font-size:17px;font-weight:800;letter-spacing:2px;
+  color:#04121a;background:linear-gradient(180deg,#7df5ff,#38c8ec);
+  border:0;border-radius:12px;padding:15px 36px;cursor:pointer;min-height:52px;
+  box-shadow:0 0 26px rgba(95,242,255,.35);
+}
+button.btn:active{transform:scale(.96)}
+.stats{display:flex;gap:30px}
+.stat{display:flex;flex-direction:column;gap:5px;align-items:center}
+.stat b{font-size:32px;color:#eafcff;font-weight:800}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hud">
+    <div class="hud-item"><span class="label">DEPTH</span><span class="val" id="depth">1</span></div>
+    <div class="hud-item"><span class="label">SCORE</span><span class="val" id="score">0</span></div>
+    <div class="hud-item"><span class="label">COINS</span><span class="val" id="coins">0</span></div>
+    <div class="hud-item"><span class="label">HP</span><span id="hearts"></span></div>
+  </div>
+  <div id="wrap">
+    <canvas id="game"></canvas>
+    <div id="titleScreen" class="overlay">
+      <h1 class="title">EVERDUNGEON</h1>
+      <div class="tag">AN ENDLESS DESCENT</div>
+      <p class="howto">Drag the left half of the screen, or use WASD / arrow keys, to move. Grab coins, dodge the sentries, and step onto the glowing exit to descend deeper.</p>
+      <div class="reveal">Wave Function Collapse + A* + Poisson-disc sampling.</div>
+      <button id="startBtn" class="btn" type="button">START DESCENT</button>
+    </div>
+    <div id="overScreen" class="overlay hidden">
+      <h1 class="title small">DESCENT ENDED</h1>
+      <div class="stats">
+        <div class="stat"><span class="label">DEPTH</span><b id="goDepth">1</b></div>
+        <div class="stat"><span class="label">COINS</span><b id="goCoins">0</b></div>
+        <div class="stat"><span class="label">BEST</span><b id="goBest">0</b></div>
+      </div>
+      <div class="reveal">Wave Function Collapse + A* + Poisson-disc sampling.</div>
+      <button id="againBtn" class="btn" type="button">PLAY AGAIN</button>
+    </div>
+  </div>
+</div>
+<script>
+'use strict';
+/* ================= utils ================= */
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+const smooth=t=>t*t*(3-2*t);
+const TAU=Math.PI*2;
+function popcount(x){
+  x=x-((x>>1)&0x5555);
+  x=(x&0x3333)+((x>>2)&0x3333);
+  return ((((x+(x>>4))&0x0F0F)*0x0101)>>8)&0xFF;
+}
+
+/* ================= config ================= */
+let GW=26, GH=18;                // dungeon grid (portrait phones get a portrait dungeon)
+const DX=[0,1,0,-1], DY=[-1,0,1,0]; // N,E,S,W
+const SPEED=10.4;           // tiles/sec  (~2.6px/frame at 15px tiles, 60fps)
+const ESTEP=0.45;           // enemy step interval (s)
+const INVULN=1.2;           // post-hit invulnerability (s)
+
+/* ================= WFC tile set =================
+   sockets: [n,e,s,w], 0 = wall, 1 = open */
+const TILES=[
+  {n:'FLOOR', s:[1,1,1,1], w:90},
+  {n:'WALL',  s:[0,0,0,0], w:8},
+  {n:'N', s:[1,0,0,0], w:3},
+  {n:'E', s:[0,1,0,0], w:3},
+  {n:'S', s:[0,0,1,0], w:3},
+  {n:'W', s:[0,0,0,1], w:3},
+  {n:'NE', s:[1,1,0,0], w:2},
+  {n:'NW', s:[1,0,0,1], w:2},
+  {n:'SE', s:[0,1,1,0], w:2},
+  {n:'SW', s:[0,0,1,1], w:2},
+  {n:'H', s:[0,1,0,1], w:4},
+  {n:'V', s:[1,0,1,0], w:4},
+  {n:'T-N', s:[0,1,1,1], w:2},  // open E,S,W
+  {n:'T-E', s:[1,0,1,1], w:2},  // open N,S,W
+  {n:'T-S', s:[1,1,0,1], w:2},  // open N,E,W
+  {n:'T-W', s:[1,1,1,0], w:2}   // open N,E,S
+];
+const NT=TILES.length;
+/* COMPAT[d][i] = bitmask of tiles compatible with tile i toward direction d */
+const COMPAT=[];
+for(let d=0;d<4;d++){
+  COMPAT[d]=[];
+  for(let i=0;i<NT;i++){
+    let mask=0;
+    const sock=TILES[i].s[d], od=(d+2)%4;
+    for(let j=0;j<NT;j++) if(TILES[j].s[od]===sock) mask|=(1<<j);
+    COMPAT[d].push(mask);
+  }
+}
+
+function propagate(opts,queue){
+  const q=queue.slice();
+  let head=0;
+  while(head<q.length){
+    const c=q[head++], cx=c%GW, cy=(c/GW)|0, cb=opts[c];
+    for(let d=0;d<4;d++){
+      const nx=cx+DX[d], ny=cy+DY[d];
+      if(nx<0||ny<0||nx>=GW||ny>=GH) continue;
+      const n=ny*GW+nx;
+      let allowed=0;
+      for(let i=0;i<NT;i++) if((cb>>i)&1) allowed|=COMPAT[d][i];
+      const nn=opts[n]&allowed;
+      if(nn!==opts[n]){
+        if(nn===0) return false;      // contradiction
+        opts[n]=nn;
+        q.push(n);
+      }
+    }
+  }
+  return true;
+}
+
+/* Full WFC collapse. Returns grid of tile indices (row-major) or null on contradiction. */
+function wfc(){
+  const ALL=(1<<NT)-1, WALLB=1<<1;
+  const opts=new Int32Array(GW*GH).fill(ALL);
+  for(let x=0;x<GW;x++){ opts[x]=WALLB; opts[(GH-1)*GW+x]=WALLB; }
+  for(let y=0;y<GH;y++){ opts[y*GW]=WALLB; opts[y*GW+GW-1]=WALLB; }
+  const seed=[];
+  for(let x=0;x<GW;x++){ seed.push(x,(GH-1)*GW+x); }
+  for(let y=1;y<GH-1;y++){ seed.push(y*GW,y*GW+GW-1); }
+  if(!propagate(opts,seed)) return null;
+  let guard=GW*GH*4;
+  while(guard-->0){
+    let bestE=99;
+    for(let i=0;i<opts.length;i++){ const e=popcount(opts[i]); if(e>1&&e<bestE) bestE=e; }
+    if(bestE===99) break;                     // everything collapsed
+    let cnt=0, best=-1;                       // lowest entropy, random tie-break
+    for(let i=0;i<opts.length;i++){
+      if(popcount(opts[i])===bestE){ cnt++; if(Math.random()<1/cnt) best=i; }
+    }
+    const bits=opts[best];                    // weighted random collapse
+    let total=0;
+    for(let i=0;i<NT;i++) if((bits>>i)&1) total+=TILES[i].w;
+    let r=Math.random()*total, pick=-1;
+    for(let i=0;i<NT;i++) if((bits>>i)&1){ r-=TILES[i].w; if(r<0){ pick=i; break; } }
+    if(pick<0) for(let i=0;i<NT;i++) if((bits>>i)&1){ pick=i; break; }
+    opts[best]=1<<pick;
+    if(!propagate(opts,[best])) return null;
+  }
+  const g=new Array(GW*GH);
+  for(let i=0;i<opts.length;i++) g[i]=31-Math.clz32(opts[i]);
+  return g;
+}
+/* ================= game state ================= */
+let TILE=15, DPR=1;
+let grid=[];
+let spawnT={x:2,y:2}, exitT={x:23,y:15};
+let currentPath=[[2,2],[23,15]];
+let coinsArr=[], enemies=[], torches=[], particles=[];
+let player={x:2.5,y:2.5};
+let depth=1, hp=3, score=0, coinsGot=0, best=0;
+let state='title';
+let invT=0, shakeT=0, bannerT=0, tGlob=0, stepAcc=0;
+
+/* DOM */
+const canvas=document.getElementById('game');
+const ctx=canvas.getContext('2d');
+const wrap=document.getElementById('wrap');
+const depthEl=document.getElementById('depth');
+const scoreEl=document.getElementById('score');
+const coinsEl=document.getElementById('coins');
+const heartsEl=document.getElementById('hearts');
+const titleScreen=document.getElementById('titleScreen');
+const overScreen=document.getElementById('overScreen');
+const goDepth=document.getElementById('goDepth');
+const goCoins=document.getElementById('goCoins');
+const goBest=document.getElementById('goBest');
+
+function walkableAt(x,y){
+  if(x<0||y<0||x>=GW||y>=GH) return false;
+  const s=TILES[grid[y*GW+x]].s;
+  return s[0]===1||s[1]===1||s[2]===1||s[3]===1;
+}
+
+/* ================= A* (4-directional) ================= */
+function astar(sx,sy,ex,ey){
+  const N=GW*GH;
+  const gS=new Float64Array(N).fill(Infinity);
+  const came=new Int32Array(N).fill(-1);
+  const closed=new Uint8Array(N);
+  const start=sy*GW+sx;
+  gS[start]=0;
+  const open=[{x:sx,y:sy,g:0,f:Math.abs(ex-sx)+Math.abs(ey-sy)}];
+  while(open.length){
+    let bi=0;
+    for(let i=1;i<open.length;i++) if(open[i].f<open[bi].f) bi=i;
+    const cur=open.splice(bi,1)[0];
+    const ci=cur.y*GW+cur.x;
+    if(closed[ci]) continue;
+    closed[ci]=1;
+    if(cur.x===ex&&cur.y===ey){
+      const path=[[ex,ey]];
+      let c=ci;
+      while(came[c]!==-1){ c=came[c]; path.push([c%GW,(c/GW)|0]); }
+      path.reverse();
+      return path;
+    }
+    for(let d=0;d<4;d++){
+      const nx=cur.x+DX[d], ny=cur.y+DY[d];
+      if(nx<0||ny<0||nx>=GW||ny>=GH) continue;
+      if(!walkableAt(nx,ny)) continue;
+      const ni=ny*GW+nx;
+      if(closed[ni]) continue;
+      const g=cur.g+1;
+      if(g<gS[ni]){
+        gS[ni]=g; came[ni]=ci;
+        open.push({x:nx,y:ny,g:g,f:g+Math.abs(ex-nx)+Math.abs(ey-ny)});
+      }
+    }
+  }
+  return null;
+}
+
+/* L-shaped corridor carve: absolute reachability guarantee */
+function carveL(s,e){
+  let x=s.x, y=s.y;
+  const set=(x,y)=>{ grid[y*GW+x]=0; };
+  while(x!==e.x){ set(x,y); x+=Math.sign(e.x-x); }
+  while(y!==e.y){ set(x,y); y+=Math.sign(e.y-y); }
+  set(e.x,e.y);
+}
+
+function placeSpawnExit(){
+  const floors=[];
+  for(let y=1;y<GH-1;y++) for(let x=1;x<GW-1;x++)
+    if(grid[y*GW+x]===0) floors.push({x:x,y:y});
+  const cands=floors.filter(p=>p.x<GW/2&&p.y<GH/2);
+  if(!cands.length) return null;
+  const s=cands[(Math.random()*cands.length)|0];
+  const far=floors.filter(p=>Math.abs(p.x-s.x)+Math.abs(p.y-s.y)>=20);
+  let e;
+  if(far.length) e=far[(Math.random()*far.length)|0];
+  else{
+    let bd=-1; e=null;
+    for(const p of floors){
+      if(p.x===s.x&&p.y===s.y) continue;
+      const d=Math.abs(p.x-s.x)+Math.abs(p.y-s.y);
+      if(d>bd){ bd=d; e=p; }
+    }
+    if(!e||bd<20) return null;   // no far-enough exit: retry whole dungeon
+  }
+  return {s:s,e:e};
+}
+
+/* ================= Poisson-disc (Bridson) ================= */
+function poisson(count,r,excl){
+  const cand=[];
+  for(let y=1;y<GH-1;y++) for(let x=1;x<GW-1;x++){
+    if(grid[y*GW+x]!==0) continue;
+    if(Math.hypot(x-spawnT.x,y-spawnT.y)<excl) continue;
+    cand.push({x:x,y:y});
+  }
+  const samples=[], active=[];
+  const free=(x,y)=>{
+    if(x<1||y<1||x>=GW-1||y>=GH-1) return false;
+    if(grid[y*GW+x]!==0) return false;
+    if(Math.hypot(x-spawnT.x,y-spawnT.y)<excl) return false;
+    for(const s of samples) if(Math.hypot(x-s.x,y-s.y)<r) return false;
+    return true;
+  };
+  if(cand.length){
+    const f=cand[(Math.random()*cand.length)|0];
+    samples.push(f); active.push(f);
+  }
+  let guard=0;
+  while(samples.length<count&&active.length&&guard++<20000){
+    const ai=(Math.random()*active.length)|0, s=active[ai];
+    let placed=false;
+    for(let k=0;k<30;k++){                       // k = 30 annulus candidates
+      const a=Math.random()*TAU, d=r+Math.random()*r;
+      const x=Math.round(s.x+Math.cos(a)*d), y=Math.round(s.y+Math.sin(a)*d);
+      if(free(x,y)){ const p={x:x,y:y}; samples.push(p); active.push(p); placed=true; break; }
+    }
+    if(!placed) active.splice(ai,1);
+  }
+  let tg=0;                                      // top-up if Bridson stalled early
+  while(samples.length<count&&tg++<8000&&cand.length){
+    const c=cand[(Math.random()*cand.length)|0];
+    let okp=true;
+    for(const s of samples) if(Math.hypot(c.x-s.x,c.y-s.y)<r){ okp=false; break; }
+    if(okp) samples.push(c);
+  }
+  return samples;
+}
+
+/* ================= depth generation ================= */
+function finalizeGen(){
+  torches=[];
+  let tries=0;
+  while(torches.length<6&&tries++<400){
+    const x=1+((Math.random()*(GW-2))|0), y=1+((Math.random()*(GH-2))|0);
+    if(grid[y*GW+x]!==1) continue;
+    let adj=false;
+    for(let d=0;d<4;d++) if(walkableAt(x+DX[d],y+DY[d])){ adj=true; break; }
+    if(!adj) continue;
+    if(torches.some(t=>Math.abs(t.x-x)+Math.abs(t.y-y)<6)) continue;
+    torches.push({x:x,y:y,ph:Math.random()*TAU});
+  }
+  const pts=poisson(11,3,4);
+  coinsArr=pts.slice(0,8).map(p=>({x:p.x+0.5,y:p.y+0.5,taken:false,ph:Math.random()*TAU}));
+  enemies=pts.slice(8,11).map(p=>({tx:p.x,ty:p.y,fx:p.x,fy:p.y,anim:1,ph:Math.random()*TAU}));
+  player.x=spawnT.x+0.5; player.y=spawnT.y+0.5;
+  invT=0; stepAcc=0; particles=[];
+  renderTiles();
+}
+
+function genDepth(){
+  for(let a=0;a<40;a++){
+    const g=wfc();
+    if(!g) continue;                             // contradiction: restart whole grid
+    grid=g;
+    const se=placeSpawnExit();
+    if(!se) continue;
+    spawnT=se.s; exitT=se.e;
+    const p=astar(spawnT.x,spawnT.y,exitT.x,exitT.y);
+    if(p&&p.length>1){ currentPath=p; finalizeGen(); return; }
+  }
+  grid=new Array(GW*GH).fill(0);                 // restart cap hit: open-room fallback
+  for(let x=0;x<GW;x++){ grid[x]=1; grid[(GH-1)*GW+x]=1; }
+  for(let y=0;y<GH;y++){ grid[y*GW]=1; grid[y*GW+GW-1]=1; }
+  const se=placeSpawnExit();
+  spawnT=se.s; exitT=se.e;
+  carveL(spawnT,exitT);                          // guarantee reachability
+  const p=astar(spawnT.x,spawnT.y,exitT.x,exitT.y);
+  currentPath=(p&&p.length)?p:[[spawnT.x,spawnT.y],[exitT.x,exitT.y]];
+  finalizeGen();
+}
+
+/* ================= sprites (pre-rendered glow) ================= */
+function makeGlow(r,g,b){
+  const c=document.createElement('canvas'); c.width=c.height=96;
+  const x=c.getContext('2d');
+  const gr=x.createRadialGradient(48,48,2,48,48,48);
+  gr.addColorStop(0,'rgba(255,255,255,0.85)');
+  gr.addColorStop(0.28,'rgba('+r+','+g+','+b+',0.5)');
+  gr.addColorStop(1,'rgba('+r+','+g+','+b+',0)');
+  x.fillStyle=gr; x.fillRect(0,0,96,96);
+  return c;
+}
+const glowCyan=makeGlow(80,220,255), glowGold=makeGlow(255,200,80),
+      glowRed=makeGlow(255,70,80), glowOrange=makeGlow(255,150,60);
+function drawSprite(c,img,cx,cy,size){ c.drawImage(img,cx-size/2,cy-size/2,size,size); }
+
+/* ================= offscreen tile layer (redrawn only on regen/resize) ================= */
+const tCan=document.createElement('canvas');
+const tg=tCan.getContext('2d');
+function renderTiles(){
+  if(!grid.length) return;
+  tCan.width=GW*TILE*DPR; tCan.height=GH*TILE*DPR;
+  tg.setTransform(DPR,0,0,DPR,0,0);
+  tg.fillStyle='#04060a'; tg.fillRect(0,0,GW*TILE,GH*TILE);
+  for(let y=0;y<GH;y++) for(let x=0;x<GW;x++){
+    const t=grid[y*GW+x], px=x*TILE, py=y*TILE;
+    if(t===1){
+      tg.fillStyle='#111a2c'; tg.fillRect(px,py,TILE,TILE);
+      tg.fillStyle='rgba(160,200,255,0.07)'; tg.fillRect(px,py,TILE,1);
+      tg.fillStyle='rgba(0,0,0,0.4)'; tg.fillRect(px,py+TILE-1,TILE,1);
+      tg.fillStyle='rgba(160,200,255,0.10)';   // rivets: lab-panel walls
+      tg.fillRect(px+2,py+2,1,1); tg.fillRect(px+TILE-3,py+2,1,1);
+      tg.fillRect(px+2,py+TILE-3,1,1); tg.fillRect(px+TILE-3,py+TILE-3,1,1);
+    }else{
+      const alt=(x*7+y*13)&1;
+      tg.fillStyle=alt?'#0a1120':'#0b1222'; tg.fillRect(px,py,TILE,TILE);
+      tg.strokeStyle='rgba(140,190,255,0.05)'; tg.lineWidth=1;
+      tg.strokeRect(px+0.5,py+0.5,TILE-1,TILE-1);
+      tg.fillStyle='rgba(140,190,255,0.05)';
+      tg.fillRect(px+TILE*0.3,py+TILE*0.55,1,1);
+      tg.fillRect(px+TILE*0.68,py+TILE*0.3,1,1);
+    }
+  }
+  const ex=exitT.x*TILE, ey=exitT.y*TILE;      // exit tile: neon pad
+  tg.fillStyle='#06302c'; tg.fillRect(ex,ey,TILE,TILE);
+  drawSprite(tg,glowCyan,ex+TILE/2,ey+TILE/2,TILE*3.4);
+}
+
+function resize(){
+  const aw=wrap.clientWidth, ah=wrap.clientHeight;
+  TILE=Math.max(10,Math.min(40,Math.floor(Math.min(aw/GW,ah/GH))));
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  canvas.width=GW*TILE*DPR; canvas.height=GH*TILE*DPR;
+  canvas.style.width=(GW*TILE)+'px'; canvas.style.height=(GH*TILE)+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  renderTiles();
+}
+window.addEventListener('resize',resize);
+/* ================= input: keyboard + virtual joystick ================= */
+const keys=new Set();
+const KEYMAP={arrowup:1,arrowdown:1,arrowleft:1,arrowright:1,w:1,a:1,s:1,d:1,' ':1};
+function normKey(e){ return e.key.length===1?e.key.toLowerCase():e.key.toLowerCase(); }
+window.addEventListener('keydown',e=>{
+  const k=normKey(e);
+  if(KEYMAP[k]){ keys.add(k); if(state==='playing') e.preventDefault(); }
+  if(k==='enter'&&state==='title') startGame();
+});
+window.addEventListener('keyup',e=>{ keys.delete(normKey(e)); });
+window.addEventListener('blur',()=>keys.clear());
+
+let joyActive=false, joyId=null, joyOX=0, joyOY=0, joyVec={x:0,y:0};
+function joyMove(px,py){
+  let dx=px-joyOX, dy=py-joyOY;
+  const m=Math.hypot(dx,dy), max=56;
+  if(m>max){ dx=dx/m*max; dy=dy/m*max; }
+  joyVec=(m<10)?{x:0,y:0}:{x:dx/max,y:dy/max};
+}
+canvas.addEventListener('touchstart',e=>{
+  if(state==='playing'&&!joyActive){
+    for(const t of e.changedTouches){
+      const r=canvas.getBoundingClientRect(), px=t.clientX-r.left, py=t.clientY-r.top;
+      if(px<canvas.clientWidth/2){ joyActive=true; joyId=t.identifier; joyOX=px; joyOY=py; joyVec={x:0,y:0}; break; }
+    }
+  }
+  e.preventDefault();
+},{passive:false});
+canvas.addEventListener('touchmove',e=>{
+  for(const t of e.changedTouches){
+    if(joyActive&&t.identifier===joyId){
+      const r=canvas.getBoundingClientRect();
+      joyMove(t.clientX-r.left,t.clientY-r.top);
+    }
+  }
+  e.preventDefault();
+},{passive:false});
+function joyEnd(e){
+  for(const t of e.changedTouches)
+    if(joyActive&&t.identifier===joyId){ joyActive=false; joyId=null; joyVec={x:0,y:0}; }
+}
+canvas.addEventListener('touchend',joyEnd);
+canvas.addEventListener('touchcancel',joyEnd);
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('mousedown',e=>{           // desktop drag fallback
+  if(state!=='playing'||joyActive) return;
+  const r=canvas.getBoundingClientRect(), px=e.clientX-r.left, py=e.clientY-r.top;
+  if(px<canvas.clientWidth/2){ joyActive=true; joyId='mouse'; joyOX=px; joyOY=py; joyVec={x:0,y:0}; }
+});
+window.addEventListener('mousemove',e=>{
+  if(joyActive&&joyId==='mouse'){
+    const r=canvas.getBoundingClientRect();
+    joyMove(e.clientX-r.left,e.clientY-r.top);
+  }
+});
+window.addEventListener('mouseup',()=>{ if(joyId==='mouse'){ joyActive=false; joyId=null; joyVec={x:0,y:0}; } });
+
+/* ================= movement & combat ================= */
+function hitsWall(x,y){
+  const r=0.30;
+  const x0=Math.floor(x-r), x1=Math.floor(x+r), y0=Math.floor(y-r), y1=Math.floor(y+r);
+  for(let ty=y0;ty<=y1;ty++) for(let tx=x0;tx<=x1;tx++)
+    if(!walkableAt(tx,ty)) return true;
+  return false;
+}
+function movePlayer(dx,dy){
+  if(dx!==0&&!hitsWall(player.x+dx,player.y)) player.x+=dx;
+  if(dy!==0&&!hitsWall(player.x,player.y+dy)) player.y+=dy;
+}
+function enemyStep(e){
+  const px=Math.floor(player.x), py=Math.floor(player.y);
+  let bx=0, by=0, bd=Infinity, found=false;
+  for(let d=0;d<4;d++){
+    const nx=e.tx+DX[d], ny=e.ty+DY[d];
+    if(!walkableAt(nx,ny)) continue;
+    const dd=Math.abs(nx-px)+Math.abs(ny-py);
+    if(dd<bd){ bd=dd; bx=nx; by=ny; found=true; }
+  }
+  if(found){ e.fx=e.tx; e.fy=e.ty; e.tx=bx; e.ty=by; e.anim=0; }
+}
+function enemyPX(e){ return lerp(e.fx,e.tx,smooth(e.anim))+0.5; }
+function enemyPY(e){ return lerp(e.fy,e.ty,smooth(e.anim))+0.5; }
+function burst(x,y,color){
+  for(let i=0;i<10;i++){
+    if(particles.length>140) break;
+    const a=Math.random()*TAU, sp=2+Math.random()*4;
+    particles.push({x:x,y:y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-2,life:0.5+Math.random()*0.3,max:0.8,color:color});
+  }
+}
+function damage(){
+  hp--; invT=INVULN; shakeT=0.2;
+  burst(player.x,player.y,'#ff5f6b');
+  updateHUD();
+  if(hp<=0) gameOver();
+}
+function descend(){
+  depth++; score+=40+10*depth; bannerT=1.8;
+  burst(exitT.x+0.5,exitT.y+0.5,'#5ff2ff');
+  genDepth();
+  updateHUD();
+}
+
+function update(dt){
+  tGlob+=dt;
+  let dx=0, dy=0;
+  if(keys.has('arrowleft')||keys.has('a')) dx-=1;
+  if(keys.has('arrowright')||keys.has('d')) dx+=1;
+  if(keys.has('arrowup')||keys.has('w')) dy-=1;
+  if(keys.has('arrowdown')||keys.has('s')) dy+=1;
+  if(dx===0&&dy===0&&joyActive){ dx=joyVec.x; dy=joyVec.y; }
+  const m=Math.hypot(dx,dy);
+  if(m>0.02){ const s=SPEED/Math.max(1,m); movePlayer(dx*s*dt,dy*s*dt); }
+  if(invT>0) invT-=dt;
+  if(shakeT>0) shakeT-=dt;
+  if(bannerT>0) bannerT-=dt;
+  stepAcc+=dt;
+  while(stepAcc>=ESTEP){ stepAcc-=ESTEP; for(const e of enemies) enemyStep(e); }
+  for(const e of enemies) if(e.anim<1) e.anim=Math.min(1,e.anim+dt/ESTEP);
+  const pr=0.32;
+  for(const e of enemies){
+    if(Math.hypot(enemyPX(e)-player.x,enemyPY(e)-player.y)<pr+0.34&&invT<=0){ damage(); break; }
+  }
+  for(const c of coinsArr){
+    if(c.taken) continue;
+    if(Math.hypot(c.x-player.x,c.y-player.y)<pr+0.2){
+      c.taken=true; coinsGot++; score+=10;
+      burst(c.x,c.y,'#ffd75f'); updateHUD();
+    }
+  }
+  if(Math.floor(player.x)===exitT.x&&Math.floor(player.y)===exitT.y) descend();
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.life-=dt;
+    if(p.life<=0){ particles.splice(i,1); continue; }
+    p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=6*dt;
+  }
+}
+
+/* ================= render ================= */
+function render(){
+  ctx.save();
+  if(shakeT>0){ const s=shakeT*14; ctx.translate((Math.random()-0.5)*s,(Math.random()-0.5)*s); }
+  ctx.fillStyle='#04060a';
+  ctx.fillRect(-8,-8,GW*TILE+16,GH*TILE+16);
+  ctx.drawImage(tCan,0,0,tCan.width,tCan.height,0,0,GW*TILE,GH*TILE);
+  const t=tGlob;
+  for(const th of torches){                       // neon torches, flickering
+    const cx=(th.x+0.5)*TILE, cy=(th.y+0.5)*TILE;
+    ctx.globalAlpha=0.72+0.28*Math.sin(t*9+th.ph);
+    drawSprite(ctx,glowOrange,cx,cy,TILE*3.4);
+    ctx.globalAlpha=1;
+    ctx.fillStyle='#ffb35f';
+    ctx.beginPath(); ctx.ellipse(cx,cy-1,TILE*0.10,TILE*0.16,0,0,TAU); ctx.fill();
+  }
+  const ecx=(exitT.x+0.5)*TILE, ecy=(exitT.y+0.5)*TILE;   // exit glow + pulse rings
+  for(let i=0;i<2;i++){
+    const ph=((t*0.7+i*0.5)%1);
+    ctx.globalAlpha=0.55*(1-ph);
+    ctx.strokeStyle='#5ff2ff'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(ecx,ecy,(0.3+ph*1.1)*TILE,0,TAU); ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+  drawSprite(ctx,glowCyan,ecx,ecy,TILE*2.6+Math.sin(t*4)*2);
+  ctx.fillStyle='#d9feff';
+  ctx.save(); ctx.translate(ecx,ecy); ctx.rotate(Math.PI/4);
+  const ds=TILE*0.22; ctx.fillRect(-ds/2,-ds/2,ds,ds); ctx.restore();
+  for(const c of coinsArr){                        // coins
+    if(c.taken) continue;
+    const cx=c.x*TILE, cy=(c.y+Math.sin(t*3+c.ph)*0.05)*TILE;
+    const pu=1+0.12*Math.sin(t*5+c.ph);
+    drawSprite(ctx,glowGold,cx,cy,TILE*1.7*pu);
+    ctx.fillStyle='#ffd75f';
+    ctx.beginPath(); ctx.arc(cx,cy,TILE*0.16*pu,0,TAU); ctx.fill();
+    ctx.fillStyle='#fff3c4';
+    ctx.beginPath(); ctx.arc(cx-TILE*0.05,cy-TILE*0.05,TILE*0.06*pu,0,TAU); ctx.fill();
+  }
+  for(const e of enemies){                         // sentries
+    const ex=enemyPX(e)*TILE, ey=enemyPY(e)*TILE;
+    const wob=1+0.08*Math.sin(t*6+e.ph);
+    drawSprite(ctx,glowRed,ex,ey,TILE*2.4);
+    ctx.fillStyle='#7d1016';
+    ctx.beginPath(); ctx.arc(ex,ey,TILE*0.34*wob,0,TAU); ctx.fill();
+    ctx.strokeStyle='rgba(255,90,100,0.8)'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(ex,ey,TILE*0.34*wob,0,TAU); ctx.stroke();
+    ctx.fillStyle='#ff8f96';
+    const eo=TILE*0.12;
+    ctx.beginPath(); ctx.arc(ex-eo,ey-eo*0.4,TILE*0.06,0,TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(ex+eo,ey-eo*0.4,TILE*0.06,0,TAU); ctx.fill();
+  }
+  const blink=invT>0&&(Math.floor(t*10)%2===0);    // player
+  if(!blink){
+    const px=player.x*TILE, py=player.y*TILE;
+    drawSprite(ctx,glowCyan,px,py,TILE*2.6);
+    ctx.fillStyle='#eafcff';
+    ctx.beginPath(); ctx.arc(px,py,TILE*0.30,0,TAU); ctx.fill();
+    ctx.fillStyle='#5ff2ff';
+    ctx.beginPath(); ctx.arc(px,py,TILE*0.20,0,TAU); ctx.fill();
+  }
+  for(const p of particles){
+    ctx.globalAlpha=clamp(p.life/p.max,0,1);
+    ctx.fillStyle=p.color;
+    ctx.beginPath(); ctx.arc(p.x*TILE,p.y*TILE,TILE*0.07,0,TAU); ctx.fill();
+  }
+  ctx.globalAlpha=1;
+  if(joyActive){                                  // joystick indicator
+    ctx.strokeStyle='rgba(140,200,255,0.35)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(joyOX,joyOY,44,0,TAU); ctx.stroke();
+    ctx.fillStyle='rgba(140,200,255,0.18)';
+    ctx.beginPath(); ctx.arc(joyOX,joyOY,44,0,TAU); ctx.fill();
+    ctx.fillStyle='rgba(160,220,255,0.75)';
+    ctx.beginPath(); ctx.arc(joyOX+joyVec.x*40,joyOY+joyVec.y*40,18,0,TAU); ctx.fill();
+  }
+  if(bannerT>0){
+    ctx.globalAlpha=clamp(bannerT,0,1);
+    ctx.fillStyle='#d9feff';
+    ctx.font='800 '+Math.round(TILE*1.6)+'px -apple-system,"Segoe UI",Roboto,sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('DEPTH '+depth,GW*TILE/2,GH*TILE/2);
+    ctx.globalAlpha=1;
+  }
+  ctx.restore();
+}
+
+/* ================= HUD & flow ================= */
+const HEART='<svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>';
+function updateHUD(){
+  depthEl.textContent=depth;
+  scoreEl.textContent=score;
+  coinsEl.textContent=coinsGot;
+  heartsEl.innerHTML='';
+  for(let i=0;i<3;i++){
+    const s=document.createElement('span');
+    s.className='heart'+(i<hp?' on':'');
+    s.innerHTML=HEART;
+    heartsEl.appendChild(s);
+  }
+}
+function readBest(){
+  try{ return parseInt(localStorage.getItem('blackbox-everdungeon-best')||'0',10)||0; }
+  catch(err){ return 0; }
+}
+function startGame(){
+  state='playing';
+  titleScreen.classList.add('hidden');
+}
+function gameOver(){
+  state='gameover';
+  const b=readBest();
+  best=Math.max(b,depth);
+  try{ localStorage.setItem('blackbox-everdungeon-best',String(best)); }catch(err){}
+  goDepth.textContent=depth;
+  goCoins.textContent=coinsGot;
+  goBest.textContent=best;
+  overScreen.classList.remove('hidden');
+}
+function resetGame(){
+  depth=1; hp=3; score=0; coinsGot=0;
+  genDepth();
+  updateHUD();
+  overScreen.classList.add('hidden');
+  state='playing';
+}
+document.getElementById('startBtn').addEventListener('click',startGame);
+document.getElementById('againBtn').addEventListener('click',resetGame);
+
+/* ================= main loop ================= */
+let last=performance.now();
+function frame(now){
+  requestAnimationFrame(frame);
+  let dt=(now-last)/1000; last=now;
+  if(dt>0.05) dt=0.05;
+  if(dt<0) dt=0;
+  if(state==='playing') update(dt);
+  else tGlob+=dt;
+  render();
+}
+
+/* ================= init ================= */
+// portrait viewport -> portrait dungeon so the grid fills a phone screen
+(function(){
+  var w=document.getElementById('wrap');
+  var aw=w?w.clientWidth:window.innerWidth, ah=w?w.clientHeight:window.innerHeight;
+  if(ah>aw+40){ GW=18; GH=26; }
+})();
+genDepth();
+resize();
+updateHUD();
+best=readBest();
+
+/* test hook (exact shape) */
+window.__test={
+  pos:function(){ return {x:player.x*TILE,y:player.y*TILE}; },
+  exit:function(){ return {x:(exitT.x+0.5)*TILE,y:(exitT.y+0.5)*TILE}; },
+  depth:function(){ return depth; },
+  coins:function(){ return coinsGot; },
+  pathLen:function(){ return currentPath.length; },
+  path:function(){ return currentPath.map(function(p){ return [p[0],p[1]]; }); },
+  hp:function(){ return hp; }
+};
+
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

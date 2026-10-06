@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>BLACKBOX — how did they do that?</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { min-height: 100%; }
+  body {
+    background: #0a0a12;
+    background-image:
+      radial-gradient(circle at 20% 0%, rgba(34,211,238,.07), transparent 45%),
+      radial-gradient(circle at 85% 90%, rgba(232,121,249,.06), transparent 45%);
+    color: #e8e8f0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    padding: 28px 18px 60px;
+    touch-action: manipulation;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 8px; }
+  .kicker {
+    font-size: 12px; letter-spacing: 4px; text-transform: uppercase;
+    color: #22d3ee; margin-bottom: 10px;
+  }
+  h1 {
+    font-size: 44px; font-weight: 800; letter-spacing: 6px; margin-bottom: 10px;
+    background: linear-gradient(100deg, #22d3ee, #e879f9);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .sub { color: #9a9ab0; font-size: 15px; line-height: 1.5; margin-bottom: 28px; text-align: center; }
+  .card {
+    background: rgba(255,255,255,.03);
+    border: 1px solid rgba(255,255,255,.09);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 14px;
+  }
+  .card h2 { font-size: 21px; letter-spacing: 2px; margin-bottom: 6px; }
+  .card h2 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 10px; }
+  .card p.hook { color: #b9b9d0; font-size: 14.5px; line-height: 1.5; margin-bottom: 14px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .play {
+    display: inline-block; text-decoration: none; color: #06121a; font-weight: 700;
+    background: linear-gradient(100deg, #22d3ee, #67e8f9);
+    padding: 11px 26px; border-radius: 999px; font-size: 15px;
+    touch-action: manipulation;
+  }
+  .reveal-btn {
+    background: none; border: 1px solid rgba(232,121,249,.5); color: #e879f9;
+    padding: 10px 18px; border-radius: 999px; font-size: 14px; cursor: pointer;
+    touch-action: manipulation; font-family: inherit;
+  }
+  .trick {
+    display: none; margin-top: 14px; padding: 12px 14px;
+    background: rgba(232,121,249,.07); border: 1px dashed rgba(232,121,249,.4);
+    border-radius: 10px; font-size: 14px; line-height: 1.55; color: #d8c6ee;
+  }
+  .trick.open { display: block; }
+  .trick b { color: #e879f9; }
+  .best {
+    margin-left: auto; font-size: 13px; color: #8a8aa5;
+  }
+  .best span { color: #22d3ee; font-weight: 600; }
+  footer { text-align: center; color: #55556e; font-size: 12.5px; margin-top: 34px; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">classified toys</div>
+    <h1>BLACKBOX</h1>
+    <p class="sub">Five games powered by algorithms you've never heard of.<br>Play first. Ask "how?!" after.</p>
+  </header>
+  <div id="cards"></div>
+  <footer>No libraries. No frameworks. Every algorithm hand-rolled.<br>The trick is revealed only if you ask.</footer>
+</div>
+<script>
+var GAMES = [
+  { slug: "orbital", name: "ORBITAL", color: "#22d3ee",
+    hook: "Draw anything. Watch spinning circles redraw it live.",
+    trick: "<b>Discrete Fourier Transform.</b> Any closed curve is a sum of spinning circles — 8 draw a blob, 96 draw your doodle.",
+    bestKey: "blackbox-orbital-best", bestLabel: "best trace", bestFmt: function(v){ return Number(v).toFixed(1) + " px"; } },
+  { slug: "murmur", name: "MURMUR", color: "#e879f9",
+    hook: "Stir the wind. Steer 250 starlings through glowing rings.",
+    trick: "<b>Boids + curl-noise flow fields + spatial hashing.</b> Separation, alignment, cohesion — 250 birds moving as one liquid animal.",
+    bestKey: "blackbox-murmur-best", bestLabel: "best", bestFmt: function(v){ return v + " pts"; } },
+  { slug: "goo", name: "GOO", color: "#a3e635",
+    hook: "Slam slime drops together until one blob hits critical mass.",
+    trick: "<b>Marching squares + scalar fields.</b> The same iso-surface math as medical imaging — drops fuse with real liquid necks.",
+    bestKey: "blackbox-goo-best", bestLabel: "fastest", bestFmt: function(v){ return v + "s"; } },
+  { slug: "bloodline", name: "BLOODLINE", color: "#fb923c",
+    hook: "Breed a bloodline of walkers. Evolution learns to walk.",
+    trick: "<b>Genetic algorithm + verlet physics.</b> Selection, crossover, mutation on oscillator genomes — gen 1 faceplants, gen 8 moonwalks.",
+    bestKey: "blackbox-bloodline-best", bestLabel: "best", bestFmt: function(v){ return Number(v).toFixed(0) + " px"; } },
+  { slug: "everdungeon", name: "EVERDUNGEON", color: "#67e8f9",
+    hook: "Descend an endless dungeon that designs itself.",
+    trick: "<b>Wave Function Collapse + A* + Poisson-disc sampling.</b> Infinite coherent rooms, always escapable, loot never clumped.",
+    bestKey: "blackbox-everdungeon-best", bestLabel: "deepest", bestFmt: function(v){ return "depth " + v; } },
+];
+var host = document.getElementById("cards");
+GAMES.forEach(function(g, i){
+  var best = null;
+  try { best = localStorage.getItem(g.bestKey); } catch (e) {}
+  var el = document.createElement("div");
+  el.className = "card";
+  el.innerHTML =
+    '<h2><span class="dot" style="background:' + g.color + ';box-shadow:0 0 8px ' + g.color + '"></span>' + g.name + "</h2>" +
+    '<p class="hook">' + g.hook + "</p>" +
+    '<div class="row">' +
+      '<a class="play" href="games/' + g.slug + '.html">Play</a>' +
+      '<button class="reveal-btn" type="button">reveal the trick</button>' +
+      (best !== null ? '<span class="best">' + g.bestLabel + ': <span>' + g.bestFmt(best) + "</span></span>" : "") +
+    "</div>" +
+    '<div class="trick">' + g.trick + "</div>";
+  var btn = el.querySelector(".reveal-btn");
+  var trick = el.querySelector(".trick");
+  btn.addEventListener("click", function(){
+    var open = trick.classList.toggle("open");
+    btn.textContent = open ? "hide the trick" : "reveal the trick";
+  });
+  host.appendChild(el);
+});
+</script>
+</body>
+</html>

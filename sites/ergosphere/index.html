@@ -176,11 +176,11 @@ body.cinema #restore{display:flex}
     </div>
     <div class="ctl">
       <div class="row"><label for="sTemp">Disk color</label><span class="val" id="vTemp"></span></div>
-      <input type="range" id="sTemp" min="0" max="100" value="68">
+      <input type="range" id="sTemp" min="0" max="100" value="100">
     </div>
     <div class="ctl">
       <div class="row"><label for="sTilt">Camera tilt</label><span class="val" id="vTilt"></span></div>
-      <input type="range" id="sTilt" min="5" max="80" value="12">
+      <input type="range" id="sTilt" min="5" max="80" value="15">
     </div>
     <div class="ctl">
       <div class="row"><label for="sStars">Starfield</label><span class="val" id="vStars"></span></div>
@@ -222,7 +222,7 @@ body.cinema #restore{display:flex}
       photon ring. No footage, no image file.</p>
     <p><b>Drag</b> to orbit. Leave it alone and it drifts on its own.
       The bright side of the disk is <b>doppler beaming</b> — gas racing toward
-      you at half the speed of light, blueshifted brighter.</p>
+      you at half the speed of light, brighter and hotter.</p>
     <p>The time-dilation readout is a toy Schwarzschild estimate for fun,
       not navigation.</p>
     <button class="btn primary" id="btnCloseAbout" style="width:100%">Back to the void</button>
@@ -237,8 +237,8 @@ body.cinema #restore{display:flex}
 
 /* ============================== state ============================== */
 const state = {
-  spin: 0.70, temp: 0.68, tiltDeg: 12, stars: 0.60, orbitR: 9.0,
-  az: 0.6, el: 12 * Math.PI/180,
+  spin: 0.70, temp: 1.00, tiltDeg: 15, stars: 0.60, orbitR: 9.0,
+  az: 0.6, el: 15 * Math.PI/180,
   labelsOn: true, lastInteract: 0,
 };
 const TANH = Math.tan(27.5 * Math.PI / 180);
@@ -289,10 +289,9 @@ uniform int   uSteps;
 
 // Striated-disk animation params (see diskTex/diskShade below).
 const float CYCLE_T  = 20.0; // winding-cap cycle, seconds
-const float OMEGA_IN = 0.8;  // inner-edge angular speed, rad/s (~8 s per orbit)
+const float OMEGA_IN = 1.0;  // inner-edge angular speed, rad/s (~6 s per orbit)
 const float BANDS    = 30.0; // striation count across the disk radius
-const float SPIRAL   = 1.5;  // spiral lean of the bands
-const float WOB_AMP  = 7.0;  // band waviness, radians of phase
+const float SPIRAL   = 2.2;  // spiral lean of the bands (higher = more sheared arcs)
 
 float hash13(vec3 p){
   p = fract(p * 0.1031);
@@ -319,7 +318,7 @@ vec3 background(vec3 d){
   float bd = dot(d, normalize(vec3(0.25, 1.0, 0.15)));
   float band = exp(-bd * bd * 5.0);
   float wob = sin(d.x * 9.0 + 1.3) * sin(d.y * 7.0 - 0.6) * sin(d.z * 8.0 + 2.1);
-  col += band * vec3(0.10, 0.09, 0.16) * (0.55 + 0.45 * wob);
+  col += band * vec3(0.035, 0.030, 0.055) * (0.55 + 0.45 * wob);
   float thresh = mix(0.998, 0.955, uStarDensity);
   col += starLayer(d, 60.0, thresh, 2.4);
   col += starLayer(d + 3.7, 130.0, thresh, 1.5);
@@ -355,24 +354,33 @@ float fbm3(vec2 p){
 
 // Striated disk texture in co-rotating material coordinates.
 // a = ang + lt*Om shears with Keplerian differential rotation (inner orbits
-// faster); the sense matches the doppler tangent in diskShade below.
-// lt is the layer-local time; two layers half a cycle apart are cross-faded by
-// the caller so differential winding never exceeds one cycle (bands stay crisp,
-// never alias into mush).
+// faster). Every feature below is a function of the advected angle a, so
+// bright knots and streaks visibly ride the flow and inner material laps the
+// outer within seconds. lt is the layer-local time; two layers half a cycle
+// apart are cross-faded by the caller so differential winding never exceeds
+// one cycle (bands stay crisp, never alias into mush).
 float diskTex(float r, float ang, float lt, float rIn, float lrMax){
   float lr = log(max(r / rIn, 0.001));
   float om = OMEGA_IN * pow(rIn / max(r, 0.001), 1.5);
   float a = ang + lt * om;
 
-  // large-scale wobble, co-rotating and radially stretched: wavy, not circular, bands
-  float wob = fbm3(vec2(lr * 1.7, a * 1.3) + vec2(0.0, lt * 0.03)) - 0.5;
-  // fine striations: BANDS bright/dark rings across log-radius, phase-wobbled
-  float ph = lr / lrMax * BANDS * 6.2831853 + wob * WOB_AMP + a * SPIRAL;
-  float bands = sin(mod(ph, 6.2831853));
-  float stri = smoothstep(-0.45, 0.85, bands);
+  // organic wobble at two scales, co-rotating: wavy gas, not machined grooves
+  float wobL = fbm3(vec2(lr * 1.6, a * 1.2) + vec2(0.0, lt * 0.030)) - 0.5;
+  float wobF = fbm3(vec2(lr * 4.5, a * 3.4) + vec2(4.7, lt * 0.045)) - 0.5;
+  // band spacing varies with azimuth -> bands merge and split like turbulence
+  float spacing = 1.0 + 1.1 * wobL;
+  float ph = (lr / lrMax) * BANDS * 6.2831853 * spacing
+           + wobL * 10.0 + wobF * 5.0 + a * SPIRAL;
+  float stri = smoothstep(-0.55, 0.90, sin(mod(ph, 6.2831853)));
+
   // brightness lanes running along each band
-  float lanes = fbm3(vec2(lr * 2.6, a * 2.6) + vec2(lt * 0.02, 3.7));
-  return 0.30 + 0.90 * stri * (0.45 + 0.55 * lanes);
+  float lanes = fbm3(vec2(lr * 2.6, a * 2.6) + vec2(lt * 0.020, 3.7));
+  // bright knots/streaks: sparse, high-contrast, advected with the flow so
+  // the rotation is unmistakable (concentric bands alone can't show motion)
+  float knots = smoothstep(0.60, 0.92, fbm3(vec2(a * 2.2, lr * 5.5) + vec2(8.2, 1.3)));
+
+  float bandPart = stri * (0.30 + 0.70 * lanes);
+  return 0.10 + 1.20 * bandPart + 1.50 * knots * (0.45 + 0.55 * stri);
 }
 
 vec3 diskShade(vec3 hit, vec3 rayDir, float rIn, float rOut){
@@ -393,13 +401,13 @@ vec3 diskShade(vec3 hit, vec3 rayDir, float rIn, float rOut){
             + diskTex(r, ang, tb, rIn, lrMax) * (1.0 - wa);
 
   // flicker octave on absolute time: glues the two layers during crossfade
-  tex *= 0.86 + 0.28 * vnoise(vec2(mod(uTime, 600.0) * 0.33, r * 0.8));
+  tex *= 0.90 + 0.20 * vnoise(vec2(mod(uTime, 600.0) * 0.33, r * 0.8));
 
-  // Striated ember palette: white-hot rim -> vivid amber -> deep red-orange.
-  // uTemp slides the mid/outer disk between icy blue and ember.
-  vec3 cHot = vec3(1.00, 0.98, 0.94);
-  vec3 cMid = mix(vec3(0.38, 0.55, 1.00), vec3(1.00, 0.52, 0.16), uTemp);
-  vec3 cOut = mix(vec3(0.08, 0.14, 0.42), vec3(0.55, 0.13, 0.03), uTemp);
+  // Incandescent ember palette: white-hot rim -> vivid saturated amber ->
+  // deep red-orange. uTemp slides the mid/outer disk between icy blue and ember.
+  vec3 cHot = vec3(1.00, 0.96, 0.88);
+  vec3 cMid = mix(vec3(0.38, 0.55, 1.00), vec3(1.00, 0.50, 0.14), uTemp);
+  vec3 cOut = mix(vec3(0.08, 0.14, 0.42), vec3(0.52, 0.12, 0.02), uTemp);
   vec3 base = rn < 0.38 ? mix(cHot, cMid, rn / 0.38)
                         : mix(cMid, cOut, (rn - 0.38) / 0.62);
 
@@ -413,9 +421,10 @@ vec3 diskShade(vec3 hit, vec3 rayDir, float rIn, float rOut){
   float grav = sqrt(clamp(1.0 - 1.0 / r, 0.02, 1.0));
   float bright = pow(1.0 - rn, 1.5) * 3.6 + 0.08;
 
-  // Doppler color shift: approaching -> electric blue-white, receding -> deep ember.
+  // Doppler color shift, kept inside the orange family: approaching side runs
+  // hot amber-white, receding side deepens to red ember. No blue wash.
   float ds = clamp((dop - 1.0) * 1.6 + 0.5, 0.0, 1.0);
-  vec3 shifted = base * mix(vec3(1.30, 0.52, 0.30), vec3(0.60, 0.82, 1.40), ds);
+  vec3 shifted = base * mix(vec3(1.02, 0.60, 0.36), vec3(1.18, 1.04, 0.90), ds);
   return shifted * (bright * tex * beam * grav) * uDiskBright;
 }
 
@@ -468,8 +477,8 @@ void main(){
   vec2 q = gl_FragCoord.xy / uRes;
   float vig = 1.0 - smoothstep(0.35, 1.25, length((q - 0.5) * vec2(uRes.x / uRes.y, 1.0)));
   col *= mix(0.72, 1.0, vig);
-  col = col / (col + vec3(0.55));
-  col = pow(col, vec3(0.9));
+  col = col / (col + vec3(0.38));
+  col = pow(col, vec3(1.05));
   float gr = hash13(vec3(gl_FragCoord.xy, fract(uTime) * 100.0)) - 0.5;
   col += gr * 0.012;
   gl_FragColor = vec4(col, 1.0);
@@ -565,7 +574,7 @@ const labelDefs = [
     anchor:()=>[Math.cos(state.az)*RING_B, 0.12, Math.sin(state.az)*RING_B] },
   { title:'Accretion disk', sub:'superheated gas, lensed above and below by gravity',
     anchor:()=>[Math.cos(state.az)*6.6, 0.1, Math.sin(state.az)*6.6] },
-  { title:'Doppler beaming', sub:'this side races toward you \u2014 brighter, bluer',
+  { title:'Doppler beaming', sub:'this side races toward you \u2014 brighter, hotter',
     anchor:()=>{ const t = state.az + Math.PI/2;
       return [Math.cos(t)*4.2, 0.15, Math.sin(t)*4.2]; } },
 ];
@@ -636,8 +645,8 @@ $('btnHide').addEventListener('click', () => cinemaOn(true));
 $('restore').addEventListener('click', () => cinemaOn(false));
 $('btnReset').addEventListener('click', () => {
   var dorb = defaultOrbit();
-  state.az = 0.6; state.el = 12*Math.PI/180; state.orbitR = dorb/10; state.tiltDeg = 12;
-  $('sTilt').value = 12; $('vTilt').textContent = '12\u00B0';
+  state.az = 0.6; state.el = 15*Math.PI/180; state.orbitR = dorb/10; state.tiltDeg = 15;
+  $('sTilt').value = 15; $('vTilt').textContent = '15\u00B0';
   $('sOrbit').value = dorb; $('vOrbit').textContent = (dorb/10).toFixed(1)+' Rs';
   updateMiller(); state.lastInteract = performance.now();
 });
@@ -682,7 +691,7 @@ function frame(now){
   const dtms = now - prevT; prevT = now;
   emaMs = emaMs * 0.94 + Math.min(dtms, 100) * 0.06;
 
-  if (!dragging && now - state.lastInteract > 5000) state.az += (dtms/1000) * 0.045;
+  if (!dragging && now - state.lastInteract > 8000) state.az += (dtms/1000) * 0.02;
 
   camUpdate();
   gl.uniform2f(U.uRes, canvas.width, canvas.height);

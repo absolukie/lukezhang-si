@@ -164,12 +164,13 @@ footer{text-align:center;color:var(--faint);font-size:12px;margin-top:44px;line-
 </div>
 <div id="toast"></div>
 <input type="file" id="noop" hidden>
+<script src="omggif.js"></script>
 <script>
 (function(){
 "use strict";
 var cv = document.getElementById("cv"), ctx = cv.getContext("2d");
 var W = 720, PAD = 54;
-var media = null, mediaKind = null, mediaName = "";
+var media = null, mediaKind = null, mediaName = "", mediaBlob = null;
 var bg = "#f6f1e7", fg = "#141414", fontSize = 68;
 var playing = false;
 
@@ -178,20 +179,28 @@ function showToast(m){ toast.textContent = m; toast.classList.add("show");
   clearTimeout(toastT); toastT = setTimeout(function(){toast.classList.remove("show")}, 2600); }
 function font(){ return '800 ' + fontSize + 'px "Baloo 2", sans-serif'; }
 
-function wrap(text, maxW){
-  ctx.font = font();
-  var words = text.split(/\s+/).filter(Boolean), lines = [], line = "";
+function memeHeader(Wd){
+  var fs = Math.round(fontSize * Wd / W), pad = Math.round(PAD * Wd / W);
+  var c = memeHeader._c || (memeHeader._c = document.createElement("canvas").getContext("2d"));
+  var text = document.getElementById("capIn").value.trim() || "your caption here";
+  c.font = '800 ' + fs + 'px "Baloo 2", sans-serif';
+  var words = text.split(/\s+/).filter(Boolean), lines = [], line = "", maxW = Wd - pad * 2;
   words.forEach(function(w){
     var t = line ? line + " " + w : w;
-    if(ctx.measureText(t).width > maxW && line){ lines.push(line); line = w; }
+    if(c.measureText(t).width > maxW && line){ lines.push(line); line = w; }
     else line = t;
   });
   if(line) lines.push(line);
-  return lines.length ? lines : [""];
+  if(!lines.length) lines = [""];
+  return {hh: Math.round(pad * 1.4 + lines.length * fs * 1.22 + pad * 0.9), lines: lines, fs: fs, pad: pad};
 }
-function headerH(lines){
-  var lh = fontSize * 1.22;
-  return PAD * 1.4 + lines.length * lh + PAD * 0.9;
+function paintHeader(c, Wd, h){
+  c.fillStyle = bg; c.fillRect(0, 0, Wd, h.hh);
+  c.fillStyle = fg;
+  c.font = '800 ' + h.fs + 'px "Baloo 2", sans-serif';
+  c.textAlign = "center"; c.textBaseline = "top";
+  var y = h.pad * 1.15, lh = h.fs * 1.22;
+  h.lines.forEach(function(l){ c.fillText(l, Wd / 2, y); y += lh; });
 }
 function mediaBox(){
   if(!media || !media.videoWidth && !media.naturalWidth) return null;
@@ -202,29 +211,23 @@ function mediaBox(){
   return {w: W, h: h};
 }
 function draw(){
-  var text = document.getElementById("capIn").value.trim() || "your caption here";
-  var lines = wrap(text, W - PAD * 2);
-  var hh = headerH(lines);
+  var h = memeHeader(W);
   var mb = mediaBox();
   var mh = mb ? mb.h : Math.round(W * 0.75);
-  var H = Math.round(hh + mh);
+  var H = Math.round(h.hh + mh);
   if(cv.height !== H){ cv.height = H; }
-  // panel
-  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, hh);
-  ctx.fillStyle = fg; ctx.font = font(); ctx.textAlign = "center"; ctx.textBaseline = "top";
-  var lh = fontSize * 1.22, y = PAD * 1.15;
-  lines.forEach(function(l){ ctx.fillText(l, W / 2, y); y += lh; });
-  // media
-  ctx.fillStyle = "#000"; ctx.fillRect(0, hh, W, mh);
+  paintHeader(ctx, W, h);
+  ctx.fillStyle = "#000"; ctx.fillRect(0, h.hh, W, mh);
   if(media && mb){
     if(mediaKind === "video"){
-      try{ ctx.drawImage(media, 0, hh, W, mh); }catch(e){}
+      try{ ctx.drawImage(media, 0, h.hh, W, mh); }catch(e){}
     } else {
-      ctx.drawImage(media, 0, hh, W, mh);
+      ctx.drawImage(media, 0, h.hh, W, mh);
     }
   } else {
     ctx.fillStyle = "#3a3a44"; ctx.font = '600 28px "Baloo 2", sans-serif';
-    ctx.fillText("your clip plays here", W / 2, hh + mh / 2 - 14);
+    ctx.textAlign = "center";
+    ctx.fillText("your clip plays here", W / 2, h.hh + mh / 2 - 14);
   }
   return H;
 }
@@ -252,6 +255,7 @@ document.getElementById("uploadBtn").addEventListener("click", function(){
 });
 document.getElementById("fileIn").addEventListener("change", function(e){
   var f = e.target.files[0]; if(!f) return;
+  mediaBlob = f;
   var url = URL.createObjectURL(f);
   if(f.type.indexOf("video") === 0){
     var v = document.createElement("video");
@@ -275,6 +279,7 @@ document.getElementById("loadLink").addEventListener("click", async function(){
     var res = await fetch(url);
     if(!res.ok) throw 0;
     var blob = await res.blob();
+    mediaBlob = blob;
     var ourl = URL.createObjectURL(blob);
     var name = url.split("/").pop().split("?")[0] || "clip";
     if(blob.type.indexOf("video") === 0 || /\.(mp4|webm|mov)(\?|$)/i.test(url)){
@@ -334,6 +339,90 @@ function seekTo(v, t){  return new Promise(function(res){
     setTimeout(h, 1500);
   });
 }
+/* Decode a GIF's frames directly with omggif (shipped locally) and composite them
+   by hand, honoring disposal methods. No reliance on the browser's GIF animation
+   clock, which mobile Safari won't advance for canvas capture. */
+async function gifFromDecodedFrames(gif, off, octx, gw, fps, setP){
+  try{
+    if(!mediaBlob || typeof GifReader === "undefined") return false;
+    var ab = await mediaBlob.arrayBuffer();
+    var reader;
+    try{ reader = new GifReader(new Uint8Array(ab)); }catch(e){ return false; }
+    var fw = reader.width, fh = reader.height, nf = reader.numFrames();
+    if(!fw || !fh || !nf) return false;
+    var delays = [], totalMs = 0, k;
+    for(k = 0; k < nf; k++){
+      var dms = reader.frameInfo(k).delay * 10; // gif units are 1/100s
+      if(!(dms >= 20)) dms = 100; // spec default / browser clamp
+      delays.push(dms); totalMs += dms;
+    }
+    if(totalMs <= 0) return false;
+    var maxMs = Math.min(totalMs, 5000);
+    var n = Math.max(4, Math.round(maxMs / 1000 * fps));
+    var h = memeHeader(gw);
+    var mh = Math.round(gw * fh / fw);
+    off.width = gw; off.height = h.hh + mh;
+    var tmp = document.createElement("canvas"); tmp.width = fw; tmp.height = fh;
+    var tctx = tmp.getContext("2d");
+    var pix = new Uint8ClampedArray(fw * fh * 4);
+    var imgd = new ImageData(pix, fw, fh);
+    var cum = [], acc = 0;
+    for(k = 0; k < nf; k++){ cum.push(acc); acc += delays[k]; }
+    var lastDecoded = -1, prevDisp = 0, prevRect = null, saved = null;
+    function clampRect(r){
+      var x = Math.max(0, r.x), y = Math.max(0, r.y);
+      var w = Math.min(r.width, fw - x), hh2 = Math.min(r.height, fh - y);
+      return {x: x, y: y, width: Math.max(0, w), height: Math.max(0, hh2)};
+    }
+    function clearRect(r){
+      r = clampRect(r);
+      for(var yy = 0; yy < r.height; yy++){
+        var o = ((r.y + yy) * fw + r.x) * 4;
+        for(var xx = 0; xx < r.width; xx++){ pix[o++] = 0; pix[o++] = 0; pix[o++] = 0; pix[o++] = 0; }
+      }
+    }
+    function saveRect(r){
+      r = clampRect(r);
+      var s = {x: r.x, y: r.y, width: r.width, height: r.height, data: new Uint8ClampedArray(r.width * r.height * 4)};
+      for(var yy = 0; yy < r.height; yy++){
+        var so = yy * r.width * 4, po = ((r.y + yy) * fw + r.x) * 4;
+        s.data.set(pix.subarray(po, po + r.width * 4), so);
+      }
+      return s;
+    }
+    function restoreRect(s){
+      for(var yy = 0; yy < s.height; yy++){
+        var so = yy * s.width * 4, po = ((s.y + yy) * fw + s.x) * 4;
+        pix.set(s.data.subarray(so, so + s.width * 4), po);
+      }
+    }
+    function decodeUpTo(fi){
+      while(lastDecoded < fi){
+        var nk = lastDecoded + 1, info = reader.frameInfo(nk);
+        if(lastDecoded >= 0){ // dispose the previous frame before drawing this one
+          if(prevDisp === 2 && prevRect) clearRect(prevRect);
+          else if(prevDisp === 3 && saved) restoreRect(saved);
+        }
+        var rect = {x: info.x, y: info.y, width: info.width, height: info.height};
+        saved = (info.disposal === 3) ? saveRect(rect) : null;
+        reader.decodeAndBlitFrameRGBA(nk, pix);
+        prevDisp = info.disposal; prevRect = rect; lastDecoded = nk;
+      }
+    }
+    for(var i = 0; i < n; i++){
+      var tMs = (i / n) * maxMs, fi = 0;
+      while(fi < nf - 1 && cum[fi] + delays[fi] <= tMs) fi++;
+      decodeUpTo(fi);
+      tctx.putImageData(imgd, 0, 0);
+      paintHeader(octx, gw, h);
+      octx.fillStyle = "#000"; octx.fillRect(0, h.hh, gw, mh);
+      octx.drawImage(tmp, 0, h.hh, gw, mh);
+      gif.addFrame(off, {copy: true, delay: Math.round(1000 / fps)});
+      setP(0.4 * (i + 1) / n);
+    }
+    return true;
+  }catch(e){ return false; }
+}
 document.getElementById("gifBtn").addEventListener("click", async function(){
   if(!media){ showToast("Add a clip first"); return; }
   var btn = this;
@@ -373,16 +462,19 @@ document.getElementById("gifBtn").addEventListener("click", async function(){
       }
       if(!wasPaused){ try{ media.play(); }catch(e){} }
     } else {
-      var hashes = [];
-      for(var j = 0; j < n; j++){
-        await snap();
-        gif.addFrame(off, {copy: true, delay: Math.round(1000 / fps)});
-        hashes.push(quickHash(octx, gw, gh));
-        setP(0.4 * (j + 1) / n);
-        await new Promise(function(r){ setTimeout(r, 1000 / fps); });
+      var parsedOk = await gifFromDecodedFrames(gif, off, octx, gw, fps, setP);
+      if(!parsedOk){
+        var hashes = [];
+        for(var j = 0; j < n; j++){
+          await snap();
+          gif.addFrame(off, {copy: true, delay: Math.round(1000 / fps)});
+          hashes.push(quickHash(octx, gw, gh));
+          setP(0.4 * (j + 1) / n);
+          await new Promise(function(r){ setTimeout(r, 1000 / fps); });
+        }
+        var animated = hashes.some(function(hh2){ return hh2 !== hashes[0]; });
+        if(!animated) showToast("That GIF isn't animating in the browser — try the video file instead");
       }
-      var animated = hashes.some(function(h){ return h !== hashes[0]; });
-      if(!animated) showToast("That GIF isn't animating in the browser — try the video file instead");
     }
     gif.on("progress", function(p){ setP(0.4 + 0.6 * p); });
     gifBlob = await new Promise(function(res){ gif.on("finished", res); gif.render(); });

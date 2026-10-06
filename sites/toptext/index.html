@@ -61,15 +61,6 @@ textarea:focus{outline:none;border-color:var(--accent)}
 #stage{margin-top:16px;display:none}
 #stage.show{display:block}
 #cv{width:100%;border-radius:16px;border:1px solid var(--line);display:block;background:#000}
-.exportrow{display:flex;gap:10px;margin-top:12px}
-#exportBtn{flex:1;background:var(--accent);border:none;color:#171106;font-weight:800;
-  padding:15px;border-radius:13px;font-size:16px;cursor:pointer}
-#exportBtn:disabled{opacity:.45}
-#exportBtn:active{transform:scale(.98)}
-#dlLink{display:none;flex:1;background:#1d2b22;border:1px solid #2c4a38;color:#7ee2a8;
-  font-weight:800;padding:15px;border-radius:13px;font-size:16px;text-align:center;text-decoration:none;
-  align-items:center;justify-content:center}
-#dlLink.show{display:flex}
 #recDot{display:none;align-items:center;gap:8px;justify-content:center;margin-top:10px;
   font-size:13px;color:#ff5f56;font-weight:700}
 #recDot.show{display:flex}
@@ -144,11 +135,7 @@ footer{text-align:center;color:var(--faint);font-size:12px;margin-top:44px;line-
   <div class="step" id="stage">
     <h2><b>3.</b> PREVIEW &amp; EXPORT</h2>
     <canvas id="cv" width="720" height="900"></canvas>
-    <div class="exportrow">
-      <button id="exportBtn" disabled>Add a clip first</button>
-      <a id="dlLink" download="toptext-meme.webm">Download</a>
-    </div>
-    <button class="gifbtn" id="gifBtn" disabled>Export GIF for Photos</button>
+    <button class="gifbtn" id="gifBtn" disabled>Export GIF</button>
     <div id="gifProg"><div id="gifBar"></div><span id="gifPct">0%</span></div>
     <div id="recDot"><i></i> recording…</div>
     <div id="gifResult">
@@ -157,7 +144,7 @@ footer{text-align:center;color:var(--faint);font-size:12px;margin-top:44px;line-
       <a id="gifDl" download="toptext-meme.gif">download the .gif file instead</a>
       <p class="fine">On iPhone, Save to Photos opens the share sheet — tap Save Image and it's in your library. Or long-press the GIF above → Add to Photos.</p>
     </div>
-    <p class="fine">Video export gives you a .webm file. GIF export gives you a real GIF (480px, 10fps, up to 5s) — best for Photos, iMessage, and group chats. GIFs take a few seconds to encode.</p>
+    <p class="fine">Export gives you a real GIF of just your clip — no caption — at 360px and 10fps, up to 5 seconds. Best for Photos, iMessage, and group chats. Encoding takes a few seconds.</p>
   </div>
 
   <footer>made for the group chat<br>your clips never leave your device — everything renders locally</footer>
@@ -243,10 +230,8 @@ function setMedia(el, kind, name){
   mi.style.display = "block";
   mi.innerHTML = "Loaded <b></b> — preview is live.";
   mi.querySelector("b").textContent = name;
-  var eb = document.getElementById("exportBtn");
-  eb.disabled = false; eb.textContent = "Export meme video";
-  document.getElementById("gifBtn").disabled = false;
-  document.getElementById("dlLink").classList.remove("show");
+  var gb = document.getElementById("gifBtn");
+  gb.disabled = false; gb.textContent = "Export GIF";
   document.getElementById("stage").scrollIntoView({behavior:"smooth", block:"nearest"});
 }
 
@@ -309,9 +294,7 @@ document.querySelectorAll(".sizebtn").forEach(function(b){
     b.classList.add("on"); fontSize = parseInt(b.dataset.s, 10);
   });
 });
-document.getElementById("capIn").addEventListener("input", function(){
-  document.getElementById("dlLink").classList.remove("show");
-});
+document.getElementById("capIn").addEventListener("input", function(){ draw(); });
 
 /* GIF export (for Photos / iMessage / group chats) */
 var gifBlob = null;
@@ -359,9 +342,8 @@ async function gifFromDecodedFrames(gif, off, octx, gw, fps, setP){
     if(totalMs <= 0) return false;
     var maxMs = Math.min(totalMs, 5000);
     var n = Math.max(4, Math.round(maxMs / 1000 * fps));
-    var h = memeHeader(gw);
-    var mh = Math.round(gw * fh / fw);
-    off.width = gw; off.height = h.hh + mh;
+    var mh = Math.round(gw * fh / fw); // clip only, no caption
+    off.width = gw; off.height = mh;
     var tmp = document.createElement("canvas"); tmp.width = fw; tmp.height = fh;
     var tctx = tmp.getContext("2d");
     var pix = new Uint8ClampedArray(fw * fh * 4);
@@ -414,9 +396,8 @@ async function gifFromDecodedFrames(gif, off, octx, gw, fps, setP){
       while(fi < nf - 1 && cum[fi] + delays[fi] <= tMs) fi++;
       decodeUpTo(fi);
       tctx.putImageData(imgd, 0, 0);
-      paintHeader(octx, gw, h);
-      octx.fillStyle = "#000"; octx.fillRect(0, h.hh, gw, mh);
-      octx.drawImage(tmp, 0, h.hh, gw, mh);
+      octx.fillStyle = "#000"; octx.fillRect(0, 0, gw, mh);
+      octx.drawImage(tmp, 0, 0, gw, mh);
       gif.addFrame(off, {copy: true, delay: Math.round(1000 / fps)});
       setP(0.4 * (i + 1) / n);
     }
@@ -444,13 +425,16 @@ document.getElementById("gifBtn").addEventListener("click", async function(){
     var dur = (mediaKind === "video" && media.duration && isFinite(media.duration))
       ? Math.min(media.duration, maxSec) : maxSec;
     var n = Math.max(4, Math.round(dur * fps));
-    var gw = 480, gh = Math.round(480 * cv.height / cv.width);
+    var gw = 360; // smaller = much faster encode, still crisp on a phone
+    var fullH = memeHeader(W); // export is the clip only — crop the caption out
+    var mediaH = Math.max(1, cv.height - fullH.hh);
+    var gh = Math.round(gw * mediaH / W);
     var off = document.createElement("canvas"); off.width = gw; off.height = gh;
     var octx = off.getContext("2d");
-    var gif = new GIF({workers: 2, quality: 10, width: gw, height: gh, workerScript: workerUrl});
+    var gif = new GIF({workers: 4, quality: 15, width: gw, height: gh, workerScript: workerUrl});
     async function snap(){
       await new Promise(function(r){ requestAnimationFrame(function(){ requestAnimationFrame(r); }); });
-      octx.drawImage(cv, 0, 0, gw, gh);
+      octx.drawImage(cv, 0, fullH.hh, W, mediaH, 0, 0, gw, gh);
     }
     if(mediaKind === "video"){
       var wasPaused = media.paused;
@@ -505,40 +489,6 @@ document.getElementById("shareBtn").addEventListener("click", async function(){
   a.href = URL.createObjectURL(gifBlob); a.download = "toptext-meme.gif";
   document.body.appendChild(a); a.click(); a.remove();
   showToast("Downloaded — long-press the GIF above → Add to Photos");
-});
-
-/* video export */
-document.getElementById("exportBtn").addEventListener("click", async function(){
-  if(!media){ showToast("Add a clip first"); return; }
-  try{ await document.fonts.load('800 68px "Baloo 2"'); }catch(e){}
-  var dur = mediaKind === "video" && media.duration && isFinite(media.duration)
-    ? Math.min(media.duration, 30) : 5;
-  if(mediaKind === "video"){ try{ media.currentTime = 0; await media.play(); }catch(e){} }
-  var stream = cv.captureStream(30);
-  var mime = "video/webm;codecs=vp9";
-  if(!window.MediaRecorder || !MediaRecorder.isTypeSupported(mime)) mime = "video/webm";
-  var rec;
-  try{ rec = new MediaRecorder(stream, {mimeType: mime, videoBitsPerSecond: 8000000}); }
-  catch(e){ showToast("Export isn't supported in this browser"); return; }
-  var chunks = [];
-  rec.ondataavailable = function(e){ if(e.data.size) chunks.push(e.data); };
-  rec.onstop = function(){
-    document.getElementById("recDot").classList.remove("show");
-    var blob = new Blob(chunks, {type: "video/webm"});
-    var url = URL.createObjectURL(blob);
-    var a = document.getElementById("dlLink");
-    a.href = url; a.classList.add("show");
-    document.getElementById("exportBtn").textContent = "Export again";
-    showToast("Done — hit Download");
-    a.scrollIntoView({behavior:"smooth", block:"nearest"});
-  };
-  // ensure first frames are the composed meme, then record
-  draw();
-  await new Promise(function(r){ setTimeout(r, 400); });
-  document.getElementById("recDot").classList.add("show");
-  rec.start(250);
-  await new Promise(function(r){ setTimeout(r, dur * 1000); });
-  rec.stop();
 });
 
 if(document.fonts && document.fonts.ready){ document.fonts.ready.then(function(){ draw(); }); }

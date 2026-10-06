@@ -393,8 +393,9 @@ async function handleDecision(request, env) {
 }
 
 // ---- TRACE RACE shared leaderboards ----
-// POST /api/trace-race/submit {challenge, name, total, scores[5]} → stores in KV (rate-limited)
+// POST /api/trace-race/submit {challenge, name, total, scores[5], drawings?} → stores in KV (rate-limited)
 // GET  /api/trace-race/scores?challenge=X → public top-20 + per-round bests
+// GET  /api/trace-race/rival?challenge=X → top-3 entries with drawings, for per-round rival replays
 var TR_CHALLENGE_RE = /^[cd][A-Za-z0-9-]{1,31}$/;
 async function handleTraceRace(request, env) {
   var kv = env.TAKES_KV;
@@ -418,13 +419,47 @@ async function handleTraceRace(request, env) {
         !scores.every(function (s) { return Number.isInteger(s) && s >= 0 && s <= 100; }))
       return err("bad scores", 400);
     if (scores.reduce(function (a, b) { return a + b; }, 0) !== total) return err("bad total", 400);
+    // optional drawings: 5 rounds x up to 128 normalized [x,y] pairs, for rival replays
+    var drawings = body && body.drawings;
+    if (drawings !== undefined && drawings !== null) {
+      if (!Array.isArray(drawings) || drawings.length !== 5) return err("bad drawings", 400);
+      for (var d = 0; d < 5; d++) {
+        var pts = drawings[d];
+        if (!Array.isArray(pts) || pts.length === 0 || pts.length > 128) return err("bad drawings", 400);
+        for (var q = 0; q < pts.length; q++) {
+          var pt = pts[q];
+          if (!Array.isArray(pt) || pt.length !== 2 ||
+              !isFinite(pt[0]) || !isFinite(pt[1]) ||
+              Math.abs(pt[0]) > 2 || Math.abs(pt[1]) > 2) return err("bad drawings", 400);
+        }
+      }
+    } else { drawings = null; }
     var id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     var rec = { id: id, challenge: challenge, name: name, total: total, scores: scores, createdAt: Date.now() };
-    await kv.put("tr:sub:" + challenge + ":" + id, JSON.stringify(rec).slice(0, 2000));
+    if (drawings) rec.drawings = drawings;
+    await kv.put("tr:sub:" + challenge + ":" + id, JSON.stringify(rec).slice(0, 30000));
     var idx = JSON.parse((await kv.get("tr:idx:" + challenge)) || "[]");
     idx.unshift(id);
     await kv.put("tr:idx:" + challenge, JSON.stringify(idx.slice(0, 200)));
     return json({ ok: true, id: id }, 201);
+  }
+
+  if (request.method === "GET" && action === "rival") {
+    var ch2 = url.searchParams.get("challenge") || "";
+    if (!TR_CHALLENGE_RE.test(ch2)) return err("bad challenge", 400);
+    var idx2 = JSON.parse((await kv.get("tr:idx:" + ch2)) || "[]");
+    var all = [];
+    for (var m = 0; m < Math.min(idx2.length, 60); m++) {
+      var rec2 = await kv.get("tr:sub:" + ch2 + ":" + idx2[m], "json");
+      if (rec2 && rec2.id && typeof rec2.total === "number") all.push(rec2);
+    }
+    all.sort(function (a, b) { return b.total - a.total; });
+    var top = all.slice(0, 3).map(function (s) {
+      var o = { id: s.id, name: s.name, total: s.total, scores: s.scores };
+      if (s.drawings) o.drawings = s.drawings;
+      return o;
+    });
+    return json({ challenge: ch2, count: all.length, top: top });
   }
 
   if (request.method === "GET" && action === "scores") {

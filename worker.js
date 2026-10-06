@@ -23,7 +23,6 @@ const SITES = ["ergosphere", "illusion-bowling", "shotgrep", "ui-candy", "takes"
   "theme-names",
   "swipe-cards-yes-no",
   "notes-triage-oct-5",
-  "china-trip-planning",
   "comparison-slider",
   "ab-toggle"];
 const PROJECTS_HOST = "projects.lukezhang.si";

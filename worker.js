@@ -18,7 +18,14 @@
  * to SITES below, push. See ROUTER.md.
  */
 
-const SITES = ["ergosphere", "illusion-bowling", "shotgrep", "ui-candy", "takes", "rust-vs-go", "toptext", "america-gov-privacy", "ballz-1000-decisions", "ballz-recreation", "boygames-hub", "cat-cafe-tycoon", "coffee-game", "comeback-kit", "company-site", "comparison-lab", "design-docs", "desk-setup-showdown", "emotion-engine", "fall-foliage-sim", "foil-cards", "grok-bot-recreation", "leetcode-games-browser", "liquid-glass-demo", "make-100k", "model-bench-site", "nicomachus-visual", "oobleck-lab", "reaction-studio", "screenshot-ctrl-f", "skill-tree"];
+const SITES = ["ergosphere", "illusion-bowling", "shotgrep", "ui-candy", "takes", "rust-vs-go", "toptext", "america-gov-privacy", "ballz-1000-decisions", "ballz-recreation", "boygames-hub", "cat-cafe-tycoon", "coffee-game", "comeback-kit", "company-site", "comparison-lab", "design-docs", "desk-setup-showdown", "emotion-engine", "fall-foliage-sim", "foil-cards", "grok-bot-recreation", "leetcode-games-browser", "liquid-glass-demo", "make-100k", "model-bench-site", "nicomachus-visual", "oobleck-lab", "reaction-studio", "screenshot-ctrl-f", "skill-tree",
+  "ballz-1000-levels",
+  "theme-names",
+  "swipe-cards-yes-no",
+  "notes-triage-oct-5",
+  "china-trip-planning",
+  "comparison-slider",
+  "ab-toggle"];
 const PROJECTS_HOST = "projects.lukezhang.si";
 const SITE_HOST_RE = /^([a-z0-9-]+)\.lukezhang\.si$/;
 

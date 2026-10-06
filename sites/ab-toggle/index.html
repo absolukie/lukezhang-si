@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>A/B Toggle — Final Spec</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { background: #0c1014; color: #eef2f6; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", sans-serif; }
+  body { padding: 20px 16px 120px; max-width: 720px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 24px; }
+  header h1 { font-size: 28px; font-weight: 800; letter-spacing: .5px; }
+  header h1 span { color: #5b8def; }
+  header p { color: #9aa4b2; font-size: 14px; margin-top: 8px; line-height: 1.55; }
+  header p a { color: #5b8def; font-weight: 700; text-decoration: none; }
+  .backlink { display: inline-block; color: #5b8def; font-size: 14px; font-weight: 700; text-decoration: none; margin-bottom: 12px; touch-action: manipulation; }
+  .savebar { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 14px 0 4px; font-size: 13px; color: #9aa4b2; }
+  .savebar .dot { width: 8px; height: 8px; border-radius: 50%; background: #3dffa0; }
+  .savebar.saving .dot { background: #ffc93d; }
+  .card { background: rgba(24,30,40,.6); border: 1px solid rgba(91,141,239,.18); border-radius: 18px; padding: 18px; margin-bottom: 16px; }
+  .card h2 { font-size: 19px; font-weight: 800; letter-spacing: .4px; margin-bottom: 4px; }
+  .card h2 .pick { display: inline-block; font-size: 11px; font-weight: 800; color: #0c1014; background: #5b8def;
+                   border-radius: 99px; padding: 2px 10px; margin-left: 8px; vertical-align: middle; letter-spacing: .06em; }
+  .card .qsub { color: #9aa4b2; font-size: 13.5px; margin-bottom: 12px; line-height: 1.5; }
+  .feats { list-style: none; margin: 0; display: grid; gap: 7px; }
+  .feats li { font-size: 13.5px; line-height: 1.5; color: #d2d9e2; background: rgba(12,16,20,.55); border-radius: 10px; padding: 9px 12px; }
+  .feats li b { color: #5b8def; }
+  .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .opts.one { grid-template-columns: 1fr; }
+  .opt { touch-action: manipulation; -webkit-user-select: none; user-select: none; border: 1px solid rgba(91,141,239,.25);
+         background: rgba(12,16,20,.55); color: #d2d9e2; border-radius: 12px; padding: 13px 12px;
+         font-size: 14px; font-weight: 700; cursor: pointer; text-align: left; font-family: inherit; }
+  .opt small { display: block; font-weight: 400; font-size: 12px; color: #6b7482; margin-top: 3px; line-height: 1.4; }
+  .opt.sel { background: rgba(91,141,239,.14); border-color: #5b8def; color: #fff; box-shadow: 0 0 14px rgba(91,141,239,.22); }
+  .opt.sel small { color: #5b8def; }
+  .notes { width: 100%; touch-action: manipulation; background: rgba(12,16,20,.6); border: 1px solid rgba(91,141,239,.18);
+           border-radius: 12px; color: #eef2f6; font-size: 16px; padding: 11px 12px; font-family: inherit; resize: vertical; }
+  .notes::placeholder { color: #6b7482; }
+  .notes:focus { outline: none; border-color: #5b8def; }
+  footer { position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; background: #11161c;
+           border-top: 1px solid rgba(91,141,239,.22); padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+           display: flex; gap: 10px; align-items: center; }
+  footer .prog { flex: 1; font-size: 13px; color: #9aa4b2; }
+  footer button { touch-action: manipulation; -webkit-user-select: none; user-select: none; border: none; border-radius: 12px;
+                  padding: 13px 18px; font-size: 15px; font-weight: 800; cursor: pointer; font-family: inherit; }
+  #copyBtn { background: #5b8def; color: #0c1014; }
+  #clearBtn { background: rgba(91,141,239,.12); color: #9aa4b2; }
+  .toast { position: fixed; left: 50%; bottom: calc(88px + env(safe-area-inset-bottom));
+           transform: translateX(-50%) translateY(12px) scale(.95);
+           background: rgba(17,22,28,.96); color: #fff; border: 1px solid #5b8def; border-radius: 99px;
+           padding: 12px 22px; font-size: 14px; font-weight: 700; z-index: 100; opacity: 0;
+           pointer-events: none; white-space: nowrap; transition: opacity .25s ease, transform .25s ease;
+           box-shadow: 0 14px 36px rgba(0,0,0,.5); }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  .toast .tick { color: #5b8def; margin-right: 8px; font-weight: 800; }
+</style>
+</head>
+<body>
+<header>
+  <a class="backlink" href="../design-docs/">← All design docs</a>
+  <h1>A/B Toggle <span>Final Spec</span></h1>
+  <p>One switch, one stage — every tap anywhere on the button flips the comparison. No picking sides.
+     Live lab: <a href="https://comparison-lab.pages.dev">comparison-lab.pages.dev</a> (section 03)<br>
+     The permanent spec lives in the <b>ab-toggle</b> skill. Tap a verdict per question, add notes, everything autosaves in this browser.</p>
+  <div class="savebar" id="savebar"><span class="dot"></span><span id="savetxt">Saved</span></div>
+</header>
+
+<section class="card">
+  <h2>Shipped spec</h2>
+  <p class="qsub">Everything currently live in the lab, as of 2026-10-05.</p>
+  <ul class="feats">
+    <li><b>One button, not two pills</b> — the entire switch is a single <span style="font-family:monospace">role="switch"</span> button. Tapping anywhere on it flips; there is no way to "pick a side."</li>
+    <li><b>Every tap flips</b> — no dead taps: hitting the active side flips too, so spamming alternates A/B/A/B.</li>
+    <li><b>Sliding thumb</b> — a dark thumb glides (~280ms, slight overshoot) to cover the active side's label; the thumb always shows what's currently displayed.</li>
+    <li><b>Stage crossfade</b> — the two versions dissolve over ~450ms; reduced-motion disables it.</li>
+    <li><b>Keyboard + screen reader</b> — native button, so Space/Enter flip; <span style="font-family:monospace">aria-checked</span> mirrors state, label names both sides.</li>
+    <li><b>Generous tap target</b> — full-width up to 420px, 16px labels, <span style="font-family:monospace">touch-action:manipulation</span>: rapid taps never zoom.</li>
+    <li><b>Embed snippet</b> — copies a self-contained HTML/CSS/JS block; the wiring function is dependency-free so it stringifies cleanly.</li>
+  </ul>
+</section>
+
+<section class="card" id="q-control">
+  <h2>1 · Control style <span class="pick">PICKED: SINGLE SWITCH</span></h2>
+  <p class="qsub">Your call — one button that flips on every tap is preselected. Change it here if you want.</p>
+  <div class="opts one" role="radiogroup" aria-label="Control style">
+    <button class="opt" data-q="control" data-v="Single switch">Single switch<small>One button, sliding thumb. Every tap flips — your pick.</small></button>
+    <button class="opt" data-q="control" data-v="A/B pills">A/B pills<small>Two segmented pills; tap a side to select it. Tapping the active pill does nothing.</small></button>
+  </div>
+  <textarea class="notes" data-notes="control" placeholder="Notes on the control (optional)…" rows="2"></textarea>
+</section>
+
+<section class="card" id="q-tap">
+  <h2>2 · Tapping the active side <span class="pick">PICKED: FLIPS</span></h2>
+  <p class="qsub">What happens when he taps the side that's already showing? Flips is preselected.</p>
+  <div class="opts one" role="radiogroup" aria-label="Tapping the active side">
+    <button class="opt" data-q="tap" data-v="Flips">Flips<small>Every tap toggles, even on the active side. Spamming always does something.</small></button>
+    <button class="opt" data-q="tap" data-v="Does nothing">Does nothing<small>Tapping the active side is a no-op — only a change flips.</small></button>
+  </div>
+  <textarea class="notes" data-notes="tap" placeholder="Notes (optional)…" rows="2"></textarea>
+</section>
+
+<section class="card" id="q-thumb">
+  <h2>3 · Active indicator <span class="pick">PICKED: SLIDING THUMB</span></h2>
+  <p class="qsub">How does the switch show which side is active? Sliding thumb is preselected.</p>
+  <div class="opts" role="radiogroup" aria-label="Active indicator">
+    <button class="opt" data-q="thumb" data-v="Sliding thumb">Sliding thumb<small>Dark thumb glides to the active label, as now.</small></button>
+    <button class="opt" data-q="thumb" data-v="Label swap only">Label swap only<small>No thumb — the button just shows the current side's name.</small></button>
+  </div>
+  <textarea class="notes" data-notes="thumb" placeholder="Notes (optional)…" rows="2"></textarea>
+</section>
+
+<section class="card" id="q-other">
+  <h2>Other notes</h2>
+  <p class="qsub" style="margin-bottom:10px">Anything the questions didn't cover.</p>
+  <textarea class="notes" data-notes="other" placeholder="Anything else…" rows="4"></textarea>
+</section>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<footer>
+  <div class="prog" id="prog">0 of 3 answered</div>
+  <button id="clearBtn">Clear</button>
+  <button id="copyBtn">Copy answers</button>
+</footer>
+<script>
+const KEY = 'ab-toggle-v1';
+const QS = ["control", "tap", "thumb"];
+let toastT = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.innerHTML = '<span class="tick">✓</span>' + msg;
+  t.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => t.classList.remove('show'), 2200);
+}
+let state = { opts: { control: "Single switch", tap: "Flips", thumb: "Sliding thumb" }, notes: {} };
+let hadSaved = false;
+try { const raw = localStorage.getItem(KEY); if (raw) { state = JSON.parse(raw); hadSaved = true; } } catch (e) {}
+let saveT = null;
+const savebar = document.getElementById('savebar'), savetxt = document.getElementById('savetxt');
+function persist(immediate) {
+  savebar.classList.add('saving'); savetxt.textContent = 'Saving…';
+  const write = () => {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    savebar.classList.remove('saving'); savetxt.textContent = 'Saved';
+    updateProg();
+  };
+  if (immediate) { write(); return; }
+  clearTimeout(saveT); saveT = setTimeout(write, 400);
+}
+function updateProg() {
+  const n = QS.filter(q => state.opts[q]).length;
+  document.getElementById('prog').textContent = n + ' of 3 answered';
+}
+document.querySelectorAll('.opt').forEach(btn => {
+  const q = btn.dataset.q;
+  if (state.opts[q] === btn.dataset.v) btn.classList.add('sel');
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.opt[data-q="' + q + '"]').forEach(b => b.classList.remove('sel'));
+    btn.classList.add('sel');
+    state.opts[q] = btn.dataset.v;
+    persist();
+  });
+});
+document.querySelectorAll('.notes').forEach(ta => {
+  const q = ta.dataset.notes;
+  if (state.notes[q]) ta.value = state.notes[q];
+  ta.addEventListener('input', () => { state.notes[q] = ta.value; persist(); });
+});
+document.getElementById('clearBtn').addEventListener('click', () => {
+  if (!confirm('Clear all answers and notes?')) return;
+  state = { opts: {}, notes: {} };
+  document.querySelectorAll('.opt.sel').forEach(b => b.classList.remove('sel'));
+  document.querySelectorAll('.notes').forEach(t => t.value = '');
+  persist(true);
+});
+const NAMES = {"control": "1 · Control style", "tap": "2 · Tapping the active side", "thumb": "3 · Active indicator"};
+document.getElementById('copyBtn').addEventListener('click', async () => {
+  let out = 'A/B TOGGLE — FINAL SPEC DECISIONS\n\n';
+  for (const q of QS) {
+    out += NAMES[q] + '\n  Verdict: ' + (state.opts[q] || '(unanswered)') + '\n';
+    if (state.notes[q]) out += '  Notes: ' + state.notes[q] + '\n';
+    out += '\n';
+  }
+  if (state.notes.other) out += 'OTHER NOTES\n' + state.notes.other + '\n';
+  try { await navigator.clipboard.writeText(out); showToast('Answers copied'); }
+  catch (e) {
+    const ta = document.createElement('textarea'); ta.value = out; document.body.appendChild(ta);
+    ta.select(); try { document.execCommand('copy'); showToast('Answers copied'); } catch (e2) { showToast('Copy failed'); }
+    ta.remove();
+  }
+});
+if (!hadSaved) persist(true); // record his stated picks
+updateProg();
+</script>
+</body>
+</html>

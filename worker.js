@@ -106,7 +106,49 @@ const SITES = ["leetcode-games", "ergosphere", "illusion-bowling", "shotgrep", "
   "fifty-tracks",
   "spf-blog-post",
   "birds-of-a-feather",
-  "unsolved-lab"];
+  "unsolved-lab",
+  "second-brain-search"];
+// Trade Compass: proxies Yahoo Finance quotes (client calls ./api/quotes?s=).
+async function handleTradeCompassQuotes(request) {
+  const url = new URL(request.url);
+  const syms = (url.searchParams.get("s") || "")
+    .split(",")
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean)
+    .slice(0, 25);
+  if (!syms.length) {
+    return new Response(JSON.stringify({ error: "missing s param" }), {
+      status: 400,
+      headers: { "content-type": "application/json" },
+    });
+  }
+  const yq = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${syms
+    .map(encodeURIComponent)
+    .join(",")}`;
+  const res = await fetch(yq, { headers: { "User-Agent": "Mozilla/5.0" } });
+  if (!res.ok) {
+    return new Response(JSON.stringify({ error: "yahoo fetch failed" }), {
+      status: 502,
+      headers: { "content-type": "application/json" },
+    });
+  }
+  const data = await res.json();
+  const quotes = (data.quoteResponse?.result || []).map((q) => ({
+    symbol: q.symbol,
+    name: q.shortName || q.longName || q.symbol,
+    price: q.regularMarketPrice,
+    change: q.regularMarketChange,
+    changePct: q.regularMarketChangePercent,
+  }));
+  return new Response(JSON.stringify({ quotes }), {
+    headers: {
+      "content-type": "application/json",
+      "cache-control": "public, max-age=60",
+      "access-control-allow-origin": "*",
+    },
+  });
+}
+
 const PROJECTS_HOST = "projects.lukezhang.si";
 const SITE_HOST_RE = /^([a-z0-9-]+)\.lukezhang\.si$/;
 
@@ -428,6 +470,11 @@ export default {
       host === PROJECTS_HOST
     ) {
       return handleDecision(request, env);
+    }
+
+    // Trade Compass: /trade-compass/api/quotes -> Yahoo Finance proxy.
+    if (url.pathname === "/trade-compass/api/quotes" && host === PROJECTS_HOST) {
+      return handleTradeCompassQuotes(request);
     }
 
     // TakeTemp API: /api/takes/* → handleTakeTemp (needs the TAKES_KV binding).

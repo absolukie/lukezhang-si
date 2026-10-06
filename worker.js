@@ -101,7 +101,8 @@ const SITES = ["leetcode-games", "ergosphere", "illusion-bowling", "shotgrep", "
   "spf-showdown",
   "tesla-commute-tco",
   "what-should-we-talk-about",
-  "world-todo"];
+  "world-todo",
+  "fifty-tracks"];
 const PROJECTS_HOST = "projects.lukezhang.si";
 const SITE_HOST_RE = /^([a-z0-9-]+)\.lukezhang\.si$/;
 

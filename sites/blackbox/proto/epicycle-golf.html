@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>EPICYCLE GOLF — Orbital Lab</title>
+<style>
+  :root{
+    --bg:#0a0a12;
+    --cyan:#00e5ff;
+    --magenta:#ff4fd8;
+    --dim:#8a8aa3;
+    --panel:#12121c;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:#e8e8f2;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    overflow:hidden;overscroll-behavior:none;}
+  #app{display:flex;flex-direction:column;height:100%;height:100dvh;}
+  header{
+    padding:8px 12px;background:var(--panel);border-bottom:1px solid #1e1e2e;
+    flex:0 0 auto;
+  }
+  .brand{font-weight:800;letter-spacing:3px;font-size:15px;color:var(--cyan);
+    text-shadow:0 0 12px rgba(0,229,255,.6);}
+  #hud{font-size:13px;font-weight:700;color:#c9c9dd;margin-top:4px;letter-spacing:1px;}
+  #hud b{color:var(--cyan);}
+  #hud .par{color:var(--magenta);}
+  #wrap{position:relative;flex:1 1 auto;min-height:0;}
+  #cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;}
+  #hint{
+    position:absolute;left:0;right:0;top:14px;text-align:center;pointer-events:none;
+    color:#e8e8f2;font-size:15px;font-weight:700;letter-spacing:.5px;z-index:2;
+    text-shadow:0 1px 6px #000;
+  }
+  #hint.hidden{display:none;}
+  footer{
+    flex:0 0 auto;background:var(--panel);border-top:1px solid #1e1e2e;
+    padding:8px 12px 10px;
+  }
+  #score{font-size:14px;font-weight:700;color:#e8e8f2;text-align:center;}
+  #score b{color:var(--cyan);}
+  .reveal{font-size:10.5px;color:#55556e;margin-top:4px;line-height:1.4;text-align:center;}
+  .overlay{
+    position:fixed;inset:0;z-index:10;background:rgba(10,10,18,.96);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:24px;gap:14px;
+  }
+  .overlay.hidden{display:none;}
+  .overlay h1{margin:0;font-size:40px;font-weight:900;letter-spacing:6px;color:var(--cyan);
+    text-shadow:0 0 24px rgba(0,229,255,.7),0 0 60px rgba(0,229,255,.3);}
+  .overlay .how{font-size:16px;color:#c9c9dd;max-width:340px;line-height:1.6;}
+  .overlay .big{font-size:22px;font-weight:800;color:#e8e8f2;}
+  .overlay .sub2{font-size:14px;color:var(--dim);}
+  .overlay .newbest{font-size:15px;font-weight:800;color:var(--magenta);}
+  .bigbtn{
+    touch-action:manipulation;
+    font-size:18px;font-weight:800;padding:14px 44px;border-radius:14px;
+    background:transparent;border:2px solid var(--cyan);color:var(--cyan);
+    box-shadow:0 0 18px rgba(0,229,255,.35);min-height:56px;cursor:pointer;
+    font-family:inherit;
+  }
+  .bigbtn:active{transform:scale(.96);}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">EPICYCLE GOLF</div>
+    <div id="hud">HOLE 1/9 &middot; <b>K 48</b> &middot; <span class="par">PAR 2</span> &middot; STROKE 1/5</div>
+  </header>
+  <div id="wrap">
+    <canvas id="cv"></canvas>
+    <div id="hint">Draw one loop &mdash; the ball flies its smoothed echo</div>
+  </div>
+  <footer>
+    <div id="score">TOTAL <b>0</b> &middot; PAR 24</div>
+    <div class="reveal">Discrete Fourier Transform &mdash; any closed curve is a sum of spinning circles.</div>
+  </footer>
+</div>
+<div id="title" class="overlay">
+  <h1>EPICYCLE GOLF</h1>
+  <div class="how">Draw one loop per stroke. The ball flies the Fourier-smoothed echo of your drawing, starting at the tee &mdash; sink it in the cup. Low circle counts smooth your corners, so draw ahead of the error.</div>
+  <button id="startBtn" class="bigbtn">Tee off</button>
+  <div class="reveal">Discrete Fourier Transform &mdash; any closed curve is a sum of spinning circles.</div>
+</div>
+<div id="results" class="overlay hidden">
+  <h1>ROUND OVER</h1>
+  <div class="big" id="finalScore"></div>
+  <div class="sub2" id="finalDetail"></div>
+  <div class="newbest hidden" id="newBest">NEW BEST!</div>
+  <button id="againBtn" class="bigbtn">Play again</button>
+</div>
+<script>
+'use strict';
+/* EPICYCLE GOLF — the ball flies the K-harmonic DFT reconstruction of your
+   drawing. Hand-rolled math, no libraries. */
+
+/* ---------- shared DFT core ---------- */
+var N = 256;
+function resampleClosed(pts, n){
+  var m = pts.length; if(m === 0) return [];
+  var segs = new Array(m), total = 0, i;
+  for(i = 0; i < m; i++){
+    var a = pts[i], b = pts[(i+1)%m];
+    var d = Math.hypot(b[0]-a[0], b[1]-a[1]); segs[i] = d; total += d;
+  }
+  if(total < 1e-9){ var o=[]; for(i=0;i<n;i++) o.push([pts[0][0],pts[0][1]]); return o; }
+  var out=[], step=total/n, target=0, segStart=0;
+  for(i=0; i<m && out.length<n; i++){
+    var p=pts[i], q=pts[(i+1)%m], dd=segs[i];
+    while(target <= segStart+dd+1e-9 && out.length<n){
+      var f = dd>1e-12 ? (target-segStart)/dd : 0;
+      out.push([p[0]+(q[0]-p[0])*f, p[1]+(q[1]-p[1])*f]); target += step;
+    }
+    segStart += dd;
+  }
+  while(out.length<n) out.push([pts[0][0],pts[0][1]]);
+  return out;
+}
+function dftSorted(seq){
+  var n=seq.length, k, j, out=new Array(n);
+  for(k=0;k<n;k++){ var re=0, im=0;
+    for(j=0;j<n;j++){ var a=2*Math.PI*k*j/n, ca=Math.cos(a), sa=Math.sin(a);
+      var x=seq[j][0], y=seq[j][1];
+      re += x*ca + y*sa; im += -x*sa + y*ca; }
+    out[k]={ k: k>n/2 ? k-n : k, re:re, im:im, amp:Math.hypot(re,im)/n };
+  }
+  out.sort(function(h1,h2){ return h2.amp-h1.amp; });
+  return out;
+}
+function tipAt(t, harm, K){
+  var x=0, y=0, lim=Math.min(K,harm.length);
+  for(var i=0;i<lim;i++){ var h=harm[i], a=2*Math.PI*h.k*t/N;
+    var ca=Math.cos(a), sa=Math.sin(a);
+    x += (h.re*ca - h.im*sa)/N; y += (h.re*sa + h.im*ca)/N; }
+  return [x,y];
+}
+
+/* ---------- course ---------- */
+/* tee/cup/hazards in W,H fractions. K = circles for the hole. */
+var HOLES = [
+  {tee:[.50,.85], cup:[.50,.25], K:48, par:2, hz:[]},
+  {tee:[.18,.82], cup:[.82,.28], K:32, par:2, hz:[]},
+  {tee:[.15,.85], cup:[.85,.78], K:24, par:3, hz:[]},
+  {tee:[.50,.82], cup:[.50,.32], K:16, par:2, hz:[]},
+  {tee:[.20,.88], cup:[.80,.18], K:12, par:3, hz:[]},
+  {tee:[.18,.85], cup:[.82,.22], K:40, par:3, hz:[[.50,.55,.085]]},
+  {tee:[.30,.82], cup:[.72,.38], K:8,  par:2, hz:[]},
+  {tee:[.15,.88], cup:[.85,.12], K:20, par:4, hz:[[.38,.62,.075],[.66,.38,.075]]},
+  {tee:[.82,.85], cup:[.18,.20], K:28, par:3, hz:[]}
+];
+var TOTAL_PAR = HOLES.reduce(function(s,h){ return s+h.par; }, 0);
+var FLIGHT_T = 3.0;   // seconds per period
+
+/* ---------- dom ---------- */
+var cv = document.getElementById('cv');
+var ctx = cv.getContext('2d');
+var trail = document.createElement('canvas');
+var tctx = trail.getContext('2d');
+var hintEl = document.getElementById('hint');
+var hudEl = document.getElementById('hud');
+var scoreEl = document.getElementById('score');
+var titleEl = document.getElementById('title');
+var resultsEl = document.getElementById('results');
+
+var W=0, H=0, S=1, DPR=1;
+
+/* ---------- state ---------- */
+var state = {
+  screen:'title',   // title | aim | flight | splash | holed | results
+  hole:0, strokesUsed:0, scores:[], total:0,
+  K:48,
+  raw:[], rawF:[],
+  orig:null, harm:null, anchor:[0,0], pathSamp:[],
+  t:0, prevBall:null,
+  teePx:[0,0], cupPx:[0,0], hzPx:[],
+  cupR:18,
+  timer:0,
+  drawing:false, activePointer:null,
+  best:loadBest()
+};
+
+function loadBest(){
+  try{
+    var v = window.localStorage.getItem('bb-proto-epicycle-golf-best');
+    if(v===null) return null;
+    var f = parseInt(v,10);
+    return isFinite(f) ? f : null;
+  }catch(e){ return null; }
+}
+function saveBest(v){
+  try{ window.localStorage.setItem('bb-proto-epicycle-golf-best', String(v)); }catch(e){}
+}
+
+/* ---------- geometry helpers ---------- */
+/* Math happens in S-fraction space (S = min(W,H)) so distances are isotropic. */
+function toF(x, y){ return [x/S, y/S]; }
+function toPx(fx, fy){ return [fx*S, fy*S]; }
+function holeGeom(h){
+  return {
+    tee: [h.tee[0]*W/S, h.tee[1]*H/S],
+    cup: [h.cup[0]*W/S, h.cup[1]*H/S],
+    hz: h.hz.map(function(z){ return [z[0]*W/S, z[1]*H/S, z[2]*W/S]; })
+  };
+}
+function cupRF(){ return state.cupR / S; }
+
+/* ---------- flow ---------- */
+function allowed(h){ return HOLES[h].par + 3; }
+
+function startHole(i){
+  var h = HOLES[i];
+  var g = holeGeom(h);
+  state.hole = i;
+  state.K = h.K;
+  state.strokesUsed = 0;
+  state.screen = 'aim';
+  state.raw = []; state.rawF = [];
+  state.orig = null; state.harm = null; state.pathSamp = [];
+  state.teePx = toPx(g.tee[0], g.tee[1]);
+  state.cupPx = toPx(g.cup[0], g.cup[1]);
+  state.hzPx = g.hz.map(function(z){ var p = toPx(z[0], z[1]); return [p[0], p[1], z[2]*S]; });
+  tctx.clearRect(0, 0, W, H);
+  updateHud();
+  hintEl.textContent = 'Draw one loop \u2014 the ball flies its smoothed echo';
+  hintEl.classList.remove('hidden');
+}
+
+function updateHud(){
+  var h = HOLES[state.hole];
+  hudEl.innerHTML = 'HOLE ' + (state.hole+1) + '/9 &middot; <b>K ' + h.K +
+    '</b> &middot; <span class="par">PAR ' + h.par + '</span> &middot; STROKE ' +
+    Math.min(state.strokesUsed+1, allowed(state.hole)) + '/' + allowed(state.hole);
+  scoreEl.innerHTML = 'TOTAL <b>' + state.total + '</b> &middot; PAR ' + TOTAL_PAR;
+}
+
+function launch(){
+  if(state.rawF.length < 3) return;
+  var seq = resampleClosed(state.rawF, N);
+  state.orig = seq;
+  state.harm = dftSorted(seq);
+  var g = holeGeom(HOLES[state.hole]);
+  var p0 = tipAt(0, state.harm, state.K);
+  state.anchor = [g.tee[0]-p0[0], g.tee[1]-p0[1]];
+  // precompute translated path samples (F-space)
+  state.pathSamp = [];
+  for(var j=0; j<512; j++){
+    var p = tipAt(j/512*N, state.harm, state.K);
+    state.pathSamp.push([p[0]+state.anchor[0], p[1]+state.anchor[1]]);
+  }
+  state.screen = 'flight';
+  state.t = 0;
+  state.prevBall = null;
+  tctx.clearRect(0, 0, W, H);
+  hintEl.classList.add('hidden');
+}
+
+function pathPos(t){ // t in [0,N)
+  var f = (t/N)*512, i0 = Math.floor(f)%512, i1 = (i0+1)%512, fr = f-Math.floor(f);
+  var a = state.pathSamp[i0], b = state.pathSamp[i1];
+  return [a[0]+(b[0]-a[0])*fr, a[1]+(b[1]-a[1])*fr];
+}
+
+function endStrokeMiss(reason){
+  state.strokesUsed++;
+  updateHud();
+  if(state.strokesUsed >= allowed(state.hole)){
+    // out of strokes: score par+4, move on
+    state.scores[state.hole] = HOLES[state.hole].par + 4;
+    state.total += HOLES[state.hole].par + 4;
+    hintEl.textContent = 'Out of strokes';
+    hintEl.classList.remove('hidden');
+    state.screen = 'splash';
+    state.timer = 1.2;
+    state.splashKind = 'out';
+  }else{
+    state.screen = 'aim';
+    state.raw = []; state.rawF = [];
+    state.orig = null; state.harm = null; state.pathSamp = [];
+    hintEl.textContent = reason + ' \u2014 ' +
+      (allowed(state.hole)-state.strokesUsed) + ' left';
+    hintEl.classList.remove('hidden');
+  }
+  updateHud();
+}
+
+function holeComplete(){
+  state.strokesUsed++;
+  state.scores[state.hole] = state.strokesUsed;
+  state.total += state.strokesUsed;
+  state.screen = 'holed';
+  state.timer = 1.4;
+  hintEl.textContent = 'HOLED!';
+  hintEl.classList.remove('hidden');
+  updateHud();
+}
+
+function advance(){
+  if(state.hole >= HOLES.length-1){
+    showResults();
+  }else{
+    startHole(state.hole+1);
+  }
+}
+
+function showResults(){
+  state.screen = 'results';
+  var vs = state.total - TOTAL_PAR;
+  var vsTxt = vs === 0 ? 'E (par)' : (vs < 0 ? vs + ' under par' : '+' + vs + ' over par');
+  document.getElementById('finalScore').textContent = state.total + ' strokes';
+  document.getElementById('finalDetail').textContent = vsTxt + ' \u00b7 par ' + TOTAL_PAR;
+  var nb = document.getElementById('newBest');
+  if(state.best === null || state.total < state.best){
+    state.best = state.total; saveBest(state.total);
+    nb.classList.remove('hidden');
+  }else{
+    nb.classList.add('hidden');
+    document.getElementById('finalDetail').textContent += ' \u00b7 best ' + state.best;
+  }
+  resultsEl.classList.remove('hidden');
+}
+
+function resetGame(){
+  state.scores = []; state.total = 0;
+  resultsEl.classList.add('hidden');
+  titleEl.classList.add('hidden');
+  startHole(0);
+}
+
+/* ---------- pointer ---------- */
+function posOf(e){
+  var r = cv.getBoundingClientRect();
+  return [e.clientX - r.left, e.clientY - r.top];
+}
+cv.addEventListener('pointerdown', function(e){
+  if(!e.isPrimary || e.button !== 0 || state.activePointer !== null) return;
+  if(state.screen !== 'aim') return;
+  state.activePointer = e.pointerId;
+  e.preventDefault();
+  state.drawing = true;
+  state.raw = []; state.rawF = [];
+  try{ cv.setPointerCapture(e.pointerId); }catch(err){}
+  var p = posOf(e);
+  state.raw.push(p);
+  state.rawF.push(toF(p[0], p[1]));
+});
+cv.addEventListener('pointermove', function(e){
+  if(!state.drawing || e.pointerId !== state.activePointer) return;
+  e.preventDefault();
+  var p = posOf(e);
+  var last = state.raw[state.raw.length-1];
+  if(!last || Math.hypot(p[0]-last[0], p[1]-last[1]) > 2){
+    state.raw.push(p);
+    state.rawF.push(toF(p[0], p[1]));
+  }
+});
+function endStroke(e){
+  if(!state.drawing || e.pointerId !== state.activePointer) return;
+  state.drawing = false;
+  state.activePointer = null;
+  if(state.screen !== 'aim') return;
+  var length = 0;
+  for(var i=1; i<state.raw.length; i++){
+    length += Math.hypot(state.raw[i][0]-state.raw[i-1][0], state.raw[i][1]-state.raw[i-1][1]);
+  }
+  if(state.raw.length < 3 || length < 60){
+    hintEl.textContent = 'Stroke too short \u2014 draw a bigger loop';
+    state.raw = []; state.rawF = [];
+    return;
+  }
+  launch();
+}
+cv.addEventListener('pointerup', endStroke);
+cv.addEventListener('pointercancel', endStroke);
+cv.addEventListener('lostpointercapture', endStroke);
+
+document.getElementById('startBtn').addEventListener('click', resetGame);
+document.getElementById('againBtn').addEventListener('click', resetGame);
+
+/* ---------- test hook ---------- */
+window.__test = {
+  screen: function(){ return state.screen; },
+  hole: function(){ return state.hole; },
+  strokes: function(){ return state.strokesUsed; },
+  total: function(){ return state.total; },
+  scores: function(){ return state.scores.slice(); },
+  start: function(){ resetGame(); },
+  /* draw a lens-shaped loop through tee and cup, verify it holes, then launch for real */
+  solve: function(){
+    var H0 = HOLES[state.hole];
+    var g = holeGeom(H0);
+    var tee = g.tee, cup = g.cup;
+    var dx = cup[0]-tee[0], dy = cup[1]-tee[1];
+    var len = Math.hypot(dx,dy) || 1, nx = -dy/len, ny = dx/len;
+    var offs = [0.35,-0.35,0.6,-0.6,0.15,-0.15,0.9,-0.9];
+    for(var oi=0; oi<offs.length; oi++){
+      var off = offs[oi]*len;
+      var mx=(tee[0]+cup[0])/2, my=(tee[1]+cup[1])/2;
+      var c1x=mx+nx*off, c1y=my+ny*off, c2x=2*mx-c1x, c2y=2*my-c1y;
+      var pts=[], i, t, u;
+      for(i=0;i<=60;i++){ t=i/60; u=1-t;
+        pts.push([u*u*tee[0]+2*u*t*c1x+t*t*cup[0], u*u*tee[1]+2*u*t*c1y+t*t*cup[1]]); }
+      for(i=1;i<=60;i++){ t=i/60; u=1-t;
+        pts.push([u*u*cup[0]+2*u*t*c2x+t*t*tee[0], u*u*cup[1]+2*u*t*c2y+t*t*tee[1]]); }
+      var seq=resampleClosed(pts,N), harm=dftSorted(seq), K=H0.K;
+      var p0=tipAt(0,harm,K), ax=tee[0]-p0[0], ay=tee[1]-p0[1];
+      var ok=true, hitsCup=false, j;
+      for(j=0;j<N;j+=2){
+        var p=tipAt(j,harm,K), px=p[0]+ax, py=p[1]+ay;
+        if(Math.hypot(px-cup[0],py-cup[1]) < (state.cupR-2)/S) hitsCup=true;
+        for(var z=0;z<g.hz.length;z++){
+          if(Math.hypot(px-g.hz[z][0],py-g.hz[z][1]) < g.hz[z][2]+6/S){ ok=false; break; }
+        }
+        if(!ok) break;
+      }
+      if(ok && hitsCup){ state.rawF=pts; state.K=K; launch(); return true; }
+    }
+    return false;
+  }
+};
+
+/* ---------- canvas sizing ---------- */
+function resize(){
+  var r = cv.getBoundingClientRect();
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = Math.max(1, r.width); H = Math.max(1, r.height);
+  S = Math.min(W, H);
+  state.cupR = Math.max(14, S*0.046);
+  cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
+  trail.width = cv.width; trail.height = cv.height;
+  tctx.setTransform(DPR,0,0,DPR,0,0);
+  if(state.screen==='aim' || state.screen==='title'){
+    var h = HOLES[state.hole], g = holeGeom(h);
+    state.teePx = toPx(g.tee[0], g.tee[1]);
+    state.cupPx = toPx(g.cup[0], g.cup[1]);
+    state.hzPx = g.hz.map(function(z){ var p=toPx(z[0],z[1]); return [p[0],p[1],z[2]*S]; });
+  }
+}
+window.addEventListener('resize', resize);
+
+/* ---------- render ---------- */
+function drawCourseBase(){
+  // tee pad
+  ctx.fillStyle = 'rgba(0,229,255,0.9)';
+  ctx.beginPath();
+  ctx.arc(state.teePx[0], state.teePx[1], 7, 0, 2*Math.PI);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,229,255,0.35)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(state.teePx[0], state.teePx[1], 12, 0, 2*Math.PI);
+  ctx.stroke();
+  // hazards (water)
+  for(var i=0;i<state.hzPx.length;i++){
+    var z = state.hzPx[i];
+    ctx.fillStyle = 'rgba(56,189,248,0.28)';
+    ctx.beginPath(); ctx.arc(z[0], z[1], z[2], 0, 2*Math.PI); ctx.fill();
+    ctx.strokeStyle = 'rgba(56,189,248,0.7)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(z[0], z[1], z[2], 0, 2*Math.PI); ctx.stroke();
+  }
+  // cup + flag
+  var c = state.cupPx, r = state.cupR;
+  ctx.fillStyle = '#000';
+  ctx.beginPath(); ctx.arc(c[0], c[1], r, 0, 2*Math.PI); ctx.fill();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(c[0], c[1], r, 0, 2*Math.PI); ctx.stroke();
+  ctx.strokeStyle = '#e8e8f2'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(c[0], c[1]); ctx.lineTo(c[0], c[1]-r-22); ctx.stroke();
+  ctx.fillStyle = '#ff4fd8';
+  ctx.beginPath();
+  ctx.moveTo(c[0], c[1]-r-22); ctx.lineTo(c[0]+14, c[1]-r-16); ctx.lineTo(c[0], c[1]-r-10);
+  ctx.closePath(); ctx.fill();
+}
+function drawAim(){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle = '#0a0a12'; ctx.fillRect(0,0,W,H);
+  // dotted guide tee -> cup
+  ctx.strokeStyle = 'rgba(232,232,242,0.18)';
+  ctx.lineWidth = 2; ctx.setLineDash([6,8]);
+  ctx.beginPath();
+  ctx.moveTo(state.teePx[0], state.teePx[1]);
+  ctx.lineTo(state.cupPx[0], state.cupPx[1]);
+  ctx.stroke(); ctx.setLineDash([]);
+  drawCourseBase();
+  // current stroke
+  var pts = state.raw;
+  if(pts.length > 1){
+    ctx.strokeStyle = '#00e5ff'; ctx.lineWidth = 3;
+    ctx.lineCap='round'; ctx.lineJoin='round';
+    ctx.shadowColor='#00e5ff'; ctx.shadowBlur=12;
+    ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+    for(var i=1;i<pts.length;i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.stroke(); ctx.shadowBlur=0;
+  }
+}
+function drawFlight(){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle = '#0a0a12'; ctx.fillRect(0,0,W,H);
+  // ghost of the original drawing, very low opacity
+  if(state.orig && state.orig.length > 1){
+    ctx.strokeStyle = 'rgba(232,232,242,0.14)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    var q0 = toPx(state.orig[0][0], state.orig[0][1]);
+    ctx.moveTo(q0[0], q0[1]);
+    for(var gi=1; gi<state.orig.length; gi++){
+      var q = toPx(state.orig[gi][0], state.orig[gi][1]);
+      ctx.lineTo(q[0], q[1]);
+    }
+    ctx.closePath(); ctx.stroke();
+  }
+  // planned smoothed path, faint
+  if(state.pathSamp.length > 1){
+    ctx.strokeStyle = 'rgba(0,229,255,0.25)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    var r0 = toPx(state.pathSamp[0][0], state.pathSamp[0][1]);
+    ctx.moveTo(r0[0], r0[1]);
+    for(var pi=1; pi<state.pathSamp.length; pi++){
+      var r = toPx(state.pathSamp[pi][0], state.pathSamp[pi][1]);
+      ctx.lineTo(r[0], r[1]);
+    }
+    ctx.closePath(); ctx.stroke();
+  }
+  ctx.drawImage(trail, 0, 0, W, H);
+  drawCourseBase();
+  // ball
+  if(state.prevBall){
+    var b = toPx(state.prevBall[0], state.prevBall[1]);
+    ctx.fillStyle = '#fff';
+    ctx.shadowColor = '#ff4fd8'; ctx.shadowBlur = 14;
+    ctx.beginPath(); ctx.arc(b[0], b[1], 5, 0, 2*Math.PI); ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+}
+
+/* ---------- main loop ---------- */
+var lastT = 0;
+function frame(now){
+  var dt = lastT ? (now-lastT)/1000 : 0.016;
+  lastT = now;
+  if(dt > 0.05) dt = 0.05;
+
+  if(state.screen === 'flight'){
+    var prevT = state.t;
+    state.t += dt/FLIGHT_T*N;
+    var done = state.t >= N;
+    var endT = Math.min(state.t, N);
+    // substeps: cup + hazard checks
+    var cupF = [state.cupPx[0]/S, state.cupPx[1]/S];
+    var SUB = 10, captured = false, splashed = false, s;
+    for(s=1; s<=SUB; s++){
+      var tt = prevT + (endT-prevT)*s/SUB;
+      var pos = pathPos(tt);
+      if(Math.hypot(pos[0]-cupF[0], pos[1]-cupF[1]) < cupRF()){ captured = true; break; }
+      for(var z=0; z<state.hzPx.length; z++){
+        var hz = state.hzPx[z];
+        var hzf = [hz[0]/S, hz[1]/S];
+        if(Math.hypot(pos[0]-hzf[0], pos[1]-hzf[1]) < hz[2]/S){ splashed = true; break; }
+      }
+      if(splashed) break;
+    }
+    // trail fade + advance
+    tctx.globalCompositeOperation = 'destination-out';
+    tctx.fillStyle = 'rgba(0,0,0,' + (1-Math.exp(-1.2*dt)) + ')';
+    tctx.fillRect(0, 0, W, H);
+    tctx.globalCompositeOperation = 'source-over';
+    var cur = pathPos(endT);
+    if(state.prevBall){
+      tctx.strokeStyle = 'rgba(0,229,255,0.85)';
+      tctx.lineWidth = 3; tctx.lineCap='round';
+      var a = toPx(state.prevBall[0], state.prevBall[1]);
+      var b2 = toPx(cur[0], cur[1]);
+      tctx.beginPath(); tctx.moveTo(a[0], a[1]); tctx.lineTo(b2[0], b2[1]); tctx.stroke();
+    }
+    state.prevBall = cur;
+    if(captured){
+      holeComplete();
+    }else if(splashed){
+      state.screen = 'splash'; state.timer = 0.9; state.splashKind = 'water';
+      hintEl.textContent = 'Splash! Water hazard';
+      hintEl.classList.remove('hidden');
+    }else if(done){
+      endStrokeMiss('Miss');
+    }
+    drawFlight();
+  }else if(state.screen === 'splash' || state.screen === 'holed'){
+    state.timer -= dt;
+    drawFlight();
+    if(state.timer <= 0){
+      if(state.screen === 'splash' && state.splashKind === 'out'){ advance(); }
+      else if(state.screen === 'splash'){ endStrokeMiss2(); }
+      else { advance(); }
+    }
+  }else if(state.screen === 'aim' || state.screen === 'title'){
+    drawAim();
+  }else{
+    drawFlight();
+  }
+  requestAnimationFrame(frame);
+}
+function endStrokeMiss2(){
+  // continuation after splash display
+  state.strokesUsed++;
+  updateHud();
+  if(state.strokesUsed >= allowed(state.hole)){
+    state.scores[state.hole] = HOLES[state.hole].par + 4;
+    state.total += HOLES[state.hole].par + 4;
+    hintEl.textContent = 'Out of strokes';
+    state.screen = 'splash'; state.timer = 1.2; state.splashKind = 'out';
+  }else{
+    state.screen = 'aim';
+    state.raw = []; state.rawF = [];
+    state.orig = null; state.harm = null; state.pathSamp = [];
+    hintEl.textContent = 'Miss \u2014 ' + (allowed(state.hole)-state.strokesUsed) + ' left';
+  }
+  updateHud();
+}
+
+/* ---------- boot ---------- */
+resize();
+updateHud();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

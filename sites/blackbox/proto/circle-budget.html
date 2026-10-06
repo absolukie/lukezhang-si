@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>CIRCLE BUDGET — Blackbox Arcade</title>
+<style>
+  :root{ --bg:#0a0a12; --cyan:#00e5ff; --magenta:#ff4fd8; --dim:#8a8aa3; --panel:#12121c; --gold:#ffd34d; }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:#e8e8f2;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    overflow:hidden;overscroll-behavior:none;}
+  #app{display:flex;flex-direction:column;height:100%;height:100dvh;}
+  header{display:flex;align-items:center;justify-content:space-between;gap:8px;
+    padding:10px 12px;background:var(--panel);border-bottom:1px solid #1e1e2e;flex:0 0 auto;}
+  .brand{font-weight:800;letter-spacing:3px;font-size:15px;color:var(--cyan);
+    text-shadow:0 0 12px rgba(0,229,255,.6);}
+  #meta{font-size:13px;font-weight:700;color:var(--dim);}
+  #meta b{color:var(--gold);}
+  #wrap{position:relative;flex:1 1 auto;min-height:0;}
+  #cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;}
+  #roundLabel{position:absolute;left:0;right:0;top:12px;text-align:center;pointer-events:none;
+    font-size:15px;font-weight:800;letter-spacing:2px;color:#c9c9dd;z-index:2;}
+  #roundLabel small{display:block;font-size:12px;font-weight:600;color:var(--dim);letter-spacing:1px;margin-top:2px;}
+  #toast{position:absolute;left:50%;bottom:16px;transform:translateX(-50%) translateY(8px);
+    background:#1c1c2c;border:1px solid #33334d;color:#e8e8f2;font-size:14px;font-weight:600;
+    padding:10px 16px;border-radius:12px;opacity:0;transition:opacity .25s, transform .25s;
+    pointer-events:none;z-index:3;white-space:nowrap;max-width:92%;}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  footer{flex:0 0 auto;background:var(--panel);border-top:1px solid #1e1e2e;padding:10px 12px 12px;}
+  .sliderow{display:flex;align-items:center;gap:10px;}
+  .sliderow label{font-size:14px;font-weight:800;color:var(--dim);white-space:nowrap;}
+  #kval{color:var(--cyan);font-weight:800;min-width:28px;display:inline-block;text-align:right;}
+  input[type=range]{flex:1 1 auto;min-width:0;-webkit-appearance:none;appearance:none;height:48px;
+    background:linear-gradient(90deg,var(--cyan),var(--magenta)) center / 100% 6px no-repeat;
+    outline:none;border-radius:3px;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:30px;height:30px;
+    border-radius:50%;background:#fff;border:3px solid var(--cyan);
+    box-shadow:0 0 10px rgba(0,229,255,.8);cursor:pointer;}
+  input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;background:#fff;
+    border:3px solid var(--cyan);box-shadow:0 0 10px rgba(0,229,255,.8);cursor:pointer;}
+  #readout{text-align:center;font-size:13.5px;font-weight:700;color:#e8e8f2;margin:2px 0 8px;white-space:nowrap;}
+  #readout .rms{color:var(--magenta);}
+  #readout .ok{color:#4ade80;}
+  .btnrow{display:flex;gap:10px;}
+  button{touch-action:manipulation;font-family:inherit;font-size:16px;font-weight:700;
+    background:#181826;color:#e8e8f2;border:1px solid #2c2c44;border-radius:12px;
+    padding:12px;min-height:52px;cursor:pointer;}
+  button:active{transform:scale(.97);}
+  #lockBtn{flex:1;background:linear-gradient(100deg,#00e5ff,#4dd8ff);color:#06121a;border:none;
+    font-size:17px;font-weight:800;letter-spacing:1px;}
+  .reveal{font-size:10.5px;color:#55556e;margin-top:8px;line-height:1.4;text-align:center;}
+  .modal{position:fixed;inset:0;z-index:10;background:rgba(10,10,18,.96);display:flex;
+    flex-direction:column;align-items:center;justify-content:center;text-align:center;
+    padding:24px;gap:14px;}
+  .modal.hidden{display:none;}
+  .modal h1{margin:0;font-size:40px;font-weight:900;letter-spacing:6px;color:var(--cyan);
+    text-shadow:0 0 24px rgba(0,229,255,.7);}
+  .modal .how{font-size:16px;color:#c9c9dd;max-width:340px;line-height:1.55;}
+  .modal .stars{font-size:44px;letter-spacing:6px;color:var(--gold);
+    text-shadow:0 0 18px rgba(255,211,77,.5);}
+  .modal .stars .dim{color:#3a3a52;text-shadow:none;}
+  .modal .sub{font-size:14px;color:var(--dim);max-width:320px;line-height:1.5;}
+  .modal .big{font-size:22px;font-weight:800;color:#e8e8f2;}
+  #startBtn,#againBtn,#nextBtn{font-size:18px;font-weight:800;padding:14px 44px;border-radius:14px;
+    background:transparent;border:2px solid var(--cyan);color:var(--cyan);min-height:56px;
+    box-shadow:0 0 18px rgba(0,229,255,.35);}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">CIRCLE BUDGET</div>
+    <div id="meta">Round <span id="roundNum">1</span>/6 &middot; <b><span id="starCount">0</span>&#9733;</b></div>
+  </header>
+  <div id="wrap">
+    <canvas id="cv"></canvas>
+    <div id="roundLabel"></div>
+    <div id="toast"></div>
+  </div>
+  <footer>
+    <div class="sliderow">
+      <label for="kslider">K <span id="kval">8</span></label>
+      <input type="range" id="kslider" min="8" max="96" step="4" value="8" aria-label="Circle budget">
+    </div>
+    <div id="readout">RMS <span class="rms" id="rmsRead">&mdash;</span> px &middot; need &lt; 8 &middot; par <span id="parRead">&mdash;</span></div>
+    <div class="btnrow"><button id="lockBtn">Lock in</button></div>
+    <div class="reveal">Discrete Fourier Transform &mdash; any closed curve is a sum of spinning circles.</div>
+  </footer>
+</div>
+
+<div id="title" class="modal">
+  <h1>CIRCLE BUDGET</h1>
+  <div class="how">Match each ghost shape with <b>as few circles as possible</b>.<br>
+    Sweep the K slider, watch the reconstruction snap into focus, then lock in under 8px error.<br>
+    Beat par for 3 stars.</div>
+  <button id="startBtn">Start</button>
+  <div class="reveal">Discrete Fourier Transform &mdash; any closed curve is a sum of spinning circles.</div>
+</div>
+
+<div id="roundEnd" class="modal hidden">
+  <div class="stars" id="reStars"></div>
+  <div class="big" id="reTitle"></div>
+  <div class="sub" id="reSub"></div>
+  <button id="nextBtn">Next shape</button>
+</div>
+
+<div id="final" class="modal hidden">
+  <h1>DONE</h1>
+  <div class="stars" id="finStars"></div>
+  <div class="big" id="finScore"></div>
+  <div class="sub" id="finBest"></div>
+  <button id="againBtn">Play again</button>
+  <div class="reveal">Discrete Fourier Transform &mdash; any closed curve is a sum of spinning circles.</div>
+</div>
+
+<script>
+'use strict';
+/* CIRCLE BUDGET — match each target with as few Fourier circles as possible.
+   Shared DFT core (hand-rolled, no libraries). */
+
+var N = 256;
+var WIN_RMS = 8; // px
+
+function resampleClosed(pts, n){
+  var m = pts.length; if(m === 0) return [];
+  var segs = new Array(m), total = 0, i;
+  for(i = 0; i < m; i++){
+    var a = pts[i], b = pts[(i+1)%m];
+    var d = Math.hypot(b[0]-a[0], b[1]-a[1]); segs[i] = d; total += d;
+  }
+  if(total < 1e-9){ var o=[]; for(i=0;i<n;i++) o.push([pts[0][0],pts[0][1]]); return o; }
+  var out=[], step=total/n, target=0, segStart=0;
+  for(i=0; i<m && out.length<n; i++){
+    var p=pts[i], q=pts[(i+1)%m], dd=segs[i];
+    while(target <= segStart+dd+1e-9 && out.length<n){
+      var f = dd>1e-12 ? (target-segStart)/dd : 0;
+      out.push([p[0]+(q[0]-p[0])*f, p[1]+(q[1]-p[1])*f]); target += step;
+    }
+    segStart += dd;
+  }
+  while(out.length<n) out.push([pts[0][0],pts[0][1]]);
+  return out;
+}
+function dftSorted(seq){
+  var n=seq.length, k, j, out=new Array(n);
+  for(k=0;k<n;k++){ var re=0, im=0;
+    for(j=0;j<n;j++){ var a=2*Math.PI*k*j/n, ca=Math.cos(a), sa=Math.sin(a);
+      var x=seq[j][0], y=seq[j][1];
+      re += x*ca + y*sa; im += -x*sa + y*ca; }
+    out[k]={ k: k>n/2 ? k-n : k, re:re, im:im, amp:Math.hypot(re,im)/n };
+  }
+  out.sort(function(h1,h2){ return h2.amp-h1.amp; });
+  return out;
+}
+function tipAt(t, harm, K){
+  var x=0, y=0, lim=Math.min(K,harm.length);
+  for(var i=0;i<lim;i++){ var h=harm[i], a=2*Math.PI*h.k*t/N;
+    var ca=Math.cos(a), sa=Math.sin(a);
+    x += (h.re*ca - h.im*sa)/N; y += (h.re*sa + h.im*ca)/N; }
+  return [x,y];
+}
+function rmsOf(orig, harm, K){
+  var s=0;
+  for(var j=0;j<N;j++){
+    var p=tipAt(j,harm,K), o=orig[j];
+    var dx=p[0]-o[0], dy=p[1]-o[1];
+    s += dx*dx+dy*dy;
+  }
+  return Math.sqrt(s/N);
+}
+
+/* ---------- procedural target shapes ---------- */
+
+var ROUNDS = [
+  { name:'MOON',    label:'smooth crescent',   par:12 },
+  { name:'KEY',     label:'old brass key',     par:16 },
+  { name:'FISH',    label:'corner-tailed fish',par:16 },
+  { name:'LEAF',    label:'serrated leaf',     par:16 },
+  { name:'GHOST',   label:'wavy ghost',        par:16 },
+  { name:'COMB',    label:'fine-tooth comb',   par:20 }
+];
+
+/* fit a point loop into a BOX×BOX square centered at (cx,cy) */
+function fitBox(P, cx, cy, BOX){
+  var x0=1e9,y0=1e9,x1=-1e9,y1=-1e9,i;
+  for(i=0;i<P.length;i++){ var p=P[i];
+    if(p[0]<x0)x0=p[0]; if(p[0]>x1)x1=p[0]; if(p[1]<y0)y0=p[1]; if(p[1]>y1)y1=p[1]; }
+  var w=Math.max(1,x1-x0), h=Math.max(1,y1-y0), k=BOX/Math.max(w,h);
+  var mx=(x0+x1)/2, my=(y0+y1)/2, out=[];
+  for(i=0;i<P.length;i++) out.push([cx+(P[i][0]-mx)*k, cy+(P[i][1]-my)*k]);
+  return out;
+}
+
+function shapeLoop(name, W, H){
+  var s = Math.min(W,H)*0.32, cx = W/2, cy = H/2 - 8;
+  var P=[], i, t, a;
+  if(name==='MOON'){
+    for(i=0;i<=120;i++){ a=-Math.PI*0.72+(i/120)*Math.PI*1.44;
+      P.push([cx+Math.cos(a)*s, cy+Math.sin(a)*s]); }
+    for(i=120;i>=0;i--){ a=-Math.PI*0.72+(i/120)*Math.PI*1.44;
+      P.push([cx+Math.cos(a)*s*0.74+s*0.30, cy+Math.sin(a)*s*0.74]); }
+  }else if(name==='GHOST'){
+    for(i=0;i<=80;i++){ a=Math.PI-(i/80)*Math.PI;
+      P.push([cx+Math.cos(a)*s*0.8, cy-14+Math.sin(a)*s*0.85]); }
+    for(i=0;i<4;i++){
+      var gx0=cx+s*0.8-(i/4)*s*1.6, gx1=cx+s*0.8-((i+0.5)/4)*s*1.6, gx2=cx+s*0.8-((i+1)/4)*s*1.6;
+      P.push([gx1, cy-14+s*0.85+s*0.22]); P.push([gx2, cy-14+s*0.85]);
+    }
+  }else if(name==='LEAF'){
+    for(i=0;i<=100;i++){ t=(i/100)*Math.PI;
+      var lw=Math.sin(t)*s*0.55*(1+0.12*Math.cos(24*t));
+      P.push([cx-Math.cos(t)*s*0.95, cy-lw]); }
+    for(i=100;i>=0;i--){ t=(i/100)*Math.PI;
+      var lw2=Math.sin(t)*s*0.55*(1+0.12*Math.cos(24*t));
+      P.push([cx-Math.cos(t)*s*0.95, cy+lw2]); }
+    P.push([cx+s*0.95+s*0.35, cy+s*0.28]);
+  }else if(name==='FISH'){
+    for(i=0;i<=56;i++){ a=(i/56)*Math.PI*0.92;
+      P.push([cx+Math.cos(a)*s*0.92, cy-Math.sin(a)*s*0.60]); }
+    var tx=cx-s*0.92;
+    P.push([tx-s*0.42, cy-s*0.62]);
+    P.push([tx+s*0.10, cy]);
+    P.push([tx-s*0.42, cy+s*0.62]);
+    for(i=56;i>=0;i--){ a=(i/56)*Math.PI*0.92;
+      P.push([cx+Math.cos(a)*s*0.92, cy+Math.sin(a)*s*0.60]); }
+  }else if(name==='KEY'){
+    var kr=s*0.52;
+    for(i=0;i<=70;i++){ a=(i/70)*2*Math.PI;
+      P.push([cx-kr*1.4+Math.cos(a)*kr, cy-kr*1.1+Math.sin(a)*kr]); }
+    var sx0=cx-kr*1.4+kr*0.7;
+    P.push([sx0, cy-kr*1.1+kr*0.28]); P.push([sx0+s*1.55, cy-kr*1.1+kr*0.28]);
+    P.push([sx0+s*1.55, cy-kr*1.1+kr*0.75]); P.push([sx0+s*1.30, cy-kr*1.1+kr*0.75]);
+    P.push([sx0+s*1.30, cy-kr*1.1+kr*0.55]); P.push([sx0+s*1.05, cy-kr*1.1+kr*0.55]);
+    P.push([sx0+s*1.05, cy-kr*1.1+kr*0.75]); P.push([sx0+s*0.80, cy-kr*1.1+kr*0.75]);
+    P.push([sx0+s*0.80, cy-kr*1.1+kr*0.28]);
+    P.push([sx0, cy-kr*1.1-kr*0.28]);
+  }else if(name==='COMB'){
+    var bx0=-1.25*s, bx1=1.25*s, by0=-0.15*s, by1=0.15*s, teeth=12;
+    var th=0.38*s, tw=(bx1-bx0)/teeth;
+    P.push([bx0,by0]); P.push([bx1,by0]); P.push([bx1,by1]);
+    for(i=0;i<teeth;i++){
+      var cx1=bx1-(i+0.5)*tw, cx2=bx1-(i+1)*tw;
+      P.push([cx1, by1+th]); P.push([cx2, by1]);
+    }
+    P.push([bx0,by1]);
+  }
+  P = fitBox(P, cx, cy, Math.min(W,H)*0.78);
+  return P;
+}
+
+/* ---------- state ---------- */
+
+var cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+var kslider=document.getElementById('kslider'), kval=document.getElementById('kval');
+var rmsRead=document.getElementById('rmsRead'), parRead=document.getElementById('parRead');
+var roundNum=document.getElementById('roundNum'), starCount=document.getElementById('starCount');
+var roundLabel=document.getElementById('roundLabel'), toast=document.getElementById('toast');
+var titleEl=document.getElementById('title'), roundEndEl=document.getElementById('roundEnd'), finalEl=document.getElementById('final');
+
+var W=0,H=0,DPR=1;
+var state={ round:0, K:8, stars:0, perRound:[],
+  orig:null, harm:null, path:null, tipT:0, best:loadBest() };
+
+function loadBest(){
+  try{ var v=window.localStorage.getItem('bb-proto-circle-budget-best');
+    if(v===null) return 0; var n=parseInt(v,10); return isFinite(n)?n:0; }catch(e){ return 0; }
+}
+function saveBest(v){ try{ window.localStorage.setItem('bb-proto-circle-budget-best', String(v)); }catch(e){} }
+
+var toastTimer=null;
+function showToast(msg){
+  toast.textContent=msg; toast.classList.add('show');
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){ toast.classList.remove('show'); },1800);
+}
+
+function buildRound(){
+  var r=ROUNDS[state.round];
+  state.orig=resampleClosed(shapeLoop(r.name,W,H),N);
+  state.harm=dftSorted(state.orig);
+  state.K=8; kslider.value='8'; kval.textContent='8';
+  rebuildPath();
+  roundNum.textContent=String(state.round+1);
+  parRead.textContent=String(r.par);
+  roundLabel.innerHTML=r.name+'<small>'+r.label+' &middot; par '+r.par+'</small>';
+  updateRMS();
+}
+
+function rebuildPath(){
+  var p=new Array(N), K=Math.min(state.K,state.harm.length);
+  for(var j=0;j<N;j++) p[j]=tipAt(j,state.harm,K);
+  state.path=p;
+}
+function currentRMS(){ return rmsOf(state.orig,state.harm,state.K); }
+function updateRMS(){
+  var e=currentRMS();
+  rmsRead.textContent=e.toFixed(1);
+  rmsRead.className=e<WIN_RMS?'ok':'rms';
+}
+
+function setK(k){
+  k=Math.round(Number(k)); if(!isFinite(k)) return;
+  k=Math.max(8,Math.min(96,k));
+  state.K=k; kslider.value=String(k); kval.textContent=String(k);
+  rebuildPath(); updateRMS();
+}
+
+function lockIn(){
+  var e=currentRMS();
+  if(e>=WIN_RMS){
+    showToast('Too blobby ('+e.toFixed(1)+'px). Add more circles.');
+    return {win:false, rms:e};
+  }
+  var r=ROUNDS[state.round], stars;
+  if(state.K<=r.par) stars=3; else if(state.K<=r.par+16) stars=2; else stars=1;
+  state.stars+=stars; state.perRound.push(stars);
+  starCount.textContent=String(state.stars);
+  showRoundEnd(stars,e);
+  return {win:true, stars:stars, rms:e};
+}
+
+function starStr(n){
+  var s='';
+  for(var i=0;i<3;i++) s+= i<n ? '&#9733;' : '<span class="dim">&#9733;</span>';
+  return s;
+}
+function showRoundEnd(stars,e){
+  document.getElementById('reStars').innerHTML=starStr(stars);
+  document.getElementById('reTitle').textContent = stars===3 ? 'Under par. Beautiful.' : (stars===2 ? 'Locked in.' : 'It counts.');
+  document.getElementById('reSub').textContent='RMS '+e.toFixed(1)+'px at '+state.K+' circles (par '+ROUNDS[state.round].par+').';
+  document.getElementById('nextBtn').textContent = state.round<ROUNDS.length-1 ? 'Next shape' : 'See results';
+  roundEndEl.classList.remove('hidden');
+}
+function nextRound(){
+  roundEndEl.classList.add('hidden');
+  if(state.round<ROUNDS.length-1){ state.round++; buildRound(); }
+  else showFinal();
+}
+function showFinal(){
+  var total=state.stars, isBest=false;
+  if(total>state.best){ state.best=total; saveBest(total); isBest=true; }
+  document.getElementById('finStars').innerHTML=starStr(Math.round(total/6));
+  document.getElementById('finScore').textContent=total+' / 18 stars';
+  document.getElementById('finBest').textContent='Best: '+state.best+' / 18'+(isBest?' — new best!':'');
+  finalEl.classList.remove('hidden');
+}
+function startGame(){
+  state.round=0; state.stars=0; state.perRound=[];
+  starCount.textContent='0';
+  titleEl.classList.add('hidden'); finalEl.classList.add('hidden'); roundEndEl.classList.add('hidden');
+  buildRound();
+}
+
+/* ---------- canvas ---------- */
+
+function resize(){
+  var r=cv.getBoundingClientRect();
+  DPR=Math.min(window.devicePixelRatio||1,2);
+  W=Math.max(1,r.width); H=Math.max(1,r.height);
+  cv.width=Math.round(W*DPR); cv.height=Math.round(H*DPR);
+  if(state.orig){ buildRound(); }
+}
+window.addEventListener('resize',resize);
+
+function draw(){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle='#0a0a12'; ctx.fillRect(0,0,W,H);
+  if(!state.orig) return;
+  var i;
+  // ghost target
+  ctx.strokeStyle='rgba(255,255,255,0.20)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(state.orig[0][0],state.orig[0][1]);
+  for(i=1;i<state.orig.length;i++) ctx.lineTo(state.orig[i][0],state.orig[i][1]);
+  ctx.closePath(); ctx.stroke();
+  // reconstruction
+  var p=state.path;
+  ctx.strokeStyle='rgba(0,229,255,0.95)'; ctx.lineWidth=2.5;
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.shadowColor='#00e5ff'; ctx.shadowBlur=8;
+  ctx.beginPath(); ctx.moveTo(p[0][0],p[0][1]);
+  for(i=1;i<p.length;i++) ctx.lineTo(p[i][0],p[i][1]);
+  ctx.closePath(); ctx.stroke();
+  ctx.shadowBlur=0;
+  // traveling tip
+  var tip=tipAt(state.tipT,state.harm,Math.min(state.K,state.harm.length));
+  ctx.fillStyle='#ff4fd8'; ctx.shadowColor='#ff4fd8'; ctx.shadowBlur=12;
+  ctx.beginPath(); ctx.arc(tip[0],tip[1],4.5,0,2*Math.PI); ctx.fill();
+  ctx.shadowBlur=0;
+}
+
+var lastT=0;
+function frame(now){
+  var dt=lastT?(now-lastT)/1000:0.016; lastT=now;
+  if(dt>0.05) dt=0.05;
+  if(state.orig){ state.tipT=(state.tipT+dt/6*N)%N; draw(); }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- events ---------- */
+
+kslider.addEventListener('input',function(){ setK(kslider.value); });
+document.getElementById('lockBtn').addEventListener('click',lockIn);
+document.getElementById('nextBtn').addEventListener('click',nextRound);
+document.getElementById('startBtn').addEventListener('click',startGame);
+document.getElementById('againBtn').addEventListener('click',startGame);
+
+/* ---------- test hook ---------- */
+window.__test={
+  start:function(){ startGame(); },
+  setK:function(k){ setK(k); },
+  lock:function(){ return lockIn(); },
+  next:function(){ nextRound(); },
+  rms:function(){ return currentRMS(); },
+  K:function(){ return state.K; },
+  round:function(){ return state.round; },
+  stars:function(){ return state.stars; },
+  // measure RMS for any shape at any K (tuning helper)
+  rmsAt:function(name,k){
+    var o=resampleClosed(shapeLoop(name,W,H),N);
+    return rmsOf(o,dftSorted(o),k);
+  },
+  shapes:function(){ return ROUNDS.map(function(r){return r.name;}); }
+};
+
+/* ---------- boot ---------- */
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

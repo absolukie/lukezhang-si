@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>TRACE RACE — Blackbox Arcade</title>
+<style>
+  :root{
+    --bg:#0a0a12;
+    --cyan:#00e5ff;
+    --magenta:#ff4fd8;
+    --dim:#8a8aa3;
+    --panel:#12121c;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:#e8e8f2;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    overflow:hidden;overscroll-behavior:none;}
+  #app{display:flex;flex-direction:column;height:100%;height:100dvh;}
+  header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:10px 14px;background:var(--panel);border-bottom:1px solid #1e1e2e;
+    flex:0 0 auto;
+  }
+  .brand{font-weight:800;letter-spacing:3px;font-size:15px;color:var(--cyan);
+    text-shadow:0 0 12px rgba(0,229,255,.6);}
+  .meta{display:flex;gap:14px;font-size:13px;font-weight:700;color:var(--dim);}
+  .meta b{color:#e8e8f2;}
+  #wrap{position:relative;flex:1 1 auto;min-height:0;}
+  #cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;}
+  #panel{
+    flex:0 0 auto;background:var(--panel);border-top:1px solid #1e1e2e;
+    padding:10px 14px 12px;display:flex;align-items:center;gap:12px;
+    min-height:64px;
+  }
+  #status{flex:1 1 auto;font-size:15px;font-weight:600;color:#c9c9dd;line-height:1.4;}
+  #status .big{font-size:26px;font-weight:800;color:var(--cyan);}
+  #status .quip{color:var(--magenta);font-weight:700;}
+  button{
+    touch-action:manipulation;
+    font-family:inherit;font-size:15px;font-weight:700;
+    background:#181826;color:#e8e8f2;
+    border:1px solid #2c2c44;border-radius:12px;
+    padding:12px 18px;min-height:48px;cursor:pointer;flex:0 0 auto;
+  }
+  button:active{transform:scale(.96);}
+  button.primary{background:transparent;border:2px solid var(--cyan);color:var(--cyan);
+    box-shadow:0 0 18px rgba(0,229,255,.35);}
+  .hidden{display:none !important;}
+  footer{
+    flex:0 0 auto;text-align:center;color:#55556e;font-size:11px;
+    padding:6px 12px 10px;background:var(--panel);line-height:1.4;
+  }
+  .overlay{
+    position:fixed;inset:0;z-index:10;background:rgba(10,10,18,.96);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:24px;gap:14px;
+  }
+  .overlay h1{margin:0;font-size:46px;font-weight:900;letter-spacing:8px;color:var(--cyan);
+    text-shadow:0 0 24px rgba(0,229,255,.7),0 0 60px rgba(0,229,255,.3);}
+  .overlay .how{font-size:16px;color:#c9c9dd;max-width:320px;line-height:1.55;}
+  .overlay .bestline{font-size:14px;color:var(--dim);}
+  .overlay .bestline b{color:var(--cyan);}
+  #resTotal{font-size:22px;font-weight:800;color:#e8e8f2;}
+  #resTotal b{color:var(--cyan);font-size:34px;}
+  #newBest{font-size:15px;font-weight:800;color:var(--magenta);
+    text-shadow:0 0 14px rgba(255,79,216,.6);}
+  #resRows{display:flex;flex-direction:column;gap:6px;min-width:230px;}
+  .rrow{display:flex;justify-content:space-between;font-size:14px;color:#c9c9dd;
+    background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+    border-radius:10px;padding:8px 14px;}
+  .rrow b{color:var(--cyan);}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">TRACE RACE</div>
+    <div class="meta"><span id="roundLbl">Round <b>1</b>/5</span><span id="totalLbl"><b>0</b> pts</span></div>
+  </header>
+  <div id="wrap"><canvas id="cv"></canvas></div>
+  <div id="panel">
+    <div id="status">Draw the shape in one stroke</div>
+    <button id="nextBtn" class="primary hidden">Next shape &rarr;</button>
+  </div>
+  <footer>Discrete Fourier Transform &mdash; any closed curve is a sum of spinning circles.</footer>
+</div>
+
+<div id="title" class="overlay">
+  <h1>TRACE RACE</h1>
+  <p class="how">5 rounds. Each round shows a ghost shape &mdash; redraw it in <b>one</b> stroke. Closest trace wins.</p>
+  <div class="bestline" id="titleBest"></div>
+  <button id="startBtn" class="primary">Start</button>
+</div>
+
+<div id="results" class="overlay hidden">
+  <h1 id="resTitle">DONE</h1>
+  <div id="resTotal"></div>
+  <div id="newBest" class="hidden">NEW BEST!</div>
+  <div id="resRows"></div>
+  <div class="bestline" id="resBest"></div>
+  <button id="againBtn" class="primary">Play again</button>
+</div>
+
+<script>
+'use strict';
+/* TRACE RACE — draw-to-match. Your stroke is resampled, normalized and
+   RMS-compared against the target (phase- and direction-aligned).
+   Shared hand-rolled DFT core below. No libraries. */
+
+var N = 256;
+var SCORE_K = 500;   // tuned: decent trace -> 60-85, sloppy -> <30
+
+function resampleClosed(pts, n){
+  var m = pts.length;
+  if(m === 0) return [];
+  var segs = new Array(m);
+  var total = 0, i;
+  for(i = 0; i < m; i++){
+    var a = pts[i], b = pts[(i + 1) % m];
+    var d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    segs[i] = d; total += d;
+  }
+  if(total < 1e-9){
+    var out0 = [];
+    for(i = 0; i < n; i++) out0.push([pts[0][0], pts[0][1]]);
+    return out0;
+  }
+  var out = [];
+  var step = total / n;
+  var target = 0;
+  var segStart = 0;
+  for(i = 0; i < m && out.length < n; i++){
+    var p = pts[i], q = pts[(i + 1) % m];
+    var dd = segs[i];
+    while(target <= segStart + dd + 1e-9 && out.length < n){
+      var f = dd > 1e-12 ? (target - segStart) / dd : 0;
+      out.push([p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f]);
+      target += step;
+    }
+    segStart += dd;
+  }
+  while(out.length < n) out.push([pts[0][0], pts[0][1]]);
+  return out;
+}
+
+function dftSorted(seq){
+  var n = seq.length, k, j;
+  var out = new Array(n);
+  for(k = 0; k < n; k++){
+    var re = 0, im = 0;
+    for(j = 0; j < n; j++){
+      var a = 2 * Math.PI * k * j / n;
+      var ca = Math.cos(a), sa = Math.sin(a);
+      var x = seq[j][0], y = seq[j][1];
+      re += x * ca + y * sa;
+      im += -x * sa + y * ca;
+    }
+    var amp = Math.hypot(re, im) / n;
+    out[k] = { k: k > n / 2 ? k - n : k, re: re, im: im, amp: amp };
+  }
+  out.sort(function(h1, h2){ return h2.amp - h1.amp; });
+  return out;
+}
+
+function tipAt(t, harm, K){
+  var x = 0, y = 0;
+  var lim = Math.min(K, harm.length);
+  for(var i = 0; i < lim; i++){
+    var h = harm[i];
+    var a = 2 * Math.PI * h.k * t / N;
+    var ca = Math.cos(a), sa = Math.sin(a);
+    x += (h.re * ca - h.im * sa) / N;
+    y += (h.re * sa + h.im * ca) / N;
+  }
+  return [x, y];
+}
+
+/* centroid at origin + unit bounding box */
+function normalize(pts){
+  var n = pts.length, i, cx = 0, cy = 0;
+  for(i = 0; i < n; i++){ cx += pts[i][0]; cy += pts[i][1]; }
+  cx /= n; cy /= n;
+  var minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity;
+  for(i = 0; i < n; i++){
+    var x = pts[i][0] - cx, y = pts[i][1] - cy;
+    if(x < minx) minx = x; if(x > maxx) maxx = x;
+    if(y < miny) miny = y; if(y > maxy) maxy = y;
+  }
+  var s = Math.max(maxx - minx, maxy - miny);
+  if(s < 1e-9) s = 1;
+  var out = [];
+  for(i = 0; i < n; i++) out.push([(pts[i][0] - cx) / s, (pts[i][1] - cy) / s]);
+  return out;
+}
+
+function rmsAB(a, b){
+  var s = 0;
+  for(var i = 0; i < N; i++){
+    var dx = a[i][0] - b[i][0], dy = a[i][1] - b[i][1];
+    s += dx * dx + dy * dy;
+  }
+  return Math.sqrt(s / N);
+}
+
+/* phase- and direction-aligned RMS: the player may start anywhere on the
+   loop and draw either way around, so take the best cyclic shift + flip */
+function bestRMS(a, b){
+  var best = Infinity, i, j;
+  for(i = 0; i < N; i += 2){
+    var s = 0;
+    for(j = 0; j < N; j++){
+      var p = b[(j + i) % N];
+      var dx = a[j][0] - p[0], dy = a[j][1] - p[1];
+      s += dx * dx + dy * dy;
+    }
+    var r = Math.sqrt(s / N);
+    if(r < best) best = r;
+  }
+  var br = b.slice().reverse();
+  for(i = 0; i < N; i += 2){
+    var s2 = 0;
+    for(j = 0; j < N; j++){
+      var q = br[(j + i) % N];
+      var dx2 = a[j][0] - q[0], dy2 = a[j][1] - q[1];
+      s2 += dx2 * dx2 + dy2 * dy2;
+    }
+    var r2 = Math.sqrt(s2 / N);
+    if(r2 < best) best = r2;
+  }
+  return best;
+}
+
+function scoreOf(rms){
+  return Math.max(0, Math.round(100 - rms * SCORE_K));
+}
+
+/* ---------- procedural target shapes (design space ~[-1,1], y up) ---------- */
+
+function heartPts(){
+  var P = [], i, t;
+  for(i = 0; i < 220; i++){
+    t = i / 220 * 2 * Math.PI;
+    var x = 16 * Math.pow(Math.sin(t), 3);
+    var y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+    P.push([x / 17, y / 17]);
+  }
+  return P;
+}
+function smoothClosed(pts){
+  var out = [], n = pts.length, i;
+  for(i = 0; i < n; i++){
+    var a = pts[i], b = pts[(i + 1) % n];
+    out.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25]);
+    out.push([a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]);
+  }
+  return out;
+}
+function fishPts(){
+  var P = [
+    [1.0, 0.0], [0.75, 0.18], [0.45, 0.30], [0.1, 0.34], [-0.2, 0.28],
+    [-0.75, 0.55], [-0.5, 0.02], [-0.75, -0.5],
+    [-0.2, -0.26], [0.1, -0.32], [0.45, -0.28], [0.75, -0.16]
+  ];
+  return smoothClosed(P);
+}
+function flowerPts(){
+  var P = [], i;
+  for(i = 0; i < 200; i++){
+    var t = i / 200 * 2 * Math.PI;
+    var r = 0.62 + 0.38 * Math.cos(5 * t);
+    P.push([r * Math.cos(t), r * Math.sin(t)]);
+  }
+  return P;
+}
+function crescentPts(){
+  var P = [], i;
+  var D = Math.PI / 180;
+  var n1 = 140, a0 = 51.3 * D, a1 = 308.7 * D;
+  for(i = 0; i < n1; i++){
+    var a = a0 + (a1 - a0) * i / (n1 - 1);
+    P.push([Math.cos(a), Math.sin(a)]);
+  }
+  var n2 = 110, b0 = -77.4 * D, b1 = 77.4 * D;
+  // inner cut: the arc of circle2 that lies INSIDE circle1, i.e. from b0
+  // decreasing through +/-180deg (left side) around to b1
+  var sweep = 2 * Math.PI - (b1 - b0);
+  for(i = 0; i < n2; i++){
+    var b = b0 - sweep * i / (n2 - 1);
+    P.push([0.45 + 0.8 * Math.cos(b), 0.8 * Math.sin(b)]);
+  }
+  return P;
+}
+function boltPts(){
+  return [
+    [0.25, 1.0], [-0.35, 0.12], [-0.08, 0.12],
+    [-0.25, -1.0], [0.35, -0.12], [0.08, -0.12]
+  ];
+}
+
+var SHAPES = [
+  { label: 'heart',    pts: heartPts() },
+  { label: 'fish',     pts: fishPts() },
+  { label: 'flower',   pts: flowerPts() },
+  { label: 'crescent', pts: crescentPts() },
+  { label: 'lightning', pts: boltPts() }
+];
+
+/* ---------- dom ---------- */
+
+var cv = document.getElementById('cv');
+var ctx = cv.getContext('2d');
+var roundLbl = document.getElementById('roundLbl');
+var totalLbl = document.getElementById('totalLbl');
+var statusEl = document.getElementById('status');
+var nextBtn = document.getElementById('nextBtn');
+var titleEl = document.getElementById('title');
+var resultsEl = document.getElementById('results');
+
+var W = 0, H = 0, DPR = 1;
+
+var game = {
+  order: [],
+  roundIdx: 0,
+  total: 0,
+  scores: [],
+  phase: 'title',   // title | draw | reveal | done
+  design: null,     // current shape design points
+  shapeLabel: '',
+  targetPx: null,   // 256 resampled target points, canvas px
+  targetN: null,    // normalized target
+  raw: [],          // player stroke
+  lastRMS: NaN,
+  lastScore: 0,
+  best: loadBest()
+};
+
+function loadBest(){
+  try{
+    var v = window.localStorage.getItem('bb-proto-trace-race-best');
+    var f = parseInt(v, 10);
+    return isFinite(f) ? f : 0;
+  }catch(e){ return 0; }
+}
+function saveBest(v){
+  try{ window.localStorage.setItem('bb-proto-trace-race-best', String(v)); }catch(e){}
+}
+
+function shuffle(a){
+  for(var i = a.length - 1; i > 0; i--){
+    var j = Math.floor(Math.random() * (i + 1));
+    var t = a[i]; a[i] = a[j]; a[j] = t;
+  }
+  return a;
+}
+
+function quip(s){
+  if(s >= 90) return 'Inhuman.';
+  if(s >= 75) return 'Nailed it.';
+  if(s >= 60) return 'Solid trace.';
+  if(s >= 40) return 'Rough.';
+  if(s >= 20) return 'Shaky.';
+  return 'Yikes.';
+}
+
+/* ---------- game flow ---------- */
+
+function startGame(){
+  game.order = shuffle([0, 1, 2, 3, 4]);
+  game.roundIdx = 0;
+  game.total = 0;
+  game.scores = [];
+  titleEl.classList.add('hidden');
+  resultsEl.classList.add('hidden');
+  startRound();
+}
+
+function layoutTarget(){
+  var s = Math.min(W, H) * 0.30;
+  var cxp = W / 2, cyp = H * 0.46;
+  var mapped = game.design.map(function(p){ return [cxp + p[0] * s, cyp - p[1] * s]; });
+  game.targetPx = resampleClosed(mapped, N);
+  game.targetN = normalize(game.targetPx);
+}
+
+function startRound(){
+  var sh = SHAPES[game.order[game.roundIdx]];
+  game.design = sh.pts;
+  game.shapeLabel = sh.label;
+  layoutTarget();
+  game.raw = [];
+  game.phase = 'draw';
+  roundLbl.innerHTML = 'Round <b>' + (game.roundIdx + 1) + '</b>/5';
+  totalLbl.innerHTML = '<b>' + game.total + '</b> pts';
+  statusEl.textContent = 'Draw the ' + sh.label + ' in one stroke';
+  nextBtn.classList.add('hidden');
+}
+
+function lockInStroke(){
+  var length = 0, i;
+  for(i = 1; i < game.raw.length; i++){
+    length += Math.hypot(game.raw[i][0] - game.raw[i-1][0], game.raw[i][1] - game.raw[i-1][1]);
+  }
+  if(game.raw.length < 3 || length < 60){
+    statusEl.textContent = 'Too short — draw a bigger loop';
+    game.raw = [];
+    return;
+  }
+  var b = normalize(resampleClosed(game.raw, N));
+  var rms = bestRMS(game.targetN, b);
+  var score = scoreOf(rms);
+  game.lastRMS = rms;
+  game.lastScore = score;
+  game.total += score;
+  game.scores.push({ label: game.shapeLabel, score: score });
+  game.phase = 'reveal';
+  totalLbl.innerHTML = '<b>' + game.total + '</b> pts';
+  statusEl.innerHTML = '<span class="big">' + score + '</span> <span class="quip">' + quip(score) + '</span>';
+  nextBtn.textContent = (game.roundIdx === 4) ? 'See results →' : 'Next shape →';
+  nextBtn.classList.remove('hidden');
+}
+
+function nextRound(){
+  game.roundIdx++;
+  if(game.roundIdx >= 5) showResults();
+  else startRound();
+}
+
+function showResults(){
+  game.phase = 'done';
+  var isBest = game.total > game.best;
+  if(isBest){ game.best = game.total; saveBest(game.total); }
+  document.getElementById('resTotal').innerHTML = '<b>' + game.total + '</b> / 500';
+  document.getElementById('newBest').classList.toggle('hidden', !isBest);
+  var rows = document.getElementById('resRows');
+  rows.innerHTML = '';
+  game.scores.forEach(function(r){
+    var d = document.createElement('div');
+    d.className = 'rrow';
+    d.innerHTML = '<span>' + r.label + '</span><b>' + r.score + '</b>';
+    rows.appendChild(d);
+  });
+  document.getElementById('resBest').innerHTML = 'best: <b>' + game.best + '</b> / 500';
+  resultsEl.classList.remove('hidden');
+}
+
+/* ---------- canvas ---------- */
+
+function resize(){
+  var r = cv.getBoundingClientRect();
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = Math.max(1, r.width); H = Math.max(1, r.height);
+  cv.width = Math.round(W * DPR);
+  cv.height = Math.round(H * DPR);
+  if(game.design && (game.phase === 'draw' || game.phase === 'reveal')) layoutTarget();
+}
+window.addEventListener('resize', resize);
+
+function strokePath(pts, close){
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for(var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  if(close) ctx.closePath();
+  ctx.stroke();
+}
+
+var pulseT = 0;
+function frame(now){
+  pulseT = now / 1000;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = '#0a0a12';
+  ctx.fillRect(0, 0, W, H);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  if(game.phase === 'draw' || game.phase === 'reveal'){
+    // ghost target
+    var alpha = game.phase === 'draw' ? 0.20 + 0.08 * Math.sin(pulseT * 3) : 0.38;
+    ctx.strokeStyle = 'rgba(255,255,255,' + alpha.toFixed(3) + ')';
+    ctx.lineWidth = 2;
+    strokePath(game.targetPx, true);
+
+    if(game.phase === 'draw' && game.raw.length > 1){
+      ctx.strokeStyle = '#00e5ff';
+      ctx.lineWidth = 3;
+      ctx.shadowColor = '#00e5ff';
+      ctx.shadowBlur = 12;
+      strokePath(game.raw, false);
+      ctx.shadowBlur = 0;
+    }
+    if(game.phase === 'reveal'){
+      var drawn = resampleClosed(game.raw, N);
+      ctx.strokeStyle = 'rgba(0,229,255,0.95)';
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = '#00e5ff';
+      ctx.shadowBlur = 10;
+      strokePath(drawn, true);
+      ctx.shadowBlur = 0;
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- pointer input ---------- */
+
+var drawing = false, activePointer = null;
+
+function posOf(e){
+  var r = cv.getBoundingClientRect();
+  return [e.clientX - r.left, e.clientY - r.top];
+}
+
+cv.addEventListener('pointerdown', function(e){
+  if(game.phase !== 'draw') return;
+  if(!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0) || activePointer !== null) return;
+  activePointer = e.pointerId;
+  e.preventDefault();
+  drawing = true;
+  game.raw = [];
+  try{ cv.setPointerCapture(e.pointerId); }catch(err){}
+  game.raw.push(posOf(e));
+});
+cv.addEventListener('pointermove', function(e){
+  if(!drawing || e.pointerId !== activePointer) return;
+  e.preventDefault();
+  var p = posOf(e);
+  var last = game.raw[game.raw.length - 1];
+  if(!last || Math.hypot(p[0] - last[0], p[1] - last[1]) > 2){
+    game.raw.push(p);
+  }
+});
+function endStroke(e){
+  if(!drawing || e.pointerId !== activePointer) return;
+  drawing = false;
+  activePointer = null;
+  if(e.type === 'pointercancel' || e.type === 'lostpointercapture'){
+    statusEl.textContent = 'Interrupted — draw the ' + game.shapeLabel + ' again';
+    game.raw = [];
+    return;
+  }
+  lockInStroke();
+}
+cv.addEventListener('pointerup', endStroke);
+cv.addEventListener('pointercancel', endStroke);
+cv.addEventListener('lostpointercapture', endStroke);
+
+/* ---------- buttons ---------- */
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('againBtn').addEventListener('click', startGame);
+nextBtn.addEventListener('click', nextRound);
+
+(function initBest(){
+  var el = document.getElementById('titleBest');
+  el.innerHTML = game.best > 0 ? 'best: <b>' + game.best + '</b> / 500' : '';
+})();
+
+/* ---------- test hook ---------- */
+window.__test = {
+  start: function(){ startGame(); },
+  phase: function(){ return game.phase; },
+  round: function(){ return game.roundIdx + 1; },
+  shape: function(){ return game.shapeLabel; },
+  total: function(){ return game.total; },
+  lastRMS: function(){ return game.lastRMS; },
+  lastScore: function(){ return game.lastScore; },
+  scores: function(){ return game.scores.map(function(s){ return s.score; }); },
+  next: function(){ nextRound(); },
+  targetClient: function(){
+    var r = cv.getBoundingClientRect();
+    return game.targetPx.map(function(p){ return [p[0] + r.left, p[1] + r.top]; });
+  },
+  debugScore: function(rawPts){
+    var b = normalize(resampleClosed(rawPts, N));
+    var rms = bestRMS(game.targetN, b);
+    return { rms: rms, score: scoreOf(rms) };
+  }
+};
+
+/* ---------- boot ---------- */
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

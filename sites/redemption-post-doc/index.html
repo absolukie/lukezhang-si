@@ -312,6 +312,7 @@ textarea.notes { width: 100%; min-height: 76px; font-size: 16px; }
   <div class="prog" id="prog">0 of 24 decided</div>
   <button id="clearBtn" class="ghost">Clear</button>
   <button id="copyBtn">Copy my decision</button>
+  <button id="submitBtn">Submit</button>
 </footer>
 <div class="toast" id="toast"></div>
 <script>
@@ -419,6 +420,22 @@ document.getElementById('copyBtn').addEventListener('click', () => {
     try { document.execCommand('copy'); } catch (e) {}
     document.body.removeChild(ta); done();
   }
+});
+document.getElementById('submitBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Submitting\u2026';
+  try {
+    const res = await fetch('/api/decision/submit', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ slug: 'redemption-post-doc', picks: state.picks, notes: state.notes })
+    });
+    if (!res.ok) throw new Error('bad status ' + res.status);
+    showToast('Submitted \u2014 Kit can read it now');
+  } catch (e) {
+    showToast('Submit failed \u2014 check connection and retry');
+  }
+  btn.disabled = false; btn.textContent = orig;
 });
 document.getElementById('clearBtn').addEventListener('click', () => {
   if (!confirm('Clear all picks and notes?')) return;

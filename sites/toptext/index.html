@@ -308,7 +308,7 @@ document.querySelectorAll(".sizebtn").forEach(function(b){
 });
 document.getElementById("capIn").addEventListener("input", function(){
   draw();
-  scheduleAutoExport(2500); // export a few seconds after he stops typing
+  scheduleAutoExport(1200); // re-export ~1s after he stops typing
 });
 
 /* GIF export (for Photos / iMessage / group chats) */
@@ -339,84 +339,106 @@ function seekTo(v, t){  return new Promise(function(res){
 }
 /* Decode a GIF's frames directly with omggif (shipped locally) and composite them
    by hand, honoring disposal methods. No reliance on the browser's GIF animation
-   clock, which mobile Safari won't advance for canvas capture. */
+   clock, which mobile Safari won't advance for canvas capture.
+   Decoded frames are cached per clip (at output size) so re-exports while typing
+   skip the decode and go straight to stamping the caption + encoding. */
+var clipCache = null; // {blob, n, mh, frames:[ImageData]}
+async function decodeClipToCache(fps, gw, setP){
+  var ab = await mediaBlob.arrayBuffer();
+  var reader;
+  try{ reader = new GifReader(new Uint8Array(ab)); }catch(e){ return null; }
+  var fw = reader.width, fh = reader.height, nf = reader.numFrames();
+  if(!fw || !fh || !nf) return null;
+  var delays = [], totalMs = 0, k;
+  for(k = 0; k < nf; k++){
+    var dms = reader.frameInfo(k).delay * 10; // gif units are 1/100s
+    if(!(dms >= 20)) dms = 100; // spec default / browser clamp
+    delays.push(dms); totalMs += dms;
+  }
+  if(totalMs <= 0) return null;
+  var maxMs = Math.min(totalMs, 5000);
+  var n = Math.max(4, Math.round(maxMs / 1000 * fps));
+  var mh = Math.round(gw * fh / fw);
+  var cum = [], acc = 0;
+  for(k = 0; k < nf; k++){ cum.push(acc); acc += delays[k]; }
+  var tmp = document.createElement("canvas"); tmp.width = fw; tmp.height = fh;
+  var tctx = tmp.getContext("2d");
+  var small = document.createElement("canvas"); small.width = gw; small.height = mh;
+  var sctx = small.getContext("2d");
+  var pix = new Uint8ClampedArray(fw * fh * 4);
+  var imgd = new ImageData(pix, fw, fh);
+  var lastDecoded = -1, prevDisp = 0, prevRect = null, saved = null;
+  function clampRect(r){
+    var x = Math.max(0, r.x), y = Math.max(0, r.y);
+    var w = Math.min(r.width, fw - x), hh2 = Math.min(r.height, fh - y);
+    return {x: x, y: y, width: Math.max(0, w), height: Math.max(0, hh2)};
+  }
+  function clearRect(r){
+    r = clampRect(r);
+    for(var yy = 0; yy < r.height; yy++){
+      var o = ((r.y + yy) * fw + r.x) * 4;
+      for(var xx = 0; xx < r.width; xx++){ pix[o++] = 0; pix[o++] = 0; pix[o++] = 0; pix[o++] = 0; }
+    }
+  }
+  function saveRect(r){
+    r = clampRect(r);
+    var s = {x: r.x, y: r.y, width: r.width, height: r.height, data: new Uint8ClampedArray(r.width * r.height * 4)};
+    for(var yy = 0; yy < r.height; yy++){
+      var so = yy * r.width * 4, po = ((r.y + yy) * fw + r.x) * 4;
+      s.data.set(pix.subarray(po, po + r.width * 4), so);
+    }
+    return s;
+  }
+  function restoreRect(s){
+    for(var yy = 0; yy < s.height; yy++){
+      var so = yy * s.width * 4, po = ((s.y + yy) * fw + s.x) * 4;
+      pix.set(s.data.subarray(so, so + s.width * 4), po);
+    }
+  }
+  function decodeUpTo(fi){
+    while(lastDecoded < fi){
+      var nk = lastDecoded + 1, info = reader.frameInfo(nk);
+      if(lastDecoded >= 0){ // dispose the previous frame before drawing this one
+        if(prevDisp === 2 && prevRect) clearRect(prevRect);
+        else if(prevDisp === 3 && saved) restoreRect(saved);
+      }
+      var rect = {x: info.x, y: info.y, width: info.width, height: info.height};
+      saved = (info.disposal === 3) ? saveRect(rect) : null;
+      reader.decodeAndBlitFrameRGBA(nk, pix);
+      prevDisp = info.disposal; prevRect = rect; lastDecoded = nk;
+    }
+  }
+  var frames = [];
+  for(var i = 0; i < n; i++){
+    var tMs = (i / n) * maxMs, fi = 0;
+    while(fi < nf - 1 && cum[fi] + delays[fi] <= tMs) fi++;
+    decodeUpTo(fi);
+    tctx.putImageData(imgd, 0, 0);
+    sctx.drawImage(tmp, 0, 0, gw, mh);
+    frames.push(sctx.getImageData(0, 0, gw, mh));
+    if(setP) setP(0.08 * (i + 1) / n);
+  }
+  return {blob: mediaBlob, n: n, mh: mh, frames: frames};
+}
 async function gifFromDecodedFrames(gif, off, octx, gw, fps, setP){
   try{
     if(!mediaBlob || typeof GifReader === "undefined") return false;
-    var ab = await mediaBlob.arrayBuffer();
-    var reader;
-    try{ reader = new GifReader(new Uint8Array(ab)); }catch(e){ return false; }
-    var fw = reader.width, fh = reader.height, nf = reader.numFrames();
-    if(!fw || !fh || !nf) return false;
-    var delays = [], totalMs = 0, k;
-    for(k = 0; k < nf; k++){
-      var dms = reader.frameInfo(k).delay * 10; // gif units are 1/100s
-      if(!(dms >= 20)) dms = 100; // spec default / browser clamp
-      delays.push(dms); totalMs += dms;
+    if(!clipCache || clipCache.blob !== mediaBlob){
+      clipCache = await decodeClipToCache(fps, gw, setP);
+      if(!clipCache) return false;
     }
-    if(totalMs <= 0) return false;
-    var maxMs = Math.min(totalMs, 5000);
-    var n = Math.max(4, Math.round(maxMs / 1000 * fps));
+    var cc = clipCache;
     var h = memeHeader(gw); // caption renders live into every exported frame
-    var mh = Math.round(gw * fh / fw);
-    off.width = gw; off.height = h.hh + mh;
-    var tmp = document.createElement("canvas"); tmp.width = fw; tmp.height = fh;
+    off.width = gw; off.height = h.hh + cc.mh;
+    var tmp = document.createElement("canvas"); tmp.width = gw; tmp.height = cc.mh;
     var tctx = tmp.getContext("2d");
-    var pix = new Uint8ClampedArray(fw * fh * 4);
-    var imgd = new ImageData(pix, fw, fh);
-    var cum = [], acc = 0;
-    for(k = 0; k < nf; k++){ cum.push(acc); acc += delays[k]; }
-    var lastDecoded = -1, prevDisp = 0, prevRect = null, saved = null;
-    function clampRect(r){
-      var x = Math.max(0, r.x), y = Math.max(0, r.y);
-      var w = Math.min(r.width, fw - x), hh2 = Math.min(r.height, fh - y);
-      return {x: x, y: y, width: Math.max(0, w), height: Math.max(0, hh2)};
-    }
-    function clearRect(r){
-      r = clampRect(r);
-      for(var yy = 0; yy < r.height; yy++){
-        var o = ((r.y + yy) * fw + r.x) * 4;
-        for(var xx = 0; xx < r.width; xx++){ pix[o++] = 0; pix[o++] = 0; pix[o++] = 0; pix[o++] = 0; }
-      }
-    }
-    function saveRect(r){
-      r = clampRect(r);
-      var s = {x: r.x, y: r.y, width: r.width, height: r.height, data: new Uint8ClampedArray(r.width * r.height * 4)};
-      for(var yy = 0; yy < r.height; yy++){
-        var so = yy * r.width * 4, po = ((r.y + yy) * fw + r.x) * 4;
-        s.data.set(pix.subarray(po, po + r.width * 4), so);
-      }
-      return s;
-    }
-    function restoreRect(s){
-      for(var yy = 0; yy < s.height; yy++){
-        var so = yy * s.width * 4, po = ((s.y + yy) * fw + s.x) * 4;
-        pix.set(s.data.subarray(so, so + s.width * 4), po);
-      }
-    }
-    function decodeUpTo(fi){
-      while(lastDecoded < fi){
-        var nk = lastDecoded + 1, info = reader.frameInfo(nk);
-        if(lastDecoded >= 0){ // dispose the previous frame before drawing this one
-          if(prevDisp === 2 && prevRect) clearRect(prevRect);
-          else if(prevDisp === 3 && saved) restoreRect(saved);
-        }
-        var rect = {x: info.x, y: info.y, width: info.width, height: info.height};
-        saved = (info.disposal === 3) ? saveRect(rect) : null;
-        reader.decodeAndBlitFrameRGBA(nk, pix);
-        prevDisp = info.disposal; prevRect = rect; lastDecoded = nk;
-      }
-    }
-    for(var i = 0; i < n; i++){
-      var tMs = (i / n) * maxMs, fi = 0;
-      while(fi < nf - 1 && cum[fi] + delays[fi] <= tMs) fi++;
-      decodeUpTo(fi);
-      tctx.putImageData(imgd, 0, 0);
+    for(var i = 0; i < cc.n; i++){
+      tctx.putImageData(cc.frames[i], 0, 0);
       paintHeader(octx, gw, h);
-      octx.fillStyle = "#000"; octx.fillRect(0, h.hh, gw, mh);
-      octx.drawImage(tmp, 0, h.hh, gw, mh);
+      octx.fillStyle = "#000"; octx.fillRect(0, h.hh, gw, cc.mh);
+      octx.drawImage(tmp, 0, h.hh, gw, cc.mh);
       gif.addFrame(off, {copy: true, delay: Math.round(1000 / fps)});
-      setP(0.4 * (i + 1) / n);
+      setP(0.08 + 0.32 * (i + 1) / cc.n);
     }
     return true;
   }catch(e){ return false; }

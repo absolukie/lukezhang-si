@@ -108,7 +108,7 @@ const SITES = ["leetcode-games", "ergosphere", "illusion-bowling", "shotgrep", "
   "birds-of-a-feather",
   "unsolved-lab",
   "second-brain-search"];
-// Trade Compass: proxies Yahoo Finance quotes (client calls ./api/quotes?s=).
+// Trade Compass: proxies Yahoo Finance quotes via v8 chart API.
 async function handleTradeCompassQuotes(request) {
   const url = new URL(request.url);
   const syms = (url.searchParams.get("s") || "")
@@ -122,24 +122,34 @@ async function handleTradeCompassQuotes(request) {
       headers: { "content-type": "application/json" },
     });
   }
-  const yq = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${syms
-    .map(encodeURIComponent)
-    .join(",")}`;
-  const res = await fetch(yq, { headers: { "User-Agent": "Mozilla/5.0" } });
-  if (!res.ok) {
-    return new Response(JSON.stringify({ error: "yahoo fetch failed" }), {
-      status: 502,
-      headers: { "content-type": "application/json" },
-    });
-  }
-  const data = await res.json();
-  const quotes = (data.quoteResponse?.result || []).map((q) => ({
-    symbol: q.symbol,
-    name: q.shortName || q.longName || q.symbol,
-    price: q.regularMarketPrice,
-    change: q.regularMarketChange,
-    changePct: q.regularMarketChangePercent,
-  }));
+  const quotes = await Promise.all(
+    syms.map(async (sym) => {
+      try {
+        const res = await fetch(
+          `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=5d`,
+          { headers: { "User-Agent": "Mozilla/5.0" } }
+        );
+        if (!res.ok) return { symbol: sym, error: "fetch failed" };
+        const data = await res.json();
+        const m = data.chart?.result?.[0]?.meta;
+        if (!m) return { symbol: sym, error: "no data" };
+        return {
+          symbol: sym,
+          name: m.shortName || m.longName || sym,
+          price: m.regularMarketPrice,
+          prevClose: m.chartPreviousClose || m.previousClose,
+          change: m.regularMarketPrice != null && m.chartPreviousClose != null
+            ? m.regularMarketPrice - m.chartPreviousClose
+            : null,
+          changePct: m.regularMarketPrice != null && m.chartPreviousClose
+            ? ((m.regularMarketPrice - m.chartPreviousClose) / m.chartPreviousClose) * 100
+            : null,
+        };
+      } catch (e) {
+        return { symbol: sym, error: "exception" };
+      }
+    })
+  );
   return new Response(JSON.stringify({ quotes }), {
     headers: {
       "content-type": "application/json",

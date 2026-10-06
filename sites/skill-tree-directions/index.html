@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Skill Tree, Round Two: Five Directions</title>
+<title>Skill Tree, Round Three: Four Forests</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { -webkit-text-size-adjust: 100%; }
@@ -139,13 +139,12 @@
   .fogswirl { animation: fogswirl 6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
   @keyframes blinktag { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
   .blink { animation: blinktag 1.2s steps(2, jump-none) infinite; }
-</style>
-</head>
+</style></head>
 <body>
 <div class="wrap">
   <div class="hero">
-    <h1>Skill Tree, <span class="accent">Round Two</span></h1>
-    <p>Five fresh visual directions for your skill tree, each one grown as a real tree. Same real skill data in every one. <b>Tap any node</b> to see its level, XP, and next quest, then pick the direction that makes you grin.</p>
+    <h1>Skill Tree, <span class="accent">Round Three</span></h1>
+    <p>Five directions, rebuilt the way games build them: four separate trees per direction, tidy spacing, room to breathe. Same real skill data in every one. <b>Tap any node</b> to see its level, XP, and next quest, then pick the direction that makes you grin.</p>
     <div class="rule"><b>The Level-Up Rule:</b> a node levels up only when you have tried it hands-on AND written down your take. Reading never counts.</div>
     <div class="legend" id="legend"></div>
   </div>
@@ -155,12 +154,8 @@
   <div class="sheet hint" id="sheet"><p>Tap any node above to see its level,<br>XP, and next quest.</p></div>
   <div class="foot">Sample data uses your real skill areas at honest beginner-to-intermediate levels.<br>Nothing here is maxed out. Nothing is fake.</div>
 </div>
-<div class="ver">v2026.10.06-r2</div>
+<div class="ver">v2026.10.06-r3</div>
 <script>
-"use strict";
-/* ================= real skill trees: 4 skills, each 4+ levels deep ================= */
-/* states: op = opinionated (tried it + wrote the take), tried = tried hands-on, take not written yet,
-   fog = undiscovered, star = shipped in the real world */
 var SKILLS = [
   { name: "Mandarin", tag: "Mandarin", root:
     { n: "Mandarin", s: "tried", lv: 1, xp: 40, q: "Do one 15 minute lesson a day until the China trip.", kids: [
@@ -233,14 +228,14 @@ var SKILLS = [
     ] }
   }
 ];
+"use strict";
+/* ================= shared: states, helpers ================= */
 var STATE_META = {
   op:    { label: "Opinionated",  c: "#34d399" },
   tried: { label: "Tried",        c: "#f5a623" },
   fog:   { label: "Undiscovered", c: "#5b6579" },
   star:  { label: "Shipped",      c: "#ffd479" }
 };
-
-/* ================= helpers ================= */
 function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 function j(seed){ var x = Math.sin(seed * 127.1 + 311.7) * 43758.5453; return (x - Math.floor(x)) * 2 - 1; }
 function nodeG(b, i, x, y, sel){
@@ -264,39 +259,141 @@ function starPath(r){
   return s + "Z";
 }
 
-/* ================= tree layout engine ================= */
-/* leaves spread across [x0,x1], internal node x = mean of children x, y = groundY - depth*levelH */
-function layoutTree(root, x0, x1, groundY, levelH){
-  var leaves = [];
-  (function walk(nd, d){
-    nd._d = d;
+/* ================= tidy tree layout (Buchheim et al.) ================= */
+/* Root grows downward: sets _x (raw), _depth on every node. hGap = minimum
+   horizontal center distance between adjacent nodes. Returns {minX, width, maxDepth}. */
+function tidyLayout(root, hGap){
+  (function link(nd, parent, idx){
+    nd._parent = parent || null; nd._idx = idx || 0;
     var k = nd.kids || [], i;
-    if (!k.length){ leaves.push(nd); }
-    else { for (i = 0; i < k.length; i++){ walk(k[i], d + 1); } }
-  })(root, 0);
-  var n = leaves.length, i;
-  for (i = 0; i < n; i++){ leaves[i]._x = (n === 1) ? (x0 + x1) / 2 : x0 + (x1 - x0) * i / (n - 1); }
-  (function setX(nd){
-    var k = nd.kids || [], i, sum = 0;
-    if (k.length){
-      for (i = 0; i < k.length; i++){ setX(k[i]); sum += k[i]._x; }
-      nd._x = sum / k.length;
+    for (i = 0; i < k.length; i++) link(k[i], nd, i);
+  })(root, null, 0);
+  function nextLeft(v){ var k = v.kids || []; return k.length ? k[0] : v._thread; }
+  function nextRight(v){ var k = v.kids || []; return k.length ? k[k.length-1] : v._thread; }
+  function leftSib(v){
+    if (!v._parent) return null;
+    return v._idx > 0 ? v._parent.kids[v._idx - 1] : null;
+  }
+  function moveSubtree(wl, wr, shift){
+    var sub = wr._idx - wl._idx;
+    wr._change -= shift / sub; wr._shift += shift;
+    wl._change += shift / sub;
+    wr._prelim += shift; wr._mod += shift;
+  }
+  function executeShifts(v){
+    var shift = 0, change = 0, k = v.kids || [], i, c;
+    for (i = k.length - 1; i >= 0; i--){
+      c = k[i];
+      c._prelim += shift; c._mod += shift;
+      change += c._change;
+      shift += c._shift + change;
     }
-  })(root);
-  (function setY(nd){
-    nd._y = groundY - nd._d * levelH;
+  }
+  function ancestor(vim, v, def){
+    return (vim._ancestor._parent === v._parent) ? vim._ancestor : def;
+  }
+  function apportion(v, def){
+    var w = leftSib(v);
+    if (!w) return def;
+    var vip = v, vop = v, vim = w, vom = v._parent.kids[0];
+    var sip = vip._mod, sop = vop._mod, sim = vim._mod, som = vom._mod;
+    while (nextRight(vim) && nextLeft(vip)){
+      vim = nextRight(vim); vip = nextLeft(vip);
+      vom = nextLeft(vom); vop = nextRight(vop);
+      vop._ancestor = v;
+      var shift = (vim._prelim + sim) - (vip._prelim + sip) + hGap;
+      if (shift > 0){
+        moveSubtree(ancestor(vim, v, def), v, shift);
+        sip += shift; sop += shift;
+      }
+      sim += vim._mod; sip += vip._mod; som += vom._mod; sop += vop._mod;
+    }
+    if (nextRight(vim) && !nextRight(vop)){
+      vop._thread = nextRight(vim);
+      vop._mod += sim - sop;
+    }
+    if (nextLeft(vip) && !nextLeft(vom)){
+      vom._thread = nextLeft(vip);
+      vom._mod += sip - som;
+      def = v;
+    }
+    return def;
+  }
+  function firstWalk(v, depth){
+    v._depth = depth;
+    v._ancestor = v; v._thread = null;
+    v._change = 0; v._shift = 0; v._mod = 0;
+    var k = v.kids || [], i, def = k.length ? k[0] : null;
+    for (i = 0; i < k.length; i++){ firstWalk(k[i], depth + 1); def = apportion(k[i], def); }
+    executeShifts(v);
+    if (k.length){
+      var mid = (k[0]._prelim + k[k.length-1]._prelim) / 2;
+      var ls = leftSib(v);
+      if (ls){ v._prelim = ls._prelim + hGap; v._mod = v._prelim - mid; }
+      else v._prelim = mid;
+    } else {
+      var l2 = leftSib(v);
+      v._prelim = l2 ? l2._prelim + hGap : 0;
+    }
+  }
+  function secondWalk(v, m){
+    v._x = v._prelim + m;
+    var k = v.kids || [], i;
+    for (i = 0; i < k.length; i++) secondWalk(k[i], m + v._mod);
+  }
+  firstWalk(root, 0);
+  secondWalk(root, 0);
+  var minX = Infinity, maxX = -Infinity, maxD = 0;
+  (function scan(nd){
+    if (nd._x < minX) minX = nd._x;
+    if (nd._x > maxX) maxX = nd._x;
+    if (nd._depth > maxD) maxD = nd._depth;
     var k = nd.kids || [], i;
-    for (i = 0; i < k.length; i++){ setY(k[i]); }
+    for (i = 0; i < k.length; i++) scan(k[i]);
   })(root);
+  return { minX: minX, width: maxX - minX, maxDepth: maxD };
+}
+
+/* node radius by tier: consistent within a tier, like game trees */
+function TIER_R(d){ return [14, 12, 11, 10, 9][Math.min(d, 4)]; }
+var LH = 78; /* uniform vertical tier spacing */
+
+/* lay out one skill tree across full width W; gap sized from longest label so
+   labels never collide. Sets _sx on nodes. Returns {maxDepth, gap}. */
+function placeSkill(sk, W, padX){
+  var maxLen = 0;
+  (function walk(nd, d){
+    if (d > 0 && nd.n.length > maxLen) maxLen = nd.n.length;
+    var k = nd.kids || [], i;
+    for (i = 0; i < k.length; i++) walk(k[i], d + 1);
+  })(sk.root, 0);
+  var gap = Math.max(62, maxLen * 4.7 + 18);
+  var info = tidyLayout(sk.root, gap);
+  var avail = W - padX * 2;
+  var ox = padX + (avail - info.width) / 2 - info.minX;
+  (function walk(nd){
+    nd._sx = nd._x + ox;
+    var k = nd.kids || [], i;
+    for (i = 0; i < k.length; i++) walk(k[i]);
+  })(sk.root);
+  return { maxDepth: info.maxDepth, gap: gap };
+}
+/* screen y for upward growth: root sits at rootY, leaves rise */
+function setTreeY(sk, rootY){
+  (function walk(nd){
+    nd._sy = rootY - nd._depth * LH;
+    var k = nd.kids || [], i;
+    for (i = 0; i < k.length; i++) walk(k[i]);
+  })(sk.root);
 }
 /* pre-order flatten of skill b into SKILLS[b].flat: [{nd,depth,x,y,px,py,b,i}] */
 function flattenSkill(b){
   var flat = [], sk = SKILLS[b];
   (function walk(nd, parent){
-    flat.push({ nd: nd, depth: nd._d, x: nd._x, y: nd._y,
-      px: parent ? parent._x : null, py: parent ? parent._y : null, b: b, i: flat.length });
+    flat.push({ nd: nd, depth: nd._depth, x: nd._sx, y: nd._sy,
+      px: parent ? parent._sx : null, py: parent ? parent._sy : null, b: b, i: flat.length });
     var k = nd.kids || [], i;
-    for (i = 0; i < k.length; i++){ walk(k[i], nd); }
+    for (i = 0; i < k.length; i++) walk(k[i], nd);
   })(sk.root, null);
   sk.flat = flat;
   return flat;
@@ -344,20 +441,22 @@ function wrapLines(s, maxLen){
   }
   return out.slice(0, 2);
 }
-/* greedy non-overlapping labels; skill anchors first so they always win */
-function labelSVG(cands, nodes){
+/* greedy non-overlapping labels; with adaptive gaps this is only a safety net */
+function labelSVG(cands, nodes, W){
   var boxes = [], s = "", k;
   nodes.forEach(function(nd){ boxes.push({ x: nd.x - nd.r, y: nd.y - nd.r, w: nd.r * 2, h: nd.r * 2 }); });
+  var skipped = 0;
   cands.forEach(function(c){
     var w = c.txt.length * c.size * 0.6 + 6, h = c.size * 1.3;
     var bx = c.x - w / 2, by = c.ly - c.size;
     if (bx < 4){ bx = 4; }
-    if (bx + w > 356){ bx = 356 - w; }
-    var cx = bx + w / 2;
+    if (bx + w > W - 4){ bx = W - 4 - w; }
+    var cx = bx + w / 2, bad = false;
     for (k = 0; k < boxes.length; k++){
       var p = boxes[k];
-      if (bx < p.x + p.w + 2 && bx + w + 2 > p.x && by < p.y + p.h + 2 && by + h + 2 > p.y){ return; }
+      if (bx < p.x + p.w + 2 && bx + w + 2 > p.x && by < p.y + p.h + 2 && by + h + 2 > p.y){ bad = true; break; }
     }
+    if (bad){ skipped++; return; }
     boxes.push({ x: bx, y: by, w: w, h: h });
     s += '<text x="' + cx.toFixed(1) + '" y="' + c.ly.toFixed(1) + '" text-anchor="middle" font-size="' + c.size +
       '" fill="' + c.fill + '" font-weight="600"' +
@@ -366,7 +465,7 @@ function labelSVG(cands, nodes){
       (c.bold ? ' font-weight="800"' : "") +
       (c.ls ? ' letter-spacing="' + c.ls + '"' : "") + '>' + esc(c.txt) + '</text>';
   });
-  return s;
+  return { svg: s, skipped: skipped };
 }
 /* per-skill "next step" strip, tappable */
 function stripHTML(dirId, sel){
@@ -380,473 +479,375 @@ function stripHTML(dirId, sel){
   });
   return h + '</div>';
 }
-</script>
-<script>
-"use strict";
-/* ================= DIRECTION 1: NOCTURNE (one great celestial tree) ================= */
+/* shared: lay out all 4 skills, returns panels with metrics */
+function layoutAll(W, padX){
+  return SKILLS.map(function(sk){
+    var info = placeSkill(sk, W, padX);
+    return { sk: sk, md: info.maxDepth };
+  });
+}
+
+/* node wrapper: tap target + selection halo + inner art */
+function nodeEl(b, f, isSel, r, inner, haloStroke){
+  return nodeG(b, f.i, f.x, f.y, isSel) +
+    '<circle class="halo" r="'+(r+8).toFixed(1)+'" fill="none" stroke="'+haloStroke+'" stroke-width="1.8" stroke-dasharray="4 3"/>' +
+    inner + '</g>';
+}
+/* standard below-node label candidate */
+function nodeLabel(f, r, size, fill, halo, mono){
+  return { x: f.x, ly: f.y + r + 15, txt: f.nd.s === "fog" ? "???" : f.nd.n,
+           size: size, fill: fill, halo: halo, mono: !!mono };
+}
+
+/* ================= DIRECTION 1: NOCTURNE (four celestial trees) ================= */
 function renderNocturne(sel){
-  var W = 360, H = 800, s = "";
-  s += '<defs><radialGradient id="spN" cx="50%" cy="30%" r="90%">' +
-    '<stop offset="0%" stop-color="#101a3a"/><stop offset="60%" stop-color="#0a0f22"/><stop offset="100%" stop-color="#05070f"/></radialGradient>' +
-    '<radialGradient id="horN" cx="50%" cy="50%" r="50%">' +
-    '<stop offset="0%" stop-color="#2a3a7a" stop-opacity="0.55"/><stop offset="100%" stop-color="#2a3a7a" stop-opacity="0"/></radialGradient></defs>';
-  s += '<rect width="' + W + '" height="' + H + '" fill="url(#spN)"/>';
+  var W = 360, s = "";
+  var panels = layoutAll(W, 30);
+  var PH = panels.map(function(p){ return 36 + p.md * LH + 60 + 34; });
+  var H = 104 + PH[0] + PH[1] + PH[2] + PH[3] + 24;
+  s += '<defs><radialGradient id="spN3" cx="50%" cy="12%" r="110%">'+
+    '<stop offset="0%" stop-color="#101a3a"/><stop offset="55%" stop-color="#0a0f22"/><stop offset="100%" stop-color="#05070f"/></radialGradient></defs>';
+  s += '<rect width="'+W+'" height="'+H+'" fill="url(#spN3)"/>';
   var k;
-  for (k = 0; k < 80; k++){
-    var sx = (j(k * 3.1) * 0.5 + 0.5) * W, sy = (j(k * 7.7) * 0.5 + 0.5) * 620;
-    s += '<circle class="tw" style="animation-delay:' + (k % 9 * 0.4).toFixed(1) + 's" cx="' + sx.toFixed(1) + '" cy="' + sy.toFixed(1) +
-      '" r="' + (0.6 + (k % 3) * 0.5).toFixed(1) + '" fill="#cdd8ff"/>';
+  for (k = 0; k < 120; k++){
+    var sx = (j(k*3.1)*0.5+0.5)*W, sy = (j(k*7.7)*0.5+0.5)*H;
+    s += '<circle class="tw" style="animation-delay:'+(k%9*0.35).toFixed(1)+'s" cx="'+sx.toFixed(1)+'" cy="'+sy.toFixed(1)+'" r="'+(0.6+(k%3)*0.5).toFixed(1)+'" fill="#cdd8ff"/>';
   }
-  s += '<circle cx="308" cy="86" r="34" fill="#f4f1de" opacity="0.12"/>' +
-       '<circle cx="308" cy="86" r="21" fill="#f4f1de" opacity="0.92"/>' +
-       '<circle cx="301" cy="80" r="18" fill="#0a0f22" opacity="0.16"/>';
-  s += '<text x="180" y="36" text-anchor="middle" font-size="11" letter-spacing="4" fill="#8fa0cc" font-weight="700">YOUR TREE</text>';
-
-  var V = { kids: SKILLS.map(function(sk){ return sk.root; }) };
-  var groundY = 648, levelH = 102;
-  layoutTree(V, 40, 320, groundY, levelH);
-  var flats = SKILLS.map(function(sk, b){ return flattenSkill(b); });
-  var vx = V._x;
-
-  /* ground */
-  s += '<ellipse cx="180" cy="656" rx="205" ry="30" fill="url(#horN)"/>';
-  s += '<ellipse cx="180" cy="660" rx="190" ry="22" fill="#0a0e1d"/>';
-
-  /* trunk: tapered, dark bark with a moonlit edge */
-  s += '<path d="' + trunkPath(vx, groundY + 2, groundY - 54, 30, 12, j(7) * 6) + '" fill="#10162e" stroke="#2a3560" stroke-width="1.4"/>';
-  s += '<path d="M' + (vx - 14).toFixed(1) + ' ' + (groundY + 2) + ' l-16 10 M' + (vx + 14).toFixed(1) + ' ' + (groundY + 2) +
-    ' l16 10 M' + vx.toFixed(1) + ' ' + (groundY + 2) + ' l0 14" stroke="#2a3560" stroke-width="4" stroke-linecap="round" fill="none"/>';
-  s += '<path d="M' + (vx - 6).toFixed(1) + ' ' + (groundY - 4) + ' Q' + (vx - 4).toFixed(1) + ' ' + (groundY - 30) + ' ' + (vx - 3).toFixed(1) + ' ' + (groundY - 50) +
-    '" stroke="#3d4a72" stroke-width="1.6" fill="none" opacity="0.8"/>';
-
-  /* limbs: trunk base to each skill root, then every branch */
-  var limbCols = ["#5a6db8", "#5a6db8", "#5a6db8", "#5a6db8"];
-  flats.forEach(function(flat, b){
-    flat.forEach(function(f){
-      var fromX = f.px === null ? vx : f.px, fromY = f.py === null ? groundY - 44 : f.py;
-      var w = Math.max(1.4, 7 - f.depth * 1.15);
-      s += '<path d="' + branchPath(fromX, fromY, f.x, f.y) + '" fill="none" stroke="' + limbCols[b] +
-        '" stroke-width="' + w.toFixed(1) + '" stroke-linecap="round" opacity="0.9" style="filter:drop-shadow(0 0 4px #5a6db866)"/>';
-    });
-  });
-
-  /* fireflies */
-  for (k = 0; k < 9; k++){
-    var fx = 60 + (j(k * 13.7) * 0.5 + 0.5) * 240, fy = 220 + (j(k * 29.3) * 0.5 + 0.5) * 380;
-    s += '<circle class="tw" style="animation-delay:' + (k * 0.7).toFixed(1) + 's" cx="' + fx.toFixed(1) + '" cy="' + fy.toFixed(1) + '" r="1.7" fill="#ffe9a3"/>';
-  }
-
-  /* nodes: glowing fruit on the branches */
-  var nodeBoxes = [], cands = [];
-  flats.forEach(function(flat, b){
-    flat.forEach(function(f){
-      var nd = f.nd, d = Math.min(f.depth, 5);
-      var r = [0, 14, 12.5, 11, 10, 9][d];
-      var inner = "", isSel = sel && sel.b === b && sel.i === f.i;
-      if (nd.s === "fog"){
-        inner = '<path d="M0,-11 C6.5,-4 6.5,4 0,9.5 C-6.5,4 -6.5,-4 0,-11 Z" fill="#141b31" stroke="#5b6579" stroke-width="1.8" stroke-dasharray="4 3"/>' +
-          '<text y="3.5" text-anchor="middle" font-size="9" fill="#5b6579" font-weight="800">?</text>';
-      } else if (nd.s === "star"){
-        inner = '<circle class="gp" r="' + (r + 5).toFixed(1) + '" fill="#ffd479" opacity="0.2"/>' +
-          '<path d="' + starPath(r) + '" fill="#ffd479"/>' +
-          '<g color="#7a5c00" transform="scale(0.55)">' + GLYPH.op + '</g>';
-      } else {
-        var c = STATE_META[nd.s].c;
-        inner = '<circle r="' + r + '" fill="#0c1424" stroke="' + c + '" stroke-width="2.2"/>' +
-          '<circle r="' + r + '" fill="' + c + '" opacity="0.12"/>' +
-          '<g color="' + c + '" transform="scale(0.9)">' + GLYPH[nd.s] + '</g>';
-        if (nd.s === "op"){
-          inner += '<circle class="tw" cx="' + (r - 4).toFixed(1) + '" cy="' + (-r + 4).toFixed(1) + '" r="1.6" fill="' + c + '"/>';
+  s += '<circle cx="312" cy="64" r="30" fill="#f4f1de" opacity="0.10"/>'+
+       '<circle cx="312" cy="64" r="19" fill="#f4f1de" opacity="0.92"/>'+
+       '<circle cx="306" cy="59" r="16" fill="#0a0f22" opacity="0.14"/>';
+  var y = 104, nodeBoxes = [], cands = [], b, i, f;
+  for (b = 0; b < 4; b++){
+    (function(){
+      var sk = panels[b].sk, md = panels[b].md;
+      var rootY = y + 36 + md * LH;
+      setTreeY(sk, rootY);
+      var flat = flattenSkill(b);
+      var cx = sk.root._sx;
+      s += '<text x="180" y="'+(y+20)+'" text-anchor="middle" font-size="11" letter-spacing="3" fill="#8fa0cc" font-weight="800">'+esc(sk.tag.toUpperCase())+'</text>';
+      s += '<ellipse cx="'+cx.toFixed(1)+'" cy="'+(rootY+58)+'" rx="72" ry="12" fill="#2a3a7a" opacity="0.4"/>';
+      s += '<path d="'+trunkPath(cx, rootY+58, rootY+8, 24, 10, j(b*3+1)*5)+'" fill="#10162e" stroke="#2a3560" stroke-width="1.4"/>';
+      s += '<path d="M'+(cx-5).toFixed(1)+' '+(rootY+12)+' Q'+(cx-3).toFixed(1)+' '+(rootY+32)+' '+(cx-2).toFixed(1)+' '+(rootY+52)+'" stroke="#3d4a72" stroke-width="1.6" fill="none" opacity="0.8"/>';
+      for (i = 0; i < flat.length; i++){
+        f = flat[i];
+        if (f.depth === 0) continue;
+        var w = Math.max(1.3, 5.5 - f.depth*1.05);
+        s += '<path d="'+branchPath(f.px, f.py, f.x, f.y)+'" fill="none" stroke="#46568c" stroke-width="'+w.toFixed(1)+'" stroke-linecap="round" opacity="0.9"/>';
+      }
+      for (i = 0; i < flat.length; i++){
+        f = flat[i];
+        var nd = f.nd, r = TIER_R(f.depth), inner = "";
+        var isSel = sel && sel.b === b && sel.i === f.i;
+        if (nd.s === "fog"){
+          inner = '<path d="M0,-11 C6.5,-4 6.5,4 0,9.5 C-6.5,4 -6.5,-4 0,-11 Z" fill="#141b31" stroke="#5b6579" stroke-width="1.8" stroke-dasharray="4 3"/>'+
+            '<text y="3.5" text-anchor="middle" font-size="9" fill="#5b6579" font-weight="800">?</text>';
+        } else if (nd.s === "star"){
+          inner = '<circle class="gp" r="'+(r+5).toFixed(1)+'" fill="#ffd479" opacity="0.2"/>'+
+            '<path d="'+starPath(r)+'" fill="#ffd479"/>'+
+            '<g color="#7a5c00" transform="scale(0.55)">'+GLYPH.op+'</g>';
+        } else {
+          var c = STATE_META[nd.s].c;
+          inner = '<circle r="'+r+'" fill="#0c1424" stroke="'+c+'" stroke-width="2.2"/>'+
+            '<circle r="'+r+'" fill="'+c+'" opacity="0.14"/>'+
+            '<g color="'+c+'" transform="scale(0.9)">'+GLYPH[nd.s]+'</g>';
         }
+        s += nodeEl(b, f, isSel, r, inner, "#8fa0ff");
+        nodeBoxes.push({ x: f.x, y: f.y, r: r });
+        if (f.depth > 0) cands.push(nodeLabel(f, r, 8, nd.s === "fog" ? "#4d5a80" : "#aeb9d6", "#05070f"));
       }
-      s += nodeG(b, f.i, f.x, f.y, isSel) +
-        '<circle class="halo" r="' + (r + 8).toFixed(1) + '" fill="none" stroke="#fff" stroke-width="1.6" stroke-dasharray="4 3"/>' + inner + '</g>';
-      nodeBoxes.push({ x: f.x, y: f.y, r: r });
-      if (f.depth === 1){
-        cands.unshift({ x: f.x, ly: f.y - r - 12, txt: SKILLS[b].tag, size: 11, fill: "#e6ecff", halo: "#05070f", bold: true, ls: "1.2" });
-      } else {
-        cands.push({ x: f.x, ly: f.y + r + 15, txt: nd.s === "fog" ? "???" : nd.n, size: 8,
-          fill: nd.s === "fog" ? "#4d5a80" : "#aeb9d6", halo: "#05070f" });
-      }
-    });
-  });
-  s += labelSVG(cands, nodeBoxes);
-  s += '<text x="180" y="716" text-anchor="middle" font-size="10" fill="#5b6a94" letter-spacing="1.5">BUDS OPEN WHEN YOU TRY THEM</text>';
-  return '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Nocturne celestial skill tree">' + s + "</svg>";
+      y += PH[b];
+    })();
+  }
+  s += labelSVG(cands, nodeBoxes, W).svg;
+  return '<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Nocturne celestial skill trees">'+s+'</svg>';
 }
 
-/* ================= DIRECTION 2: TRAILHEAD (grove of 4 storybook trees) ================= */
+/* ================= DIRECTION 2: TRAILHEAD (four storybook trees) ================= */
 function renderTrailhead(sel){
-  var W = 360, H = 760, s = "";
-  s += '<defs><linearGradient id="skyT" x1="0" y1="0" x2="0" y2="1">' +
-    '<stop offset="0%" stop-color="#fdf3dd"/><stop offset="100%" stop-color="#f7e7c3"/></linearGradient></defs>';
-  s += '<rect width="' + W + '" height="' + H + '" fill="url(#skyT)"/>';
-  /* sun, clouds, birds */
-  s += '<circle cx="62" cy="82" r="30" fill="#ffd34d"/>';
-  var r, a;
-  for (r = 0; r < 8; r++){
-    a = r * Math.PI / 4;
-    s += '<line x1="' + (62 + 38 * Math.cos(a)).toFixed(1) + '" y1="' + (82 + 38 * Math.sin(a)).toFixed(1) +
-      '" x2="' + (62 + 48 * Math.cos(a)).toFixed(1) + '" y2="' + (82 + 48 * Math.sin(a)).toFixed(1) + '" stroke="#ffd34d" stroke-width="4" stroke-linecap="round"/>';
-  }
-  s += '<g class="drift"><ellipse cx="200" cy="66" rx="34" ry="12" fill="#ffffff" opacity="0.9"/><ellipse cx="226" cy="62" rx="26" ry="10" fill="#ffffff" opacity="0.9"/></g>';
-  s += '<g class="drift" style="animation-delay:2.4s"><ellipse cx="310" cy="150" rx="28" ry="10" fill="#ffffff" opacity="0.85"/></g>';
-  s += '<path d="M150 120 q7 -8 14 0 q7 -8 14 0" stroke="#8a93a3" stroke-width="2" fill="none" stroke-linecap="round"/>';
-  s += '<path d="M250 96 q6 -7 12 0 q6 -7 12 0" stroke="#8a93a3" stroke-width="2" fill="none" stroke-linecap="round"/>';
-  /* hills */
-  s += '<ellipse cx="52" cy="712" rx="175" ry="95" fill="#cfe3ae"/>';
-  s += '<ellipse cx="312" cy="722" rx="185" ry="105" fill="#c2d89f"/>';
-  s += '<ellipse cx="180" cy="762" rx="270" ry="115" fill="#b5d191"/>';
-
-  var nodeBoxes = [], cands = [], k;
-  SKILLS.forEach(function(sk, b){
-    var x0 = b * 90 + 12, x1 = b * 90 + 78, groundY = 600, levelH = 86;
-    layoutTree(sk.root, x0, x1, groundY, levelH);
-    var flat = flattenSkill(b);
-    var cx = sk.root._x;
-
-    /* trunk rises from the hill, root node sits on top */
-    s += '<path d="' + trunkPath(cx, 654, 594, 22, 13, j(b * 3 + 1) * 5) + '" fill="#9c6b3f" stroke="#6e4525" stroke-width="1.5"/>';
-    s += '<path d="M' + (cx - 5).toFixed(1) + ' 640 Q' + (cx - 4).toFixed(1) + ' 618 ' + (cx - 3).toFixed(1) + ' 600" stroke="#6e4525" stroke-width="1.6" fill="none" opacity="0.7"/>';
-
-    /* branches */
-    flat.forEach(function(f){
-      if (f.depth === 0){ return; }
-      var w = Math.max(1.6, 6 - f.depth * 1.2);
-      s += '<path d="' + branchPath(f.px, f.py, f.x, f.y) + '" fill="none" stroke="#7d5230" stroke-width="' + w.toFixed(1) + '" stroke-linecap="round"/>';
-    });
-
-    /* soft leaf puffs along the branches */
-    flat.forEach(function(f){
-      if (f.depth < 2){ return; }
-      s += '<circle cx="' + (f.x + j(f.i * 5.3) * 9).toFixed(1) + '" cy="' + (f.y - 7).toFixed(1) + '" r="' + (13 + (f.i % 3) * 3).toFixed(1) + '" fill="#a9d684" opacity="0.5"/>';
-    });
-
-    /* fruit nodes */
-    flat.forEach(function(f){
-      var nd = f.nd, d = Math.min(f.depth, 4);
-      var r = [14, 12.5, 11, 10, 9][d];
-      var inner = "", isSel = sel && sel.b === b && sel.i === f.i;
-      if (nd.s === "fog"){
-        inner = '<path d="M0,-10 C6,-3.5 6,3.5 0,9 C-6,3.5 -6,-3.5 0,-10 Z" fill="#dfe3ea" stroke="#9aa2b0" stroke-width="1.8" stroke-dasharray="4 3"/>' +
-          '<text y="3" text-anchor="middle" font-size="9" fill="#8a93a3" font-weight="800">?</text>';
-      } else if (nd.s === "star"){
-        inner = '<circle r="' + r + '" fill="#ffd34d" stroke="#e0a92e" stroke-width="2.6"/>' +
-          '<circle cx="-4" cy="-5" r="3.4" fill="#ffffff" opacity="0.5"/>' +
-          '<g color="#7a5c00" transform="scale(1.05)">' + GLYPH.star + '</g>';
-      } else {
-        var badge = nd.s === "op" ? "#58cc5c" : "#f5a623";
-        var dark = nd.s === "op" ? "#3aa845" : "#cf8618";
-        inner = '<circle r="' + r + '" fill="' + badge + '" stroke="' + dark + '" stroke-width="2.6"/>' +
-          '<circle cx="-4" cy="-5" r="' + (r * 0.28).toFixed(1) + '" fill="#ffffff" opacity="0.35"/>' +
-          '<g color="#ffffff" transform="scale(0.95)">' + GLYPH[nd.s] + '</g>';
+  var W = 360, s = "";
+  var panels = layoutAll(W, 30);
+  var PH = panels.map(function(p){ return 36 + p.md * LH + 60 + 34; });
+  var H = 104 + PH[0] + PH[1] + PH[2] + PH[3] + 24;
+  s += '<defs><linearGradient id="skyT3" x1="0" y1="0" x2="0" y2="1">'+
+    '<stop offset="0%" stop-color="#fdf3dd"/><stop offset="100%" stop-color="#f3dfb4"/></linearGradient></defs>';
+  s += '<rect width="'+W+'" height="'+H+'" fill="url(#skyT3)"/>';
+  s += '<circle cx="58" cy="70" r="26" fill="#ffd34d"/>';
+  s += '<g class="drift"><ellipse cx="210" cy="60" rx="32" ry="11" fill="#ffffff" opacity="0.9"/><ellipse cx="234" cy="56" rx="24" ry="9" fill="#ffffff" opacity="0.9"/></g>';
+  var y = 18, nodeBoxes = [], cands = [], b, i, f, k;
+  for (b = 0; b < 4; b++){
+    (function(){
+      var sk = panels[b].sk, md = panels[b].md;
+      var rootY = y + 36 + md * LH;
+      setTreeY(sk, rootY);
+      var flat = flattenSkill(b);
+      var cx = sk.root._sx;
+      s += '<ellipse cx="180" cy="'+(rootY+66)+'" rx="150" ry="30" fill="#b5d191" opacity="0.75"/>';
+      s += '<path d="'+trunkPath(cx, rootY+58, rootY+8, 22, 12, j(b*3+1)*5)+'" fill="#9c6b3f" stroke="#6e4525" stroke-width="1.5"/>';
+      s += '<path d="M'+(cx-5).toFixed(1)+' '+(rootY+18)+' Q'+(cx-4).toFixed(1)+' '+(rootY+36)+' '+(cx-3).toFixed(1)+' '+(rootY+52)+'" stroke="#6e4525" stroke-width="1.6" fill="none" opacity="0.7"/>';
+      for (i = 0; i < flat.length; i++){
+        f = flat[i];
+        if (f.depth === 0) continue;
+        var w = Math.max(1.6, 5.5 - f.depth*1.1);
+        s += '<path d="'+branchPath(f.px, f.py, f.x, f.y)+'" fill="none" stroke="#7d5230" stroke-width="'+w.toFixed(1)+'" stroke-linecap="round"/>';
       }
-      s += nodeG(b, f.i, f.x, f.y, isSel) +
-        '<circle class="halo" r="' + (r + 8).toFixed(1) + '" fill="none" stroke="#2b2118" stroke-width="2.2"/>' + inner + '</g>';
-      nodeBoxes.push({ x: f.x, y: f.y, r: r });
-      if (f.depth > 0){
-        cands.push({ x: f.x, ly: f.y + r + 14, txt: nd.s === "fog" ? "???" : nd.n, size: 8, fill: "#5a4a33", halo: "#f6e8c6" });
+      for (i = 0; i < flat.length; i++){
+        f = flat[i];
+        if (f.depth >= 2){
+          s += '<circle cx="'+(f.x + j(f.i*5.3)*9).toFixed(1)+'" cy="'+(f.y-8).toFixed(1)+'" r="'+(14+(f.i%3)*3).toFixed(1)+'" fill="#a9d684" opacity="0.55"/>';
+        }
       }
-    });
-
-    /* wooden name sign staked on the trunk */
-    s += '<rect x="' + (cx - 34).toFixed(1) + '" y="614" width="68" height="22" rx="6" fill="#6e4525"/>' +
-      '<rect x="' + (cx - 34).toFixed(1) + '" y="614" width="68" height="22" rx="6" fill="none" stroke="#4a3a26" stroke-width="1.2"/>' +
-      '<text x="' + cx.toFixed(1) + '" y="629" text-anchor="middle" font-size="9.5" fill="#ffefd0" font-weight="800" letter-spacing="0.4">' + esc(sk.tag) + '</text>';
-  });
-  s += labelSVG(cands, nodeBoxes);
-  /* flowers on the hills */
-  for (k = 0; k < 14; k++){
-    var fx = (j(k * 11.3) * 0.5 + 0.5) * 340 + 10, fy = 668 + (j(k * 17.9) * 0.5 + 0.5) * 60;
-    s += '<circle cx="' + fx.toFixed(1) + '" cy="' + fy.toFixed(1) + '" r="2.6" fill="' + (k % 3 === 0 ? "#ffffff" : k % 3 === 1 ? "#ffd34d" : "#ff9ec4") + '" opacity="0.9"/>';
+      for (i = 0; i < flat.length; i++){
+        f = flat[i];
+        var nd = f.nd, r = TIER_R(f.depth), inner = "";
+        var isSel = sel && sel.b === b && sel.i === f.i;
+        if (nd.s === "fog"){
+          inner = '<path d="M0,-10 C6,-3.5 6,3.5 0,9 C-6,3.5 -6,-3.5 0,-10 Z" fill="#eef1f5" stroke="#9aa2b0" stroke-width="1.8" stroke-dasharray="4 3"/>'+
+            '<text y="3" text-anchor="middle" font-size="9" fill="#8a93a3" font-weight="800">?</text>';
+        } else if (nd.s === "star"){
+          inner = '<circle r="'+r+'" fill="#ffd34d" stroke="#e0a92e" stroke-width="2.6"/>'+
+            '<circle cx="-4" cy="-5" r="3.2" fill="#ffffff" opacity="0.5"/>'+
+            '<g color="#7a5c00" transform="scale(1.0)">'+GLYPH.star+'</g>';
+        } else {
+          var badge = nd.s === "op" ? "#58cc5c" : "#f5a623";
+          var dark = nd.s === "op" ? "#3aa845" : "#cf8618";
+          inner = '<circle r="'+r+'" fill="'+badge+'" stroke="'+dark+'" stroke-width="2.6"/>'+
+            '<circle cx="-4" cy="-5" r="'+(r*0.28).toFixed(1)+'" fill="#ffffff" opacity="0.35"/>'+
+            '<g color="#ffffff" transform="scale(0.95)">'+GLYPH[nd.s]+'</g>';
+        }
+        s += nodeEl(b, f, isSel, r, inner, "#2b2118");
+        nodeBoxes.push({ x: f.x, y: f.y, r: r });
+        if (f.depth > 0) cands.push(nodeLabel(f, r, 8, "#5a4a33", "#f6e8c6"));
+      }
+      s += '<rect x="'+(cx-36).toFixed(1)+'" y="'+(y+8)+'" width="72" height="22" rx="7" fill="#6e4525"/>'+
+        '<rect x="'+(cx-36).toFixed(1)+'" y="'+(y+8)+'" width="72" height="22" rx="7" fill="none" stroke="#4a3a26" stroke-width="1.2"/>'+
+        '<text x="'+cx.toFixed(1)+'" y="'+(y+23)+'" text-anchor="middle" font-size="9.5" fill="#ffefd0" font-weight="800" letter-spacing="0.4">'+esc(sk.tag)+'</text>';
+      y += PH[b];
+    })();
   }
-  return '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Trailhead cozy grove skill tree">' + s + "</svg>";
+  s += labelSVG(cands, nodeBoxes, W).svg;
+  return '<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Trailhead storybook skill trees">'+s+'</svg>';
 }
-</script>
-<script>
-"use strict";
-/* ================= DIRECTION 3: SUMI (four ink pines, zen garden) ================= */
+
+/* ================= DIRECTION 3: SUMI (four ink pines) ================= */
 function renderSumi(sel){
-  var W = 360, H = 700, s = "";
-  var PAPER = "#faf7f0";
-  s += '<rect width="' + W + '" height="' + H + '" fill="' + PAPER + '"/>';
-  s += '<circle cx="306" cy="92" r="24" fill="#b3352b" opacity="0.88"/>';
-  s += '<text x="180" y="44" text-anchor="middle" font-size="19" fill="#2b2b2b" font-weight="600" font-family="Georgia, \'Times New Roman\', serif" letter-spacing="5">SKILL TREE</text>';
-  s += '<text x="180" y="64" text-anchor="middle" font-size="10" fill="#8a8478" letter-spacing="3">FOUR PINES, ONE BRUSH</text>';
-
-  /* one long ground stroke */
-  s += '<path d="M14 604 C120 600, 240 608, 346 602" stroke="#2b2b2b" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.7"/>';
-  s += '<path d="M40 616 C150 613, 260 619, 330 615" stroke="#2b2b2b" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.28"/>';
-
-  var nodeBoxes = [], cands = [];
-  SKILLS.forEach(function(sk, b){
-    var x0 = b * 90 + 14, x1 = b * 90 + 76, groundY = 560, levelH = 80;
-    layoutTree(sk.root, x0, x1, groundY, levelH);
-    var flat = flattenSkill(b);
-    var cx = sk.root._x, lean = j(b * 7 + 2) * 9;
-
-    /* ink trunk, slight lean like a windswept pine */
-    s += '<path d="' + trunkPath(cx, 606, 550, 13, 5, lean) + '" fill="#2b2b2b" opacity="0.82"/>';
-    /* a couple of exposed roots */
-    s += '<path d="M' + (cx - 5).toFixed(1) + ' 604 l-13 7 M' + (cx + 5).toFixed(1) + ' 604 l13 7" stroke="#2b2b2b" stroke-width="2.4" stroke-linecap="round" fill="none" opacity="0.6"/>';
-
-    /* sparse ink branches */
-    flat.forEach(function(f){
-      if (f.depth === 0){ return; }
-      var w = Math.max(1, 3.4 - f.depth * 0.6);
-      s += '<path d="' + branchPath(f.px, f.py, f.x, f.y) + '" fill="none" stroke="#2b2b2b" stroke-width="' + w.toFixed(1) + '" stroke-linecap="round" opacity="0.7"/>';
-    });
-
-    /* pine needle tufts at the branch tips */
-    flat.forEach(function(f){
-      if (f.depth < 2){ return; }
-      var nx = f.x, ny = f.y - 12, a;
-      for (a = -1; a <= 1; a++){
-        s += '<line x1="' + nx.toFixed(1) + '" y1="' + ny.toFixed(1) + '" x2="' + (nx + a * 7 + j(f.i + a) * 3).toFixed(1) + '" y2="' + (ny - 8).toFixed(1) +
-          '" stroke="#2b2b2b" stroke-width="1.4" stroke-linecap="round" opacity="0.55"/>';
+  var W = 360, s = "", PAPER = "#faf7f0";
+  var panels = layoutAll(W, 30);
+  var PH = panels.map(function(p){ return 36 + p.md * LH + 60 + 34; });
+  var H = 52 + PH[0] + PH[1] + PH[2] + PH[3] + 28;
+  s += '<rect width="'+W+'" height="'+H+'" fill="'+PAPER+'"/>';
+  s += '<circle cx="310" cy="66" r="22" fill="#b3352b" opacity="0.88"/>';
+  s += '<text x="180" y="34" text-anchor="middle" font-size="17" fill="#2b2b2b" font-weight="600" font-family="Georgia, \'Times New Roman\', serif" letter-spacing="5">SKILL TREE</text>';
+  var y = 52, nodeBoxes = [], cands = [], b, i, f, a;
+  for (b = 0; b < 4; b++){
+    (function(){
+      var sk = panels[b].sk, md = panels[b].md;
+      var rootY = y + 36 + md * LH;
+      setTreeY(sk, rootY);
+      var flat = flattenSkill(b);
+      var cx = sk.root._sx, lean = j(b*7+2)*8;
+      s += '<path d="M14 '+(rootY+64)+' C120 '+(rootY+60)+', 240 '+(rootY+68)+', 346 '+(rootY+62)+'" stroke="#2b2b2b" stroke-width="2.6" fill="none" stroke-linecap="round" opacity="0.65"/>';
+      s += '<path d="'+trunkPath(cx, rootY+62, rootY+8, 13, 5, lean)+'" fill="#2b2b2b" opacity="0.82"/>';
+      s += '<path d="M'+(cx-5).toFixed(1)+' '+(rootY+60)+' l-12 7 M'+(cx+5).toFixed(1)+' '+(rootY+60)+' l12 7" stroke="#2b2b2b" stroke-width="2.2" stroke-linecap="round" fill="none" opacity="0.55"/>';
+      for (i = 0; i < flat.length; i++){
+        f = flat[i];
+        if (f.depth === 0) continue;
+        var w = Math.max(1, 3.2 - f.depth*0.55);
+        s += '<path d="'+branchPath(f.px, f.py, f.x, f.y)+'" fill="none" stroke="#2b2b2b" stroke-width="'+w.toFixed(1)+'" stroke-linecap="round" opacity="0.7"/>';
       }
-    });
-
-    /* nodes: ink, with red seals for shipped */
-    flat.forEach(function(f){
-      var nd = f.nd, d = Math.min(f.depth, 4);
-      var r = [13, 11.5, 10, 9.5, 9][d];
-      var inner = "", isSel = sel && sel.b === b && sel.i === f.i;
-      if (nd.s === "fog"){
-        inner = '<circle r="' + r + '" fill="none" stroke="#b9b2a2" stroke-width="1.6" stroke-dasharray="4 4"/>' +
-          '<text y="3" text-anchor="middle" font-size="9" fill="#b9b2a2" font-weight="700">?</text>';
-      } else if (nd.s === "star"){
-        inner = '<rect x="' + (-r) + '" y="' + (-r) + '" width="' + (r * 2) + '" height="' + (r * 2) + '" rx="3" fill="#b3352b"/>' +
-          '<g color="#faf7f0" transform="scale(0.85)">' + GLYPH.star + '</g>';
-      } else if (nd.s === "op"){
-        inner = '<circle r="' + r + '" fill="none" stroke="#2b2b2b" stroke-width="2.4"/>' +
-          '<g color="#2e7d4f" transform="scale(0.85)">' + GLYPH.op + '</g>';
-      } else {
-        inner = '<circle r="' + r + '" fill="none" stroke="#2b2b2b" stroke-width="2"/>' +
-          '<g color="#b07a1e" transform="scale(0.8)">' + GLYPH.tried + '</g>';
+      for (i = 0; i < flat.length; i++){
+        f = flat[i];
+        if (f.depth < 2) continue;
+        var nx = f.x, ny = f.y - 12;
+        for (a = -1; a <= 1; a++){
+          s += '<line x1="'+nx.toFixed(1)+'" y1="'+ny.toFixed(1)+'" x2="'+(nx+a*7+j(f.i+a)*3).toFixed(1)+'" y2="'+(ny-8).toFixed(1)+'" stroke="#2b2b2b" stroke-width="1.4" stroke-linecap="round" opacity="0.5"/>';
+        }
       }
-      s += nodeG(b, f.i, f.x, f.y, isSel) +
-        '<circle class="halo" r="' + (r + 8).toFixed(1) + '" fill="none" stroke="#b3352b" stroke-width="1.8"/>' + inner + '</g>';
-      nodeBoxes.push({ x: f.x, y: f.y, r: r });
-      if (f.depth > 0){
-        cands.push({ x: f.x, ly: f.y + r + 13, txt: nd.s === "fog" ? "???" : nd.n, size: 8, fill: "#5c5648", halo: PAPER });
+      for (i = 0; i < flat.length; i++){
+        f = flat[i];
+        var nd = f.nd, r = TIER_R(f.depth), inner = "";
+        var isSel = sel && sel.b === b && sel.i === f.i;
+        if (nd.s === "fog"){
+          inner = '<circle r="'+r+'" fill="none" stroke="#b9b2a2" stroke-width="1.6" stroke-dasharray="4 4"/>'+
+            '<text y="3" text-anchor="middle" font-size="9" fill="#b9b2a2" font-weight="700">?</text>';
+        } else if (nd.s === "star"){
+          inner = '<rect x="'+(-r)+'" y="'+(-r)+'" width="'+(r*2)+'" height="'+(r*2)+'" rx="3" fill="#b3352b"/>'+
+            '<g color="#faf7f0" transform="scale(0.85)">'+GLYPH.star+'</g>';
+        } else if (nd.s === "op"){
+          inner = '<circle r="'+r+'" fill="'+PAPER+'" stroke="#2b2b2b" stroke-width="2.4"/>'+
+            '<g color="#2e7d4f" transform="scale(0.85)">'+GLYPH.op+'</g>';
+        } else {
+          inner = '<circle r="'+r+'" fill="'+PAPER+'" stroke="#2b2b2b" stroke-width="2"/>'+
+            '<g color="#b07a1e" transform="scale(0.8)">'+GLYPH.tried+'</g>';
+        }
+        s += nodeEl(b, f, isSel, r, inner, "#b3352b");
+        nodeBoxes.push({ x: f.x, y: f.y, r: r });
+        if (f.depth > 0) cands.push(nodeLabel(f, r, 8, "#5c5648", PAPER));
       }
-    });
-
-    /* garden label under the trunk */
-    s += '<text x="' + cx.toFixed(1) + '" y="634" text-anchor="middle" font-size="10" fill="#2b2b2b" font-weight="700" letter-spacing="0.5">' + esc(sk.tag) + '</text>';
-  });
-  s += labelSVG(cands, nodeBoxes);
-
-  /* hanko seal + caption */
-  s += '<g transform="translate(316,656) rotate(-4)"><rect x="-21" y="-21" width="42" height="42" rx="4" fill="none" stroke="#b3352b" stroke-width="2.4"/>' +
-    '<text y="-1" text-anchor="middle" font-size="10.5" fill="#b3352b" font-weight="800" letter-spacing="1">TRY</text>' +
-    '<text y="13" text-anchor="middle" font-size="10.5" fill="#b3352b" font-weight="800" letter-spacing="1">WRITE</text></g>';
-  s += '<text x="24" y="652" font-size="10" fill="#8a8478">ink marks what you tried;</text>';
-  s += '<text x="24" y="666" font-size="10" fill="#8a8478">red seals what shipped.</text>';
-  return '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Sumi ink pine skill tree">' + s + "</svg>";
+      s += '<text x="'+cx.toFixed(1)+'" y="'+(rootY+88)+'" text-anchor="middle" font-size="10.5" fill="#2b2b2b" font-weight="700" letter-spacing="1" font-family="Georgia, \'Times New Roman\', serif">'+esc(sk.tag)+'</text>';
+      y += PH[b];
+    })();
+  }
+  s += labelSVG(cands, nodeBoxes, W).svg;
+  return '<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Sumi ink pine skill trees">'+s+'</svg>';
 }
 
-/* ================= DIRECTION 4: INSERT COIN (one neon arcade tree) ================= */
+/* ================= DIRECTION 4: INSERT COIN (four neon trees) ================= */
 function renderArcade(sel){
-  var W = 360, H = 800, s = "";
-  s += '<defs><radialGradient id="bgA" cx="50%" cy="0%" r="120%">' +
-    '<stop offset="0%" stop-color="#141433"/><stop offset="100%" stop-color="#07070f"/></radialGradient>' +
-    '<pattern id="scanA" width="4" height="4" patternUnits="userSpaceOnUse">' +
-    '<rect width="4" height="1" fill="#ffffff" opacity="0.05"/></pattern></defs>';
-  s += '<rect width="' + W + '" height="' + H + '" fill="url(#bgA)"/>';
+  var W = 360, s = "";
+  var panels = layoutAll(W, 30);
+  var PH = panels.map(function(p){ return 36 + p.md * LH + 60 + 34; });
+  var H = 76 + PH[0] + PH[1] + PH[2] + PH[3] + 28;
+  var neonCols = ["#00e5ff", "#ff2fb3", "#39ff6a", "#ffe14d"];
+  s += '<defs><radialGradient id="bgA3" cx="50%" cy="0%" r="120%">'+
+    '<stop offset="0%" stop-color="#141433"/><stop offset="100%" stop-color="#07070f"/></radialGradient>'+
+    '<pattern id="scanA3" width="4" height="4" patternUnits="userSpaceOnUse">'+
+    '<rect width="4" height="1" fill="#ffffff" opacity="0.045"/></pattern></defs>';
+  s += '<rect width="'+W+'" height="'+H+'" fill="url(#bgA3)"/>';
   var gx, g;
-  for (gx = 0; gx <= W; gx += 30){ s += '<line x1="' + gx + '" y1="0" x2="' + gx + '" y2="648" stroke="#1c1c44" stroke-width="1"/>'; }
-  for (g = 0; g <= 648; g += 30){ s += '<line x1="0" y1="' + g + '" x2="' + W + '" y2="' + g + '" stroke="#1c1c44" stroke-width="1"/>'; }
-  /* perspective floor */
-  for (gx = 0; gx <= W; gx += 40){
-    s += '<line x1="' + gx + '" y1="648" x2="' + ((gx - 180) * 2.4 + 180).toFixed(1) + '" y2="' + H + '" stroke="#23235c" stroke-width="1.2"/>';
-  }
-  [664, 688, 720, 758].forEach(function(fy){
-    s += '<line x1="0" y1="' + fy + '" x2="' + W + '" y2="' + fy + '" stroke="#23235c" stroke-width="1.2"/>';
+  for (gx = 0; gx <= W; gx += 30){ s += '<line x1="'+gx+'" y1="0" x2="'+gx+'" y2="'+H+'" stroke="#1c1c44" stroke-width="1"/>'; }
+  for (g = 0; g <= H; g += 30){ s += '<line x1="0" y1="'+g+'" x2="'+W+'" y2="'+g+'" stroke="#1c1c44" stroke-width="1"/>'; }
+  var combo = 0, b, i, f, k;
+  SKILLS.forEach(function(sk){
+    (function walk(nd){ if (nd.s === "op" || nd.s === "star"){ combo++; } (nd.kids||[]).forEach(walk); })(sk.root);
   });
-
-  var combo = 0;
-  (function count(){ SKILLS.forEach(function(sk){
-    (function walk(nd){ if (nd.s === "op" || nd.s === "star"){ combo++; } (nd.kids || []).forEach(walk); })(sk.root);
-  }); })();
-  s += '<text x="180" y="36" text-anchor="middle" font-size="13" fill="#ff2fb3" font-weight="800" letter-spacing="3" font-family="Menlo, Consolas, monospace">INSERT COIN</text>';
-  s += '<g class="blink"><rect x="118" y="48" width="124" height="26" rx="6" fill="none" stroke="#00e5ff" stroke-width="1.6"/>' +
-    '<text x="180" y="66" text-anchor="middle" font-size="12.5" fill="#00e5ff" font-weight="800" letter-spacing="2" font-family="Menlo, Consolas, monospace">COMBO x' + combo + '</text></g>';
-
-  var V = { kids: SKILLS.map(function(sk){ return sk.root; }) };
-  var groundY = 648, levelH = 100;
-  layoutTree(V, 40, 320, groundY, levelH);
-  var limbCols = ["#ff2fb3", "#00e5ff", "#39ff6a", "#ffe14d"];
-  var flats = SKILLS.map(function(sk, b){ return flattenSkill(b); });
-  var vx = V._x;
-
-  /* neon trunk: dark core, electric edge */
-  s += '<rect x="' + (vx - 9).toFixed(1) + '" y="592" width="18" height="60" rx="9" fill="#0a2a33" stroke="#00e5ff" stroke-width="2.5" style="filter:drop-shadow(0 0 8px #00e5ff)"/>';
-  s += '<rect x="' + (vx - 22).toFixed(1) + '" y="646" width="44" height="8" rx="4" fill="#101024" stroke="#00e5ff" stroke-width="1.6" opacity="0.9"/>';
-  /* circuit notches on the trunk */
-  s += '<path d="M' + (vx - 9).toFixed(1) + ' 612 l-12 0 l0 10 M' + (vx + 9).toFixed(1) + ' 626 l12 0 l0 -10" stroke="#00e5ff" stroke-width="1.8" fill="none" opacity="0.8"/>';
-
-  /* limbs in four neon colors */
-  flats.forEach(function(flat, b){
-    var lc = limbCols[b];
-    flat.forEach(function(f){
-      var fromX = f.px === null ? vx : f.px, fromY = f.py === null ? 596 : f.py;
-      var w = Math.max(1.2, 5 - f.depth * 0.9);
-      s += '<path d="' + branchPath(fromX, fromY, f.x, f.y) + '" fill="none" stroke="' + lc +
-        '" stroke-width="' + w.toFixed(1) + '" stroke-linecap="round" opacity="0.85" style="filter:drop-shadow(0 0 4px ' + lc + ')"/>';
-    });
-  });
-
-  /* floating coins */
-  var k;
-  for (k = 0; k < 7; k++){
-    var cx2 = 40 + (j(k * 23.1) * 0.5 + 0.5) * 280, cy2 = 180 + (j(k * 41.7) * 0.5 + 0.5) * 420;
-    s += '<g class="bob" style="animation-delay:' + (k * 0.4).toFixed(1) + 's"><circle cx="' + cx2.toFixed(1) + '" cy="' + cy2.toFixed(1) + '" r="4" fill="none" stroke="#ffe14d" stroke-width="1.6" opacity="0.7"/></g>';
-  }
-
-  /* nodes: glowing pixels on the traces */
+  s += '<text x="180" y="30" text-anchor="middle" font-size="13" fill="#ff2fb3" font-weight="800" letter-spacing="3" font-family="Menlo, Consolas, monospace">INSERT COIN</text>';
+  s += '<g class="blink"><rect x="118" y="40" width="124" height="24" rx="6" fill="none" stroke="#00e5ff" stroke-width="1.6"/>'+
+    '<text x="180" y="57" text-anchor="middle" font-size="12" fill="#00e5ff" font-weight="800" letter-spacing="2" font-family="Menlo, Consolas, monospace">COMBO x'+combo+'</text></g>';
+  var y = 76, nodeBoxes = [], cands = [];
   var neon = { op: "#39ff6a", tried: "#ffb02f", fog: "#3a3f66", star: "#ffe14d" };
-  var nodeBoxes = [], cands = [];
-  flats.forEach(function(flat, b){
-    flat.forEach(function(f){
-      var nd = f.nd, d = Math.min(f.depth, 5);
-      var hr = [0, 12, 11, 10, 9.5, 9][d];
-      var c = neon[nd.s], inner = "", isSel = sel && sel.b === b && sel.i === f.i;
-      if (nd.s === "fog"){
-        inner = '<rect x="' + (-hr) + '" y="' + (-hr) + '" width="' + (hr * 2) + '" height="' + (hr * 2) + '" rx="6" fill="#101024" stroke="' + c + '" stroke-width="2" stroke-dasharray="5 4"/>' +
-          '<text y="5" text-anchor="middle" font-size="12" fill="#565b8c" font-weight="800" font-family="Menlo, Consolas, monospace">?</text>';
-      } else {
-        inner = '<rect x="' + (-hr) + '" y="' + (-hr) + '" width="' + (hr * 2) + '" height="' + (hr * 2) + '" rx="6" fill="#0d0d20" stroke="' + c + '" stroke-width="2.4" style="filter:drop-shadow(0 0 4px ' + c + ')"/>' +
-          '<g color="' + c + '" transform="scale(1.05)">' + GLYPH[nd.s] + '</g>';
-        if (nd.s === "star"){
-          inner += '<circle class="gp" r="' + (hr + 6).toFixed(1) + '" fill="none" stroke="' + c + '" stroke-width="1.6" style="filter:drop-shadow(0 0 5px ' + c + ')"/>';
+  for (b = 0; b < 4; b++){
+    (function(){
+      var sk = panels[b].sk, md = panels[b].md, lc = neonCols[b];
+      var rootY = y + 36 + md * LH;
+      setTreeY(sk, rootY);
+      var flat = flattenSkill(b);
+      var cx = sk.root._sx;
+      s += '<text x="'+cx.toFixed(1)+'" y="'+(y+20)+'" text-anchor="middle" font-size="10.5" fill="'+lc+'" font-weight="800" letter-spacing="2" font-family="Menlo, Consolas, monospace">'+esc(sk.tag.toUpperCase())+'<tspan class="blink">_</tspan></text>';
+      s += '<ellipse cx="'+cx.toFixed(1)+'" cy="'+(rootY+60)+'" rx="66" ry="10" fill="'+lc+'" opacity="0.12"/>';
+      s += '<rect x="'+(cx-9).toFixed(1)+'" y="'+(rootY+8)+'" width="18" height="52" rx="9" fill="#0a0a18" stroke="'+lc+'" stroke-width="2.5" style="filter:drop-shadow(0 0 7px '+lc+')"/>';
+      for (i = 0; i < flat.length; i++){
+        f = flat[i];
+        if (f.depth === 0) continue;
+        var w = Math.max(1.2, 4.6 - f.depth*0.85);
+        s += '<path d="'+branchPath(f.px, f.py, f.x, f.y)+'" fill="none" stroke="'+lc+'" stroke-width="'+w.toFixed(1)+'" stroke-linecap="round" opacity="0.8" style="filter:drop-shadow(0 0 3px '+lc+')"/>';
+      }
+      for (i = 0; i < flat.length; i++){
+        f = flat[i];
+        var nd = f.nd, hr = TIER_R(f.depth), inner = "";
+        var isSel = sel && sel.b === b && sel.i === f.i;
+        if (nd.s === "fog"){
+          inner = '<rect x="'+(-hr)+'" y="'+(-hr)+'" width="'+(hr*2)+'" height="'+(hr*2)+'" rx="6" fill="#101024" stroke="'+neon.fog+'" stroke-width="2" stroke-dasharray="5 4"/>'+
+            '<text y="5" text-anchor="middle" font-size="12" fill="#565b8c" font-weight="800" font-family="Menlo, Consolas, monospace">?</text>';
+        } else {
+          var c = neon[nd.s];
+          inner = '<rect x="'+(-hr)+'" y="'+(-hr)+'" width="'+(hr*2)+'" height="'+(hr*2)+'" rx="6" fill="#0d0d20" stroke="'+c+'" stroke-width="2.4" style="filter:drop-shadow(0 0 4px '+c+')"/>'+
+            '<g color="'+c+'" transform="scale(1.05)">'+GLYPH[nd.s]+'</g>';
+          if (nd.s === "star"){
+            inner += '<circle class="gp" r="'+(hr+6).toFixed(1)+'" fill="none" stroke="'+c+'" stroke-width="1.6" style="filter:drop-shadow(0 0 5px '+c+')"/>';
+          }
         }
+        s += nodeG(b, f.i, f.x, f.y, isSel) +
+          '<rect class="halo" x="'+(-hr-8)+'" y="'+(-hr-8)+'" width="'+(hr*2+16)+'" height="'+(hr*2+16)+'" rx="12" fill="none" stroke="#ffffff" stroke-width="2"/>' + inner + '</g>';
+        nodeBoxes.push({ x: f.x, y: f.y, r: hr });
+        if (f.depth > 0) cands.push(nodeLabel(f, hr, 7.5, nd.s === "fog" ? "#565b8c" : "#c9cdf5", "#07070f", true));
       }
-      s += nodeG(b, f.i, f.x, f.y, isSel) +
-        '<rect class="halo" x="' + (-hr - 8) + '" y="' + (-hr - 8) + '" width="' + (hr * 2 + 16) + '" height="' + (hr * 2 + 16) + '" rx="12" fill="none" stroke="#ffffff" stroke-width="2"/>' + inner + '</g>';
-      nodeBoxes.push({ x: f.x, y: f.y, r: hr });
-      if (f.depth === 1){
-        cands.unshift({ x: f.x, ly: f.y - hr - 12, txt: SKILLS[b].tag.toUpperCase(), size: 10, fill: limbCols[b], mono: true, bold: true, ls: "1" });
-      } else {
-        cands.push({ x: f.x, ly: f.y + hr + 14, txt: nd.s === "fog" ? "???" : nd.n, size: 7.5, fill: nd.s === "fog" ? "#565b8c" : "#c9cdf5", mono: true });
+      for (k = 0; k < 3; k++){
+        var px2 = cx - 90 + (j(b*31+k*17)*0.5+0.5)*180, py2 = rootY - 60 - k*90;
+        s += '<g class="bob" style="animation-delay:'+(k*0.5).toFixed(1)+'s"><circle cx="'+px2.toFixed(1)+'" cy="'+py2.toFixed(1)+'" r="3.6" fill="none" stroke="'+lc+'" stroke-width="1.5" opacity="0.6"/></g>';
       }
-    });
-  });
-  s += labelSVG(cands, nodeBoxes);
-
-  s += '<rect width="' + W + '" height="' + H + '" fill="url(#scanA)" pointer-events="none"/>';
-  s += '<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="none" stroke="#00e5ff" stroke-width="3" opacity="0.25" pointer-events="none"/>';
-  return '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Insert Coin neon arcade skill tree">' + s + "</svg>";
+      y += PH[b];
+    })();
+  }
+  s += labelSVG(cands, nodeBoxes, W).svg;
+  s += '<rect width="'+W+'" height="'+H+'" fill="url(#scanA3)" pointer-events="none"/>';
+  return '<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Insert Coin neon skill trees">'+s+'</svg>';
 }
-</script>
-<script>
-"use strict";
-/* ================= DIRECTION 5: COMMIT CANOPY (git-graph tree) ================= */
+
+/* ================= DIRECTION 5: COMMIT CANOPY (four git trees) ================= */
 function renderCanopy(sel){
-  var W = 360, H = 800, s = "";
-  s += '<rect width="' + W + '" height="' + H + '" fill="#0d1117"/>';
-  s += '<text x="20" y="36" font-size="15" fill="#e6edf3" font-weight="800">your year in skills</text>';
-  s += '<text x="20" y="56" font-size="11" fill="#7d8590">every commit is a node. tap one.</text>';
-
-  /* git-graph layout: one lane per skill, each commit on its own row (pre-order),
-     x jogs by lane so parent links draw as elbows like a real graph */
-  var cols = [46, 135, 225, 314], baseY = 700, pitch = 56;
+  var W = 360, s = "";
+  var panels = layoutAll(W, 40);
+  var PH = panels.map(function(p){ return 40 + p.md * LH + 60 + 34; });
+  var H = 66 + PH[0] + PH[1] + PH[2] + PH[3] + 52;
   var branchCols = ["#39d353", "#1f6feb", "#d29922", "#a371f7"];
-  SKILLS.forEach(function(sk, b){
-    var row = 0;
-    (function walk(nd, d, lane){
-      nd._d = d; nd._row = row; row++;
-      nd._x = cols[b] + lane * 16; nd._y = baseY - nd._row * pitch;
-      var k = nd.kids || [], i;
-      for (i = 0; i < k.length; i++){
-        var kl = (k.length === 1) ? 0 : (i - (k.length - 1) / 2);
-        walk(k[i], d + 1, lane * 0.5 + kl);
+  s += '<rect width="'+W+'" height="'+H+'" fill="#0d1117"/>';
+  s += '<text x="20" y="32" font-size="15" fill="#e6edf3" font-weight="800">your year in skills</text>';
+  s += '<text x="20" y="52" font-size="11" fill="#7d8590">four branches. every commit is a node. tap one.</text>';
+  var y = 66, nodeBoxes = [], cands = [], b, i, f;
+  for (b = 0; b < 4; b++){
+    (function(){
+      var sk = panels[b].sk, md = panels[b].md, bc = branchCols[b];
+      var rootY = y + 40 + md * LH;
+      setTreeY(sk, rootY);
+      var flat = flattenSkill(b);
+      var cx = sk.root._sx;
+      var tag = sk.tag, tw = tag.length * 5.6 + 18;
+      s += '<rect x="'+(180-tw/2).toFixed(1)+'" y="'+y+'" width="'+tw.toFixed(1)+'" height="20" rx="10" fill="#0d1117" stroke="'+bc+'" stroke-width="1.4"/>'+
+        '<text x="180" y="'+(y+14)+'" text-anchor="middle" font-size="8.5" fill="'+bc+'" font-weight="800" font-family="Menlo, Consolas, monospace">'+esc(tag)+'</text>';
+      s += '<path d="M'+cx.toFixed(1)+' '+(rootY+58)+' L'+cx.toFixed(1)+' '+(rootY+10)+'" fill="none" stroke="#238636" stroke-width="7" stroke-linecap="round"/>';
+      s += '<circle cx="'+cx.toFixed(1)+'" cy="'+(rootY+58)+'" r="8" fill="#0d1117" stroke="#238636" stroke-width="3"/>';
+      for (i = 0; i < flat.length; i++){
+        f = flat[i];
+        if (f.px === null) continue;
+        s += '<path d="M'+f.px.toFixed(1)+' '+f.py.toFixed(1)+' L'+f.px.toFixed(1)+' '+f.y.toFixed(1)+' L'+f.x.toFixed(1)+' '+f.y.toFixed(1)+'"'+
+          ' fill="none" stroke="'+bc+'" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>';
       }
-    })(sk.root, 0, 0);
-    flattenSkill(b);
-  });
-
-  /* main trunk line */
-  var mainX = 180;
-  s += '<path d="M' + mainX + ' 736 L' + mainX + ' 648" fill="none" stroke="#238636" stroke-width="7" stroke-linecap="round"/>';
-  s += '<circle cx="' + mainX + '" cy="736" r="9" fill="#0d1117" stroke="#238636" stroke-width="3"/>';
-  s += '<text x="' + mainX + '" y="762" text-anchor="middle" font-size="9" fill="#7d8590" font-family="Menlo, Consolas, monospace">main</text>';
-
-  /* branch lines splitting off main, then parent-link elbows up each lane */
-  SKILLS.forEach(function(sk, b){
-    var splitY = 694 - b * 10, bc = branchCols[b], colX = cols[b];
-    var root = sk.flat[0];
-    s += '<path d="M' + mainX + ' ' + splitY + ' L' + mainX + ' ' + root.y + ' L' + root.x.toFixed(1) + ' ' + root.y + '"' +
-      ' fill="none" stroke="' + bc + '" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>';
-    sk.flat.forEach(function(f){
-      if (f.px === null){ return; }
-      s += '<path d="M' + f.px.toFixed(1) + ' ' + f.py.toFixed(1) + ' L' + f.px.toFixed(1) + ' ' + f.y.toFixed(1) + ' L' + f.x.toFixed(1) + ' ' + f.y.toFixed(1) + '"' +
-        ' fill="none" stroke="' + bc + '" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>';
-    });
-    /* branch tag above the top commit */
-    var topY = baseY - (sk.flat.length - 1) * pitch;
-    var tag = sk.tag, tw = tag.length * 5.6 + 16;
-    s += '<rect x="' + (colX - tw / 2).toFixed(1) + '" y="' + (topY - 46) + '" width="' + tw.toFixed(1) + '" height="20" rx="10" fill="#0d1117" stroke="' + bc + '" stroke-width="1.4"/>' +
-      '<text x="' + colX + '" y="' + (topY - 32) + '" text-anchor="middle" font-size="8.5" fill="' + bc + '" font-weight="800" font-family="Menlo, Consolas, monospace">' + esc(tag) + '</text>';
-  });
-
-  /* commits */
-  SKILLS.forEach(function(sk, b){
-    sk.flat.forEach(function(f){
-      var nd = f.nd, hr = 12, inner = "";
-      var isSel = sel && sel.b === b && sel.i === f.i;
-      if (nd.s === "fog"){
-        inner = '<rect x="' + (-hr) + '" y="' + (-hr) + '" width="' + (hr * 2) + '" height="' + (hr * 2) + '" rx="7" fill="#161b22" stroke="#30363d" stroke-width="2" stroke-dasharray="4 3"/>' +
-          '<text y="4.5" text-anchor="middle" font-size="12" fill="#484f58" font-weight="800">?</text>';
-      } else {
-        var fill = nd.s === "op" ? "#39d353" : nd.s === "tried" ? "#d29922" : "#ffd479";
-        inner = '<rect x="' + (-hr) + '" y="' + (-hr) + '" width="' + (hr * 2) + '" height="' + (hr * 2) + '" rx="7" fill="' + fill + '" style="filter:drop-shadow(0 0 6px ' + fill + '66)"/>' +
-          '<g color="#0d1117" transform="scale(0.85)">' + GLYPH[nd.s] + '</g>';
-        if (nd.s === "star"){
-          inner += '<circle class="gp" r="' + (hr + 6) + '" fill="none" stroke="' + fill + '" stroke-width="1.6"/>';
+      for (i = 0; i < flat.length; i++){
+        f = flat[i];
+        var nd = f.nd, hr = 12, inner = "";
+        var isSel = sel && sel.b === b && sel.i === f.i;
+        if (nd.s === "fog"){
+          inner = '<rect x="'+(-hr)+'" y="'+(-hr)+'" width="'+(hr*2)+'" height="'+(hr*2)+'" rx="7" fill="#161b22" stroke="#30363d" stroke-width="2" stroke-dasharray="4 3"/>'+
+            '<text y="4.5" text-anchor="middle" font-size="12" fill="#484f58" font-weight="800">?</text>';
+        } else {
+          var fill = nd.s === "op" ? "#39d353" : nd.s === "tried" ? "#d29922" : "#ffd479";
+          inner = '<rect x="'+(-hr)+'" y="'+(-hr)+'" width="'+(hr*2)+'" height="'+(hr*2)+'" rx="7" fill="'+fill+'" style="filter:drop-shadow(0 0 6px '+fill+'66)"/>'+
+            '<g color="#0d1117" transform="scale(0.85)">'+GLYPH[nd.s]+'</g>';
+          if (nd.s === "star"){
+            inner += '<circle class="gp" r="'+(hr+6)+'" fill="none" stroke="'+fill+'" stroke-width="1.6"/>';
+          }
         }
+        s += nodeG(b, f.i, f.x, f.y, isSel) +
+          '<rect class="halo" x="'+(-hr-7)+'" y="'+(-hr-7)+'" width="'+(hr*2+14)+'" height="'+(hr*2+14)+'" rx="11" fill="none" stroke="#f0f6fc" stroke-width="2"/>' + inner;
+        if (f.depth > 0){
+          var lines = wrapLines(nd.s === "fog" ? "???" : nd.n, 11);
+          lines.forEach(function(line, li){
+            s += '<text x="0" y="'+(hr+13+li*10.5).toFixed(1)+'" text-anchor="middle" font-size="7.5" fill="'+(nd.s==="fog"?"#484f58":"#a5b3c2")+'" font-family="Menlo, Consolas, monospace" stroke="#0d1117" stroke-width="3" paint-order="stroke">'+esc(line)+'</text>';
+          });
+        }
+        s += '</g>';
+        nodeBoxes.push({ x: f.x, y: f.y, r: hr + 14 });
       }
-      s += nodeG(b, f.i, f.x, f.y, isSel) +
-        '<rect class="halo" x="' + (-hr - 7) + '" y="' + (-hr - 7) + '" width="' + (hr * 2 + 14) + '" height="' + (hr * 2 + 14) + '" rx="11" fill="none" stroke="#f0f6fc" stroke-width="2"/>' + inner;
-      /* commit message under the commit; one commit per row so nothing collides */
-      var lines = wrapLines(nd.s === "fog" ? "???" : nd.n, 10);
-      lines.forEach(function(line, li){
-        s += '<text x="0" y="' + (hr + 13 + li * 10.5).toFixed(1) + '" text-anchor="middle" font-size="7.5" fill="' + (nd.s === "fog" ? "#484f58" : "#a5b3c2") + '" font-family="Menlo, Consolas, monospace" stroke="#0d1117" stroke-width="3" paint-order="stroke">' + esc(line) + '</text>';
-      });
-      s += '</g>';
-    });
-  });
-  s += '<text x="180" y="786" text-anchor="middle" font-size="10" fill="#484f58" font-family="Menlo, Consolas, monospace">38 nodes planted</text>';
-  return '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Commit Canopy git graph skill tree">' + s + "</svg>";
+      y += PH[b];
+    })();
+  }
+  s += '<text x="180" y="'+(H-20)+'" text-anchor="middle" font-size="10" fill="#484f58" font-family="Menlo, Consolas, monospace">38 nodes planted</text>';
+  return '<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Commit Canopy git skill trees">'+s+'</svg>';
 }
 
 /* ================= direction registry ================= */
 var DIRECTIONS = [
   { id: "nocturne", tab: "Nocturne", name: "NOCTURNE",
     vibe: "moody - celestial - mysterious - patient",
-    take: "For the late-night grinder. One great tree under a moonlit sky. The mystery is the hook, but the fog can feel punishing on low-energy days.",
+    take: "For the late-night grinder. Four night trees, one per skill, spaced like constellations. The mystery is the hook, but the fog can feel punishing on low-energy days.",
     render: renderNocturne },
   { id: "trailhead", tab: "Trailhead", name: "TRAILHEAD",
     vibe: "friendly - bouncy - warm - encouraging",
-    take: "For the streak keeper. A cozy grove where every skill is its own fruit tree. The friendliest on-ramp, though it can feel a bit young for serious skills.",
+    take: "For the streak keeper. Four fruit trees with room to breathe, tidy branches, wooden name signs. The friendliest on-ramp, though it can feel a bit young for serious skills.",
     render: renderTrailhead },
   { id: "sumi", tab: "Sumi", name: "SUMI",
     vibe: "quiet - deliberate - refined - calm",
-    take: "For the reflective journaler. Four windswept pines in a zen garden. Beautiful and calm, but progress is harder to read at a glance.",
+    take: "For the reflective journaler. Four windswept ink pines, each given the full width of the page. Beautiful and calm, but progress is harder to read at a glance.",
     render: renderSumi },
   { id: "arcade", tab: "Insert Coin", name: "INSERT COIN",
     vibe: "loud - electric - competitive - juicy",
-    take: "For the competitor who chases combos. One electric tree with four neon limbs. Maximum juice, but the noise could fatigue fast.",
+    take: "For the competitor who chases combos. Four neon trees, each in its own electric color. Maximum juice, but the noise could fatigue fast.",
     render: renderArcade },
   { id: "canopy", tab: "Commit Canopy", name: "COMMIT CANOPY",
     vibe: "nerdy - honest - compounding - real",
-    take: "For the dev who trusts the graph. Your skills as git branches splitting off main. Progress you can audit, though it reads more like work than play.",
+    take: "For the dev who trusts the graph. Four separate git trees, tidy elbows, honest spacing. Progress you can audit, though it reads more like work than play.",
     render: renderCanopy }
 ];
-</script>
-<script>
-"use strict";
 /* ================= page wiring ================= */
 var cur = 0, selNode = null;
 var tabsEl = document.getElementById("tabs");
@@ -928,6 +929,10 @@ stageEl.addEventListener("click", function(e){
 });
 buildTabs();
 showDirection(0);
+</script>
+</body>
+</html>
+
 </script>
 </body>
 </html>

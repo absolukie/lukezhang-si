@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Skill Tree — Design Directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Nunito:wght@700;800;900&family=Press+Start+2P&family=Caveat:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    background: #0b0e14; color: #e8ecf3; min-height: 100vh;
+    padding: max(22px, env(safe-area-inset-top)) 14px max(40px, env(safe-area-inset-bottom));
+  }
+  .wrap { max-width: 560px; margin: 0 auto; }
+  .hero h1 { font-size: 27px; font-weight: 800; letter-spacing: -0.6px; }
+  .hero p { color: #8b93a7; font-size: 14px; line-height: 1.55; margin-top: 8px; }
+  #pickline {
+    margin-top: 12px; font-size: 13px; color: #aeb6c9; background: #141926;
+    border: 1px solid #232c42; border-radius: 12px; padding: 10px 14px; line-height: 1.45;
+  }
+  #pickline b { color: #ffd479; }
+
+  .dir {
+    margin-top: 18px; border-radius: 20px; overflow: hidden;
+    background: var(--sbg); color: var(--ink);
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+  }
+  .dir-head { display: flex; align-items: flex-start; gap: 12px; padding: 18px 18px 4px; }
+  .dir-letter {
+    flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 18px;
+    background: var(--accent); color: var(--accent-ink);
+  }
+  .dir-head h2 { font-size: 20px; font-weight: 800; letter-spacing: -0.3px; font-family: var(--hfont, inherit); }
+  .dir-head .vibe { font-size: 13px; opacity: 0.72; margin-top: 3px; line-height: 1.45; }
+  .badge {
+    margin-left: auto; flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 800; letter-spacing: 1.2px;
+    background: var(--accent); color: var(--accent-ink);
+    border-radius: 999px; padding: 7px 12px;
+  }
+  .badge[hidden] { display: none; }
+
+  .tree-wrap { position: relative; margin-top: 6px; }
+  .tree-wrap svg { display: block; width: 100%; height: auto; }
+  .node { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .node.tap { filter: brightness(1.25); }
+  .scanlines {
+    position: absolute; inset: 0; pointer-events: none; opacity: 0.5;
+    background: repeating-linear-gradient(to bottom, rgba(0,0,0,0.22) 0 2px, transparent 2px 5px);
+  }
+
+  .pop {
+    position: absolute; z-index: 5; width: 218px;
+    background: var(--pop-bg); color: var(--pop-fg);
+    border: 1px solid var(--pop-line); border-radius: 14px;
+    padding: 12px 13px; box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+    pointer-events: none;
+  }
+  .pop[hidden] { display: none; }
+  .pop-name { font-size: 14px; font-weight: 800; line-height: 1.3; }
+  .pop-meta { font-size: 11.5px; font-weight: 700; margin-top: 4px; color: var(--pop-accent); letter-spacing: 0.3px; }
+  .pop-next { font-size: 12.5px; margin-top: 6px; line-height: 1.45; opacity: 0.92; }
+
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 6px 14px;
+    padding: 10px 18px 2px; font-size: 11.5px; opacity: 0.85;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+  .choose {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: calc(100% - 36px); margin: 14px 18px 18px; padding: 14px;
+    border: none; border-radius: 14px; font-size: 15px; font-weight: 800;
+    background: var(--accent); color: var(--accent-ink);
+    touch-action: manipulation; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .choose:active { transform: scale(0.98); }
+  .choose.on { outline: 2px dashed var(--accent); outline-offset: 3px; }
+
+  .ver {
+    position: fixed; right: 10px; bottom: calc(8px + env(safe-area-inset-bottom));
+    font-size: 10.5px; color: #5b6579; background: rgba(11,14,20,0.75);
+    padding: 4px 8px; border-radius: 8px; z-index: 50; letter-spacing: 0.4px;
+  }
+
+  @keyframes ping { 0% { transform: scale(0.55); opacity: 0.95; } 80% { transform: scale(1.6); opacity: 0; } 100% { transform: scale(1.6); opacity: 0; } }
+  .ping { transform-box: fill-box; transform-origin: center; animation: ping 1.9s ease-out infinite; }
+  @keyframes twinkle { 0%, 100% { opacity: 0.25; } 50% { opacity: 0.95; } }
+  .tw { animation: twinkle 3s ease-in-out infinite; }
+  @keyframes blinktag { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+  .blink { animation: blinktag 1.1s steps(2, jump-none) infinite; }
+  @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+  .bob { animation: bob 2.2s ease-in-out infinite; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <h1>Skill Tree — Design Directions</h1>
+    <p>Eight visual directions for your gamified skill tree. Each one is rendered live with the same skill data — <b>tap any node</b> to preview its tooltip (name, level, next step), then pick a direction with the button at the end of each section. Your pick is saved on this device.</p>
+    <div id="pickline">No pick yet.</div>
+  </div>
+  <div id="dirs"></div>
+</div>
+<div class="ver">v2026.10.01-01.41</div>
+
+<script>
+"use strict";
+/* ============ shared skill data (identical in every direction) ============ */
+var BRANCHES = [
+  { name: "AI Engineering", nodes: [
+    { n: "Context Engineering", s: "done",    lv: "Lv 4/5", next: "Keep sharp: use it in every agent you build" },
+    { n: "Prompt Caching",      s: "done",    lv: "Lv 3/5", next: "Keep sharp: cache-hit tuning notes" },
+    { n: "KV-Cache Management", s: "current", lv: "Lv 2/5", next: "Next: implement paged KV-cache eviction in a demo" },
+    { n: "Quantization Tradeoffs", s: "next", lv: "Lv 0/5", next: "Next: benchmark AWQ vs GPTQ on a 7B model" },
+    { n: "Evals & Golden Sets", s: "locked",  lv: "Lv 0/5", next: "Unlock: finish Quantization Tradeoffs" },
+    { n: "Agent Guardrails",    s: "locked",  lv: "Lv 0/5", next: "Unlock: finish Evals & Golden Sets" },
+    { n: "LLM Observability",   s: "locked",  lv: "Lv 0/5", next: "Unlock: finish Agent Guardrails" },
+    { n: "Shipping to Production", s: "locked", lv: "Lv 0/5", next: "Unlock: finish LLM Observability" }
+  ]},
+  { name: "Mandarin", nodes: [
+    { n: "Pinyin Basics",        s: "done",    lv: "Lv 4/5", next: "Keep sharp: daily shadowing" },
+    { n: "500 Core Words",       s: "current", lv: "Lv 2/5", next: "Next: 50 new words this week + tone drills" },
+    { n: "Tones in Conversation", s: "next",  lv: "Lv 0/5", next: "Next: 10-minute tone-shadowing sessions daily" },
+    { n: "HSK 3 Exam",           s: "locked",  lv: "Lv 0/5", next: "Unlock: finish Tones in Conversation" }
+  ]},
+  { name: "Web Craft", nodes: [
+    { n: "HTML/CSS",         s: "done",    lv: "Lv 4/5", next: "Keep sharp: build something weekly" },
+    { n: "JavaScript",       s: "done",    lv: "Lv 4/5", next: "Keep sharp: build something weekly" },
+    { n: "Three.js Shaders", s: "current", lv: "Lv 2/5", next: "Next: write a custom GLSL foil shader from scratch" },
+    { n: "WebGL Performance", s: "next",   lv: "Lv 0/5", next: "Next: profile draw calls in the foil-cards app" }
+  ]}
+];
+var STATE_TXT = { done: "Completed", current: "You are here", next: "Up next", locked: "Locked" };
+
+/* ============ helpers ============ */
+function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function j(seed){ var x = Math.sin(seed * 127.1 + 311.7) * 43758.5453; return (x - Math.floor(x)) * 2 - 1; }
+function lbl(x, y, str, fs, fill, extra){
+  return '<text x="' + x + '" y="' + y + '" text-anchor="middle" font-size="' + fs +
+    '" fill="' + fill + '" textLength="100" lengthAdjust="spacingAndGlyphs"' + (extra || "") + ">" + esc(str) + "</text>";
+}
+var IC = {
+  check: function(c, s){ return '<path d="M-5 0.5 L-1.6 4.2 L5.5 -4.5" fill="none" stroke="' + c + '" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" transform="scale(' + (s||1) + ')"/>'; },
+  lock: function(c, s){ return '<g transform="scale(' + (s||1) + ')"><rect x="-4.6" y="-0.6" width="9.2" height="7.2" rx="1.8" fill="' + c + '"/><path d="M-3 -0.6 v-2.4 a3 3 0 0 1 6 0 v2.4" fill="none" stroke="' + c + '" stroke-width="1.9"/></g>'; },
+  next: function(c, s){ return '<path d="M-4.5 -5.5 L2.8 0 L-4.5 5.5" fill="none" stroke="' + c + '" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" transform="scale(' + (s||1) + ')"/>'; },
+  dot: function(c, r){ return '<circle r="' + (r||5) + '" fill="' + c + '"/>'; }
+};
+function nodeOpen(b, i, x, y, vbw, vbh){
+  return '<g class="node" data-k="' + b + '-' + i + '" data-x="' + x.toFixed(1) + '" data-y="' + y.toFixed(1) +
+    '" data-vbw="' + vbw + '" data-vbh="' + vbh + '" transform="translate(' + x.toFixed(1) + ',' + y.toFixed(1) + ')">';
+}
+</script>
+<script>
+"use strict";
+/* ================= direction renderers A–D ================= */
+var VBW = 360;
+
+function renderA(){ /* Noir RPG */
+  var vbh = 480, cx = [64, 180, 296], y0 = 122, dy = 44, s = "";
+  s += '<defs><radialGradient id="vigA" cx="50%" cy="42%" r="75%"><stop offset="0%" stop-color="#1d1915"/><stop offset="100%" stop-color="#100e0b"/></radialGradient></defs>';
+  s += '<rect width="360" height="' + vbh + '" fill="url(#vigA)"/>';
+  s += '<g transform="translate(180,36)"><rect x="-13" y="-13" width="26" height="26" transform="rotate(45)" fill="#1d1a15" stroke="#c9a227" stroke-width="2"/><text y="3.5" text-anchor="middle" font-size="8" letter-spacing="2" fill="#c9a227">YOU</text></g>';
+  BRANCHES.forEach(function(br, b){
+    var X = cx[b];
+    s += '<text x="' + X + '" y="80" text-anchor="middle" font-size="10" letter-spacing="3" fill="#c9a227" font-weight="600">' + esc(br.name.toUpperCase()) + '</text>';
+    s += '<line x1="180" y1="50" x2="' + X + '" y2="96" stroke="#5a5248" stroke-width="1"/>';
+    var lastY = y0 + (br.nodes.length - 1) * dy;
+    s += '<line x1="' + X + '" y1="96" x2="' + X + '" y2="' + lastY + '" stroke="#4a443c" stroke-width="1"/>';
+    br.nodes.forEach(function(nd, i){
+      var y = y0 + i * dy, inner = "";
+      if (nd.s === "done"){ inner = '<circle r="13" fill="#c9a227"/><circle r="9.5" fill="none" stroke="#161412" stroke-width="1"/>' + IC.check("#161412"); }
+      else if (nd.s === "current"){ inner = '<circle class="ping" r="17" fill="none" stroke="#e8c766" stroke-width="2"/><circle r="13" fill="#161412" stroke="#e8c766" stroke-width="2.5"/>' + IC.dot("#e8c766", 5); }
+      else if (nd.s === "next"){ inner = '<circle r="13" fill="#1d1a15" stroke="#c9a227" stroke-width="2" stroke-dasharray="4 3"/>' + IC.next("#c9a227") + '<text y="-22" text-anchor="middle" font-size="7.5" letter-spacing="2" fill="#c9a227">NEXT</text>'; }
+      else { inner = '<circle r="13" fill="#262219" stroke="#4a443c" stroke-width="1.5"/>' + IC.lock("#6b6257", 0.9); }
+      s += nodeOpen(b, i, X, y, VBW, vbh) + inner + "</g>";
+      s += lbl(X, y + 30, nd.n, 9, "#d8d2c4");
+    });
+  });
+  return { vbh: vbh, svg: s };
+}
+
+function smoothPath(pts){
+  var d = "M" + pts[0][0] + " " + pts[0][1];
+  for (var i = 1; i < pts.length - 1; i++){
+    var mx = (pts[i][0] + pts[i+1][0]) / 2, my = (pts[i][1] + pts[i+1][1]) / 2;
+    d += " Q" + pts[i][0] + " " + pts[i][1] + " " + mx + " " + my;
+  }
+  d += " L" + pts[pts.length-1][0] + " " + pts[pts.length-1][1];
+  return d;
+}
+
+function renderB(){ /* Duolingo Path */
+  var vbh = 540, cx = [64, 180, 296], y0 = 142, dy = 50, s = "";
+  s += '<rect width="360" height="' + vbh + '" fill="#fff6e5"/>';
+  BRANCHES.forEach(function(br, b){
+    var X = cx[b], pts = [];
+    br.nodes.forEach(function(nd, i){ pts.push([X + (i % 2 ? 20 : -20), y0 + i * dy]); });
+    s += '<path d="' + smoothPath(pts) + '" fill="none" stroke="#e7d9b8" stroke-width="16" stroke-linecap="round"/>';
+    s += '<rect x="' + (X - 58) + '" y="88" width="116" height="32" rx="16" fill="#ffffff" stroke="#e7d9b8" stroke-width="1.5"/>';
+    s += '<text x="' + X + '" y="109" text-anchor="middle" font-size="12" font-weight="800" fill="#4b4b4b">' + esc(br.name) + '</text>';
+    br.nodes.forEach(function(nd, i){
+      var x = pts[i][0], y = pts[i][1], inner = '<ellipse cy="21" rx="15" ry="4.5" fill="rgba(0,0,0,0.08)"/>';
+      if (nd.s === "done"){ inner += '<circle r="17" fill="#58cc02" stroke="#ffffff" stroke-width="5"/>' + IC.check("#ffffff", 1.15); }
+      else if (nd.s === "current"){ inner += '<circle class="ping" r="22" fill="none" stroke="#1cb0f6" stroke-width="3"/><g class="bob"><circle r="20" fill="#1cb0f6" stroke="#ffffff" stroke-width="5"/>' + IC.dot("#ffffff", 6) + '</g>'; }
+      else if (nd.s === "next"){ inner += '<rect x="-27" y="-50" width="54" height="21" rx="10.5" fill="#ff9600"/><text y="-35" text-anchor="middle" font-size="10.5" font-weight="900" fill="#ffffff" letter-spacing="1">NEXT</text><circle r="17" fill="#ffc800" stroke="#ffffff" stroke-width="5"/>' + IC.next("#7a4d00"); }
+      else { inner += '<circle r="17" fill="#e0e0e0" stroke="#ffffff" stroke-width="5"/>' + IC.lock("#a8a8a8"); }
+      s += nodeOpen(b, i, x, y, VBW, vbh) + inner + "</g>";
+      s += lbl(x, y + 40, nd.n, 11, "#4b4b4b").replace('textLength="100"', 'textLength="96"');
+    });
+  });
+  return { vbh: vbh, svg: s };
+}
+
+function renderC(){ /* Linear Minimal */
+  var vbh = 444, rows = [104, 234, 364], x0 = 30, dx = 42, s = "";
+  s += '<rect width="360" height="' + vbh + '" fill="#fbfbfa"/>';
+  BRANCHES.forEach(function(br, b){
+    var ry = rows[b];
+    s += '<text x="16" y="' + (ry - 56) + '" font-size="11" font-weight="700" fill="#1a1a1a" letter-spacing="0.5">' + esc(br.name) + '</text>';
+    s += '<text x="344" y="' + (ry - 56) + '" text-anchor="end" font-size="10" fill="#9a9a9a">0' + (b + 1) + '</text>';
+    s += '<line x1="16" y1="' + ry + '" x2="344" y2="' + ry + '" stroke="#e6e6e6" stroke-width="1"/>';
+    br.nodes.forEach(function(nd, i){
+      var x = x0 + i * dx, inner = "";
+      if (i > 0){
+        var prev = br.nodes[i-1].s;
+        var col = (prev === "locked" || nd.s === "locked") ? "#d8d8d8" : "#1a1a1a";
+        s += '<line x1="' + (x - dx) + '" y1="' + ry + '" x2="' + x + '" y2="' + ry + '" stroke="' + col + '" stroke-width="1.5"/>';
+      }
+      if (nd.s === "done"){ inner = '<circle r="8" fill="#1a1a1a"/>' + IC.check("#ffffff", 0.85); }
+      else if (nd.s === "current"){ inner = '<circle class="ping" r="11" fill="none" stroke="#1a1a1a" stroke-width="1.5"/><circle r="8" fill="#ffffff" stroke="#1a1a1a" stroke-width="2"/>' + IC.dot("#1a1a1a", 3) + '<text y="-20" text-anchor="middle" font-size="7.5" letter-spacing="1.5" fill="#1a1a1a">YOU ARE HERE</text>'; }
+      else if (nd.s === "next"){ inner = '<circle r="8" fill="#ffffff" stroke="#1a1a1a" stroke-width="1.5"/>' + IC.next("#1a1a1a", 0.8) + '<text y="-20" text-anchor="middle" font-size="7.5" letter-spacing="1.5" fill="#1a1a1a">NEXT</text>'; }
+      else { inner = '<circle r="8" fill="#f1f1f1" stroke="#d5d5d5" stroke-width="1.5"/>' + IC.lock("#c2c2c2", 0.8); }
+      s += nodeOpen(b, i, x, ry, VBW, vbh) + inner + "</g>";
+      s += '<g transform="translate(' + (x + 7) + ',' + (ry + 12) + ') rotate(-38)"><text font-size="9" fill="#6b6b6b" textLength="104" lengthAdjust="spacingAndGlyphs">' + esc(nd.n) + '</text></g>';
+    });
+  });
+  return { vbh: vbh, svg: s };
+}
+
+function star4(r){
+  var k = (r * 0.22).toFixed(1);
+  return "M0 " + (-r) + " L" + k + " " + (-k) + " L" + r + " 0 L" + k + " " + k + " L0 " + r + " L" + (-k) + " " + k + " L" + (-r) + " 0 L" + (-k) + " " + (-k) + " Z";
+}
+
+function renderD(){ /* Constellation */
+  var vbh = 456, s = "";
+  s += '<defs><radialGradient id="nebD" cx="50%" cy="30%" r="80%"><stop offset="0%" stop-color="#0b123a"/><stop offset="100%" stop-color="#04061a"/></radialGradient></defs>';
+  s += '<rect width="360" height="' + vbh + '" fill="url(#nebD)"/>';
+  for (var st = 0; st < 48; st++){
+    s += '<circle class="tw" cx="' + (j(st * 3 + 1) * 170 + 180).toFixed(0) + '" cy="' + (j(st * 7 + 2) * 218 + 228).toFixed(0) + '" r="' + (0.8 + (j(st * 5) * 0.5 + 0.5) * 1.2).toFixed(1) + '" fill="#cfe0ff" style="animation-delay:' + ((j(st * 11) * 1.5 + 1.5).toFixed(1)) + 's"/>';
+  }
+  var cfg = [
+    { cx: 92,  top: 96,  dy: 38, amp: 26, f: 1.15 },
+    { cx: 200, top: 116, dy: 54, amp: 30, f: 1.4 },
+    { cx: 300, top: 126, dy: 58, amp: 22, f: 1.2 }
+  ];
+  BRANCHES.forEach(function(br, b){
+    var c = cfg[b], pts = [];
+    s += '<text x="' + c.cx + '" y="' + (c.top - 30) + '" text-anchor="middle" font-size="9" letter-spacing="2.5" fill="#7c8ab0">' + esc(br.name.toUpperCase()) + '</text>';
+    br.nodes.forEach(function(nd, i){
+      var x = c.cx + Math.sin(i * c.f + b * 2) * c.amp + j(b * 40 + i * 3) * 10;
+      var y = c.top + i * c.dy + j(b * 40 + i * 3 + 9) * 8;
+      pts.push([x, y, nd]);
+    });
+    for (var k = 0; k < pts.length - 1; k++){
+      s += '<line x1="' + pts[k][0].toFixed(1) + '" y1="' + pts[k][1].toFixed(1) + '" x2="' + pts[k+1][0].toFixed(1) + '" y2="' + pts[k+1][1].toFixed(1) + '" stroke="#4d5f8a" stroke-width="1" opacity="0.75"/>';
+    }
+    pts.forEach(function(p, i){
+      var nd = p[2], x = p[0], y = p[1], inner = "";
+      if (nd.s === "done"){ inner = '<path d="' + star4(9) + '" fill="#fff3d6"/>'; }
+      else if (nd.s === "current"){ inner = '<g style="filter:drop-shadow(0 0 8px #67e8f9)"><path d="' + star4(13) + '" fill="#8ff5ff"/></g><circle class="ping" r="17" fill="none" stroke="#8ff5ff" stroke-width="1.5"/>'; }
+      else if (nd.s === "next"){ inner = '<circle r="16" fill="none" stroke="#ffbf69" stroke-width="1" stroke-dasharray="3 4" opacity="0.85"/><path d="' + star4(9) + '" fill="#ffbf69"/><text y="-24" text-anchor="middle" font-size="8" letter-spacing="1.5" fill="#ffbf69">NEXT</text>'; }
+      else { inner = '<circle r="3.5" fill="#46536e"/>'; }
+      s += nodeOpen(b, i, x, y, VBW, vbh) + inner + "</g>";
+      if (nd.s !== "locked") s += lbl(x, y + 26, nd.n, 9, "#aebadd").replace('textLength="100"', 'textLength="92"');
+      else s += lbl(x, y + 22, nd.n, 8, "#5c6884").replace('textLength="100"', 'textLength="92"');
+    });
+  });
+  return { vbh: vbh, svg: s };
+}
+</script>
+<script>
+"use strict";
+/* ================= direction renderers E–H ================= */
+function hexPts(r){
+  var p = [];
+  for (var k = 0; k < 6; k++){
+    var a = (-90 + k * 60) * Math.PI / 180;
+    p.push((r * Math.cos(a)).toFixed(1) + "," + (r * Math.sin(a)).toFixed(1));
+  }
+  return p.join(" ");
+}
+var BR_ICONS = [
+  '<path d="M0 -8 L2 -2 L8 0 L2 2 L0 8 L-2 2 L-8 0 L-2 -2 Z" fill="#2dd4bf"/>',
+  '<rect x="-8" y="-6" width="16" height="11" rx="3" fill="none" stroke="#2dd4bf" stroke-width="1.8"/><path d="M-4 8 L-2 5 L-5 5 Z" fill="#2dd4bf"/>',
+  '<path d="M-9 -4 L-4 0 L-9 4 M9 -4 L4 0 L9 4" fill="none" stroke="#2dd4bf" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+];
+
+function renderE(){ /* Civ Tech Tree */
+  var vbh = 584, cx = [64, 180, 296], y0 = 158, dy = 54, s = "";
+  s += '<defs><pattern id="gridE" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0 H0 V24" fill="none" stroke="#ffffff" stroke-width="0.6" opacity="0.05"/></pattern></defs>';
+  s += '<rect width="360" height="' + vbh + '" fill="#0c1118"/><rect width="360" height="' + vbh + '" fill="url(#gridE)"/>';
+  BRANCHES.forEach(function(br, b){
+    var X = cx[b];
+    s += '<rect x="' + (X - 58) + '" y="66" width="116" height="48" rx="10" fill="#141c28" stroke="#26314a" stroke-width="1.5"/>';
+    s += '<g transform="translate(' + (X - 38) + ',90)">' + BR_ICONS[b] + '</g>';
+    s += '<text x="' + (X + 6) + '" y="94" text-anchor="middle" font-size="10" font-weight="700" fill="#e6edf7" textLength="76" lengthAdjust="spacingAndGlyphs">' + esc(br.name) + '</text>';
+    var divY = y0 + 3 * dy - 27;
+    s += '<line x1="14" y1="' + divY + '" x2="346" y2="' + divY + '" stroke="#f59e0b" stroke-width="1" stroke-dasharray="6 5" opacity="0.55"/>';
+    s += '<text x="344" y="' + (divY - 6) + '" text-anchor="end" font-size="8" letter-spacing="2" fill="#f59e0b">FRONTIER</text>';
+    var lastY = y0 + (br.nodes.length - 1) * dy;
+    br.nodes.forEach(function(nd, i){
+      var y = y0 + i * dy, inner = "";
+      if (i > 0){
+        var py = y - dy;
+        s += '<line x1="' + X + '" y1="' + py + '" x2="' + X + '" y2="' + y + '" stroke="#2b3648" stroke-width="2"/>';
+        s += '<rect x="-4" y="-4" width="8" height="8" transform="translate(' + X + ',' + ((py + y) / 2) + ') rotate(45)" fill="#2b3648"/>';
+      }
+      if (nd.s === "done"){ inner = '<polygon points="' + hexPts(19) + '" fill="#0d3b36" stroke="#2dd4bf" stroke-width="2"/>' + IC.check("#5eead4"); }
+      else if (nd.s === "current"){ inner = '<circle class="ping" r="24" fill="none" stroke="#fbbf24" stroke-width="2"/><polygon points="' + hexPts(19) + '" fill="#3a2203" stroke="#fbbf24" stroke-width="2.5"/>' + IC.dot("#fde68a", 5); }
+      else if (nd.s === "next"){ inner = '<polygon points="' + hexPts(19) + '" fill="#141c28" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5 3"/>' + IC.next("#fbbf24") + '<text y="-30" text-anchor="middle" font-size="8" letter-spacing="1.5" fill="#fbbf24" font-weight="700">NEXT</text>'; }
+      else { inner = '<polygon points="' + hexPts(19) + '" fill="#10151d" stroke="#2b3648" stroke-width="2"/>' + IC.lock("#475569", 0.9); }
+      s += nodeOpen(b, i, X, y, VBW, vbh) + inner + "</g>";
+      s += lbl(X, y + 37, nd.n, 9.5, "#c3cede");
+    });
+  });
+  return { vbh: vbh, svg: s };
+}
+
+function renderF(){ /* Blueprint */
+  var vbh = 552, cx = [64, 180, 296], y0 = 142, dy = 48, s = "", ids = ["AE", "MA", "WC"];
+  s += '<defs><pattern id="gridF" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0 H0 V20" fill="none" stroke="#ffffff" stroke-width="0.7" opacity="0.09"/></pattern></defs>';
+  s += '<rect width="360" height="' + vbh + '" fill="#14508c"/><rect width="360" height="' + vbh + '" fill="url(#gridF)"/>';
+  var lastAll = y0 + 7 * dy;
+  s += '<line x1="20" y1="' + y0 + '" x2="20" y2="' + lastAll + '" stroke="#bcd6f5" stroke-width="1"/>';
+  s += '<line x1="15" y1="' + y0 + '" x2="25" y2="' + y0 + '" stroke="#bcd6f5" stroke-width="1"/><line x1="15" y1="' + lastAll + '" x2="25" y2="' + lastAll + '" stroke="#bcd6f5" stroke-width="1"/>';
+  s += '<text x="12" y="' + ((y0 + lastAll) / 2) + '" font-size="7" fill="#bcd6f5" text-anchor="middle" transform="rotate(-90 12 ' + ((y0 + lastAll) / 2) + ')" letter-spacing="2">SCALE 1:1</text>';
+  BRANCHES.forEach(function(br, b){
+    var X = cx[b];
+    s += '<text x="' + X + '" y="86" text-anchor="middle" font-size="10" letter-spacing="2" fill="#ffffff">' + esc(br.name.toUpperCase()) + '</text>';
+    s += '<line x1="' + (X - 52) + '" y1="94" x2="' + (X + 52) + '" y2="94" stroke="#ffffff" stroke-width="1" opacity="0.6"/>';
+    br.nodes.forEach(function(nd, i){
+      var y = y0 + i * dy, inner = "";
+      if (i > 0){
+        var py = y - dy, locked = (br.nodes[i-1].s === "locked" || nd.s === "locked");
+        s += '<line x1="' + X + '" y1="' + py + '" x2="' + X + '" y2="' + y + '" stroke="#ffffff" stroke-width="1.5"' + (locked ? ' stroke-dasharray="5 4" opacity="0.65"' : "") + '/>';
+      }
+      var idt = ids[b] + "-" + (i + 1 < 10 ? "0" : "") + (i + 1);
+      s += '<text x="' + (X - 24) + '" y="' + (y + 3) + '" text-anchor="end" font-size="7.5" fill="#bcd6f5">' + idt + '</text>';
+      if (nd.s === "done"){ inner = '<circle r="13" fill="#ffffff"/>' + IC.check("#14508c"); }
+      else if (nd.s === "current"){ inner = '<line x1="-21" y1="0" x2="21" y2="0" stroke="#ffffff" stroke-width="1" opacity="0.8"/><line x1="0" y1="-21" x2="0" y2="21" stroke="#ffffff" stroke-width="1" opacity="0.8"/><circle r="13" fill="none" stroke="#ffffff" stroke-width="2.5"/><circle r="6" fill="#ffffff"/><text y="-27" text-anchor="middle" font-size="8" letter-spacing="2" fill="#ffffff">YOU</text>'; }
+      else if (nd.s === "next"){ inner = '<circle r="13" fill="rgba(255,255,255,0.08)" stroke="#ffffff" stroke-width="2" stroke-dasharray="4 3"/>' + IC.next("#ffffff") + '<text y="-24" text-anchor="middle" font-size="8" letter-spacing="1.5" fill="#ffffff">NEXT</text>'; }
+      else { inner = '<circle r="13" fill="none" stroke="#9cc0e8" stroke-width="1.5" stroke-dasharray="2 4"/>' + IC.lock("#9cc0e8", 0.85); }
+      s += nodeOpen(b, i, X, y, VBW, vbh) + inner + "</g>";
+      s += lbl(X, y + 31, nd.n, 9, "#eaf2ff");
+    });
+  });
+  s += '<rect x="216" y="502" width="128" height="36" fill="none" stroke="#ffffff" stroke-width="1.5"/>';
+  s += '<text x="226" y="517" font-size="8" letter-spacing="1" fill="#ffffff">SKILL TREE</text>';
+  s += '<text x="226" y="530" font-size="7" fill="#bcd6f5">SHEET 01 · REV F</text>';
+  return { vbh: vbh, svg: s };
+}
+
+function renderG(){ /* Arcade Neon */
+  var vbh = 552, cx = [64, 180, 296], y0 = 140, dy = 52, s = "";
+  s += '<defs><radialGradient id="vigG" cx="50%" cy="40%" r="80%"><stop offset="0%" stop-color="#1d0b38"/><stop offset="100%" stop-color="#0a0416"/></radialGradient></defs>';
+  s += '<rect width="360" height="' + vbh + '" fill="url(#vigG)"/>';
+  var dia = "M0 -17 L17 0 L0 17 L-17 0 Z";
+  BRANCHES.forEach(function(br, b){
+    var X = cx[b];
+    s += '<text x="' + X + '" y="82" text-anchor="middle" font-size="9" fill="#ffe14d">' + esc(br.name.toUpperCase()) + '</text>';
+    br.nodes.forEach(function(nd, i){
+      var x = X + (i % 2 ? 24 : -24), y = y0 + i * dy, inner = "";
+      if (i > 0){
+        var px = X + ((i - 1) % 2 ? 24 : -24), py = y - dy;
+        s += '<line x1="' + px + '" y1="' + py + '" x2="' + x + '" y2="' + y + '" stroke="#7b2ff7" stroke-width="2.5" style="filter:drop-shadow(0 0 4px #7b2ff7)"/>';
+      }
+      if (nd.s === "done"){ inner = '<g style="filter:drop-shadow(0 0 7px #00e5ff)"><path d="' + dia + '" fill="#00e5ff"/></g>' + IC.check("#062a33"); }
+      else if (nd.s === "current"){ inner = '<circle class="ping" r="22" fill="none" stroke="#ff2fb3" stroke-width="2"/><g style="filter:drop-shadow(0 0 9px #ff2fb3)"><path d="' + dia + '" fill="#ff2fb3"/></g>' + IC.dot("#ffffff", 4); }
+      else if (nd.s === "next"){ inner = '<text y="-32" text-anchor="middle" font-size="8" fill="#ffe14d" class="blink">NEXT</text><g style="filter:drop-shadow(0 0 7px #ffe14d)"><path d="' + dia + '" fill="#1a0f2e" stroke="#ffe14d" stroke-width="2.5"/></g>' + IC.next("#ffe14d"); }
+      else { inner = '<path d="' + dia + '" fill="#1c1230" stroke="#4a3566" stroke-width="2"/>' + IC.lock("#5b4678", 0.9); }
+      s += nodeOpen(b, i, x, y, VBW, vbh) + inner + "</g>";
+      s += lbl(x, y + 36, nd.n, 7.5, "#d9c9ff").replace('textLength="100"', 'textLength="96"');
+    });
+  });
+  return { vbh: vbh, svg: s, scan: true };
+}
+
+function wobPath(r, seed){
+  var d = "", n = 9;
+  for (var k = 0; k <= n; k++){
+    var a = k / n * Math.PI * 2, rr = r * (1 + 0.07 * j(seed + k * 3.7));
+    d += (k ? "L" : "M") + (Math.cos(a) * rr).toFixed(1) + " " + (Math.sin(a) * rr).toFixed(1);
+  }
+  return d + "Z";
+}
+
+function renderH(){ /* Ink & Paper */
+  var vbh = 524, cx = [64, 180, 296], y0 = 132, dy = 48, s = "";
+  s += '<rect width="360" height="' + vbh + '" fill="#f6f0dd"/>';
+  BRANCHES.forEach(function(br, b){
+    var X = cx[b];
+    s += '<text x="' + X + '" y="80" text-anchor="middle" font-size="21" font-weight="700" fill="#2e2a24">' + esc(br.name) + '</text>';
+    s += '<path d="M' + (X - 46) + ' 88 Q' + X + ' ' + (94 + j(b) * 3).toFixed(1) + ' ' + (X + 46) + ' 88" fill="none" stroke="#2e2a24" stroke-width="1.6" opacity="0.7"/>';
+    var prev = null;
+    br.nodes.forEach(function(nd, i){
+      var x = X + j(b * 77 + i * 5) * 16, y = y0 + i * dy + j(b * 77 + i * 5 + 40) * 8, inner = "";
+      if (prev){
+        var mx = (prev[0] + x) / 2 + j(b * 31 + i * 7) * 16, my = (prev[1] + y) / 2;
+        s += '<path d="M' + prev[0].toFixed(1) + ' ' + (prev[1] + 17).toFixed(1) + ' Q' + mx.toFixed(1) + ' ' + my.toFixed(1) + ' ' + x.toFixed(1) + ' ' + (y - 17).toFixed(1) + '" fill="none" stroke="#2e2a24" stroke-width="2" opacity="0.7"/>';
+      }
+      prev = [x, y];
+      var ticks = "";
+      if (nd.s === "current"){
+        for (var t = 0; t < 8; t++){
+          var a = t / 8 * Math.PI * 2 + 0.3;
+          ticks += '<line x1="' + (Math.cos(a) * 21).toFixed(1) + '" y1="' + (Math.sin(a) * 21).toFixed(1) + '" x2="' + (Math.cos(a) * 27).toFixed(1) + '" y2="' + (Math.sin(a) * 27).toFixed(1) + '" stroke="#2e2a24" stroke-width="2" stroke-linecap="round"/>';
+        }
+      }
+      if (nd.s === "done"){ inner = '<path d="' + wobPath(15, b * 13 + i) + '" fill="#2e2a24"/><g transform="rotate(-8)">' + IC.check("#f6f0dd") + '</g>'; }
+      else if (nd.s === "current"){ inner = ticks + '<path d="' + wobPath(15, b * 13 + i) + '" fill="none" stroke="#2e2a24" stroke-width="2.6"/>' + IC.dot("#2e2a24", 5) + '<text y="-34" text-anchor="middle" font-size="14" font-weight="600" fill="#2e2a24">you are here</text>'; }
+      else if (nd.s === "next"){ inner = '<path d="' + wobPath(15, b * 13 + i) + '" fill="rgba(46,42,36,0.05)" stroke="#2e2a24" stroke-width="2" stroke-dasharray="5 4"/>' + IC.next("#2e2a24") + '<text y="-32" text-anchor="middle" font-size="15" font-weight="700" fill="#2e2a24">next!</text>'; }
+      else { inner = '<path d="' + wobPath(15, b * 13 + i) + '" fill="none" stroke="#b9b09a" stroke-width="2"/>' + IC.lock("#b9b09a", 0.9); }
+      s += nodeOpen(b, i, x, y, VBW, vbh) + inner + "</g>";
+      s += lbl(x, y + 36, nd.n, 14.5, "#2e2a24");
+    });
+  });
+  return { vbh: vbh, svg: s };
+}
+</script>
+<script>
+"use strict";
+/* ================= directions config + app ================= */
+var CHECK_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+var DIRS = [
+  { id: "A", name: "Noir RPG", vibe: "Dark charcoal, gold rings, serif type — Path-of-Exile gravity for your real-life build.",
+    ff: "'Playfair Display',Georgia,serif", hfont: "'Playfair Display',Georgia,serif", render: renderA,
+    vars: { sbg: "#141210", ink: "#ece5d8", accent: "#c9a227", "accent-ink": "#161412", "pop-bg": "#211d16", "pop-fg": "#ece5d8", "pop-line": "#c9a227", "pop-accent": "#e8c766" },
+    legend: [{c:"#c9a227",t:"Done"},{c:"#e8c766",t:"You are here"},{c:"#c9a227",t:"Up next",dash:1},{c:"#4a443c",t:"Locked"}] },
+  { id: "B", name: "Duolingo Path", vibe: "Chunky, bouncy, winding path — learning that feels like a mobile game.",
+    ff: "'Nunito',system-ui,sans-serif", hfont: "'Nunito',system-ui,sans-serif", render: renderB,
+    vars: { sbg: "#fff6e5", ink: "#2b2b2b", accent: "#58cc02", "accent-ink": "#ffffff", "pop-bg": "#ffffff", "pop-fg": "#2b2b2b", "pop-line": "#e7d9b8", "pop-accent": "#3d9900" },
+    legend: [{c:"#58cc02",t:"Done"},{c:"#1cb0f6",t:"You are here"},{c:"#ffc800",t:"Up next"},{c:"#d9d9d9",t:"Locked"}] },
+  { id: "C", name: "Linear Minimal", vibe: "Hairlines and whitespace — the professional's dashboard. Quiet, precise, grown-up.",
+    ff: "system-ui,sans-serif", hfont: "inherit", render: renderC,
+    vars: { sbg: "#fbfbfa", ink: "#1a1a1a", accent: "#1a1a1a", "accent-ink": "#ffffff", "pop-bg": "#ffffff", "pop-fg": "#1a1a1a", "pop-line": "#e2e2e2", "pop-accent": "#1a1a1a" },
+    legend: [{c:"#1a1a1a",t:"Done"},{c:"#1a1a1a",t:"You are here",hollow:1},{c:"#ffffff",t:"Up next",border:"#1a1a1a"},{c:"#d5d5d5",t:"Locked"}] },
+  { id: "D", name: "Constellation", vibe: "Your skills as a night sky — connect the stars, find your constellations.",
+    ff: "system-ui,sans-serif", hfont: "inherit", render: renderD,
+    vars: { sbg: "#04061a", ink: "#dfe6ff", accent: "#7df9ff", "accent-ink": "#062a33", "pop-bg": "#0b1030", "pop-fg": "#dfe6ff", "pop-line": "#4d5f8a", "pop-accent": "#8ff5ff" },
+    legend: [{c:"#fff3d6",t:"Done"},{c:"#8ff5ff",t:"You are here"},{c:"#ffbf69",t:"Up next"},{c:"#46536e",t:"Locked"}] },
+  { id: "E", name: "Civ Tech Tree", vibe: "Hex-grid strategy — research the tech, push past the frontier.",
+    ff: "system-ui,sans-serif", hfont: "inherit", render: renderE,
+    vars: { sbg: "#0c1118", ink: "#e6edf7", accent: "#2dd4bf", "accent-ink": "#062a28", "pop-bg": "#141c28", "pop-fg": "#e6edf7", "pop-line": "#2dd4bf", "pop-accent": "#5eead4" },
+    legend: [{c:"#2dd4bf",t:"Done"},{c:"#fbbf24",t:"You are here"},{c:"#f59e0b",t:"Up next",dash:1},{c:"#2b3648",t:"Locked"}] },
+  { id: "F", name: "Blueprint", vibe: "White on blueprint blue — engineer your own stats, sheet 01.",
+    ff: "ui-monospace,'SF Mono',Menlo,monospace", hfont: "inherit", render: renderF,
+    vars: { sbg: "#14508c", ink: "#f2f7ff", accent: "#ffffff", "accent-ink": "#14508c", "pop-bg": "#0d3a6e", "pop-fg": "#f2f7ff", "pop-line": "#ffffff", "pop-accent": "#bcd6f5" },
+    legend: [{c:"#ffffff",t:"Done"},{c:"#ffffff",t:"You are here",hollow:1},{c:"#ffffff",t:"Up next",dash:1},{c:"#9cc0e8",t:"Locked"}] },
+  { id: "G", name: "Arcade Neon", vibe: "Neon arcade cabinet — insert coin to level up.",
+    ff: "'Press Start 2P',monospace", hfont: "'Press Start 2P',monospace", render: renderG,
+    vars: { sbg: "#0e0518", ink: "#f5ecff", accent: "#ff2fb3", "accent-ink": "#ffffff", "pop-bg": "#1c0b33", "pop-fg": "#f5ecff", "pop-line": "#ff2fb3", "pop-accent": "#00e5ff" },
+    legend: [{c:"#00e5ff",t:"Done"},{c:"#ff2fb3",t:"You are here"},{c:"#ffe14d",t:"Up next",hollow:1},{c:"#4a3566",t:"Locked"}] },
+  { id: "H", name: "Ink & Paper", vibe: "Ink on cream paper — a personal field journal of who you're becoming.",
+    ff: "'Caveat',cursive", hfont: "'Caveat',cursive", render: renderH, paper: true,
+    vars: { sbg: "#f6f0dd", ink: "#2e2a24", accent: "#2e2a24", "accent-ink": "#f6f0dd", "pop-bg": "#fffdf4", "pop-fg": "#2e2a24", "pop-line": "#2e2a24", "pop-accent": "#8a6d3b" },
+    legend: [{c:"#2e2a24",t:"Done"},{c:"#2e2a24",t:"You are here",hollow:1},{c:"#2e2a24",t:"Up next",dash:1},{c:"#b9b09a",t:"Locked"}] }
+];
+
+function legendHTML(items){
+  return items.map(function(it){
+    var st = "background:" + it.c + ";";
+    if (it.hollow) st += "background:transparent;border:2px solid " + it.c + ";";
+    if (it.border) st += "border:2px solid " + it.border + ";";
+    if (it.dash) st += "border:2px dashed " + it.c + ";background:transparent;";
+    return '<span><i style="' + st + '"></i>' + it.t + "</span>";
+  }).join("");
+}
+
+function buildSections(){
+  var host = document.getElementById("dirs"), html = "";
+  DIRS.forEach(function(d){
+    var r = d.render();
+    var v = d.vars, style = "";
+    Object.keys(v).forEach(function(k){ style += "--" + k + ":" + v[k] + ";"; });
+    style += "--hfont:" + d.hfont + ";";
+    if (d.paper) style += "background-image:radial-gradient(ellipse at 20% 10%,rgba(120,90,40,0.06),transparent 55%),radial-gradient(ellipse at 85% 90%,rgba(120,90,40,0.05),transparent 50%);";
+    html += '<section class="dir" data-dir="' + d.id + '" style="' + style + '">';
+    html += '<div class="dir-head"><span class="dir-letter">' + d.id + "</span>";
+    html += "<div><h2>" + esc(d.name) + '</h2><p class="vibe">' + esc(d.vibe) + "</p></div>";
+    html += '<span class="badge" hidden>' + CHECK_SVG + "YOUR PICK</span></div>";
+    html += '<div class="tree-wrap"><svg viewBox="0 0 ' + VBW + " " + r.vbh + '" font-family="' + d.ff.replace(/"/g, "&quot;") + '">' + r.svg + "</svg>";
+    if (r.scan) html += '<div class="scanlines"></div>';
+    html += '<div class="pop" hidden><div class="pop-name"></div><div class="pop-meta"></div><div class="pop-next"></div></div></div>';
+    html += '<div class="legend">' + legendHTML(d.legend) + "</div>";
+    html += '<button class="choose" data-dir="' + d.id + '"><span>Choose this direction</span></button>';
+    html += "</section>";
+  });
+  host.innerHTML = html;
+}
+
+function nodeInfo(k){
+  var p = k.split("-"), b = +p[0], i = +p[1];
+  return { br: BRANCHES[b], nd: BRANCHES[b].nodes[i] };
+}
+
+function wirePopovers(){
+  document.querySelectorAll(".dir").forEach(function(sec){
+    var svg = sec.querySelector("svg"), pop = sec.querySelector(".pop");
+    svg.addEventListener("click", function(e){
+      var g = e.target.closest(".node");
+      if (!g){ pop.hidden = true; return; }
+      var k = g.getAttribute("data-k");
+      if (!pop.hidden && pop.getAttribute("data-k") === k){ pop.hidden = true; return; }
+      var info = nodeInfo(k), nd = info.nd;
+      pop.querySelector(".pop-name").textContent = nd.n;
+      pop.querySelector(".pop-meta").textContent = STATE_TXT[nd.s] + " · " + nd.lv;
+      pop.querySelector(".pop-next").textContent = nd.next;
+      var x = parseFloat(g.getAttribute("data-x")), y = parseFloat(g.getAttribute("data-y"));
+      var vbw = parseFloat(g.getAttribute("data-vbw")), vbh = parseFloat(g.getAttribute("data-vbh"));
+      var px = x / vbw * 100, py = y / vbh * 100;
+      pop.style.left = Math.min(78, Math.max(22, px)) + "%";
+      pop.style.top = py + "%";
+      pop.style.transform = py < 42 ? "translate(-50%,16px)" : "translate(-50%,calc(-100% - 16px))";
+      pop.setAttribute("data-k", k);
+      pop.hidden = false;
+      g.classList.add("tap");
+      setTimeout(function(){ g.classList.remove("tap"); }, 220);
+    });
+  });
+}
+
+var PICK_KEY = "skill-tree-pick";
+function getPick(){ try { return localStorage.getItem(PICK_KEY); } catch (e){ return null; } }
+function setPick(id){ try { localStorage.setItem(PICK_KEY, id); } catch (e){} syncPick(); }
+
+function syncPick(){
+  var pick = getPick();
+  document.querySelectorAll(".dir").forEach(function(sec){
+    var on = sec.getAttribute("data-dir") === pick;
+    sec.querySelector(".badge").hidden = !on;
+    var btn = sec.querySelector(".choose");
+    btn.classList.toggle("on", on);
+    btn.innerHTML = on ? CHECK_SVG + "<span>Your pick</span>" : "<span>Choose this direction</span>";
+  });
+  var meta = null;
+  DIRS.forEach(function(d){ if (d.id === pick) meta = d; });
+  document.getElementById("pickline").innerHTML = meta
+    ? "Your pick: <b>" + meta.id + " · " + esc(meta.name) + "</b> — saved on this device. Tap another direction's button anytime to change it."
+    : "No pick yet — tap a direction's button when one feels right.";
+}
+
+document.querySelectorAll(".choose");
+document.addEventListener("click", function(e){
+  var b = e.target.closest(".choose");
+  if (b) setPick(b.getAttribute("data-dir"));
+});
+
+buildSections();
+wirePopovers();
+syncPick();
+</script>
+</body>
+</html>

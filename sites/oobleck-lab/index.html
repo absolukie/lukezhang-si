@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Oobleck Lab — a non-Newtonian playground</title>
+<meta name="description" content="A 2D physics sandbox for non-Newtonian fluids: oobleck, slime, ketchup, honey, water. Poke it, pour it, smack it.">
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height:100%; overflow:hidden; background:#0b0e14; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, sans-serif;
+    color:#e8ecf4; user-select:none; -webkit-user-select:none;
+    display:flex; flex-direction:column; height:100dvh;
+  }
+  header {
+    padding: calc(10px + env(safe-area-inset-top)) 16px 8px;
+    display:flex; align-items:baseline; justify-content:space-between;
+    pointer-events:none; z-index:5;
+  }
+  header h1 { font-size:19px; font-weight:800; letter-spacing:.14em; }
+  header h1 .thin { font-weight:200; color:#8b93a7; }
+  #ver {
+    font-size:10px; color:#5b6376; letter-spacing:.08em; font-variant-numeric:tabular-nums;
+    background:rgba(255,255,255,.05); padding:3px 8px; border-radius:20px; pointer-events:auto;
+  }
+  #stage { position:relative; flex:1; overflow:hidden; }
+  #sim { position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:crosshair; }
+  #hint {
+    position:absolute; left:50%; top:14px; transform:translateX(-50%);
+    background:rgba(10,13,20,.78); border:1px solid rgba(255,255,255,.12);
+    padding:9px 16px; border-radius:24px; font-size:13px; color:#cfd6e4;
+    white-space:nowrap; pointer-events:none; transition:opacity .6s; z-index:4;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  }
+  #hint.gone { opacity:0; }
+  #toast {
+    position:absolute; left:50%; bottom:14px; transform:translateX(-50%) translateY(8px);
+    background:rgba(10,13,20,.85); border:1px solid rgba(255,255,255,.14);
+    padding:8px 16px; border-radius:20px; font-size:12.5px; color:#e8ecf4;
+    opacity:0; transition:opacity .25s, transform .25s; pointer-events:none; z-index:4;
+    white-space:nowrap;
+  }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  #panel {
+    background:rgba(13,17,25,.96); border-top:1px solid rgba(255,255,255,.09);
+    padding:10px 12px calc(12px + env(safe-area-inset-bottom));
+    display:flex; flex-direction:column; gap:9px; z-index:5;
+  }
+  .row { display:flex; gap:8px; align-items:center; justify-content:center; }
+  .row.scroll { justify-content:flex-start; overflow-x:auto; scrollbar-width:none; padding-bottom:2px; }
+  .row.scroll::-webkit-scrollbar { display:none; }
+  .chip {
+    flex:0 0 auto; display:flex; align-items:center; gap:7px;
+    border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.04);
+    color:#dfe5f0; border-radius:22px; padding:8px 13px 8px 9px;
+    font-size:13px; font-weight:600; touch-action:manipulation; cursor:pointer;
+    transition:transform .08s, background .15s, border-color .15s;
+  }
+  .chip:active { transform:scale(.94); }
+  .chip .dot { width:18px; height:18px; border-radius:50%; box-shadow:inset -2px -3px 4px rgba(0,0,0,.35), 0 0 6px rgba(255,255,255,.08); }
+  .chip.sel { background:rgba(255,255,255,.13); border-color:rgba(255,255,255,.45); }
+  .tool {
+    flex:0 0 auto; width:46px; height:46px; border-radius:15px;
+    border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.04);
+    font-size:20px; display:flex; align-items:center; justify-content:center;
+    touch-action:manipulation; cursor:pointer; transition:transform .08s, background .15s, border-color .15s;
+  }
+  .tool:active { transform:scale(.9); }
+  .tool.sel { background:rgba(120,180,255,.22); border-color:rgba(120,180,255,.6); }
+  .tool.armed { background:rgba(255,120,120,.25); border-color:rgba(255,120,120,.7); }
+  .lbl { font-size:10px; color:#69718a; letter-spacing:.12em; font-weight:700; }
+</style>
+</head>
+<body>
+<header>
+  <h1>OOBLECK <span class="thin">LAB</span></h1>
+  <span id="ver">v2026.09.30-01.00</span>
+</header>
+<div id="stage">
+  <canvas id="sim"></canvas>
+  <div id="hint">Drag to stir &nbsp;·&nbsp; Smack the oobleck 👆</div>
+  <div id="toast"></div>
+</div>
+<div id="panel">
+  <div class="row scroll" id="mats"></div>
+  <div class="row">
+    <span class="lbl">TOOLS</span>
+    <button class="tool sel" id="t-stir" title="Stir">🖐️</button>
+    <button class="tool" id="t-pour" title="Pour">🚰</button>
+    <button class="tool" id="t-hammer" title="Hammer">🔨</button>
+    <button class="tool" id="t-ball" title="Drop the ball">🎱</button>
+    <button class="tool" id="t-tilt" title="Tilt gravity">📱</button>
+    <button class="tool" id="t-clear" title="Clear">🗑️</button>
+  </div>
+</div>
+<script>
+'use strict';
+/* ============================================================
+   OOBLECK LAB — a 2D non-Newtonian fluid sandbox
+   Position-based fluids (PBF-lite) + per-material rheology:
+   - oobleck: shear-THICKENING (jam under impact, flow when gentle)
+   - ketchup: shear-THINNING + yield stress
+   - slime:   viscoelastic (stretchy springs, snaps back)
+   - honey:   Newtonian, very viscous
+   - water:   Newtonian, thin
+   ============================================================ */
+const BUILD = 'v2026.09.30-02.20';
+document.getElementById('ver').textContent = BUILD;
+
+const canvas = document.getElementById('sim');
+const ctx = canvas.getContext('2d');
+const isMobile = matchMedia('(pointer: coarse)').matches || innerWidth < 768;
+
+// ---- tuning ------------------------------------------------
+const PR   = isMobile ? 6.0 : 4.2;     // particle radius (px)
+const H    = PR * 4.0;                 // kernel radius
+const SUB  = isMobile ? 1 : 2;         // substeps per frame
+const PBF_ITERS = isMobile ? 3 : 2;    // density solver iterations
+const MAXP = isMobile ? 900 : 2600;    // particle cap
+const GRAV = 1500;                     // px/s^2
+
+// ---- materials ---------------------------------------------
+const MATS = {
+  oobleck: { name:'Oobleck', color:'#f2ecdd', stress:'#ffffff', dark:'#cfc6ae',
+             desc:'Shear-thickening: smack it → solid, stir gently → flows' },
+  slime:   { name:'Slime',   color:'#69e585', stress:'#a5ffc0', dark:'#2f8f4e',
+             desc:'Viscoelastic: stretches, snaps back, bounces' },
+  ketchup: { name:'Ketchup', color:'#e0392b', stress:'#ff6a4d', dark:'#7e1a12',
+             desc:'Shear-thinning: sits still until you shake it' },
+  honey:   { name:'Honey',   color:'#f0a832', stress:'#ffcf6e', dark:'#9a5f14',
+             desc:'Newtonian, very thick' },
+  water:   { name:'Water',   color:'#3fa9ff', stress:'#8fd0ff', dark:'#14568f',
+             desc:'Newtonian, thin — the control group' },
+};
+let curMat = 'oobleck';
+
+// ---- state --------------------------------------------------
+let W = 0, Hh = 0, DPR = 1;
+const P = [];            // particles: {x,y,px,py,vx,vy,mat,shear,lamb}
+let ball = null;         // {x,y,vx,vy,r}
+let gravX = 0, gravY = GRAV;
+let tiltOn = false;
+let tool = 'stir';
+let pouring = false, pourX = 0, pourY = 0, pourAcc = 0;
+let clearArmed = false;
+
+// pointer
+const ptr = { x:0, y:0, vx:0, vy:0, down:false, lx:0, ly:0, t:0 };
+
+// spatial hash: flat head/next arrays, zero allocation per step
+const GHASH = 2048, GMASK = GHASH - 1;
+const CELL = H;
+let gHead = new Int32Array(GHASH);
+let gNext = new Int32Array(1024);
+function buildGrid(){
+  const n = P.length;
+  if (gNext.length < n) gNext = new Int32Array(n + 512);
+  gHead.fill(-1);
+  for (let i = 0; i < n; i++){
+    const p = P[i];
+    const hsh = ((Math.floor(p.px / CELL) * 73856093) ^ (Math.floor(p.py / CELL) * 19349663)) & GMASK;
+    gNext[i] = gHead[hsh];
+    gHead[hsh] = i;
+  }
+}
+// scratch velocity buffers (reused, not reallocated)
+let SX = new Float32Array(1024), SY = new Float32Array(1024);
+function ensureScratch(n){
+  if (SX.length < n){ SX = new Float32Array(n + 512); SY = new Float32Array(n + 512); }
+}
+
+// ---- kernels (2D-adapted poly6 / spiky) ----------------------
+const POLY6 = 315 / (64 * Math.PI * Math.pow(H, 9));
+const SPIKY = 45 / (Math.PI * Math.pow(H, 6));
+function wPoly(r){ const d = H * H - r * r; return POLY6 * d * d * d; }
+
+// rest density, auto-calibrated from a hex lattice sample
+let REST_D = 1000;
+(function calibrate(){
+  const s = PR * 2.0, rows = 12, cols = 12;
+  let sum = 0, cnt = 0;
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++){
+    const x = c * s + (r % 2 ? s / 2 : 0), y = r * s * 0.866;
+    let rho = 0;
+    for (let r2 = 0; r2 < rows; r2++) for (let c2 = 0; c2 < cols; c2++){
+      const x2 = c2 * s + (r2 % 2 ? s / 2 : 0), y2 = r2 * s * 0.866;
+      const dx = x2 - x, dy = y2 - y, d2 = dx * dx + dy * dy;
+      if (d2 < H * H) rho += wPoly(Math.sqrt(d2));
+    }
+    if (r > 2 && r < rows - 3 && c > 2 && c < cols - 3){ sum += rho; cnt++; }
+  }
+  REST_D = (sum / cnt) * 0.92;
+})();
+
+// ---- rheology: effective viscosity from local shear rate -----
+// shear_i ~= weighted mean of |v_i - v_j| over neighbors (px/s)
+function rheology(mat, shear){
+  // returns { xsph, extra } — xsph is the XSPH smoothing factor
+  switch (mat){
+    case 'oobleck': { // shear-thickening: gentle -> runny, smacked -> jams
+      const t = Math.min(Math.max((shear - 160) / 700, 0), 1);
+      const jam = t * t * (3 - 2 * t); // smoothstep
+      return { xsph: 0.06 + 0.85 * jam, stress: jam };
+    }
+    case 'ketchup': { // yield + shear-thinning
+      if (shear < 70) return { xsph: 0.55, stress: 0 };       // below yield: barely creeps
+      const thin = 1 / (1 + shear / 220);
+      return { xsph: 0.08 + 0.35 * thin, stress: 0 };
+    }
+    case 'slime':   return { xsph: 0.28, stress: 0 };
+    case 'honey':   return { xsph: 0.42, stress: 0 };
+    case 'water':   return { xsph: 0.03, stress: 0 };
+  }
+  return { xsph: 0.05, stress: 0 };
+}
+
+function addParticle(x, y, mat, vx, vy){
+  if (P.length >= MAXP) P.shift();
+  P.push({ x, y, px:x, py:y, vx:vx || 0, vy:vy || 0, mat, shear:0, lamb:0, stress:0, jam:0 });
+}
+
+function step(dt){
+  const h = dt / SUB;
+  for (let s = 0; s < SUB; s++) substep(h);
+}
+
+function substep(h){
+  const n = P.length;
+  if (n === 0){ if (ball) collideBall(h); return; }
+  ensureScratch(n);
+  // --- 1. external forces + predict ---
+  for (let i = 0; i < n; i++){
+    const p = P[i];
+    p.vx += gravX * h;
+    p.vy += gravY * h;
+    p.vx *= 0.999; p.vy *= 0.999;
+    p.px = p.x + p.vx * h;
+    p.py = p.y + p.vy * h;
+  }
+  buildGrid();
+  const H2 = H * H, W0 = wPoly(0);
+  // --- 2. PBF density constraint ---
+  for (let it = 0; it < PBF_ITERS; it++){
+    for (let i = 0; i < n; i++){           // lambdas (rho + grad in one walk)
+      const p = P[i];
+      let rho = W0, gs = 0;
+      const cx = Math.floor(p.px / CELL), cy = Math.floor(p.py / CELL);
+      for (let gx = cx - 1; gx <= cx + 1; gx++){
+        const hx = gx * 73856093;
+        for (let gy = cy - 1; gy <= cy + 1; gy++){
+          let j = gHead[(hx ^ (gy * 19349663)) & GMASK];
+          while (j !== -1){
+            if (j !== i){
+              const q = P[j];
+              const dx = q.px - p.px, dy = q.py - p.py;
+              const d2 = dx * dx + dy * dy;
+              if (d2 < H2 && d2 > 1e-6){
+                const r = Math.sqrt(d2), hd = H - r;
+                rho += wPoly(r);
+                const g = SPIKY * hd * hd / (r * REST_D);
+                const gx2 = -g * dx, gy2 = -g * dy;
+                gs += gx2 * gx2 + gy2 * gy2;
+              }
+            }
+            j = gNext[j];
+          }
+        }
+      }
+      p.lamb = -(rho / REST_D - 1) / (2 * gs + 1e-2);
+    }
+    for (let i = 0; i < n; i++){           // position corrections
+      const p = P[i], li = p.lamb;
+      let dx = 0, dy = 0;
+      const cx = Math.floor(p.px / CELL), cy = Math.floor(p.py / CELL);
+      for (let gx = cx - 1; gx <= cx + 1; gx++){
+        const hx = gx * 73856093;
+        for (let gy = cy - 1; gy <= cy + 1; gy++){
+          let j = gHead[(hx ^ (gy * 19349663)) & GMASK];
+          while (j !== -1){
+            if (j !== i){
+              const q = P[j];
+              const ddx = q.px - p.px, ddy = q.py - p.py;
+              const d2 = ddx * ddx + ddy * ddy;
+              if (d2 < H2 && d2 > 1e-6){
+                const r = Math.sqrt(d2), hd = H - r;
+                const g = SPIKY * hd * hd / (r * REST_D);
+                const s = li + q.lamb;
+                dx += s * (g * ddx); dy += s * (g * ddy); // (λi+λj)·∇W(pi−pj)
+              }
+            }
+            j = gNext[j];
+          }
+        }
+      }
+      p.px += dx; p.py += dy;
+    }
+  }
+  // --- 3. velocity update ---
+  for (let i = 0; i < n; i++){
+    const p = P[i];
+    p.vx = (p.px - p.x) / h;
+    p.vy = (p.py - p.y) / h;
+    p.x = p.px; p.y = p.py;
+    if (p.jam > 0.004) p.jam *= 0.95; else p.jam = 0; // impact-jam memory
+  }
+  // --- 4. rheology: shear rate + XSPH viscosity in ONE neighbor walk ---
+  for (let i = 0; i < n; i++){
+    const p = P[i], pvx = p.vx, pvy = p.vy;
+    let sw = 0, wsum = 0, sx = 0, sy = 0;
+    const cx = Math.floor(p.px / CELL), cy = Math.floor(p.py / CELL);
+    for (let gx = cx - 1; gx <= cx + 1; gx++){
+      const hx = gx * 73856093;
+      for (let gy = cy - 1; gy <= cy + 1; gy++){
+        let j = gHead[(hx ^ (gy * 19349663)) & GMASK];
+        while (j !== -1){
+          if (j !== i){
+            const q = P[j];
+            const dx = q.px - p.px, dy = q.py - p.py;
+            const d2 = dx * dx + dy * dy;
+            if (d2 < H2 && d2 > 1e-6){
+              const w = H - Math.sqrt(d2);
+              const dvx = pvx - q.vx, dvy = pvy - q.vy;
+              sw += Math.sqrt(dvx * dvx + dvy * dvy) * w;
+              sx += (q.vx - pvx) * w; sy += (q.vy - pvy) * w;
+              wsum += w;
+            }
+          }
+          j = gNext[j];
+        }
+      }
+    }
+    const shear = wsum > 0 ? sw / wsum : 0;
+    p.shear = shear;
+    const rh = rheology(p.mat, shear);
+    p.stress = rh.stress;
+    if (wsum > 0){ SX[i] = pvx + rh.xsph * sx / wsum; SY[i] = pvy + rh.xsph * sy / wsum; }
+    else { SX[i] = pvx; SY[i] = pvy; }
+  }
+  for (let i = 0; i < n; i++){ P[i].vx = SX[i]; P[i].vy = SY[i]; }
+  // --- 5. slime viscoelastic springs (stretchy, snaps back) ---
+  const RESTL = PR * 2.1, BREAKL = PR * 5.2, BREAK2 = BREAKL * BREAKL;
+  for (let i = 0; i < n; i++){
+    const p = P[i];
+    if (p.mat !== 'slime') continue;
+    const cx = Math.floor(p.px / CELL), cy = Math.floor(p.py / CELL);
+    for (let gx = cx - 1; gx <= cx + 1; gx++){
+      const hx = gx * 73856093;
+      for (let gy = cy - 1; gy <= cy + 1; gy++){
+        let j = gHead[(hx ^ (gy * 19349663)) & GMASK];
+        while (j !== -1){
+          if (j > i){
+            const q = P[j];
+            if (q.mat === 'slime'){
+              const dx = q.px - p.px, dy = q.py - p.py;
+              const d2 = dx * dx + dy * dy;
+              if (d2 < BREAK2 && d2 > 1e-6){
+                const r = Math.sqrt(d2);
+                const stiff = r > RESTL * 1.6 ? 0.34 : 0.16; // strain-hardening
+                const corr = (r - RESTL) * stiff * 0.5 / r;
+                const ox = dx * corr, oy = dy * corr;
+                p.x -= ox; p.y -= oy; q.x += ox; q.y += oy;
+                p.px = p.x; p.py = p.y; q.px = q.x; q.py = q.y;
+              }
+            }
+          }
+          j = gNext[j];
+        }
+      }
+    }
+  }
+  // --- 6. boundaries ---
+  collideBounds();
+  if (ball) collideBall(h);
+}
+
+function collideBounds(){
+  const m = PR * 0.9;
+  for (let i = 0; i < P.length; i++){
+    const p = P[i];
+    if (p.x < m){ p.x = m; p.px = m; if (p.vx < 0) p.vx *= -0.15; }
+    if (p.x > W - m){ p.x = W - m; p.px = W - m; if (p.vx > 0) p.vx *= -0.15; }
+    if (p.y < m){ p.y = m; p.py = m; if (p.vy < 0) p.vy *= -0.15; }
+    if (p.y > Hh - m){ p.y = Hh - m; p.py = Hh - m; if (p.vy > 0) p.vy *= -0.15; p.vx *= 0.985; }
+  }
+}
+
+// heavy ball, two-way coupled: shoves particles, particles push back
+function collideBall(h){
+  const b = ball, rr = b.r + PR;
+  if (!b) return;
+  // ball vs walls
+  if (b.x < b.r){ b.x = b.r; b.vx = Math.abs(b.vx) * 0.4; }
+  if (b.x > W - b.r){ b.x = W - b.r; b.vx = -Math.abs(b.vx) * 0.4; }
+  if (b.y > Hh - b.r){ b.y = Hh - b.r; b.vy = -Math.abs(b.vy) * 0.35; b.vx *= 0.98; }
+  if (b.y < b.r){ b.y = b.r; b.vy = Math.abs(b.vy) * 0.4; }
+  b.vy += gravY * h;
+
+  const solid = []; // rigid-plug contact particle indices
+  let spx = 0, spy = 0, svx = 0, svy = 0;
+
+  for (let i = 0; i < P.length; i++){
+    const p = P[i];
+    const dx = p.x - b.x, dy = p.y - b.y;
+    const d2 = dx * dx + dy * dy;
+    if (d2 >= rr * rr || d2 < 1e-4) continue;
+    const d = Math.sqrt(d2), nx = dx / d, ny = dy / d, push = rr - d;
+    const vrel = (p.vx - b.vx) * nx + (p.vy - b.vy) * ny;
+    // oobleck jams on impact (sticky: stays jammed while being hit)
+    if (vrel < 0 && p.mat === 'oobleck'){
+      const jt = Math.min(1, -vrel / 500), jam = jt * jt * (3 - 2 * jt);
+      if (jam > (p.jam || 0)) p.jam = jam;
+    }
+    const seff = Math.max(p.stress || 0, p.jam || 0);
+    if (seff > 0.45){
+      // jammed plug: acts as one rigid solid against the ball
+      solid.push(i); spx += p.x; spy += p.y; svx += p.vx; svy += p.vy;
+      p.x += nx * push * 0.15; p.y += ny * push * 0.15; // dent looks soft
+      p.px = p.x; p.py = p.y;
+    } else {
+      // fluid contact: soft two-way coupling (water parts around the ball)
+      const mp = 1 + 40 * seff;
+      const pShare = b.mass / (b.mass + mp), bShare = mp / (b.mass + mp);
+      p.x += nx * push * pShare; p.y += ny * push * pShare;
+      b.x -= nx * push * bShare; b.y -= ny * push * bShare;
+      p.px = p.x; p.py = p.y;
+      if (vrel < 0){
+        const e = 0.05 + 0.3 * seff;
+        const jimp = -(1 + e) * vrel / (1 / mp + 1 / b.mass);
+        p.vx += nx * jimp / mp; p.vy += ny * jimp / mp;
+        b.vx -= nx * jimp / b.mass; b.vy -= ny * jimp / b.mass;
+      }
+      p.vx += b.vx * 0.02; p.vy += b.vy * 0.02; // contact friction
+    }
+  }
+
+  if (solid.length){
+    const n = solid.length;
+    const pvx = svx / n, pvy = svy / n;
+    let nx = spx / n - b.x, ny = spy / n - b.y; // contact normal: ball -> plug
+    const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
+    // positional: eject the ball out of the rigid plug
+    let maxPen = 0;
+    for (const i of solid){
+      const p = P[i];
+      const pen = rr - Math.hypot(p.x - b.x, p.y - b.y);
+      if (pen > maxPen) maxPen = pen;
+    }
+    b.x -= nx * maxPen * 0.85; b.y -= ny * maxPen * 0.85;
+    // velocity: single aggregated bounce off the plug (no per-particle pileup)
+    const vrel = (b.vx - pvx) * nx + (b.vy - pvy) * ny; // > 0 = approaching
+    if (vrel > 0){
+      const dvn = -1.25 * vrel; // restitution 0.25
+      b.vx += nx * dvn; b.vy += ny * dvn;
+      const kick = -dvn * b.mass / (n * 200); // plug recoil splash (pushes plug away)
+      for (const i of solid){
+        const p = P[i];
+        p.vx += nx * kick; p.vy += ny * kick;
+      }
+    }
+  }
+
+  b.vx *= 0.999; b.vy *= 0.999;
+  b.x += b.vx * h; b.y += b.vy * h;
+}
+
+function dropBall(){
+  if (ball) return;
+  let top = Hh;
+  for (const p of P) if (p.y < top) top = p.y;
+  if (top > Hh - 60) top = 220; // pool cleared: drop from mid-air
+  ball = { x: W / 2, y: Math.max(50, top - 150), vx: 0, vy: 0,
+           r: Math.min(W, Hh) * 0.075 + 14, mass: 900 };
+  toast('🎱 dropped — oobleck turns solid under impact');
+}
+
+// ---- sprites (pre-rendered radial blobs) ----------------------
+function makeSprite(color, stressColor){
+  const S = 64, c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(S/2, S/2, S*0.05, S/2, S/2, S/2);
+  grad.addColorStop(0, stressColor || color);
+  grad.addColorStop(0.55, color);
+  grad.addColorStop(1, color + '00');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, S, S);
+  // glossy highlight
+  g.fillStyle = 'rgba(255,255,255,.28)';
+  g.beginPath(); g.arc(S*0.36, S*0.32, S*0.13, 0, 7); g.fill();
+  return c;
+}
+const sprites = {};
+function buildSprites(){
+  for (const k in MATS){
+    const m = MATS[k];
+    sprites[k] = makeSprite(m.color);
+    sprites[k + '_stress'] = makeSprite(m.stress, '#ffffff');
+    sprites[k + '_dark'] = makeSprite(m.dark);
+  }
+}
+
+// ---- toast + hint ---------------------------------------------
+const toastEl = document.getElementById('toast');
+let toastT = 0;
+function toast(msg, ms){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => toastEl.classList.remove('show'), ms || 2400);
+}
+function hideHint(){ document.getElementById('hint').classList.add('gone'); }
+
+// ---- material chips -------------------------------------------
+const matsEl = document.getElementById('mats');
+for (const k in MATS){
+  const b = document.createElement('button');
+  b.className = 'chip' + (k === curMat ? ' sel' : '');
+  b.innerHTML = `<span class="dot" style="background:${MATS[k].color}"></span>${MATS[k].name}`;
+  b.onclick = () => {
+    curMat = k;
+    [...matsEl.children].forEach(c => c.classList.remove('sel'));
+    b.classList.add('sel');
+    toast(MATS[k].name + ' — ' + MATS[k].desc, 2600);
+    hideHint();
+  };
+  matsEl.appendChild(b);
+}
+
+// ---- tools ------------------------------------------------------
+const toolBtns = { stir:'t-stir', pour:'t-pour', hammer:'t-hammer', ball:'t-ball', tilt:'t-tilt', clear:'t-clear' };
+function setTool(t){
+  tool = t; clearArmed = false;
+  for (const k in toolBtns) document.getElementById(toolBtns[k]).classList.remove('sel', 'armed');
+  document.getElementById(toolBtns[t]).classList.add('sel');
+  document.getElementById(toolBtns['tilt']).classList.toggle('sel', tiltOn);
+  hideHint();
+}
+for (const k of ['stir', 'pour', 'hammer']) document.getElementById(toolBtns[k]).onclick = () => setTool(k);
+document.getElementById('t-ball').onclick = () => { dropBall(); hideHint(); };
+document.getElementById('t-clear').onclick = (e) => {
+  const b = e.currentTarget;
+  if (!clearArmed){ clearArmed = true; b.classList.add('armed'); toast('Tap 🗑️ again to clear everything'); setTimeout(() => { clearArmed = false; b.classList.remove('armed'); }, 2600); }
+  else { P.length = 0; ball = null; clearArmed = false; b.classList.remove('armed'); toast('Clean slate ✨'); }
+};
+document.getElementById('t-tilt').onclick = async () => {
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
+      const r = await DeviceOrientationEvent.requestPermission();
+      if (r !== 'granted'){ toast('Tilt needs motion permission — try again'); return; }
+    }
+    tiltOn = !tiltOn;
+    document.getElementById('t-tilt').classList.toggle('sel', tiltOn);
+    if (!tiltOn){ gravX = 0; gravY = GRAV; }
+    toast(tiltOn ? '📱 Tilt your phone — gravity follows' : 'Gravity back to normal');
+    hideHint();
+  } catch(e){ toast('Tilt not available here'); }
+};
+window.addEventListener('deviceorientation', (e) => {
+  if (!tiltOn || e.beta == null || e.gamma == null) return;
+  const gx = Math.max(-1, Math.min(1, e.gamma / 35));
+  const gy = Math.max(-1, Math.min(1, (e.beta - 40) / 35));
+  gravX = gx * GRAV; gravY = gy * GRAV * 0.9 + GRAV * 0.35;
+});
+
+// ---- pointer interaction ----------------------------------------
+const stage = document.getElementById('stage');
+function toLocal(e){
+  const r = canvas.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * (W / r.width), y: (e.clientY - r.top) * (Hh / r.height) };
+}
+canvas.addEventListener('pointerdown', (e) => {
+  canvas.setPointerCapture(e.pointerId);
+  const l = toLocal(e);
+  ptr.down = true; ptr.x = ptr.lx = l.x; ptr.y = ptr.ly = l.y; ptr.vx = ptr.vy = 0; ptr.t = performance.now();
+  hideHint();
+  if (tool === 'hammer') hammerAt(l.x, l.y);
+  if (tool === 'pour'){ pouring = true; pourX = l.x; pourY = l.y; }
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!ptr.down) return;
+  const l = toLocal(e);
+  const now = performance.now(), dt = Math.max(1, now - ptr.t) / 1000;
+  ptr.vx = 0.65 * ptr.vx + 0.35 * ((l.x - ptr.x) / dt);
+  ptr.vy = 0.65 * ptr.vy + 0.35 * ((l.y - ptr.y) / dt);
+  ptr.lx = ptr.x; ptr.ly = ptr.y; ptr.x = l.x; ptr.y = l.y; ptr.t = now;
+  if (tool === 'pour'){ pourX = l.x; pourY = l.y; }
+});
+function endPointer(){ ptr.down = false; pouring = false; ptr.vx = ptr.vy = 0; }
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
+
+function hammerAt(x, y){
+  const R = 150, IMP = 1050;
+  for (let i = 0; i < P.length; i++){
+    const p = P[i];
+    const dx = p.x - x, dy = p.y - y;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < R){
+      const f = (1 - d / R);
+      p.vx += (dx / (d + 1)) * IMP * f;
+      p.vy += (dy / (d + 1)) * IMP * f - IMP * 0.25 * f;
+    }
+  }
+  toast('🔨 SMACK! Watch the oobleck go solid', 1800);
+}
+
+// per-frame pointer forces (stir) + pouring
+function applyPointer(dt){
+  if (tool === 'pour' && pouring){
+    pourAcc += dt * (isMobile ? 130 : 200);
+    while (pourAcc >= 1){
+      pourAcc -= 1;
+      addParticle(pourX + (Math.random() - 0.5) * 14, pourY + (Math.random() - 0.5) * 8,
+        curMat, (Math.random() - 0.5) * 60, 120 + Math.random() * 80);
+    }
+  }
+  if (tool === 'stir' && ptr.down){
+    const R = 110, sp = Math.hypot(ptr.vx, ptr.vy);
+    if (sp > 1){
+      for (let i = 0; i < P.length; i++){
+        const p = P[i];
+        const dx = p.x - ptr.x, dy = p.y - ptr.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < R * R){
+          const f = 1 - Math.sqrt(d2) / R;
+          const k = Math.min(1, 9 * dt) * f;
+          p.vx += (ptr.vx * 1.15 - p.vx) * k;
+          p.vy += (ptr.vy * 1.15 - p.vy) * k;
+        }
+      }
+    }
+  }
+}
+
+// ---- render -------------------------------------------------------
+function render(){
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  // bg
+  const bg = ctx.createLinearGradient(0, 0, 0, Hh);
+  bg.addColorStop(0, '#0d1220'); bg.addColorStop(1, '#090c13');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, Hh);
+  // subtle grid
+  ctx.strokeStyle = 'rgba(255,255,255,.035)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = 0; x < W; x += 44){ ctx.moveTo(x, 0); ctx.lineTo(x, Hh); }
+  for (let y = 0; y < Hh; y += 44){ ctx.moveTo(0, y); ctx.lineTo(W, y); }
+  ctx.stroke();
+  // walls
+  ctx.strokeStyle = 'rgba(255,255,255,.14)'; ctx.lineWidth = 3;
+  ctx.strokeRect(2, 2, W - 4, Hh - 4);
+  const S = PR * 2.9;
+  for (let i = 0; i < P.length; i++){
+    const p = P[i];
+    let spr = sprites[p.mat];
+    if (p.mat === 'oobleck' && Math.max(p.stress || 0, p.jam || 0) > 0.35) spr = sprites.oobleck_stress;
+    ctx.drawImage(spr, p.x - S / 2, p.y - S / 2, S, S);
+  }
+  if (ball){
+    const b = ball;
+    const g = ctx.createRadialGradient(b.x - b.r*0.3, b.y - b.r*0.35, b.r*0.1, b.x, b.y, b.r);
+    g.addColorStop(0, '#5a6376'); g.addColorStop(0.7, '#2b303c'); g.addColorStop(1, '#14171e');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 2; ctx.stroke();
+  }
+}
+
+// ---- resize ---------------------------------------------------------
+function resize(){
+  const r = stage.getBoundingClientRect();
+  DPR = Math.min(devicePixelRatio || 1, isMobile ? 1.5 : 2);
+  W = Math.max(200, r.width); Hh = Math.max(200, r.height);
+  canvas.width = W * DPR; canvas.height = Hh * DPR;
+}
+window.addEventListener('resize', resize);
+
+// ---- initial scene: a pool of oobleck -------------------------------
+function seed(){
+  P.length = 0;
+  const s = PR * 2.05;
+  const cols = Math.max(1, Math.floor(W / s));
+  // target a consistent pool depth (~14 rows) at every width, capped by particle budget
+  const rows = Math.min(14, Math.floor(MAXP * 0.8 / cols));
+  for (let r = 0; r < rows; r++){
+    for (let x = s / 2; x < W; x += s){
+      const px = x + (r % 2 ? s / 2 : 0) + (Math.random() - 0.5) * 2;
+      const py = Hh - PR - r * s * 0.9;
+      if (px < W - PR) addParticle(px, py, 'oobleck');
+    }
+  }
+}
+
+// ---- main loop --------------------------------------------------------
+let last = performance.now(), acc = 0;
+const DT = 1 / 60;
+function frame(now){
+  requestAnimationFrame(frame);
+  let ft = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  acc += ft;
+  let iter = 0;
+  while (acc >= DT && iter < 3){
+    applyPointer(DT);
+    step(DT);
+    acc -= DT; iter++;
+  }
+  render();
+}
+
+buildSprites();
+resize();
+seed();
+setTimeout(hideHint, 9000);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

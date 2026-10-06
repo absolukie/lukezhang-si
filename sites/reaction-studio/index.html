@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Reaction Studio — record reaction-ready videos for X</title>
+<meta name="description" content="Record your screen + camera as a polished reaction video, exported ready to post on X.">
+<style>
+:root{
+  --bg:#0b0e14; --panel:#121724; --panel2:#0e1320; --line:#232c44;
+  --ink:#eef2ff; --mut:#93a0bd; --acc:#ff4d2e; --acc2:#ff8a3d;
+  --good:#34d399; --warn:#fbbf24; --blue:#4f8cff;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;min-height:100vh}
+button{touch-action:manipulation;cursor:pointer}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 18px 90px}
+header.top{display:flex;align-items:center;gap:12px;margin:6px 0 18px}
+.logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--acc),var(--acc2));display:grid;place-items:center;font-size:22px;box-shadow:0 6px 24px rgba(255,77,46,.35)}
+h1{font-size:22px;margin:0;letter-spacing:.2px}
+.sub{color:var(--mut);font-size:13px;margin:2px 0 0}
+.badgeX{margin-left:auto;background:#000;border:1px solid var(--line);color:#fff;font-weight:700;font-size:12px;padding:6px 12px;border-radius:999px;letter-spacing:.4px}
+.grid{display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start}
+@media(max-width:960px){.grid{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:16px}
+.card h2{font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:var(--mut);margin:0 0 10px}
+.step-n{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--acc);color:#fff;font-size:12px;font-weight:700;margin-right:8px}
+.demo{display:flex;gap:10px;align-items:center;width:100%;text-align:left;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:8px;color:var(--ink)}
+.demo:hover{border-color:var(--acc)}
+.demo.active{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+.demo .thumb{width:64px;height:36px;border-radius:8px;flex:none}
+.demo b{font-size:14px;display:block}
+.demo span{font-size:12px;color:var(--mut)}
+.btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:12px;padding:10px 14px;font-size:14px;font-weight:600}
+.btn:hover{border-color:var(--acc)}
+.btn.primary{background:linear-gradient(135deg,var(--acc),var(--acc2));border:none;color:#fff;box-shadow:0 6px 20px rgba(255,77,46,.35)}
+.btn.ghost{background:transparent}
+.btn:disabled{opacity:.45;cursor:default}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+.seg{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px;margin-top:8px}
+.seg button{flex:1;border:none;background:transparent;color:var(--mut);border-radius:8px;padding:8px 4px;font-size:12px;font-weight:600}
+.seg button.on{background:#1d2740;color:#fff}
+.tgl{display:flex;align-items:center;justify-content:space-between;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px;font-size:14px}
+.tgl small{color:var(--mut);display:block;font-size:12px}
+.switch{position:relative;width:46px;height:26px;flex:none}
+.switch input{opacity:0;width:100%;height:100%;position:absolute;margin:0;cursor:pointer}
+.knob{position:absolute;inset:0;background:#2a3550;border-radius:999px;transition:.2s;pointer-events:none}
+.knob:after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#8b96b3;transition:.2s}
+.switch input:checked+.knob{background:var(--acc)}
+.switch input:checked+.knob:after{left:23px;background:#fff}
+.layouts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.layout{border:1px solid var(--line);border-radius:12px;padding:8px;background:var(--panel2);color:var(--ink);text-align:left}
+.layout:hover{border-color:var(--acc)}
+.layout.active{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+.layout svg{width:100%;height:auto;display:block;border-radius:6px;background:#000}
+.layout b{font-size:12px;display:block;margin-top:6px}
+.layout span{font-size:11px;color:var(--mut)}
+.stage-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;position:relative}
+.stage-holder{position:relative;background:#000;border-radius:12px;overflow:hidden}
+canvas#stage{width:100%;height:auto;display:block;background:#000}
+#countdown{position:absolute;inset:0;display:none;place-items:center;background:rgba(0,0,0,.55);z-index:5}
+#countdown span{font-size:110px;font-weight:800;color:#fff;text-shadow:0 8px 40px rgba(255,77,46,.6)}
+.transport{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+.rec-dot{width:12px;height:12px;border-radius:50%;background:#3a4358;display:inline-block}
+.rec-dot.on{background:var(--acc);animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.25}}
+#timer{font-variant-numeric:tabular-nums;font-weight:700;font-size:18px}
+.fmt{font-size:12px;color:var(--mut);border:1px solid var(--line);border-radius:999px;padding:4px 10px}
+#result .vid{width:100%;border-radius:12px;background:#000;max-height:420px}
+.check{list-style:none;margin:12px 0 0;padding:0;font-size:14px}
+.check li{margin:7px 0;display:flex;gap:8px;align-items:flex-start}
+.check .ok{color:var(--good)} .check .no{color:var(--warn)}
+.examples{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.ex{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.ex .art{height:120px;position:relative}
+.ex .body{padding:12px}
+.ex b{font-size:14px}.ex p{font-size:12px;color:var(--mut);margin:6px 0 10px}
+.tips{font-size:13px;color:var(--mut)}
+.tips li{margin:6px 0}
+.ver{position:fixed;right:10px;bottom:8px;font-size:11px;color:#5b6680;z-index:50}
+h2.sec{font-size:18px;margin:26px 0 12px}
+.note{font-size:12px;color:var(--mut);margin-top:8px}
+#err{display:none;background:#3a1414;border:1px solid #7f2a2a;color:#ffb4b4;border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="logo">🎬</div>
+    <div><h1>Reaction Studio</h1><p class="sub">Screen + camera → reaction-ready video, exported for X</p></div>
+    <div class="badgeX">𝕏 ready</div>
+  </header>
+  <div id="err"></div>
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2><span class="step-n">1</span>Content to react to</h2>
+        <button class="demo active" data-demo="launch">
+          <canvas class="thumb" width="128" height="72" data-thumb="launch"></canvas>
+          <div><b>NovaPhone X — Launch Keynote</b><span>Animated keynote • 48s loop</span></div>
+        </button>
+        <button class="demo" data-demo="review">
+          <canvas class="thumb" width="128" height="72" data-thumb="review"></canvas>
+          <div><b>Expert Review — 14 days later</b><span>Score bars &amp; verdict • 44s loop</span></div>
+        </button>
+        <button class="demo" data-demo="versus">
+          <canvas class="thumb" width="128" height="72" data-thumb="versus"></canvas>
+          <div><b>Nova X vs Pixel Z</b><span>Head-to-head battle • 40s loop</span></div>
+        </button>
+        <div class="btnrow" style="margin-top:10px">
+          <button class="btn" id="shareBtn">🖥️ Share my screen</button>
+        </div>
+        <p class="note" id="srcNote">Playing built-in demo. Share your screen to react to a real launch or review video instead.</p>
+      </div>
+      <div class="card">
+        <h2><span class="step-n">2</span>Camera &amp; mic</h2>
+        <div class="tgl"><div>📷 Reaction camera<small>Picture-in-picture of you</small></div><label class="switch"><input type="checkbox" id="camTgl" checked><span class="knob"></span></label></div>
+        <div class="tgl"><div>🎙️ Microphone<small>Your voiceover / reactions</small></div><label class="switch"><input type="checkbox" id="micTgl" checked><span class="knob"></span></label></div>
+        <div class="tgl"><div>🔊 Screen audio<small>Sound from the shared tab</small></div><label class="switch"><input type="checkbox" id="sysTgl" checked><span class="knob"></span></label></div>
+        <div class="tgl"><div>⏱️ Stop at 2:20<small>X free-account video limit</small></div><label class="switch"><input type="checkbox" id="capTgl" checked><span class="knob"></span></label></div>
+        <div style="font-size:12px;color:var(--mut);margin-top:6px">Camera position</div>
+        <div class="seg" id="camPos">
+          <button data-pos="br" class="on">Bottom right</button>
+          <button data-pos="bl">Bottom left</button>
+          <button data-pos="tr">Top right</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2><span class="step-n">3</span>Layout</h2>
+        <div class="layouts" id="layouts"></div>
+      </div>
+    </div>
+    <div>
+      <div class="stage-card">
+        <div class="stage-holder">
+          <canvas id="stage" width="1920" height="1080"></canvas>
+          <div id="countdown"><span>3</span></div>
+        </div>
+        <div class="transport">
+          <button class="btn primary" id="recBtn">● Record</button>
+          <button class="btn" id="pauseBtn" disabled>⏸ Pause</button>
+          <button class="btn" id="stopBtn" disabled>■ Stop</button>
+          <span class="rec-dot" id="recDot"></span><span id="timer">0:00</span>
+          <span class="fmt" id="fmtBadge">MP4 • 1080p60</span>
+          <span class="fmt" id="sizeBadge" style="display:none"></span>
+        </div>
+      </div>
+      <div class="card" id="result" style="display:none;margin-top:16px">
+        <h2>✅ Your reaction video</h2>
+        <video class="vid" id="preview" controls playsinline></video>
+        <div class="btnrow" style="margin-top:10px">
+          <button class="btn primary" id="dlBtn">⬇ Download video</button>
+          <button class="btn" id="capBtn">📋 Copy X caption</button>
+          <button class="btn ghost" id="againBtn">↺ Record again</button>
+        </div>
+        <ul class="check" id="xcheck"></ul>
+      </div>
+    </div>
+  </div>
+  <h2 class="sec">Examples — pick a combo and hit Record</h2>
+  <div class="examples" id="examples"></div>
+  <h2 class="sec">Tips for great reaction videos</h2>
+  <div class="card tips"><ul style="margin:0;padding-left:18px">
+    <li>Pause the demo with your screen-share instead: share the tab, pause on the price reveal, then react.</li>
+    <li>Keep it under 2:20 for free X accounts; Premium allows longer uploads.</li>
+    <li>Vertical (9:16) fills the phone screen — best for the X mobile feed.</li>
+    <li>Reacting to someone else's video? Keep clips short and add real commentary — that's what keeps it fair use.</li>
+    <li>Record in a quiet room; your mic matters more than the camera.</li>
+  </ul></div>
+</div>
+<div class="ver" id="ver">v2026.10.01-01.33</div>
+<script>
+"use strict";
+/* ============ utils ============ */
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+function phase(t,s,d){return clamp((t-s)/d,0,1)}
+function pop(t,s){const p=phase(t,s,.5);return p<=0?0:ease(Math.min(1,p*1.6))*(p>=1?1:1)}
+function rr(c,x,y,w,h,r){r=Math.min(r,w/2,h/2);c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath()}
+function txt(c,s,x,y,size,color,align="center",weight=700,font="Inter,-apple-system,sans-serif"){c.fillStyle=color;c.font=`${weight} ${size}px ${font}`;c.textAlign=align;c.textBaseline="middle";c.fillText(s,x,y)}
+function cover(c,vid,x,y,w,h){const vw=vid.videoWidth,vh=vid.videoHeight;if(!vw||!vh)return;const s=Math.max(w/vw,h/vh),dw=vw*s,dh=vh*s;c.drawImage(vid,x+(w-dw)/2,y+(h-dh)/2,dw,dh)}
+function err(m){const e=$("#err");e.style.display="block";e.textContent=m}
+</script>
+<script>
+"use strict";
+/* ============ DEMO SCENES — animated example videos ============ */
+function stars(c,x,y,n,size,color){c.fillStyle=color;c.textAlign="left";c.textBaseline="middle";let s="";for(let i=0;i<5;i++)s+=i<Math.round(n)?"★":"☆";c.font=`${size}px sans-serif`;c.fillText(s,x,y)}
+function bar(c,x,y,w,h,frac,fill,bg="rgba(255,255,255,.14)"){rr(c,x,y,w,h,h/2);c.fillStyle=bg;c.fill();if(frac>0){rr(c,x,y,w*clamp(frac,0,1),h,h/2);c.fillStyle=fill;c.fill()}}
+
+const DEMOS={
+launch:{title:"NovaPhone X — Launch Keynote",dur:48,draw(c,W,H,t){
+  const g=c.createLinearGradient(0,0,0,H);g.addColorStop(0,"#07070f");g.addColorStop(1,"#141428");c.fillStyle=g;c.fillRect(0,0,W,H);
+  const sp=c.createRadialGradient(W/2,H*0.32,50,W/2,H*0.32,W*0.45);sp.addColorStop(0,"rgba(120,140,255,.20)");sp.addColorStop(1,"rgba(120,140,255,0)");c.fillStyle=sp;c.fillRect(0,0,W,H);
+  c.fillStyle="rgba(255,255,255,.05)";for(let i=0;i<24;i++){const px=(i*197)%W,py=(i*331+t*22)%H;c.beginPath();c.arc(px,py,2.2,0,7);c.fill()}
+  const liveA=.6+.4*Math.sin(t*4);c.fillStyle=`rgba(255,60,60,${liveA})`;c.beginPath();c.arc(W*0.06,H*0.07,10,0,7);c.fill();
+  txt(c,"LIVE  •  NovaKeynote",W*0.06+96,H*0.07,26,"#cfd6ff","left",600);
+  if(t<5){const p=pop(t,0);c.save();c.globalAlpha=p;txt(c,"NovaPhone",W/2,H*0.36-p*30,120,"#fff");const gg=c.createLinearGradient(0,H*0.4,0,H*0.62);gg.addColorStop(0,"#8fa2ff");gg.addColorStop(1,"#4f8cff");c.fillStyle=gg;c.font="800 300px Inter,-apple-system,sans-serif";c.textAlign="center";c.textBaseline="middle";c.shadowColor="#4f8cff";c.shadowBlur=90*p;c.fillText("X",W/2,H*0.55);c.restore()}
+  else if(t<23){
+    const px=W/2,py=H*0.52,pw=W*0.16,ph=H*0.52;
+    c.save();c.translate(px,py);c.rotate(Math.sin((t-5)*.5)*.04);
+    let bg=c.createLinearGradient(-pw/2,0,pw/2,0);bg.addColorStop(0,"#2a2f45");bg.addColorStop(.5,"#4a5170");bg.addColorStop(1,"#232742");
+    rr(c,-pw/2,-ph/2,pw,ph,54);c.fillStyle=bg;c.fill();c.strokeStyle="rgba(255,255,255,.25)";c.lineWidth=3;c.stroke();
+    let sg=c.createLinearGradient(0,-ph/2+20,0,ph/2-20);sg.addColorStop(0,"#8fa2ff");sg.addColorStop(1,"#2b3a8f");
+    rr(c,-pw/2+22,-ph/2+22,pw-44,ph-44,36);c.fillStyle=sg;c.fill();
+    c.fillStyle="#0b0e18";rr(c,-34,-ph/2+22,68,26,13);c.fill();
+    c.fillStyle="rgba(255,255,255,.85)";c.beginPath();c.arc(0,-40,64,0,7);c.fill();c.fillStyle="#223";c.beginPath();c.arc(0,-40,40,0,7);c.fill();c.fillStyle="#8fa2ff";c.beginPath();c.arc(-10,-52,10,0,7);c.fill();
+    txt(c,"NovaPhone X",0,ph/2-70,34,"rgba(255,255,255,.9)");c.restore();
+    const chips=[["Titanium unibody",5.5],["A19 Pro chip",7],["48MP Fusion camera",8.5]];
+    chips.forEach(([s,ts],i)=>{const p=pop(t,ts),y=H*0.82+i*0;const x=W*(0.5+(i-1)*0.3);
+      c.save();c.globalAlpha=p;rr(c,x-190,y-34,380,68,34);c.fillStyle="rgba(79,140,255,.16)";c.fill();c.strokeStyle="#4f8cff";c.lineWidth=2.5;c.stroke();txt(c,s,x,y,30,"#dfe6ff");c.restore()});
+    txt(c,"The future. In your hand.",W/2,H*0.12,40,"#aeb8e8");
+  }
+  else if(t<32){
+    const p=pop(t,23);c.save();c.globalAlpha=p;
+    c.strokeStyle="#4f8cff";c.lineWidth=10;c.beginPath();c.arc(W/2,H*0.46,150,0,7);c.stroke();
+    c.fillStyle="#1a2036";c.beginPath();c.arc(W/2,H*0.46,120,0,7);c.fill();
+    c.fillStyle="#8fa2ff";[[-45,-30],[45,-30],[0,55]].forEach(([dx,dy])=>{c.beginPath();c.arc(W/2+dx,H*0.46+dy,34,0,7);c.fill()});
+    txt(c,"8K Cinematic video",W/2,H*0.46+230,52,"#fff");txt(c,"Pro-grade. Pocket-size.",W/2,H*0.46+290,32,"#aeb8e8");c.restore();
+  }
+  else if(t<40){
+    const cats=[["A18",.62],["A19 Pro",1]],p=pop(t,32);c.save();c.globalAlpha=p;
+    txt(c,"2× faster. All day battery.",W/2,H*0.2,52,"#fff");
+    cats.forEach(([s,f],i)=>{const y=H*0.42+i*120;txt(c,s,W*0.3,y,40,"#dfe6ff","right");bar(c,W*0.34,y-30,W*0.44,60,ease(phase(t,33+i*1.2,1.5))*f,i?"#4f8cff":"#3a4066")});
+    txt(c,"33-hour video playback",W/2,H*0.78,36,"#8dffb0");c.restore();
+  }
+  else{
+    const p=pop(t,40);c.save();c.globalAlpha=p;
+    txt(c,"NovaPhone X",W/2,H*0.34,72,"#aeb8e8");txt(c,"$999",W/2,H*0.55,190,"#fff", "center",800);
+    c.shadowColor="#4f8cff";c.shadowBlur=60;txt(c,"$999",W/2,H*0.55,190,"#fff","center",800);c.shadowBlur=0;
+    rr(c,W/2-260,H*0.7,520,96,48);const bg2=c.createLinearGradient(W/2-260,0,W/2+260,0);bg2.addColorStop(0,"#ff4d2e");bg2.addColorStop(1,"#ff8a3d");c.fillStyle=bg2;c.fill();txt(c,"Pre-order Friday",W/2,H*0.7+48,40,"#fff");c.restore();
+  }
+}},
+review:{title:"Expert Review — 14 days later",dur:44,draw(c,W,H,t){
+  c.fillStyle="#f4f1ea";c.fillRect(0,0,W,H);c.fillStyle="#e9e2d4";for(let i=0;i<40;i++){c.fillRect((i*229)%W,(i*167)%H,3,3)}
+  rr(c,W*0.06,H*0.06,W*0.88,H*0.88,36);c.fillStyle="#fff";c.fill();c.strokeStyle="#e2d9c6";c.lineWidth=2;c.stroke();
+  txt(c,"NOVAPHONE X",W*0.12,H*0.16,44,"#1c1c22","left",800);txt(c,"14-day review  •  Marques-style desk",W*0.12,H*0.16+52,26,"#8a8474","left",500);
+  c.fillStyle="#ddd6c4";c.beginPath();c.arc(W*0.84,H*0.17,44,0,7);c.fill();txt(c,"MK",W*0.84,H*0.17,34,"#6b6350");
+  const sc=9.2*ease(phase(t,1,2));c.lineWidth=26;c.strokeStyle="#eee7d6";c.beginPath();c.arc(W*0.2,H*0.5,110,0,7);c.stroke();
+  c.strokeStyle=sc>=9?"#22c55e":"#f59e0b";c.beginPath();c.arc(W*0.2,H*0.5,110,-Math.PI/2,-Math.PI/2+Math.PI*2*(sc/10));c.stroke();
+  txt(c,sc.toFixed(1),W*0.2,H*0.5,72,"#1c1c22","center",800);
+  txt(c,"OVERALL",W*0.2,H*0.5+92,24,"#8a8474");
+  const rows=[["Display",9.6],["Camera",9.1],["Battery",9.8],["Performance",9.4],["Value",7.9]];
+  rows.forEach(([s,v],i)=>{const y=H*0.36+i*92,x=W*0.4;txt(c,s,x,y,30,"#3a372e","left",600);txt(c,v.toFixed(1),W*0.86,y,30,"#3a372e","right",700);bar(c,x,y+24,W*0.4,22,ease(phase(t,2+i*.5,1))*v/10,v>=9?"#22c55e":v>=8?"#a3c14a":"#f59e0b","#eee7d6")});
+  const p=pop(t,7);c.save();c.globalAlpha=p;
+  txt(c,"✓ Pros",W*0.4,H*0.86,30,"#15803d","left",700);txt(c,"Battery for days  •  Camera slaps  •  Titanium feels $$$",W*0.4,H*0.86+38,26,"#4a463c","left",500);
+  txt(c,"✕ Cons",W*0.72,H*0.86,30,"#b91c1c","left",700);txt(c,"Price  •  Same design  •  Slow charging",W*0.72,H*0.86+38,26,"#4a463c","left",500);c.restore();
+}},
+versus:{title:"Nova X vs Pixel Z",dur:40,draw(c,W,H,t){
+  const g=c.createLinearGradient(0,0,W,0);g.addColorStop(0,"#101a33");g.addColorStop(.5,"#0b0e14");g.addColorStop(1,"#331016");c.fillStyle=g;c.fillRect(0,0,W,H);
+  txt(c,"HEAD  TO  HEAD",W/2,H*0.1,40,"#8a93b8","center",600);
+  txt(c,"NOVA X",W*0.25,H*0.18,64,"#4f8cff","center",800);txt(c,"PIXEL Z",W*0.75,H*0.18,64,"#ff5d5d","center",800);
+  txt(c,"VS",W/2,H*0.18,54,"#fff","center",800);
+  const cats=[["Display",.96,.9],["Camera",.92,.95],["Battery",.99,.82],["Price",.7,.93]];
+  let sx=0,sz=0;
+  cats.forEach(([s,fx,fz],i)=>{const y=H*0.32+i*130,ex=ease(phase(t,2+i*1.4,1.6));
+    txt(c,s,W/2,y-6,32,"#cfd6ff");const bw=W*0.36;
+    rr(c,W/2-bw-20,y+16,bw,34,17);c.fillStyle="rgba(255,255,255,.08)";c.fill();
+    rr(c,W/2+20,y+16,bw,34,17);c.fill();c.fillStyle="rgba(255,255,255,.08)";c.fill();
+    const wx=bw*ex*fx,wz=bw*ex*fz;
+    rr(c,W/2-20-wx,y+16,Math.max(wx,2),34,17);c.fillStyle="#4f8cff";c.fill();
+    rr(c,W/2+20,y+16,Math.max(wz,2),34,17);c.fillStyle="#ff5d5d";c.fill();
+    if(ex>=1){if(fx>fz){sx++;txt(c,"✓",W/2-bw-52,y+32,40,"#4f8cff")}else{sz++;txt(c,"✓",W/2+bw+52,y+32,40,"#ff5d5d")}}
+  });
+  const p=pop(t,9);c.save();c.globalAlpha=p;
+  txt(c,`NOVA X  ${sx}  —  ${sz}  PIXEL Z`,W/2,H*0.9,56,"#fff","center",800);
+  if(sx>sz)txt(c,"Nova X takes it — but that price…",W/2,H*0.9+64,30,"#8a93b8");c.restore();
+}}
+};
+/* thumbnails */
+function paintThumb(cv,id){const c=cv.getContext("2d");c.save();c.scale(cv.width/640,cv.height/360);DEMOS[id].draw(c,640,360,DEMOS[id].dur*0.35);c.restore()}
+</script>
+<script>
+"use strict";
+/* ============ LAYOUTS ============ */
+const LAYOUTS=[
+{id:"launch",name:"Launch React",ratio:"16:9",desc:"Full-screen content, you in the corner. Classic reaction video."},
+{id:"split",name:"Review Split",ratio:"16:9",desc:"Content left, your take on the right. Great for reviews."},
+{id:"vertical",name:"Vertical React",ratio:"9:16",desc:"Fills the phone screen. Best for the X mobile feed."},
+{id:"square",name:"Square Clip",ratio:"1:1",desc:"Square crop for timeline scrolling."}];
+const STAGE={launch:[1920,1080],split:[1920,1080],vertical:[1080,1920],square:[1080,1080]};
+function layoutIcon(id){
+  if(id==="launch")return `<svg viewBox="0 0 100 56"><rect width="100" height="56" fill="#1a2138"/><rect x="64" y="32" width="30" height="18" rx="4" fill="#ff4d2e"/></svg>`;
+  if(id==="split")return `<svg viewBox="0 0 100 56"><rect width="64" height="56" fill="#1a2138"/><rect x="64" width="36" height="56" fill="#232c44"/><circle cx="82" cy="18" r="10" fill="#ff4d2e"/></svg>`;
+  if(id==="vertical")return `<svg viewBox="0 0 56 100"><rect width="56" height="60" fill="#1a2138"/><rect x="6" y="64" width="44" height="30" rx="6" fill="#ff4d2e"/></svg>`;
+  return `<svg viewBox="0 0 80 80"><rect width="80" height="80" fill="#1a2138"/><circle cx="58" cy="58" r="16" fill="#ff4d2e"/></svg>`;
+}
+/* ============ STUDIO STATE ============ */
+const S={demo:"launch",screen:null,screenVideo:null,camStream:null,camVideo:null,micStream:null,
+  layout:"launch",camPos:"br",recording:false,paused:false,t0:0,elapsed:0,cap:true,raf:0,demoT:0,last:0};
+const stage=$("#stage"),sctx=stage.getContext("2d");
+
+function drawCamFrame(c,x,y,w,h,label){
+  if(!S.camVideo||!S.camVideo.videoWidth)return;
+  c.save();rr(c,x,y,w,h,Math.min(28,h*0.12));c.clip();
+  const vw=S.camVideo.videoWidth,vh=S.camVideo.videoHeight,s=Math.max(w/vw,h/vh),dw=vw*s,dh=vh*s;
+  c.drawImage(S.camVideo,x+(w-dw)/2,y+(h-dh)/2,dw,dh);c.restore();
+  rr(c,x,y,w,h,Math.min(28,h*0.12));c.strokeStyle="rgba(255,255,255,.85)";c.lineWidth=5;c.stroke();
+  if(label){
+    c.font="700 24px Inter,-apple-system,sans-serif";
+    const tw=c.measureText(label).width+36;
+    c.fillStyle="rgba(0,0,0,.65)";rr(c,x+12,y+h-58,tw,44,22);c.fill();
+    txt(c,label,x+12+tw/2,y+h-36,24,"#fff","center",700);
+  }
+}
+function drawChrome(c,W,H){
+  c.fillStyle="rgba(0,0,0,.55)";rr(c,24,24,300,64,32);c.fill();
+  txt(c,"REACTION",24+150,24+34,30,"#fff","center",800);
+  if(S.recording&&!S.paused){const a=.5+.5*Math.sin(performance.now()/200);c.fillStyle=`rgba(255,45,45,${a})`;c.beginPath();c.arc(70,56,14,0,7);c.fill()}
+  const t=S.elapsed,mm=Math.floor(t/60),ss=Math.floor(t%60);
+  txt(c,`${mm}:${String(ss).padStart(2,"0")}`,W-120,56,40,"#fff","center",700);
+  if(S.recording){const frac=S.cap?clamp(t/140,0,1):0;c.fillStyle="rgba(255,255,255,.15)";c.fillRect(0,H-10,W,10);c.fillStyle="#ff4d2e";c.fillRect(0,H-10,W*frac,10)}
+  const vg=c.createRadialGradient(W/2,H/2,H*0.35,W/2,H/2,H*0.85);vg.addColorStop(0,"rgba(0,0,0,0)");vg.addColorStop(1,"rgba(0,0,0,.35)");c.fillStyle=vg;c.fillRect(0,0,W,H);
+}
+function drawContent(c,W,H){
+  if(S.screenVideo&&S.screenVideo.videoWidth){c.fillStyle="#000";c.fillRect(0,0,W,H);cover(c,S.screenVideo,0,0,W,H)}
+  else{const d=DEMOS[S.demo];d.draw(c,W,H,S.demoT%d.dur)}
+}
+function frame(c,W,H){
+  c.clearRect(0,0,W,H);
+  const L=S.layout,pos=S.camPos;
+  if(L==="launch"||L==="square"){
+    drawContent(c,W,H);
+    if(S.camStream){const cw=W*0.21,ch=cw*9/16,x=pos==="bl"?36:(pos==="tr"?W-cw-36:W-cw-36),y=pos==="tr"?100:H-ch-36;drawCamFrame(c,x,y,cw,ch,"YOU")}
+  }else if(L==="split"){
+    const cw2=W*0.36;
+    c.save();c.beginPath();c.rect(0,0,W-cw2,H);c.clip();
+    if(S.screenVideo&&S.screenVideo.videoWidth){c.fillStyle="#000";c.fillRect(0,0,W-cw2,H);cover(c,S.screenVideo,0,0,W-cw2,H)}
+    else{const d=DEMOS[S.demo];c.save();c.beginPath();c.rect(0,0,W-cw2,H);c.clip();c.translate(-(W*0.18),0);d.draw(c,W,H,S.demoT%d.dur);c.restore()}
+    c.restore();
+    const g=c.createLinearGradient(W-cw2,0,W,0);g.addColorStop(0,"#141a2e");g.addColorStop(1,"#1d2540");c.fillStyle=g;c.fillRect(W-cw2,0,cw2,H);
+    txt(c,"MY TAKE",W-cw2/2,90,44,"#8a93b8","center",700);
+    if(S.camStream){const kw=cw2*0.82,kh=kw*9/16;drawCamFrame(c,W-cw2/2-kw/2,150,kw,kh,"YOU")}
+    else{txt(c,"Enable camera",W-cw2/2,300,34,"#5b6680");txt(c,"for your take",W-cw2/2,348,34,"#5b6680")}
+    txt(c,"First impression…",W-cw2/2,H-160,36,"#cfd6ff","center",600);
+  }else if(L==="vertical"){
+    const chTop=W*9/16;
+    c.save();c.beginPath();c.rect(0,0,W,chTop);c.clip();
+    if(S.screenVideo&&S.screenVideo.videoWidth){c.fillStyle="#000";c.fillRect(0,0,W,chTop);cover(c,S.screenVideo,0,0,W,chTop)}
+    else{const d=DEMOS[S.demo];c.save();c.translate((W-1080)/2,0);c.scale(W/1080,W/1080);d.draw(c,1080,1080,S.demoT%d.dur);c.restore()}
+    c.restore();
+    const g2=c.createLinearGradient(0,chTop,0,H);g2.addColorStop(0,"#101527");g2.addColorStop(1,"#1a2140");c.fillStyle=g2;c.fillRect(0,chTop,W,H-chTop);
+    if(S.camStream){const kw=W*0.86,kh=H-chTop-260;drawCamFrame(c,W*0.07,chTop+40,kw,Math.min(kh,kw*9/16),"YOU")}
+    txt(c,"POV: the price reveal 😭",W/2,H-120,44,"#fff","center",700);
+  }
+  drawChrome(c,W,H);
+}
+/* engine */
+function loop(ts){
+  const dt=Math.min(.1,(ts-S.last)/1000||0);S.last=ts;S.demoT+=dt;
+  if(S.recording&&!S.paused){S.elapsed=(ts-S.t0)/1000+S.elapsedBase;
+    if(S.cap&&S.elapsed>=140)stopRec();
+    const mm=Math.floor(S.elapsed/60),ss=Math.floor(S.elapsed%60);
+    $("#timer").textContent=`${mm}:${String(ss).padStart(2,"0")}`;
+    const mb=S.recSize();if(mb>1)$("#sizeBadge").style.display="",$("#sizeBadge").textContent=`${mb.toFixed(1)} MB`;
+  }
+  const[W,H]=STAGE[S.layout];
+  if(stage.width!==W||stage.height!==H){stage.width=W;stage.height=H}
+  frame(sctx,W,H);
+  S.raf=requestAnimationFrame(loop);
+}
+</script>
+<script>
+"use strict";
+/* ============ MEDIA ============ */
+S.elapsedBase=0;S.chunks=[];
+S.recSize=function(){return S.chunks.reduce((a,c)=>a+c.size,0)/1048576};
+function mkVideo(muted){const v=document.createElement("video");v.muted=!!muted;v.playsInline=true;v.autoplay=true;return v}
+async function ensureCamera(){
+  if(S.camStream)return true;
+  try{S.camStream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},facingMode:"user"},audio:false});
+    S.camVideo=mkVideo(true);S.camVideo.srcObject=S.camStream;await S.camVideo.play();return true}
+  catch(e){err("Couldn't access the camera: "+e.message);$("#camTgl").checked=false;return false}
+}
+async function ensureMic(){
+  if(S.micStream||!$("#micTgl").checked)return true;
+  try{S.micStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});return true}
+  catch(e){err("Couldn't access the mic: "+e.message);$("#micTgl").checked=false;return false}
+}
+async function shareScreen(){
+  try{
+    const st=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:60}},audio:true});
+    if(S.screen)stopScreen();
+    S.screen=st;S.screenVideo=mkVideo(true);S.screenVideo.srcObject=st;await S.screenVideo.play();
+    st.getVideoTracks()[0].addEventListener("ended",()=>{stopScreen();$("#srcNote").textContent="Screen share ended — back to the built-in demo."});
+    $$(".demo").forEach(b=>b.classList.remove("active"));
+    $("#srcNote").textContent="Sharing your screen — play the launch or review video in the shared tab.";
+  }catch(e){if(e.name!=="NotAllowedError")err("Screen share failed: "+e.message)}
+}
+function stopScreen(){if(S.screen){S.screen.getTracks().forEach(t=>t.stop());S.screen=null;S.screenVideo=null}}
+/* ============ RECORDER ============ */
+const MIMES=['video/mp4;codecs="avc1.42E01F,mp4a.40.2"','video/mp4','video/webm;codecs=vp9,opus','video/webm'];
+let MR=null,mimeUsed="",actx=null;
+function pickMime(){for(const m of MIMES){try{if(MediaRecorder.isTypeSupported(m))return m}catch(e){}}return ""}
+function fmtBadge(){$("#fmtBadge").textContent=(mimeUsed.includes("mp4")?"MP4":"WebM")+" • "+STAGE[S.layout][0]+"p"+(S.layout==="vertical"||S.layout==="square"?"":"60")}
+async function startRec(){
+  if(!$("#camTgl").checked&&!$("#micTgl").checked&&!confirm("Camera and mic are both off — record screen only?"))return;
+  if($("#camTgl").checked&&!await ensureCamera())return;
+  if(!await ensureMic())return;
+  mimeUsed=pickMime();if(!mimeUsed){err("This browser can't record video.");return}
+  const cd=$("#countdown"),num=cd.querySelector("span");cd.style.display="grid";
+  for(const n of["3","2","1"]){num.textContent=n;await new Promise(r=>setTimeout(r,650))}
+  cd.style.display="none";
+  try{
+    actx=actx||new (window.AudioContext||window.webkitAudioContext)();await actx.resume();
+    const dest=actx.createMediaStreamDestination();
+    if(S.micStream&&$("#micTgl").checked)actx.createMediaStreamSource(S.micStream).connect(dest);
+    if(S.screen&&$("#sysTgl").checked&&S.screen.getAudioTracks().length)actx.createMediaStreamSource(S.screen).connect(dest);
+    const vs=stage.captureStream(60);
+    const tracks=[...vs.getVideoTracks(),...dest.stream.getAudioTracks()];
+    MR=new MediaRecorder(new MediaStream(tracks),{mimeType:mimeUsed,videoBitsPerSecond:14_000_000,audioBitsPerSecond:192_000});
+  }catch(e){err("Recorder failed to start: "+e.message);return}
+  S.chunks=[];MR.ondataavailable=e=>{if(e.data.size)S.chunks.push(e.data)};
+  MR.onstop=onStop;MR.start(250);
+  S.recording=true;S.paused=false;S.elapsedBase=0;S.elapsed=0;S.t0=performance.now();
+  $("#recBtn").disabled=true;$("#pauseBtn").disabled=false;$("#stopBtn").disabled=false;
+  $("#recDot").classList.add("on");$("#timer").textContent="0:00";$("#sizeBadge").style.display="none";
+  fmtBadge();
+}
+function pauseRec(){
+  if(!MR||!S.recording)return;
+  if(S.paused){MR.resume();S.t0=performance.now();S.paused=false;$("#pauseBtn").textContent="⏸ Pause"}
+  else{MR.pause();S.elapsedBase=S.elapsed;S.paused=true;$("#pauseBtn").textContent="▶ Resume"}
+}
+function stopRec(){if(MR&&S.recording){S.recording=false;MR.stop()}}
+function onStop(){
+  $("#recBtn").disabled=false;$("#pauseBtn").disabled=true;$("#pauseBtn").textContent="⏸ Pause";$("#stopBtn").disabled=true;
+  $("#recDot").classList.remove("on");
+  const type=mimeUsed.includes("mp4")?"video/mp4":"video/webm";
+  const blob=new Blob(S.chunks,{type}),url=URL.createObjectURL(blob);
+  const dur=S.elapsed,mb=blob.size/1048576;
+  const pv=$("#preview");pv.src=url;$("#result").style.display="block";
+  $("#dlBtn").onclick=()=>{const a=document.createElement("a");a.href=url;a.download=`reaction-${S.layout}-${Date.now()}.${type==="video/mp4"?"mp4":"webm"}`;a.click()};
+  $("#againBtn").onclick=()=>{$("#result").style.display="none";window.scrollTo({top:0,behavior:"smooth"})};
+  const isMp4=type==="video/mp4";
+  $("#xcheck").innerHTML=`
+    <li><span class="${isMp4?"ok":"no"}">${isMp4?"✓":"⚠"}</span><span>${isMp4?"MP4 — uploads straight to X.":`WebM — convert to MP4 before posting (X accepts MP4/MOV). This browser couldn't record MP4 directly.`}</span></li>
+    <li><span class="${dur<=140?"ok":"no"}">${dur<=140?"✓":"⚠"}</span><span>${fmtDur(dur)} long — ${dur<=140?"fits X's 2:20 free limit.":"over 2:20 — needs X Premium or a trim."}</span></li>
+    <li><span class="ok">✓</span><span>${mb.toFixed(1)} MB — well under X's 512 MB cap.</span></li>
+    <li><span class="ok">✓</span><span>${STAGE[S.layout][0]}×${STAGE[S.layout][1]} — crisp on the X feed.</span></li>`;
+  const title=S.screenVideo?"that video":`"${DEMOS[S.demo].title}"`;
+  $("#capBtn").onclick=async()=>{
+    const cap=`My reaction to ${title} 😭🔥\n\nRecorded with Reaction Studio — what's YOUR take? 👇\n\n#reaction #tech #launch`;
+    try{await navigator.clipboard.writeText(cap);$("#capBtn").textContent="✅ Copied!"}catch(e){prompt("Copy your caption:",cap)}
+    setTimeout(()=>$("#capBtn").textContent="📋 Copy X caption",2000)};
+  $("#result").scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+function fmtDur(s){return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,"0")}`}
+/* ============ UI WIRING ============ */
+function renderLayouts(){
+  $("#layouts").innerHTML=LAYOUTS.map(l=>`
+    <button class="layout ${l.id===S.layout?"active":""}" data-l="${l.id}">
+      ${layoutIcon(l.id)}<b>${l.name}</b><span>${l.ratio} • ${l.desc}</span>
+    </button>`).join("");
+  $$("#layouts .layout").forEach(b=>b.onclick=()=>{S.layout=b.dataset.l;
+    $$("#layouts .layout").forEach(x=>x.classList.toggle("active",x===b));fmtBadge()});
+}
+const EXAMPLES=[
+ {d:"launch",l:"launch",t:"Keynote + corner cam",s:"The classic reaction video. Play the NovaPhone keynote, react in the corner."},
+ {d:"review",l:"split",t:"Review breakdown",s:"Review on the left, your take on the right. Pause and point at the score bars."},
+ {d:"launch",l:"vertical",t:"Vertical keynote clip",s:"Phone-first 9:16 — fills the X mobile feed. Best for the price reveal."},
+ {d:"versus",l:"square",t:"Square versus clip",s:"1:1 head-to-head — perfect for timeline scrolling."},
+ {d:"launch",l:"split",t:"Your screen, your take",s:"Share your screen (step 1), play a real launch video, break it down."},
+ {d:"review",l:"vertical",t:"Vertical review react",s:"Share a review tab, go vertical, post the hot take."}];
+function renderExamples(){
+  const arts={launch:"linear-gradient(135deg,#141428,#2b3a8f)",review:"linear-gradient(135deg,#f4f1ea,#d8cfae)",versus:"linear-gradient(135deg,#101a33,#331016)"};
+  $("#examples").innerHTML=EXAMPLES.map((e,i)=>`
+    <div class="ex"><div class="art" style="background:${arts[e.d]};display:grid;place-items:center;font-size:40px">${["🎤","📊","📱","⚔️","🖥️","🎙️"][i]}</div>
+    <div class="body"><b>${e.t}</b><p>${e.s}</p>
+    <button class="btn" data-ex="${i}">Use this combo →</button></div></div>`).join("");
+  $$("#examples [data-ex]").forEach(b=>b.onclick=()=>{
+    const e=EXAMPLES[+b.dataset.ex];S.demo=e.d;S.layout=e.l;
+    $$(".demo").forEach(x=>x.classList.toggle("active",x.dataset.demo===e.d));
+    renderLayouts();fmtBadge();
+    $(".stage-card").scrollIntoView({behavior:"smooth",block:"center"})});
+}
+$$(".demo").forEach(b=>b.onclick=()=>{stopScreen();S.demo=b.dataset.demo;
+  $$(".demo").forEach(x=>x.classList.toggle("active",x===b));
+  $("#srcNote").textContent="Playing built-in demo. Share your screen to react to a real launch or review video instead."});
+$("#shareBtn").onclick=shareScreen;
+$("#camTgl").onchange=e=>{if(e.target.checked)ensureCamera();else if(S.camStream){S.camStream.getTracks().forEach(t=>t.stop());S.camStream=null;S.camVideo=null}};
+$("#micTgl").onchange=()=>{if(S.micStream){S.micStream.getTracks().forEach(t=>t.stop());S.micStream=null}};
+$("#capTgl").onchange=e=>S.cap=e.target.checked;
+$$("#camPos button").forEach(b=>b.onclick=()=>{S.camPos=b.dataset.pos;$$("#camPos button").forEach(x=>x.classList.toggle("on",x===b))});
+$("#recBtn").onclick=startRec;$("#pauseBtn").onclick=pauseRec;$("#stopBtn").onclick=stopRec;
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&S.recording)stopRec()});
+/* init */
+$$("[data-thumb]").forEach(cv=>{try{paintThumb(cv,cv.dataset.thumb)}catch(e){}});
+renderLayouts();renderExamples();fmtBadge();
+S.last=performance.now();requestAnimationFrame(loop);
+</script>
+</body>
+</html>

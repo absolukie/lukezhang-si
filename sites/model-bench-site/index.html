@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model Bench &mdash; Muse vs Codex vs Astra</title>
+<style>
+:root{
+  --bg:#0a0d13; --card:#121722; --card2:#0d121c; --border:#232c3d;
+  --text:#e6ebf4; --muted:#8b94a7; --faint:#5b6478;
+  --green:#3fb950; --green-bg:rgba(63,185,80,.12);
+  --red:#f85149; --red-bg:rgba(248,81,73,.12);
+  --amber:#d29922; --amber-bg:rgba(210,153,34,.12);
+  --blue:#58a6ff;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  line-height:1.55}
+.wrap{max-width:1080px;margin:0 auto;padding:0 16px}
+a{color:var(--blue);touch-action:manipulation}
+h1{font-size:clamp(28px,6vw,44px);margin:.35em 0 .2em;letter-spacing:-.02em}
+h2{font-size:clamp(21px,4.5vw,28px);margin:2.2em 0 .4em;letter-spacing:-.01em}
+h3{font-size:17px;margin:1.4em 0 .4em}
+.kicker{color:var(--muted);text-transform:uppercase;font-size:12px;letter-spacing:.12em;margin:26px 0 0}
+.lede{color:var(--muted);font-size:16px;max-width:640px}
+.muted{color:var(--muted)} .faint{color:var(--faint)} .small{font-size:13px}
+.toc{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 26px}
+.toc a{border:1px solid var(--border);border-radius:999px;padding:8px 14px;
+  color:var(--text);text-decoration:none;font-size:14px;background:var(--card)}
+.scores{display:grid;grid-template-columns:1fr;gap:14px;margin:6px 0 10px}
+@media(min-width:760px){.scores{grid-template-columns:repeat(3,1fr)}}
+.score{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px}
+.score .num{font-size:52px;font-weight:800;letter-spacing:-.03em;line-height:1}
+.score .who{font-size:16px;font-weight:700;margin-top:8px}
+.score .via{color:var(--muted);font-size:13px;margin-top:2px}
+.score .sub{font-size:13px;margin-top:10px;color:var(--muted)}
+.score.astra{border:2px dashed var(--amber);background:linear-gradient(180deg,rgba(210,153,34,.07),var(--card))}
+.score.astra .num{color:var(--amber)}
+.flag{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;
+  color:var(--amber);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+.flag svg{flex:none}
+.task{border:1px solid var(--border);border-radius:12px;margin:10px 0;background:var(--card);overflow:hidden}
+.task-head{width:100%;display:flex;align-items:center;gap:10px;padding:14px;
+  background:none;border:0;color:var(--text);text-align:left;cursor:pointer;
+  touch-action:manipulation;font-size:15px}
+.task-head:hover{background:rgba(255,255,255,.02)}
+.task-num{color:var(--faint);font-variant-numeric:tabular-nums;flex:none}
+.task-name{font-weight:700;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:15px}
+.task-desc{color:var(--muted);font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:640px){.task-desc{display:none}}
+.chips{display:flex;gap:6px;flex:none}
+.chip{font-size:11px;font-weight:700;border-radius:999px;padding:3px 9px;letter-spacing:.04em;white-space:nowrap}
+.chip.pass{background:var(--green-bg);color:var(--green);border:1px solid rgba(63,185,80,.4)}
+.chip.fail{background:var(--red-bg);color:var(--red);border:1px solid rgba(248,81,73,.4)}
+.chip.warn{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(210,153,34,.4)}
+.chev{flex:none;transition:transform .18s ease;color:var(--muted)}
+.task-head[aria-expanded="true"] .chev{transform:rotate(180deg)}
+.task-body{border-top:1px solid var(--border);padding:16px}
+.spec{background:var(--card2);border:1px solid var(--border);border-radius:10px;
+  padding:14px;font-size:13.5px;white-space:pre-wrap;color:var(--muted);margin-bottom:14px}
+.spec b,.spec strong{color:var(--text)}
+.tabs{display:flex;gap:8px;margin-bottom:12px}
+@media(min-width:900px){.tabs{display:none}}
+.tab{flex:1;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--card2);
+  color:var(--muted);font-weight:700;font-size:14px;cursor:pointer;touch-action:manipulation}
+.tab[aria-selected="true"]{color:var(--text);border-color:var(--blue);background:rgba(88,166,255,.08)}
+.code-grid{display:grid;grid-template-columns:1fr;gap:12px}
+.code-grid .col{display:none;min-width:0}
+.code-grid.show-muse .col-muse,.code-grid.show-codex .col-codex,.code-grid.show-astra .col-astra{display:block}
+@media(min-width:900px){.code-grid{grid-template-columns:repeat(3,1fr)}.code-grid .col{display:block!important}}
+.col-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px;font-weight:700}
+.col-note{font-size:12px;color:var(--muted);margin:0 0 6px}
+pre{background:#070a10;border:1px solid var(--border);border-radius:10px;padding:14px;
+  overflow-x:auto;font-size:12.5px;line-height:1.55;margin:0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;color:#dbe4f3}
+.errline{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;
+  background:var(--red-bg);border:1px solid rgba(248,81,73,.4);color:var(--red);
+  border-radius:10px;padding:12px 14px;margin:12px 0;overflow-x:auto;white-space:pre}
+.plain-part{background:var(--card2);border:1px solid var(--border);border-radius:10px 10px 0 0;
+  padding:14px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;
+  white-space:pre;overflow-x:auto;border-bottom:0}
+.code-part pre{border-radius:0 0 10px 10px;border-top:0}
+.part-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px}
+.part-label.ok{color:var(--green)} .part-label.bad{color:var(--amber)}
+.callout{border:1px solid var(--border);border-left:4px solid var(--amber);border-radius:8px;
+  background:var(--card);padding:14px 16px;margin:14px 0;font-size:14px}
+.callout.green{border-left-color:var(--green)}
+.method{display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:760px){.method{grid-template-columns:repeat(3,1fr)}}
+.method .score h3{margin-top:0}
+ul.tight{margin:.4em 0;padding-left:1.2em} ul.tight li{margin:.35em 0;font-size:14px;color:var(--muted)}
+ul.tight li b{color:var(--text)}
+footer{margin:48px 0 30px;color:var(--faint);font-size:13px;display:flex;justify-content:space-between;
+  align-items:center;gap:12px;flex-wrap:wrap}
+.badge{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;
+  border:1px solid var(--border);border-radius:999px;padding:5px 12px;color:var(--muted);background:var(--card)}
+button{touch-action:manipulation}
+</style>
+</head>
+<body>
+<header class="wrap">
+  <p class="kicker">Code-generation benchmark &middot; 2026-10-02 &middot; 8 Python tasks</p>
+  <h1>Muse vs Codex vs Astra</h1>
+  <p class="lede">Three models, the same eight coding tasks, one shared assert-based test harness.
+  Muse and Codex went 8-for-8. Astra's code <em>almost</em> did &mdash; and the reason it didn't is the whole story.</p>
+  <nav class="toc" aria-label="Sections">
+    <a href="#scores">Scores</a><a href="#tasks">The 8 tasks</a><a href="#astra-defect">What happened with Astra</a><a href="#methodology">Methodology</a>
+  </nav>
+  <div class="scores" id="scores">
+    <div class="score">
+      <div class="num" style="color:var(--green)">8/8</div>
+      <div class="who">Muse Spark</div>
+      <div class="via">Direct generation, same tests</div>
+      <div class="sub">Every task passed on the first attempt. No generation timing was measured on this side, so speed isn't part of the claim.</div>
+    </div>
+    <div class="score">
+      <div class="num" style="color:var(--green)">8/8</div>
+      <div class="who">Codex default <span class="faint" style="font-size:13px;font-weight:400">gpt-5.6-sol</span></div>
+      <div class="via">Via <span style="font-family:ui-monospace,monospace">codex exec</span> CLI &middot; codex-cli 0.149.0</div>
+      <div class="sub">Avg ~11s per task wall clock (includes ~2&ndash;3s CLI startup). Independently nailed the tricky RFC 4180 quoting rule in the CSV task.</div>
+    </div>
+    <div class="score astra">
+      <div class="flag"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1.5L15 14H1L8 1.5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 6v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="12" r=".9" fill="currentColor"/></svg>as-shipped</div>
+      <div class="num">0/8</div>
+      <div class="who">GPT-6 Astra</div>
+      <div class="via">Via ChatGPT web app &middot; Work mode &middot; GPT-6 Astra selected</div>
+      <div class="sub"><b style="color:var(--text)">6/8 on logic</b> after a purely mechanical re-indentation (no logic edits). The defect is in how the code arrived, not in the reasoning &mdash; details below.</div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="tasks">
+    <h2>The 8 tasks</h2>
+    <p class="muted">Tap a task to expand the spec and the side-by-side code. On phones, use the tabs to switch models.</p>
+    <div id="task-list"></div>
+  </section>
+
+  <section id="astra-defect">
+    <h2>What happened with Astra</h2>
+    <p>Every one of Astra's eight responses has the <b>same structural defect</b>. The model emits the
+    opening lines &mdash; <span style="font-family:ui-monospace,monospace">def</span> / <span style="font-family:ui-monospace,monospace">import</span> lines &mdash; as
+    <b>unfenced plain text</b>, then puts the rest of the code in a <b>fenced code block whose content starts at column 0</b>.
+    The function body is detached from its <span style="font-family:ui-monospace,monospace">def</span>, so as a literal file nothing imports.
+    This was verified twice via independent copy-button captures, read back character-exact, plus screenshot checks.</p>
+    <p class="muted small">Below is Astra's actual <span style="font-family:ui-monospace,monospace">binary_search</span> response, exactly as captured &mdash; plain-text head, then the fenced block:</p>
+
+    <div class="part-label bad">Sent as plain text (not in a code block)</div>
+    <div class="plain-part" id="defect-head"></div>
+    <div class="part-label bad">Fenced code block &mdash; starts at column 0</div>
+    <div class="code-part"><pre><code id="defect-body"></code></pre></div>
+
+    <div class="part-label">What Python says</div>
+    <div class="errline">SyntaxError: 'return' outside function (astra_1.py, line 7)</div>
+
+    <h3>Two genuine bugs underneath the formatting</h3>
+    <p class="muted">Re-attaching the bodies (indent the fenced part one level, zero logic changes) gets Astra to 6/8.
+    The two that still fail are real model bugs:</p>
+    <div class="callout">
+      <b>1. <span style="font-family:ui-monospace,monospace">def init</span>, not <span style="font-family:ui-monospace,monospace">__init__</span></b> (LRUCache task) &mdash;
+      confirmed in the raw message markdown, not a rendering artifact. <span style="font-family:ui-monospace,monospace">LRUCache(2)</span> raises
+      <span style="font-family:ui-monospace,monospace">TypeError: LRUCache() takes no arguments</span>.
+      <pre style="margin-top:10px"><code id="bug-init"></code></pre>
+    </div>
+    <div class="callout">
+      <b>2. Broken regex</b> (md_to_text task) &mdash; unescaped <span style="font-family:ui-monospace,monospace">*</span> quantifiers with nothing to repeat:
+      <span style="font-family:ui-monospace,monospace">re.error: nothing to repeat at position 41</span>. The link/image alternative is malformed too.
+      <pre style="margin-top:10px"><code id="bug-regex"></code></pre>
+    </div>
+    <div class="callout green">
+      <b>The takeaway:</b> Astra's code reasoning is in the same ballpark as the others (6/8 on logic),
+      but its output serialization through the ChatGPT app was systematically broken &mdash; <b>8 out of 8 responses</b>.
+      Nothing it produced runs as-pasted. Whether the defect originates in the model or in how the app renders/copies Astra output
+      couldn't be determined from the app alone.
+    </div>
+  </section>
+
+  <section id="methodology">
+    <h2>Methodology</h2>
+    <div class="method">
+      <div class="score">
+        <h3>Codex</h3>
+        <ul class="tight">
+          <li><b><span style="font-family:ui-monospace,monospace">codex exec</span></b> CLI, codex-cli 0.149.0</li>
+          <li>Model resolved to <b>gpt-5.6-sol</b> (Codex default; "astra" is blocked with a ChatGPT account)</li>
+          <li>Wall time measured externally around each CLI call: <b>avg ~11s/task</b>, includes ~2&ndash;3s CLI startup</li>
+          <li>Token counts from the CLI's own "tokens used" line (~2.3k&ndash;3.0k per task)</li>
+          <li>Zero failures, zero retries; the "output ONLY code" prompt was honored</li>
+        </ul>
+      </div>
+      <div class="score">
+        <h3>Muse Spark</h3>
+        <ul class="tight">
+          <li>Solutions written directly by the assistant as the fair stand-in</li>
+          <li>Same specs, same tests, same <span style="font-family:ui-monospace,monospace">grade.py</span> harness</li>
+          <li><b>No generation timing measured</b> &mdash; timing comparison across models isn't claimed</li>
+        </ul>
+      </div>
+      <div class="score">
+        <h3>GPT-6 Astra</h3>
+        <ul class="tight">
+          <li>ChatGPT web app, <b>Work mode</b>, GPT-6 Astra explicitly selected (verified in composer before every prompt)</li>
+          <li>8 prompts sent verbatim, one at a time, each awaited to completion</li>
+          <li>Responses collected via message/code-block Copy buttons &mdash; <b>no timing possible</b> through the interactive UI</li>
+          <li>Defect verified by <b>two independent captures</b> (copy-paste + read-back, character-exact)</li>
+        </ul>
+      </div>
+    </div>
+    <h3>Shared harness</h3>
+    <ul class="tight">
+      <li>Assert-based tests (<span style="font-family:ui-monospace,monospace">test_N.py</span>), no dependencies, run via <span style="font-family:ui-monospace,monospace">grade.py</span> in a subprocess with a 30s timeout</li>
+      <li>Spec ambiguities found during grading were fixed in the <em>tests</em> before scoring (e.g. the CSV mid-field-quote case was pinned to RFC 4180 and checked against Python's own <span style="font-family:ui-monospace,monospace">csv</span> module)</li>
+      <li>Honest caveat: these are <b>LeetCode easy/medium tasks &mdash; too easy to separate the models on reasoning</b>. The differentiator this round turned out to be output formatting, not intelligence.</li>
+    </ul>
+  </section>
+</main>
+
+<footer class="wrap">
+  <span>Built from <span style="font-family:ui-monospace,monospace">~/workspace/model-bench</span> &middot; raw data: results.json, results_astra.md</span>
+  <span class="badge" id="build-badge">build</span>
+</footer>
+<script>
+const DATA = {"badge": "v2026.10.02-06.48", "tasks": [{"n": 1, "name": "binary_search", "desc": "Binary search in a sorted list", "spec": "Write a Python function with this exact signature:\n\n    def binary_search(arr, target):\n\nBehavior:\n- `arr` is a list of numbers sorted in ascending order (may be empty; may contain duplicates).\n- Return the index of `target` in `arr` if present, else return -1.\n- If `target` appears multiple times, any index holding `target` is acceptable.\n- Must run in O(log n) time (use binary search, not a linear scan).", "code": {"muse": "def binary_search(arr, target):\n    lo, hi = 0, len(arr) - 1\n    while lo <= hi:\n        mid = (lo + hi) // 2\n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            lo = mid + 1\n        else:\n            hi = mid - 1\n    return -1", "codex": "def binary_search(arr, target):\n    low, high = 0, len(arr) - 1\n\n    while low <= high:\n        mid = low + (high - low) // 2\n        if arr[mid] == target:\n            return mid\n        if arr[mid] < target:\n            low = mid + 1\n        else:\n            high = mid - 1\n\n    return -1", "astra": "def binary_search(arr, target):\n    left, right = 0, len(arr) - 1\n\nwhile left <= right:\n    mid = left + (right - left) // 2\n    if arr[mid] == target:\n        return mid\n    if arr[mid] < target:\n        left = mid + 1\n    else:\n        right = mid - 1\n\nreturn -1"}, "astra_fail": "SyntaxError: 'return' outside function (line 7)", "astra_logic": "pass", "astra_logic_note": "logic correct"}, {"n": 2, "name": "LRUCache", "desc": "Least-recently-used cache", "spec": "Write a Python class with this exact name and method signatures:\n\n    class LRUCache:\n        def __init__(self, capacity: int): ...\n        def get(self, key): ...\n        def put(self, key, value): ...\n\nBehavior:\n- `capacity >= 1`.\n- `get(key)`: return the stored value if `key` exists, else return -1. A successful `get` marks the key as most-recently-used.\n- `put(key, value)`: insert or update the key/value pair, marking it most-recently-used. If the cache exceeds `capacity`, evict the least-recently-used key.\n- Keys and values are ints for testing purposes (implementation may be generic).", "code": {"muse": "class _Node:\n    __slots__ = (\"key\", \"value\", \"prev\", \"next\")\n\n    def __init__(self, key, value):\n        self.key = key\n        self.value = value\n        self.prev = None\n        self.next = None\n\n\nclass LRUCache:\n    def __init__(self, capacity: int):\n        self.capacity = capacity\n        self._map = {}\n        # dummy head (MRU side) and tail (LRU side)\n        self._head = _Node(None, None)\n        self._tail = _Node(None, None)\n        self._head.next = self._tail\n        self._tail.prev = self._head\n\n    def _remove(self, node):\n        node.prev.next = node.next\n        node.next.prev = node.prev\n\n    def _add_front(self, node):\n        node.next = self._head.next\n        node.prev = self._head\n        self._head.next.prev = node\n        self._head.next = node\n\n    def get(self, key):\n        node = self._map.get(key)\n        if node is None:\n            return -1\n        self._remove(node)\n        self._add_front(node)\n        return node.value\n\n    def put(self, key, value):\n        node = self._map.get(key)\n        if node is not None:\n            node.value = value\n            self._remove(node)\n            self._add_front(node)\n            return\n        node = _Node(key, value)\n        self._map[key] = node\n        self._add_front(node)\n        if len(self._map) > self.capacity:\n            lru = self._tail.prev\n            self._remove(lru)\n            del self._map[lru.key]", "codex": "class LRUCache:\n    def __init__(self, capacity: int):\n        self.capacity = capacity\n        self.cache = {}\n\n    def get(self, key):\n        if key not in self.cache:\n            return -1\n        value = self.cache.pop(key)\n        self.cache[key] = value\n        return value\n\n    def put(self, key, value):\n        if key in self.cache:\n            self.cache.pop(key)\n        self.cache[key] = value\n        if len(self.cache) > self.capacity:\n            least_recently_used = next(iter(self.cache))\n            del self.cache[least_recently_used]", "astra": "from collections import OrderedDict\n\nclass LRUCache:\n    def init(self, capacity: int):\n        self.capacity = capacity\n        self.cache = OrderedDict()\n\ndef get(self, key):\n    if key not in self.cache:\n        return -1\n    self.cache.move_to_end(key)\n    return self.cache[key]\n\ndef put(self, key, value):\n    self.cache[key] = value\n    self.cache.move_to_end(key)\n    if len(self.cache) > self.capacity:\n        self.cache.popitem(last=False)"}, "astra_fail": "TypeError: LRUCache() takes no arguments", "astra_logic": "fail", "astra_logic_note": "genuine bug: def init, not __init__"}, {"n": 3, "name": "flatten", "desc": "Flatten nested JSON with dot-path keys", "spec": "Write a Python function with this exact signature:\n\n    def flatten(obj, prefix=\"\"):\n\nBehavior:\n- `obj` is a dict (possibly nested). Return a NEW flat dict.\n- Nested dict keys are joined with dots: `{\"a\": {\"b\": 1}}` -> `{\"a.b\": 1}`.\n- Lists use `[i]` suffixes: `{\"a\": [10, 20]}` -> `{\"a[0]\": 10, \"a[1]\": 20}`.\n- Mixed: `{\"a\": {\"b\": [1, {\"c\": 2}]}}` -> `{\"a.b[0]\": 1, \"a.b[1].c\": 2}`.\n- Top-level scalar values are kept under their key: `{\"a\": 1}` -> `{\"a\": 1}`.\n- Empty dicts and empty lists contribute NO keys: `{\"a\": {}}` -> `{}`, `{\"a\": []}` -> `{}`.\n- `prefix` is prepended to every key with a dot separator when non-empty: `flatten({\"b\": 1}, prefix=\"a\")` -> `{\"a.b\": 1}`.\n- Do not mutate the input.", "code": {"muse": "def flatten(obj, prefix=\"\"):\n    out = {}\n\n    def key(parent, part):\n        return f\"{parent}.{part}\" if parent else str(part)\n\n    def walk(value, path):\n        if isinstance(value, dict):\n            if not value:\n                return\n            for k, v in value.items():\n                walk(v, key(path, k))\n        elif isinstance(value, list):\n            if not value:\n                return\n            for i, v in enumerate(value):\n                walk(v, f\"{path}[{i}]\")\n        else:\n            out[path] = value\n\n    if isinstance(obj, dict):\n        for k, v in obj.items():\n            walk(v, key(prefix, k))\n    else:\n        walk(obj, prefix)\n    return out", "codex": "def flatten(obj, prefix=\"\"):\n    result = {}\n\n    def visit(value, path):\n        if isinstance(value, dict):\n            for key, item in value.items():\n                visit(item, f\"{path}.{key}\" if path else str(key))\n        elif isinstance(value, list):\n            for index, item in enumerate(value):\n                visit(item, f\"{path}[{index}]\")\n        else:\n            result[path] = value\n\n    visit(obj, prefix)\n    return result", "astra": "def flatten(obj, prefix=\"\"):\n    result = {}\n\ndef visit(value, path):\n    if isinstance(value, dict):\n        for key, child in value.items():\n            child_path = f\"{path}.{key}\" if path else str(key)\n            visit(child, child_path)\n    elif isinstance(value, list):\n        for i, child in enumerate(value):\n            visit(child, f\"{path}[{i}]\")\n    else:\n        result[path] = value\n\nvisit(obj, prefix)\nreturn result"}, "astra_fail": "SyntaxError: 'return' outside function (line 16)", "astra_logic": "pass", "astra_logic_note": "logic correct"}, {"n": 4, "name": "is_valid", "desc": "Bracket matching", "spec": "Write a Python function with this exact signature:\n\n    def is_valid(s):\n\nBehavior:\n- `s` is a string. Return True iff every bracket in `s` is correctly matched and nested.\n- Bracket pairs: `()` `[]` `{}`.\n- Non-bracket characters are ignored.\n- Empty string is valid (return True).", "code": {"muse": "def is_valid(s):\n    pairs = {\")\": \"(\", \"]\": \"[\", \"}\": \"{\"}\n    stack = []\n    for ch in s:\n        if ch in \"([{\":\n            stack.append(ch)\n        elif ch in pairs:\n            if not stack or stack.pop() != pairs[ch]:\n                return False\n    return not stack", "codex": "def is_valid(s):\n    stack = []\n    pairs = {')': '(', ']': '[', '}': '{'}\n    for char in s:\n        if char in '([{':\n            stack.append(char)\n        elif char in pairs:\n            if not stack or stack.pop() != pairs[char]:\n                return False\n    return not stack", "astra": "def is_valid(s):\n    stack = []\n    pairs = {\")\": \"(\", \"]\": \"[\", \"}\": \"{\"}\n\nfor char in s:\n    if char in \"([{\":\n        stack.append(char)\n    elif char in pairs:\n        if not stack or stack.pop() != pairs[char]:\n            return False\n\nreturn not stack"}, "astra_fail": "SyntaxError: 'return' outside function (line 10)", "astra_logic": "pass", "astra_logic_note": "logic correct"}, {"n": 5, "name": "debounce", "desc": "Leading-edge debounce decorator", "spec": "Write a Python decorator factory with this exact signature:\n\n    def debounce(wait_seconds):\n\nBehavior (leading-edge throttle):\n- The decorated function executes at most once per `wait_seconds` window, measured with `time.monotonic()`.\n- The first call executes immediately.\n- Calls made within `wait_seconds` of the last EXECUTED call are dropped: they return None, produce no side effects, and do NOT reset the timing window.\n- Once `wait_seconds` have elapsed since the last executed call, the next call executes normally (with its return value passed through).\n- Must preserve the wrapped function's arguments (positional and keyword).", "code": {"muse": "import functools\nimport time\n\n\ndef debounce(wait_seconds):\n    def decorator(fn):\n        last_run = [float(\"-inf\")]\n\n        @functools.wraps(fn)\n        def wrapper(*args, **kwargs):\n            now = time.monotonic()\n            if now - last_run[0] >= wait_seconds:\n                last_run[0] = now\n                return fn(*args, **kwargs)\n            return None\n\n        return wrapper\n\n    return decorator", "codex": "import time\nfrom functools import wraps\n\n\ndef debounce(wait_seconds):\n    def decorator(func):\n        last_executed = None\n\n        @wraps(func)\n        def wrapper(*args, **kwargs):\n            nonlocal last_executed\n            now = time.monotonic()\n\n            if last_executed is not None and now - last_executed < wait_seconds:\n                return None\n\n            last_executed = now\n            return func(*args, **kwargs)\n\n        return wrapper\n\n    return decorator", "astra": "import time\nfrom functools import wraps\nfrom threading import Lock\n\ndef debounce(wait_seconds):\n    def decorator(func):\n        last_executed = None\n        lock = Lock()\n\n    @wraps(func)\n    def wrapper(*args, **kwargs):\n        nonlocal last_executed\n        with lock:\n            now = time.monotonic()\n            if last_executed is not None and now - last_executed < wait_seconds:\n                return None\n            last_executed = now\n        return func(*args, **kwargs)\n\n    return wrapper\n\nreturn decorator"}, "astra_fail": "SyntaxError: no binding for nonlocal 'last_executed' (line 12)", "astra_logic": "pass", "astra_logic_note": "logic correct"}, {"n": 6, "name": "parse_csv", "desc": "RFC 4180 CSV parser, no csv module", "spec": "Write a Python function with this exact signature:\n\n    def parse_csv(text):\n\nBehavior:\n- `text` is a string containing CSV data. Return a list of rows; each row is a list of strings.\n- Fields may be quoted with double quotes. Quoted fields may contain commas and newlines.\n- Inside a quoted field, two double quotes `\"\"` represent one literal double quote.\n- Support CRLF (`\\r\\n`) line endings as row separators (the `\\r` must not appear in field values).\n- Empty fields are preserved as empty strings.\n- A trailing newline at the end of input does not create an extra empty row.\n- Empty string input returns `[]`.\n- Do not use the `csv` module.", "code": {"muse": "def parse_csv(text):\n    if text == \"\":\n        return []\n    text = text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\")\n    rows = []\n    row = []\n    field = []\n    in_quotes = False\n    i, n = 0, len(text)\n    while i < n:\n        ch = text[i]\n        if in_quotes:\n            if ch == '\"':\n                if i + 1 < n and text[i + 1] == '\"':\n                    field.append('\"')\n                    i += 2\n                else:\n                    in_quotes = False\n                    i += 1\n            else:\n                field.append(ch)\n                i += 1\n        elif ch == '\"':\n            # per RFC 4180, a quote only opens a quoted field at field start;\n            # mid-field quotes are literal\n            if not field:\n                in_quotes = True\n            else:\n                field.append(ch)\n            i += 1\n        elif ch == \",\":\n            row.append(\"\".join(field))\n            field = []\n            i += 1\n        elif ch == \"\\n\":\n            row.append(\"\".join(field))\n            field = []\n            rows.append(row)\n            row = []\n            i += 1\n        else:\n            field.append(ch)\n            i += 1\n    # flush trailing content; a trailing newline already flushed its row\n    if field or row or not text.endswith(\"\\n\"):\n        row.append(\"\".join(field))\n        rows.append(row)\n    return rows", "codex": "def parse_csv(text):\n    if text == \"\":\n        return []\n\n    rows = []\n    row = []\n    field = []\n    in_quotes = False\n    i = 0\n    ended_with_newline = False\n\n    while i < len(text):\n        char = text[i]\n\n        if in_quotes:\n            if char == '\"':\n                if i + 1 < len(text) and text[i + 1] == '\"':\n                    field.append('\"')\n                    i += 2\n                    continue\n                in_quotes = False\n            elif char == \"\\r\" and i + 1 < len(text) and text[i + 1] == \"\\n\":\n                field.append(\"\\n\")\n                i += 2\n                continue\n            else:\n                field.append(char)\n            ended_with_newline = False\n        else:\n            if char == '\"' and not field:\n                in_quotes = True\n                ended_with_newline = False\n            elif char == \",\":\n                row.append(\"\".join(field))\n                field = []\n                ended_with_newline = False\n            elif char == \"\\r\" or char == \"\\n\":\n                row.append(\"\".join(field))\n                field = []\n                rows.append(row)\n                row = []\n                ended_with_newline = True\n                if char == \"\\r\" and i + 1 < len(text) and text[i + 1] == \"\\n\":\n                    i += 1\n            else:\n                field.append(char)\n                ended_with_newline = False\n\n        i += 1\n\n    if not ended_with_newline:\n        row.append(\"\".join(field))\n        rows.append(row)\n\n    return rows", "astra": "def parse_csv(text):\n    rows = []\n    row = []\n    field = []\n    in_quotes = False\n    pending_row = False\n    i = 0\n\nwhile i < len(text):\n    char = text[i]\n\n    if in_quotes:\n        if char == '\"':\n            if i + 1 < len(text) and text[i + 1] == '\"':\n                field.append('\"')\n                i += 2\n                continue\n            in_quotes = False\n        else:\n            field.append(char)\n    elif char == '\"' and not field:\n        in_quotes = True\n        pending_row = True\n    elif char == ',':\n        row.append(\"\".join(field))\n        field = []\n        pending_row = True\n    elif char in \"\\r\\n\":\n        row.append(\"\".join(field))\n        rows.append(row)\n        row = []\n        field = []\n        pending_row = False\n        if char == \"\\r\" and i + 1 < len(text) and text[i + 1] == \"\\n\":\n            i += 1\n    else:\n        field.append(char)\n        pending_row = True\n\n    i += 1\n\nif pending_row:\n    row.append(\"\".join(field))\n    rows.append(row)\n\nreturn rows"}, "astra_fail": "SyntaxError: 'return' outside function (line 46)", "astra_logic": "pass", "astra_logic_note": "logic correct, incl. RFC 4180 edge"}, {"n": 7, "name": "merge_k_sorted", "desc": "Merge k sorted lists with a heap", "spec": "Write a Python function with this exact signature:\n\n    def merge_k_sorted(lists):\n\nBehavior:\n- `lists` is a list of lists; each inner list is sorted in ascending order (inner lists may be empty; `lists` itself may be empty).\n- Return a single new list containing all elements in ascending order.\n- Must not mutate the input lists.\n- Should run in O(N log k) time where N is the total number of elements and k the number of lists (use a heap, not repeated sorting).", "code": {"muse": "import heapq\n\n\ndef merge_k_sorted(lists):\n    heap = []\n    for li, lst in enumerate(lists):\n        if lst:\n            heapq.heappush(heap, (lst[0], li, 0))\n    out = []\n    while heap:\n        val, li, idx = heapq.heappop(heap)\n        out.append(val)\n        if idx + 1 < len(lists[li]):\n            heapq.heappush(heap, (lists[li][idx + 1], li, idx + 1))\n    return out", "codex": "import heapq\n\ndef merge_k_sorted(lists):\n    heap = []\n    result = []\n\n    for list_index, values in enumerate(lists):\n        if values:\n            heapq.heappush(heap, (values[0], list_index, 0))\n\n    while heap:\n        value, list_index, element_index = heapq.heappop(heap)\n        result.append(value)\n\n        next_index = element_index + 1\n        if next_index < len(lists[list_index]):\n            heapq.heappush(\n                heap,\n                (lists[list_index][next_index], list_index, next_index),\n            )\n\n    return result", "astra": "import heapq\n\ndef merge_k_sorted(lists):\n    heap = [\n        (values[0], i, 0)\n        for i, values in enumerate(lists)\n        if values\n    ]\n    heapq.heapify(heap)\n    result = []\n\nwhile heap:\n    value, list_index, element_index = heapq.heappop(heap)\n    result.append(value)\n    next_index = element_index + 1\n    if next_index < len(lists[list_index]):\n        heapq.heappush(\n            heap,\n            (lists[list_index][next_index], list_index, next_index),\n        )\n\nreturn result"}, "astra_fail": "SyntaxError: 'return' outside function (line 22)", "astra_logic": "pass", "astra_logic_note": "logic correct (heap-based)"}, {"n": 8, "name": "md_to_text", "desc": "Markdown subset to plain text", "spec": "Write a Python function with this exact signature:\n\n    def md_to_text(md):\n\nBehavior: convert a small subset of Markdown to plain text.\n- Heading markers: one or more `#` at the START of a line, followed by a space, are removed (the heading text is kept). A `#` not at line start, or not followed by a space, is left untouched.\n- Emphasis: `**bold**` -> `bold`, `*italic*` -> `italic` (markers removed, inner text kept).\n- Inline code: `` `code` `` -> `code` (backticks removed, inner text kept).\n- Links: `[text](url)` -> `text`.\n- Images: `![alt](url)` -> `alt`.\n- All other text (including newlines) is preserved as-is.\n- Apply repeatedly within a line, e.g. `**a** and **b**` -> `a and b`.", "code": {"muse": "import re\n\n\ndef md_to_text(md):\n    lines = []\n    for line in md.split(\"\\n\"):\n        # heading: #'s at line start followed by a space\n        line = re.sub(r\"^#+ \", \"\", line)\n        lines.append(line)\n    text = \"\\n\".join(lines)\n    # images first (so the ![..](..) isn't eaten by the link rule)\n    text = re.sub(r\"!\\[([^\\]]*)\\]\\([^)]*\\)\", r\"\\1\", text)\n    # links\n    text = re.sub(r\"\\[([^\\]]*)\\]\\([^)]*\\)\", r\"\\1\", text)\n    # inline code\n    text = re.sub(r\"`([^`]*)`\", r\"\\1\", text)\n    # strong then emphasis\n    text = re.sub(r\"\\*\\*([^*]*)\\*\\*\", r\"\\1\", text)\n    text = re.sub(r\"\\*([^*]*)\\*\", r\"\\1\", text)\n    return text", "codex": "def md_to_text(md):\n    import re\n\n    md = re.sub(r\"^#+ \", \"\", md, flags=re.MULTILINE)\n    md = re.sub(r\"!\\[([^\\]\\n]*)\\]\\([^)\\n]*\\)\", r\"\\1\", md)\n    md = re.sub(r\"\\[([^\\]\\n]*)\\]\\([^)\\n]*\\)\", r\"\\1\", md)\n    md = re.sub(r\"`([^`\\n]*)`\", r\"\\1\", md)\n    md = re.sub(r\"\\*\\*([^*\\n]*?)\\*\\*\", r\"\\1\", md)\n    md = re.sub(r\"\\*([^*\\n]*?)\\*\", r\"\\1\", md)\n    return md", "astra": "import re\n\ndef md_to_text(md):\n    pattern = re.compile(\n        r\"([^\\r\\n])`\"\n        r\"|!?\\(([^\\)\\r\\n])]\\([^)\\r\\n]*\\)\"\n        r\"|**([^\\r\\n]+?)**\"\n        r\"|*([^\\r\\n]+)*\"\n    )\n\ndef replace(match):\n    if match.group(1) is not None:\n        return match.group(1)\n    inner = next(group for group in match.groups()[1:] if group is not None)\n    return pattern.sub(replace, inner)\n\nmd = re.sub(r\"^#+ \", \"\", md, flags=re.MULTILINE)\nreturn pattern.sub(replace, md)"}, "astra_fail": "SyntaxError: 'return' outside function (line 18)", "astra_logic": "fail", "astra_logic_note": "genuine bug: broken regex"}], "defect": {"head": "def binary_search(arr, target):\n    left, right = 0, len(arr) - 1", "body": "while left <= right:\n    mid = left + (right - left) // 2\n    if arr[mid] == target:\n        return mid\n    if arr[mid] < target:\n        left = mid + 1\n    else:\n        right = mid - 1\n\nreturn -1"}, "bugs": {"init": "class LRUCache:\n    def init(self, capacity: int):\n        self.capacity = capacity", "regex": "def md_to_text(md):\n    pattern = re.compile(\n        r\"([^\\r\\n])`\"\n        r\"|!?\\(([^\\)\\r\\n])]\\([^)\\r\\n]*\\)\"\n        r\"|**([^\\r\\n]+?)**\"\n        r\"|*([^\\r\\n]+)*\"\n    )"}};
+const MODELS = [
+  {id:'muse', label:'Muse Spark'},
+  {id:'codex', label:'Codex default'},
+  {id:'astra', label:'GPT-6 Astra'}
+];
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function chip(txt, cls){return '<span class="chip '+cls+'">'+txt+'</span>';}
+
+function colHead(t, m){
+  if(m==='muse') return '<div class="col-head">Muse Spark '+chip('PASS','pass')+'</div>';
+  if(m==='codex') return '<div class="col-head">Codex <span class="faint small">gpt-5.6-sol</span> '+chip('PASS','pass')+'</div>';
+  var logic = t.astra_logic==='pass'
+    ? '<p class="col-note">Logic after mechanical re-attachment: <b style="color:var(--green)">PASS</b> <span class="faint">('+esc(t.astra_logic_note)+')</span></p>'
+    : '<p class="col-note">Logic after mechanical re-attachment: <b style="color:var(--red)">FAIL</b> <span class="faint">('+esc(t.astra_logic_note)+')</span></p>';
+  return '<div class="col-head">GPT-6 Astra '+chip('FAIL','fail')+'</div>'
+    + '<p class="col-note faint">'+esc(t.astra_fail)+'</p>' + logic;
+}
+
+function taskHTML(t){
+  var cols = MODELS.map(function(m){
+    return '<div class="col col-'+m.id+'">'+colHead(t,m.id)
+      +'<pre><code>'+esc(t.code[m.id])+'</code></pre></div>';
+  }).join('');
+  return '<article class="task" id="task-'+t.n+'">'
+    +'<button class="task-head" aria-expanded="false" aria-controls="taskbody-'+t.n+'">'
+    +'<span class="task-num">'+t.n+'</span>'
+    +'<span class="task-name">'+esc(t.name)+'</span>'
+    +'<span class="task-desc">'+esc(t.desc)+'</span>'
+    +'<span class="chips">'+chip('Muse PASS','pass')+chip('Codex PASS','pass')+chip('Astra FAIL','fail')+'</span>'
+    +'<svg class="chev" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    +'</button>'
+    +'<div class="task-body" id="taskbody-'+t.n+'" hidden>'
+    +'<div class="part-label">Task spec</div>'
+    +'<div class="spec">'+esc(t.spec)+'</div>'
+    +'<div class="tabs" role="tablist" aria-label="Choose model">'
+    +'<button class="tab" role="tab" aria-selected="true" data-m="muse">Muse</button>'
+    +'<button class="tab" role="tab" aria-selected="false" data-m="codex">Codex</button>'
+    +'<button class="tab" role="tab" aria-selected="false" data-m="astra">Astra</button>'
+    +'</div>'
+    +'<div class="code-grid show-muse">'+cols+'</div>'
+    +'</div></article>';
+}
+
+document.getElementById('task-list').innerHTML = DATA.tasks.map(taskHTML).join('');
+
+document.querySelectorAll('.task-head').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var body = document.getElementById(btn.getAttribute('aria-controls'));
+    var open = btn.getAttribute('aria-expanded')==='true';
+    btn.setAttribute('aria-expanded', String(!open));
+    body.hidden = open;
+  });
+});
+document.querySelectorAll('.tabs').forEach(function(tabs){
+  var grid = tabs.parentElement.querySelector('.code-grid');
+  tabs.querySelectorAll('.tab').forEach(function(tab){
+    tab.addEventListener('click', function(){
+      tabs.querySelectorAll('.tab').forEach(function(o){o.setAttribute('aria-selected','false');});
+      tab.setAttribute('aria-selected','true');
+      grid.className = 'code-grid show-'+tab.getAttribute('data-m');
+    });
+  });
+});
+
+// Astra defect example
+document.getElementById('defect-head').textContent = DATA.defect.head;
+document.getElementById('defect-body').textContent = DATA.defect.body;
+document.getElementById('bug-init').textContent = DATA.bugs.init;
+document.getElementById('bug-regex').textContent = DATA.bugs.regex;
+document.getElementById('build-badge').textContent = 'build ' + DATA.badge;
+</script>
+</body>
+</html>

@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#FAF6EB">
+  <title>Nicomachus's Theorem — a visual proof</title>
+  <style>
+    :root { color-scheme: light; --paper:#FAF6EB; --ink:#4A4238; --muted:#827766; --accent:#CE725B; }
+    * { box-sizing:border-box; }
+    html,body { margin:0; min-height:100%; background:var(--paper); color:var(--ink); }
+    body { font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; overflow:hidden; }
+    button { font:inherit; color:inherit; cursor:pointer; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+    button:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
+    #stage { position:absolute; width:1160px; height:700px; transform-origin:0 0; }
+    header { position:absolute; top:34px; left:58px; right:58px; display:flex; justify-content:space-between; align-items:center; }
+    .eyebrow { margin:0 0 8px; color:var(--muted); font-size:10px; font-weight:650; letter-spacing:.23em; text-transform:uppercase; }
+    h1 { margin:0; font-family:Georgia,"Times New Roman",serif; font-size:31px; font-weight:400; letter-spacing:-.7px; }
+    h1 span { color:var(--muted); font-size:22px; }
+    #stage-name { color:var(--muted); font-size:11px; letter-spacing:.12em; text-transform:uppercase; }
+    .geometry { position:absolute; top:105px; left:0; width:1160px; height:400px; }
+    canvas { display:block; width:100%; height:100%; }
+    .equations { position:absolute; top:500px; width:100%; text-align:center; min-height:95px; }
+    .equation { margin:0 0 7px; font-size:18px; line-height:1.4; opacity:0; transform:translateY(8px); }
+    .equation:nth-child(2) { color:var(--muted); font-size:15px; }
+    .equation:last-child { font-size:22px; font-weight:500; letter-spacing:.01em; }
+    .c1 { color:#B4614C; } .c2 { color:#A47622; } .c3 { color:#438763; } .c4 { color:#587BB9; }
+    #caption { position:absolute; top:599px; left:40px; right:40px; margin:0; text-align:center; font-size:13px; line-height:1.6; }
+    .controls { position:absolute; top:642px; left:0; right:0; display:flex; justify-content:center; align-items:center; gap:22px; }
+    .transport { display:flex; gap:8px; align-items:center; }
+    .transport button { border:1px solid #DCD3C3; background:transparent; border-radius:50%; width:36px; height:36px; display:grid; place-items:center; font-size:16px; }
+    .transport button:hover { background:#F0E8D9; }
+    .transport #play { background:#4A4238; border-color:#4A4238; color:var(--paper); width:42px; height:42px; font-size:15px; }
+    .dots { display:flex; align-items:center; gap:1px; }
+    .dot { width:25px; height:34px; border:0; background:transparent; display:grid; place-items:center; padding:0; }
+    .dot::after { content:""; width:6px; height:6px; border-radius:50%; background:#D5CCBD; }
+    .dot[aria-current="step"]::after { width:8px; height:8px; background:var(--accent); box-shadow:0 0 0 4px #CE725B14; }
+    #motion-note { position:absolute; bottom:6px; width:100%; text-align:center; font-size:10px; color:var(--muted); }
+    .badge { position:fixed; bottom:8px; right:12px; color:#958B7B; font-size:9px; letter-spacing:.06em; }
+    @media (max-width:639px) {
+      body { overflow:auto; }
+      #stage { position:relative; width:100%; height:auto; min-height:100svh; padding:25px 0 35px; transform:none !important; left:0 !important; top:0 !important; }
+      header { position:relative; inset:auto; margin:0 24px 15px; display:block; }
+      .eyebrow { font-size:8px; margin-bottom:9px; }
+      h1 { font-size:27px; line-height:1.2; letter-spacing:-.6px; }
+      h1 span { display:block; font-size:18px; margin-top:3px; }
+      #stage-name { position:absolute; top:0; right:0; font-size:8px; letter-spacing:.06em; }
+      .geometry { position:relative; inset:auto; width:100%; height:auto; aspect-ratio:390 / 420; }
+      .equations { position:relative; inset:auto; min-height:97px; padding:4px 10px 0; }
+      .equation { font-size:clamp(12px,3.5vw,16px); margin-bottom:9px; white-space:nowrap; }
+      .equation:nth-child(2) { font-size:13px; }
+      .equation:last-child { font-size:clamp(13px,3.7vw,18px); letter-spacing:0; }
+      #caption { position:relative; inset:auto; margin:7px 24px 15px; min-height:42px; font-size:12px; line-height:1.7; }
+      .controls { position:relative; inset:auto; gap:18px; }
+      .transport button { width:40px; height:40px; }
+      .transport #play { width:44px; height:44px; }
+      #motion-note { position:relative; inset:auto; margin-top:13px; }
+      .badge { position:absolute; font-size:8px; bottom:8px; }
+    }
+  </style>
+</head>
+<body>
+  <main id="stage">
+    <header>
+      <div><p class="eyebrow">A little arithmetic, made visible</p><h1>Nicomachus's Theorem <span>— a visual proof</span></h1></div>
+      <div id="stage-name" aria-hidden="true">01 / 05 · Assemble</div>
+    </header>
+    <div class="geometry"><canvas id="canvas" role="img" aria-label="Four pastel cubes are sliced into ten tiles, then their 100 unit squares form nested borders in a ten by ten square.">A visual proof: each cube k³ forms the border between squares of side Tₖ₋₁ and Tₖ, where Tₖ = k(k+1)/2.</canvas></div>
+    <div class="equations" aria-label="The resulting identities">
+      <p class="equation" aria-hidden="true"><span class="c1">1³</span> + <span class="c2">2³</span> + <span class="c3">3³</span> + <span class="c4">4³</span> = (1 + 2 + 3 + 4)²</p>
+      <p class="equation" aria-hidden="true">1 + 8 + 27 + 64 = 100 = 10²</p>
+      <p class="equation" aria-hidden="true">1³ + 2³ + ⋯ + n³ = (1 + 2 + ⋯ + n)²</p>
+    </div>
+    <p id="caption" aria-live="polite" aria-atomic="true">Four cubes: 1³, 2³, 3³, 4³ — that's 1 + 8 + 27 + 64 tiny unit cubes.</p>
+    <nav class="controls" aria-label="Animation controls">
+      <div class="transport">
+        <button id="prev" aria-label="Previous stage" title="Previous stage (←)">⏮</button>
+        <button id="play" aria-label="Pause" title="Play / pause (Space)">⏸</button>
+        <button id="next" aria-label="Next stage" title="Next stage (→)">⏭</button>
+        <button id="replay" aria-label="Replay" title="Replay (R)">⟳</button>
+      </div>
+      <div class="dots" aria-label="Choose a stage">
+        <button class="dot" aria-label="Stage 1: Cubes assemble" aria-current="step"></button>
+        <button class="dot" aria-label="Stage 2: Split into slabs"></button>
+        <button class="dot" aria-label="Stage 3: Flatten into tiles"></button>
+        <button class="dot" aria-label="Stage 4: Fill the target"></button>
+        <button class="dot" aria-label="Stage 5: The proof lands"></button>
+      </div>
+    </nav>
+    <div id="motion-note" hidden>reduced motion</div>
+  </main>
+  <div class="badge">v2026.10.03-01</div>
+  <script>
+  'use strict';
+  (() => {
+    // One clock drives every visual property, including the HTML equations.
+    const STARTS = [0, 4, 8.5, 14, 22];
+    const ENDS = [4, 8.5, 14, 22, 26];
+    const T = [1, 3, 6, 10];
+    const NAMES = ['Assemble', 'Slice', 'Flatten', 'Rearrange', 'The identity'];
+    const CAPTIONS = [
+      "Four cubes: 1³, 2³, 3³, 4³ — that's 1 + 8 + 27 + 64 tiny unit cubes.",
+      'Slice each cube into flat slabs — the k³ cube splits into k slabs of k×k.',
+      'Flatten the slabs into square tiles: ten tiles, 100 unit squares in all.',
+      'Fly the squares into the 10×10 frame — each color forms a border exactly k³ in area.',
+      '1³+2³+3³+4³ = (1+2+3+4)² — and the same borders work for any n.'
+    ];
+    const PALETTES = [
+      ['#FFC9BC', '#F5A08C', '#E8826C', '#F6A48F'],
+      ['#FFE6A8', '#F8C964', '#E6AC40', '#F3C25C'],
+      ['#C2EDD6', '#86D9AF', '#57BC8C', '#79D5A6'],
+      ['#C7DAFC', '#93B1EC', '#6E92D8', '#8AA9E8']
+    ];
+    const INK = '#4A4238', GRID = 'rgba(90,70,50,0.18)';
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const stage = document.getElementById('stage');
+    const caption = document.getElementById('caption');
+    const stageName = document.getElementById('stage-name');
+    const equations = [...document.querySelectorAll('.equation')];
+    const dots = [...document.querySelectorAll('.dot')];
+    const play = document.getElementById('play');
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let reduced = media.matches;
+    let clock = reduced ? ENDS[0] - 1e-7 : 0;
+    let playing = !reduced, previousTime = null, stepElapsed = 0;
+    let isNarrow = false, layout, pixelScale = 1, dirty = true, lastStage = -1;
+    const clamp = value => Math.min(1, Math.max(0, value));
+    const progress = (time, start, duration) => clamp((time - start) / Math.max(duration, 1e-9));
+    const ease = t => { t = clamp(t); return t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2; };
+    const mix = (a,b,t) => a + (b-a)*t;
+    const pointMix = (a,b,t) => [mix(a[0],b[0],t), mix(a[1],b[1],t)];
+    const stageIndex = () => { for (let i=0;i<4;i++) if(clock<ENDS[i]) return i; return 4; };
+
+    // Destination cells are generated from the stated max(x,y) coloring rule.
+    // Each group has exactly k³ cells; each source consists of k tiles of k² cells.
+    const groups = PALETTES.map(() => []);
+    for (let y=0;y<10;y++) for (let x=0;x<10;x++) {
+      const group = T.findIndex(t => Math.max(x,y)<t);
+      const i = groups[group].length, k = group+1;
+      groups[group].push({ x,y, slab:Math.floor(i/(k*k)), sx:i%k, sy:Math.floor(i/k)%k, i });
+    }
+    const launches = [14.15,15.5,17.1,19.2];
+    const flights = [1.1,1.35,1.55,1.65];
+
+    function resize() {
+      isNarrow = window.innerWidth < 640;
+      const scale = Math.min(window.innerWidth/1160, window.innerHeight/700);
+      if (!isNarrow) {
+        stage.style.transform = `scale(${scale})`;
+        stage.style.left = `${(window.innerWidth-1160*scale)/2}px`;
+        stage.style.top = `${(window.innerHeight-700*scale)/2}px`;
+      }
+      layout = isNarrow ? {
+        w:390,h:420,u:12,baseline:236,centers:[44,125,214,320],gap:10,
+        tileUnit:9,tileX:101,rows:[12,40,77,121],tileGap:8,
+        targetX:90,targetY:194,targetUnit:21,finalX:90
+      } : {
+        w:1160,h:400,u:27,baseline:302,centers:[195,410,645,905],gap:16,
+        tileUnit:17,tileX:188,rows:[39,97,167,258],tileGap:16,
+        targetX:730,targetY:60,targetUnit:28,finalX:440
+      };
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      canvas.width = Math.max(1, Math.round(rect.width*dpr));
+      canvas.height = Math.max(1, Math.round(rect.height*dpr));
+      pixelScale = canvas.width/layout.w;
+      dirty = true;
+    }
+
+    function line(points, color=GRID, width=1) {
+      ctx.beginPath(); points.forEach((p,i) => i ? ctx.lineTo(...p) : ctx.moveTo(...p));
+      ctx.strokeStyle=color; ctx.lineWidth=width; ctx.stroke();
+    }
+    function polygon(points, fill, alpha=1) {
+      ctx.save(); ctx.globalAlpha*=alpha;
+      ctx.beginPath(); points.forEach((p,i) => i ? ctx.lineTo(...p) : ctx.moveTo(...p));
+      ctx.closePath(); ctx.fillStyle=fill; ctx.fill(); ctx.strokeStyle=GRID; ctx.lineWidth=1; ctx.stroke(); ctx.restore();
+    }
+    function label(text,x,y,size=16,alpha=1,align='center') {
+      ctx.save(); ctx.globalAlpha*=clamp(alpha); ctx.fillStyle=INK;
+      ctx.font=`${size}px system-ui, sans-serif`; ctx.textAlign=align; ctx.textBaseline='middle';
+      ctx.fillText(text,x,y); ctx.restore();
+    }
+    function tilePosition(k,s) {
+      return {x:layout.tileX+s*(k*layout.tileUnit+layout.tileGap),y:layout.rows[k-1]};
+    }
+    function project(k,x,y,z) {
+      return [layout.centers[k-1]+(x-y)*.8660*layout.u,
+        layout.baseline-k*layout.u+(x+y)*.5*layout.u-z*layout.u];
+    }
+
+    // Morph the actual subdivided faces, so the units remain visible through flattening.
+    function box(k,z,height,flatten=0,slab=0) {
+      const pal=PALETTES[k-1], dest=tilePosition(k,slab), unit=layout.tileUnit;
+      const top=(x,y) => pointMix(project(k,x,y,z+height),[dest.x+x*unit,dest.y+y*unit],flatten);
+      const bottom=(x,y) => pointMix(project(k,x,y,z),[dest.x+x*unit,dest.y+y*unit],flatten);
+      polygon([bottom(0,k),bottom(k,k),top(k,k),top(0,k)],pal[1],1-flatten);
+      polygon([bottom(k,0),bottom(k,k),top(k,k),top(k,0)],pal[2],1-flatten);
+      ctx.save(); ctx.globalAlpha*=1-flatten;
+      for(let i=1;i<k;i++) {
+        line([bottom(i,k),top(i,k)]); line([bottom(k,i),top(k,i)]);
+      }
+      for(let h=1;h<height;h++) {
+        line([project(k,0,k,z+h),project(k,k,k,z+h)]);
+        line([project(k,k,0,z+h),project(k,k,k,z+h)]);
+      }
+      ctx.restore();
+      polygon([top(0,0),top(k,0),top(k,k),top(0,k)],pal[0]);
+      if(flatten>0) polygon([top(0,0),top(k,0),top(k,k),top(0,k)],pal[3],flatten);
+      for(let i=1;i<k;i++) { line([top(i,0),top(i,k)]); line([top(0,i),top(k,i)]); }
+    }
+
+    function flattenProgress(k,s) { return ease(progress(clock,8.5+(k-1)*.22+s*.12,3.8)); }
+    function drawSources() {
+      // Ground shadows precede all geometry.
+      if(clock<14) for(let k=1;k<=4;k++) {
+        const appear=ease(progress(clock,(k-1)*.5,1.6));
+        const fade=1-flattenProgress(k,0);
+        ctx.save(); ctx.globalAlpha=appear*fade;
+        ctx.beginPath(); ctx.ellipse(layout.centers[k-1],layout.baseline+3,
+          k*layout.u*.91*appear,Math.max(1,k*layout.u*.19*appear),0,0,Math.PI*2);
+        ctx.fillStyle='rgba(90,70,50,0.10)'; ctx.fill(); ctx.restore();
+      }
+      if(clock<14) for(let k=1;k<=4;k++) {
+        if(clock<4) {
+          const p=ease(progress(clock,(k-1)*.5,1.6));
+          ctx.save(); ctx.globalAlpha=p;
+          ctx.translate(layout.centers[k-1],layout.baseline+(1-p)*24);
+          ctx.scale(.65+.35*p,.65+.35*p); ctx.translate(-layout.centers[k-1],-layout.baseline);
+          box(k,0,k); ctx.restore();
+          label(`${k}³`,layout.centers[k-1],layout.baseline+30,isNarrow?14:18,p);
+        } else {
+          const split=ease(progress(clock,4+(k-1)*.16,2.5));
+          for(let s=0;s<k;s++) box(k,s*(1+split*layout.gap/layout.u),1,flattenProgress(k,s),s);
+          label(`${k}³`,layout.centers[k-1],layout.baseline+30,isNarrow?14:18,1-flattenProgress(k,0));
+        }
+      }
+      if(clock>=8.5) for(let k=1;k<=4;k++) {
+        const appear=ease(progress(clock,9.7,2));
+        const disappear=1-ease(progress(clock,launches[k-1]+(k*k*k-1)*.012,.65));
+        label(`${k}³`,layout.tileX-(isNarrow?35:40),layout.rows[k-1]+k*layout.tileUnit/2,
+          isNarrow?12:16,appear*disappear);
+      }
+    }
+    function target() {
+      return {x:mix(layout.targetX,layout.finalX,ease(progress(clock,22,1.2))),
+        y:layout.targetY,u:layout.targetUnit};
+    }
+    function drawTarget(t) {
+      const opacity=ease(progress(clock,9.1,2));
+      ctx.save(); ctx.globalAlpha=opacity;
+      ctx.setLineDash([7,6]); ctx.lineWidth=2; ctx.strokeStyle='#8A7F6A';
+      ctx.strokeRect(t.x-2,t.y-2,10*t.u+4,10*t.u+4); ctx.setLineDash([]);
+      label('10 × 10',t.x+5*t.u,t.y+10*t.u+(isNarrow?10:23),isNarrow?11:13);
+      ctx.restore();
+    }
+
+    function drawUnits(t) {
+      if(clock<14) return;
+      groups.forEach((cells,g) => {
+        const k=g+1;
+        cells.forEach(cell => {
+          const p=ease(progress(clock,launches[g]+cell.i*.012,flights[g]));
+          const tile=tilePosition(k,cell.slab);
+          const fromX=tile.x+cell.sx*layout.tileUnit, fromY=tile.y+cell.sy*layout.tileUnit;
+          // A parabolic lift is parameterized by eased progress: exact endpoints, no drift.
+          const lift=4*p*(1-p)*(isNarrow?24:55);
+          const x=mix(fromX,t.x+cell.x*t.u,p), y=mix(fromY,t.y+cell.y*t.u,p)-lift;
+          const size=mix(layout.tileUnit,t.u,p);
+          ctx.fillStyle=PALETTES[g][3]; ctx.fillRect(x,y,size,size);
+          ctx.strokeStyle=GRID; ctx.lineWidth=1; ctx.strokeRect(x,y,size,size);
+        });
+      });
+      // Each completed gnomon leaves the boundary of its triangular-number square.
+      groups.forEach((cells,g) => {
+        const finish=launches[g]+(cells.length-1)*.012+flights[g];
+        const opacity=ease(progress(clock,finish,.25));
+        if(opacity<=0) return;
+        ctx.save(); ctx.globalAlpha=opacity;
+        ctx.strokeStyle='rgba(74,66,56,0.35)'; ctx.lineWidth=1.5;
+        ctx.strokeRect(t.x,t.y,T[g]*t.u,T[g]*t.u); ctx.restore();
+      });
+    }
+
+    function drawBrackets(t) {
+      for(let i=0;i<4;i++) {
+        const p=ease(progress(clock,22.5+i*.15,.9));
+        if(!p) continue;
+        const start=i===0?0:T[i-1], end=T[i], gap=isNarrow?14:17;
+        const left=t.x+start*t.u, right=t.x+end*t.u;
+        const top=t.y+start*t.u, bottom=t.y+end*t.u;
+        ctx.save(); ctx.globalAlpha=p;
+        line([[left+1,t.y-gap+5],[left+1,t.y-gap],[mix(left+1,right-1,p),t.y-gap]],'#8A7F6A',1);
+        line([[right-1,t.y-gap],[right-1,t.y-gap+5*p]],'#8A7F6A',1);
+        line([[t.x-gap+5,top+1],[t.x-gap,top+1],[t.x-gap,mix(top+1,bottom-1,p)]],'#8A7F6A',1);
+        line([[t.x-gap,bottom-1],[t.x-gap+5*p,bottom-1]],'#8A7F6A',1);
+        label(String(i+1),(left+right)/2,t.y-gap-12,isNarrow?11:13,p);
+        label(String(i+1),t.x-gap-13,(top+bottom)/2,isNarrow?11:13,p);
+        ctx.restore();
+      }
+    }
+    function updateHTML() {
+      const current=stageIndex();
+      if(current!==lastStage) {
+        caption.textContent=CAPTIONS[current];
+        stageName.textContent=`0${current+1} / 05 · ${NAMES[current]}`;
+        dots.forEach((dot,i) => { if(i===current) dot.setAttribute('aria-current','step'); else dot.removeAttribute('aria-current'); });
+        lastStage=current;
+      }
+      equations.forEach((el,i) => {
+        const p=ease(progress(clock,23.05+i*.75,.8));
+        el.style.opacity=String(p); el.style.transform=`translateY(${8*(1-p)}px)`;
+        el.setAttribute('aria-hidden',p>.5?'false':'true');
+      });
+      play.textContent=playing?'⏸':'▶';
+      play.setAttribute('aria-label',playing?'Pause':'Play');
+      document.getElementById('motion-note').hidden=!reduced;
+    }
+    function render() {
+      ctx.setTransform(pixelScale,0,0,pixelScale,0,0);
+      ctx.clearRect(0,0,layout.w,layout.h);
+      drawSources();
+      const t=target(); drawTarget(t); drawUnits(t); drawBrackets(t);
+      updateHTML(); dirty=false;
+    }
+
+    function jump(index) {
+      index=Math.min(4,Math.max(0,index));
+      clock=reduced?ENDS[index]-(index===4?0:1e-7):STARTS[index];
+      playing=!reduced; previousTime=null; stepElapsed=0; dirty=true;
+    }
+    function toggle() {
+      if(!playing && clock>=26) { jump(0); playing=true; }
+      else playing=!playing;
+      previousTime=null; stepElapsed=0; dirty=true;
+    }
+    document.getElementById('prev').addEventListener('click',()=>jump(stageIndex()-1));
+    document.getElementById('next').addEventListener('click',()=>jump(stageIndex()+1));
+    document.getElementById('replay').addEventListener('click',()=>jump(0));
+    play.addEventListener('click',toggle);
+    dots.forEach((dot,i)=>dot.addEventListener('click',()=>jump(i)));
+    window.addEventListener('keydown',event=> {
+      if(event.altKey || event.ctrlKey || event.metaKey || event.repeat) return;
+      if(event.target instanceof HTMLElement && (event.target.isContentEditable || /INPUT|TEXTAREA|SELECT/.test(event.target.tagName))) return;
+      if(event.code==='Space') { event.preventDefault(); toggle(); }
+      else if(event.key==='ArrowLeft') { event.preventDefault(); jump(stageIndex()-1); }
+      else if(event.key==='ArrowRight') { event.preventDefault(); jump(stageIndex()+1); }
+      else if(event.key.toLowerCase()==='r') { event.preventDefault(); jump(0); }
+    });
+    const motionChanged=event=> { reduced=event.matches; const current=stageIndex(); jump(current); };
+    if(media.addEventListener) media.addEventListener('change',motionChanged);
+    else media.addListener(motionChanged);
+    window.addEventListener('resize',resize);
+    document.addEventListener('visibilitychange',()=> { previousTime=null; });
+
+    function tick(now) {
+      const delta=previousTime===null?0:Math.max(0,(now-previousTime)/1000);
+      previousTime=now;
+      if(playing && !document.hidden) {
+        if(reduced) {
+          // Reduced-motion playback advances static, fully assembled stage snapshots.
+          stepElapsed+=delta;
+          if(stepElapsed>=2.2) {
+            stepElapsed=0;
+            const current=stageIndex();
+            if(current===4) playing=false;
+            else clock=ENDS[current+1]-(current+1===4?0:1e-7);
+            dirty=true;
+          }
+        } else {
+          clock=Math.min(26,clock+delta); dirty=true;
+          if(clock>=26) playing=false;
+        }
+      }
+      if(dirty) render();
+      requestAnimationFrame(tick);
+    }
+    resize(); render(); requestAnimationFrame(tick);
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>shotgrep — ctrl+f for your screenshots</title>
+<meta name="description" content="A visual breakdown of gyotaku, the offline Ctrl+F for your screenshots folder — plus an honest verdict on whether PaddleOCR is the best OCR in 2026.">
+<style>
+:root{
+  --bg:#16130f; --bg2:#1e1a15; --card:#242019; --line:#3a3227;
+  --ink:#f2e9d8; --ink-soft:#b8a98f; --ink-faint:#7d6f5c;
+  --amber:#f0a840; --amber-dim:#8a5f22; --green:#7fc97f; --red:#e06c5c; --blue:#6cb2e0;
+  --mono:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+  --serif:Georgia,'Times New Roman',serif;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html{scroll-behavior:smooth;}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px; line-height:1.6;
+}
+.wrap{max-width:760px; margin:0 auto; padding:0 18px 80px;}
+header.hero{padding:52px 0 8px; text-align:center;}
+.kicker{
+  display:inline-block; font-family:var(--mono); font-size:12.5px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--amber); border:1px solid var(--amber-dim);
+  border-radius:999px; padding:6px 14px; margin-bottom:18px;
+}
+h1{
+  font-family:var(--serif); font-weight:700; font-size:clamp(38px,9vw,58px);
+  line-height:1.05; margin:0 0 10px; letter-spacing:-.01em;
+}
+h1 .grep{color:var(--amber);}
+.tagline{font-size:19px; color:var(--ink-soft); margin:0 0 6px; font-family:var(--serif); font-style:italic;}
+.byline{font-size:14px; color:var(--ink-faint);}
+.byline a{color:var(--amber); text-decoration:none; border-bottom:1px dotted var(--amber-dim);}
+section{margin:44px 0;}
+h2{
+  font-family:var(--serif); font-size:27px; margin:0 0 6px; line-height:1.2;
+}
+h2 .n{color:var(--amber); font-family:var(--mono); font-size:19px; vertical-align:middle; margin-right:8px;}
+.sub{color:var(--ink-soft); margin:0 0 18px; font-size:16px;}
+p{margin:0 0 14px;}
+a{color:var(--amber);}
+code, .mono{font-family:var(--mono); font-size:.88em;}
+code{background:#00000055; border:1px solid var(--line); border-radius:6px; padding:1px 7px; color:#ffd9a0;}
+.verdict{
+  background:linear-gradient(180deg,#2a2318,#211c13);
+  border:1.5px solid var(--amber-dim); border-radius:18px; padding:22px 20px; margin:26px 0;
+}
+.verdict h3{margin:0 0 8px; font-family:var(--serif); font-size:21px; color:var(--amber);}
+.verdict p{margin:0 0 10px;}
+.verdict p:last-child{margin-bottom:0;}
+.verdict .one-liner{font-size:19px; font-family:var(--serif);}
+.asterisk{
+  border-left:3px solid var(--amber); padding:2px 0 2px 14px; margin:14px 0; color:var(--ink-soft);
+}
+.card{
+  background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px;
+}
+/* ---------- step-through ---------- */
+.stage{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; overflow:hidden;}
+.stage canvas{width:100%; height:auto; display:block; border-radius:10px; background:#101010;}
+.caption{min-height:0; color:var(--ink-soft); font-size:15.5px; margin:12px 2px 0;}
+.caption b{color:var(--ink);}
+.prog{height:6px; background:#00000066; border-radius:99px; margin:12px 2px 0; overflow:hidden;}
+.prog i{display:block; height:100%; width:0; background:var(--amber); border-radius:99px; transition:width .4s ease;}
+.stepmeta{display:flex; justify-content:space-between; align-items:center; margin:10px 2px 0; font-family:var(--mono); font-size:13px; color:var(--ink-faint);}
+.controls{display:grid; grid-template-columns:1fr 2fr; gap:10px; margin-top:12px;}
+button.stepbtn{
+  font-family:inherit; font-size:17px; font-weight:600; color:var(--ink);
+  background:#2e2820; border:1.5px solid var(--line); border-radius:14px;
+  padding:15px 10px; cursor:pointer; touch-action:manipulation; user-select:none;
+  -webkit-user-select:none; transition:transform .3s ease-out, background .15s;
+}
+button.stepbtn:active{transform:scale(.96); transition:transform .16s ease-in;}
+button.stepbtn.primary{background:var(--amber); border-color:var(--amber); color:#1a1408;}
+button.stepbtn:disabled{opacity:.35; cursor:default;}
+button.stepbtn:focus-visible{outline:2px solid var(--amber); outline-offset:2px;}
+.sim-label{
+  display:inline-block; font-family:var(--mono); font-size:11px; letter-spacing:.1em;
+  color:var(--ink-faint); border:1px dashed var(--line); border-radius:6px;
+  padding:3px 8px; margin-bottom:10px;
+}
+/* ---------- demo ---------- */
+.searchbox{
+  display:flex; gap:8px; margin:6px 0 4px; position:sticky; top:0; z-index:5;
+  background:var(--bg); padding:10px 0;
+}
+.searchbox input{
+  flex:1; font-size:17px; font-family:var(--mono); color:var(--ink);
+  background:var(--bg2); border:1.5px solid var(--line); border-radius:12px;
+  padding:13px 14px; touch-action:manipulation; min-width:0;
+}
+.searchbox input:focus{outline:none; border-color:var(--amber);}
+.searchbox input::placeholder{color:var(--ink-faint);}
+.count{font-family:var(--mono); font-size:13px; color:var(--ink-faint); margin:2px 2px 12px;}
+.shotgrid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+@media(max-width:520px){.shotgrid{grid-template-columns:1fr 1fr;}}
+.shot{background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden;}
+.shot.hidden{display:none;}
+.shot canvas{width:100%; height:auto; display:block;}
+.shot .excerpt{font-size:12.5px; color:var(--ink-soft); padding:8px 10px 10px; font-family:var(--mono); line-height:1.45;}
+.shot .excerpt mark{background:var(--amber); color:#1a1408; border-radius:3px; padding:0 2px;}
+.shot .fname{font-family:var(--mono); font-size:11px; color:var(--ink-faint); padding:8px 10px 0;}
+.nomatch{display:none; text-align:center; color:var(--ink-soft); padding:26px 10px; font-family:var(--serif); font-style:italic;}
+/* ---------- table ---------- */
+.tablewrap{overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid var(--line); border-radius:14px;}
+table{border-collapse:collapse; width:100%; min-width:640px; font-size:14px; background:var(--card);}
+th,td{text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top;}
+th{font-family:var(--mono); font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); background:#00000033;}
+tr:last-child td{border-bottom:none;}
+tr.pick td{background:#f0a84014;}
+td .mono{font-size:13px;}
+.stars{color:var(--amber); font-weight:700;}
+.check{color:var(--green); font-weight:700;} .cross{color:var(--red); font-weight:700;} .warn{color:var(--amber); font-weight:700;}
+.src{font-size:12.5px; color:var(--ink-faint);}
+.src a{color:var(--ink-soft);}
+/* ---------- misc ---------- */
+.picklist{list-style:none; margin:14px 0 0; padding:0;}
+.picklist li{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:13px 15px; margin-bottom:9px; font-size:15.5px;}
+.picklist li b{color:var(--amber);}
+.stack{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:14px;}
+@media(max-width:560px){.stack{grid-template-columns:1fr;}}
+.stack .card h4{margin:0 0 6px; font-family:var(--mono); font-size:15px; color:var(--amber);}
+.stack .card p{font-size:14.5px; color:var(--ink-soft); margin:0;}
+footer{margin-top:56px; padding-top:20px; border-top:1px solid var(--line); color:var(--ink-faint); font-size:13.5px;}
+footer a{color:var(--ink-soft);}
+.links{display:grid; gap:10px; margin-top:12px;}
+.links a{
+  display:block; background:var(--card); border:1px solid var(--line); border-radius:12px;
+  padding:14px 16px; text-decoration:none; color:var(--ink); touch-action:manipulation;
+}
+.links a b{color:var(--amber); display:block; font-size:16px;}
+.links a span{font-size:13.5px; color:var(--ink-soft);}
+.probe{position:absolute; visibility:hidden; pointer-events:none; top:0; left:0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="kicker">A visual breakdown</div>
+  <h1>shot<span class="grep">grep</span></h1>
+  <p class="tagline">ctrl+f for your screenshots folder</p>
+  <p class="byline">Breaking down <a href="https://github.com/xevrion/gyotaku">gyotaku</a> by <a href="https://x.com/xevrion_the1">@xevrion_the1</a> — plus an honest verdict on its OCR engine.</p>
+</header>
+
+<section id="verdict">
+  <h2><span class="n">00</span>The verdict, first</h2>
+  <div class="verdict">
+    <h3>What it is</h3>
+    <p class="one-liner">gyotaku watches your screenshots folder, reads every word inside every image with OCR, and makes it all searchable in milliseconds — fully offline, open source, native Linux.</p>
+    <h3 style="margin-top:16px">Is PaddleOCR the best OCR?</h3>
+    <p><b>For this job: yes.</b> PaddleOCR's PP-OCRv5 is the best accuracy-per-megabyte OCR you can run on a CPU in 2026 — roughly 4.5% character error rate against ~18% for Tesseract on the same benchmark, a 7.5&nbsp;MB English recognizer, 109 languages, Apache 2.0, no GPU, no cloud. It dethroned Tesseract as the most-starred OCR project on GitHub in March 2026. For keyword search over screenshots, nothing else is close on the accuracy/size/speed triangle.</p>
+    <div class="asterisk">One asterisk: PaddleOCR's official runtime is Python/C++ — heavy for a Rust app. The sharp move is running PP-OCRv5's <i>models</i> through ONNX Runtime (the RapidOCR trick): same weights, a fraction of the footprint, no Python. Models: yes. Runtime: go ONNX.</div>
+    <p style="color:var(--ink-soft)">Scroll for the full pipeline walkthrough, a simulated live demo, and the 2026 OCR showdown table.</p>
+  </div>
+</section>
+
+<section id="problem">
+  <h2><span class="n">01</span>The problem: screenshot hoarding</h2>
+  <p class="sub">You know exactly which screenshot has the thing. You have no idea which file it is.</p>
+  <p>The author's words: <i>"i screenshot everything and can never find anything."</i> Receipts, error messages, wifi passwords, that one tweet, the terminal output you swore you'd remember — they pile up in <code>~/Pictures/Screenshots</code> as <code>shot_4821.png</code>, <code>shot_4822.png</code>, <code>shot_4823.png</code>. Your OS can search filenames. It cannot search <i>inside</i> the pixels.</p>
+  <p>gyotaku fixes that with the oldest trick in computing: build an index. Every screenshot gets read once by OCR; every word goes into a searchable database. After that, finding anything is a database lookup — milliseconds.</p>
+</section>
+
+<section id="how">
+  <h2><span class="n">02</span>How it works</h2>
+  <p class="sub">Walk the pipeline one step at a time. The screenshots below are simulated drawings, not real OCR output.</p>
+  <div class="stage">
+    <div class="sim-label">SIMULATED WALKTHROUGH</div>
+    <canvas id="pipeCanvas" width="680" height="380"></canvas>
+    <p class="caption" id="pipeCaption"></p>
+    <div class="prog"><i id="pipeFill"></i></div>
+    <div class="stepmeta"><span id="pipeCount">1 / 5</span><span id="pipeName">WATCH</span></div>
+  </div>
+  <div class="controls">
+    <button class="stepbtn" id="pipeBack" disabled>&larr; Back</button>
+    <button class="stepbtn primary" id="pipeNext">Next &rarr;</button>
+  </div>
+  <div class="probe" id="probe" aria-hidden="true"></div>
+</section>
+
+<section id="demo">
+  <h2><span class="n">03</span>Try it: the simulated demo</h2>
+  <p class="sub">Eight fake screenshots, drawn live on canvas. Type any word that appears in one — the library filters instantly, exactly like gyotaku's search box. All content below is simulated.</p>
+  <div class="searchbox">
+    <input id="demoSearch" type="text" inputmode="search" autocomplete="off" autocapitalize="off" spellcheck="false"
+      placeholder="Type a word from any screenshot…" aria-label="Search simulated screenshots">
+  </div>
+  <div class="count" id="demoCount">8 of 8 screenshots</div>
+  <div class="shotgrid" id="shotGrid"></div>
+  <div class="nomatch" id="noMatch">No screenshots contain that. Try "wifi", "banana", "deploy"…</div>
+</section>
+
+<section id="showdown">
+  <h2><span class="n">04</span>The 2026 OCR showdown</h2>
+  <p class="sub">Seven engines, one table. Numbers are directional — drawn from 2026 benchmarks and project docs, linked below — not lab-grade measurements.</p>
+  <div class="tablewrap">
+  <table>
+    <thead>
+      <tr><th>Engine</th><th>Accuracy</th><th>Speed (CPU)</th><th>Model size</th><th>Languages</th><th>Fully offline</th><th>License</th></tr>
+    </thead>
+    <tbody>
+      <tr class="pick">
+        <td><b>PaddleOCR</b> <span class="mono">PP-OCRv5</span><br><span class="stars">★ gyotaku's pick</span></td>
+        <td>~4.5% char error rate; 92.86 OmniDocBench; matches GPT-4o on some OCR tasks at 5M params</td>
+        <td>~1.5–2.5 s per A4 page</td>
+        <td>7.5 MB recognizer (EN) + 84 MB detector</td>
+        <td>109</td>
+        <td class="check">Yes</td>
+        <td>Apache 2.0</td>
+      </tr>
+      <tr>
+        <td><b>Tesseract</b> <span class="mono">5.x</span></td>
+        <td>~18% char error rate on same benchmark; fine on clean print</td>
+        <td>~2–5 s per page</td>
+        <td>~30 MB</td>
+        <td>100+</td>
+        <td class="check">Yes</td>
+        <td>Apache 2.0</td>
+      </tr>
+      <tr>
+        <td><b>EasyOCR</b></td>
+        <td>Good on print; weak on the hard stuff (0.26 edit distance vs 0.07 PaddleOCR on OmniDocBench EN)</td>
+        <td>3–5× slower than PaddleOCR</td>
+        <td>~2 GB install (drags PyTorch)</td>
+        <td>80+</td>
+        <td class="check">Yes</td>
+        <td>Apache 2.0</td>
+      </tr>
+      <tr>
+        <td><b>RapidOCR</b> <span class="mono">(ONNX)</span></td>
+        <td>Same as PaddleOCR — it runs PP-OCR weights</td>
+        <td>Fast on CPU</td>
+        <td>~40–150 MB total, no torch</td>
+        <td>Same as PaddleOCR</td>
+        <td class="check">Yes</td>
+        <td>Apache 2.0</td>
+      </tr>
+      <tr>
+        <td><b>Surya</b> <span class="mono">2</span></td>
+        <td>Best-in-class layout + tables; strong multilingual</td>
+        <td>Slow per page; wants a GPU</td>
+        <td>0.65B params (~1.3 GB+)</td>
+        <td>90+</td>
+        <td class="warn">Yes, but needs GPU</td>
+        <td>OpenRAIL (not fully OSS)</td>
+      </tr>
+      <tr>
+        <td><b>Apple Vision</b></td>
+        <td>Excellent on Latin scripts</td>
+        <td>Real-time on-device</td>
+        <td>Built into the OS</td>
+        <td>Broad</td>
+        <td class="check">Yes</td>
+        <td>Proprietary, Apple-only</td>
+      </tr>
+      <tr>
+        <td><b>Google ML Kit</b></td>
+        <td>Very good, mobile-tuned</td>
+        <td>Real-time on-device</td>
+        <td>~10s of MB</td>
+        <td>Broad</td>
+        <td class="check">Yes</td>
+        <td>Proprietary, mobile-only</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="src" style="margin-top:10px">Sources: character-error figures from a 2026 community benchmark (github.com/nickrivers1983/opencode-vision); PP-OCRv5 specs, 60k+ stars and GPT-4o-matching claim via abit.ee, Mar 2026; model sizes via huggingface.co/monkt/paddleocr-onnx; Tesseract standing via koncile.ai; Surya/OpenRAIL and VLM rankings via 2026 community research docs; EasyOCR weight from multiple migration notes (2 GB → 150 MB switching to RapidOCR).</p>
+
+  <h2 style="margin-top:30px; font-size:23px;"><span class="n">05</span>So what should <i>you</i> pick?</h2>
+  <p class="sub">There is no "best OCR". There is best OCR <i>for a constraint</i>.</p>
+  <ul class="picklist">
+    <li><b>Offline Linux screenshot search (this app)</b> — PaddleOCR PP-OCRv5. Best accuracy you can run on a laptop CPU, tiny models, 109 languages. Correct pick.</li>
+    <li><b>Smallest binary, zero ML dependencies</b> — Tesseract. Ancient, stable, fine on clean text, falls apart past 5° of rotation.</li>
+    <li><b>Lightest deploy of PaddleOCR-grade quality</b> — RapidOCR via ONNX Runtime. Same PP-OCRv5 weights, ~150 MB instead of a Python ML stack.</li>
+    <li><b>iOS / Android app</b> — Apple Vision / Google ML Kit. Free, on-device, real-time; not available on Linux desktops.</li>
+    <li><b>GPU box, tables + handwriting + complex docs</b> — PaddleOCR-VL or Surya. Vision-language models win on structure, at 1–3B params and GPU cost. Overkill for keyword search.</li>
+    <li><b>Handwriting specifically</b> — none of the CPU engines are great (PaddleOCR ~14% on handwriting in one test); this is where cloud vision APIs or VLMs earn their keep.</li>
+  </ul>
+  <div class="asterisk">The honest caveat on gyotaku's stack: PaddleOCR's <i>models</i> are the right call, but its official <i>runtime</i> is Python. A native Rust/gpui app would most sensibly run the ONNX-exported PP-OCRv5 weights through the <code>ort</code> crate — the RapidOCR playbook, not <code>pip install paddleocr</code>.</div>
+</section>
+
+<section id="stack">
+  <h2><span class="n">06</span>The rest of the stack</h2>
+  <div class="stack">
+    <div class="card">
+      <h4>SQLite FTS5</h4>
+      <p>The index lives in a single file. FTS5 full-text search turns "find the word" into a B-tree lookup — that's the milliseconds.</p>
+    </div>
+    <div class="card">
+      <h4>gpui</h4>
+      <p>Zed editor's Rust GPU UI framework. Native widgets, GPU-composited, no Electron — search-as-you-type stays at 60fps.</p>
+    </div>
+    <div class="card">
+      <h4>fully offline</h4>
+      <p>No server, no API key, no per-page pricing. Your screenshots never leave the disk — the privacy story is the feature.</p>
+    </div>
+  </div>
+</section>
+
+<section id="links">
+  <h2><span class="n">07</span>Go see it</h2>
+  <div class="links">
+    <a href="https://github.com/xevrion/gyotaku">
+      <b>github.com/xevrion/gyotaku</b>
+      <span>Search every screenshot you've ever taken by the text inside it. Native Linux, offline, PaddleOCR + SQLite + gpui. Open source.</span>
+    </a>
+    <a href="https://x.com/xevrion_the1/status/2107047629477847476">
+      <b>The original post by @xevrion_the1</b>
+      <span>"i screenshot everything and can never find anything. so i built ctrl+f for my screenshots folder." — Oct 5, 2026</span>
+    </a>
+  </div>
+</section>
+
+<footer>
+  <p>shotgrep is an unofficial visual explainer. The pipeline walkthrough and search demo are <b>simulated</b> — canvas drawings, not real OCR. Benchmark figures are directional, drawn from the 2026 sources cited above. Built as a single self-contained HTML file.</p>
+</footer>
+
+</div>
+<script>
+(function(){
+'use strict';
+/* ================= helpers ================= */
+function el(id){ return document.getElementById(id); }
+function rr(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+function txt(ctx,s,x,y,font,color,align){
+  ctx.font=font; ctx.fillStyle=color; ctx.textAlign=align||'left'; ctx.textBaseline='alphabetic';
+  ctx.fillText(s,x,y);
+}
+/* A fake screenshot used across the pipeline steps (SIMULATED) */
+var SHOT_LINES=[
+  '$ ./deploy.sh --prod',
+  'Build succeeded in 4.2s',
+  '12 files uploaded'
+];
+function drawShotBase(ctx,x,y,w,h,opts){
+  opts=opts||{};
+  ctx.save();
+  rr(ctx,x,y,w,h,10); ctx.fillStyle='#1c1c1e'; ctx.fill();
+  ctx.fillStyle='#2c2c2e'; rr(ctx,x,y,w,26,10); ctx.fill();
+  ctx.fillRect(x,y+20,w,6);
+  ['#ff5f57','#febc2e','#28c840'].forEach(function(c,i){
+    ctx.beginPath(); ctx.arc(x+16+i*16,y+13,5,0,7); ctx.fillStyle=c; ctx.fill();
+  });
+  txt(ctx,'terminal — deploy',x+58,y+18,'12px ui-monospace,monospace','#a0a0a0');
+  ctx.font='13px ui-monospace,monospace';
+  SHOT_LINES.forEach(function(line,i){
+    var yy=y+52+i*26;
+    ctx.fillStyle= i===0 ? '#7dd87d' : '#e8e8e8';
+    ctx.fillText(line,x+16,yy);
+  });
+  ctx.restore();
+  return {lineY:function(i){ return y+52+i*26; }, left:x+16};
+}
+/* ================= pipeline step-through ================= */
+var STEPS=[
+  {name:'WATCH', cap:'<b>Step 1 — Watch.</b> A folder watcher (Linux <span class="mono">inotify</span>) notices the instant a new screenshot lands in <span class="mono">~/Pictures/Screenshots</span>. Nothing uploads anywhere; the file never leaves your disk.'},
+  {name:'DETECT', cap:'<b>Step 2 — Detect.</b> PP-OCRv5\u2019s text detector scans the image and draws boxes around every text region — tilted, small, or awkward. It finds <i>where</i> words are; it can\u2019t read yet.'},
+  {name:'RECOGNIZE', cap:'<b>Step 3 — Recognize.</b> The recognizer — a 7.5&nbsp;MB model, smaller than a phone photo — reads each box: <span class="mono">"./deploy.sh --prod" @ 99%</span>. This is the PaddleOCR part, and it runs on plain CPU.'},
+  {name:'INDEX', cap:'<b>Step 4 — Index.</b> Every recognized word, its file, and its box coordinates land in <b>SQLite FTS5</b> — a full-text index in a single file. Indexing happens once per screenshot, in the background.'},
+  {name:'SEARCH', cap:'<b>Step 5 — Search.</b> You type <span class="mono">"prod"</span>. FTS5 turns that into a B-tree lookup over the index — milliseconds, offline, no server, no API key.'}
+];
+var step=0, W=680, H=380;
+var cv=el('pipeCanvas'), cx=cv.getContext('2d');
+function drawStep(i){
+  cx.clearRect(0,0,W,H);
+  cx.fillStyle='#101010'; cx.fillRect(0,0,W,H);
+  if(i===0){
+    /* folder + incoming file */
+    cx.fillStyle='#c98f2e';
+    rr(cx,80,120,150,100,8); cx.fill();
+    cx.fillStyle='#a06f1f'; rr(cx,80,105,90,30,8); cx.fill();
+    txt(cx,'Screenshots/',80,250,'15px ui-monospace,monospace','#b8a98f');
+    cx.fillStyle='#242019'; rr(cx,400,60,190,130,8); cx.fill();
+    cx.strokeStyle='#f0a840'; cx.lineWidth=2; rr(cx,400,60,190,130,8); cx.stroke();
+    txt(cx,'shot_4821.png',420,100,'14px ui-monospace,monospace','#f2e9d8');
+    txt(cx,'1920 × 1080',420,126,'12px ui-monospace,monospace','#7d6f5c');
+    txt(cx,'NEW FILE',420,162,'12px ui-monospace,monospace','#f0a840');
+    cx.strokeStyle='#7fc97f'; cx.lineWidth=3;
+    cx.beginPath(); cx.moveTo(300,170); cx.lineTo(385,170); cx.stroke();
+    cx.beginPath(); cx.moveTo(372,160); cx.lineTo(388,170); cx.lineTo(372,180); cx.stroke();
+    txt(cx,'inotify: something landed',300,215,'14px ui-monospace,monospace','#7fc97f');
+  }else if(i===1){
+    var g=drawShotBase(cx,120,60,440,240);
+    cx.strokeStyle='#f0a840'; cx.lineWidth=2.5;
+    SHOT_LINES.forEach(function(line,k){
+      var w=cx.measureText(line).width;
+      cx.save(); cx.font='13px ui-monospace,monospace';
+        var ww=cx.measureText(line).width;
+        cx.strokeRect(g.left-6, g.lineY(k)-17, ww+12, 24);
+      cx.restore();
+    });
+    txt(cx,'3 text regions found',120,330,'14px ui-monospace,monospace','#f0a840');
+  }else if(i===2){
+    var g2=drawShotBase(cx,60,40,300,190);
+    cx.strokeStyle='#f0a840'; cx.lineWidth=2;
+    SHOT_LINES.forEach(function(line,k){
+      cx.save(); cx.font='13px ui-monospace,monospace';
+      var ww=cx.measureText(line).width;
+      cx.strokeRect(g2.left-6, g2.lineY(k)-17, ww+12, 24);
+      cx.restore();
+    });
+    var outs=['"./deploy.sh --prod"  99%','"Build succeeded in 4.2s"  98%','"12 files uploaded"  99%'];
+    txt(cx,'reads out:',400,90,'14px ui-monospace,monospace','#7d6f5c');
+    outs.forEach(function(o,k){
+      cx.fillStyle='#242019'; rr(cx,390,105+k*44,240,34,8); cx.fill();
+      txt(cx,o,402,128+k*44,'13px ui-monospace,monospace','#7fc97f');
+    });
+    txt(cx,'recognizer: 7.5 MB, CPU',400,280,'13px ui-monospace,monospace','#b8a98f');
+    txt(cx,'handwriting: not its sport',400,304,'13px ui-monospace,monospace','#7d6f5c');
+  }else if(i===3){
+    cx.fillStyle='#242019'; rr(cx,60,50,300,280,10); cx.fill();
+    cx.strokeStyle='#3a3227'; cx.lineWidth=1.5; rr(cx,60,50,300,280,10); cx.stroke();
+    txt(cx,'screenshots_fts',80,82,'14px ui-monospace,monospace','#f0a840');
+    var rows=[
+      ['prod','shot_4821.png','(3 boxes)'],
+      ['deploy','shot_4821.png','(1 box)'],
+      ['succeeded','shot_4821.png','(1 box)'],
+      ['banana','shot_4819.png','(2 boxes)']
+    ];
+    rows.forEach(function(r,k){
+      var y=110+k*52;
+      cx.fillStyle= k<3 ? '#f0a84022' : '#ffffff08'; rr(cx,72,y,276,44,8); cx.fill();
+      txt(cx,r[0],84,y+20,'14px ui-monospace,monospace', k<3?'#ffd9a0':'#b8a98f');
+      txt(cx,r[1]+'  '+r[2],84,y+38,'11px ui-monospace,monospace','#7d6f5c');
+    });
+    cx.strokeStyle='#7fc97f'; cx.lineWidth=2.5;
+    cx.beginPath(); cx.moveTo(400,190); cx.lineTo(470,190); cx.stroke();
+    cx.beginPath(); cx.moveTo(458,180); cx.lineTo(474,190); cx.lineTo(458,200); cx.stroke();
+    cx.fillStyle='#1c4d2e'; rr(cx,490,120,140,140,10); cx.fill();
+    cx.strokeStyle='#7fc97f'; rr(cx,490,120,140,140,10); cx.stroke();
+    txt(cx,'SQLite',505,175,'16px ui-monospace,monospace','#7fc97f');
+    txt(cx,'FTS5',505,200,'16px ui-monospace,monospace','#7fc97f');
+    txt(cx,'one file',505,224,'12px ui-monospace,monospace','#7d6f5c');
+    txt(cx,'indexed once, searched forever',390,300,'13px ui-monospace,monospace','#b8a98f');
+  }else{
+    cx.fillStyle='#242019'; rr(cx,90,50,500,64,12); cx.fill();
+    cx.strokeStyle='#f0a840'; cx.lineWidth=2; rr(cx,90,50,500,64,12); cx.stroke();
+    txt(cx,'prod',112,90,'20px ui-monospace,monospace','#f2e9d8');
+    txt(cx,'▍',168,90,'20px ui-monospace,monospace','#f0a840');
+    txt(cx,'0.4 ms',520,90,'14px ui-monospace,monospace','#7fc97f');
+    var res=drawShotBase(cx,90,150,320,190);
+    cx.strokeStyle='#f0a840'; cx.lineWidth=3;
+    cx.save(); cx.font='13px ui-monospace,monospace';
+    var ww=cx.measureText(SHOT_LINES[0]).width;
+    cx.strokeRect(res.left-6, res.lineY(0)-17, ww+12, 24); cx.restore();
+    cx.fillStyle='#f0a840'; rr(cx,440,150,150,190,10); cx.fill();
+    txt(cx,'1 match',455,220,'15px ui-monospace,monospace','#1a1408');
+    txt(cx,'shot_4821.png',455,246,'12px ui-monospace,monospace','#1a1408');
+    txt(cx,'B-tree lookup.',440,320,'13px ui-monospace,monospace','#b8a98f');
+  }
+}
+function renderStep(){
+  drawStep(step);
+  el('pipeCaption').innerHTML=STEPS[step].cap;
+  el('pipeCount').textContent=(step+1)+' / '+STEPS.length;
+  el('pipeName').textContent=STEPS[step].name;
+  el('pipeFill').style.width=((step+1)/STEPS.length*100)+'%';
+  el('pipeBack').disabled = step===0;
+  el('pipeNext').innerHTML = step===STEPS.length-1 ? 'Replay &#8635;' : 'Next &rarr;';
+}
+/* pin the caption height so the buttons never move (measured per skill) */
+function pinHeights(){
+  var probe=el('probe'), cap=el('pipeCaption');
+  var w=cap.clientWidth || cap.parentElement.clientWidth-4;
+  probe.style.width=w+'px';
+  probe.style.font=getComputedStyle(cap).font;
+  var max=0;
+  STEPS.forEach(function(s){
+    probe.innerHTML=s.cap;
+    max=Math.max(max, Math.ceil(probe.getBoundingClientRect().height));
+  });
+  cap.style.minHeight=(max+1)+'px';
+  probe.innerHTML='';
+}
+/* Glide press feel: squash on pointerdown, advance on release */
+function glide(btn, fn){
+  var pressed=false;
+  btn.addEventListener('pointerdown', function(e){
+    e.preventDefault(); pressed=true;
+    btn.style.transition='transform .16s ease-in'; btn.style.transform='scale(.96)';
+  });
+  function release(e){
+    if(!pressed) return; pressed=false;
+    btn.style.transition='transform .3s ease-out'; btn.style.transform='';
+    if(e && e.type==='pointerup' && !btn.disabled) fn();
+  }
+  btn.addEventListener('pointerup', release);
+  btn.addEventListener('pointercancel', function(){ pressed=false; btn.style.transform=''; });
+  btn.addEventListener('pointerleave', function(){ if(pressed){ pressed=false; btn.style.transform=''; } });
+  btn.addEventListener('keydown', function(e){
+    if((e.key==='Enter'||e.key===' ')&&!btn.disabled){ e.preventDefault(); fn(); }
+  });
+}
+function nextStep(){ step=(step+1)%STEPS.length; renderStep(); }
+function prevStep(){ step=(step-1+STEPS.length)%STEPS.length; renderStep(); }
+glide(el('pipeNext'), nextStep);
+glide(el('pipeBack'), prevStep);
+document.addEventListener('keydown', function(e){
+  if(e.target && (e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')) return;
+  if(e.key==='ArrowRight') nextStep();
+  else if(e.key==='ArrowLeft') prevStep();
+});
+window.addEventListener('resize', pinHeights);
+pinHeights(); renderStep();
+
+/* ================= simulated search demo ================= */
+var SHOTS=[
+ {fname:'shot_4821.png', kind:'terminal',
+  text:'./deploy.sh --prod Build succeeded in 4.2s 12 files uploaded to prod-us-west',
+  draw:function(c,W,H){
+    c.fillStyle='#1c1c1e'; c.fillRect(0,0,W,H);
+    c.fillStyle='#2c2c2e'; c.fillRect(0,0,W,22);
+    ['#ff5f57','#febc2e','#28c840'].forEach(function(col,i){ c.beginPath(); c.arc(12+i*13,11,4,0,7); c.fillStyle=col; c.fill(); });
+    c.font='11px ui-monospace,monospace'; c.fillStyle='#e8e8e8';
+    var L=['$ ./deploy.sh --prod','Build succeeded in 4.2s','12 files uploaded'];
+    L.forEach(function(l,i){ c.fillStyle=i===0?'#7dd87d':'#e8e8e8'; c.fillText(l,12,48+i*22); });
+  }},
+ {fname:'shot_4819.png', kind:'tweet',
+  text:'hot take: the best code is the code you delete @devthoughts 2.4K likes',
+  draw:function(c,W,H){
+    c.fillStyle='#f7f5f0'; c.fillRect(0,0,W,H);
+    c.beginPath(); c.arc(28,30,13,0,7); c.fillStyle='#6cb2e0'; c.fill();
+    c.fillStyle='#1a1a1a'; c.font='bold 12px sans-serif'; c.fillText('devthoughts',48,28);
+    c.fillStyle='#777'; c.font='11px sans-serif'; c.fillText('@devthoughts · 2h',48,44);
+    c.fillStyle='#1a1a1a'; c.font='13px sans-serif';
+    c.fillText('hot take: the best code',14,72);
+    c.fillText('is the code you delete',14,92);
+    c.fillStyle='#e06c5c'; c.font='12px sans-serif'; c.fillText('♥ 2.4K',14,120);
+  }},
+ {fname:'shot_4815.png', kind:'code',
+  text:'function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }',
+  draw:function(c,W,H){
+    c.fillStyle='#14161f'; c.fillRect(0,0,W,H);
+    c.fillStyle='#1f2330'; c.fillRect(0,0,W,22);
+    c.fillStyle='#8a93a8'; c.font='11px ui-monospace,monospace'; c.fillText('utils.js',12,15);
+    c.font='11.5px ui-monospace,monospace';
+    var L=[['function','debounce(fn, ms) {'],['let','t;'],['return','(...a) => {']];
+    var cols=['#c792ea','#e8e8e8'];
+    L.forEach(function(l,i){
+      c.fillStyle=cols[0]; c.fillText(l[0],14,48+i*20);
+      c.fillStyle=cols[1]; c.fillText(l[1],14+c.measureText(l[0]).width+6,48+i*20);
+    });
+    c.fillStyle='#5a6378'; c.fillText('// wait for pause',14,112);
+  }},
+ {fname:'shot_4809.png', kind:'recipe',
+  text:"Grandma's banana bread: 3 ripe bananas, 2 cups flour, 1 cup sugar, bake 350F for 60 min",
+  draw:function(c,W,H){
+    c.fillStyle='#fbf7ee'; c.fillRect(0,0,W,H);
+    c.fillStyle='#3a2c1a'; c.font='bold 14px Georgia,serif';
+    c.fillText("Grandma's banana bread",14,30);
+    c.fillStyle='#5a4a33'; c.font='12px sans-serif';
+    ['3 ripe bananas','2 cups flour','1 cup sugar','bake 350°F · 60 min'].forEach(function(l,i){
+      c.fillText('• '+l,14,56+i*20);
+    });
+  }},
+ {fname:'shot_4802.png', kind:'dialog',
+  text:'Error 0x80070057: The parameter is incorrect. Please check your input and try again.',
+  draw:function(c,W,H){
+    c.fillStyle='#e8e4da'; c.fillRect(0,0,W,H);
+    c.fillStyle='#fff'; rr(c,30,20,W-60,100,10); c.fill();
+    c.strokeStyle='#c9c2b2'; c.stroke();
+    c.beginPath(); c.arc(56,48,12,0,7); c.fillStyle='#e06c5c'; c.fill();
+    c.fillStyle='#fff'; c.font='bold 14px sans-serif'; c.fillText('!',52,53);
+    c.fillStyle='#222'; c.font='bold 12px sans-serif'; c.fillText('Error 0x80070057',78,44);
+    c.fillStyle='#555'; c.font='11px sans-serif'; c.fillText('The parameter is incorrect.',78,62);
+    c.fillStyle='#3a6fd8'; rr(c,78,80,90,26,6); c.fill();
+    c.fillStyle='#fff'; c.fillText('OK',112,97);
+  }},
+ {fname:'shot_4795.png', kind:'chat',
+  text:'hey what is the wifi password again? wifi password is: pineapple-pizza-99 all lowercase',
+  draw:function(c,W,H){
+    c.fillStyle='#efe9dc'; c.fillRect(0,0,W,H);
+    function bub(x,y,w,lines,me){
+      var h=lines.length*18+14;
+      c.fillStyle=me?'#bfe3b4':'#ffffff'; rr(c,x,y,w,h,10); c.fill();
+      c.fillStyle='#222'; c.font='12px sans-serif';
+      lines.forEach(function(l,i){ c.fillText(l,x+10,y+20+i*18); });
+      return h;
+    }
+    var h1=bub(14,14,200,['hey what is the wifi','password again?'],false);
+    bub(W-224,14+h1+10,210,['wifi password is:','pineapple-pizza-99'],true);
+  }},
+ {fname:'shot_4788.png', kind:'meme',
+  text:'me explaining to my rubber duck why the bug is actually a feature',
+  draw:function(c,W,H){
+    c.fillStyle='#2b2b2b'; c.fillRect(0,0,W,H);
+    c.fillStyle='#ffd23e'; c.beginPath(); c.arc(W/2,78,34,0,7); c.fill();
+    c.fillStyle='#222'; c.beginPath(); c.arc(W/2-12,70,4,0,7); c.arc(W/2+12,70,4,0,7); c.fill();
+    c.beginPath(); c.arc(W/2,88,12,0.2,Math.PI-0.2); c.strokeStyle='#222'; c.lineWidth=3; c.stroke();
+    c.fillStyle='#fff'; c.font='bold 13px Impact,sans-serif'; c.textAlign='center';
+    c.fillText('ME EXPLAINING TO MY',W/2,26);
+    c.fillText('RUBBER DUCK WHY THE',W/2,124);
+    c.fillText('BUG IS A FEATURE',W/2,142);
+    c.textAlign='left';
+  }},
+ {fname:'shot_4770.png', kind:'ticket',
+  text:'UA 857 SFO to PVG Dec 3 boarding 10:45 AM seat 14A confirmation FB6RCX',
+  draw:function(c,W,H){
+    c.fillStyle='#0f2a52'; c.fillRect(0,0,W,H);
+    c.fillStyle='#fff'; rr(c,14,14,W-28,H-28,10); c.fill();
+    c.fillStyle='#0f2a52'; c.font='bold 16px sans-serif'; c.fillText('UA 857',28,48);
+    c.font='13px sans-serif'; c.fillStyle='#333';
+    c.fillText('SFO  →  PVG',28,72);
+    c.fillText('Dec 3 · Boarding 10:45 AM',28,94);
+    c.fillStyle='#0f2a52'; c.font='bold 13px sans-serif';
+    c.fillText('Seat 14A',28,120);
+    c.fillStyle='#777'; c.font='11px ui-monospace,monospace'; c.fillText('FB6RCX',W-90,120);
+  }}
+];
+var grid=el('shotGrid');
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function excerpt(text,q){
+  if(!q) return esc(text.slice(0,64))+(text.length>64?'…':'');
+  var lt=text.toLowerCase(), lq=q.toLowerCase();
+  var i=lt.indexOf(lq);
+  if(i<0) return esc(text.slice(0,64));
+  var a=Math.max(0,i-28), b=Math.min(text.length,i+lq.length+28);
+  var out=esc(text.slice(a,b));
+  var mi=out.toLowerCase().indexOf(lq);
+  out=out.slice(0,mi)+'<mark>'+out.slice(mi,mi+lq.length)+'</mark>'+out.slice(mi+lq.length);
+  return (a>0?'…':'')+out+(b<text.length?'…':'');
+}
+function renderShots(){
+  grid.innerHTML='';
+  var q=el('demoSearch').value.trim();
+  var shown=0;
+  SHOTS.forEach(function(s){
+    var hit = !q || s.text.toLowerCase().indexOf(q.toLowerCase())>=0;
+    var d=document.createElement('div');
+    d.className='shot'+(hit?'':' hidden');
+    var cvs=document.createElement('canvas');
+    cvs.width=720; cvs.height=420;
+    var ctx=cvs.getContext('2d'); ctx.scale(2,2);
+    s.draw(ctx,360,210);
+    d.appendChild(cvs);
+    var fn=document.createElement('div'); fn.className='fname'; fn.textContent=s.fname; d.appendChild(fn);
+    var ex=document.createElement('div'); ex.className='excerpt'; ex.innerHTML=excerpt(s.text,q); d.appendChild(ex);
+    grid.appendChild(d);
+    if(hit) shown++;
+  });
+  el('demoCount').textContent=shown+' of '+SHOTS.length+' screenshots';
+  el('noMatch').style.display = shown===0 ? 'block':'none';
+}
+el('demoSearch').addEventListener('input', renderShots);
+renderShots();
+})();
+</script>
+</body>
+</html>

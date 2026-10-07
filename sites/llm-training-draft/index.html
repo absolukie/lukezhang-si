@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How an LLM Learns, Step by Step: luke's blog</title>
+<meta name="description" content="Training a large language model, explained from the ground up: tokens, embeddings, attention, next-token loss, gradient descent, scale, fine-tuning, RLHF, and sampling. Every step gets an interactive visualizer.">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    min-height: 100%;
+    background: #f6f1e3;
+    color: #2b2b2b;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.7;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 56px 22px 80px; }
+  nav.top { margin-bottom: 40px; font-size: 14px; }
+  nav.top a { color: rgba(43,43,43,0.55); text-decoration: none; }
+  nav.top a:hover { color: #b3352b; }
+  h1 { font-size: 32px; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 8px; }
+  .meta { color: rgba(43,43,43,0.5); font-size: 14px; margin-bottom: 24px; }
+  .verdict { font-size: 17px; color: #2b2b2b; border-left: 3px solid #b3352b;
+    padding: 4px 0 4px 18px; margin: 0 0 28px; line-height: 1.65; }
+  p { margin-bottom: 16px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  p strong, li strong { color: #2b2b2b; }
+  h2 { font-size: 23px; color: #2b2b2b; margin: 44px 0 10px; letter-spacing: -0.01em; }
+  ul { margin: 0 0 16px 20px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  li { margin-bottom: 8px; }
+  a { color: #b3352b; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px;
+    background: rgba(43,43,43,0.07); padding: 1px 6px; border-radius: 5px; }
+  figure { margin: 24px 0 28px; }
+  footer { margin-top: 60px; font-size: 13px; color: rgba(43,43,43,0.35); }
+  footer a { color: rgba(43,43,43,0.6); }
+  .kicker-close { font-size: 19px; font-weight: 700; color: #2b2b2b;
+    border-top: 1px solid rgba(43,43,43,0.15); padding-top: 28px; margin-top: 48px; }
+
+  /* visualizer cards */
+  .viz { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 16px; padding: 20px; margin: 24px 0; }
+  .viz h3 { font-size: 17px; margin-bottom: 4px; color: #2b2b2b; }
+  .viz .sub { font-size: 14px; color: rgba(43,43,43,0.62); margin-bottom: 12px; line-height: 1.55; }
+  .viz label { font-size: 15px; font-weight: 600; display: block; margin: 14px 0 2px; color: #2b2b2b; }
+  .viz input[type=range] { width: 100%; height: 52px; accent-color: #b3352b;
+    touch-action: manipulation; cursor: pointer; margin: 0; }
+  .viz input[type=text], .viz textarea { width: 100%; font-size: 16px; padding: 12px 14px;
+    border: 1px solid rgba(43,43,43,0.25); border-radius: 10px; background: #fff;
+    font-family: inherit; color: #2b2b2b; }
+  .viz input[type=text]:focus, .viz textarea:focus { outline: none; border-color: #b3352b; }
+  .btn { touch-action: manipulation; border: none; background: #b3352b; color: #f6f1e3;
+    border-radius: 10px; padding: 12px 22px; font-size: 15px; font-weight: 700;
+    cursor: pointer; font-family: inherit; margin: 6px 8px 6px 0; }
+  .btn:active { transform: scale(0.97); }
+  .btn.ghost { background: transparent; color: #2b2b2b; border: 2px solid rgba(43,43,43,0.25); }
+  .btn:disabled { opacity: 0.4; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  .chip { touch-action: manipulation; border: 2px solid rgba(43,43,43,0.2); background: transparent;
+    border-radius: 999px; padding: 8px 16px; font-size: 14px; font-weight: 600;
+    cursor: pointer; color: #2b2b2b; font-family: inherit; }
+  .chip.on { border-color: #b3352b; color: #b3352b; background: rgba(179,53,43,0.07); }
+  .chip:active { transform: scale(0.96); }
+  .readout { display: flex; justify-content: space-between; align-items: baseline; margin: 8px 0; gap: 10px; }
+  .big { font-size: 30px; font-weight: 800; color: #b3352b; font-variant-numeric: tabular-nums; }
+  .cap { font-size: 13.5px; color: rgba(43,43,43,0.6); margin-top: 10px; line-height: 1.55; }
+  .insight { background: rgba(179,53,43,0.07); border: 1px solid rgba(179,53,43,0.25);
+    border-radius: 12px; padding: 12px 16px; margin-top: 14px; font-size: 15px;
+    color: #2b2b2b; min-height: 54px; line-height: 1.55; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin: 7px 0; }
+  .bar-row .w { width: 92px; font-size: 14px; text-align: right; flex: none;
+    font-family: ui-monospace, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; }
+  .bar-track { flex: 1; height: 22px; background: rgba(43,43,43,0.08); border-radius: 6px;
+    overflow: hidden; }
+  .bar-fill { height: 100%; background: #b3352b; border-radius: 6px;
+    transition: width 320ms cubic-bezier(.2,.7,.2,1); }
+  .bar-fill.dim { background: rgba(43,43,43,0.25); }
+  .bar-fill.truth { background: #2e7d32; }
+  .bar-pct { width: 56px; font-size: 13px; font-variant-numeric: tabular-nums;
+    color: rgba(43,43,43,0.7); flex: none; text-align: right; }
+  .tok-chip { display: inline-block; padding: 5px 11px; margin: 3px; border-radius: 8px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; white-space: pre; }
+  .tok-a { background: rgba(59,130,196,0.16); border: 1px solid rgba(59,130,196,0.45); }
+  .tok-b { background: rgba(224,123,42,0.14); border: 1px solid rgba(224,123,42,0.5); }
+  .tok-out { line-height: 2.1; margin: 12px 0 4px; }
+  .vec-strip { display: flex; gap: 4px; margin: 12px 0 4px; }
+  .vec-cell { flex: 1; height: 34px; border-radius: 5px; border: 1px solid rgba(43,43,43,0.15); }
+  .stage-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 4px 0 12px; }
+  @media (max-width: 560px) { .stage-grid { grid-template-columns: 1fr; } }
+  .stage { border: 2px solid rgba(43,43,43,0.16); border-radius: 14px; padding: 16px;
+    background: #fffdf6; cursor: pointer; touch-action: manipulation;
+    transition: border-color 160ms, transform 120ms; }
+  .stage:active { transform: scale(0.98); }
+  .stage.on { border-color: #b3352b; background: rgba(179,53,43,0.05); }
+  .stage h4 { font-size: 16px; margin-bottom: 4px; }
+  .stage .num { display: inline-block; width: 24px; height: 24px; border-radius: 50%;
+    background: #b3352b; color: #f6f1e3; font-size: 13px; font-weight: 800;
+    text-align: center; line-height: 24px; margin-right: 8px; }
+  .stage p { font-size: 13.5px; margin: 0; color: rgba(43,43,43,0.7); }
+  .stage-detail { background: rgba(179,53,43,0.06); border-radius: 12px; padding: 16px 18px;
+    font-size: 15px; min-height: 150px; }
+  .stage-detail strong { display: block; font-size: 15px; margin-bottom: 4px; }
+  .stage-detail .row { display: flex; gap: 8px; margin-bottom: 8px; }
+  .stage-detail .k { flex: none; width: 86px; font-weight: 700; font-size: 13.5px; color: #b3352b; }
+  .stage-detail .v { font-size: 14.5px; color: rgba(43,43,43,0.85); }
+  canvas.gd { width: 100%; display: block; border-radius: 10px; background: #fff;
+    border: 1px solid rgba(43,43,43,0.12); touch-action: manipulation; }
+  .attn-sent { line-height: 2.3; margin: 10px 0 6px; }
+  .attn-word { touch-action: manipulation; display: inline-block; padding: 4px 10px; margin: 2px;
+    border-radius: 8px; border: 2px solid rgba(43,43,43,0.18); background: transparent;
+    font-size: 14.5px; cursor: pointer; font-family: inherit; color: #2b2b2b; }
+  .attn-word.on { border-color: #b3352b; color: #b3352b; background: rgba(179,53,43,0.07); }
+  .attn-word:active { transform: scale(0.96); }
+  .samp-out { font-family: ui-monospace, Menlo, monospace; font-size: 14.5px; line-height: 1.9;
+    background: rgba(43,43,43,0.05); border-radius: 10px; padding: 12px 14px; margin-top: 12px;
+    min-height: 76px; }
+  .samp-out .ctx { color: rgba(43,43,43,0.55); }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+  @media (max-width: 560px) { .stat-grid { grid-template-columns: 1fr 1fr; } }
+  .stat-cell { background: rgba(43,43,43,0.045); border-radius: 10px; padding: 10px 12px; }
+  .stat-cell .n { font-size: 20px; font-weight: 800; color: #2b2b2b; font-variant-numeric: tabular-nums; }
+  .stat-cell .l { font-size: 12.5px; color: rgba(43,43,43,0.6); }
+  .note-box { border-left: 3px solid #3b82c4; padding: 2px 0 2px 16px; margin: 18px 0;
+    font-size: 15px; color: rgba(43,43,43,0.8); }
+  @media (prefers-reduced-motion: reduce) {
+    .bar-fill { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="top"><a href="/blog/">&larr; blog</a></nav>
+  <h1>How an LLM Learns, Step by Step</h1>
+  <div class="meta">October 7, 2026 &middot; llms &middot; machine learning</div>
+
+  <p class="verdict">Training a language model is one game played trillions of times: cover up the next word, guess it, measure how surprised you were, and adjust. Everything else, tokens, attention, gradient descent, RLHF, is machinery that makes that game work at scale.</p>
+
+  <p>People talk about training like it is magic or like it is just math. It is neither. It is a very large, very patient student doing fill-in-the-blank quizzes, checking the answer key, and nudging its brain a tiny bit after every single question. Do that a few trillion times and the guessing starts to look like thinking.</p>
+  <p>This post walks through every step, and every step has something you can touch. Type into the tokenizer. Poke the attention weights. Break gradient descent with a bad learning rate on purpose. By the end you will have run a miniature version of the whole pipeline in your browser.</p>
+
+  <h2>1. The model never sees words. It sees tokens.</h2>
+  <p>Before training starts, all text gets chopped into pieces called <strong>tokens</strong>. A token can be a whole common word ("the"), a chunk of a word ("ing"), or a single character. The model has a fixed vocabulary, usually 50,000 to 200,000 tokens, and everything it ever reads or writes is built from those pieces.</p>
+  <p>Why not just use words? English has over a million of them, and new ones appear daily. Tokens are the compromise: common words get their own token, rare words get split into pieces. The splits are learned from data by an algorithm called <strong>BPE</strong> (byte pair encoding): start with single characters, then repeatedly merge the most common adjacent pair, until the vocabulary is full.</p>
+
+  <div class="viz">
+    <h3>The tokenizer, live</h3>
+    <p class="sub">A toy tokenizer with a tiny vocabulary, using the same greedy longest-match idea as the real ones. Type anything and watch it chop. Spaces stick to the word after them, like real tokenizers do.</p>
+    <input type="text" id="tok-in" value="Tokenizers are weirdly satisfying" aria-label="Text to tokenize" maxlength="120">
+    <div class="tok-out" id="tok-out"></div>
+    <div class="readout">
+      <span id="tok-count" style="font-size:15px; font-weight:700;">0 tokens</span>
+      <span id="tok-ratio" style="font-size:14px; color:rgba(43,43,43,0.6);">0 chars per token</span>
+    </div>
+    <p class="cap">Try a rare word like "flibbertigibbet" and watch it shatter into pieces. Common words survive whole because the vocabulary was built from what appears most.</p>
+  </div>
+
+  <p>Two details that matter later. First, every token becomes an ID number, and the model only ever works with those numbers. Second, token counts are the currency of the whole field: context windows, pricing, and training budgets are all measured in tokens, not words. A rough rule: 1 token is about 3/4 of an English word.</p>
+
+  <h2>2. Tokens become lists of numbers</h2>
+  <p>A token ID is just a label. The model needs something it can do math on, so each token gets an <strong>embedding</strong>: a list of a few hundred or thousand numbers, its coordinates in meaning-space. These numbers start random. Training moves them around until words used in similar ways end up near each other.</p>
+  <p>Tap two words below. The strip shows one's embedding as colors (darker blue means a bigger number). The similarity score is the <strong>cosine similarity</strong>: 1 means pointing the same way, 0 means unrelated, and the model literally uses this geometry to reason.</p>
+
+  <div class="viz">
+    <h3>Word vectors you can poke</h3>
+    <p class="sub">Toy 10-number embeddings, hand-made to show the idea. Tap any word, then tap a second one to compare.</p>
+    <div class="chips" id="emb-chips"></div>
+    <div class="vec-strip" id="emb-vec"></div>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);" id="emb-pair">Tap two words</span>
+      <span class="big" id="emb-sim"></span>
+    </div>
+    <p class="cap">Real embeddings have thousands of numbers and are learned, not hand-made. But the trick is the same: meaning becomes geometry, and similar meanings sit near each other.</p>
+  </div>
+
+  <h2>3. Tokens look at each other: attention</h2>
+  <p>Here is the famous part. A word's meaning depends on context, so before the model decides anything, every token gets to <strong>look at</strong> every other token and pull in information. That is <strong>attention</strong>: for each token, a set of weights saying how much each other token matters right now.</p>
+  <p>The classic example: "The animal did not cross the street because it was too tired." What does "it" refer to? The model learns to point "it" back at "animal". Tap a word in the sentence and see where its attention goes. These weights are illustrative, but the mechanism is exactly the real one: weighted mixing, recomputed fresh for every word in every sentence.</p>
+
+  <div class="viz">
+    <h3>Attention, under your finger</h3>
+    <p class="sub">Tap any word. The bars show how much of each other word gets mixed into it.</p>
+    <div class="attn-sent" id="attn-sent"></div>
+    <div id="attn-bars"></div>
+    <p class="cap">Real models run many attention heads in parallel, each learning a different kind of relationship: grammar, coreference, position, and patterns with no English name. This demo shows one head's job.</p>
+  </div>
+
+  <p>One more detail: attention is why these models are called <strong>transformers</strong>. The architecture is stacks of identical blocks, and each block is mostly "attention, then a small neural net, repeated." A big model just stacks that block 100 times.</p>
+
+  <h2>4. The only game: predict the next token</h2>
+  <p>After attention and the small neural nets (called <strong>MLPs</strong>) have done their mixing, the model outputs a score for every token in its vocabulary: how likely is each one to come next? Those scores are called <strong>logits</strong>, and they get squashed into probabilities that sum to 1 by a function called <strong>softmax</strong>.</p>
+  <p>Training is one repeated quiz: hide the next token, make the model guess, then score it. The score is the <strong>loss</strong>, and for this game it has a beautifully simple form called <strong>cross-entropy</strong>: negative log of the probability the model gave to the correct answer. Gave the truth 72%? Loss is small. Gave it 6%? Loss is large. The model's whole education is "be less surprised, on average, over trillions of quizzes."</p>
+
+  <div class="viz">
+    <h3>The surprise meter</h3>
+    <p class="sub">Pick a quiz. The bars are the model's guesses. Reveal the truth to see how surprised it was, then take a training step and watch the surprise shrink.</p>
+    <div class="chips" id="loss-chips"></div>
+    <p style="font-size:16px; margin:6px 0;" id="loss-ctx"></p>
+    <div id="loss-bars"></div>
+    <div>
+      <button class="btn" id="loss-reveal">Reveal the truth</button>
+      <button class="btn ghost" id="loss-step" disabled>Take one training step</button>
+    </div>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Surprise (loss)</span>
+      <span class="big" id="loss-val">?</span>
+    </div>
+    <div class="insight" id="loss-insight">Reveal the truth to measure the surprise.</div>
+    <p class="cap">Cross-entropy loss = -log(probability given to the correct token). A real training step nudges millions of weights using calculus. This demo just nudges the probabilities directly, but the effect is the same: the truth gets less surprising.</p>
+  </div>
+  <h2>5. Learning is rolling downhill</h2>
+  <p>So the model gets a loss score on every quiz. How does it improve? Every weight in the model gets a tiny adjustment in the direction that would have lowered the loss. Computing those directions for millions of weights at once is <strong>backpropagation</strong>: the chain rule from calculus, applied mechanically, layer by layer, backwards through the network.</p>
+  <p>Then comes <strong>gradient descent</strong>: move each weight a little bit downhill. The size of the step is the <strong>learning rate</strong>, and picking it is the oldest drama in machine learning. Too small and training crawls. Too big and the model bounces around or blows up entirely. Try it below. This is a one-weight model on a simple valley, but the rule is identical in 100 billion dimensions.</p>
+
+  <div class="viz">
+    <h3>Break gradient descent on purpose</h3>
+    <p class="sub">One weight, one valley. Set the learning rate, then run and watch the loss.</p>
+    <label for="lr">Learning rate: <span id="lr-val">0.40</span></label>
+    <input type="range" id="lr" min="2" max="120" value="40" aria-label="Learning rate">
+    <div>
+      <button class="btn" id="gd-run">Run</button>
+      <button class="btn ghost" id="gd-reset">Reset</button>
+    </div>
+    <canvas class="gd" id="gd-canvas" height="170" style="margin-top:12px;"></canvas>
+    <p class="cap">Top: the valley and the weight rolling in it. Bottom: loss over time, log scale. Real training uses fancier optimizers (usually Adam), but they are all downhill-rolling with better shock absorbers.</p>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Step <b id="gd-step">0</b> &middot; loss <b id="gd-loss">10.24</b></span>
+    </div>
+    <div class="insight" id="gd-insight">Press Run. A learning rate around 0.4 glides to the bottom.</div>
+  </div>
+
+  <div class="note-box">Real training does not update after every quiz. It averages the gradient over a <strong>batch</strong>, thousands of quizzes at once, then takes one step. Smoother signal, and GPUs love doing the same math on many examples in parallel.</div>
+
+  <h2>6. Why scale wins</h2>
+  <p>Here is the uncomfortable truth the field learned around 2020: the same algorithm, just bigger, keeps getting smarter. Bigger model, more data, more compute. The <strong>scaling laws</strong> say loss falls predictably as you scale any of the three, which is why training runs now cost tens of millions of dollars.</p>
+  <p>The sharpest version of this is <strong>Chinchilla</strong> (DeepMind, 2022). For a fixed compute budget, the best results come from splitting it evenly: half on a bigger model, half on more training data. The rule of thumb that fell out: train on about <strong>20 tokens per parameter</strong>. Drag the slider and feel the numbers.</p>
+
+  <div class="viz">
+    <h3>The Chinchilla slider</h3>
+    <p class="sub">Pick a model size. The readouts follow the 20-tokens-per-parameter rule, with compute estimated as 6 &times; parameters &times; tokens.</p>
+    <div class="chips" id="scale-chips"></div>
+    <label for="pscale">Parameters: <span id="pscale-val">70B</span></label>
+    <input type="range" id="pscale" min="0" max="100" value="62" aria-label="Model size in parameters">
+    <div class="stat-grid">
+      <div class="stat-cell"><div class="n" id="st-tokens">1.4T</div><div class="l">training tokens (Chinchilla-optimal)</div></div>
+      <div class="stat-cell"><div class="n" id="st-flops">5.9e23</div><div class="l">FLOPs of training compute</div></div>
+      <div class="stat-cell"><div class="n" id="st-books">10.8M</div><div class="l">books of text, roughly</div></div>
+      <div class="stat-cell"><div class="n" id="st-note">?</div><div class="l" id="st-note-l">vs a famous model</div></div>
+    </div>
+    <p class="cap">GPT-3 (175B params) trained on only 300B tokens, far below its Chinchilla-optimal ~3.5T. It was undertrained by this rule, which is part of why smaller, longer-trained models like Chinchilla beat it. Token counts are approximate public figures.</p>
+  </div>
+
+  <h2>7. Three stages: pretrain, fine-tune, RLHF</h2>
+  <p>Next-token prediction on internet text produces a model that can continue text, but it is not an assistant. It will happily continue your question with another question. Turning it into something helpful takes two more stages. Tap each one.</p>
+
+  <div class="viz">
+    <h3>From text predictor to assistant</h3>
+    <p class="sub">Three stages, three datasets, three objectives. Each one builds on the last.</p>
+    <div class="stage-grid" id="stage-grid">
+      <div class="stage on" data-s="0"><h4><span class="num">1</span>Pretraining</h4><p>The long, expensive part.</p></div>
+      <div class="stage" data-s="1"><h4><span class="num">2</span>Fine-tuning</h4><p>Teach it to follow instructions.</p></div>
+      <div class="stage" data-s="2"><h4><span class="num">3</span>RLHF</h4><p>Teach it human preferences.</p></div>
+    </div>
+    <div class="stage-detail" id="stage-detail"></div>
+    <p class="cap">Modern RLHF is often closer to plain reinforcement learning on verifiable rewards (math, code tests) than to the original human-feedback recipe, but the three-stage shape is the same.</p>
+  </div>
+
+  <h2>8. Picking the word: temperature and top-p</h2>
+  <p>Training is over. Now you ask a question and the model must actually <em>choose</em> a token. It has probabilities, not a decision procedure, so generation is sampling: roll a weighted die, append the word, repeat. Two knobs control the personality of that die.</p>
+  <p><strong>Temperature</strong> sharpens or flattens the distribution before sampling. Near zero, the top choice always wins: boring, safe, deterministic. High, and unlikely words start winning: creative, weird, unhinged. <strong>Top-p</strong> (nucleus sampling) chops off the long tail entirely: only sample from the smallest set of words whose probabilities add up to p.</p>
+
+  <div class="viz">
+    <h3>The sampling sandbox</h3>
+    <p class="sub">A toy 8-word vocabulary after "The cat sat on the". Set the knobs, then sample and watch which words survive.</p>
+    <label for="temp">Temperature: <span id="temp-val">1.00</span></label>
+    <input type="range" id="temp" min="10" max="200" value="100" aria-label="Temperature">
+    <label for="topp">Top-p: <span id="topp-val">1.00</span></label>
+    <input type="range" id="topp" min="10" max="100" value="100" aria-label="Top-p">
+    <div id="samp-bars"></div>
+    <div>
+      <button class="btn" id="samp-go">Sample one word</button>
+      <button class="btn ghost" id="samp-reset">Reset</button>
+    </div>
+    <div class="samp-out"><span class="ctx">The cat sat on the</span> <span id="samp-words"></span></div>
+    <p class="cap">Greyed-out words were cut by top-p. Real models sample from 50k+ tokens, so top-p matters even more there: it throws away the junk tail before the die is rolled.</p>
+  </div>
+
+  <p class="kicker-close">It never understands. It just gets less surprised, trillions of times, until the guessing looks like thinking.</p>
+
+  <footer>Words, diagrams, and toy models are mine. Built to learn in public.</footer>
+</div>
+
+<script>
+(function () {
+  /* ---- 1. toy tokenizer ---- */
+  var WORDS = ("the a an and or of to in is it you that he was for on are as with his they at be " +
+  "this have from one had by but not what all were we when your can said there use each which " +
+  "she do how their if will up other about out many then them these so some her would make like " +
+  "him into time has look two more go see no way could people my than first been who its now find " +
+  "long down day did get come made may part over new take only little work know place year live " +
+  "back give most very after thing our just name good man think say great where help through much " +
+  "before line right too mean old any same tell want show also around three small set put end does " +
+  "another well large must big even such because turn here why ask went read need different home " +
+  "move try kind hand again change off play air away animal house point page letter answer found " +
+  "study still learn should world high every near add food between own below country plant last " +
+  "school keep tree never start city light thought head under story saw left few while along might " +
+  "close something seem next hard open example begin life always those both paper together got " +
+  "group often run until side feet car mile night walk white sea began grow took river four carry " +
+  "state once book hear stop without second idea enough eat face watch far really almost let above " +
+  "girl sometimes mountain cut young talk soon list song being leave family").split(" ");
+  var MLW = "token tokens tokenizer model models train training trained neural network attention embed embedding embeddings layer layers predict prediction learns learning data text word words machine computer language vector vectors number numbers weight weights loss step steps brain".split(" ");
+  var SUBS = "ing ed es ly tion sion ness ment un re pre dis able ible ous ive ful less er est th ch sh wh ph ck str qu oo ee ea ou ow ai ar or al il".split(" ");
+  var CAPS = "The A An And To In It You He I We This That".split(" ");
+  var VOCAB = WORDS.concat(MLW, SUBS, CAPS);
+  var c;
+  for (c = 32; c < 127; c++) VOCAB.push(String.fromCharCode(c));
+  VOCAB.sort(function (a, b) { return b.length - a.length; });
+  function tokenize(text) {
+    var toks = [], i = 0, k, v;
+    while (i < text.length) {
+      var best = null;
+      for (k = 0; k < VOCAB.length; k++) {
+        v = VOCAB[k];
+        if (text.substr(i, v.length) === v) { best = v; break; }
+      }
+      if (best === null) best = text[i];
+      toks.push(best);
+      i += best.length;
+    }
+    return toks;
+  }
+  function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  var inp = document.getElementById("tok-in"), out = document.getElementById("tok-out"),
+      cnt = document.getElementById("tok-count"), rat = document.getElementById("tok-ratio");
+  function renderTok() {
+    var text = inp.value, toks = tokenize(text), merged = [], pend = "", i, h = "";
+    for (i = 0; i < toks.length; i++) {
+      if (toks[i] === " ") { pend = " "; continue; }
+      merged.push(pend + toks[i]); pend = "";
+    }
+    if (pend) merged.push(pend);
+    for (i = 0; i < merged.length; i++) {
+      h += '<span class="tok-chip ' + (i % 2 ? "tok-b" : "tok-a") + '">' + esc(merged[i]) + "</span>";
+    }
+    out.innerHTML = h || '<span style="font-size:14px;color:rgba(43,43,43,0.4);">Type something above</span>';
+    cnt.textContent = merged.length + " token" + (merged.length === 1 ? "" : "s");
+    rat.textContent = text.length ? (text.length / merged.length).toFixed(1) + " chars per token" : "0 chars per token";
+  }
+  inp.addEventListener("input", renderTok);
+  renderTok();
+})();
+
+(function () {
+  /* ---- 2. embeddings ---- */
+  var V = {
+    king:  [0.9,0.8,0.0,0.9,0.0,0.6,0.2,0.1,0.5,0.3],
+    queen: [0.9,0.0,0.8,0.9,0.0,0.5,0.2,0.1,0.5,0.3],
+    man:   [0.1,0.8,0.0,0.9,0.0,0.5,0.3,0.2,0.4,0.2],
+    woman: [0.1,0.0,0.8,0.9,0.0,0.5,0.3,0.2,0.4,0.2],
+    dog:   [0.0,0.4,0.4,0.0,0.9,0.4,0.7,0.6,0.1,0.5],
+    cat:   [0.0,0.4,0.4,0.0,0.9,0.2,0.7,0.6,0.1,0.5]
+  };
+  var names = Object.keys(V), selA = null, selB = null;
+  var chipsEl = document.getElementById("emb-chips"), vecEl = document.getElementById("emb-vec"),
+      pairEl = document.getElementById("emb-pair"), simEl = document.getElementById("emb-sim");
+  function cos(a, b) {
+    var d = 0, na = 0, nb = 0, i;
+    for (i = 0; i < a.length; i++) { d += a[i]*b[i]; na += a[i]*a[i]; nb += b[i]*b[i]; }
+    return d / Math.sqrt(na * nb);
+  }
+  names.forEach(function (n) {
+    var b = document.createElement("button");
+    b.className = "chip"; b.textContent = n; b.setAttribute("data-n", n);
+    b.addEventListener("click", function () {
+      if (selA === null || (selA !== null && selB !== null)) { selA = n; selB = null; }
+      else if (n !== selA) { selB = n; }
+      renderEmb();
+    });
+    chipsEl.appendChild(b);
+  });
+  function renderEmb() {
+    var btns = chipsEl.querySelectorAll(".chip"), i;
+    for (i = 0; i < btns.length; i++) {
+      var n = btns[i].getAttribute("data-n");
+      btns[i].classList.toggle("on", n === selA || n === selB);
+    }
+    var show = selA || names[0], vec = V[show], h = "";
+    for (i = 0; i < vec.length; i++) {
+      h += '<div class="vec-cell" style="background:rgba(59,130,196,' + vec[i].toFixed(2) + ')" title="' + vec[i].toFixed(2) + '"></div>';
+    }
+    vecEl.innerHTML = h;
+    if (selA && selB) {
+      pairEl.textContent = selA + " vs " + selB;
+      simEl.textContent = cos(V[selA], V[selB]).toFixed(2);
+    } else {
+      pairEl.textContent = selA ? "Showing " + selA + ". Tap a second word to compare." : "Tap two words";
+      simEl.textContent = "";
+    }
+  }
+  renderEmb();
+})();
+
+(function () {
+  /* ---- 3. attention ---- */
+  var words = ["The","animal","did","not","cross","the","street","because","it","was","tired"];
+  var HAND = {
+    8: {1:0.55, 6:0.14, 10:0.12, 9:0.06, 7:0.05},
+    10: {10:0.45, 9:0.22, 8:0.12, 1:0.08},
+    1: {1:0.55, 0:0.18, 4:0.10},
+    4: {4:0.40, 6:0.24, 1:0.16, 3:0.08},
+    6: {6:0.52, 5:0.18, 4:0.12}
+  };
+  function weights(q) {
+    var n = words.length, w = [], i, rest = (1 - 0.5 - 0.2 - 0.12) / (n - 3);
+    for (i = 0; i < n; i++) w[i] = rest;
+    w[q] = 0.5;
+    if (q > 0) w[q-1] = 0.2;
+    if (q < n-1) w[q+1] = 0.12;
+    var h = HAND[q];
+    if (h) {
+      var hs = 0, rem = 0, ds = 0, k;
+      for (k in h) hs += h[k];
+      rem = 1 - hs;
+      for (i = 0; i < n; i++) if (!(i in h)) ds += w[i];
+      for (i = 0; i < n; i++) w[i] = (i in h) ? h[i] : (ds > 0 ? w[i] / ds * rem : 0);
+    }
+    return w;
+  }
+  var sentEl = document.getElementById("attn-sent"), barsEl = document.getElementById("attn-bars"),
+      q = 8, btns = [];
+  words.forEach(function (wd, i) {
+    var b = document.createElement("button");
+    b.className = "attn-word" + (i === q ? " on" : "");
+    b.textContent = wd;
+    b.addEventListener("click", function () { q = i; renderAttn(); });
+    sentEl.appendChild(b); btns.push(b);
+  });
+  function renderAttn() {
+    var i;
+    for (i = 0; i < btns.length; i++) btns[i].classList.toggle("on", i === q);
+    var w = weights(q), h = "";
+    for (i = 0; i < words.length; i++) {
+      var pct = Math.round(w[i] * 100);
+      h += '<div class="bar-row"><div class="w">' + words[i] + '</div>' +
+           '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>' +
+           '<div class="bar-pct">' + pct + '%</div></div>';
+    }
+    barsEl.innerHTML = h;
+  }
+  renderAttn();
+})();
+
+(function () {
+  /* ---- 4. surprise meter ---- */
+  var QUIZZES = [
+    { ctx: "The capital of France is ___", truth: "Paris",
+      cands: [["Paris",0.72],["Lyon",0.08],["Nice",0.05],["London",0.04],["Berlin",0.03],["Madrid",0.02],["Rome",0.02],["other",0.04]],
+      note: "The model gave Paris 72%. Surprise is low, so the lesson is small. Easy quizzes teach little." },
+    { ctx: "The fastest land animal is ___", truth: "cheetah",
+      cands: [["lion",0.42],["tiger",0.18],["leopard",0.12],["horse",0.08],["cheetah",0.06],["gazelle",0.05],["other",0.09]],
+      note: "The model gave the truth only 6%. Surprise is high, so the lesson is big. Hard quizzes do the teaching." },
+    { ctx: "Water boils at 100 degrees ___", truth: "Celsius",
+      cands: [["Celsius",0.81],["Fahrenheit",0.09],["Kelvin",0.04],["other",0.06]],
+      note: "The model was 81% sure and right. Almost no surprise, almost no learning." }
+  ];
+  var qi = 0, revealed = false, probs = [], steps = 0;
+  var chipsEl = document.getElementById("loss-chips"), ctxEl = document.getElementById("loss-ctx"),
+      barsEl = document.getElementById("loss-bars"), valEl = document.getElementById("loss-val"),
+      insEl = document.getElementById("loss-insight"),
+      revBtn = document.getElementById("loss-reveal"), stepBtn = document.getElementById("loss-step");
+  QUIZZES.forEach(function (qz, i) {
+    var b = document.createElement("button");
+    b.className = "chip" + (i === 0 ? " on" : "");
+    b.textContent = "Quiz " + (i + 1);
+    b.addEventListener("click", function () { setQuiz(i); });
+    chipsEl.appendChild(b);
+  });
+  function pTruth() {
+    var qz = QUIZZES[qi], i;
+    for (i = 0; i < qz.cands.length; i++) if (qz.cands[i][0] === qz.truth) return probs[i];
+    return 0;
+  }
+  function setQuiz(i) {
+    qi = i; revealed = false; steps = 0;
+    probs = QUIZZES[i].cands.map(function (c) { return c[1]; });
+    stepBtn.disabled = true; revBtn.disabled = false;
+    var btns = chipsEl.querySelectorAll(".chip"), k;
+    for (k = 0; k < btns.length; k++) btns[k].classList.toggle("on", k === i);
+    renderLoss();
+  }
+  function renderLoss() {
+    var qz = QUIZZES[qi], h = "", i, pct;
+    ctxEl.innerHTML = "<strong>Quiz:</strong> " + qz.ctx;
+    for (i = 0; i < qz.cands.length; i++) {
+      pct = Math.round(probs[i] * 100);
+      var cls = "bar-fill" + (revealed && qz.cands[i][0] === qz.truth ? " truth" : "");
+      h += '<div class="bar-row"><div class="w">' + qz.cands[i][0] + '</div>' +
+           '<div class="bar-track"><div class="' + cls + '" style="width:' + pct + '%"></div></div>' +
+           '<div class="bar-pct">' + pct + '%</div></div>';
+    }
+    barsEl.innerHTML = h;
+    if (!revealed) {
+      valEl.textContent = "?";
+      insEl.textContent = "Reveal the truth to measure the surprise.";
+    } else {
+      var pt = pTruth(), loss = -Math.log(pt);
+      valEl.textContent = loss.toFixed(2);
+      insEl.textContent = steps === 0 ? qz.note + " Surprise is measured in nats: -log(" + pt.toFixed(2) + ") = " + loss.toFixed(2) + "."
+        : "After " + steps + " training step" + (steps === 1 ? "" : "s") + ", the truth has " +
+          Math.round(pt * 100) + "% and surprise fell to " + loss.toFixed(2) + ". Real training repeats this billions of times.";
+    }
+  }
+  revBtn.addEventListener("click", function () {
+    revealed = true; revBtn.disabled = true; stepBtn.disabled = false; renderLoss();
+  });
+  stepBtn.addEventListener("click", function () {
+    var qz = QUIZZES[qi], ti = 0, i;
+    for (i = 0; i < qz.cands.length; i++) if (qz.cands[i][0] === qz.truth) ti = i;
+    probs[ti] = probs[ti] + (1 - probs[ti]) * 0.18;
+    var rest = 1 - probs[ti], oldRest = 0;
+    for (i = 0; i < probs.length; i++) if (i !== ti) oldRest += probs[i];
+    for (i = 0; i < probs.length; i++) if (i !== ti) probs[i] = probs[i] / oldRest * rest;
+    steps++;
+    renderLoss();
+  });
+  setQuiz(0);
+})();
+
+(function () {
+  /* ---- 5. gradient descent ---- */
+  var canvas = document.getElementById("gd-canvas"),
+      lrIn = document.getElementById("lr"), lrVal = document.getElementById("lr-val"),
+      runBtn = document.getElementById("gd-run"), resetBtn = document.getElementById("gd-reset"),
+      stepEl = document.getElementById("gd-step"), lossEl = document.getElementById("gd-loss"),
+      insEl = document.getElementById("gd-insight");
+  var W0 = -3.2, w = W0, step = 0, trail = [], running = false, timer = null, done = false, blew = false;
+  function L(x) { return x * x; }
+  function setup() {
+    var r = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, r.width * dpr); canvas.height = 170 * dpr;
+    var g = canvas.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return g;
+  }
+  var g = setup();
+  function X(x) { var r = canvas.getBoundingClientRect(); return 16 + (x + 4.5) / 9 * (r.width - 32); }
+  function draw() {
+    var r = canvas.getBoundingClientRect(), W = r.width, H = 170, mid = 108, i;
+    g.clearRect(0, 0, W, H);
+    g.strokeStyle = "rgba(43,43,43,0.15)"; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(0, mid + 2); g.lineTo(W, mid + 2); g.stroke();
+    g.strokeStyle = "#b3352b"; g.lineWidth = 2.5; g.beginPath();
+    for (i = 0; i <= 90; i++) {
+      var x = -4.5 + 9 * i / 90, px = X(x), py = mid - Math.min(96, L(x) * 9);
+      if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
+    }
+    g.stroke();
+    g.fillStyle = "rgba(43,43,43,0.5)"; g.font = "11px sans-serif";
+    g.fillText("loss valley", 18, 22); g.fillText("loss history (log)", 18, mid + 24);
+    var t;
+    for (t = 0; t < trail.length; t++) {
+      var a = 0.15 + 0.75 * (t / Math.max(1, trail.length - 1));
+      g.fillStyle = "rgba(59,130,196," + a.toFixed(2) + ")";
+      g.beginPath(); g.arc(X(trail[t][0]), mid - Math.min(96, L(trail[t][0]) * 9), 3.4, 0, 7); g.fill();
+    }
+    var bx = X(Math.max(-4.5, Math.min(4.5, w))), by = mid - Math.min(96, L(Math.max(-4.5, Math.min(4.5, w))) * 9);
+    g.fillStyle = blew ? "#b3352b" : "#2b2b2b";
+    g.beginPath(); g.arc(bx, by, 7, 0, 7); g.fill();
+    g.fillStyle = "#f6f1e3"; g.beginPath(); g.arc(bx, by, 2.6, 0, 7); g.fill();
+    g.strokeStyle = "rgba(43,43,43,0.35)"; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(0, mid + 34); g.lineTo(W, mid + 34); g.stroke();
+    if (trail.length > 1) {
+      g.strokeStyle = "#3b82c4"; g.lineWidth = 2; g.beginPath();
+      var n = Math.min(trail.length, 120);
+      for (t = 0; t < n; t++) {
+        var lv = Math.log10(Math.max(1e-4, L(trail[trail.length - n + t][0])));
+        var hx = 16 + t / 119 * (W - 32), hy = (mid + 60) - (lv + 4) / 5.2 * 24;
+        if (t === 0) g.moveTo(hx, hy); else g.lineTo(hx, hy);
+      }
+      g.stroke();
+    }
+  }
+  function insight() {
+    var lr = parseInt(lrIn.value, 10) / 100;
+    if (blew) { insEl.textContent = "It blew up. The steps were so big it overshot the valley, then overshot wider every time. This is why real training uses small steps and gradient clipping."; return; }
+    if (done && L(w) < 0.0005) { insEl.textContent = "Converged in " + step + " steps. The weight found the bottom of the valley."; return; }
+    if (lr < 0.15) insEl.textContent = "Crawling. Each step is tiny, so the loss barely moves. Safe, but training would take forever.";
+    else if (lr > 1.0) insEl.textContent = "Bouncing. It overshoots the bottom almost every step, ping-ponging across the valley. Push further and it diverges.";
+    else insEl.textContent = "Smooth descent. Big enough to move, small enough to settle. This is the sweet spot.";
+  }
+  function doStep() {
+    var lr = parseInt(lrIn.value, 10) / 100;
+    w = w - lr * 2 * w;
+    step++; trail.push([w, L(w)]);
+    if (trail.length > 400) trail.shift();
+    if (!isFinite(w) || Math.abs(w) > 25) { blew = true; stopRun(); }
+    else if (L(w) < 0.0005) { done = true; stopRun(); }
+    else if (step >= 400) { done = true; stopRun(); }
+    stepEl.textContent = step;
+    lossEl.textContent = isFinite(L(w)) ? (L(w) < 0.01 ? L(w).toExponential(1) : L(w).toFixed(3)) : "diverged";
+    draw(); insight();
+  }
+  function stopRun() { running = false; if (timer) clearInterval(timer); timer = null; runBtn.textContent = "Run"; }
+  runBtn.addEventListener("click", function () {
+    if (running) { stopRun(); insight(); return; }
+    if (done || blew) reset();
+    running = true; runBtn.textContent = "Pause";
+    timer = setInterval(doStep, 110);
+  });
+  function reset() {
+    stopRun(); w = W0; step = 0; trail = [[W0, L(W0)]]; done = false; blew = false;
+    stepEl.textContent = "0"; lossEl.textContent = L(W0).toFixed(2);
+    insEl.textContent = "Press Run. A learning rate around 0.4 glides to the bottom.";
+    draw();
+  }
+  resetBtn.addEventListener("click", reset);
+  lrIn.addEventListener("input", function () {
+    lrVal.textContent = (parseInt(lrIn.value, 10) / 100).toFixed(2);
+    if (!running) insight();
+  });
+  window.addEventListener("resize", function () { g = setup(); draw(); });
+  lrVal.textContent = "0.40";
+  reset();
+})();
+
+(function () {
+  /* ---- 6. Chinchilla slider ---- */
+  var PRESETS = [
+    { name: "GPT-3", p: 175e9, note: "GPT-3: 175B params on 300B tokens" },
+    { name: "Chinchilla", p: 70e9, note: "Chinchilla: 70B params on 1.4T tokens" },
+    { name: "Llama 3 405B", p: 405e9, note: "Llama 3: 405B params on 15T+ tokens" }
+  ];
+  var chipsEl = document.getElementById("scale-chips"), sl = document.getElementById("pscale"),
+      pv = document.getElementById("pscale-val"), tk = document.getElementById("st-tokens"),
+      fl = document.getElementById("st-flops"), bk = document.getElementById("st-books"),
+      sn = document.getElementById("st-note"), snl = document.getElementById("st-note-l"),
+      exactP = null;
+  function fmtP(p) {
+    if (p >= 1e12) return (p / 1e12).toFixed(2) + "T";
+    var b = p / 1e9; return (b >= 100 ? Math.round(b) : (b % 1 === 0 ? b : b.toFixed(1))) + "B";
+  }
+  function fmtT(t) {
+    if (t >= 1e12) { var v = t / 1e12; return (v >= 100 ? Math.round(v) : v.toFixed(1)) + "T"; }
+    return Math.round(t / 1e9) + "B";
+  }
+  function fmtF(f) {
+    var e = Math.floor(Math.log10(f)), m = f / Math.pow(10, e);
+    return m.toFixed(1) + "e" + e;
+  }
+  function renderScale(fromPreset) {
+    var p = exactP !== null ? exactP : Math.pow(10, 9 + parseInt(sl.value, 10) / 100 * 2.7);
+    var tokens = 20 * p, flops = 6 * p * tokens, books = tokens / 1.3e5;
+    pv.textContent = fmtP(p);
+    tk.textContent = fmtT(tokens);
+    fl.textContent = fmtF(flops);
+    bk.textContent = books >= 1e6 ? (books / 1e6).toFixed(1) + "M" : Math.round(books / 1e3) + "K";
+    var best = PRESETS[0], bd = 1e9, i, d;
+    for (i = 0; i < PRESETS.length; i++) {
+      d = Math.abs(Math.log10(p) - Math.log10(PRESETS[i].p));
+      if (d < bd) { bd = d; best = PRESETS[i]; }
+    }
+    sn.textContent = best.name;
+    snl.textContent = "closest famous model";
+    var btns = chipsEl.querySelectorAll(".chip"), k;
+    for (k = 0; k < btns.length; k++) {
+      btns[k].classList.toggle("on", fromPreset === PRESETS[k].name);
+    }
+  }
+  PRESETS.forEach(function (pr) {
+    var b = document.createElement("button");
+    b.className = "chip"; b.textContent = pr.name;
+    b.addEventListener("click", function () {
+      exactP = pr.p;
+      sl.value = Math.round((Math.log10(pr.p) - 9) / 2.7 * 100);
+      renderScale(pr.name);
+    });
+    chipsEl.appendChild(b);
+  });
+  sl.addEventListener("input", function () { exactP = null; renderScale(null); });
+  renderScale(null);
+})();
+
+(function () {
+  /* ---- 7. three stages ---- */
+  var STAGES = [
+    { t: "1. Pretraining",
+      rows: [["Data", "Trillions of tokens: books, articles, code, forums. The raw internet."],
+             ["Objective", "Predict the next token, over and over."],
+             ["Learns", "Grammar, facts, reasoning patterns, code, and also the internet's bad habits."],
+             ["Cost", "The expensive part: months on thousands of GPUs."],
+             ["Output", "A base model. Great at continuing text, bad at being helpful."]] },
+    { t: "2. Supervised fine-tuning",
+      rows: [["Data", "Tens of thousands of human-written examples: a good question paired with a good answer."],
+             ["Objective", "Imitate the demonstrations."],
+             ["Learns", "How to follow instructions, answer questions, and sound like an assistant."],
+             ["Cost", "Tiny next to pretraining: hours to days."],
+             ["Output", "An instruction-following model."]] },
+    { t: "3. RLHF",
+      rows: [["Data", "Human rankings: for one prompt, which of two answers is better? Repeated thousands of times."],
+             ["Objective", "Prefer answers humans rate higher. A reward model learns the rankings, then the model chases the score."],
+             ["Learns", "Helpfulness, tone, honesty, and what not to say."],
+             ["Cost", "Moderate: needs the ranking data plus the reward model."],
+             ["Output", "The assistant you actually talk to. RLHF stands for reinforcement learning from human feedback."]] }
+  ];
+  var grid = document.getElementById("stage-grid"), det = document.getElementById("stage-detail"),
+      cards = grid.querySelectorAll(".stage");
+  function showStage(i) {
+    var k;
+    for (k = 0; k < cards.length; k++) cards[k].classList.toggle("on", k === i);
+    var h = "<strong>" + STAGES[i].t + "</strong>", r;
+    for (k = 0; k < STAGES[i].rows.length; k++) {
+      r = STAGES[i].rows[k];
+      h += '<div class="row"><div class="k">' + r[0] + '</div><div class="v">' + r[1] + "</div></div>";
+    }
+    det.innerHTML = h;
+  }
+  for (var i = 0; i < cards.length; i++) {
+    (function (idx) {
+      cards[idx].addEventListener("click", function () { showStage(idx); });
+    })(i);
+  }
+  showStage(0);
+})();
+
+(function () {
+  /* ---- 8. sampler ---- */
+  var VOC = [["mat",3.0],["rug",2.2],["floor",1.8],["table",1.5],["chair",1.2],["roof",0.2],["moon",-0.6],["dog",-1.2]];
+  var tempIn = document.getElementById("temp"), toppIn = document.getElementById("topp"),
+      tempVal = document.getElementById("temp-val"), toppVal = document.getElementById("topp-val"),
+      barsEl = document.getElementById("samp-bars"), wordsEl = document.getElementById("samp-words"),
+      goBtn = document.getElementById("samp-go"), rsBtn = document.getElementById("samp-reset"),
+      counts = {};
+  VOC.forEach(function (v) { counts[v[0]] = 0; });
+  function dist() {
+    var T = parseInt(tempIn.value, 10) / 100, p = parseInt(toppIn.value, 10) / 100, i;
+    var ex = VOC.map(function (v) { return Math.exp(v[1] / T); });
+    var s = ex.reduce(function (a, b) { return a + b; }, 0);
+    var probs = ex.map(function (e) { return e / s; });
+    var order = probs.map(function (pr, i) { return i; }).sort(function (a, b) { return probs[b] - probs[a]; });
+    var keep = {}, cum = 0;
+    for (i = 0; i < order.length; i++) {
+      keep[order[i]] = true; cum += probs[order[i]];
+      if (cum >= p) break;
+    }
+    var ks = 0;
+    for (i = 0; i < probs.length; i++) if (keep[i]) ks += probs[i];
+    var renorm = probs.map(function (pr, i) { return keep[i] ? pr / ks : 0; });
+    return { probs: probs, renorm: renorm, keep: keep };
+  }
+  function renderSamp() {
+    var T = (parseInt(tempIn.value, 10) / 100).toFixed(2),
+        p = (parseInt(toppIn.value, 10) / 100).toFixed(2),
+        d = dist(), h = "", i, pct, cut = 0;
+    tempVal.textContent = T; toppVal.textContent = p;
+    for (i = 0; i < VOC.length; i++) {
+      if (!d.keep[i]) cut++;
+      pct = Math.round(d.renorm[i] * 100);
+      var cls = "bar-fill" + (d.keep[i] ? "" : " dim");
+      h += '<div class="bar-row"><div class="w">' + VOC[i][0] + '</div>' +
+           '<div class="bar-track"><div class="' + cls + '" style="width:' + pct + '%"></div></div>' +
+           '<div class="bar-pct">' + (d.keep[i] ? pct + "%" : "cut") + "</div></div>";
+    }
+    barsEl.innerHTML = h;
+  }
+  goBtn.addEventListener("click", function () {
+    var d = dist(), r = Math.random(), acc = 0, pick = 0, i;
+    for (i = 0; i < VOC.length; i++) {
+      acc += d.renorm[i];
+      if (r <= acc) { pick = i; break; }
+    }
+    var w = VOC[pick][0];
+    counts[w]++;
+    var s = document.createElement("span");
+    s.textContent = w + " ";
+    s.style.opacity = "0";
+    wordsEl.appendChild(s);
+    setTimeout(function () { s.style.transition = "opacity 300ms"; s.style.opacity = "1"; }, 20);
+  });
+  rsBtn.addEventListener("click", function () {
+    wordsEl.innerHTML = "";
+    VOC.forEach(function (v) { counts[v[0]] = 0; });
+  });
+  tempIn.addEventListener("input", renderSamp);
+  toppIn.addEventListener("input", renderSamp);
+  renderSamp();
+})();
+</script>
+</body>
+</html>

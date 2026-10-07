@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenAI Proved 722 Theorems. I Proved One: luke's blog</title>
+<meta name="description" content="OpenAI released 722 math manuscripts from an unreleased model, some with Lean 4 proofs. The proofs are research-level, so I wrote my own practice set starting from zero: √2 is irrational, checked by a computer.">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    min-height: 100%;
+    background: #f6f1e3;
+    color: #2b2b2b;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.7;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 56px 22px 80px; }
+  nav.top { margin-bottom: 40px; font-size: 14px; }
+  nav.top a { color: rgba(43,43,43,0.55); text-decoration: none; }
+  nav.top a:hover { color: #b3352b; }
+  h1 { font-size: 32px; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 8px; }
+  .meta { color: rgba(43,43,43,0.5); font-size: 14px; margin-bottom: 24px; }
+  .verdict { font-size: 17px; color: #2b2b2b; border-left: 3px solid #b3352b;
+    padding: 4px 0 4px 18px; margin: 0 0 28px; line-height: 1.65; }
+  p { margin-bottom: 16px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  p strong, li strong { color: #2b2b2b; }
+  h2 { font-size: 23px; color: #2b2b2b; margin: 40px 0 10px; letter-spacing: -0.01em; }
+  ul { margin: 0 0 16px 20px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  li { margin-bottom: 8px; }
+  a { color: #b3352b; }
+  .demo { display: block; margin: 28px 0; border: 1px solid rgba(179,53,43,0.35);
+    border-radius: 16px; padding: 22px; text-decoration: none; color: inherit;
+    background: rgba(255,255,255,0.4); touch-action: manipulation; }
+  .demo:hover { border-color: rgba(179,53,43,0.7); }
+  .demo h3 { color: #2b2b2b; font-size: 19px; margin-bottom: 6px; }
+  .demo p { margin: 0; font-size: 15px; color: rgba(43,43,43,0.75); }
+  .demo .go { display: inline-block; margin-top: 10px; color: #b3352b; font-weight: 700; font-size: 15px; }
+  figure { margin: 20px 0 24px; }
+  figcaption { font-size: 14px; color: rgba(43,43,43,0.6); margin-top: 8px; line-height: 1.5; text-align: center; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px;
+    background: rgba(43,43,43,0.07); padding: 1px 6px; border-radius: 5px; }
+  pre { background: #2b2b2b; color: #f6f1e3; border-radius: 12px; padding: 18px;
+    margin: 16px 0 24px; overflow-x: auto; font-size: 14px; line-height: 1.6; }
+  pre code { background: none; padding: 0; color: inherit; }
+  footer { margin-top: 60px; font-size: 13px; color: rgba(43,43,43,0.35); }
+  footer a { color: rgba(43,43,43,0.6); }
+
+  /* Step-through proof widget */
+  .stepper { border: 1px solid rgba(179,53,43,0.35); border-radius: 16px;
+    background: rgba(255,255,255,0.45); margin: 24px 0; overflow: hidden; }
+  .stepper .stage { padding: 26px 22px 20px; min-height: 210px; }
+  .stepper .kicker { font-size: 13px; font-weight: 700; color: #b3352b;
+    text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+  .stepper .step-title { font-size: 19px; font-weight: 700; margin-bottom: 8px; color: #2b2b2b; }
+  .stepper .step-body { font-size: 15px; color: rgba(43,43,43,0.85); margin-bottom: 12px; }
+  .stepper .step-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 13.5px; background: #2b2b2b; color: #f6f1e3; border-radius: 8px;
+    padding: 10px 14px; display: inline-block; }
+  .stepper .bar { display: flex; align-items: center; gap: 12px;
+    padding: 14px 22px; border-top: 1px solid rgba(43,43,43,0.12); }
+  .stepper button { touch-action: manipulation; border: 1px solid rgba(43,43,43,0.25);
+    background: #fff; color: #2b2b2b; border-radius: 10px; padding: 10px 18px;
+    font-size: 15px; font-weight: 600; cursor: pointer; min-width: 88px; }
+  .stepper button:active { transform: scale(0.97); }
+  .stepper button.primary { background: #b3352b; border-color: #b3352b; color: #f6f1e3; }
+  .stepper button:disabled { opacity: 0.35; cursor: default; }
+  .stepper .count { margin-left: auto; font-size: 14px; color: rgba(43,43,43,0.55); font-variant-numeric: tabular-nums; }
+  .stepper .dots { display: flex; gap: 6px; padding: 0 22px 16px; }
+  .stepper .dots span { width: 8px; height: 8px; border-radius: 50%;
+    background: rgba(43,43,43,0.18); }
+  .stepper .dots span.on { background: #b3352b; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="top"><a href="/blog/">&larr; blog</a></nav>
+  <h1>OpenAI Proved 722 Theorems. I Proved One.</h1>
+  <div class="meta">October 6, 2026 &middot; math &middot; lean</div>
+
+  <p class="verdict">OpenAI just released 722 math manuscripts produced by an unreleased model, some with machine-checked Lean proofs. The proofs are research-level. I wanted Lean proofs I could actually practice with, so I wrote my own, starting from zero: √2 is irrational, checked by a computer.</p>
+
+  <a class="demo" href="https://github.com/absolukie/lean-practice">
+    <h3>lean-practice</h3>
+    <p>My Lean 4 practice set: baby steps, the full √2 irrationality proof with comments, and exercises (√3, then √p for any prime). Every file compiles.</p>
+    <span class="go">Open the repo &rarr;</span>
+  </a>
+
+  <h2>1. What OpenAI dropped</h2>
+  <p>The repo is <a href="https://github.com/openai/math">openai/math</a>, Apache licensed. 722 manuscripts in 372 families, produced by an internal frontier model at roughly three hours of heavy thinking compute per result, drawn from about 4,000 posed problems. Some results already come with Lean 4 formalizations, which is the part that caught my eye: a machine-checked proof is either right or it does not compile. There is no partial credit and no hand-waving.</p>
+  <p>The headline families include the irrationality exponent of π, the Mahler conjectures, Kaplansky's direct-finiteness conjecture in characteristic two, the Hodge conjecture for CM abelian varieties, and a zero-free region for the Riemann zeta function. Heavyweight stuff. The π one is my favorite: it asks how well π can be approximated by fractions, which is a precise way of measuring how irrational a number is.</p>
+
+  <h2>2. The gap I actually wanted to fill</h2>
+  <p>Here is the thing about a Lean proof of the irrationality exponent of π: you cannot practice on it. It is the top of a mountain with no trail. I wanted the trail. So I built the smallest possible practice set that points at the same mountain: start with baby steps in Lean's tactic language, then prove √2 is irrational from scratch, with every step explained.</p>
+  <p>If the π result measures <em>how</em> irrational a number is, the √2 proof is where that road starts: the 2,500-year-old argument that some numbers simply are not fractions, now in a form a computer can check.</p>
+
+  <h2>3. The proof, in six steps</h2>
+  <p>Tap through it. Each step is one move in the argument, with the Lean line that makes it real.</p>
+
+  <figure>
+    <div class="stepper" id="stepper">
+      <div class="stage">
+        <div class="kicker" id="st-kicker">Step 1 of 6</div>
+        <div class="step-title" id="st-title"></div>
+        <div class="step-body" id="st-body"></div>
+        <div class="step-code" id="st-code"></div>
+      </div>
+      <div class="bar">
+        <button id="st-back">&larr; Back</button>
+        <button id="st-next" class="primary">Next &rarr;</button>
+        <span class="count" id="st-count">1 / 6</span>
+      </div>
+      <div class="dots" id="st-dots"></div>
+    </div>
+    <figcaption>Proof by contradiction: assume √2 is a fraction, then break that assumption.</figcaption>
+  </figure>
+
+  <h2>4. What learning Lean feels like</h2>
+  <p>Lean is a programming language where the program is a proof and the compiler is the referee. You write what you believe, and it tells you exactly which step does not hold up. There is something addictive about it: every error message is a precise pointer at the gap in your reasoning. Mathematicians have always had referees. Now the referee runs in milliseconds and never gets tired.</p>
+  <p>The honest part: the first hour is humbling. Things you "know" turn out to have twelve hidden steps. <code>n + 0 = n</code> is free, but <code>0 + n = n</code> needs induction, because addition is defined by recursion on the right. You learn how much of your own math runs on vibes.</p>
+  <p>Then it clicks, and you start seeing proofs as programs. The √2 proof in the repo is 40 lines with comments. The computer checked every one of them. Euclid never got that.</p>
+
+  <h2>5. Try it yourself</h2>
+  <p>The repo has three parts: <code>Basics.lean</code> (tactics from zero, all compiling), <code>Irrational.lean</code> (the full √2 proof, heavily commented), and exercises with the answers removed: √3, then √p for any prime p. Install Lean with <code>elan</code>, clone, run <code>lake build</code>. If it compiles, you are right. That is the whole grading system.</p>
+  <p>Somewhere in the openai/math repo, a machine proved something about π that no human had managed. My contribution is smaller: one ancient theorem, checked by a laptop, and a trailhead for anyone who wants to start climbing. Take notes, OpenAI.</p>
+
+  <footer>Built with Lean 4 and Mathlib. The practice repo is <a href="https://github.com/absolukie/lean-practice">absolukie/lean-practice</a>.</footer>
+</div>
+
+<script>
+(function () {
+  var steps = [
+    { title: "Assume √2 is a fraction",
+      body: "Suppose √2 = a/b for some integers a, b with b ≠ 0. Reduce to lowest terms: write it as p/q where p and q share no common factor.",
+      code: "intro a b hb h" },
+    { title: "Square both sides",
+      body: "If √2 = p/q, then squaring gives p² = 2q². The square root is gone; now it is pure arithmetic about whole numbers.",
+      code: "have hsq : p^2 = 2*q^2" },
+    { title: "2 divides p², so 2 divides p",
+      body: "p² = 2q² means 2 divides p². Since 2 is prime, a prime dividing a square must divide the base. So p is even.",
+      code: "Nat.Prime.dvd_of_dvd_pow" },
+    { title: "Substitute and simplify",
+      body: "Write p = 2k. Then (2k)² = 2q² becomes 4k² = 2q², which simplifies to q² = 2k². The same shape as step 2, with the roles shifted.",
+      code: "obtain ⟨k, hk⟩ := h2p" },
+    { title: "So 2 divides q as well",
+      body: "q² = 2k² means 2 divides q², and by the same prime argument, 2 divides q. Now both p and q are even.",
+      code: "exact Nat.Prime.dvd_of_dvd_pow Nat.prime_two hdiv" },
+    { title: "Contradiction",
+      body: "p and q were in lowest terms, but 2 divides both. Impossible. The assumption was wrong: √2 is not a fraction. ∎",
+      code: "exact absurd hgcd (by decide)" }
+  ];
+  var i = 0;
+  var kicker = document.getElementById('st-kicker');
+  var title = document.getElementById('st-title');
+  var body = document.getElementById('st-body');
+  var code = document.getElementById('st-code');
+  var count = document.getElementById('st-count');
+  var back = document.getElementById('st-back');
+  var next = document.getElementById('st-next');
+  var dots = document.getElementById('st-dots');
+  for (var d = 0; d < steps.length; d++) {
+    var s = document.createElement('span');
+    dots.appendChild(s);
+  }
+  function render() {
+    var st = steps[i];
+    kicker.textContent = 'Step ' + (i + 1) + ' of ' + steps.length;
+    title.textContent = st.title;
+    body.textContent = st.body;
+    code.textContent = st.code;
+    count.textContent = (i + 1) + ' / ' + steps.length;
+    back.disabled = (i === 0);
+    next.disabled = (i === steps.length - 1);
+    var ds = dots.children;
+    for (var d = 0; d < ds.length; d++) {
+      ds[d].className = (d === i) ? 'on' : '';
+    }
+  }
+  back.addEventListener('click', function () { if (i > 0) { i--; render(); } });
+  next.addEventListener('click', function () { if (i < steps.length - 1) { i++; render(); } });
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>America.gov launch demo — product render recreation</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: #dfe2e6;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* ---- stage: fixed 1920x1080, scaled to viewport ---- */
+  #stage {
+    position: absolute; left: 50%; top: 50%;
+    width: 1920px; height: 1080px;
+    transform-origin: center center;
+    background: radial-gradient(1300px 760px at 50% 36%, #ffffff 0%, #eef0f2 58%, #dde1e6 100%);
+    overflow: hidden;
+  }
+  /* ---- floor shadows ---- */
+  .floor-shadow {
+    position: absolute; left: 50%;
+    width: 1060px; height: 150px;
+    transform: translate(-50%, 0);
+    background: radial-gradient(ellipse at center, rgba(12,22,44,.30) 0%, rgba(12,22,44,.12) 45%, transparent 72%);
+    filter: blur(6px);
+  }
+  .floor-shadow.back { top: 872px; width: 900px; opacity: .55; }
+  .floor-shadow.main { top: 896px; }
+  /* ---- phones ---- */
+  .phone { position: absolute; left: 50%; top: 50%; }
+  .phone .frame {
+    width: 430px; height: 884px;
+    background: linear-gradient(150deg, #43434a 0%, #17171a 30%, #0c0c0e 70%, #2b2b30 100%);
+    border-radius: 64px;
+    padding: 13px;
+    transform: translate(-50%, -55%);
+    box-shadow:
+      inset 0 0 0 2px rgba(255,255,255,.14),
+      inset 0 0 0 5px rgba(0,0,0,.55),
+      0 30px 80px rgba(10,18,38,.28);
+  }
+  .phone.ghost .frame {
+    transform: translate(calc(-50% - 340px), calc(-55% + 46px)) scale(.92);
+  }
+  .phone.ghost { filter: blur(15px); opacity: .30; }
+  .phone.ghost .layer.chat { display: none; }
+  .screen {
+    position: relative; width: 100%; height: 100%;
+    background: #ffffff; border-radius: 52px; overflow: hidden;
+  }
+  .island {
+    position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
+    width: 118px; height: 33px; background: #000; border-radius: 20px; z-index: 60;
+  }
+  .homebar {
+    position: absolute; bottom: 9px; left: 50%; transform: translateX(-50%);
+    width: 134px; height: 5px; border-radius: 3px; background: rgba(10,22,51,.85); z-index: 60;
+  }
+  .layer { position: absolute; inset: 0; will-change: opacity, transform; }
+  .layer.chat { visibility: hidden; }
+  /* ---- shared header ---- */
+  .appheader {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 62px 26px 0; height: 104px; z-index: 5; position: relative;
+    background: linear-gradient(#ffffff 78%, rgba(255,255,255,0));
+  }
+  .appheader svg { display: block; }
+  .wordmark { font-size: 19px; font-weight: 800; color: #0A1633; letter-spacing: -.01em; }
+  .wordmark em { font-style: normal; color: #3b5bdb; }
+  /* ---- landing ---- */
+  .hero-text { padding: 26px 30px 0; }
+  .hero-text h1 {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 47px; line-height: 1.08; color: #0A1633; font-weight: 600;
+    letter-spacing: -.015em; margin-bottom: 12px;
+  }
+  .hero-text p { font-size: 17px; line-height: 1.5; color: #4a5568; max-width: 300px; }
+  .askwrap { position: relative; margin: 44px 24px 0; }
+  .waves { position: absolute; left: -30px; right: -30px; top: -42px; height: 40px; overflow: hidden; opacity: 0; }
+  .waves svg { display: block; width: 860px; height: 40px; animation: wavedrift 3.2s linear infinite; }
+  @keyframes wavedrift { from { transform: translateX(0); } to { transform: translateX(-200px); } }
+  .askpill {
+    position: relative;
+    display: flex; align-items: center;
+    height: 60px; border-radius: 30px; padding: 0 12px 0 24px;
+    background: rgba(255,255,255,.62);
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,.9);
+    box-shadow: 0 10px 30px rgba(10,22,51,.14), inset 0 1px 0 rgba(255,255,255,.7);
+    font-size: 16.5px; color: #0A1633;
+    overflow: hidden;
+  }
+  .askpill .placeholder { color: #8a93a5; white-space: nowrap; }
+  .askpill .typed { white-space: nowrap; }
+  .askpill .caret { width: 2px; height: 22px; background: #0A1633; margin-left: 2px; border-radius: 1px; }
+  .sendbtn {
+    margin-left: auto; flex: 0 0 auto;
+    width: 44px; height: 44px; border-radius: 50%;
+    background: #0A1633; display: flex; align-items: center; justify-content: center;
+    opacity: 0;
+  }
+  .heroimg { margin: 22px 24px 0; border-radius: 22px; overflow: hidden; height: 252px;
+    box-shadow: 0 14px 34px rgba(10,22,51,.16); }
+  .heroimg svg { display: block; width: 100%; height: 100%; }
+  .landing-foot { text-align: center; padding-top: 18px; font-size: 12.5px; color: #9aa3b2; letter-spacing: .02em; }
+  /* ---- chat ---- */
+  .messages { position: absolute; top: 104px; bottom: 118px; left: 0; right: 0; padding: 6px 22px; overflow: hidden; }
+  .bubble { max-width: 88%; font-size: 15.5px; line-height: 1.45; border-radius: 20px; padding: 12px 16px; }
+  .bubble.user {
+    margin: 4px 0 4px auto; background: #0A1633; color: #fff;
+    border-bottom-right-radius: 6px; will-change: opacity, transform;
+  }
+  .thinking { font-size: 14px; color: #8a93a5; margin: 8px 0 0 4px; }
+  .thinking .tdot { animation: tblink 1.2s infinite; }
+  .thinking .tdot:nth-child(2) { animation-delay: .2s; }
+  .thinking .tdot:nth-child(3) { animation-delay: .4s; }
+  @keyframes tblink { 0%, 60%, 100% { opacity: .25; } 30% { opacity: 1; } }
+  .bubble.assist {
+    margin: 12px auto 0 0; background: #f1f3f6; color: #1c2740;
+    border-bottom-left-radius: 6px; will-change: opacity, transform;
+  }
+  .formcard {
+    margin: 12px 0 0; background: #ffffff;
+    border: 1px solid #e4e8ee; border-radius: 18px;
+    box-shadow: 0 12px 30px rgba(10,22,51,.10);
+    padding: 18px 18px 16px; will-change: opacity, transform;
+  }
+  .formcard h3 { font-size: 17px; font-weight: 700; color: #0A1633; margin-bottom: 4px; }
+  .formcard .sub { font-size: 12.5px; color: #8a93a5; margin-bottom: 10px; }
+  .frow { display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 0; border-top: 1px solid #eef1f5; font-size: 13.5px; }
+  .frow .k { color: #8a93a5; }
+  .frow .v { color: #1c2740; font-weight: 600; text-align: right; display: flex; align-items: center; gap: 7px; }
+  .frow .v svg { flex: 0 0 auto; }
+  .continue {
+    margin-top: 12px; width: 100%; height: 50px; border: 0; border-radius: 14px;
+    background: #0A1633; color: #fff; font-size: 16px; font-weight: 700;
+    touch-action: manipulation; cursor: pointer;
+  }
+  .dock {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 10px 22px 30px;
+    background: linear-gradient(rgba(255,255,255,0), #ffffff 42%);
+  }
+  .dock .askpill { height: 56px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="floor-shadow back"></div>
+  <div class="phone ghost" aria-hidden="true"><div class="frame"><div class="screen" id="ghostScreen"></div></div></div>
+  <div class="floor-shadow main"></div>
+
+  <div class="phone main" id="mainPhone">
+    <div class="frame">
+      <div class="screen">
+        <div class="island"></div>
+
+        <!-- LANDING -->
+        <div class="layer landing">
+          <div class="appheader">
+            <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="#0A1633" stroke-width="2.4" stroke-linecap="round">
+              <line x1="4" y1="8" x2="22" y2="8"/><line x1="4" y1="13" x2="22" y2="13"/><line x1="4" y1="18" x2="22" y2="18"/>
+            </svg>
+            <span class="wordmark">America<em>.</em>gov</span>
+          </div>
+          <div class="hero-text">
+            <h1>Hello, America</h1>
+            <p>Whatever you need from government, start here.</p>
+          </div>
+          <div class="askwrap">
+            <div class="waves">
+              <svg viewBox="0 0 860 40" fill="none" stroke="#0A1633" stroke-linecap="round">
+                <path d="M0 10 Q25 -2 50 10 T100 10 T150 10 T200 10 T250 10 T300 10 T350 10 T400 10 T450 10 T500 10 T550 10 T600 10 T650 10 T700 10 T750 10 T800 10 T850 10" stroke-width="3" opacity=".75"/>
+                <path d="M0 22 Q25 10 50 22 T100 22 T150 22 T200 22 T250 22 T300 22 T350 22 T400 22 T450 22 T500 22 T550 22 T600 22 T650 22 T700 22 T750 22 T800 22 T850 22" stroke-width="2.4" opacity=".45"/>
+                <path d="M0 34 Q25 24 50 34 T100 34 T150 34 T200 34 T250 34 T300 34 T350 34 T400 34 T450 34 T500 34 T550 34 T600 34 T650 34 T700 34 T750 34 T800 34 T850 34" stroke-width="2" opacity=".25"/>
+              </svg>
+            </div>
+            <div class="askpill">
+              <span class="placeholder">Ask anything...</span><span class="typed"></span><span class="caret"></span>
+              <span class="sendbtn">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="10" y1="17" x2="10" y2="3"/><polyline points="4.5,8.5 10,3 15.5,8.5"/>
+                </svg>
+              </span>
+            </div>
+          </div>
+          <div class="heroimg">
+            <svg viewBox="0 0 404 252" preserveAspectRatio="xMidYMid slice">
+              <defs>
+                <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#bcd7ee"/><stop offset=".62" stop-color="#e9e4d6"/><stop offset="1" stop-color="#f7e3c2"/>
+                </linearGradient>
+                <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#ffffff" stop-opacity=".5"/><stop offset=".5" stop-color="#ffffff" stop-opacity="0"/><stop offset="1" stop-color="#ffffff" stop-opacity=".28"/>
+                </linearGradient>
+              </defs>
+              <rect width="404" height="252" fill="url(#sky)"/>
+              <!-- distant airplane silhouette -->
+              <g fill="#22314e" opacity=".8">
+                <ellipse cx="292" cy="72" rx="34" ry="7"/>
+                <path d="M292 66 L306 40 L312 40 L298 66 Z"/>
+                <path d="M288 78 L278 96 L272 96 L284 78 Z"/>
+                <rect x="256" y="68" width="8" height="9" rx="2"/>
+              </g>
+              <!-- runway -->
+              <rect y="196" width="404" height="56" fill="#8d949e"/>
+              <rect y="196" width="404" height="7" fill="#a9b0ba"/>
+              <g stroke="#f4f5f7" stroke-width="4" stroke-dasharray="26 20"><line x1="0" y1="226" x2="404" y2="226"/></g>
+              <!-- terminal window frame -->
+              <g fill="#101b30">
+                <rect x="0" y="0" width="14" height="252"/>
+                <rect x="390" y="0" width="14" height="252"/>
+                <rect x="0" y="0" width="404" height="12"/>
+                <rect x="128" y="12" width="10" height="184"/>
+                <rect x="262" y="12" width="10" height="184"/>
+              </g>
+              <rect width="404" height="252" fill="url(#glass)"/>
+              <!-- foreground silhouettes: child + suitcase -->
+              <g fill="#0d1626">
+                <ellipse cx="96" cy="196" rx="17" ry="20"/>
+                <rect x="84" y="206" width="24" height="34" rx="10"/>
+                <rect x="80" y="236" width="10" height="16" rx="4"/>
+                <rect x="102" y="236" width="10" height="16" rx="4"/>
+                <rect x="128" y="212" width="30" height="38" rx="6"/>
+                <rect x="138" y="200" width="10" height="14" rx="4"/>
+                <line x1="118" y1="216" x2="132" y2="208" stroke="#0d1626" stroke-width="7" stroke-linecap="round"/>
+              </g>
+              <rect y="238" width="404" height="14" fill="#0d1626" opacity=".55"/>
+            </svg>
+          </div>
+          <div class="landing-foot">A concept demo &middot; built in code</div>
+          <div class="homebar"></div>
+        </div>
+
+        <!-- CHAT -->
+        <div class="layer chat">
+          <div class="appheader">
+            <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="#0A1633" stroke-width="2.4" stroke-linecap="round">
+              <line x1="4" y1="8" x2="22" y2="8"/><line x1="4" y1="13" x2="22" y2="13"/><line x1="4" y1="18" x2="22" y2="18"/>
+            </svg>
+            <span class="wordmark">America<em>.</em>gov</span>
+          </div>
+          <div class="messages">
+            <div class="bubble user">How do I apply for my first passport?</div>
+            <div class="thinking">Thinking<span class="tdot">.</span><span class="tdot">.</span><span class="tdot">.</span></div>
+            <div class="bubble assist">I found your application. Review your information before paying the fee &mdash; I&rsquo;ll guide you through each step.</div>
+            <div class="formcard">
+              <h3>Review your information</h3>
+              <div class="sub">Sample data &middot; nothing here is real</div>
+              <div class="frow"><span class="k">Full name</span><span class="v">Alex Rivera</span></div>
+              <div class="frow"><span class="k">Sex</span><span class="v">Female</span></div>
+              <div class="frow"><span class="k">Date of birth</span><span class="v">January 1, 1990</span></div>
+              <div class="frow"><span class="k">Address</span><span class="v">1600 Pennsylvania Ave NW<br>Washington, DC 20500</span></div>
+              <div class="frow"><span class="k">Social Security</span><span class="v">&bull;&bull;&bull; &bull;&bull; &middot; 0000
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8a93a5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="2" y1="2" x2="22" y2="22"/>
+                </svg></span></div>
+              <button class="continue" type="button" tabindex="-1">Continue</button>
+            </div>
+          </div>
+          <div class="dock">
+            <div class="askpill"><span class="placeholder">Ask anything...</span></div>
+          </div>
+          <div class="homebar"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // fit the 1920x1080 stage to the viewport
+  var stage = document.getElementById('stage');
+  function fit() {
+    var s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+    stage.style.transform = 'translate(-50%,-50%) scale(' + s + ')';
+  }
+  window.addEventListener('resize', fit); fit();
+
+  // ghost phone: static copy of the landing layer
+  var main = document.getElementById('mainPhone');
+  document.getElementById('ghostScreen').innerHTML =
+    '<div class="island"></div>' + main.querySelector('.layer.landing').outerHTML +
+    '<div class="homebar"></div>';
+
+  var LOOP = 13;
+  var Q = 'How do I apply for my first passport?';
+  var params = new URLSearchParams(location.search);
+  var frozenT = params.has('t') ? (parseFloat(params.get('t')) % LOOP) : null;
+
+  var el = {
+    landing:  main.querySelector('.layer.landing'),
+    chat:     main.querySelector('.layer.chat'),
+    typed:    main.querySelector('.typed'),
+    ph:       main.querySelector('.askpill .placeholder'),
+    caret:    main.querySelector('.caret'),
+    send:     main.querySelector('.sendbtn'),
+    waves:    main.querySelector('.waves'),
+    user:     main.querySelector('.bubble.user'),
+    thinking: main.querySelector('.thinking'),
+    assist:   main.querySelector('.bubble.assist'),
+    card:     main.querySelector('.formcard')
+  };
+  function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+  function seg(t, a, b) { return clamp01((t - a) / (b - a)); }
+
+  function render(t) {
+    // crossfade landing <-> chat
+    var landOp = t < 5 ? 1 : t < 5.8 ? 1 - seg(t, 5, 5.8) : t < 11.5 ? 0 : t < 12.8 ? seg(t, 11.5, 12.8) : 1;
+    var chatOp = 1 - landOp;
+    el.landing.style.opacity = landOp;
+    el.landing.style.transform = 'translateY(' + ((1 - landOp) * -26) + 'px)';
+    el.chat.style.opacity = chatOp;
+    el.chat.style.transform = 'translateY(' + ((1 - chatOp) * 26) + 'px)';
+    el.chat.style.visibility = chatOp <= 0 ? 'hidden' : 'visible';
+
+    // typing in the landing pill
+    var n = 0;
+    if (t >= 1.8 && t < 4.6) n = Math.floor(seg(t, 1.8, 4.6) * Q.length);
+    else if (t >= 4.6 && t < 5) n = Q.length;
+    el.typed.textContent = Q.slice(0, n);
+    el.ph.style.display = n > 0 ? 'none' : '';
+    el.caret.style.opacity = (t >= 1.8 && t < 5) ? (Math.floor(t * 2.4) % 2 ? '1' : '.12') : '0';
+
+    // send button pops in as typing finishes
+    var sb = seg(t, 3.8, 4.4);
+    el.send.style.opacity = sb;
+    el.send.style.transform = 'scale(' + (0.55 + 0.45 * sb) + ')';
+
+    // wavy lines drift above the pill while typing
+    el.waves.style.opacity = Math.min(seg(t, 1.8, 2.4), 1 - seg(t, 4.6, 5.2));
+
+    // user bubble pops in at send
+    var ub = seg(t, 5.0, 5.35);
+    el.user.style.opacity = ub;
+    el.user.style.transform = 'translateY(' + ((1 - ub) * 14) + 'px) scale(' + (0.92 + 0.08 * ub) + ')';
+
+    // thinking indicator
+    el.thinking.style.opacity = seg(t, 5.4, 5.7) * (1 - seg(t, 6.3, 6.6));
+
+    // assistant text + form card rise in
+    var at = seg(t, 6.6, 7.4);
+    el.assist.style.opacity = at;
+    el.assist.style.transform = 'translateY(' + ((1 - at) * 12) + 'px)';
+    var fc = seg(t, 7.3, 8.3);
+    el.card.style.opacity = fc;
+    el.card.style.transform = 'translateY(' + ((1 - fc) * 28) + 'px)';
+  }
+
+  if (frozenT !== null) { render(frozenT); }
+  else {
+    (function tick() {
+      render((performance.now() / 1000) % LOOP);
+      requestAnimationFrame(tick);
+    })();
+  }
+})();
+</script>
+</body>
+</html>

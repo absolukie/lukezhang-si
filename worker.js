@@ -48,6 +48,7 @@ const SITES = ["america-gov-render", "leetcode-games", "ergosphere", "illusion-b
   "backfill",
   "fineprint",
   "builds",
+  "status",
   "skill-tree-directions",
   "sysdesign-build-a-job-scheduler",
   "sysdesign-build-a-tokenizer",
@@ -577,6 +578,52 @@ async function proxyTo(request, backend, stripPrefix) {
   return fetch(target, init);
 }
 
+
+// Status dashboard API proxy: /status/api/* -> sync-proto /v1/admin/*.
+// PROTOTYPE. The dashboard sits behind Cloudflare Access (Luke only); this
+// proxy injects ADMIN_KEY server-side so the browser never sees it. Strict
+// path allowlist; everything else 404s. ADMIN_KEY is a Worker secret.
+const STATUS_API_ROUTES = {
+  "/status/api/metrics": "/v1/admin/metrics",
+  "/status/api/uptime": "/v1/admin/uptime",
+  "/status/api/client-errors": "/v1/admin/client-errors",
+  "/status/api/alerts": "/v1/admin/alerts",
+  "/status/api/ack": "/v1/admin/ack",
+  "/status/api/users": "/v1/admin/users",
+  "/status/api/selfcheck": "/v1/admin/selfcheck",
+  "/status/api/health": "/v1/health",
+};
+async function handleStatusApi(request, env) {
+  const url = new URL(request.url);
+  let target = STATUS_API_ROUTES[url.pathname];
+  if (!target) {
+    const m = url.pathname.match(/^\/status\/api\/users\/([0-9a-f]{8,64})$/);
+    if (m) target = "/v1/admin/users/" + m[1];
+  }
+  if (!target) return notFound();
+  if (!env.ADMIN_KEY) {
+    return new Response("status api proxy not configured", { status: 500 });
+  }
+  const dest = "https://sync-proto.lukezhang.si" + target + url.search;
+  const headers = new Headers({ "x-admin-key": env.ADMIN_KEY });
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    headers.set("content-type", request.headers.get("content-type") || "application/json");
+  }
+  const init = {
+    method: request.method,
+    headers: headers,
+    redirect: "manual",
+    signal: AbortSignal.timeout(20000),
+  };
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    init.body = await request.arrayBuffer();
+  }
+  const res = await fetch(dest, init);
+  const out = new Headers(res.headers);
+  out.set("cache-control", "no-store");
+  return new Response(await res.arrayBuffer(), { status: res.status, headers: out });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -613,6 +660,11 @@ export default {
       (host === PROJECTS_HOST || host === "takes.lukezhang.si")
     ) {
       return handleTakeTemp(request, env);
+    }
+
+    // Status dashboard API: /status/api/* -> sync-proto admin (Access-gated).
+    if (url.pathname.startsWith("/status/api/") && host === PROJECTS_HOST) {
+      return handleStatusApi(request, env);
     }
 
     // Trade Compass quotes: /unsolved-lab/api/quotes?symbol=X → Yahoo Finance chart API.

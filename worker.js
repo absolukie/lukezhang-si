@@ -606,6 +606,12 @@ async function handleStatusApi(request, env) {
   }
   const dest = "https://sync-proto.lukezhang.si" + target + url.search;
   const headers = new Headers({ "x-admin-key": env.ADMIN_KEY });
+  // Service token so the proxy passes the Access gate on /v1/admin/*
+  // (Access challenges worker subrequests too). Secrets on this worker.
+  if (env.CF_ACCESS_CLIENT_ID && env.CF_ACCESS_CLIENT_SECRET) {
+    headers.set("CF-Access-Client-Id", env.CF_ACCESS_CLIENT_ID);
+    headers.set("CF-Access-Client-Secret", env.CF_ACCESS_CLIENT_SECRET);
+  }
   if (request.method !== "GET" && request.method !== "HEAD") {
     headers.set("content-type", request.headers.get("content-type") || "application/json");
   }

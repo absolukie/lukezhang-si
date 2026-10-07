@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>TRACE RACE — Blackbox Arcade</title>
+<title>TRACE RACE - Blackbox Arcade</title>
 <style>
   :root{
     --bg:#0a0a12;
@@ -93,12 +93,12 @@
     <div id="status">Draw the shape in one stroke</div>
     <button id="nextBtn" class="primary hidden">Next shape &rarr;</button>
   </div>
-  <footer><span class="scorehow">Score: your trace is resized to match the ghost, then compared point by point. 100 is perfect &mdash; starting anywhere on the loop is fine. Draw fast for bonus points.</span></footer>
+  <footer><span class="scorehow">Score: your trace is compared to the ghost point by point. 100 is perfect. Starting anywhere on the loop is fine. Draw fast for bonus points.</span></footer>
 </div>
 
 <div id="title" class="overlay">
   <h1>TRACE RACE</h1>
-  <p class="how">5 rounds. Each round shows a ghost shape &mdash; redraw it in <b>one</b> stroke. Closest trace wins.</p>
+  <p class="how">5 rounds. Each round shows a shape. Redraw it in <b>one</b> stroke. Closest trace wins.</p>
   <div class="bestline" id="challengeLbl"></div>
   <div class="bestline" id="titleBest"></div>
   <button id="startBtn" class="primary">Start</button>
@@ -460,6 +460,360 @@ function shieldPts(){
   return smoothClosed([[0, 1], [0.9, 0.7], [0.9, -0.2], [0, -1], [-0.9, -0.2], [-0.9, 0.7]]);
 }
 
+
+/* ---------- pool generators (100-shape expansion) ---------- */
+function polyPts(n, rot, squashY){
+  var P = [], i, sq = (squashY == null ? 1 : squashY);
+  for(i = 0; i < n; i++){
+    var a = (rot || 0) + i * 2 * Math.PI / n;
+    P.push([Math.cos(a), Math.sin(a) * sq]);
+  }
+  return smoothClosed(P);
+}
+function starNPts(n, inner){
+  var P = [], i, inn = (inner == null ? 0.45 : inner);
+  for(i = 0; i < 2 * n; i++){
+    var rad = (i % 2 === 0) ? 1 : inn;
+    var a = -Math.PI / 2 + i * Math.PI / n;
+    P.push([Math.cos(a) * rad, Math.sin(a) * rad]);
+  }
+  return smoothClosed(P);
+}
+function flowerNPts(petals, depth, squashY){
+  var P = [], i, d = (depth == null ? 0.38 : depth), sq = (squashY == null ? 1 : squashY);
+  for(i = 0; i < 220; i++){
+    var t = i / 220 * 2 * Math.PI;
+    var r = 1 - d + d * Math.cos(petals * t);
+    P.push([r * Math.cos(t), r * Math.sin(t) * sq]);
+  }
+  return P;
+}
+function blobPts(lobes, amp, squashY){
+  var P = [], i, sq = (squashY == null ? 1 : squashY), am = (amp == null ? 0.15 : amp);
+  for(i = 0; i < 220; i++){
+    var t = i / 220 * 2 * Math.PI;
+    var r = 1 + am * Math.cos(lobes * t);
+    P.push([r * Math.cos(t) / 1.2, r * Math.sin(t) * sq / 1.2]);
+  }
+  return P;
+}
+function superellipsePts(a, b, n){
+  var P = [], i;
+  for(i = 0; i < 220; i++){
+    var t = i / 220 * 2 * Math.PI;
+    var c = Math.cos(t), s2 = Math.sin(t);
+    P.push([a * Math.sign(c) * Math.pow(Math.abs(c), 2 / n),
+            b * Math.sign(s2) * Math.pow(Math.abs(s2), 2 / n)]);
+  }
+  return P;
+}
+function ellipsePts(a, b){
+  var P = [], i;
+  for(i = 0; i < 220; i++){
+    var t = i / 220 * 2 * Math.PI;
+    P.push([a * Math.cos(t), b * Math.sin(t)]);
+  }
+  return P;
+}
+function heart2Pts(sx, sy){
+  var P = [], i;
+  for(i = 0; i < 220; i++){
+    var t = i / 220 * 2 * Math.PI;
+    var x = 16 * Math.pow(Math.sin(t), 3);
+    var y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+    P.push([x / 17 * sx, y / 17 * sy]);
+  }
+  return P;
+}
+function trapezoidPts(){
+  return smoothClosed([[-0.62, -1], [0.62, -1], [1, 1], [-1, 1]]);
+}
+function parallelogramPts(){
+  return smoothClosed([[-0.35, -1], [1, -1], [0.35, 1], [-1, 1]]);
+}
+function kitePts(){
+  return smoothClosed([[0, 1], [0.55, 0.1], [0, -1], [-0.55, 0.1]]);
+}
+function chevronPts(){
+  return [[-1, 1], [-0.42, 1], [0.12, 0], [-0.42, -1], [-1, -1], [-0.46, 0]];
+}
+function arrowPts(){
+  return [[-1, -0.28], [-0.12, -0.28], [-0.12, -0.62], [1, 0],
+          [-0.12, 0.62], [-0.12, 0.28], [-1, 0.28]];
+}
+function plusPts(){
+  var w = 0.32;
+  return [[-w, 1], [w, 1], [w, w], [1, w], [1, -w], [w, -w],
+          [w, -1], [-w, -1], [-w, -w], [-1, -w], [-1, w], [-w, w]];
+}
+function tulipPts(){
+  return smoothClosed([[-0.72, 1], [-0.36, 0.55], [0, 1], [0.36, 0.55], [0.72, 1],
+    [0.52, -0.5], [0.18, -1], [-0.18, -1], [-0.52, -0.5]]);
+}
+function flamePts(){
+  var P = dropPts(), i, out = [];
+  for(i = 0; i < P.length; i++){
+    var x = P[i][0], y = P[i][1];
+    if(y > 0) x += 0.38 * y * y;
+    out.push([x, y]);
+  }
+  return out;
+}
+function spadePts(){
+  var P = heart2Pts(1, -1), i, bi = 0, bd = 1e9;
+  for(i = 0; i < P.length; i++){
+    var d = Math.abs(P[i][0]) + Math.abs(P[i][1] + 0.294);
+    if(d < bd){ bd = d; bi = i; }
+  }
+  var out = P.slice(0, bi + 1);
+  out.push([0.14, -0.66], [-0.14, -0.66]);
+  return out.concat(P.slice(bi + 1));
+}
+function applePts(){
+  var P = [], i;
+  for(i = 0; i < 220; i++){
+    var t = i / 220 * 2 * Math.PI;
+    var x = Math.cos(t), y = Math.sin(t);
+    if(y > 0.25) y -= 0.44 * Math.max(0, 1 - Math.pow(x / 0.9, 2)) * (y - 0.25);
+    P.push([x, y * 1.05]);
+  }
+  return P;
+}
+function pearPts(){
+  var P = [], i;
+  for(i = 0; i < 220; i++){
+    var t = i / 220 * 2 * Math.PI;
+    var r = 1 - 0.34 * Math.sin(t);
+    P.push([r * Math.cos(t) * 0.95, r * Math.sin(t)]);
+  }
+  return P;
+}
+function alienPts(){
+  var P = [], i;
+  for(i = 0; i < 220; i++){
+    var t = i / 220 * 2 * Math.PI;
+    var r = 1 + 0.32 * Math.sin(t);
+    P.push([r * Math.cos(t) * 0.95, r * Math.sin(t)]);
+  }
+  return P;
+}
+function balloonPts(){
+  var P = [], i;
+  for(i = 0; i < 220; i++){
+    var t = i / 220 * 2 * Math.PI;
+    var d = Math.atan2(Math.sin(t + Math.PI / 2), Math.cos(t + Math.PI / 2));
+    var r = 1 - 0.3 * Math.exp(-Math.pow(d / 0.35, 2));
+    P.push([r * Math.cos(t), r * Math.sin(t) * 1.08]);
+  }
+  return P;
+}
+function lemonPts(){
+  var P = [], i;
+  for(i = 0; i < 220; i++){
+    var t = i / 220 * 2 * Math.PI;
+    var r = 1 + 0.18 * Math.cos(2 * t);
+    P.push([r * Math.cos(t), r * Math.sin(t) * 0.72]);
+  }
+  return P;
+}
+function carrotPts(){
+  return smoothClosed([[0, 1], [0.3, 0.55], [0.34, 0.1], [0.14, -0.5],
+    [0.1, -1], [-0.1, -1], [-0.14, -0.5], [-0.34, 0.1], [-0.3, 0.55]]);
+}
+function tacoPts(){
+  var P = [], i;
+  for(i = 0; i < 120; i++){
+    var t = i / 119 * Math.PI;
+    P.push([Math.cos(t), Math.sin(t) * 0.85]);
+  }
+  for(i = 0; i < 80; i++){
+    var x = -1 + 2 * i / 79;
+    P.push([x, 0.1 * Math.sin(x * 9)]);
+  }
+  return P;
+}
+function pizzaPts(){
+  return smoothClosed([[0, 1], [0.55, -0.55], [0.3, -0.95], [-0.3, -0.95], [-0.55, -0.55]]);
+}
+function melonPts(){
+  var P = [[0, -1]], i;
+  for(i = 0; i <= 80; i++){
+    var t = Math.PI + i / 80 * Math.PI;
+    P.push([0.95 * Math.cos(t), 0.35 - 0.5 * Math.sin(t)]);
+  }
+  return P;
+}
+function partyHatPts(){
+  return smoothClosed([[-0.85, -0.45], [0.85, -0.45], [0.14, 0.82], [0, 1.04], [-0.14, 0.82]]);
+}
+function topHatPts(){
+  return [[-0.52, 1], [0.52, 1], [0.52, -0.45], [0.95, -0.45],
+          [0.95, -0.75], [-0.95, -0.75], [-0.95, -0.45], [-0.52, -0.45]];
+}
+function bottlePts(){
+  return [[-0.24, 1], [0.24, 1], [0.24, 0.35], [0.52, -0.05],
+          [0.52, -1], [-0.52, -1], [-0.52, -0.05], [-0.24, 0.35]];
+}
+function batteryPts(){
+  return [[-0.55, -0.9], [0.55, -0.9], [0.55, 0.62], [0.26, 0.62],
+          [0.26, 0.9], [-0.26, 0.9], [-0.26, 0.62], [-0.55, 0.62]];
+}
+function bulbPts(){
+  var P = [], i;
+  for(i = 0; i <= 140; i++){
+    var a = (242 - 304 * i / 140) * Math.PI / 180;
+    P.push([0.74 * Math.cos(a), 0.32 + 0.74 * Math.sin(a)]);
+  }
+  P.push([0.34, -0.5], [0.3, -0.92], [-0.3, -0.92], [-0.34, -0.5]);
+  return P;
+}
+function padlockPts(){
+  var P = [[-0.58, -1], [-0.58, -0.05]], i;
+  for(i = 0; i <= 60; i++){
+    var t = Math.PI - i / 60 * Math.PI;
+    P.push([0.58 * Math.cos(t), -0.05 + 0.58 * Math.sin(t)]);
+  }
+  P.push([0.58, -1]);
+  return P;
+}
+function ticketPts(){
+  return smoothClosed([[-1, -0.62], [1, -0.62], [1, 0.62], [-1, 0.62],
+    [-1, 0.28], [-0.68, 0], [-1, -0.28]]);
+}
+function pencilPts(){
+  return [[-0.85, -0.28], [-0.85, 0.28], [-0.7, 0.28], [0.35, 0.28],
+          [1, 0], [0.35, -0.28], [-0.7, -0.28]];
+}
+function rocketPts(){
+  return smoothClosed([[0, 1], [0.3, 0.45], [0.3, -0.45], [0.62, -0.95], [0.3, -0.68],
+    [0.22, -0.85], [-0.22, -0.85], [-0.3, -0.68], [-0.62, -0.95], [-0.3, -0.45], [-0.3, 0.45]]);
+}
+function ufoPts(){
+  var P = [], i;
+  for(i = 0; i <= 80; i++){
+    var t = Math.PI + i / 80 * Math.PI;
+    P.push([Math.cos(t), 0.38 * Math.sin(t)]);
+  }
+  P.push([0.52, 0.08]);
+  for(i = 0; i <= 60; i++){
+    var a = i / 60 * Math.PI;
+    P.push([0.52 * Math.cos(a), 0.08 + 0.5 * Math.sin(a)]);
+  }
+  P.push([-1, 0]);
+  return P;
+}
+function towerPts(){
+  return [[-0.42, -1], [0.42, -1], [0.42, 0.25], [0, 1], [-0.42, 0.25]];
+}
+function volcanoPts(){
+  return smoothClosed([[-0.55, -1], [0.55, -1], [0.92, 0.55], [0.32, 0.55],
+    [0.16, 0.9], [-0.16, 0.9], [-0.32, 0.55], [-0.92, 0.55]]);
+}
+function cupPts(){
+  return [[-0.58, 0.85], [0.58, 0.85], [0.4, -0.9], [-0.4, -0.9]];
+}
+function flaskPts(){
+  return [[-0.72, -0.9], [0.72, -0.9], [0.2, 0.35], [0.2, 0.9], [-0.2, 0.9], [-0.2, 0.35]];
+}
+function potionPts(){
+  var P = [], i;
+  for(i = 0; i <= 160; i++){
+    var a = (115 + 310 * i / 160) * Math.PI / 180;
+    P.push([0.7 * Math.cos(a), -0.2 + 0.7 * Math.sin(a)]);
+  }
+  P.push([0.24, 0.55], [0.24, 0.95], [-0.24, 0.95], [-0.24, 0.55]);
+  return P;
+}
+function gemPts(){
+  return [[0, 1], [0.72, 0.28], [0.45, -0.9], [-0.45, -0.9], [-0.72, 0.28]];
+}
+function tiePts(){
+  return smoothClosed([[-0.22, 0.9], [0.22, 0.9], [0.14, 0.5],
+    [0.38, -0.55], [0, -1], [-0.38, -0.55], [-0.14, 0.5]]);
+}
+function pinePts(){
+  return [[0, 1], [0.22, 0.6], [0.1, 0.6], [0.38, 0.12], [0.2, 0.12], [0.48, -0.42],
+    [0.16, -0.42], [0.16, -0.9], [-0.16, -0.9], [-0.16, -0.42], [-0.48, -0.42],
+    [-0.2, 0.12], [-0.38, 0.12], [-0.1, 0.6], [-0.22, 0.6]];
+}
+function shellPts(){
+  var P = [], i;
+  for(i = 0; i <= 120; i++){
+    var t = i / 120 * Math.PI;
+    var r = 1 + 0.07 * Math.sin(9 * t);
+    P.push([r * Math.cos(t), r * Math.sin(t) * 0.9]);
+  }
+  P.push([-0.1, -0.28], [0.1, -0.28]);
+  return P;
+}
+function moonPts(){
+  var P = [], i, D = Math.PI / 180;
+  for(i = 0; i < 140; i++){
+    var a = (60 + 240 * i / 139) * D;
+    P.push([Math.cos(a), Math.sin(a)]);
+  }
+  for(i = 0; i < 110; i++){
+    var b = (300 - 240 * i / 109) * D;
+    P.push([0.62 + 0.85 * Math.cos(b), 0.85 * Math.sin(b)]);
+  }
+  return P;
+}
+function pacmanPts(){
+  var P = [[0, 0]], i;
+  for(i = 0; i <= 120; i++){
+    var a = (35 + 290 * i / 120) * Math.PI / 180;
+    P.push([Math.cos(a), Math.sin(a)]);
+  }
+  return P;
+}
+function mittenPts(){
+  var P = [], i;
+  for(i = 0; i < 220; i++){
+    var t = i / 220 * 2 * Math.PI;
+    var d = Math.atan2(Math.sin(t - 0.5), Math.cos(t - 0.5));
+    var r = 1 + 0.28 * Math.exp(-Math.pow(d / 0.45, 2));
+    P.push([0.8 * r * Math.cos(t), 1.05 * r * Math.sin(t)]);
+  }
+  return P;
+}
+function archPts(){
+  var P = [], i;
+  for(i = 0; i <= 100; i++){
+    var t = i / 100 * Math.PI;
+    P.push([Math.cos(t), Math.sin(t) * 1.1]);
+  }
+  return P;
+}
+function domePts(){
+  var P = [], i;
+  for(i = 0; i <= 100; i++){
+    var t = i / 100 * Math.PI;
+    P.push([Math.cos(t), Math.sin(t) * 0.62]);
+  }
+  return P;
+}
+function lensPts(){
+  var P = [], i, D = Math.PI / 180;
+  for(i = 0; i <= 100; i++){
+    var a = (-56 + 112 * i / 100) * D;
+    P.push([-0.55 + Math.cos(a), Math.sin(a)]);
+  }
+  for(i = 0; i <= 100; i++){
+    var b = (124 + 112 * i / 100) * D;
+    P.push([0.55 + Math.cos(b), Math.sin(b)]);
+  }
+  return P;
+}
+function amoebaPts(){
+  var P = [], i;
+  for(i = 0; i < 220; i++){
+    var t = i / 220 * 2 * Math.PI;
+    var r = 1 + 0.12 * Math.cos(3 * t + 1) + 0.07 * Math.cos(5 * t + 2);
+    P.push([r * Math.cos(t) / 1.2, r * Math.sin(t) / 1.2]);
+  }
+  return P;
+}
+
 var SHAPES = [
   { label: 'heart',    pts: heartPts() },
   { label: 'fish',     pts: fishPts() },
@@ -483,7 +837,84 @@ var SHAPES = [
   { label: 'umbrella', pts: umbrellaPts() },
   { label: 'bell',     pts: bellPts() },
   { label: 'ice cream', pts: icecreamPts() },
-  { label: 'shield',   pts: shieldPts() }
+  { label: 'shield',   pts: shieldPts() },
+  { label: 'square', pts: polyPts(4, Math.PI/4) },
+  { label: 'rectangle', pts: polyPts(4, Math.PI/4, 0.6) },
+  { label: 'pentagon', pts: polyPts(5, -Math.PI/2) },
+  { label: 'heptagon', pts: polyPts(7, -Math.PI/2) },
+  { label: 'octagon', pts: polyPts(8, Math.PI/8) },
+  { label: 'nonagon', pts: polyPts(9, -Math.PI/2) },
+  { label: 'decagon', pts: polyPts(10, Math.PI/10) },
+  { label: 'dodecagon', pts: polyPts(12, 0) },
+  { label: 'trapezoid', pts: trapezoidPts() },
+  { label: 'parallelogram', pts: parallelogramPts() },
+  { label: 'kite', pts: kitePts() },
+  { label: 'chevron', pts: chevronPts() },
+  { label: 'arrow', pts: arrowPts() },
+  { label: 'plus', pts: plusPts() },
+  { label: 'sparkle', pts: starNPts(4, 0.2) },
+  { label: '6-point star', pts: starNPts(6, 0.52) },
+  { label: '7-point star', pts: starNPts(7, 0.52) },
+  { label: '8-point star', pts: starNPts(8, 0.55) },
+  { label: 'burst', pts: starNPts(12, 0.72) },
+  { label: '3-petal flower', pts: flowerNPts(3, 0.42) },
+  { label: '4-petal flower', pts: flowerNPts(4, 0.4) },
+  { label: '6-petal flower', pts: flowerNPts(6, 0.35) },
+  { label: 'daisy', pts: flowerNPts(8, 0.3) },
+  { label: 'sunflower', pts: flowerNPts(12, 0.24) },
+  { label: 'tulip', pts: tulipPts() },
+  { label: 'bell pepper', pts: flowerNPts(3, 0.16, 0.85) },
+  { label: 'pumpkin', pts: flowerNPts(10, 0.09, 0.72) },
+  { label: 'circle', pts: ellipsePts(1, 1) },
+  { label: 'oval', pts: ellipsePts(1, 0.62) },
+  { label: 'capsule', pts: superellipsePts(1, 0.62, 4) },
+  { label: 'lens', pts: lensPts() },
+  { label: 'arch', pts: archPts() },
+  { label: 'dome', pts: domePts() },
+  { label: 'blob', pts: blobPts(3, 0.2) },
+  { label: 'clover blob', pts: blobPts(4, 0.16) },
+  { label: 'wobble', pts: blobPts(5, 0.16) },
+  { label: 'amoeba', pts: amoebaPts() },
+  { label: 'wide heart', pts: heart2Pts(1.28, 0.92) },
+  { label: 'flame', pts: flamePts() },
+  { label: 'spade', pts: spadePts() },
+  { label: 'apple', pts: applePts() },
+  { label: 'pear', pts: pearPts() },
+  { label: 'alien', pts: alienPts() },
+  { label: 'lemon', pts: lemonPts() },
+  { label: 'strawberry', pts: heart2Pts(1.18, 0.98) },
+  { label: 'carrot', pts: carrotPts() },
+  { label: 'taco', pts: tacoPts() },
+  { label: 'pizza slice', pts: pizzaPts() },
+  { label: 'melon slice', pts: melonPts() },
+  { label: 'balloon', pts: balloonPts() },
+  { label: 'party hat', pts: partyHatPts() },
+  { label: 'top hat', pts: topHatPts() },
+  { label: 'bottle', pts: bottlePts() },
+  { label: 'soda can', pts: superellipsePts(0.62, 1, 3.5) },
+  { label: 'battery', pts: batteryPts() },
+  { label: 'light bulb', pts: bulbPts() },
+  { label: 'padlock', pts: padlockPts() },
+  { label: 'ticket', pts: ticketPts() },
+  { label: 'pencil', pts: pencilPts() },
+  { label: 'rocket', pts: rocketPts() },
+  { label: 'ufo', pts: ufoPts() },
+  { label: 'tower', pts: towerPts() },
+  { label: 'volcano', pts: volcanoPts() },
+  { label: 'cup', pts: cupPts() },
+  { label: 'test tube', pts: superellipsePts(0.45, 1, 4) },
+  { label: 'flask', pts: flaskPts() },
+  { label: 'potion', pts: potionPts() },
+  { label: 'gem', pts: gemPts() },
+  { label: 'necktie', pts: tiePts() },
+  { label: 'pine tree', pts: pinePts() },
+  { label: 'shell', pts: shellPts() },
+  { label: 'sun', pts: flowerNPts(12, 0.12) },
+  { label: 'gear', pts: flowerNPts(8, 0.2) },
+  { label: 'badge', pts: flowerNPts(20, 0.07) },
+  { label: 'moon', pts: moonPts() },
+  { label: 'pacman', pts: pacmanPts() },
+  { label: 'mitten', pts: mittenPts() }
 ];
 
 /* ---------- seeded challenges (same link = same 5 shapes, same order) ---------- */
@@ -524,9 +955,13 @@ function getChallenge(){
   }catch(e){}
   if(q.c){
     var cUp = q.c.toUpperCase();
-    if(/^[A-Z0-9]{5}$/.test(cUp)){
+    if(/^[A-Z0-9]{10}$/.test(cUp)){
       var ord = decodeOrder(cUp);
       if(ord) return { id: 'c' + cUp, kind: 'friend', order: ord };
+    }
+    if(/^[A-Z0-9]{5}$/.test(cUp)){
+      var ord5 = decodeOrder5(cUp);
+      if(ord5) return { id: 'c' + cUp, kind: 'friend', order: ord5 };
     }
     // legacy 6-char random seeds (pre order-encoding): seeded shuffle
     if(/^[A-Za-z0-9]{6}$/.test(q.c)) return { id: 'c' + q.c.toUpperCase(), kind: 'friend', order: null };
@@ -534,14 +969,30 @@ function getChallenge(){
   if(q.d && /^\d{4}-\d{2}-\d{2}$/.test(q.d)) return { id: 'd' + q.d, kind: 'daily' };
   return { id: 'd' + todayStr(), kind: 'daily' };
 }
-/* Room codes: the 5 shape indices ARE the code. Each char of the 6-letter
-   alphabet below is a pool index, so ?c=ABCDE always deals the same 5 shapes
-   in the same order — no lookup needed. (Pool has 23 shapes; alphabet covers 32.) */
+/* Room codes: the 5 shape indices ARE the code. Each shape takes two chars of
+   the 32-letter alphabet below (32*32 = 1024 slots), so ?c=AABBCCDDEE always
+   deals the same 5 shapes in the same order — no lookup needed. */
 var CODE_ALPHA = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 function encodeOrder(order){
-  return order.map(function(i){ return CODE_ALPHA.charAt(i); }).join('');
+  return order.map(function(i){
+    return CODE_ALPHA.charAt(Math.floor(i / 32)) + CODE_ALPHA.charAt(i % 32);
+  }).join('');
 }
 function decodeOrder(code){
+  if(code.length !== 10) return null;
+  var out = [], k;
+  for(k = 0; k < 10; k += 2){
+    var hi = CODE_ALPHA.indexOf(code.charAt(k));
+    var lo = CODE_ALPHA.indexOf(code.charAt(k + 1));
+    if(hi < 0 || lo < 0) return null;
+    var i = hi * 32 + lo;
+    if(i >= SHAPES.length) return null;
+    out.push(i);
+  }
+  return out;
+}
+function decodeOrder5(code){
+  // pre-100-shape rooms: one char per shape
   var out = [], k;
   for(k = 0; k < code.length; k++){
     var i = CODE_ALPHA.indexOf(code.charAt(k));
@@ -632,13 +1083,21 @@ function quip(s){
 /* ---------- game flow ---------- */
 
 function startGame(){
-  if(CH.order){
+  var i;
+  if(CH.kind === 'friend' && CH.order){
+    // shared room: the 5 shapes are fixed by the link
     game.order = CH.order.slice(0, 5);
+  }else if(CH.kind === 'friend'){
+    // legacy 6-char room: stable per link
+    var randL = mulberry32(hashStr(CH.id));
+    var poolL = [];
+    for(i = 0; i < SHAPES.length; i++) poolL.push(i);
+    game.order = seededShuffle(poolL, randL).slice(0, 5);
   }else{
-    var rand = mulberry32(hashStr(CH.id));
+    // solo: fresh random 5 every play
     var pool = [];
-    for(var i = 0; i < SHAPES.length; i++) pool.push(i);
-    game.order = seededShuffle(pool, rand).slice(0, 5);
+    for(i = 0; i < SHAPES.length; i++) pool.push(i);
+    game.order = seededShuffle(pool, Math.random).slice(0, 5);
   }
   game.roundIdx = 0;
   game.total = 0;
@@ -731,7 +1190,7 @@ function lockInStroke(){
     length += Math.hypot(game.raw[i][0] - game.raw[i-1][0], game.raw[i][1] - game.raw[i-1][1]);
   }
   if(game.raw.length < 3 || length < 60){
-    statusEl.textContent = 'Too short — draw a bigger loop';
+    statusEl.textContent = 'Too short. Draw a bigger loop';
     game.raw = [];
     return;
   }
@@ -780,8 +1239,11 @@ function showRivalReveal(){
   var rs = r.scores[game.roundIdx], mine = game.lastScore;
   var line = mine > rs ? 'You beat ' + escHtml(r.name) + '!'
     : mine < rs ? escHtml(r.name) + ' beat you.' : 'Dead even.';
-  statusEl.innerHTML = '<span class="big">' + rs + '</span> <span class="quip">' + escHtml(r.name) + '</span>' +
-    '<br><span class="vsline">you: ' + mine + ' · ' + line + '</span>';
+  var sb = game.lastSpeedBonus ? '<br><span class="vsline">trace ' + game.lastBase +
+    ' + ' + game.lastSpeedBonus + ' speed</span>' : '';
+  // your score stays big in the same spot; the friend's score lands below it
+  statusEl.innerHTML = '<span class="big">' + mine + '</span> <span class="quip">you</span>' + sb +
+    '<br><span class="vsline">' + escHtml(r.name) + ': ' + rs + ' &middot; ' + line + '</span>';
   nextBtn.textContent = (game.roundIdx === 4) ? 'See results →' : 'Next shape →';
   nextBtn.classList.remove('hidden');
 }
@@ -1039,7 +1501,7 @@ function endStroke(e){
   hideMag();
   game.strokeSecs = game.strokeStart ? (Date.now() - game.strokeStart) / 1000 : 0;
   if(e.type === 'pointercancel' || e.type === 'lostpointercapture'){
-    statusEl.textContent = 'Interrupted — draw the ' + game.shapeLabel + ' again';
+    statusEl.textContent = 'Interrupted. Draw the ' + game.shapeLabel + ' again';
     game.raw = [];
     return;
   }
@@ -1094,9 +1556,9 @@ document.getElementById('shareBtn').addEventListener('click', function(){
   var msg = document.getElementById('postMsg');
   var code = encodeOrder(game.order);
   var url = challengeURL('c' + code);
-  var nm = playerName() || 'Host';
+  var nm = playerName() || 'Your friend';
   function go(){
-    shareLink(url, msg, 'Room ' + code + ' shared — your ' + game.total + ' is waiting in it.');
+    shareLink(url, msg, 'Room ' + code + ' shared. Your ' + game.total + ' is waiting in it.');
   }
   if(!game.sharedToRoom && game.scores.length === 5){
     game.sharedToRoom = true;
@@ -1121,7 +1583,7 @@ document.getElementById('shareBtn').addEventListener('click', function(){
     btn.textContent = 'Share room';
     btn.addEventListener('click', function(){
       var lbl = document.getElementById('challengeLbl');
-      shareLink(challengeURL(CH.id), lbl, 'Room shared — send it to a friend.');
+      shareLink(challengeURL(CH.id), lbl, 'Room shared. Send it to a friend.');
       setTimeout(function(){
         lbl.innerHTML = 'Friend challenge<br><span id="codeBig">' + escHtml(CH.id.slice(1)) + '</span>';
       }, 4000);

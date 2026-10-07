@@ -1281,12 +1281,22 @@ function showResults(){
 }
 
 /* Final you-vs-friend verdict on the results screen (rooms only). */
+function rivalOther(){
+  // the rival entry, unless it's your own run
+  var r = game.rival;
+  if(!r || !r.drawings || r.drawings.length !== 5) return null;
+  var myName = playerName() || 'Your friend';
+  if(r.name === myName && r.total === game.total) return null;
+  return r;
+}
+function displayCode(code){
+  // 10-char room codes read better with a dash; the link itself stays dashless
+  return code.length === 10 ? code.slice(0, 5) + '-' + code.slice(5) : code;
+}
 function renderVsLine(){
   var el = document.getElementById('vsLine');
-  var r = game.rival;
-  var myName = playerName() || 'Your friend';
-  if(!r || typeof r.total !== 'number' || !r.scores || r.scores.length !== 5 ||
-     (r.name === myName && r.total === game.total)){
+  var r = rivalOther();
+  if(!r || typeof r.total !== 'number' || !r.scores || r.scores.length !== 5){
     el.classList.add('hidden');
     return;
   }
@@ -1332,6 +1342,12 @@ function renderThumbs(){
       c2.strokeStyle = 'rgba(255,255,255,0.28)';
       c2.lineWidth = 1.5;
       drawNormThumb(c2, target, S);
+      var fr = rivalOther();
+      if(fr && fr.drawings[k]){
+        c2.strokeStyle = 'rgba(255,45,149,0.9)';
+        c2.lineWidth = 1.5;
+        drawNormThumb(c2, fr.drawings[k], S);
+      }
       c2.strokeStyle = 'rgba(0,229,255,0.95)';
       c2.lineWidth = 1.5;
       drawNormThumb(c2, game.drawings[k], S);
@@ -1582,7 +1598,7 @@ document.getElementById('shareBtn').addEventListener('click', function(){
   var url = challengeURL('c' + code);
   var nm = playerName() || 'Your friend';
   function go(){
-    shareLink(url, msg, 'Room ' + code + ' shared. Your ' + game.total + ' is waiting in it.');
+    shareLink(url, msg, 'Room ' + displayCode(code) + ' shared. Your ' + game.total + ' is waiting in it.');
   }
   if(!game.sharedToRoom && game.scores.length === 5){
     game.sharedToRoom = true;
@@ -1609,7 +1625,7 @@ document.getElementById('shareBtn').addEventListener('click', function(){
       var lbl = document.getElementById('challengeLbl');
       shareLink(challengeURL(CH.id), lbl, 'Room shared. Send it to a friend.');
       setTimeout(function(){
-        lbl.innerHTML = 'Friend challenge<br><span id="codeBig">' + escHtml(CH.id.slice(1)) + '</span>';
+        lbl.innerHTML = 'Friend challenge<br><span id="codeBig">' + escHtml(displayCode(CH.id.slice(1))) + '</span>';
       }, 4000);
     });
   }else{
@@ -1620,7 +1636,7 @@ document.getElementById('shareBtn').addEventListener('click', function(){
 (function initMeta(){
   var lbl = document.getElementById('challengeLbl');
   if(CH.kind === 'friend'){
-    lbl.innerHTML = 'Friend challenge<br><span id="codeBig">' + escHtml(CH.id.slice(1)) + '</span>';
+    lbl.innerHTML = 'Friend challenge<br><span id="codeBig">' + escHtml(displayCode(CH.id.slice(1))) + '</span>';
   }else{
     lbl.textContent = challengeLabel();
   }

@@ -202,20 +202,29 @@ function render(){
   });
   const yt = el("text",{x:14,y:PT+4,"class":"axis-title"},svg);
   yt.textContent = "cost";
-  // dots, jittered within cells so they don't stack
-  let di = 0;
+  // dots arranged on a mini-grid inside each cell so neighbors never overlap
+  const cellTotal = {}, cellSeen = {};
+  MODELS.forEach(m=>{ const k=m[2]+"|"+m[4]; cellTotal[k]=(cellTotal[k]||0)+1; });
   MODELS.forEach((m,mi)=>{
     const ci = CATS.findIndex(c=>c.id===m[2]);
     const x = colX(ci), y = rowY(m[4]);
-    const jx = ((mi*37)%5-2)*16, jy = ((mi*53)%5-2)*13;
+    const k = m[2]+"|"+m[4];
+    const n = (cellSeen[k]=(cellSeen[k]||0)+1)-1;
+    const total = cellTotal[k];
+    const cols = Math.ceil(Math.sqrt(total));
+    const rows = Math.ceil(total/cols);
+    const gx = n%cols, gy = Math.floor(n/cols);
+    const ox = (gx-(cols-1)/2)*30, oy = (gy-(rows-1)/2)*30;
     const g = el("g",{"class":"mdot"+(mi===selected?" sel":"")+(matches(m)?"":" dim"),"data-mi":mi},svg);
-    el("circle",{cx:x+jx,cy:y+jy,r:11,fill:m[5]?"#7dd87d":"#6cb8f0",opacity:0.92},g);
+    const c = el("circle",{cx:x+ox,cy:y+oy,r:11,fill:m[5]?"#7dd87d":"#6cb8f0",opacity:0.92},g);
+    const t = el("title",{},g); t.textContent = m[0]+" ("+m[1]+")";
     if(matches(m)){
       g.addEventListener("click",()=>{ selected = mi; render(); showDetail(mi); });
     }
-    const lbl = el("text",{x:x+jx,y:y+jy+26,"class":"mlabel"},svg);
-    lbl.textContent = matches(m) ? shortName(m[0]) : "";
-    di++;
+    if(mi===selected){
+      const lbl = el("text",{x:x+ox,y:y+oy+26,"class":"mlabel"},svg);
+      lbl.textContent = shortName(m[0]);
+    }
   });
   if(selected>=0) showDetail(selected);
   else if(!detail.dataset.keep) detail.innerHTML = '<div class="empty">Tap a dot to inspect a model.</div>';

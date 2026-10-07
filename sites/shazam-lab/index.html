@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shazam Lab: how your phone names a song in 3 seconds</title>
+<meta name="description" content="An interactive walkthrough of the 2003 Shazam algorithm: spectrograms, constellation maps, combinatorial hashing, and the vote. All computed live in your browser.">
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#11161f; --panel2:#151b26; --line:rgba(255,255,255,.09);
+    --ink:#e8ecf4; --muted:#8b93a7; --faint:#5b6376;
+    --accent:#2f9bff; --amber:#ffb340; --green:#35d07f; --red:#ff5d5d;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html{background:var(--bg);}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,system-ui,sans-serif;
+    background:var(--bg); color:var(--ink); font-size:16px; line-height:1.6;
+    padding-bottom:196px; min-height:100dvh;
+  }
+  button{font-size:16px;touch-action:manipulation;font-family:inherit;}
+  input{font-size:16px;touch-action:manipulation;}
+  .wrap{max-width:700px;margin:0 auto;padding:0 16px;}
+  header.top{padding:calc(14px + env(safe-area-inset-top)) 0 6px;}
+  header.top .kicker{font-size:11px;letter-spacing:.22em;color:var(--faint);font-weight:700;}
+  header.top h1{font-size:30px;letter-spacing:-.5px;margin:4px 0 2px;font-weight:800;}
+  header.top h1 .thin{font-weight:200;color:var(--muted);}
+  header.top p{color:var(--muted);font-size:14.5px;}
+  .card{
+    background:var(--panel);border:1px solid var(--line);border-radius:18px;
+    padding:20px 18px;margin:14px 0;
+  }
+  .card h2{font-size:21px;letter-spacing:-.3px;margin-bottom:8px;}
+  .card h2 .n{color:var(--faint);font-weight:200;margin-right:8px;}
+  .card p{color:#c6cddd;margin:8px 0;font-size:15.5px;}
+  .card p b{color:var(--ink);}
+  .card .dim{color:var(--muted);font-size:14px;}
+  .stepTag{font-size:11px;letter-spacing:.2em;color:var(--faint);font-weight:700;margin-bottom:2px;}
+  canvas.viz{
+    width:100%;display:block;border-radius:12px;background:#070a10;
+    border:1px solid var(--line);margin:12px 0 6px;touch-action:manipulation;
+  }
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0;}
+  .seg{
+    display:flex;background:var(--panel2);border:1px solid var(--line);
+    border-radius:999px;padding:3px;gap:2px;
+  }
+  .seg button{
+    border:none;background:transparent;color:var(--muted);font-weight:700;
+    padding:8px 16px;border-radius:999px;cursor:pointer;font-size:14.5px;
+  }
+  .seg button[aria-pressed="true"]{background:var(--accent);color:#04121f;}
+  .btn{
+    border:1px solid var(--line);background:var(--panel2);color:var(--ink);
+    border-radius:12px;padding:11px 18px;font-weight:700;cursor:pointer;
+  }
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#04121f;}
+  .btn:active{transform:scale(.97);}
+  .ctl{margin:12px 0;}
+  .ctl label{display:flex;justify-content:space-between;font-size:14px;color:var(--muted);margin-bottom:6px;}
+  .ctl label output{color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums;}
+  input[type=range]{width:100%;accent-color:var(--accent);height:28px;}
+  .stat3{display:flex;gap:8px;margin:12px 0;}
+  .stat{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;text-align:center;}
+  .stat .v{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;}
+  .stat .l{font-size:11.5px;color:var(--muted);letter-spacing:.06em;}
+  .hashlist{
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;
+    background:#070a10;border:1px solid var(--line);border-radius:12px;
+    padding:10px 12px;margin:10px 0;max-height:150px;overflow:auto;color:#aeb8cc;
+  }
+  .hashlist .hk{color:var(--amber);}
+  .verdict{
+    border-radius:14px;padding:14px 16px;margin:12px 0;font-weight:700;font-size:17px;
+    background:rgba(53,208,127,.1);border:1px solid rgba(53,208,127,.4);color:var(--green);
+  }
+  .verdict small{display:block;font-weight:400;color:var(--muted);font-size:13.5px;margin-top:4px;}
+  table.lookup{width:100%;border-collapse:collapse;font-size:13px;margin:10px 0;}
+  table.lookup th{text-align:left;color:var(--faint);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line);font-size:11.5px;letter-spacing:.08em;}
+  table.lookup td{padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.05);font-family:ui-monospace,Menlo,monospace;color:#aeb8cc;}
+  table.lookup td.song{color:var(--accent);font-weight:700;}
+  .stepbar{
+    position:fixed;left:0;right:0;bottom:0;z-index:50;
+    background:rgba(11,14,20,.96);border-top:1px solid var(--line);
+    padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+  }
+  .stepbar .inner{max-width:700px;margin:0 auto;}
+  .progress{height:4px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden;margin-bottom:10px;}
+  .progress i{display:block;height:100%;width:0;background:var(--accent);border-radius:2px;transition:width .4s ease;}
+  .metarow{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .steptext{flex:1;text-align:center;font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .navrow{display:flex;gap:10px;}
+  .navbtn{
+    flex:1;border:1px solid var(--line);background:var(--panel2);color:var(--ink);
+    border-radius:14px;padding:13px 0;font-weight:800;font-size:16.5px;cursor:pointer;
+  }
+  .navbtn.primary{background:var(--accent);border-color:var(--accent);color:#04121f;}
+  .navbtn:disabled{opacity:.3;}
+  .dots{display:flex;justify-content:center;gap:8px;margin-top:10px;}
+  .sdot{width:9px;height:9px;border-radius:50%;background:#2a3140;border:none;padding:0;cursor:pointer;}
+  .sdot.done{background:var(--green);}
+  .sdot.cur{outline:2px solid var(--accent);outline-offset:2px;}
+  .hint{
+    text-align:center;color:var(--faint);font-size:13px;margin:8px 0 0;
+  }
+  footer{padding:26px 0 8px;color:var(--faint);font-size:13px;}
+  footer a{color:var(--accent);}
+  .toast{
+    position:fixed;left:50%;bottom:210px;transform:translateX(-50%) translateY(8px);
+    background:#1c2330;border:1px solid var(--line);padding:10px 18px;border-radius:999px;
+    font-size:14px;font-weight:600;opacity:0;transition:all .25s;z-index:60;pointer-events:none;
+    white-space:nowrap;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <div class="kicker">INTERACTIVE EXPLAINER</div>
+  <h1>Shazam <span class="thin">Lab</span></h1>
+  <p>How your phone names a song from 3 seconds in a noisy bar. Every visual below is computed live, in your browser, from real synthesized audio.</p>
+</div></header>
+
+<main class="wrap"><div id="stage"></div></main>
+
+<div class="stepbar"><div class="inner">
+  <div class="progress"><i id="barFill"></i></div>
+  <div class="metarow"><div class="steptext" id="stepText"></div></div>
+  <div class="navrow">
+    <button class="navbtn" id="backBtn">&#8249; Back</button>
+    <button class="navbtn primary" id="nextBtn">Start &#8250;</button>
+  </div>
+  <div class="dots" id="dots"></div>
+</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ============ DSP ENGINE: everything is computed, nothing is faked ============ */
+const SR = 8000;          // sample rate (Hz); Shazam used low rates too
+const DUR = 6;            // seconds per song
+const WIN = 256, HOP = 128;   // STFT window / hop (32ms / 16ms)
+const BINS = 128;
+const FRAME_S = HOP / SR;     // seconds per frame (~16ms)
+const TARGET_FRAMES = 48;     // target zone length (~0.77s)
+const TARGET_BINS = 48;
+const FANOUT = 8;
+const HIST_BIN = 4;           // histogram bin width in frames (~64ms)
+
+const SONGS = [
+  { name:"Song A", sub:"major arpeggio",
+    notes:[[60,1],[64,1],[67,1],[64,1],[69,1],[67,1],[64,1],[60,1],[64,1],[67,1],[69,2],[67,2]] },
+  { name:"Song B", sub:"minor walk",
+    notes:[[62,1],[65,1],[69,1],[65,1],[71,1],[69,1],[65,1],[62,1],[60,1],[62,2],[65,2],[62,2]] },
+  { name:"Song C", sub:"the climb",
+    notes:[[64,1],[67,1],[71,1],[67,1],[72,1],[71,1],[67,1],[64,1],[62,1],[64,2],[67,2],[64,2]] },
+];
+const midiF = m => 440 * Math.pow(2, (m - 69) / 12);
+
+function synthSong(notes){
+  const n = Math.floor(SR * DUR), x = new Float32Array(n);
+  const beat = 0.42;
+  let t = 0.3;
+  for(const [m, d] of notes){
+    const f = midiF(m), len = d * beat;
+    const s0 = Math.floor(t * SR), s1 = Math.min(n, Math.floor((t + len) * SR));
+    for(let i = s0; i < s1; i++){
+      const tt = (i - s0) / SR;
+      const env = Math.min(1, tt / 0.015) * Math.exp(-tt * 2.4);
+      const vib = 1 + 0.004 * Math.sin(2 * Math.PI * 5.5 * tt);
+      x[i] += 0.5 * env * (
+        Math.sin(2*Math.PI*f*vib*tt) +
+        0.5 * Math.sin(2*Math.PI*2*f*vib*tt) +
+        0.25 * Math.sin(2*Math.PI*3*f*vib*tt) +
+        0.12 * Math.sin(2*Math.PI*4.02*f*vib*tt));
+      if(tt < 0.012) x[i] += 0.35 * (Math.random()*2-1) * Math.exp(-tt*380);
+    }
+    t += len;
+  }
+  let mx = 1e-6;
+  for(const v of x) mx = Math.max(mx, Math.abs(v));
+  for(let i = 0; i < n; i++) x[i] /= mx;
+  return x;
+}
+
+/* iterative radix-2 FFT, in place */
+function fft(re, im){
+  const n = re.length;
+  for(let i = 1, j = 0; i < n; i++){
+    let b = n >> 1;
+    for(; j & b; b >>= 1) j ^= b;
+    j ^= b;
+    if(i < j){
+      let t = re[i]; re[i] = re[j]; re[j] = t;
+      t = im[i]; im[i] = im[j]; im[j] = t;
+    }
+  }
+  for(let L = 2; L <= n; L <<= 1){
+    const a = -2 * Math.PI / L, wr = Math.cos(a), wi = Math.sin(a);
+    for(let i = 0; i < n; i += L){
+      let cwr = 1, cwi = 0;
+      for(let k = 0; k < L/2; k++){
+        const ur = re[i+k], ui = im[i+k];
+        const vr = re[i+k+L/2]*cwr - im[i+k+L/2]*cwi;
+        const vi = re[i+k+L/2]*cwi + im[i+k+L/2]*cwr;
+        re[i+k] = ur+vr; im[i+k] = ui+vi;
+        re[i+k+L/2] = ur-vr; im[i+k+L/2] = ui-vi;
+        const nwr = cwr*wr - cwi*wi; cwi = cwr*wi + cwi*wr; cwr = nwr;
+      }
+    }
+  }
+}
+
+const hann = (() => { const w = new Float64Array(WIN);
+  for(let i = 0; i < WIN; i++) w[i] = 0.5 * (1 - Math.cos(2*Math.PI*i/(WIN-1)));
+  return w; })();
+
+/* spectrogram: array of Float32Array(BINS), log magnitude */
+function spectrogram(x){
+  const T = Math.floor((x.length - WIN) / HOP);
+  const spec = new Array(T);
+  const re = new Float64Array(WIN), im = new Float64Array(WIN);
+  for(let t = 0; t < T; t++){
+    const o = t * HOP;
+    for(let i = 0; i < WIN; i++){ re[i] = x[o+i] * hann[i]; im[i] = 0; }
+    fft(re, im);
+    const row = new Float32Array(BINS);
+    for(let f = 0; f < BINS; f++)
+      row[f] = Math.log1p(Math.hypot(re[f], im[f]));
+    spec[t] = row;
+  }
+  return spec;
+}
+
+/* local-maximum candidates, sorted by strength (desc) */
+function peakCandidates(spec){
+  const T = spec.length, out = [];
+  for(let t = 2; t < T-2; t++){
+    const row = spec[t];
+    for(let f = 5; f < BINS-5; f++){
+      const v = row[f];
+      if(v < 0.3) continue;
+      let ok = true;
+      for(let dt = -1; dt <= 1 && ok; dt++){
+        const r2 = spec[t+dt];
+        for(let df = -2; df <= 2; df++){
+          if(!dt && !df) continue;
+          if(r2[f+df] >= v){ ok = false; break; }
+        }
+      }
+      if(ok) out.push({t, f, v});
+    }
+  }
+  out.sort((a,b) => b.v - a.v);
+  return out;
+}
+
+/* combinatorial hashes from the top-K peaks */
+function hashPeaks(peaks){
+  const byT = peaks.slice().sort((a,b) => a.t - b.t);
+  const H = [];
+  for(let i = 0; i < byT.length; i++){
+    const a = byT[i];
+    let fan = 0;
+    for(let j = i+1; j < byT.length && fan < FANOUT; j++){
+      const b = byT[j], dt = b.t - a.t;
+      if(dt > TARGET_FRAMES) break;
+      if(dt < 2 || Math.abs(b.f - a.f) > TARGET_BINS) continue;
+      H.push({key: a.f + ":" + b.f + ":" + dt, f1: a.f, f2: b.f, dt, ta: a.t,
+              fa: a, fb: b});
+      fan++;
+    }
+  }
+  return H;
+}
+
+/* ---- precompute the world ---- */
+const WORLD = SONGS.map(s => {
+  const samples = synthSong(s.notes);
+  const spec = spectrogram(samples);
+  let mx = 1e-6;
+  for(const row of spec) for(const v of row) mx = Math.max(mx, v);
+  return {...s, samples, spec, specMax: mx,
+          candidates: peakCandidates(spec), peaks: [], hashes: []};
+});
+const DB = new Map();   // hash -> [{song, t}]
+
+function rebuildFingerprints(K){
+  DB.clear();
+  WORLD.forEach((w, si) => {
+    w.peaks = w.candidates.slice(0, K);
+    w.hashes = hashPeaks(w.peaks);
+    for(const h of w.hashes){
+      let arr = DB.get(h.key);
+      if(!arr){ arr = []; DB.set(h.key, arr); }
+      arr.push({song: si, t: h.ta});
+    }
+  });
+}
+
+/* ---- the query: clip a song, add noise, identify ---- */
+function makeQuery(songIdx, startS, lenS, noiseAmp){
+  const w = WORLD[songIdx];
+  const s0 = Math.floor(startS * SR), n = Math.floor(lenS * SR);
+  const clip = new Float32Array(n);
+  for(let i = 0; i < n; i++){
+    const v = (s0 + i < w.samples.length) ? w.samples[s0+i] : 0;
+    clip[i] = v + noiseAmp * (Math.random()*2 - 1);
+  }
+  let mx = 1e-6;
+  for(const v of clip) mx = Math.max(mx, Math.abs(v));
+  for(let i = 0; i < n; i++) clip[i] /= mx;
+  return clip;
+}
+
+function identify(clip){
+  const spec = spectrogram(clip);
+  const peaks = peakCandidates(spec).slice(0, 400);
+  const hashes = hashPeaks(peaks);
+  const per = [new Map(), new Map(), new Map()];
+  const hits = [0, 0, 0];
+  for(const h of hashes){
+    const arr = DB.get(h.key);
+    if(!arr) continue;
+    for(const e of arr){
+      hits[e.song]++;
+      const bin = Math.round((e.t - h.ta) / HIST_BIN);
+      const m = per[e.song];
+      m.set(bin, (m.get(bin) || 0) + 1);
+    }
+  }
+  const res = per.map((m, si) => {
+    let bestBin = 0, best = 0;
+    for(const [b, c] of m){ if(c > best){ best = c; bestBin = b; } }
+    return {song: si, hits: hits[si], best, bestBin, map: m,
+            offsetS: bestBin * HIST_BIN * FRAME_S};
+  });
+  const order = res.slice().sort((a,b) => b.best - a.best);
+  return {res, winner: order[0], runnerUp: order[1], qHashes: hashes.length,
+          qPeaks: peaks.length, spec};
+}
+/* ============ UI ============ */
+const S = { song:0, density:350, anchorKey:null, qSong:1, qStart:2.0, qNoise:0.35, qLen:3.0 };
+rebuildFingerprints(S.density);
+
+const $ = id => document.getElementById(id);
+const stage = $("stage"), barFill = $("barFill"), stepText = $("stepText"),
+      dotsEl = $("dots"), backBtn = $("backBtn"), nextBtn = $("nextBtn");
+const fmt = n => n.toLocaleString("en-US");
+
+function toast(msg){
+  const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._tm); t._tm = setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+/* ---- audio ---- */
+let AC = null;
+function ac(){ if(!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); return AC; }
+function bufOf(x){
+  const a = ac(), b = a.createBuffer(1, x.length, SR);
+  b.getChannelData(0).set(x); return b;
+}
+const bufCache = {};
+function playSamples(x, key){
+  const a = ac(); if(a.state === "suspended") a.resume();
+  if(!bufCache[key]) bufCache[key] = bufOf(x);
+  const src = a.createBufferSource(); src.buffer = bufCache[key];
+  src.connect(a.destination); src.start();
+  toast("Playing");
+}
+
+/* ---- canvas helpers ---- */
+function fit(cv, h){
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = cv.clientWidth || cv.parentElement.clientWidth;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return {ctx, W: w, H: h};
+}
+function cmap(v){
+  v = Math.max(0, Math.min(1, v));
+  let r, g, b;
+  if(v < 0.5){ const t = v/0.5; r = 8+30*t; g = 16+90*t; b = 52+130*t; }
+  else { const t = (v-0.5)/0.5; r = 38+217*t; g = 106+149*t; b = 182+73*t; }
+  return [r|0, g|0, b|0];
+}
+const FSHOW = 96; // bins shown (0..3kHz)
+function specImage(w){
+  const T = w.spec.length;
+  const off = document.createElement("canvas");
+  off.width = T; off.height = FSHOW;
+  const octx = off.getContext("2d");
+  const img = octx.createImageData(T, FSHOW);
+  for(let t = 0; t < T; t++){
+    const row = w.spec[t];
+    for(let f = 0; f < FSHOW; f++){
+      const v = row[f] / w.specMax;
+      const [r, g, b] = cmap(Math.pow(v, 0.65));
+      const y = FSHOW - 1 - f, p = (y * T + t) * 4;
+      img.data[p] = r; img.data[p+1] = g; img.data[p+2] = b; img.data[p+3] = 255;
+    }
+  }
+  octx.putImageData(img, 0, 0);
+  return {off, T};
+}
+function drawSpecBase(ctx, W, H, w, alpha){
+  const {off, T} = specImage(w);
+  ctx.save(); ctx.globalAlpha = alpha;
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(off, 0, 0, W, H);
+  ctx.restore();
+  return T;
+}
+const X = (px, W, T) => px / W * T;
+const FX = (t, W, T) => t / T * W;
+const FY = (f, H) => H - (f / FSHOW) * H;
+function drawPeaks(ctx, W, H, T, peaks, color, r){
+  ctx.fillStyle = color;
+  for(const p of peaks){
+    ctx.beginPath();
+    ctx.arc(FX(p.t, W, T), FY(p.f, H), r, 0, 7);
+    ctx.fill();
+  }
+}
+function drawWave(ctx, W, H, x){
+  ctx.clearRect(0, 0, W, H);
+  ctx.strokeStyle = "#2f9bff"; ctx.lineWidth = 1.5; ctx.beginPath();
+  const n = x.length;
+  for(let px = 0; px < W; px++){
+    const i = Math.floor(px / W * n);
+    const y = H/2 - x[i] * (H/2 - 8);
+    px ? ctx.lineTo(px, y) : ctx.moveTo(px, y);
+  }
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(255,255,255,.15)"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke();
+}
+
+/* ---- step screens ---- */
+function songSeg(sel){
+  return '<div class="seg" data-seg="song">' + WORLD.map((w, i) =>
+    '<button data-i="' + i + '" aria-pressed="' + (sel === i) + '">' + w.name + '</button>').join("") + '</div>';
+}
+function wireSongSeg(root, cb){
+  root.querySelectorAll('[data-seg="song"] button').forEach(b =>
+    b.addEventListener("click", () => { S.song = +b.dataset.i; cb(); }));
+}
+
+const STEPS = [
+{ label:"Intro", html(){
+  return '<div class="card"><div class="stepTag">THE TRICK</div><h2>Your phone is not listening to the music</h2>' +
+  '<p>Hold your phone up in a noisy bar. Three seconds later it names the song. It does not know the lyrics. It does not hum along. It runs an algorithm from a <b>2003 paper</b>, and the whole beautiful trick fits on this page.</p>' +
+  '<p>Everything you are about to see is <b>computed live</b> in your browser from real synthesized audio: the spectrogram, the star map, the hashes, the final vote. Nothing is a mockup.</p>' +
+  '<p style="border-left:3px solid var(--accent);padding:8px 12px;color:#aeb8cc;font-size:14.5px">"The serious answer to how Shazam worked is it took the peaks of a spectrogram of short clips of every song, hash it with the value being (time stamp, track id) and then the actual recognition is a hashtable lookup."<br><span class="dim">Deedy Das on X, which is what sent me down this hole</span></p><p class="dim">Based on Avery Li-Chun Wang, "An Industrial-Strength Audio Search Algorithm", ISMIR 2003.</p></div>';
+}},
+
+{ label:"1 of 6 · raw audio", html(){
+  return '<div class="card"><div class="stepTag">STEP 1 · RAW AUDIO</div><h2>First, the raw material</h2>' +
+  '<p>Every sound is just air wiggles. Your phone turns them into numbers, <b>8,000 per second</b>. I synthesized three little tunes for this demo. Pick one and press play. This anonymous waveform is all the algorithm ever gets.</p>' +
+  '<div class="row">' + songSeg(S.song) +
+  '<button class="btn primary" id="playBtn">Play</button></div>' +
+  '<canvas class="viz" id="waveCv" style="height:170px"></canvas>' +
+  '<p class="dim" id="waveCap"></p></div>';
+}, mount(el){
+  const w = WORLD[S.song];
+  const cv = el.querySelector("#waveCv"), {ctx, W, H} = fit(cv, 170);
+  drawWave(ctx, W, H, w.samples);
+  el.querySelector("#waveCap").textContent =
+    w.name + " · " + w.sub + " · " + fmt(w.samples.length) + " samples, " + DUR + " seconds";
+  el.querySelector("#playBtn").addEventListener("click", () => playSamples(w.samples, "song"+S.song));
+  wireSongSeg(el, () => render());
+}},
+
+{ label:"2 of 6 · spectrogram", html(){
+  return '<div class="card"><div class="stepTag">STEP 2 · SPECTROGRAM</div><h2>Sound becomes a picture</h2>' +
+  '<p>The algorithm chops the numbers into tiny slices, <b>32 milliseconds</b> each, and runs a Fourier transform on every slice to ask: which pitches are loud right now?</p>' +
+  '<p>Time runs left to right, pitch runs bottom to top, brightness is loudness. A song is now a picture. (Showing 0 to 3 kHz, where the music lives.)</p>' +
+  '<div class="row">' + songSeg(S.song) + '</div>' +
+  '<canvas class="viz" id="specCv" style="height:240px"></canvas>' +
+  '<p class="dim">Real STFT, 256-point windows, computed in this page.</p></div>';
+}, mount(el){
+  const w = WORLD[S.song];
+  const cv = el.querySelector("#specCv"), {ctx, W, H} = fit(cv, 240);
+  drawSpecBase(ctx, W, H, w, 1);
+  wireSongSeg(el, () => render());
+}},
+
+{ label:"3 of 6 · constellation", html(){
+  const w = WORLD[S.song];
+  return '<div class="card"><div class="stepTag">STEP 3 · CONSTELLATION MAP</div><h2>Keep only the stars</h2>' +
+  '<p>The picture is huge and fragile. A cough in the bar changes half the pixels. So the algorithm keeps only the brightest dots: each dot is the <b>loudest pitch in its little neighborhood</b>.</p>' +
+  '<p>What is left is a <b>constellation map</b>, a few hundred stars per song. Here is the key insight: noise can dim a star, but it rarely moves one. The geometry survives.</p>' +
+  '<div class="row">' + songSeg(S.song) + '</div>' +
+  '<canvas class="viz" id="conCv" style="height:240px"></canvas>' +
+  '<div class="ctl"><label>Peak density <output id="densOut">' + fmt(w.peaks.length) + ' stars</output></label>' +
+  '<input type="range" id="densRg" min="120" max="700" step="10" value="' + S.density + '"></div>' +
+  '<p class="dim">Drag to change how many stars survive. Fewer stars is faster; more stars is sturdier.</p></div>';
+}, mount(el){
+  const w = WORLD[S.song];
+  const cv = el.querySelector("#conCv"), {ctx, W, H} = fit(cv, 240);
+  const T = drawSpecBase(ctx, W, H, w, 0.35);
+  drawPeaks(ctx, W, H, T, w.peaks, "#ffb340", 2.2);
+  const rg = el.querySelector("#densRg");
+  rg.addEventListener("input", () => {
+    S.density = +rg.value;
+    el.querySelector("#densOut").textContent = fmt(S.density) + " stars";
+  });
+  rg.addEventListener("change", () => { rebuildFingerprints(S.density); render(); });
+  wireSongSeg(el, () => render());
+}},
+
+{ label:"4 of 6 · fingerprint", html(){
+  return '<div class="card"><div class="stepTag">STEP 4 · COMBINATORIAL HASHING</div><h2>Turn geometry into hashes</h2>' +
+  '<p><b>Tap any star</b> to make it the anchor. The algorithm draws a target zone after it and pairs the anchor with the next few stars inside. Each pair becomes one hash: <b>two pitches plus the time gap between them</b>.</p>' +
+  '<p>Note what is missing: the hash never records <b>where</b> in the song it happened. Shift the whole song ten seconds and every hash stays identical. That is what makes snippets matchable.</p>' +
+  '<div class="row">' + songSeg(S.song) + '</div>' +
+  '<canvas class="viz" id="fpCv" style="height:240px;cursor:crosshair"></canvas>' +
+  '<p class="hint" id="fpHint">Tap a star</p>' +
+  '<div class="hashlist" id="fpHashes"></div></div>';
+}, mount(el){
+  const w = WORLD[S.song];
+  const cv = el.querySelector("#fpCv");
+  if(!S.anchorKey || !w.peaks.find(p => p.t+":"+p.f === S.anchorKey)){
+    const mid = w.peaks.filter(p => p.t > w.spec.length*0.3 && p.t < w.spec.length*0.6)
+                       .sort((a,b) => b.v - a.v)[0] || w.peaks[0];
+    S.anchorKey = mid.t + ":" + mid.f;
+  }
+  const draw = () => {
+    const {ctx, W, H} = fit(cv, 240);
+    const T = drawSpecBase(ctx, W, H, w, 0.3);
+    drawPeaks(ctx, W, H, T, w.peaks, "rgba(255,179,64,.55)", 1.8);
+    const a = w.peaks.find(p => p.t+":"+p.f === S.anchorKey);
+    if(!a) return;
+    const ax = FX(a.t, W, T), ay = FY(a.f, H);
+    const zx0 = FX(a.t+2, W, T), zx1 = FX(Math.min(T-1, a.t+TARGET_FRAMES), W, T);
+    const zy1 = FY(Math.min(FSHOW-1, a.f+TARGET_BINS), H), zy0 = FY(Math.max(0, a.f-TARGET_BINS), H);
+    ctx.strokeStyle = "#35d07f"; ctx.setLineDash([6,4]); ctx.lineWidth = 1.5;
+    ctx.strokeRect(zx0, zy1, zx1-zx0, zy0-zy1); ctx.setLineDash([]);
+    const pairs = w.hashes.filter(h => h.ta === a.t && h.f1 === a.f).slice(0, FANOUT);
+    ctx.strokeStyle = "rgba(53,208,127,.8)"; ctx.lineWidth = 1.2;
+    for(const h of pairs){
+      ctx.beginPath(); ctx.moveTo(ax, ay);
+      ctx.lineTo(FX(h.fb.t, W, T), FY(h.fb.f, H)); ctx.stroke();
+    }
+    ctx.fillStyle = "#ff5d5d";
+    ctx.beginPath(); ctx.arc(ax, ay, 5, 0, 7); ctx.fill();
+    ctx.fillStyle = "#35d07f";
+    for(const h of pairs){ ctx.beginPath(); ctx.arc(FX(h.fb.t, W, T), FY(h.fb.f, H), 3, 0, 7); ctx.fill(); }
+    el.querySelector("#fpHint").textContent =
+      "Anchor at " + (a.t*FRAME_S).toFixed(2) + "s · " + pairs.length + " pairs";
+    el.querySelector("#fpHashes").innerHTML = pairs.map(h =>
+      '<div><span class="hk">' + h.key + '</span> &nbsp;f1=' + h.f1 + ' f2=' + h.f2 +
+      ' dt=' + (h.dt*FRAME_S*1000).toFixed(0) + 'ms</div>').join("") ||
+      '<div>No pairs in this zone, tap another star.</div>';
+  };
+  draw();
+  cv.addEventListener("click", e => {
+    const r = cv.getBoundingClientRect();
+    const {W, H} = {W: r.width, H: r.height};
+    const T = w.spec.length;
+    const pt = X(e.clientX - r.left, W, T), pf = (1 - (e.clientY - r.top)/H) * FSHOW;
+    let best = null, bd = 1e9;
+    for(const p of w.peaks){
+      const d = Math.hypot(p.t - pt, (p.f - pf) * (T/FSHOW) * 0.4);
+      if(d < bd){ bd = d; best = p; }
+    }
+    if(best){ S.anchorKey = best.t + ":" + best.f; draw(); }
+  });
+  wireSongSeg(el, () => render());
+}},
+
+{ label:"5 of 6 · the database", html(){
+  const tot = WORLD.reduce((a,w) => a + w.hashes.length, 0);
+  const w = WORLD[S.song];
+  const sample = [0.15, 0.4, 0.65, 0.85].map(fr =>
+    w.hashes[Math.floor(w.hashes.length * fr)]).filter(Boolean);
+  const rows = sample.map(h => {
+    const arr = (DB.get(h.key) || []).slice(0, 3);
+    return '<tr><td class="hk">' + h.key + '</td>' +
+      arr.map(e => '<td class="song">' + WORLD[e.song].name + '</td><td>' + (e.t*FRAME_S).toFixed(2) + 's</td>').join("") +
+      '</tr>';
+  }).join("");
+  return '<div class="card"><div class="stepTag">STEP 5 · THE DATABASE</div><h2>File them like a dictionary</h2>' +
+  '<p>Do this for every anchor and each song becomes <b>thousands of hashes</b>. The database files every hash under each song and time it appears in. Identifying a song is then just dictionary lookups. Millions of hashes, milliseconds.</p>' +
+  '<div class="stat3">' + WORLD.map(x =>
+    '<div class="stat"><div class="v">' + fmt(x.hashes.length) + '</div><div class="l">' + x.name.toUpperCase() + ' HASHES</div></div>').join("") + '</div>' +
+  '<p>Each record is tiny: a 32-bit hash plus the song id and time. A few of ' + w.name + '\'s hashes, and where they are filed:</p>' +
+  '<table class="lookup"><tr><th>HASH</th><th>SONG</th><th>TIME</th><th>SONG</th><th>TIME</th></tr>' + rows + '</table>' +
+  '<p class="dim">Total in this demo database: ' + fmt(tot) + ' hashes. The real Shazam holds billions.</p></div>';
+}},
+
+{ label:"6 of 6 · the vote", html(){
+  return '<div class="card"><div class="stepTag">STEP 6 · IDENTIFICATION</div><h2>The vote</h2>' +
+  '<p>Now the fun part. Take <b>3 seconds</b> of a song, blast noise over it, start mid-song. The clip gets the same treatment: spectrogram, stars, hashes. Every hash looks itself up, and for each hit the algorithm asks: <b>what time offset does this imply?</b></p>' +
+  '<p>Wrong songs scatter their votes across time. The right song piles hundreds of votes onto a <b>single offset</b>. That spike <i>is</i> the answer.</p>' +
+  '<div class="ctl"><label>Query song</label><div class="seg" id="qSeg">' + WORLD.map((w,i) =>
+    '<button data-i="' + i + '" aria-pressed="' + (S.qSong === i) + '">' + w.name + '</button>').join("") + '</div></div>' +
+  '<div class="ctl"><label>Clip starts at <output id="qStartOut">' + S.qStart.toFixed(1) + 's</output></label>' +
+  '<input type="range" id="qStart" min="0" max="3" step="0.1" value="' + S.qStart + '"></div>' +
+  '<div class="ctl"><label>Bar noise <output id="qNoiseOut">' + Math.round(S.qNoise*100) + '%</output></label>' +
+  '<input type="range" id="qNoise" min="0" max="0.9" step="0.05" value="' + S.qNoise + '"></div>' +
+  '<div class="row"><button class="btn" id="playQ">Hear the clip</button>' +
+  '<button class="btn primary" id="idBtn">Identify</button></div>' +
+  '<canvas class="viz" id="histCv" style="height:300px"></canvas>' +
+  '<div id="verdictBox"></div>' +
+  '<p class="dim">The x-axis is the implied time offset. A sharp spike means hundreds of hashes agree.</p></div>';
+}, mount(el){
+  let tm = null;
+  const run = () => {
+    const clip = makeQuery(S.qSong, S.qStart, S.qLen, S.qNoise);
+    const R = identify(clip);
+    drawHist(el.querySelector("#histCv"), R);
+    const v = R.winner;
+    el.querySelector("#verdictBox").innerHTML =
+      '<div class="verdict">It\'s ' + WORLD[v.song].name +
+      '<small>' + fmt(v.best) + ' hashes agree on offset ' + v.offsetS.toFixed(2) + 's · ' +
+      fmt(v.hits) + ' total hash hits · runner-up managed ' + fmt(R.runnerUp.best) + '</small></div>';
+    el._clip = clip;
+  };
+  const sched = () => { clearTimeout(tm); tm = setTimeout(run, 250); };
+  el.querySelector("#qSeg").querySelectorAll("button").forEach(b =>
+    b.addEventListener("click", () => {
+      S.qSong = +b.dataset.i;
+      el.querySelectorAll("#qSeg button").forEach(x => x.setAttribute("aria-pressed", x === b));
+      sched();
+    }));
+  const qs = el.querySelector("#qStart"), qn = el.querySelector("#qNoise");
+  qs.addEventListener("input", () => { S.qStart = +qs.value;
+    el.querySelector("#qStartOut").textContent = S.qStart.toFixed(1) + "s"; sched(); });
+  qn.addEventListener("input", () => { S.qNoise = +qn.value;
+    el.querySelector("#qNoiseOut").textContent = Math.round(S.qNoise*100) + "%"; sched(); });
+  el.querySelector("#idBtn").addEventListener("click", run);
+  el.querySelector("#playQ").addEventListener("click", () => {
+    if(!el._clip) run();
+    playSamples(el._clip, "q" + S.qSong + S.qStart + S.qNoise);
+  });
+  run();
+}}
+];
+
+/* ---- histogram ---- */
+function drawHist(cv, R){
+  const {ctx, W, H} = fit(cv, 300);
+  ctx.clearRect(0, 0, W, H);
+  const rowH = H / 3;
+  let gmin = 1e9, gmax = -1e9, gpeak = 1;
+  for(const r of R.res) for(const b of r.map.keys()){ gmin = Math.min(gmin, b); gmax = Math.max(gmax, b); }
+  if(gmin > gmax){ gmin = -10; gmax = 10; }
+  for(const r of R.res) for(const c of r.map.values()) gpeak = Math.max(gpeak, c);
+  const padL = 64, padR = 10, padT = 8, padB = 8;
+  const bw = (W - padL - padR) / Math.max(1, (gmax - gmin + 1));
+  R.res.forEach((r, i) => {
+    const y0 = i * rowH, win = r.song === R.winner.song;
+    ctx.fillStyle = win ? "#e8ecf4" : "#8b93a7";
+    ctx.font = "700 12px -apple-system,sans-serif"; ctx.textBaseline = "middle";
+    ctx.fillText(WORLD[r.song].name, 8, y0 + rowH/2);
+    if(win){
+      ctx.fillStyle = "rgba(53,208,127,.12)";
+      ctx.fillRect(padL, y0 + 2, W - padL - padR, rowH - 4);
+    }
+    for(const [b, c] of r.map){
+      const x = padL + (b - gmin) * bw;
+      const h = Math.max(1.5, (c / gpeak) * (rowH - padT - padB));
+      ctx.fillStyle = win ? (c === r.best ? "#35d07f" : "rgba(53,208,127,.45)")
+                          : "rgba(139,147,167,.5)";
+      ctx.fillRect(x, y0 + rowH - padB - h, Math.max(1, bw - 0.6), h);
+    }
+    ctx.fillStyle = "#5b6376"; ctx.font = "11px -apple-system,sans-serif";
+    ctx.fillText(fmt(r.hits) + " hits", 8, y0 + rowH/2 + 16);
+  });
+  ctx.fillStyle = "#5b6376"; ctx.font = "11px -apple-system,sans-serif";
+  const lo = (gmin*HIST_BIN*FRAME_S).toFixed(1), hi = (gmax*HIST_BIN*FRAME_S).toFixed(1);
+  ctx.fillText("offset " + lo + "s", padL, H - 2);
+  const t2 = "offset " + hi + "s";
+  ctx.fillText(t2, W - padR - ctx.measureText(t2).width, H - 2);
+}
+
+/* ---- step chrome ---- */
+let step = 0;
+function render(){
+  const s = STEPS[step];
+  stage.innerHTML = s.html();
+  if(s.mount) s.mount(stage);
+  barFill.style.width = ((step + 1) / STEPS.length * 100) + "%";
+  stepText.textContent = s.label;
+  nextBtn.innerHTML = step === 0 ? "Start &#8250;" :
+    step === STEPS.length - 1 ? "Replay &#8635;" : "Next &#8250;";
+  backBtn.disabled = step === 0;
+  dotsEl.innerHTML = "";
+  STEPS.forEach((q, i) => {
+    const d = document.createElement("button");
+    d.className = "sdot" + (i < step ? " done" : "") + (i === step ? " cur" : "");
+    d.setAttribute("aria-label", "Go to step " + (i + 1));
+    d.addEventListener("click", () => goTo(i));
+    dotsEl.appendChild(d);
+  });
+  window.scrollTo(0, 0);
+}
+function goTo(n){
+  step = Math.max(0, Math.min(STEPS.length - 1, n));
+  render();
+}
+backBtn.addEventListener("click", () => goTo(step - 1));
+nextBtn.addEventListener("click", () => {
+  if(step === STEPS.length - 1) goTo(0); else goTo(step + 1);
+});
+document.addEventListener("keydown", e => {
+  const t = (e.target.tagName || "").toLowerCase();
+  if(t === "textarea" || t === "input") return;
+  if(e.key === "ArrowRight") nextBtn.click();
+  else if(e.key === "ArrowLeft") backBtn.click();
+});
+window.addEventListener("resize", () => render());
+
+render();
+</script>
+</body>
+</html>

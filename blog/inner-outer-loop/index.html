@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Loop That Watches the Loop: luke's blog</title>
+<meta name="description" content="Ben Holmes splits engineering into two loops: the inner loop where agents build the product, and the outer loop where supervisors improve the agents. Most teams only run the first one.">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    min-height: 100%;
+    background: #f6f1e3;
+    color: #2b2b2b;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.7;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 56px 22px 80px; }
+  nav.top { margin-bottom: 40px; font-size: 14px; }
+  nav.top a { color: rgba(43,43,43,0.55); text-decoration: none; }
+  nav.top a:hover { color: #b3352b; }
+  h1 { font-size: 32px; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 8px; }
+  .meta { color: rgba(43,43,43,0.5); font-size: 14px; margin-bottom: 24px; }
+  .verdict { font-size: 17px; color: #2b2b2b; border-left: 3px solid #b3352b;
+    padding: 4px 0 4px 18px; margin: 0 0 28px; line-height: 1.65; }
+  p { margin-bottom: 16px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  p strong, li strong { color: #2b2b2b; }
+  h2 { font-size: 23px; color: #2b2b2b; margin: 44px 0 10px; letter-spacing: -0.01em; }
+  ul { margin: 0 0 16px 20px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  li { margin-bottom: 8px; }
+  a { color: #b3352b; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px;
+    background: rgba(43,43,43,0.07); padding: 1px 6px; border-radius: 5px; }
+  figure { margin: 24px 0 28px; }
+  figure img { width: 100%; border-radius: 12px; border: 1px solid rgba(43,43,43,0.15);
+    display: block; }
+  figcaption { font-size: 14px; color: rgba(43,43,43,0.6); margin-top: 8px;
+    line-height: 1.5; text-align: center; }
+  footer { margin-top: 60px; font-size: 13px; color: rgba(43,43,43,0.35); }
+  footer a { color: rgba(43,43,43,0.6); }
+  .kicker-close { font-size: 19px; font-weight: 700; color: #2b2b2b;
+    border-top: 1px solid rgba(43,43,43,0.15); padding-top: 28px; margin-top: 48px; }
+
+  /* Loop diagram */
+  .loops { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 16px; padding: 12px 8px 4px; margin: 24px 0; }
+  .loops svg { width: 100%; height: auto; display: block; }
+  .loops .node { cursor: pointer; touch-action: manipulation; }
+  .loops .node circle { transition: r 160ms; }
+  .loops .node:active circle { r: 20; }
+  .loop-detail { min-height: 86px; background: rgba(179,53,43,0.06);
+    border-radius: 12px; padding: 14px 18px; margin: 4px 12px 14px; font-size: 15px; }
+  .loop-detail strong { display: block; font-size: 15px; margin-bottom: 2px; }
+  .loop-detail span { color: rgba(43,43,43,0.8); }
+  .loop-hint { text-align: center; font-size: 13px; color: rgba(43,43,43,0.5);
+    margin: 0 0 6px; }
+
+  /* Spot the waste game */
+  .game { margin: 24px 0; }
+  .conv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+  @media (max-width: 560px) { .conv-grid { grid-template-columns: 1fr; } }
+  .conv { border: 2px solid rgba(43,43,43,0.16); border-radius: 14px; padding: 16px;
+    background: #fffdf6; cursor: pointer; touch-action: manipulation; position: relative;
+    transition: border-color 160ms, transform 120ms; }
+  .conv:active { transform: scale(0.98); }
+  .conv h4 { font-size: 16px; margin-bottom: 6px; }
+  .conv .stat { font-size: 13.5px; color: rgba(43,43,43,0.7); margin-bottom: 2px; }
+  .conv .stat b { color: #2b2b2b; }
+  .conv .flag { position: absolute; top: 12px; right: 14px; width: 18px; height: 22px;
+    opacity: 0; transition: opacity 160ms; }
+  .conv.flagged { border-color: #b3352b; }
+  .conv.flagged .flag { opacity: 1; }
+  .conv.reveal-good { border-color: #2e7d32; background: rgba(46,125,50,0.06); }
+  .conv.reveal-bad { border-color: #b3352b; background: rgba(179,53,43,0.06); }
+  .conv .verdict-tag { display: none; font-size: 12px; font-weight: 700; margin-top: 8px; }
+  .conv.reveal-good .verdict-tag { display: block; color: #2e7d32; }
+  .conv.reveal-bad .verdict-tag { display: block; color: #b3352b; }
+  .game-bar { display: flex; align-items: center; gap: 12px; }
+  .game-bar button { touch-action: manipulation; border: none; background: #b3352b;
+    color: #f6f1e3; border-radius: 10px; padding: 12px 22px; font-size: 15px;
+    font-weight: 700; cursor: pointer; }
+  .game-bar button:active { transform: scale(0.97); }
+  .game-bar button:disabled { opacity: 0.4; }
+  .game-score { font-size: 15px; font-weight: 700; }
+  .game-note { font-size: 13.5px; color: rgba(43,43,43,0.6); margin-top: 10px; }
+
+  /* Compounding slider */
+  .compound { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 16px; padding: 22px; margin: 24px 0; }
+  .compound label { font-size: 15px; font-weight: 600; display: block; margin-bottom: 6px; }
+  .compound input[type=range] { width: 100%; margin: 10px 0 4px; accent-color: #b3352b;
+    height: 32px; touch-action: manipulation; }
+  .compound .readout { display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 12px; }
+  .compound .big { font-size: 34px; font-weight: 800; color: #b3352b;
+    font-variant-numeric: tabular-nums; }
+  .compound .bars { display: flex; align-items: flex-end; gap: 3px; height: 90px;
+    margin-top: 8px; }
+  .compound .bars div { flex: 1; background: rgba(179,53,43,0.75); border-radius: 3px 3px 0 0;
+    min-height: 3px; }
+  .compound .cap { font-size: 13.5px; color: rgba(43,43,43,0.6); margin-top: 10px; }
+
+  .diff { background: #2b2b2b; color: #f6f1e3; border-radius: 12px; padding: 18px;
+    margin: 16px 0 24px; overflow-x: auto; font-size: 13.5px; line-height: 1.7;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .diff .add { color: #8fd694; }
+  .diff .file { color: #e8a15c; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="top"><a href="/blog/">&larr; blog</a></nav>
+  <h1>The Loop That Watches the Loop</h1>
+  <div class="meta">October 6, 2026 &middot; ai agents &middot; engineering</div>
+
+  <p class="verdict">Ben Holmes runs Warp's agent factory. He splits the work into two loops: the inner loop, where a team of agents builds the product, and the outer loop, where a team of supervisors watches those agents and makes them better. Most teams only run the first loop. The ones that run both compound.</p>
+
+  <figure>
+    <img src="media-generation-gardener-robots-hero-0-55f89328-8a42-4c3e-b989-b6285bf539f8.webp" alt="A gardener tending a garden of small robot plants">
+    <figcaption>The gardener does not do the growing. He fixes the soil, the water, and the light. Then the garden does the rest.</figcaption>
+  </figure>
+
+  <h2>1. Two kinds of engineering</h2>
+  <p>Holmes draws a line between <strong>product engineering</strong> and <strong>factory engineering</strong>. Product engineering improves the product. Factory engineering improves the agents that improve the product. He credits <a href="https://x.com/bholmesdev/status/2107588784275816461">the gardening metaphor</a> to <strong>poteto</strong>: you do not grow plants by yelling at them. You improve the conditions and let growth happen.</p>
+  <p>His framing: the <strong>inner loop</strong> is your team of agents building everything. The <strong>outer loop</strong> is your team of supervisors and gardeners watching over those agents, spotting room for improvement. The best companies, he argues, will design for both loops at the same time.</p>
+
+  <h2>2. The diagram, but tappable</h2>
+  <p>His whiteboard sketch has two cycles. The inner loop ships the product in eight steps. The outer loop runs every 24 hours in four steps, watching the inner one. Tap any node to see what happens there.</p>
+
+  <div class="loops">
+    <svg viewBox="0 0 720 430" role="img" aria-label="Inner and outer loop diagram">
+      <!-- inner loop dashed circle -->
+      <ellipse cx="215" cy="205" rx="150" ry="150" fill="none" stroke="#3b82c4"
+        stroke-width="2.5" stroke-dasharray="10 8" opacity="0.85"/>
+      <text x="215" y="28" text-anchor="middle" font-size="17" font-weight="800" fill="#3b82c4">Inner loop: improve the product</text>
+      <!-- outer loop dashed circle -->
+      <ellipse cx="540" cy="205" rx="118" ry="118" fill="none" stroke="#e07b2a"
+        stroke-width="2.5" stroke-dasharray="10 8" opacity="0.85"/>
+      <text x="540" y="28" text-anchor="middle" font-size="17" font-weight="800" fill="#e07b2a">Outer loop: improve the factory</text>
+      <text x="540" y="52" text-anchor="middle" font-size="13" fill="rgba(43,43,43,0.6)">every 24 hr</text>
+      <!-- core factory loop -->
+      <ellipse cx="540" cy="205" rx="46" ry="46" fill="none" stroke="#3b82c4"
+        stroke-width="2" stroke-dasharray="6 5" opacity="0.7"/>
+      <text x="540" y="200" text-anchor="middle" font-size="11" font-weight="700" fill="#3b82c4">Core</text>
+      <text x="540" y="215" text-anchor="middle" font-size="11" font-weight="700" fill="#3b82c4">factory loop</text>
+      <!-- animated dots -->
+      <circle r="6" fill="#3b82c4"><animateMotion dur="9s" repeatCount="indefinite"
+        path="M 365,205 A 150,150 0 1 1 364,205"/></circle>
+      <circle r="6" fill="#e07b2a"><animateMotion dur="12s" repeatCount="indefinite"
+        path="M 658,205 A 118,118 0 1 1 657,205"/></circle>
+      <g id="loop-nodes" font-size="12.5" font-weight="600" text-anchor="middle"></g>
+    </svg>
+    <p class="loop-hint">Tap a node</p>
+    <div class="loop-detail" id="loop-detail"><strong>Pick a step</strong><span>Eight steps ship the product. Four steps improve the shippers.</span></div>
+  </div>
+
+  <h2>3. What the outer loop actually does</h2>
+  <p>At Warp, the outer loop is not a meeting. It is agents watching agents. One batch of agents <strong>scores</strong> agent conversations on rubrics like efficiency (did it waste tool calls?) and code quality (did it write excessive tests?). Then, on a schedule, another agent <strong>reviews the low scorers</strong> and proposes improvements to the team's skills. The proposals get merged, and the scores tell you whether the change helped. It is a feedback loop with a memory.</p>
+  <p>The example from his post: five conversations all wrote redundant tests. That is not five problems, it is one problem. The fix was a skill update:</p>
+  <div class="diff"><span class="file">test-writing/SKILL.md &nbsp;+57 &minus;20</span><br><span class="add">+ ## Coverage pyramid</span><br><span class="add">+ When to add unit vs. integration tests...</span></div>
+  <p>Try it yourself. Four agent conversations from yesterday. Two of them have a bad habit. You are the outer loop: flag the ones you would send back for retraining, then run the loop to see if you agree with the machine.</p>
+
+  <div class="game">
+    <div class="conv-grid" id="conv-grid">
+      <div class="conv" data-bad="0">
+        <span class="flag"><svg width="18" height="22" viewBox="0 0 18 22"><path d="M4 1v20" stroke="#b3352b" stroke-width="2.4" stroke-linecap="round"/><path d="M4 2h11l-3 4 3 4H4z" fill="#b3352b"/></svg></span>
+        <h4>Auth refactor</h4>
+        <div class="stat">Tool calls: <b>12</b> (avg 14)</div>
+        <div class="stat">Redundant tests: <b>0</b></div>
+        <div class="stat">Shipped: <b>yes</b>, no review comments</div>
+        <div class="verdict-tag"></div>
+      </div>
+      <div class="conv" data-bad="1">
+        <span class="flag"><svg width="18" height="22" viewBox="0 0 18 22"><path d="M4 1v20" stroke="#b3352b" stroke-width="2.4" stroke-linecap="round"/><path d="M4 2h11l-3 4 3 4H4z" fill="#b3352b"/></svg></span>
+        <h4>Login form</h4>
+        <div class="stat">Tool calls: <b>47</b> (avg 14)</div>
+        <div class="stat">Redundant tests: <b>5</b></div>
+        <div class="stat">Shipped: <b>yes</b>, 3 review comments</div>
+        <div class="verdict-tag"></div>
+      </div>
+      <div class="conv" data-bad="0">
+        <span class="flag"><svg width="18" height="22" viewBox="0 0 18 22"><path d="M4 1v20" stroke="#b3352b" stroke-width="2.4" stroke-linecap="round"/><path d="M4 2h11l-3 4 3 4H4z" fill="#b3352b"/></svg></span>
+        <h4>API endpoint</h4>
+        <div class="stat">Tool calls: <b>8</b> (avg 14)</div>
+        <div class="stat">Redundant tests: <b>0</b></div>
+        <div class="stat">Shipped: <b>yes</b>, no review comments</div>
+        <div class="verdict-tag"></div>
+      </div>
+      <div class="conv" data-bad="1">
+        <span class="flag"><svg width="18" height="22" viewBox="0 0 18 22"><path d="M4 1v20" stroke="#b3352b" stroke-width="2.4" stroke-linecap="round"/><path d="M4 2h11l-3 4 3 4H4z" fill="#b3352b"/></svg></span>
+        <h4>Checkout flow</h4>
+        <div class="stat">Tool calls: <b>31</b> (avg 14)</div>
+        <div class="stat">Redundant tests: <b>2</b></div>
+        <div class="stat">Shipped: <b>yes</b>, 1 review comment</div>
+        <div class="verdict-tag"></div>
+      </div>
+    </div>
+    <div class="game-bar">
+      <button id="run-loop">Run the outer loop &rarr;</button>
+      <span class="game-score" id="game-score"></span>
+    </div>
+    <p class="game-note" id="game-note">Tap cards to flag the wasteful ones, then run the loop.</p>
+  </div>
+
+  <h2>4. Old wisdom in new clothes</h2>
+  <p>The two loops are everywhere once you look.</p>
+  <p><strong>The garden.</strong> Gardeners do not photosynthesize. They fix the soil, the water, the light, and pull the weeds. The plants do the growing. Your agents are the plants. Your skills, rubrics, and guardrails are the soil.</p>
+  <figure>
+    <img src="media-generation-coach-reviewing-tape-0-56a851ca-fda9-4f78-abdf-3e638649b1f2:dofcv2.webp" alt="A robot coach reviewing monitors of worker robots with a red pen">
+    <figcaption>The outer loop is a coach reviewing tape at midnight, red pen in hand.</figcaption>
+  </figure>
+  <p><strong>The coach.</strong> Players run the plays. That is the inner loop, and it happens on game day. Coaches watch tape at midnight, circle mistakes in red, and redesign Tuesday's practice. That is the outer loop. No team wins with only one of them. Holmes is literally asking who else is setting up supervisor agents. He is hiring coaches.</p>
+  <p><strong>The roguelike.</strong> Gamers know this one by heart. Each run is the inner loop: you play, you die, the run ends. The outer loop is the meta-progression between runs: better gear, unlocked shortcuts, a stronger character. The run does not get easier. You get better at running. An agent team with no outer loop is a roguelike with no meta-progression: every run starts from zero, forever.</p>
+  <p><strong>The kitchen.</strong> Line cooks fire dishes all night. That is the inner loop. The chef sharpens the knives, rearranges the stations, and writes the prep list. That is the outer loop. A dull knife slows down every single dish, and no amount of faster cooking fixes a dull knife. Most teams try to cook faster. Holmes sharpens the knife.</p>
+
+  <h2>5. The math of compounding</h2>
+  <p>Here is why the outer loop matters more than it looks. A 3% improvement sounds like nothing. But the outer loop applies to <em>every future inner loop</em>. Drag the slider and watch what small, repeated improvements do over 30 outer-loop cycles.</p>
+
+  <div class="compound">
+    <label for="gain">Inner-loop speedup per outer-loop cycle: <span id="gain-val">3%</span></label>
+    <input type="range" id="gain" min="0" max="10" step="0.5" value="3">
+    <div class="readout">
+      <span>After 30 cycles, the inner loop runs</span>
+      <span class="big" id="mult">2.43&times;</span>
+    </div>
+    <div style="font-size:14px; margin-bottom:4px;">faster than day one.</div>
+    <div class="bars" id="bars"></div>
+    <p class="cap">Each bar is one cycle. The outer loop does not add speed, it multiplies it. This is the whole game.</p>
+  </div>
+
+  <h2>6. Steal this for a team of one</h2>
+  <p>You do not need a factory to run an outer loop. Once a week, read your own agent transcripts and ask two questions: where did it waste tool calls, and where did the code come out worse than you would write? Keep a <code>SKILL.md</code> of what you learn, the way Warp does. That file is your soil. Score next week's conversations against it. You are the gardener now.</p>
+  <p>Holmes wants to add more outer loops next: code architecture review, abstraction checks, static analysis as guardrails, in his words, to stop bad code viruses from spreading. The inner loop writes the code. The outer loop decides what kind of code the team writes. Design both.</p>
+
+  <p class="kicker-close">The inner loop builds the thing. The outer loop builds the builder. Guess which one compounds.</p>
+
+  <footer>Via <a href="https://x.com/bholmesdev/status/2107588784275816461">Ben Holmes on X</a>. Diagrams redrawn, words are mine.</footer>
+</div>
+
+<script>
+(function () {
+  /* ---- tappable loop diagram ---- */
+  var inner = [
+    ["New work assigned", "A task enters the system: a ticket, a bug report, a feature request."],
+    ["Triage", "Agents sort and prioritize. What is urgent, what can wait, what is a duplicate."],
+    ["Spec writing", "The agent writes down what it is about to build, before building it."],
+    ["Implementation", "The agent writes the code. This is the part everyone pictures."],
+    ["Verification", "The computer checks the work: tests run, a bot clicks through the app."],
+    ["Code review", "Another agent, or a human, reads the diff and asks hard questions."],
+    ["Ship", "The code goes live to real users."],
+    ["Monitor usage", "Watch what happens: errors, confusion, slow spots. This feeds the next cycle."]
+  ];
+  var outer = [
+    ["Review conversations", "Read the transcripts. Where did agents struggle, stall, or go in circles?"],
+    ["Score quality", "Grade each run: efficiency (wasted tool calls?) and code quality (redundant tests?)."],
+    ["Isolate failures", "Find the pattern. Five conversations wrote redundant tests: that is one problem, not five."],
+    ["Propose improvements", "Write the fix as a skill update. Merge it. Next week's scores say if it worked."]
+  ];
+  var g = document.getElementById('loop-nodes');
+  var detail = document.getElementById('loop-detail');
+  var NS = 'http://www.w3.org/2000/svg';
+  function addNode(cx, cy, r, n, label, desc, color) {
+    var a = document.createElementNS(NS, 'g');
+    a.setAttribute('class', 'node');
+    var c = document.createElementNS(NS, 'circle');
+    c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', 17);
+    c.setAttribute('fill', '#fffdf6'); c.setAttribute('stroke', color); c.setAttribute('stroke-width', 2.5);
+    var t = document.createElementNS(NS, 'text');
+    t.setAttribute('x', cx); t.setAttribute('y', cy + 4.5);
+    t.setAttribute('font-size', '13'); t.setAttribute('font-weight', '800'); t.setAttribute('fill', color);
+    t.textContent = n;
+    a.appendChild(c); a.appendChild(t);
+    var lab = document.createElementNS(NS, 'text');
+    lab.setAttribute('x', cx); lab.setAttribute('y', cy + 34);
+    lab.setAttribute('font-size', '11'); lab.setAttribute('fill', 'rgba(43,43,43,0.75)');
+    var words = label.split(' ');
+    if (words.length > 2) {
+      var t1 = document.createElementNS(NS, 'tspan');
+      t1.setAttribute('x', cx); t1.textContent = words.slice(0, 2).join(' ');
+      var t2 = document.createElementNS(NS, 'tspan');
+      t2.setAttribute('x', cx); t2.setAttribute('dy', 13); t2.textContent = words.slice(2).join(' ');
+      lab.appendChild(t1); lab.appendChild(t2);
+    } else { lab.textContent = label; }
+    a.appendChild(lab);
+    a.addEventListener('click', function () {
+      detail.innerHTML = '<strong>' + label + '</strong><span>' + desc + '</span>';
+    });
+    g.appendChild(a);
+  }
+  var i, ang, x, y;
+  for (i = 0; i < 8; i++) {
+    ang = -Math.PI / 2 + i * Math.PI / 4;
+    x = 215 + 150 * Math.cos(ang); y = 205 + 150 * Math.sin(ang);
+    addNode(x, y, 17, i + 1, inner[i][0], inner[i][1], '#3b82c4');
+  }
+  for (i = 0; i < 4; i++) {
+    ang = -Math.PI / 2 + i * Math.PI / 2;
+    x = 540 + 118 * Math.cos(ang); y = 205 + 118 * Math.sin(ang);
+    addNode(x, y, 17, i + 1, outer[i][0], outer[i][1], '#e07b2a');
+  }
+
+  /* ---- spot the waste game ---- */
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.conv'));
+  var runBtn = document.getElementById('run-loop');
+  var scoreEl = document.getElementById('game-score');
+  var noteEl = document.getElementById('game-note');
+  cards.forEach(function (card) {
+    card.addEventListener('click', function () {
+      if (runBtn.disabled) return;
+      card.classList.toggle('flagged');
+    });
+  });
+  runBtn.addEventListener('click', function () {
+    var correct = 0;
+    cards.forEach(function (card) {
+      var isBad = card.getAttribute('data-bad') === '1';
+      var flagged = card.classList.contains('flagged');
+      var tag = card.querySelector('.verdict-tag');
+      if (isBad === flagged) correct++;
+      card.classList.remove('flagged');
+      if (isBad) {
+        card.classList.add('reveal-bad');
+        tag.textContent = flagged ? 'Flagged. Correct.' : 'Missed. The outer loop caught this one.';
+      } else {
+        card.classList.add('reveal-good');
+        tag.textContent = flagged ? 'Flagged, but this one was clean.' : 'Clean. Correctly left alone.';
+      }
+    });
+    runBtn.disabled = true;
+    scoreEl.textContent = correct + ' / 4 correct';
+    noteEl.textContent = correct === 4
+      ? 'Perfect. You think like a gardener.'
+      : 'The pattern: high tool calls plus redundant tests. One skill update fixes every future run, not just these two.';
+  });
+
+  /* ---- compounding slider ---- */
+  var gain = document.getElementById('gain');
+  var gainVal = document.getElementById('gain-val');
+  var mult = document.getElementById('mult');
+  var bars = document.getElementById('bars');
+  var N = 30, barEls = [];
+  for (var b = 0; b < N; b++) {
+    var d = document.createElement('div');
+    bars.appendChild(d); barEls.push(d);
+  }
+  function renderCompound() {
+    var r = parseFloat(gain.value) / 100;
+    gainVal.textContent = gain.value + '%';
+    var total = Math.pow(1 + r, N);
+    mult.textContent = total.toFixed(2) + '\u00d7';
+    for (var b = 0; b < N; b++) {
+      var h = Math.pow(1 + r, b + 1) / total;
+      barEls[b].style.height = Math.max(4, h * 100) + '%';
+      barEls[b].style.opacity = 0.35 + 0.65 * (b / N);
+    }
+  }
+  gain.addEventListener('input', renderCompound);
+  renderCompound();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vibe Check - an embedding playground</title>
+<style>
+:root{
+  --bg:#0f1115; --card:#171b22; --ink:#f2f4f8; --muted:#9aa3b2;
+  --accent:#7dd87d; --accent2:#6cb8f0; --warn:#f0b46c; --bad:#f08a6c;
+  --radius:18px;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,system-ui,sans-serif;
+  padding:0 16px 64px; max-width:760px; margin:0 auto;
+}
+header{padding:28px 4px 8px;}
+h1{font-size:30px;margin:0 0 6px;letter-spacing:-0.5px;}
+.sub{color:var(--muted);font-size:15px;line-height:1.5;margin:0 0 14px;}
+.stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;}
+.stat{background:var(--card);border:1px solid #262c38;border-radius:12px;
+  padding:8px 12px;font-size:13px;color:var(--muted);}
+.stat b{color:var(--ink);font-weight:700;}
+/* filter chips */
+.car-filters{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 12px;
+  scrollbar-width:none;}
+.car-filters::-webkit-scrollbar{display:none;}
+.chip{flex:0 0 auto;border:1px solid #2b3342;background:var(--card);color:var(--muted);
+  border-radius:999px;padding:9px 15px;font-size:14px;touch-action:manipulation;cursor:pointer;}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#0c120c;font-weight:700;}
+/* carousel */
+.twrap{position:relative;padding:0 34px;}
+.tcar{position:relative;}
+.ttrack{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;
+  scrollbar-width:none;overscroll-behavior-x:contain;border-radius:var(--radius);}
+.ttrack::-webkit-scrollbar{display:none;}
+.tslide{flex:0 0 100%;scroll-snap-align:center;scroll-snap-stop:always;padding:2px;}
+.tslide-card{width:100%;display:block;background:var(--card);border:1px solid #262c38;
+  border-radius:var(--radius);padding:20px 18px;text-align:left;color:var(--ink);
+  touch-action:manipulation;cursor:pointer;font-size:15px;}
+.tslide-card .cat{display:inline-block;font-size:12px;font-weight:700;letter-spacing:0.6px;
+  text-transform:uppercase;color:var(--accent2);margin-bottom:10px;}
+.senta,.sentb{line-height:1.55;margin:0 0 4px;}
+.senta{font-size:17px;font-weight:600;}
+.vs{text-align:center;color:var(--muted);font-size:12px;margin:8px 0;letter-spacing:2px;}
+.sentb{font-size:17px;font-weight:600;color:#d7dde8;}
+.score-row{margin-top:16px;}
+.score-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;}
+.score-num{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;}
+.verdict{font-size:13px;color:var(--muted);font-weight:600;}
+.bar{height:10px;background:#262c38;border-radius:999px;overflow:hidden;}
+.bar > i{display:block;height:100%;width:0;border-radius:999px;
+  background:linear-gradient(90deg,var(--bad),var(--warn) 45%,var(--accent2) 70%,var(--accent));
+  transition:width 0.9s cubic-bezier(0.2,0.8,0.2,1);}
+.note{margin-top:12px;font-size:13px;color:var(--warn);line-height:1.5;
+  background:rgba(240,180,108,0.08);border:1px solid rgba(240,180,108,0.25);
+  border-radius:10px;padding:8px 10px;}
+.card-actions{display:flex;gap:8px;margin-top:14px;}
+.mini{background:transparent;border:1px solid #2b3342;color:var(--muted);
+  border-radius:10px;padding:7px 12px;font-size:13px;touch-action:manipulation;cursor:pointer;}
+.mini.danger{color:var(--bad);border-color:rgba(240,138,108,0.4);}
+.tcount{text-align:center;color:var(--muted);font-family:ui-monospace,Menlo,monospace;
+  font-size:13px;margin:10px 0 0;font-variant-numeric:tabular-nums;}
+.tnav{position:absolute;top:38%;width:46px;height:46px;border-radius:50%;
+  border:1px solid #2b3342;background:rgba(23,27,34,0.85);color:var(--ink);
+  font-size:22px;line-height:1;cursor:pointer;touch-action:manipulation;
+  backdrop-filter:blur(6px);box-shadow:0 4px 14px rgba(0,0,0,0.4);z-index:2;}
+.tnav.prev{left:0;} .tnav.next{right:0;}
+/* quiz mode */
+body.quiz .score-num,body.quiz .verdict{visibility:hidden;}
+body.quiz .bar > i{width:0 !important;}
+.tslide-card.revealed .score-num,.tslide-card.revealed .verdict{visibility:visible !important;}
+.quiz-hint{text-align:center;color:var(--muted);font-size:13px;margin:6px 0 0;display:none;}
+body.quiz .quiz-hint{display:block;}
+/* toolbar */
+.toolbar{display:flex;gap:10px;margin:18px 2px;flex-wrap:wrap;}
+.btn{border:1px solid #2b3342;background:var(--card);color:var(--ink);
+  border-radius:12px;padding:11px 16px;font-size:15px;font-weight:600;
+  touch-action:manipulation;cursor:pointer;}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#0c120c;}
+.btn.on{background:var(--accent2);border-color:var(--accent2);color:#0a0f14;}
+/* panels */
+.panel{background:var(--card);border:1px solid #262c38;border-radius:var(--radius);
+  padding:18px;margin-top:14px;}
+.panel h2{font-size:18px;margin:0 0 4px;}
+.panel p{color:var(--muted);font-size:14px;line-height:1.5;margin:0 0 12px;}
+textarea,input[type=text],select{width:100%;background:#0f1319;border:1px solid #2b3342;
+  color:var(--ink);border-radius:12px;padding:12px;font-size:16px;margin-bottom:10px;
+  font-family:inherit;}
+textarea{resize:vertical;min-height:64px;}
+label{font-size:13px;color:var(--muted);display:block;margin:0 0 6px;font-weight:600;}
+.model-status{font-size:13px;color:var(--muted);margin-top:10px;line-height:1.5;}
+.progress{height:8px;background:#262c38;border-radius:999px;overflow:hidden;margin-top:8px;display:none;}
+.progress > i{display:block;height:100%;width:0;background:var(--accent2);}
+.live-result{margin-top:12px;display:none;}
+.hidden{display:none !important;}
+footer{margin-top:28px;color:var(--muted);font-size:13px;line-height:1.6;}
+footer a{color:var(--accent2);}
+.editing textarea{border-color:var(--accent2);}
+</style>
+</head>
+<body>
+<header>
+  <h1>Vibe Check</h1>
+  <p class="sub">72 sentence pairs, scored by <b>EmbeddingGemma-300M</b> running on a $0 self-hosted box. Swipe through the deck, quiz yourself, or type your own sentences and let the model judge.</p>
+  <div class="stats">
+    <div class="stat"><b>300M</b> params</div>
+    <div class="stat"><b>768</b> dims</div>
+    <div class="stat"><b>~40ms</b> per embed</div>
+    <div class="stat"><b>$0</b> per token</div>
+    <div class="stat"><b>100+</b> languages</div>
+  </div>
+</header>
+
+<div class="car-filters" id="carFilters" aria-label="Groups"></div>
+
+<div class="twrap">
+  <div class="tcar">
+    <div class="ttrack" id="ttrack" aria-label="Examples"></div>
+    <button class="tnav prev" id="tprev" aria-label="Previous">&#8249;</button>
+    <button class="tnav next" id="tnext" aria-label="Next">&#8250;</button>
+  </div>
+</div>
+
+<p class="quiz-hint">Quiz mode: tap a card to reveal its score</p>
+
+<div class="toolbar">
+  <button class="btn" id="quizBtn">Quiz me</button>
+  <button class="btn" id="addBtn">Add example</button>
+</div>
+
+<div class="panel hidden" id="addPanel">
+  <h2>Add your own pair</h2>
+  <p>It gets scored live by the model in your browser. Saved on this device.</p>
+  <label>Sentence A</label>
+  <textarea id="newA" placeholder="e.g. My dog ate my homework"></textarea>
+  <label>Sentence B</label>
+  <textarea id="newB" placeholder="e.g. The puppy chewed up my assignment"></textarea>
+  <label>Category</label>
+  <select id="newCat">
+    <option value="paraphrase">Paraphrases</option>
+    <option value="opposite">Opposites</option>
+    <option value="tricky">Tricky</option>
+    <option value="everyday">Everyday</option>
+    <option value="multilingual">Multilingual</option>
+    <option value="fun">Fun</option>
+    <option value="custom">My own</option>
+  </select>
+  <button class="btn primary" id="saveNew">Score and add</button>
+  <button class="btn" id="cancelNew">Cancel</button>
+  <div class="model-status" id="addStatus"></div>
+</div>
+
+<div class="panel" id="tryPanel">
+  <h2>Try your own</h2>
+  <p>Type any two sentences. The model runs right here in your browser and scores how similar they feel. First run downloads the model (about 170MB), then it is instant.</p>
+  <label>Sentence A</label>
+  <textarea id="tryA" placeholder="e.g. I love rainy days"></textarea>
+  <label>Sentence B</label>
+  <textarea id="tryB" placeholder="e.g. Drizzly weather makes me happy"></textarea>
+  <button class="btn primary" id="tryBtn">Score it</button>
+  <div class="progress" id="tryProg"><i></i></div>
+  <div class="model-status" id="tryStatus"></div>
+  <div class="live-result" id="tryResult">
+    <div class="score-top">
+      <span class="score-num" id="tryScore">0.000</span>
+      <span class="verdict" id="tryVerdict"></span>
+    </div>
+    <div class="bar"><i id="tryBar"></i></div>
+  </div>
+</div>
+
+<footer>
+  Deck scores were precomputed with the Q4 quantized model on a 2-core CPU box.
+  Live scoring runs the same model (ONNX, in your browser via transformers.js).
+  Scores are cosine similarity: 1.0 means identical vibes, 0 means unrelated.
+  Watch the Tricky deck: high word overlap can fool the model, negation too.
+</footer>
+
+<script>
+"use strict";
+const EXAMPLES = [{"id": 0, "cat": "paraphrase", "a": "The cat sat on the mat", "b": "A feline rested on the rug", "score": 0.766}, {"id": 1, "cat": "paraphrase", "a": "I need to cancel my subscription", "b": "How do I end my paid membership?", "score": 0.759}, {"id": 2, "cat": "paraphrase", "a": "The meeting is at 3pm tomorrow", "b": "Tomorrow's meeting starts at three in the afternoon", "score": 0.916}, {"id": 3, "cat": "paraphrase", "a": "She loves reading mystery novels", "b": "Mystery books are her favorite", "score": 0.913}, {"id": 4, "cat": "paraphrase", "a": "The restaurant was too expensive", "b": "That place cost way too much money", "score": 0.73}, {"id": 5, "cat": "paraphrase", "a": "He fixed the leaky faucet", "b": "He repaired the dripping tap", "score": 0.898}, {"id": 6, "cat": "paraphrase", "a": "Turn off the lights before you leave", "b": "Make sure the lights are out when you go", "score": 0.815}, {"id": 7, "cat": "paraphrase", "a": "The kids are playing in the backyard", "b": "Children are having fun outside behind the house", "score": 0.809}, {"id": 8, "cat": "paraphrase", "a": "I forgot my password again", "b": "I can't remember my login credentials", "score": 0.806}, {"id": 9, "cat": "paraphrase", "a": "The package arrives on Friday", "b": "Delivery is scheduled for Friday", "score": 0.827}, {"id": 10, "cat": "paraphrase", "a": "It's raining heavily outside", "b": "There's a downpour happening right now", "score": 0.869}, {"id": 11, "cat": "paraphrase", "a": "My phone battery is dead", "b": "My phone ran out of charge", "score": 0.828}, {"id": 12, "cat": "opposite", "a": "The room is freezing", "b": "The room is boiling hot", "score": 0.757}, {"id": 13, "cat": "opposite", "a": "She arrived early", "b": "He showed up late", "score": 0.62}, {"id": 14, "cat": "opposite", "a": "The movie was amazing", "b": "The movie was terrible", "score": 0.537}, {"id": 15, "cat": "opposite", "a": "Dogs are loyal companions", "b": "Quantum physics is confusing", "score": 0.437}, {"id": 16, "cat": "opposite", "a": "I'm starving", "b": "I'm completely full", "score": 0.632}, {"id": 17, "cat": "opposite", "a": "The stock market crashed", "b": "The garden flowers bloomed", "score": 0.514}, {"id": 18, "cat": "opposite", "a": "He won the championship", "b": "She lost the final match", "score": 0.556}, {"id": 19, "cat": "opposite", "a": "Summer days are long and hot", "b": "Winter nights are short and cold", "score": 0.528}, {"id": 20, "cat": "opposite", "a": "The baby is sleeping quietly", "b": "The alarm is blaring loudly", "score": 0.54}, {"id": 21, "cat": "opposite", "a": "I trust him completely", "b": "I doubt her entirely", "score": 0.62}, {"id": 22, "cat": "opposite", "a": "The soup is delicious", "b": "The homework is difficult", "score": 0.46}, {"id": 23, "cat": "opposite", "a": "Wealth brings happiness", "b": "Traffic causes delays", "score": 0.428}, {"id": 24, "cat": "tricky", "a": "I like pizza", "b": "I don't like pizza", "score": 0.801}, {"id": 25, "cat": "tricky", "a": "The dog bit the man", "b": "The man bit the dog", "score": 0.971}, {"id": 26, "cat": "tricky", "a": "She's a great chef", "b": "She's a great chief", "score": 0.79}, {"id": 27, "cat": "tricky", "a": "The bank is by the river", "b": "I deposited money at the bank", "score": 0.649}, {"id": 28, "cat": "tricky", "a": "He's feeling blue", "b": "He painted the wall blue", "score": 0.737}, {"id": 29, "cat": "tricky", "a": "Break a leg!", "b": "I broke my leg", "score": 0.693}, {"id": 30, "cat": "tricky", "a": "The teacher praised the student", "b": "The student praised the teacher", "score": 0.96}, {"id": 31, "cat": "tricky", "a": "It's not bad", "b": "It's terrible", "score": 0.631}, {"id": 32, "cat": "tricky", "a": "The chicken is ready to eat", "b": "The chicken is ready to eat the food", "score": 0.95}, {"id": 33, "cat": "tricky", "a": "I saw her duck", "b": "I saw her pet duck", "score": 0.931}, {"id": 34, "cat": "tricky", "a": "Time flies like an arrow", "b": "Fruit flies like a banana", "score": 0.518}, {"id": 35, "cat": "tricky", "a": "The car is fast", "b": "The fast is over, let's eat", "score": 0.51}, {"id": 36, "cat": "everyday", "a": "I need a plumber for my sink", "b": "Looking for an electrician to fix lights", "score": 0.65}, {"id": 37, "cat": "everyday", "a": "The flight was delayed two hours", "b": "My train arrived thirty minutes late", "score": 0.606}, {"id": 38, "cat": "everyday", "a": "She's training for a marathon", "b": "He goes to the gym every morning", "score": 0.476}, {"id": 39, "cat": "everyday", "a": "The new iPhone has a better camera", "b": "Samsung released a phone with great battery", "score": 0.477}, {"id": 40, "cat": "everyday", "a": "We adopted a puppy last week", "b": "They got a kitten from the shelter", "score": 0.695}, {"id": 41, "cat": "everyday", "a": "The company announced record profits", "b": "The startup just raised ten million dollars", "score": 0.569}, {"id": 42, "cat": "everyday", "a": "I'm learning to play guitar", "b": "She's taking piano lessons", "score": 0.676}, {"id": 43, "cat": "everyday", "a": "The hotel had a beautiful pool", "b": "Our Airbnb had an amazing view", "score": 0.539}, {"id": 44, "cat": "everyday", "a": "He ordered sushi for dinner", "b": "She made pasta for lunch", "score": 0.478}, {"id": 45, "cat": "everyday", "a": "The doctor prescribed antibiotics", "b": "The pharmacist gave me vitamins", "score": 0.628}, {"id": 46, "cat": "everyday", "a": "Traffic on the freeway is terrible", "b": "The subway was packed this morning", "score": 0.561}, {"id": 47, "cat": "everyday", "a": "My plants need more sunlight", "b": "The garden needs watering", "score": 0.731}, {"id": 48, "cat": "multilingual", "a": "我爱你", "b": "I love you", "score": 0.959}, {"id": 49, "cat": "multilingual", "a": "今天天气很好", "b": "The weather is nice today", "score": 0.924}, {"id": 50, "cat": "multilingual", "a": "我想喝咖啡", "b": "I want to drink coffee", "score": 0.944}, {"id": 51, "cat": "multilingual", "a": "猫坐在垫子上", "b": "The cat sat on the mat", "score": 0.855}, {"id": 52, "cat": "multilingual", "a": "你好吗", "b": "How are you?", "score": 0.799}, {"id": 53, "cat": "multilingual", "a": "我喜欢吃米饭", "b": "I like eating rice", "score": 0.9}, {"id": 54, "cat": "multilingual", "a": "明天见", "b": "See you tomorrow", "score": 0.922}, {"id": 55, "cat": "multilingual", "a": "这个很贵", "b": "This is expensive", "score": 0.922}, {"id": 56, "cat": "multilingual", "a": "我不知道", "b": "I don't know", "score": 0.907}, {"id": 57, "cat": "multilingual", "a": "谢谢你的帮助", "b": "Thank you for your help", "score": 0.971}, {"id": 58, "cat": "multilingual", "a": "他是我的朋友", "b": "He is my friend", "score": 0.963}, {"id": 59, "cat": "multilingual", "a": "我正在学习中文", "b": "I am learning Chinese", "score": 0.947}, {"id": 60, "cat": "fun", "a": "It's giving main character energy", "b": "She's acting like the protagonist", "score": 0.729}, {"id": 61, "cat": "fun", "a": "That meeting could have been an email", "b": "This call was completely unnecessary", "score": 0.495}, {"id": 62, "cat": "fun", "a": "My code works and I don't know why", "b": "The program runs but nobody understands how", "score": 0.693}, {"id": 63, "cat": "fun", "a": "Touch grass", "b": "Go outside and get some fresh air", "score": 0.655}, {"id": 64, "cat": "fun", "a": "He has rizz", "b": "He's very charming with people", "score": 0.715}, {"id": 65, "cat": "fun", "a": "The wifi is down again", "b": "Internet stopped working, send help", "score": 0.65}, {"id": 66, "cat": "fun", "a": "Adulting is hard", "b": "Being a grown-up is difficult", "score": 0.939}, {"id": 67, "cat": "fun", "a": "My sleep schedule is cooked", "b": "My sleeping pattern is completely ruined", "score": 0.775}, {"id": 68, "cat": "fun", "a": "That's sus", "b": "That seems suspicious", "score": 0.887}, {"id": 69, "cat": "fun", "a": "No cap, this pizza is bussin", "b": "Honestly, this pizza is delicious", "score": 0.816}, {"id": 70, "cat": "fun", "a": "I'm in my flop era", "b": "I'm going through a rough patch", "score": 0.69}, {"id": 71, "cat": "fun", "a": "The group chat is popping off", "b": "Everyone is messaging a lot right now", "score": 0.64}];
+const CATS = {
+  paraphrase:"Paraphrases", opposite:"Opposites", tricky:"Tricky",
+  everyday:"Everyday", multilingual:"Multilingual", fun:"Fun", custom:"My own"
+};
+function verdict(s){
+  if(s>=0.85) return "Practically twins";
+  if(s>=0.70) return "Clearly related";
+  if(s>=0.55) return "Distant cousins";
+  if(s>=0.40) return "Barely related";
+  return "Total strangers";
+}
+const TRICKY_NOTE = "Blind spot: the model mostly matches words and vibes, so negation and swapped roles barely dent the score.";
+let examples = EXAMPLES.slice();
+let userEx = [];
+try{ userEx = JSON.parse(localStorage.getItem("vibe-user")||"[]"); }catch(e){ userEx=[]; }
+function persist(){ try{ localStorage.setItem("vibe-user", JSON.stringify(userEx)); }catch(e){} }
+examples = examples.concat(userEx);
+
+let filter = "all", idx = 0;
+const track = document.getElementById("ttrack");
+const filtersEl = document.getElementById("carFilters");
+
+function visible(){ return examples.filter(e=>filter==="all"||e.cat===filter); }
+
+function buildFilters(){
+  const cats = ["all"].concat(Object.keys(CATS).filter(c=>examples.some(e=>e.cat===c)));
+  filtersEl.innerHTML = "";
+  cats.forEach(c=>{
+    const b = document.createElement("button");
+    b.className = "chip"+(c===filter?" on":"");
+    b.textContent = c==="all" ? "All ("+examples.length+")" : CATS[c];
+    b.onclick = ()=>{ filter=c; idx=0; buildFilters(); render(); };
+    filtersEl.appendChild(b);
+  });
+}
+
+function cardHTML(e, i, n){
+  const v = e.score==null ? "Scoring..." : verdict(e.score);
+  const s = e.score==null ? "?" : e.score.toFixed(3);
+  const pct = e.score==null ? 0 : Math.round(e.score*100);
+  const note = e.cat==="tricky" ? '<div class="note">'+TRICKY_NOTE+'</div>' : "";
+  return '<div class="tslide"><button class="tslide-card" data-i="'+i+'">'
+    + '<span class="cat">'+(CATS[e.cat]||e.cat)+'</span>'
+    + '<p class="senta"></p><div class="vs">VS</div><p class="sentb"></p>'
+    + '<div class="score-row"><div class="score-top"><span class="score-num">'+s+'</span>'
+    + '<span class="verdict">'+v+'</span></div>'
+    + '<div class="bar"><i data-w="'+pct+'"></i></div></div>'
+    + note
+    + '<div class="card-actions"><span class="mini" data-act="edit">Edit</span>'
+    + (e.mine ? '<span class="mini danger" data-act="del">Delete</span>' : '')
+    + '</div>'
+    + '</button><p class="tcount">'+(i+1)+'/'+n+'</p></div>';
+}
+
+function render(){
+  const vis = visible();
+  if(idx>=vis.length) idx=0;
+  track.innerHTML = vis.map((e,i)=>cardHTML(e,i,vis.length)).join("");
+  Array.from(track.querySelectorAll(".tslide")).forEach((sl,k)=>{
+    const e = vis[k];
+    sl.querySelector(".senta").textContent = e.a;
+    sl.querySelector(".sentb").textContent = e.b;
+    const btn = sl.querySelector(".tslide-card");
+    btn.addEventListener("click", ev=>{
+      const act = ev.target.getAttribute("data-act");
+      if(act==="edit"){ ev.stopPropagation(); startEdit(e, btn); return; }
+      if(act==="del"){ ev.stopPropagation(); delExample(e); return; }
+      if(document.body.classList.contains("quiz")) btn.classList.add("revealed");
+      else { const bar=btn.querySelector(".bar > i"); bar.style.width="0"; requestAnimationFrame(()=>requestAnimationFrame(()=>{bar.style.width=bar.getAttribute("data-w")+"%";})); }
+    });
+  });
+  equalize();
+  load(idx, true);
+  buildFilters();
+}
+
+function equalize(){
+  const cards = Array.from(track.querySelectorAll(".tslide-card"));
+  cards.forEach(c=>c.style.height="auto");
+  let h=0; cards.forEach(c=>{ h=Math.max(h,c.offsetHeight); });
+  cards.forEach(c=>c.style.height=h+"px");
+}
+
+function load(i, force){
+  const vis = visible();
+  if(!vis.length) return;
+  idx = ((i%vis.length)+vis.length)%vis.length;
+  track.querySelectorAll(".tslide-card").forEach(c=>c.classList.remove("revealed"));
+  track.scrollTo(idx*track.clientWidth, 0);
+  requestAnimationFrame(()=>{
+    const sl = track.children[idx];
+    if(!sl) return;
+    const bar = sl.querySelector(".bar > i");
+    if(bar && !document.body.classList.contains("quiz")){
+      bar.style.width="0";
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{ bar.style.width=bar.getAttribute("data-w")+"%"; }));
+    }
+  });
+}
+document.getElementById("tprev").onclick = ()=>load(idx-1);
+document.getElementById("tnext").onclick = ()=>load(idx+1);
+
+let rafId=null;
+track.addEventListener("scroll", ()=>{
+  if(rafId) return;
+  rafId = requestAnimationFrame(()=>{
+    rafId=null;
+    const n = visible().length; if(!n) return;
+    const ni = Math.round(track.scrollLeft/track.clientWidth);
+    if(ni!==idx){ idx=((ni%n)+n)%n; }
+  });
+});
+let settleT=null;
+track.addEventListener("scroll", ()=>{
+  clearTimeout(settleT);
+  settleT=setTimeout(()=>{
+    const w=track.clientWidth, off=track.scrollLeft, near=Math.round(off/w)*w;
+    if(Math.abs(off-near)>2) track.scrollTo(near,0);
+  },180);
+},{passive:true});
+
+let resizeT=null;
+window.addEventListener("resize", ()=>{ clearTimeout(resizeT); resizeT=setTimeout(equalize,200); });
+
+/* quiz mode */
+const quizBtn=document.getElementById("quizBtn");
+quizBtn.onclick=()=>{
+  document.body.classList.toggle("quiz");
+  quizBtn.classList.toggle("on");
+  quizBtn.textContent=document.body.classList.contains("quiz")?"End quiz":"Quiz me";
+  render();
+};
+
+/* add / edit / delete */
+const addPanel=document.getElementById("addPanel");
+document.getElementById("addBtn").onclick=()=>{ addPanel.classList.toggle("hidden"); };
+document.getElementById("cancelNew").onclick=()=>{ addPanel.classList.add("hidden"); };
+function delExample(e){
+  userEx = userEx.filter(u=>u.id!==e.id); persist();
+  examples = EXAMPLES.concat(userEx); render();
+}
+function startEdit(e, btn){
+  const sa=btn.querySelector(".senta"), sb=btn.querySelector(".sentb");
+  const ta=document.createElement("textarea"), tb=document.createElement("textarea");
+  ta.value=e.a; tb.value=e.b;
+  sa.replaceWith(ta); sb.replaceWith(tb);
+  btn.classList.add("editing");
+  const acts=btn.querySelector(".card-actions");
+  acts.innerHTML='<span class="mini" data-act="save">Score and save</span><span class="mini" data-act="cancel">Cancel</span>';
+  acts.querySelector('[data-act="save"]').onclick=async ev=>{
+    ev.stopPropagation();
+    e.a=ta.value.trim()||e.a; e.b=tb.value.trim()||e.b;
+    e.score=null;
+    if(e.mine){ persist(); }
+    render();
+    e.score=await liveScore(e.a,e.b,document.getElementById("addStatus"));
+    if(e.mine) persist();
+    render();
+  };
+  acts.querySelector('[data-act="cancel"]').onclick=ev=>{ ev.stopPropagation(); render(); };
+}
+document.getElementById("saveNew").onclick=async ()=>{
+  const a=document.getElementById("newA").value.trim(), b=document.getElementById("newB").value.trim();
+  if(!a||!b) return;
+  const status=document.getElementById("addStatus");
+  const e={id:"u"+Date.now(), cat:document.getElementById("newCat").value, a:a, b:b, score:null, mine:true};
+  userEx.push(e); persist(); examples=EXAMPLES.concat(userEx);
+  document.getElementById("newA").value=""; document.getElementById("newB").value="";
+  addPanel.classList.add("hidden");
+  filter="all"; idx=examples.length-1; render();
+  status.textContent="";
+  e.score=await liveScore(a,b,status);
+  persist(); render();
+  load(examples.length-1);
+};
+
+/* live scoring via transformers.js (loaded on demand) */
+let extPromise=null;
+function getExtractor(statusEl, progEl){
+  if(!extPromise){
+    extPromise=(async()=>{
+      if(statusEl) statusEl.textContent="Loading model in your browser (first time only)...";
+      const mod=await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@3");
+      const ext=await mod.pipeline("feature-extraction","onnx-community/embeddinggemma-300m-ONNX",{
+        dtype:"q4",
+        progress_callback:(p)=>{
+          if(progEl&&p.status==="progress"){
+            progEl.style.display="block";
+            progEl.firstElementChild.style.width=Math.round(p.progress||0)+"%";
+          }
+          if(statusEl&&p.status==="progress"&&p.file) statusEl.textContent="Downloading "+p.file+" "+Math.round(p.progress||0)+"%";
+        }
+      });
+      if(progEl) progEl.style.display="none";
+      return ext;
+    })();
+  }
+  return extPromise;
+}
+function cos(a,b){
+  let d=0,na=0,nb=0;
+  for(let i=0;i<a.length;i++){ d+=a[i]*b[i]; na+=a[i]*a[i]; nb+=b[i]*b[i]; }
+  return d/(Math.sqrt(na)*Math.sqrt(nb));
+}
+async function liveScore(a,b,statusEl){
+  try{
+    const ext=await getExtractor(statusEl, document.getElementById("tryProg"));
+    const out=await ext([a,b],{pooling:"mean",normalize:true});
+    const arr=out.tolist();
+    if(statusEl) statusEl.textContent="Scored live in your browser.";
+    return Math.round(cos(arr[0],arr[1])*1000)/1000;
+  }catch(err){
+    if(statusEl) statusEl.textContent="Could not load the model. Check your connection and try again.";
+    return null;
+  }
+}
+document.getElementById("tryBtn").onclick=async ()=>{
+  const a=document.getElementById("tryA").value.trim(), b=document.getElementById("tryB").value.trim();
+  const status=document.getElementById("tryStatus"), res=document.getElementById("tryResult");
+  if(!a||!b){ status.textContent="Type two sentences first."; return; }
+  document.getElementById("tryBtn").disabled=true;
+  const s=await liveScore(a,b,status);
+  document.getElementById("tryBtn").disabled=false;
+  if(s!=null){
+    res.style.display="block";
+    document.getElementById("tryScore").textContent=s.toFixed(3);
+    document.getElementById("tryVerdict").textContent=verdict(s);
+    const bar=document.getElementById("tryBar");
+    bar.style.width="0";
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{ bar.style.width=Math.round(s*100)+"%"; }));
+  }
+};
+
+render();
+</script>
+</body>
+</html>

@@ -74,20 +74,9 @@
   #challengeLbl{font-size:14px;color:var(--magenta);font-weight:700;letter-spacing:1px;}
   #friendBtn{margin-top:4px;}
   #codeBig{font-size:22px;font-weight:800;letter-spacing:4px;color:var(--cyan);}
-  #shareRow{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;margin-top:6px;}
-  #nameInput{font-size:16px;font-family:inherit;color:#e8e8f2;background:#181826;
-    border:1px solid #2c2c44;border-radius:10px;padding:10px 12px;min-height:44px;
-    width:150px;touch-action:manipulation;}
-  #boardWrap{margin-top:10px;min-width:250px;max-width:330px;}
-  .boardTitle{font-size:12px;letter-spacing:2px;color:var(--magenta);font-weight:800;margin-bottom:8px;text-align:center;}
-  #boardRows{display:flex;flex-direction:column;gap:6px;}
-  .brow{display:flex;justify-content:space-between;align-items:center;font-size:14px;color:#c9c9dd;
-    background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
-    border-radius:10px;padding:8px 14px;}
-  .brow b{color:var(--cyan);}
-  .brow .rk{color:var(--dim);min-width:28px;}
-  .brow.me{border-color:rgba(0,229,255,.6);background:rgba(0,229,255,.06);}
-  .brow .vs{font-size:11px;color:var(--dim);display:block;}
+  #thumbWrap{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:10px 0 4px;}
+  .thumbcell{text-align:center;}
+  .thumblbl{font-size:13px;font-weight:800;color:var(--cyan);margin-top:2px;}
   .rowbtns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:4px;}
   #postMsg{min-height:18px;}
   .overlay{overflow-y:auto;}
@@ -120,14 +109,7 @@
   <h1 id="resTitle">DONE</h1>
   <div id="resTotal"></div>
   <div id="newBest" class="hidden">NEW BEST!</div>
-  <div id="boardWrap" class="hidden">
-    <div class="boardTitle">LEADERBOARD &middot; <span id="boardChallenge"></span></div>
-    <div id="boardRows"></div>
-  </div>
-  <div id="shareRow">
-    <input id="nameInput" maxlength="16" placeholder="Your name" autocomplete="off" autocapitalize="words">
-    <button id="postBtn" class="primary">Post score</button>
-  </div>
+  <div id="thumbWrap"></div>
   <div class="bestline" id="postMsg"></div>
   <div class="rowbtns">
     <button id="shareBtn">Share this race</button>
@@ -663,7 +645,6 @@ function startGame(){
   game.scores = [];
   game.drawings = [];
   game.posted = false;
-  game.myId = null;
   game.revealStep = 'you';
   game.rival = null;
   titleEl.classList.add('hidden');
@@ -825,13 +806,59 @@ function showResults(){
   if(isBest){ game.best = game.total; saveBest(game.total); }
   document.getElementById('resTotal').innerHTML = '<b>' + game.total + '</b> / 500';
   document.getElementById('newBest').classList.toggle('hidden', !isBest);
-  // reset the share/post UI, then pull the shared board
-  document.getElementById('postBtn').disabled = false;
   document.getElementById('postMsg').textContent = '';
-  document.getElementById('boardWrap').classList.add('hidden');
-  document.getElementById('nameInput').value = playerName();
+  renderThumbs();
   resultsEl.classList.remove('hidden');
-  loadBoard();
+}
+
+/* ---------- results gallery: your 5 drawings ---------- */
+
+function drawNormThumb(c2, pts, S){
+  var minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity, i;
+  for(i = 0; i < pts.length; i++){
+    var p = pts[i];
+    if(p[0] < minx) minx = p[0]; if(p[0] > maxx) maxx = p[0];
+    if(p[1] < miny) miny = p[1]; if(p[1] > maxy) maxy = p[1];
+  }
+  var s = (S - 16) / Math.max(maxx - minx, maxy - miny, 0.001);
+  var ox = S / 2 - (minx + maxx) / 2 * s, oy = S / 2 - (miny + maxy) / 2 * s;
+  c2.beginPath();
+  for(i = 0; i < pts.length; i++){
+    var x = ox + pts[i][0] * s, y = oy + pts[i][1] * s;
+    if(i === 0) c2.moveTo(x, y); else c2.lineTo(x, y);
+  }
+  c2.closePath();
+  c2.stroke();
+}
+function renderThumbs(){
+  var wrap = document.getElementById('thumbWrap');
+  wrap.innerHTML = '';
+  for(var k = 0; k < 5; k++){
+    (function(k){
+      var S = 84;
+      var cv2 = document.createElement('canvas');
+      cv2.width = S * 2; cv2.height = S * 2;
+      cv2.style.width = S + 'px'; cv2.style.height = S + 'px';
+      var c2 = cv2.getContext('2d');
+      c2.scale(2, 2);
+      c2.lineJoin = 'round'; c2.lineCap = 'round';
+      var target = normalize(resampleClosed(SHAPES[game.order[k]].pts, 64));
+      c2.strokeStyle = 'rgba(255,255,255,0.28)';
+      c2.lineWidth = 1.5;
+      drawNormThumb(c2, target, S);
+      c2.strokeStyle = 'rgba(0,229,255,0.95)';
+      c2.lineWidth = 1.5;
+      drawNormThumb(c2, game.drawings[k], S);
+      var cell = document.createElement('div');
+      cell.className = 'thumbcell';
+      cell.appendChild(cv2);
+      var lbl = document.createElement('div');
+      lbl.className = 'thumblbl';
+      lbl.textContent = game.scores[k].score;
+      cell.appendChild(lbl);
+      wrap.appendChild(cell);
+    })(k);
+  }
 }
 
 /* ---------- shared challenges: share links + leaderboard ---------- */
@@ -865,73 +892,6 @@ function playerName(){
 }
 function savePlayerName(n){
   try{ window.localStorage.setItem('bb-proto-trace-race-name', n); }catch(e){}
-}
-
-async function postScore(){
-  var msg = document.getElementById('postMsg');
-  var input = document.getElementById('nameInput');
-  var raw = (input.value || '').trim().slice(0, 16);
-  var name = raw || 'Player';
-  if(raw) savePlayerName(raw);
-  msg.textContent = 'Posting…';
-  try{
-    var res = await fetch(API + '/submit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        challenge: apiChallenge(),
-        name: name,
-        total: game.total,
-        scores: game.scores.map(function(s){ return s.score; }),
-        drawings: game.drawings
-      })
-    });
-    if(res.status === 429){ msg.textContent = 'Slow down — try again in a bit.'; return; }
-    if(!res.ok){ msg.textContent = 'Could not post. Try again.'; return; }
-    var data = await res.json();
-    game.posted = true; game.myId = data.id;
-    document.getElementById('postBtn').disabled = true;
-    msg.textContent = 'Posted! You are on the board.';
-    loadBoard();
-  }catch(e){
-    msg.textContent = 'Network hiccup — try again.';
-  }
-}
-
-async function loadBoard(){
-  var wrap = document.getElementById('boardWrap');
-  try{
-    var res = await fetch(API + '/scores?challenge=' + encodeURIComponent(apiChallenge()));
-    if(!res.ok) return;
-    var data = await res.json();
-    renderBoard(data);
-    wrap.classList.remove('hidden');
-  }catch(e){ /* board is optional; stay hidden on failure */ }
-}
-
-function renderBoard(data){
-  document.getElementById('boardChallenge').textContent = challengeLabel();
-  var rows = document.getElementById('boardRows');
-  rows.innerHTML = '';
-  var list = data.scores || [];
-  var rb = data.roundBest || [];
-  if(!list.length){
-    rows.innerHTML = '<div class="brow"><span>No scores yet — be the first.</span></div>';
-    return;
-  }
-  list.forEach(function(s, i){
-    var d = document.createElement('div');
-    d.className = 'brow' + (game.myId && s.id === game.myId ? ' me' : '');
-    var sub = '';
-    if(rb.length === 5 && s.scores && s.scores.length === 5){
-      var beats = 0, k;
-      for(k = 0; k < 5; k++) if(rb[k] > 0 && s.scores[k] >= rb[k]) beats++;
-      if(beats > 0) sub = '<span class="vs">round best x' + beats + '</span>';
-    }
-    d.innerHTML = '<span class="rk">' + (i + 1) + '</span><span>' +
-      escHtml(s.name) + sub + '</span><b>' + s.total + '</b>';
-    rows.appendChild(d);
-  });
 }
 
 /* ---------- canvas ---------- */
@@ -1107,7 +1067,6 @@ document.addEventListener('touchmove', function(e){
 document.getElementById('startBtn').addEventListener('click', startGame);
 document.getElementById('againBtn').addEventListener('click', startGame);
 nextBtn.addEventListener('click', onNext);
-document.getElementById('postBtn').addEventListener('click', postScore);
 function shareLink(url, msgEl, okText){
   function done(ok){
     if(ok){ msgEl.textContent = okText; return; }
@@ -1135,13 +1094,11 @@ document.getElementById('shareBtn').addEventListener('click', function(){
   var msg = document.getElementById('postMsg');
   var code = encodeOrder(game.order);
   var url = challengeURL('c' + code);
-  var nm = playerName();
+  var nm = playerName() || 'Host';
   function go(){
-    shareLink(url, msg, nm
-      ? 'Room ' + code + ' shared — your ' + game.total + ' is waiting in it.'
-      : 'Room ' + code + ' shared — same 5 shapes.');
+    shareLink(url, msg, 'Room ' + code + ' shared — your ' + game.total + ' is waiting in it.');
   }
-  if(nm && !game.sharedToRoom && game.scores.length === 5){
+  if(!game.sharedToRoom && game.scores.length === 5){
     game.sharedToRoom = true;
     fetch(API + '/submit', {
       method: 'POST',

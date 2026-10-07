@@ -215,7 +215,7 @@ async function pull(){
     var changed = applyRecords(S, data.records || [], meta);
     if (changed){
       saveMeta();
-      window.__aftermath.saveLocal(); // persist without triggering a push
+      if(window.__aftermath.saveLocal() === false) window.__aftermath.notifySaveFailed("synced records");
       window.__aftermath.refresh();
       lastPushed = snapshot(stateToRecords(S));
     }

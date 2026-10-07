@@ -31,6 +31,14 @@ Object.keys(I).forEach(k => { I[k] = I[k].replace('<svg ', '<svg width="1em" hei
 /* ---------- helpers ---------- */
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+/* Photo URL allowlist. dataUrl arrives through sync from other devices, so a
+ * hostile peer could inject markup; only real image data URLs may render. */
+const IMG_URL_OK = ["data:image/jpeg;base64,", "data:image/png;base64,", "data:image/webp;base64,"];
+const safeDataUrl = u => {
+  const s = String(u == null ? "" : u);
+  for (const p of IMG_URL_OK) if (s.indexOf(p) === 0) return s;
+  return "";
+};
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const money = n => "$" + (Number(n) || 0).toFixed(2);
 const fmtDate = iso => { if (!iso) return "—"; const d = new Date(iso + (iso.length <= 10 ? "T12:00:00" : "")); return isNaN(d) ? "—" : d.toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"}); };
@@ -437,7 +445,7 @@ function setStatus(j, s) {
   save(S); toast("Status: " + STATUS_LABEL[s]); viewJobDetail(j.id);
 }
 function photoHtml(p) {
-  return `<div class="photo"><img src="${p.dataUrl}" alt="${esc(p.caption || p.tag)}" loading="lazy">
+  return `<div class="photo"><img src="${safeDataUrl(p.dataUrl)}" alt="${esc(p.caption || p.tag)}" loading="lazy">
     <button class="del" data-delphoto="${p.id}" aria-label="Delete photo">×</button>
     <div class="cap">${esc(p.tag)} · ${fmtDT(p.ts)}${p.caption ? " · " + esc(p.caption) : ""}</div></div>`;
 }
@@ -488,7 +496,7 @@ function compressPhoto(file, cb) {
     const tw = 240, th = Math.max(1, Math.round(240 * h / w));
     const tc = document.createElement("canvas"); tc.width = tw; tc.height = th;
     tc.getContext("2d").drawImage(img, 0, 0, tw, th);
-    cb(full, tc.toDataURL("image/jpeg", 0.6));
+    cb(safeDataUrl(full), safeDataUrl(tc.toDataURL("image/jpeg", 0.6)));
     URL.revokeObjectURL(img.src);
   };
   img.onerror = () => toast("Could not read that photo");
@@ -568,12 +576,12 @@ function viewPacket(id) {
 
       ${before.length || after.length ? `<div class="p-sec"><h4>Condition photos (timestamped)</h4>
         <div class="p-photos">
-        ${before.concat(after).map(p => `<figure><img src="${p.dataUrl}" alt="${esc(p.caption || p.tag)}"><figcaption>${esc(p.tag)} · ${fmtDT(p.ts)}${p.caption ? " · " + esc(p.caption) : ""}</figcaption></figure>`).join("")}
+        ${before.concat(after).map(p => `<figure><img src="${safeDataUrl(p.dataUrl)}" alt="${esc(p.caption || p.tag)}"><figcaption>${esc(p.tag)} · ${fmtDT(p.ts)}${p.caption ? " · " + esc(p.caption) : ""}</figcaption></figure>`).join("")}
         </div></div>` : ""}
 
       ${tags.length ? `<div class="p-sec"><h4>Data tags &amp; part photos</h4>
         <div class="p-photos">
-        ${tags.map(p => `<figure><img src="${p.dataUrl}" alt="${esc(p.caption || p.tag)}"><figcaption>${esc(p.tag)} · ${fmtDT(p.ts)}${p.caption ? " · " + esc(p.caption) : ""}</figcaption></figure>`).join("")}
+        ${tags.map(p => `<figure><img src="${safeDataUrl(p.dataUrl)}" alt="${esc(p.caption || p.tag)}"><figcaption>${esc(p.tag)} · ${fmtDT(p.ts)}${p.caption ? " · " + esc(p.caption) : ""}</figcaption></figure>`).join("")}
         </div></div>` : ""}
 
       <div class="p-sec"><h4>Signatures</h4>

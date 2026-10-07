@@ -37,6 +37,23 @@ function photoSyncValue(ph, jobId){
   return { id: ph.id, jobId: jobId, ts: ph.ts || 0, caption: ph.caption || "",
     tag: ph.tag || "before", thumb: ph.thumb || null, hasPhoto: !!ph.dataUrl };
 }
+
+/* Photo URL allowlist (mirrors app.js). dataUrl/thumb arrive through sync from
+ * other devices; reject anything that is not a real image data URL so a hostile
+ * sync peer cannot inject markup that later renders into HTML. */
+var IMG_URL_OK = ["data:image/jpeg;base64,", "data:image/png;base64,", "data:image/webp;base64,"];
+function safeDataUrl(u){
+  var s = String(u == null ? "" : u);
+  for (var i = 0; i < IMG_URL_OK.length; i++) if (s.indexOf(IMG_URL_OK[i]) === 0) return s;
+  return "";
+}
+function cleanPhotoValue(v){
+  if (v && typeof v === "object"){
+    if ("dataUrl" in v) v.dataUrl = safeDataUrl(v.dataUrl);
+    if ("thumb" in v) v.thumb = safeDataUrl(v.thumb);
+  }
+  return v;
+}
 function jobSyncValue(j){
   var v = {};
   Object.keys(j).forEach(function(k){ if (k !== "photos") v[k] = j[k]; });
@@ -120,6 +137,7 @@ function upsertIntoState(S, collection, key, value){
     }
   } else if (collection === "jobphotos"){
     S.jobs = S.jobs || [];
+    cleanPhotoValue(value);
     var j = findById(S.jobs, value.jobId);
     if (j) upsertPhoto(j, value);
     else {
@@ -150,7 +168,8 @@ if (typeof module !== "undefined" && module.exports){
   module.exports = { stateToRecords: stateToRecords, applyRecords: applyRecords,
     hashRecord: hashRecord, upsertIntoState: upsertIntoState,
     removeFromState: removeFromState, jobSyncValue: jobSyncValue,
-    photoSyncValue: photoSyncValue, _pendingPhotos: function(){ return pendingPhotos; } };
+    photoSyncValue: photoSyncValue, safeDataUrl: safeDataUrl, cleanPhotoValue: cleanPhotoValue,
+    _pendingPhotos: function(){ return pendingPhotos; } };
   return;
 }
 

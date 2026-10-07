@@ -543,6 +543,7 @@ function vDossier(p,c){
   p.airSamples.forEach(s=>ev.push({t:new Date(s.date+"T12:00:00").getTime()+1, cls:s.pass?"good":"warn", when:fmtD(s.date), what:"Air sample — "+s.location+": "+s.result+" f/cc ("+(s.pass?"PASS":"EXCEEDS")+")"}));
   p.manifests.forEach(m=>ev.push({t:new Date(m.dateShipped+"T12:00:00").getTime()+2, cls:m.signedCopyReceived?"good":"warn", when:fmtD(m.dateShipped), what:"Waste manifest "+m.manifestNo+" — "+m.qtyYd3+" yd³ → "+m.disposalSite+(m.signedCopyReceived?" (signed copy back)":" (signature PENDING)")}));
   p.photos.forEach(x=>ev.push({t:x.takenAt, cls:"", when:fmtDT(x.takenAt), what:"Photo — "+(x.caption||x.category)}));
+  (p.events||[]).forEach(e=>ev.push({t:e.t, cls:e.cls||"", when:fmtDT(e.t), what:e.what}));
   ev.sort((a,b)=>a.t-b.t);
   const retainUntil=new Date(Math.max(...ev.map(e=>e.t),Date.now())+30*365.25*864e5).getFullYear();
   const printHead='<div class="print-only"><h1 style="font-size:20px;margin:0 0 4px">ABATE — Abatement Compliance Dossier</h1>'+
@@ -636,7 +637,7 @@ function fProject(p){
     p.id?"Save changes":"Create dossier"));
   $("#sheetCancel").onclick=closeSheet;
   $("#sheetForm").onsubmit=e=>{ e.preventDefault(); const d=collect(e.target);
-    const rec=p.id?p:Object.assign({id:uid(),status:"active",dailyLogs:[],airSamples:[],manifests:[],photos:[],
+    const rec=p.id?p:Object.assign({id:uid(),status:"active",dailyLogs:[],airSamples:[],manifests:[],photos:[],events:[],
       clearance:{visual:false,airClear:false,wasteShipped:false,manifestsBack:false,neshapFiled:false,areaReleased:false}},d);
     Object.assign(rec,{name:d.name,address:d.address,owner:d.owner,ownerPhone:d.ownerPhone,contractNo:d.contractNo,
       neshapNotified:d.neshapNotified==="1",neshapDate:d.neshapDate,competentPerson:d.competentPerson,
@@ -707,7 +708,8 @@ function fManifest(p, existing){
       transporter:d.transporter,transporterPhone:d.transporterPhone,disposalSite:d.disposalSite,disposalPhone:d.disposalPhone,
       certSigned:!!d.certSigned,
       signedCopyReceived:existing?existing.signedCopyReceived:false,
-      signedDate:existing?existing.signedDate:"",createdAt:existing?existing.createdAt:Date.now()};
+      signedDate:existing?existing.signedDate:"",
+      signedRecordedAt:existing?existing.signedRecordedAt:0,createdAt:existing?existing.createdAt:Date.now()};
     if(existing){ const i=p.manifests.findIndex(x=>x.id===existing.id); p.manifests[i]=rec; }
     else p.manifests.push(rec);
     closeSheet(); save();
@@ -755,7 +757,11 @@ function bindActions(main,p){
     else if(act==="del-manifest") b.onclick=async()=>{ if(await openConfirm("Delete manifest record?","This removes the waste shipment record. Keep paper copies per the 30-year retention rule.","Delete",true)){ p.manifests=p.manifests.filter(x=>x.id!==id); save(); toast("Manifest record deleted"); } };
     else if(act==="sign-manifest") b.onclick=async()=>{ const m=p.manifests.find(x=>x.id===id);
       const d=await openDatePrompt("Signed copy received"); if(!d) return;
-      m.signedCopyReceived=true; m.signedDate=d; save(); toast("Manifest signed copy recorded"); };
+      const wasSigned=m.signedCopyReceived;
+      m.signedCopyReceived=true; m.signedDate=d; m.signedRecordedAt=Date.now();
+      p.events=p.events||[];
+      p.events.push({t:Date.now(), cls:"good", what:"Signed copy recorded for manifest "+m.manifestNo+", dated "+fmtD(d)+(wasSigned?" (updated)":"")});
+      save(); toast("Manifest signed copy recorded"); };
     else if(act==="print") b.onclick=()=>window.print();
     else if(act==="export") b.onclick=()=>exportArchive(p);
     else if(act==="close-project") b.onclick=async()=>{ const c=completeness(p);
@@ -769,7 +775,8 @@ function bindActions(main,p){
       if(!who){ cb.checked=false; return; }
       cl[k]=true; cl[k+"By"]=who; cl[k+"Date"]=todayISO();
       if(k==="airClear"&&!p.airSamples.some(s=>s.type==="clearance"&&s.pass)){ if(await openConfirm("No passing clearance sample","Clearance sign-off needs an aggressive air sample at or below 0.01 f/cc. Add one now?","Add sample")){ view.tab="air"; save(); fAir(p); return; } }
-      if(k==="manifestsBack"){ p.manifests.forEach(m=>{ if(!m.signedCopyReceived){ m.signedCopyReceived=true; m.signedDate=todayISO(); } }); }
+      if(k==="manifestsBack"){ const pend=p.manifests.filter(m=>!m.signedCopyReceived);
+        if(pend.length && !(await openConfirm("Manifests still pending","There "+(pend.length===1?"is 1 manifest":"are "+pend.length+" manifests")+" without a signed copy recorded. This sign-off asserts every signed copy is back from the disposal site. Record each one under the Waste tab first, or sign off anyway.","Sign off anyway"))){ cb.checked=false; cl[k]=false; return; } }
       toast("Signed off by "+who);
     } else { cl[k]=false; }
     save();

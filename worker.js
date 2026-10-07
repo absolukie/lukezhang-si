@@ -604,27 +604,22 @@ async function handleStatusApi(request, env) {
   if (!env.ADMIN_KEY) {
     return new Response("status api proxy not configured", { status: 500 });
   }
-  const dest = "https://sync-proto.lukezhang.si" + target + url.search;
-  const headers = new Headers({ "x-admin-key": env.ADMIN_KEY });
-  // Service token so the proxy passes the Access gate on /v1/admin/*
-  // (Access challenges worker subrequests too). Secrets on this worker.
-  if (env.CF_ACCESS_CLIENT_ID && env.CF_ACCESS_CLIENT_SECRET) {
-    headers.set("CF-Access-Client-Id", env.CF_ACCESS_CLIENT_ID);
-    headers.set("CF-Access-Client-Secret", env.CF_ACCESS_CLIENT_SECRET);
+  if (!env.SYNC_BACKEND) {
+    return new Response("status api proxy not configured", { status: 500 });
   }
+  const headers = new Headers({ "x-admin-key": env.ADMIN_KEY });
   if (request.method !== "GET" && request.method !== "HEAD") {
     headers.set("content-type", request.headers.get("content-type") || "application/json");
   }
-  const init = {
-    method: request.method,
-    headers: headers,
-    redirect: "manual",
-    signal: AbortSignal.timeout(20000),
-  };
+  const init = { method: request.method, headers: headers };
   if (request.method !== "GET" && request.method !== "HEAD") {
     init.body = await request.arrayBuffer();
   }
-  const res = await fetch(dest, init);
+  // Service binding: in-process RPC to the sync backend worker. No network
+  // hop, so no Access challenge and no route-resolution quirks. The dashboard
+  // itself stays behind Cloudflare Access; ADMIN_KEY is injected here.
+  const res = await env.SYNC_BACKEND.fetch(
+    "https://sync-backend" + target + url.search, init);
   const out = new Headers(res.headers);
   out.set("cache-control", "no-store");
   return new Response(await res.arrayBuffer(), { status: res.status, headers: out });

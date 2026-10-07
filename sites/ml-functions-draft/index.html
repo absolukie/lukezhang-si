@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The functions that run the machine: luke's blog</title>
+<meta name="description" content="Six mathematical functions do almost all the work inside ML models, LLMs, and agents: sigmoid, tanh, softmax, ReLU, GELU, SiLU, LayerNorm, RMSNorm, cosine similarity, cross-entropy. Each one gets a plain-language analogy and an interactive toy.">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    min-height: 100%;
+    background: #f6f1e3;
+    color: #2b2b2b;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.7;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 56px 22px 80px; }
+  nav.top { margin-bottom: 40px; font-size: 14px; }
+  nav.top a { color: rgba(43,43,43,0.55); text-decoration: none; }
+  nav.top a:hover { color: #b3352b; }
+  h1 { font-size: 32px; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 8px; }
+  .meta { color: rgba(43,43,43,0.5); font-size: 14px; margin-bottom: 24px; }
+  .verdict { font-size: 17px; color: #2b2b2b; border-left: 3px solid #b3352b;
+    padding: 4px 0 4px 18px; margin: 0 0 28px; line-height: 1.65; }
+  p { margin-bottom: 16px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  p strong, li strong { color: #2b2b2b; }
+  h2 { font-size: 23px; color: #2b2b2b; margin: 44px 0 10px; letter-spacing: -0.01em; }
+  ul { margin: 0 0 16px 20px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  li { margin-bottom: 8px; }
+  a { color: #b3352b; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px;
+    background: rgba(43,43,43,0.07); padding: 1px 6px; border-radius: 5px; }
+  footer { margin-top: 60px; font-size: 13px; color: rgba(43,43,43,0.35); }
+  footer a { color: rgba(43,43,43,0.6); }
+  .kicker-close { font-size: 19px; font-weight: 700; color: #2b2b2b;
+    border-top: 1px solid rgba(43,43,43,0.15); padding-top: 28px; margin-top: 48px; }
+
+  /* visualizer cards */
+  .viz { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 16px; padding: 20px; margin: 24px 0; }
+  .viz h3 { font-size: 17px; margin-bottom: 4px; color: #2b2b2b; }
+  .viz .sub { font-size: 14px; color: rgba(43,43,43,0.62); margin-bottom: 12px; line-height: 1.55; }
+  .viz label { font-size: 15px; font-weight: 600; display: block; margin: 14px 0 2px; color: #2b2b2b; }
+  .viz input[type=range] { width: 100%; height: 52px; accent-color: #b3352b;
+    touch-action: manipulation; cursor: pointer; margin: 0; }
+  .viz input[type=text], .viz textarea { width: 100%; font-size: 16px; padding: 12px 14px;
+    border: 1px solid rgba(43,43,43,0.25); border-radius: 10px; background: #fff;
+    font-family: inherit; color: #2b2b2b; }
+  .viz input[type=text]:focus, .viz textarea:focus { outline: none; border-color: #b3352b; }
+
+  /* keep-exploring link cards */
+  .xlinks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0 8px; }
+  @media (max-width: 520px) { .xlinks { grid-template-columns: 1fr; } }
+  .xlink { display: block; background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 14px; padding: 16px; text-decoration: none; color: #2b2b2b;
+    touch-action: manipulation; }
+  .xlink:active { transform: scale(0.98); }
+  .xlink b { display: block; font-size: 15px; margin-bottom: 4px; color: #b3352b; }
+  .xlink span { font-size: 13.5px; color: rgba(43,43,43,0.62); line-height: 1.5; }
+  .btn { touch-action: manipulation; border: none; background: #b3352b; color: #f6f1e3;
+    border-radius: 10px; padding: 12px 22px; font-size: 15px; font-weight: 700;
+    cursor: pointer; font-family: inherit; margin: 6px 8px 6px 0; }
+  .btn:active { transform: scale(0.97); }
+  .btn.ghost { background: transparent; color: #2b2b2b; border: 2px solid rgba(43,43,43,0.25); }
+  .btn:disabled { opacity: 0.4; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  .chip { touch-action: manipulation; border: 2px solid rgba(43,43,43,0.2); background: transparent;
+    border-radius: 999px; padding: 8px 16px; font-size: 14px; font-weight: 600;
+    cursor: pointer; color: #2b2b2b; font-family: inherit; }
+  .chip.on { border-color: #b3352b; color: #b3352b; background: rgba(179,53,43,0.07); }
+  .chip:active { transform: scale(0.96); }
+  .readout { display: flex; justify-content: space-between; align-items: baseline; margin: 8px 0; gap: 10px; }
+  .big { font-size: 30px; font-weight: 800; color: #b3352b; font-variant-numeric: tabular-nums; }
+  .cap { font-size: 13.5px; color: rgba(43,43,43,0.6); margin-top: 10px; line-height: 1.55; }
+  .insight { background: rgba(179,53,43,0.07); border: 1px solid rgba(179,53,43,0.25);
+    border-radius: 12px; padding: 12px 16px; margin-top: 14px; font-size: 15px;
+    color: #2b2b2b; min-height: 54px; line-height: 1.55; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin: 7px 0; }
+  .bar-row .w { width: 92px; font-size: 14px; text-align: right; flex: none;
+    font-family: ui-monospace, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; }
+  .bar-track { flex: 1; height: 22px; background: rgba(43,43,43,0.08); border-radius: 6px;
+    overflow: hidden; }
+  .bar-fill { height: 100%; background: #b3352b; border-radius: 6px;
+    transition: width 320ms cubic-bezier(.2,.7,.2,1); }
+  .bar-fill.dim { background: rgba(43,43,43,0.25); }
+  .bar-fill.alt { background: #3b82c4; }
+  .bar-pct { width: 56px; font-size: 13px; font-variant-numeric: tabular-nums;
+    color: rgba(43,43,43,0.7); flex: none; text-align: right; }
+  .sm-row { display: flex; align-items: center; gap: 10px; margin: 2px 0; }
+  .sm-row .w { width: 64px; font-size: 14px; font-family: ui-monospace, Menlo, monospace; flex: none; }
+  .sm-row .v { width: 48px; font-size: 13px; text-align: right; font-variant-numeric: tabular-nums;
+    color: rgba(43,43,43,0.7); flex: none; }
+  .sm-row input[type=range] { flex: 1 1 auto; width: auto; min-width: 0; }
+  svg.curve { width: 100%; height: 230px; display: block; background: #fff;
+    border: 1px solid rgba(43,43,43,0.12); border-radius: 10px; touch-action: none;
+    margin: 10px 0 4px; }
+  svg.dial { width: 100%; height: 190px; display: block; background: #fff;
+    border: 1px solid rgba(43,43,43,0.12); border-radius: 10px; margin: 10px 0 4px; }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+  .stat-cell { background: rgba(43,43,43,0.045); border-radius: 10px; padding: 10px 12px; }
+  .stat-cell .n { font-size: 20px; font-weight: 800; color: #2b2b2b; font-variant-numeric: tabular-nums; }
+  .stat-cell .l { font-size: 12.5px; color: rgba(43,43,43,0.6); }
+  .hist { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; min-height: 34px; }
+  .hist-chip { font-family: ui-monospace, Menlo, monospace; font-size: 13px; padding: 4px 10px;
+    border-radius: 8px; background: rgba(43,43,43,0.07); border: 1px solid rgba(43,43,43,0.12); }
+  @media (prefers-reduced-motion: reduce) {
+    .bar-fill { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="top"><a href="/blog/">&larr; blog</a></nav>
+
+  <h1>The functions that run the machine</h1>
+  <div class="meta">October 7, 2026 &middot; math &middot; llms</div>
+
+  <p class="verdict">Every AI model you have ever used is, underneath the hype, about ten math functions applied a few billion times. Squash a number here. Split a pie there. Measure how surprised you were. That is the whole game, and this post makes each function something you can touch.</p>
+
+  <p>People talk about neural networks like they are mysterious. They are not. A network is a long chain of very ordinary operations, and the interesting parts are just a handful of functions with funny names: sigmoid, softmax, ReLU, GELU, LayerNorm, cosine similarity. Learn these six families and you can read any model paper without flinching.</p>
+  <p>Each section below gives you one analogy and one toy. Drag the sliders, spin the dials, and watch what the function actually does. By the end you will know exactly what is happening inside a transformer block, an embedding search, and a game-playing agent.</p>
+
+  <h2>1. The squashers: sigmoid and tanh</h2>
+  <p>Neural nets pass huge wild numbers around, and sometimes they need to calm one down. That is what the squashers do. <strong>Sigmoid</strong> takes any number and squeezes it into a 0-to-1 range. Think of a <strong>dimmer switch</strong>: any input becomes a brightness level between off and fully on. <strong>Tanh</strong> is the same idea but for a <strong>tug of war</strong>: any input becomes a pull between -1 and 1, negative one way, positive the other.</p>
+  <p>Where they live: inside LSTM memory cells, where sigmoid acts as a gate that decides how much old memory to keep, and in older networks as plain on/off switches. Modern transformers mostly replaced them, but the gate idea never left.</p>
+
+  <div class="viz">
+    <h3>The dimmer and the tug of war</h3>
+    <p class="sub">Drag the input. The red dot rides the sigmoid curve, the blue dot rides tanh. Same input, two different squeezes.</p>
+    <label for="sq-in">Input value <span id="sq-in-v" style="font-weight:400;">0.0</span></label>
+    <input type="range" id="sq-in" min="-8" max="8" step="0.1" value="0" aria-label="Input to sigmoid and tanh">
+    <svg class="curve" id="sq-svg" viewBox="0 0 600 230" role="img" aria-label="Sigmoid and tanh curves"></svg>
+    <div class="stat-grid">
+      <div class="stat-cell"><div class="n" id="sq-sig">0.50</div><div class="l">sigmoid: dimmer brightness</div></div>
+      <div class="stat-cell"><div class="n" id="sq-tanh">0.00</div><div class="l">tanh: tug-of-war pull</div></div>
+    </div>
+    <p class="cap">Notice how both flatten out at the extremes. Push the input to 8 and more input barely changes anything. That flat zone is called saturation, and it is why training can stall: no change in output means no signal to learn from.</p>
+  </div>
+
+  <h2>2. The chooser: the softmax family</h2>
+  <p>Often the model must pick: which word comes next, which word to attend to, which action to take. Raw scores are messy, so <strong>softmax</strong> turns them into a clean split of a pie. Think of <strong>splitting a pie where the loudest voice gets the biggest slice</strong>: bigger score, bigger slice, and the slices always add to 100%.</p>
+  <p>Two knobs matter. <strong>Temperature</strong> is the randomness dial: cold temperature makes the winner take almost everything, hot temperature hands everyone a similar slice. And <strong>log-softmax</strong> is the Richter scale version of the same split: same information, but measured in logs so the math never underflows when probabilities get microscopic. There is also <strong>gumbel-softmax</strong>, which is softmax you can learn through, used for agents that sample an action and then improve from the result.</p>
+  <p>Where it lives: next-token probabilities, attention weights, and anywhere a model must choose.</p>
+
+  <div class="viz">
+    <h3>Split the pie</h3>
+    <p class="sub">Drag the scores. The bars show each candidate's slice. Drop the temperature for a ruthless winner, raise it to share the pie.</p>
+    <div id="sm-sliders"></div>
+    <label for="sm-temp">Temperature <span id="sm-temp-v" style="font-weight:400;">1.0</span></label>
+    <input type="range" id="sm-temp" min="0.2" max="4" step="0.1" value="1" aria-label="Softmax temperature">
+    <div class="chips" id="sm-mode">
+      <button class="chip on" data-m="prob">Probabilities</button>
+      <button class="chip" data-m="log">Log-softmax</button>
+    </div>
+    <div id="sm-bars"></div>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Slices add to</span>
+      <span class="big" id="sm-total">100.0%</span>
+    </div>
+    <p class="cap">Temperature 0.2 is a dictatorship: the top score takes nearly everything. Temperature 4 is a commune: almost equal slices no matter the scores. Sampling with high temperature is why the same prompt gives different answers each time.</p>
+  </div>
+
+  <h2>3. The spark: ReLU, GELU, SiLU</h2>
+  <p>After all the careful mixing, each neuron needs a moment of nonlinear mischief, or the whole network collapses into one big boring linear function. That mischief is the <strong>activation function</strong>. Think of them as <strong>bouncers at a club door</strong>. <strong>ReLU</strong> is the strict bouncer: negative numbers get bounced outright, positives walk straight in. <strong>GELU</strong> and <strong>SiLU</strong> are velvet-rope bouncers: entry is smooth, small negatives get a little slack instead of a hard no.</p>
+  <p>Where they live: inside every transformer block, right after the attention and MLP layers. GPT models use GELU. Llama models use SiLU (also called Swish). The smooth ones train a little better, which is why the strict bouncer mostly retired.</p>
+
+  <div class="viz">
+    <h3>Meet the bouncers</h3>
+    <p class="sub">Pick a bouncer, then drag the dot along the curve. Negatives on the left, positives on the right.</p>
+    <div class="chips" id="ac-chips">
+      <button class="chip on" data-a="relu">ReLU</button>
+      <button class="chip" data-a="gelu">GELU</button>
+      <button class="chip" data-a="silu">SiLU</button>
+    </div>
+    <svg class="curve" id="ac-svg" viewBox="0 0 600 230" role="img" aria-label="Activation function curve, draggable input point"></svg>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Input <span id="ac-x" style="font-weight:700;">0.0</span></span>
+      <span class="big" id="ac-y">0.00</span>
+    </div>
+    <p class="cap">Drag into the negatives with ReLU: flat zero, hard bounce. Switch to GELU or SiLU and the curve dips slightly below zero before recovering. That tiny dip is the velvet rope, and it gives the optimizer a gradient to follow where ReLU gives it nothing.</p>
+  </div>
+
+  <h2>4. The stabilizers: LayerNorm and RMSNorm</h2>
+  <p>Stack a hundred layers and the numbers drift: some explode, some vanish, and training falls over. <strong>Normalization</strong> is the fix. Think of a <strong>sound mixer resetting every instrument's volume</strong> before each song so no single guitar drowns the band. <strong>LayerNorm</strong> centers the values (subtract the mean) and rescales them (divide by the spread). <strong>RMSNorm</strong> skips the centering and just rescales, which is cheaper and works just as well.</p>
+  <p>Where they live: between every sub-layer of every modern model. Transformers without normalization do not train. Full stop.</p>
+
+  <div class="viz">
+    <h3>Reset the mixer</h3>
+    <p class="sub">Eight wild input values. Hit normalize and watch the mixer pull them into a sane range.</p>
+    <div class="chips" id="nm-chips">
+      <button class="chip on" data-n="layer">LayerNorm</button>
+      <button class="chip" data-n="rms">RMSNorm</button>
+    </div>
+    <div id="nm-bars"></div>
+    <div class="stat-grid">
+      <div class="stat-cell"><div class="n" id="nm-mean">-</div><div class="l">mean</div></div>
+      <div class="stat-cell"><div class="n" id="nm-std">-</div><div class="l">spread (std)</div></div>
+    </div>
+    <button class="btn" id="nm-go">Normalize</button>
+    <button class="btn ghost" id="nm-reset">New wild values</button>
+    <p class="cap">LayerNorm lands the mean at 0. RMSNorm leaves the mean alone and only tames the spread. Either way the next layer receives numbers it can actually work with.</p>
+  </div>
+
+  <h2>5. The measurers: cosine similarity and cross-entropy</h2>
+  <p>Two questions come up constantly. First: <strong>how alike are these two things?</strong> Embeddings turn words, images, and sentences into arrows in meaning-space, and <strong>cosine similarity</strong> asks <strong>do these two arrows point the same way</strong>. 1 means same direction, 0 means unrelated, -1 means opposite. This is the entire engine behind search-by-meaning.</p>
+  <p>Second: <strong>how wrong was the guess?</strong> <strong>Cross-entropy</strong> asks <strong>how surprised you were by the right answer</strong>. The model gave the correct word 90% probability? Barely surprised, tiny loss. Gave it 2%? Deeply surprised, huge loss. Training is just the long project of being less surprised.</p>
+  <p>Where they live: cosine similarity powers embedding search and retrieval; cross-entropy is the loss function behind almost all LLM training.</p>
+
+  <div class="viz">
+    <h3>Point the arrows</h3>
+    <p class="sub">Rotate each arrow with its slider. The readout is the cosine similarity: 1 when they align, 0 when they are perpendicular.</p>
+    <svg class="dial" id="cos-svg" viewBox="0 0 600 190" role="img" aria-label="Two rotatable arrows"></svg>
+    <label for="cos-a">Arrow A angle <span id="cos-a-v" style="font-weight:400;">20 deg</span></label>
+    <input type="range" id="cos-a" min="0" max="360" step="1" value="20" aria-label="Arrow A angle">
+    <label for="cos-b">Arrow B angle <span id="cos-b-v" style="font-weight:400;">80 deg</span></label>
+    <input type="range" id="cos-b" min="0" max="360" step="1" value="80" aria-label="Arrow B angle">
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Cosine similarity</span>
+      <span class="big" id="cos-sim">0.50</span>
+    </div>
+  </div>
+
+  <div class="viz">
+    <h3>The surprise dial</h3>
+    <p class="sub">The model gave the correct answer some probability. Drag it down and feel the loss explode.</p>
+    <label for="ce-p">Probability on the right answer <span id="ce-p-v" style="font-weight:400;">70%</span></label>
+    <input type="range" id="ce-p" min="1" max="99" step="1" value="70" aria-label="Probability on correct answer">
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Cross-entropy loss (nats)</span>
+      <span class="big" id="ce-loss">0.36</span>
+    </div>
+    <div class="insight" id="ce-insight"></div>
+    <p class="cap">Loss is negative log probability. At 99% the loss is nearly zero. At 1% it is 4.6 nats of pure surprise. Every training step is the model trying to push this number down across billions of guesses.</p>
+  </div>
+
+  <h2>6. The agent corner: softmax over actions</h2>
+  <p>An agent is a model with a to-do list. At every step it scores its options, what to click, which tool to call, which move to play, and then it must commit. That commit is <strong>softmax over actions</strong>: the same pie-splitting from section 2, but the slices are things to do. Think of it as <strong>the agent's gut feeling, written as probabilities</strong>.</p>
+  <p>Temperature is the personality dial here. Cold agent: always picks its best guess, reliable but predictable. Hot agent: explores, tries weird moves, sometimes discovers something brilliant, sometimes faceplants. Game-playing agents and tool-using agents live on this dial.</p>
+
+  <div class="viz">
+    <h3>Be the agent</h3>
+    <p class="sub">Set the scores, pick a temperature, then press Act. The agent samples an action from its gut feeling. Run it twenty times and watch the history.</p>
+    <div id="ag-sliders"></div>
+    <label for="ag-temp">Temperature <span id="ag-temp-v" style="font-weight:400;">1.0</span></label>
+    <input type="range" id="ag-temp" min="0.2" max="4" step="0.1" value="1" aria-label="Agent temperature">
+    <div>
+      <button class="btn" id="ag-act">Act</button>
+      <button class="btn ghost" id="ag-clear">Clear history</button>
+    </div>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Last action</span>
+      <span class="big" id="ag-last" style="font-size:24px;">-</span>
+    </div>
+    <div class="hist" id="ag-hist"></div>
+    <p class="cap">With temperature at 0.2 the history is a boring column of the top action. Crank it to 4 and every action shows up. Real agents often start hot to explore, then cool down to exploit what they learned.</p>
+  </div>
+
+  <p class="kicker-close">Six functions, and you now know what each one feels like. Next time a paper says "we apply RMSNorm before a SiLU MLP with softmax attention," you will hear: reset the mixer, velvet-rope bouncer, split the pie.</p>
+
+  <h2>Keep exploring</h2>
+  <p>These functions do not live alone. See them running inside real training, fine-tuning, and retrieval.</p>
+  <div class="xlinks">
+    <a class="xlink" href="https://projects.lukezhang.si/llm-training-draft/"><b>How an LLM learns, step by step</b><span>Softmax, cross-entropy, and gradient descent running inside a full training pipeline.</span></a>
+    <a class="xlink" href="https://lukezhang.si/blog/how-fine-tuning-works/"><b>How fine-tuning works</b><span>What changes after pretraining, when the model learns to follow instructions.</span></a>
+    <a class="xlink" href="https://lukezhang.si/blog/rag/"><b>RAG, explained</b><span>Cosine similarity doing its day job: finding the right document by meaning.</span></a>
+    <a class="xlink" href="https://projects.lukezhang.si/model-atlas/"><b>Model Atlas</b><span>A visual map of 56 models: what kind each one is, who made it, what it costs.</span></a>
+  </div>
+
+  <footer>Draft. Interactive visualizers run entirely in your browser.</footer>
+</div>
+
+<script>
+(function(){
+"use strict";
+function $(id){ return document.getElementById(id); }
+function fmt(x, d){ return Number(x).toFixed(d); }
+
+/* ---------- shared curve helper ---------- */
+function drawCurve(svg, fns, x0, x1, y0, y1, dots){
+  var W=600, H=230, PL=40, PR=20, PT=14, PB=24;
+  function X(x){ return PL + (x-x0)/(x1-x0)*(W-PL-PR); }
+  function Y(y){ return H-PB - (y-y0)/(y1-y0)*(H-PT-PB); }
+  var s = "";
+  // gridlines at nice y values
+  var step = (y1-y0) > 4 ? 1 : 0.25;
+  for (var gy = Math.ceil(y0/step)*step; gy <= y1; gy += step){
+    var py = Y(gy);
+    s += '<line x1="'+PL+'" y1="'+py+'" x2="'+(W-PR)+'" y2="'+py+'" stroke="rgba(43,43,43,0.1)" stroke-width="1"/>';
+    s += '<text x="'+(PL-8)+'" y="'+(py+4)+'" font-size="11" fill="rgba(43,43,43,0.5)" text-anchor="end">'+gy+'</text>';
+  }
+  // zero axes
+  if (y0 < 0 && y1 > 0){
+    var zy = Y(0);
+    s += '<line x1="'+PL+'" y1="'+zy+'" x2="'+(W-PR)+'" y2="'+zy+'" stroke="rgba(43,43,43,0.35)" stroke-width="1.5"/>';
+  }
+  if (x0 < 0 && x1 > 0){
+    var zx = X(0);
+    s += '<line x1="'+zx+'" y1="'+PT+'" x2="'+zx+'" y2="'+(H-PB)+'" stroke="rgba(43,43,43,0.2)" stroke-width="1"/>';
+  }
+  fns.forEach(function(fn){
+    var d = "";
+    for (var i=0;i<=120;i++){
+      var x = x0 + (x1-x0)*i/120, y = fn.f(x);
+      if (y < y0) y = y0; if (y > y1) y = y1;
+      d += (i===0?"M":"L") + X(x).toFixed(1) + " " + Y(y).toFixed(1);
+    }
+    s += '<path d="'+d+'" fill="none" stroke="'+fn.color+'" stroke-width="2.5"/>';
+  });
+  (dots||[]).forEach(function(dt){
+    var y = dt.f(dt.x); if (y < y0) y = y0; if (y > y1) y = y1;
+    s += '<circle cx="'+X(dt.x).toFixed(1)+'" cy="'+Y(y).toFixed(1)+'" r="9" fill="'+dt.color+'" stroke="#fff" stroke-width="3"/>';
+  });
+  svg.innerHTML = s;
+  return {X:X, Y:Y, x0:x0, x1:x1};
+}
+
+/* ---------- 1. squashers ---------- */
+(function(){
+  var svg = $("sq-svg"), inp = $("sq-in");
+  function sig(x){ return 1/(1+Math.exp(-x)); }
+  function render(){
+    var x = parseFloat(inp.value);
+    $("sq-in-v").textContent = fmt(x,1);
+    var s = sig(x), t = Math.tanh(x);
+    $("sq-sig").textContent = fmt(s,2);
+    $("sq-tanh").textContent = fmt(t,2);
+    drawCurve(svg, [
+      {f:sig, color:"#b3352b"},
+      {f:Math.tanh, color:"#3b82c4"}
+    ], -8, 8, -1.1, 1.1, [
+      {x:x, f:sig, color:"#b3352b"},
+      {x:x, f:Math.tanh, color:"#3b82c4"}
+    ]);
+  }
+  inp.addEventListener("input", render);
+  render();
+})();
+
+/* ---------- 2. softmax family ---------- */
+(function(){
+  var names = ["Red","Blue","Green","Gold"];
+  var colors = ["#b3352b","#3b82c4","#2e7d32","#e07b2a"];
+  var scores = [2.2, 1.0, 0.2, -0.6];
+  var temp = 1.0, mode = "prob";
+  var sWrap = $("sm-sliders"), bWrap = $("sm-bars");
+  names.forEach(function(n,i){
+    var row = document.createElement("div");
+    row.className = "sm-row";
+    row.innerHTML = '<span class="w">'+n+'</span>' +
+      '<input type="range" min="-3" max="6" step="0.1" value="'+scores[i]+'" aria-label="'+n+' score">' +
+      '<span class="v"></span>';
+    sWrap.appendChild(row);
+    var r = row.querySelector("input"), v = row.querySelector(".v");
+    r.addEventListener("input", function(){ scores[i]=parseFloat(r.value); v.textContent=fmt(scores[i],1); render(); });
+    v.textContent = fmt(scores[i],1);
+  });
+  names.forEach(function(n,i){
+    var row = document.createElement("div");
+    row.className = "bar-row";
+    row.innerHTML = '<span class="w">'+n+'</span><div class="bar-track"><div class="bar-fill" style="background:'+colors[i]+'"></div></div><span class="bar-pct"></span>';
+    bWrap.appendChild(row);
+  });
+  var bars = bWrap.querySelectorAll(".bar-fill"), pcts = bWrap.querySelectorAll(".bar-pct");
+  $("sm-temp").addEventListener("input", function(){
+    temp = parseFloat(this.value);
+    $("sm-temp-v").textContent = fmt(temp,1);
+    render();
+  });
+  $("sm-mode").querySelectorAll(".chip").forEach(function(c){
+    c.addEventListener("click", function(){
+      $("sm-mode").querySelectorAll(".chip").forEach(function(x){ x.classList.remove("on"); });
+      c.classList.add("on"); mode = c.getAttribute("data-m"); render();
+    });
+  });
+  function render(){
+    var mx = Math.max.apply(null, scores);
+    var ex = scores.map(function(s){ return Math.exp((s-mx)/temp); });
+    var sum = ex.reduce(function(a,b){ return a+b; }, 0);
+    var probs = ex.map(function(e){ return e/sum; });
+    probs.forEach(function(p,i){
+      bars[i].style.width = (p*100).toFixed(1) + "%";
+      pcts[i].textContent = mode === "prob" ? (p*100).toFixed(1)+"%" : fmt(Math.log(p),2);
+    });
+    if (mode === "prob"){
+      $("sm-total").textContent = "100.0%";
+    } else {
+      var top = Math.max.apply(null, probs.map(function(p){ return Math.log(p); }));
+      $("sm-total").textContent = fmt(top,2) + " nats";
+    }
+  }
+  render();
+})();
+})();
+</script>
+
+<script>
+(function(){
+"use strict";
+function $(id){ return document.getElementById(id); }
+function fmt(x, d){ return Number(x).toFixed(d); }
+
+/* ---------- 3. bouncers: ReLU / GELU / SiLU ---------- */
+(function(){
+  var svg = $("ac-svg");
+  var act = "relu", x = 1.5;
+  function erf(v){
+    var s = v < 0 ? -1 : 1; v = Math.abs(v);
+    var t = 1/(1+0.3275911*v);
+    var y = 1 - (((((1.061405429*t - 1.453152027)*t) + 1.421413741)*t - 0.284496736)*t + 0.254829592)*t*Math.exp(-v*v);
+    return s*y;
+  }
+  var fns = {
+    relu: function(v){ return Math.max(0, v); },
+    gelu: function(v){ return 0.5*v*(1+erf(v/Math.SQRT2)); },
+    silu: function(v){ return v/(1+Math.exp(-v)); }
+  };
+  function drawStatic(f){
+    var W=600,H=230,PL=44,PR=20,PT=14,PB=26;
+    function X(v){ return PL + (v+6)/12*(W-PL-PR); }
+    function Y(v){ return H-PB - (v+2)/8*(H-PT-PB); }
+    var s = "";
+    [-2,-1,0,1,2,3,4,5,6].forEach(function(gy){
+      var py=Y(gy);
+      s += '<line x1="'+PL+'" y1="'+py+'" x2="'+(W-PR)+'" y2="'+py+'" stroke="rgba(43,43,43,0.1)"/>';
+      s += '<text x="'+(PL-8)+'" y="'+(py+4)+'" font-size="11" fill="rgba(43,43,43,0.5)" text-anchor="end">'+gy+'</text>';
+    });
+    var zy=Y(0), zx=X(0);
+    s += '<line x1="'+PL+'" y1="'+zy+'" x2="'+(W-PR)+'" y2="'+zy+'" stroke="rgba(43,43,43,0.35)" stroke-width="1.5"/>';
+    s += '<line x1="'+zx+'" y1="'+PT+'" x2="'+zx+'" y2="'+(H-PB)+'" stroke="rgba(43,43,43,0.2)"/>';
+    var d="";
+    for (var i=0;i<=140;i++){
+      var vx=-6+12*i/140, vy=f(vx);
+      if (vy<-2) vy=-2; if (vy>6) vy=6;
+      d += (i===0?"M":"L")+X(vx).toFixed(1)+" "+Y(vy).toFixed(1);
+    }
+    s += '<path d="'+d+'" fill="none" stroke="#b3352b" stroke-width="2.5"/>';
+    s += '<rect id="ac-hit" x="'+PL+'" y="'+PT+'" width="'+(W-PL-PR)+'" height="'+(H-PT-PB)+'" fill="transparent"/>';
+    s += '<circle id="ac-dot" r="11" fill="#b3352b" stroke="#fff" stroke-width="3" style="cursor:grab"/>';
+    svg.innerHTML = s;
+  }
+  function moveDot(){
+    var f = fns[act];
+    var W=600,H=230,PL=44,PR=20,PT=14,PB=26;
+    function X(v){ return PL + (v+6)/12*(W-PL-PR); }
+    function Y(v){ return H-PB - (v+2)/8*(H-PT-PB); }
+    var y = f(x); if (y<-2) y=-2; if (y>6) y=6;
+    var dot = $("ac-dot");
+    if (dot){ dot.setAttribute("cx", X(x).toFixed(1)); dot.setAttribute("cy", Y(y).toFixed(1)); }
+    $("ac-x").textContent = fmt(x,1);
+    $("ac-y").textContent = fmt(f(x),2);
+  }
+  function render(){
+    drawStatic(fns[act]);
+    moveDot();
+  }
+  // drag handlers attach once to the svg element (never re-created)
+  (function(){
+    var dragging = false;
+    function setFromEvent(e){
+      var r = svg.getBoundingClientRect();
+      var px = (e.clientX - r.left)/r.width*600;
+      var vx = -6 + (px-44)/(600-44-20)*12;
+      x = Math.max(-6, Math.min(6, vx));
+      moveDot();
+    }
+    svg.addEventListener("pointerdown", function(e){
+      dragging = true;
+      try { svg.setPointerCapture(e.pointerId); } catch(err){}
+      setFromEvent(e);
+    });
+    svg.addEventListener("pointermove", function(e){ if (dragging) setFromEvent(e); });
+    svg.addEventListener("pointerup", function(){ dragging = false; });
+    svg.addEventListener("pointercancel", function(){ dragging = false; });
+  })();
+  $("ac-chips").querySelectorAll(".chip").forEach(function(c){
+    c.addEventListener("click", function(){
+      $("ac-chips").querySelectorAll(".chip").forEach(function(z){ z.classList.remove("on"); });
+      c.classList.add("on"); act = c.getAttribute("data-a"); render();
+    });
+  });
+  render();
+})();
+
+/* ---------- 4. stabilizers: LayerNorm / RMSNorm ---------- */
+(function(){
+  var vals = [], mode = "layer";
+  var wrap = $("nm-bars");
+  function wild(){
+    vals = [];
+    for (var i=0;i<8;i++) vals.push(Math.round((Math.random()*100-45)*10)/10);
+  }
+  function stats(v){
+    var mean = v.reduce(function(a,b){return a+b;},0)/v.length;
+    var sd = Math.sqrt(v.reduce(function(a,b){return a+(b-mean)*(b-mean);},0)/v.length);
+    return {mean:mean, sd:sd};
+  }
+  function render(list){
+    wrap.innerHTML = "";
+    var mx = Math.max.apply(null, list.map(function(v){ return Math.abs(v); })) || 1;
+    list.forEach(function(v,i){
+      var row = document.createElement("div");
+      row.className = "bar-row";
+      var pct = Math.min(100, Math.abs(v)/mx*100);
+      var cls = v < 0 ? "bar-fill dim" : "bar-fill";
+      row.innerHTML = '<span class="w">v'+(i+1)+'</span><div class="bar-track"><div class="'+cls+'" style="width:'+pct.toFixed(1)+'%"></div></div><span class="bar-pct">'+fmt(v,2)+'</span>';
+      wrap.appendChild(row);
+    });
+    var s = stats(list);
+    $("nm-mean").textContent = fmt(s.mean,2);
+    $("nm-std").textContent = fmt(s.sd,2);
+  }
+  $("nm-chips").querySelectorAll(".chip").forEach(function(c){
+    c.addEventListener("click", function(){
+      $("nm-chips").querySelectorAll(".chip").forEach(function(z){ z.classList.remove("on"); });
+      c.classList.add("on"); mode = c.getAttribute("data-n");
+    });
+  });
+  $("nm-go").addEventListener("click", function(){
+    var s = stats(vals), eps = 1e-6, out;
+    if (mode === "layer"){
+      out = vals.map(function(v){ return (v-s.mean)/Math.sqrt(s.sd*s.sd+eps); });
+    } else {
+      var rms = Math.sqrt(vals.reduce(function(a,b){return a+b*b;},0)/vals.length + eps);
+      out = vals.map(function(v){ return v/rms; });
+    }
+    render(out);
+  });
+  $("nm-reset").addEventListener("click", function(){ wild(); render(vals); });
+  wild(); render(vals);
+})();
+
+/* ---------- 5a. cosine similarity dial ---------- */
+(function(){
+  var svg = $("cos-svg");
+  function render(){
+    var a = parseFloat($("cos-a").value), b = parseFloat($("cos-b").value);
+    $("cos-a-v").textContent = a + " deg";
+    $("cos-b-v").textContent = b + " deg";
+    var cx=300, cy=95, r=62;
+    function pt(deg){
+      var rad = deg*Math.PI/180;
+      return [cx + r*Math.cos(rad), cy - r*Math.sin(rad)];
+    }
+    function arrow(deg, color){
+      var p = pt(deg), rad = deg*Math.PI/180;
+      var dx = Math.cos(rad), dy = -Math.sin(rad);
+      var bx = p[0]-dx*16, by = p[1]-dy*16;
+      var nx = -dy, ny = dx;
+      var s = '<line x1="'+cx+'" y1="'+cy+'" x2="'+p[0].toFixed(1)+'" y2="'+p[1].toFixed(1)+'" stroke="'+color+'" stroke-width="4" stroke-linecap="round"/>';
+      s += '<polygon points="'+p[0].toFixed(1)+","+p[1].toFixed(1)+" "+(bx+nx*8).toFixed(1)+","+(by+ny*8).toFixed(1)+" "+(bx-nx*8).toFixed(1)+","+(by-ny*8).toFixed(1)+'" fill="'+color+'"/>';
+      s += '<circle cx="'+cx+'" cy="'+cy+'" r="5" fill="#2b2b2b"/>';
+      return s;
+    }
+    var s = '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="rgba(43,43,43,0.15)" stroke-dasharray="4 4"/>';
+    s += '<text x="'+(cx+r+8)+'" y="'+(cy+4)+'" font-size="12" fill="rgba(43,43,43,0.5)">0 deg</text>';
+    s += arrow(a, "#b3352b") + arrow(b, "#3b82c4");
+    s += '<text x="'+(cx-64)+'" y="'+(cy-r-10)+'" font-size="13" font-weight="700" fill="#b3352b">A</text>';
+    s += '<text x="'+(cx+52)+'" y="'+(cy-r-10)+'" font-size="13" font-weight="700" fill="#3b82c4">B</text>';
+    svg.innerHTML = s;
+    var sim = Math.cos((a-b)*Math.PI/180);
+    $("cos-sim").textContent = fmt(sim,2);
+  }
+  $("cos-a").addEventListener("input", render);
+  $("cos-b").addEventListener("input", render);
+  render();
+})();
+
+/* ---------- 5b. surprise dial: cross-entropy ---------- */
+(function(){
+  var inp = $("ce-p");
+  function render(){
+    var p = parseFloat(inp.value);
+    $("ce-p-v").textContent = p + "%";
+    var loss = -Math.log(p/100);
+    $("ce-loss").textContent = fmt(loss,2);
+    var el = $("ce-insight"), msg;
+    if (p >= 90) msg = "Barely a shrug. The model was confident and right, so this guess teaches it almost nothing.";
+    else if (p >= 50) msg = "Mild surprise. A decent guess, but the model still has something to learn here.";
+    else if (p >= 20) msg = "Real surprise. The model spread its bets and mostly missed. This one moves the weights.";
+    else msg = "Maximum embarrassment. The model was sure about everything except the truth. Huge gradient incoming.";
+    el.textContent = msg;
+  }
+  inp.addEventListener("input", render);
+  render();
+})();
+
+/* ---------- 6. agent corner: softmax over actions ---------- */
+(function(){
+  var names = ["search","click","type","wait"];
+  var colors = ["#b3352b","#3b82c4","#2e7d32","#e07b2a"];
+  var scores = [1.6, 0.8, 0.2, -0.5];
+  var temp = 1.0, hist = [];
+  var sWrap = $("ag-sliders"), hWrap = $("ag-hist");
+  names.forEach(function(n,i){
+    var row = document.createElement("div");
+    row.className = "sm-row";
+    row.innerHTML = '<span class="w">'+n+'</span>' +
+      '<input type="range" min="-3" max="6" step="0.1" value="'+scores[i]+'" aria-label="'+n+' score">' +
+      '<span class="v"></span>';
+    sWrap.appendChild(row);
+    var r = row.querySelector("input"), v = row.querySelector(".v");
+    v.textContent = fmt(scores[i],1);
+    r.addEventListener("input", function(){ scores[i]=parseFloat(r.value); v.textContent=fmt(scores[i],1); });
+  });
+  $("ag-temp").addEventListener("input", function(){
+    temp = parseFloat(this.value);
+    $("ag-temp-v").textContent = fmt(temp,1);
+  });
+  function probs(){
+    var mx = Math.max.apply(null, scores);
+    var ex = scores.map(function(s){ return Math.exp((s-mx)/temp); });
+    var sum = ex.reduce(function(a,b){ return a+b; }, 0);
+    return ex.map(function(e){ return e/sum; });
+  }
+  function renderHist(){
+    hWrap.innerHTML = "";
+    hist.slice(-14).forEach(function(h){
+      var c = document.createElement("span");
+      c.className = "hist-chip";
+      c.textContent = names[h];
+      c.style.borderLeft = "4px solid " + colors[h];
+      hWrap.appendChild(c);
+    });
+  }
+  $("ag-act").addEventListener("click", function(){
+    var p = probs(), r = Math.random(), acc = 0, pick = 0;
+    for (var i=0;i<p.length;i++){ acc += p[i]; if (r <= acc){ pick = i; break; } }
+    hist.push(pick);
+    $("ag-last").textContent = names[pick];
+    renderHist();
+  });
+  $("ag-clear").addEventListener("click", function(){
+    hist = []; $("ag-last").textContent = "-"; renderHist();
+  });
+  renderHist();
+})();
+})();
+</script>
+</body>
+</html>

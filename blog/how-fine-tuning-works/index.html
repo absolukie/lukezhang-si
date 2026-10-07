@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How fine-tuning works (press the buttons): luke's blog</title>
+<meta name="description" content="Fine-tuning is teaching an already-smart model your specific thing. Train a simulated model, play with learning rate, see LoRA's frozen vs trainable weights, and watch behavior change. All interactive.">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { min-height: 100%; background: #0b0e14; background-attachment: fixed;
+    color: #e8ecf3; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.7; -webkit-tap-highlight-color: transparent; }
+  button { touch-action: manipulation; font: inherit; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 56px 22px 80px; }
+  nav.top { margin-bottom: 40px; font-size: 14px; }
+  nav.top a { color: rgba(232,236,243,0.55); text-decoration: none; }
+  nav.top a:hover { color: #5eb1ff; }
+  h1 { font-size: 32px; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 8px; }
+  .meta { color: rgba(232,236,243,0.5); font-size: 14px; margin-bottom: 24px; }
+  .verdict { font-size: 17px; color: #bfe0ff; border-left: 3px solid #5eb1ff;
+    padding: 4px 0 4px 18px; margin: 0 0 28px; line-height: 1.65; }
+  p { margin-bottom: 16px; font-size: 16px; color: rgba(232,236,243,0.88); }
+  p strong { color: #bfe0ff; }
+  h2 { font-size: 23px; color: #bfe0ff; margin: 40px 0 10px; letter-spacing: -0.01em; }
+  a { color: #5eb1ff; }
+  .sim-note { font-size: 12.5px; color: #6d7688; margin-top: 8px; }
+  footer { margin-top: 60px; font-size: 13px; color: rgba(232,236,243,0.35); }
+
+  /* lab widgets */
+  .lab { background: #12161f; border: 1px solid #1e2430; border-radius: 16px;
+    padding: 20px; margin: 20px 0 8px; }
+  .lab .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  .lab label { font-size: 13px; color: #aab2c5; }
+  .lab label b { color: #fff; }
+  .lab input[type=range] { flex: 1; min-width: 140px; accent-color: #5eb1ff; height: 28px; font-size: 16px; }
+  .btn { background: #5eb1ff; color: #06121f; border: 0; border-radius: 12px;
+    padding: 12px 22px; font-weight: 800; font-size: 15px; cursor: pointer; }
+  .btn:active { transform: scale(.97); }
+  .btn.ghost { background: #1e2430; color: #e8ecf3; }
+  .btn:disabled { opacity: .45; }
+  .btn.small { padding: 8px 14px; font-size: 13px; border-radius: 10px; }
+  .pill { font-size: 13px; font-weight: 700; padding: 6px 14px; border-radius: 20px;
+    background: #1e2430; color: #aab2c5; border: 1px solid #2a3140; }
+  .pill.good { background: rgba(61,220,132,.15); color: #3ddc84; border-color: #3ddc84; }
+  .pill.bad { background: rgba(255,107,107,.15); color: #ff6b6b; border-color: #ff6b6b; }
+  .pill.warn { background: rgba(255,214,10,.12); color: #ffd60a; border-color: #ffd60a; }
+  #loss-svg { width: 100%; height: auto; display: block; background: #0b0e14;
+    border-radius: 10px; border: 1px solid #1e2430; }
+  .lora-grids { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; margin: 12px 0; }
+  .lora-box { text-align: center; }
+  .lora-box svg { display: block; background: #0b0e14; border-radius: 8px; border: 1px solid #1e2430; }
+  .lora-box .cap { font-size: 12px; color: #8b93a7; margin-top: 6px; }
+  .lora-box .cap b { color: #fff; }
+  .rank-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .rank-btns .btn.on { outline: 2px solid #fff; }
+  .stat-line { font-size: 14px; color: #aab2c5; margin-top: 10px; font-variant-numeric: tabular-nums; }
+  .stat-line b { color: #3ddc84; font-size: 16px; }
+  .persona-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .persona-btns .btn.on { outline: 2px solid #fff; }
+  .resp { border-radius: 10px; padding: 14px 16px; font-size: 14.5px; margin-bottom: 10px;
+    border: 1px solid #1e2430; background: #0b0e14; }
+  .resp .who { font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+    color: #8b93a7; margin-bottom: 6px; }
+  .resp.tuned { border-color: #3ddc84; }
+  .resp.tuned .who { color: #3ddc84; }
+  .progress { height: 10px; background: #0b0e14; border-radius: 6px; overflow: hidden;
+    border: 1px solid #1e2430; margin: 12px 0; display: none; }
+  .progress.show { display: block; }
+  .progress .fill { height: 100%; width: 0%; background: #3ddc84; transition: width .1s linear; }
+  #epoch-label { font-size: 13px; color: #8b93a7; display: none; margin-bottom: 8px; }
+  #epoch-label.show { display: block; }
+  .recipe { margin: 16px 0; font-size: 15px; color: rgba(232,236,243,0.88); }
+  .recipe li { margin-bottom: 10px; margin-left: 20px; }
+  .recipe code, p code { font-family: ui-monospace, Menlo, monospace; font-size: 13.5px;
+    background: rgba(94,177,255,0.12); border: 1px solid rgba(94,177,255,0.25);
+    border-radius: 6px; padding: 1px 7px; color: #bfe0ff; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="top"><a href="/blog/">← blog</a></nav>
+  <h1>How fine-tuning works (press the buttons)</h1>
+  <div class="meta">October 6, 2026 · machine learning · interactive</div>
+
+  <p class="verdict">Fine-tuning is taking a model that's already smart and teaching it your specific thing: your voice, your task, your data. You don't retrain the whole brain. You nudge a tiny fraction of it with your examples until it behaves the way you want. Below: train a simulated model yourself, see which weights actually change, and watch a model's personality shift.</p>
+
+  <h2>1. Train it yourself</h2>
+  <p>This is a simulated training run. The line is the model's error (loss): lower is better. Press <strong>Train</strong>, then drag the learning rate slider and train again. The learning rate is how big each nudge is. Too small and it crawls. Too big and it explodes.</p>
+
+  <div class="lab">
+    <div class="row">
+      <label style="min-width:170px">Learning rate <b id="lr-val">1.0</b></label>
+      <input type="range" id="lr" min="0.1" max="3" step="0.1" value="1">
+      <button class="btn" id="train-btn">▶ Train</button>
+      <span class="pill" id="train-verdict">not trained yet</span>
+    </div>
+    <svg id="loss-svg" viewBox="0 0 640 300" role="img" aria-label="Training loss curve"></svg>
+    <p class="sim-note">Simulated loss curve, not a real model. The shape is honest though: this is what training curves actually look like.</p>
+  </div>
+
+  <h2>2. What actually changes: almost nothing</h2>
+  <p>Here's the trick that makes fine-tuning cheap. A model's knowledge lives in giant weight matrices (gray grid). In <strong>LoRA</strong> fine-tuning, you freeze all of that and only train two tiny matrices, A and B (green). The model's update is just A times B added on top. Pick a rank below: bigger rank means more trainable weights, but even the biggest option here is a rounding error next to the full model.</p>
+
+  <div class="lab">
+    <div class="row">
+      <label>LoRA rank <b id="rank-val">8</b></label>
+      <div class="rank-btns" id="rank-btns"></div>
+      <button class="btn ghost small" id="lora-step">Run training steps</button>
+    </div>
+    <div class="lora-grids">
+      <div class="lora-box">
+        <svg id="lora-frozen" viewBox="0 0 160 160" width="160" height="160" role="img" aria-label="Frozen weight matrix"></svg>
+        <div class="cap"><b>Frozen</b><br>16.7M params, never change</div>
+      </div>
+      <div class="lora-box">
+        <svg id="lora-a" viewBox="0 0 160 160" width="160" height="160" role="img" aria-label="Trainable matrix A"></svg>
+        <div class="cap"><b>A</b> trainable</div>
+      </div>
+      <div class="lora-box">
+        <svg id="lora-b" viewBox="0 0 160 160" width="160" height="160" role="img" aria-label="Trainable matrix B"></svg>
+        <div class="cap"><b>B</b> trainable</div>
+      </div>
+    </div>
+    <div class="stat-line" id="lora-stats"></div>
+    <p class="sim-note">Grid sizes are illustrative (a real matrix is 4096×4096), but the parameter math is real: LoRA with rank r on that matrix trains r × 8,192 params instead of 16,777,216.</p>
+  </div>
+
+  <h2>3. What it does to behavior</h2>
+  <p>Pick a personality, see the base model's generic answer, then fine-tune it and watch the same prompt come out different. The knowledge didn't change. The behavior did.</p>
+
+  <div class="lab">
+    <div class="persona-btns" id="persona-btns"></div>
+    <div class="resp" id="resp-base"><div class="who">Base model</div><div id="resp-base-text"></div></div>
+    <div id="epoch-label">Fine-tuning… epoch <span id="epoch-n">1</span>/3</div>
+    <div class="progress" id="ft-progress"><div class="fill" id="ft-fill"></div></div>
+    <div class="resp tuned" id="resp-tuned" style="display:none"><div class="who">After fine-tuning</div><div id="resp-tuned-text"></div></div>
+    <div class="row" style="margin-bottom:0">
+      <button class="btn" id="ft-btn">Fine-tune on 2,000 examples</button>
+    </div>
+    <p class="sim-note">Simulated outputs written by a human (me), not generated by a model. A real run would use thousands of examples and a GPU, and take hours, not seconds.</p>
+  </div>
+
+  <h2>4. The real-world recipe</h2>
+  <ul class="recipe">
+    <li><strong>Pick a small open base model.</strong> Llama 3.2 1B or Qwen3 1.7B are the usual starting points. Small enough to fine-tune cheaply, smart enough to be worth steering.</li>
+    <li><strong>Build your dataset.</strong> Hundreds to thousands of examples of the behavior you want: prompt in, ideal response out. This is the actual work. Garbage in, garbage personality out.</li>
+    <li><strong>Rent a GPU for a few hours.</strong> Roughly $2 to $6 per hour. LoRA keeps the memory footprint small enough for a single GPU.</li>
+    <li><strong>Train with LoRA, watch the loss curve</strong> (like section 1), and stop when your evals look good, not when the loss hits zero. Zero loss means it memorized your examples.</li>
+    <li><strong>Evaluate on things it hasn't seen.</strong> A fine-tune that only works on your training examples is a parrot, not a model.</li>
+  </ul>
+  <p>That's the whole game. No GPU cluster, no PhD, no training from scratch. Just a base model, your examples, and a few dollars of compute.</p>
+
+  <footer>All three widgets are simulated for illustration. The concepts (loss curves, LoRA rank math, behavior shift) are the real thing.</footer>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const SVGNS = "http://www.w3.org/2000/svg";
+function el(tag, attrs) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+
+/* ---------- 1. Loss curve trainer ---------- */
+const STEPS = 100;
+let trainTimer = null;
+
+function lossAt(s, lr) {
+  const decay = Math.exp(-s * lr / 35);
+  let l = 0.25 + 2.2 * decay;
+  l += (Math.random() - 0.5) * 0.12 * Math.min(1.5, lr);
+  if (lr > 2.0 && s > 25) l += (s - 25) * 0.045 * (lr - 2.0);
+  return Math.max(0.05, l);
+}
+
+function drawLossAxes(svg) {
+  svg.innerHTML = "";
+  const W = 640, H = 300, pl = 44, pb = 30, pt = 12, pr = 12;
+  svg._geo = { W, H, pl, pb, pt, pr };
+  // y gridlines 0..3
+  for (let v = 0; v <= 3; v++) {
+    const y = pt + (H - pt - pb) * (1 - v / 3);
+    svg.appendChild(el("line", { x1: pl, y1: y, x2: W - pr, y2: y, stroke: "#1e2430", "stroke-width": 1 }));
+    const t = el("text", { x: pl - 8, y: y + 4, "text-anchor": "end", fill: "#6d7688", "font-size": 11 });
+    t.textContent = v.toFixed(1);
+    svg.appendChild(t);
+  }
+  const xl = el("text", { x: pl, y: H - 8, fill: "#6d7688", "font-size": 11 });
+  xl.textContent = "0";
+  svg.appendChild(xl);
+  const xr = el("text", { x: W - pr, y: H - 8, "text-anchor": "end", fill: "#6d7688", "font-size": 11 });
+  xr.textContent = "100 steps";
+  svg.appendChild(xr);
+  const yl = el("text", { x: 12, y: pt + 8, fill: "#6d7688", "font-size": 11 });
+  yl.textContent = "loss";
+  svg.appendChild(yl);
+  const path = el("path", { d: "", fill: "none", stroke: "#5eb1ff", "stroke-width": 2.5, "stroke-linejoin": "round" });
+  svg.appendChild(path);
+  svg._path = path;
+  const dot = el("circle", { r: 4, fill: "#ffd60a", cx: -10, cy: -10 });
+  svg.appendChild(dot);
+  svg._dot = dot;
+}
+
+function lossPoint(svg, s, l) {
+  const g = svg._geo;
+  const W = 640;
+  const px = g.pl + (W - g.pl - g.pr) * (s / STEPS);
+  const py = g.pt + (g.H - g.pt - g.pb) * (1 - Math.min(l, 3.2) / 3.2);
+  return [px, py];
+}
+
+function trainModel() {
+  const svg = $("loss-svg");
+  const lr = parseFloat($("lr").value);
+  if (trainTimer) clearInterval(trainTimer);
+  drawLossAxes(svg);
+  $("train-btn").disabled = true;
+  const verdict = $("train-verdict");
+  verdict.className = "pill";
+  verdict.textContent = "training…";
+  let s = 0, d = "";
+  const losses = [];
+  for (let i = 0; i <= STEPS; i++) losses.push(lossAt(i, lr));
+  trainTimer = setInterval(() => {
+    const [px, py] = lossPoint(svg, s, losses[s]);
+    d += (s === 0 ? "M" : "L") + px.toFixed(1) + " " + py.toFixed(1) + " ";
+    svg._path.setAttribute("d", d);
+    svg._dot.setAttribute("cx", px);
+    svg._dot.setAttribute("cy", py);
+    s++;
+    if (s > STEPS) {
+      clearInterval(trainTimer); trainTimer = null;
+      $("train-btn").disabled = false;
+      const final = losses[STEPS];
+      if (lr > 2.0) {
+        verdict.className = "pill bad";
+        verdict.textContent = "diverged! loss exploded to " + final.toFixed(2);
+      } else if (lr < 0.5) {
+        verdict.className = "pill warn";
+        verdict.textContent = "crawling… final loss " + final.toFixed(2);
+      } else {
+        verdict.className = "pill good";
+        verdict.textContent = "converged! final loss " + final.toFixed(2);
+      }
+    }
+  }, 30);
+}
+
+$("lr").addEventListener("input", e => { $("lr-val").textContent = parseFloat(e.target.value).toFixed(1); });
+$("train-btn").addEventListener("click", trainModel);
+drawLossAxes($("loss-svg"));
+
+/* ---------- 2. LoRA visual ---------- */
+let rank = 8;
+let loraTimer = null;
+const FROZEN = 16777216; // 4096^2
+
+function drawFrozen() {
+  const svg = $("lora-frozen");
+  svg.innerHTML = "";
+  const n = 16, cell = 10;
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++)
+    svg.appendChild(el("rect", { x: j * cell, y: i * cell, width: cell - 1, height: cell - 1,
+      rx: 2, fill: "#2a3140" }));
+}
+
+function drawAB() {
+  [["lora-a", rank, 16], ["lora-b", 16, rank]].forEach(([id, rows, cols]) => {
+    const svg = $(id);
+    svg.innerHTML = "";
+    const cw = 160 / cols, ch = 160 / rows;
+    for (let i = 0; i < rows; i++) for (let j = 0; j < cols; j++) {
+      const r = svg._cells && svg._cells[i * cols + j];
+      svg.appendChild(el("rect", {
+        x: (j * cw).toFixed(1), y: (i * ch).toFixed(1),
+        width: (cw - 1).toFixed(1), height: (ch - 1).toFixed(1), rx: 2,
+        fill: r !== undefined ? shade(r) : "#1e5c38"
+      }));
+    }
+    svg._dims = [rows, cols];
+    if (!svg._cells) svg._cells = new Array(rows * cols).fill(0.3);
+    else if (svg._cells.length !== rows * cols) svg._cells = new Array(rows * cols).fill(0.3);
+  });
+  updateLoraStats();
+}
+
+function shade(v) {
+  // v in 0..1 -> green intensity
+  const g = Math.round(90 + v * 130), r = Math.round(30 + v * 40), b = Math.round(56 + v * 60);
+  return "rgb(" + r + "," + g + "," + b + ")";
+}
+
+function updateLoraStats() {
+  const trainable = rank * 8192;
+  const ratio = Math.round(FROZEN / trainable);
+  $("lora-stats").innerHTML = "Training <b>" + trainable.toLocaleString() + "</b> params instead of " +
+    FROZEN.toLocaleString() + ", which is <b>" + ratio.toLocaleString() + "× fewer</b>.";
+  $("rank-val").textContent = rank;
+}
+
+function loraSteps() {
+  if (loraTimer) { clearInterval(loraTimer); loraTimer = null; $("lora-step").textContent = "Run training steps"; return; }
+  $("lora-step").textContent = "Stop";
+  loraTimer = setInterval(() => {
+    ["lora-a", "lora-b"].forEach(id => {
+      const svg = $(id);
+      const [rows, cols] = svg._dims;
+      for (let k = 0; k < Math.max(2, rank); k++) {
+        const i = Math.floor(Math.random() * rows * cols);
+        svg._cells[i] = Math.min(1, Math.max(0.05, svg._cells[i] + (Math.random() - 0.45) * 0.3));
+      }
+      const kids = svg.childNodes;
+      for (let i = 0; i < kids.length; i++) kids[i].setAttribute("fill", shade(svg._cells[i]));
+    });
+  }, 250);
+}
+
+[8, 1, 2, 4, 16].forEach(r => {
+  const b = document.createElement("button");
+  b.className = "btn small ghost" + (r === 8 ? " on" : "");
+  b.textContent = "r=" + r;
+  b.style.order = r === 8 ? 0 : 1;
+  b.onclick = () => {
+    rank = r;
+    document.querySelectorAll("#rank-btns .btn").forEach(x => x.classList.remove("on"));
+    b.classList.add("on");
+    if (loraTimer) { clearInterval(loraTimer); loraTimer = null; $("lora-step").textContent = "Run training steps"; }
+    drawAB();
+  };
+  $("rank-btns").appendChild(b);
+});
+// order rank buttons ascending
+[...$("rank-btns").children].sort((a, b) =>
+  parseInt(a.textContent.slice(2)) - parseInt(b.textContent.slice(2))
+).forEach(b => $("rank-btns").appendChild(b));
+
+$("lora-step").addEventListener("click", loraSteps);
+drawFrozen();
+drawAB();
+
+/* ---------- 3. Before/after personas ---------- */
+const PERSONAS = {
+  pirate: {
+    label: "🏴‍☠️ Pirate",
+    prompt: "Write a product launch announcement.",
+    base: "We are excited to announce the launch of our new product. It offers innovative features designed to improve your workflow. It is available starting today.",
+    tuned: "Ahoy, mateys! Hoist the colors, our newest treasure be ready for plunderin'! She be packed with more booty than a sunken galleon and sails smoother than a siren's song. Set course today, ye scallywags!"
+  },
+  bard: {
+    label: "🎭 Shakespeare",
+    prompt: "Write a product launch announcement.",
+    base: "We are excited to announce the launch of our new product. It offers innovative features designed to improve your workflow. It is available starting today.",
+    tuned: "Hark! What light through yonder server breaks? Our new product, fair and true, doth grace the stage at last. With features most wondrous and divine, thy weary workflow shall troubles resign. Seize it now, good friends, ere the moment flies!"
+  },
+  support: {
+    label: "🎧 Support agent",
+    prompt: "Write a product launch announcement.",
+    base: "We are excited to announce the launch of our new product. It offers innovative features designed to improve your workflow. It is available starting today.",
+    tuned: "Great news! Your new product is ready and I've made sure everything is set up for you. Here's what it can do for your workflow, step by step. And if anything looks off, just reply to this message and I'll sort it out personally."
+  }
+};
+let persona = "pirate";
+let ftTimer = null;
+
+function renderPersonas() {
+  const box = $("persona-btns");
+  box.innerHTML = "";
+  Object.keys(PERSONAS).forEach(k => {
+    const b = document.createElement("button");
+    b.className = "btn small ghost" + (k === persona ? " on" : "");
+    b.textContent = PERSONAS[k].label;
+    b.onclick = () => {
+      persona = k;
+      if (ftTimer) { clearInterval(ftTimer); ftTimer = null; }
+      $("resp-tuned").style.display = "none";
+      $("ft-progress").classList.remove("show");
+      $("epoch-label").classList.remove("show");
+      $("ft-btn").disabled = false;
+      renderPersonas();
+      showBase();
+    };
+    box.appendChild(b);
+  });
+}
+
+function showBase() {
+  $("resp-base-text").textContent = "Prompt: \"" + PERSONAS[persona].prompt + "\"\n\n" + PERSONAS[persona].base;
+}
+
+function fineTune() {
+  if (ftTimer) return;
+  $("ft-btn").disabled = true;
+  $("resp-tuned").style.display = "none";
+  $("ft-progress").classList.add("show");
+  $("epoch-label").classList.add("show");
+  let p = 0, epoch = 1;
+  $("epoch-n").textContent = epoch;
+  ftTimer = setInterval(() => {
+    p += 4;
+    if (p >= 100) {
+      p = 100;
+      clearInterval(ftTimer); ftTimer = null;
+      $("resp-tuned-text").textContent = PERSONAS[persona].tuned;
+      $("resp-tuned").style.display = "block";
+      $("resp-tuned").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      $("ft-btn").disabled = false;
+    } else if (p % 34 < 4) {
+      epoch = Math.min(3, epoch + 1);
+      $("epoch-n").textContent = epoch;
+    }
+    $("ft-fill").style.width = p + "%";
+  }, 80);
+}
+
+$("ft-btn").addEventListener("click", fineTune);
+renderPersonas();
+showBase();
+</script>
+</body>
+</html>

@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Model Atlas - what kind of model is what</title>
+<style>
+:root{
+  --bg:#0f1115; --card:#171b22; --ink:#f2f4f8; --muted:#9aa3b2;
+  --green:#7dd87d; --blue:#6cb8f0; --warn:#f0b46c; --bad:#f08a6c; --purp:#c39bf0;
+  --radius:18px;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;}
+body{background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,system-ui,sans-serif;
+  padding:0 16px 64px;max-width:900px;margin:0 auto;}
+header{padding:28px 4px 8px;}
+h1{font-size:30px;margin:0 0 6px;letter-spacing:-0.5px;}
+.sub{color:var(--muted);font-size:15px;line-height:1.6;margin:0 0 18px;max-width:640px;}
+.sub b{color:var(--ink);}
+/* category cards */
+.cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:22px;}
+.cat{background:var(--card);border:1px solid #262c38;border-radius:14px;padding:12px 14px;
+  cursor:pointer;touch-action:manipulation;text-align:left;color:var(--ink);font-size:14px;}
+.cat h3{margin:0 0 4px;font-size:14px;display:flex;align-items:center;gap:8px;}
+.cat p{margin:0;color:var(--muted);font-size:13px;line-height:1.45;}
+.cat .dotk{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
+.cat.on{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue);}
+/* controls */
+.controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center;}
+input[type=text]{flex:1;min-width:180px;background:#0f1319;border:1px solid #2b3342;
+  color:var(--ink);border-radius:12px;padding:11px 14px;font-size:16px;font-family:inherit;}
+.chip{border:1px solid #2b3342;background:var(--card);color:var(--muted);
+  border-radius:999px;padding:9px 15px;font-size:14px;touch-action:manipulation;cursor:pointer;font-family:inherit;}
+.chip.on{background:var(--blue);border-color:var(--blue);color:#0a0f14;font-weight:700;}
+.toggle{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted);
+  border:1px solid #2b3342;background:var(--card);border-radius:999px;padding:9px 15px;
+  cursor:pointer;touch-action:manipulation;font-family:inherit;}
+.toggle.on{border-color:var(--green);color:var(--green);}
+/* chart */
+.chart-wrap{background:var(--card);border:1px solid #262c38;border-radius:var(--radius);
+  padding:14px 6px 6px;overflow-x:auto;margin-bottom:14px;}
+.chart-wrap svg{display:block;min-width:640px;width:100%;height:auto;}
+.axis{font-size:11px;fill:var(--muted);}
+.axis-title{font-size:12px;fill:var(--muted);font-weight:700;}
+.mdot{cursor:pointer;touch-action:manipulation;}
+.mdot circle{transition:r 0.15s;}
+.mdot.sel circle{stroke:#fff;stroke-width:2.5;}
+.mdot.dim{opacity:0.12;}
+.mlabel{font-size:10px;fill:var(--muted);text-anchor:middle;pointer-events:none;}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);padding:2px 10px 12px;}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;}
+/* detail */
+.detail{background:var(--card);border:1px solid #262c38;border-radius:var(--radius);
+  padding:18px;min-height:150px;}
+.detail h2{margin:0 0 2px;font-size:20px;}
+.detail .maker{color:var(--muted);font-size:14px;margin-bottom:10px;}
+.detail p{font-size:15px;line-height:1.6;margin:0 0 10px;}
+.detail .meta{display:flex;gap:8px;flex-wrap:wrap;}
+.pill{font-size:12px;font-weight:700;border-radius:999px;padding:5px 11px;}
+.pill.type{background:rgba(108,184,240,0.15);color:var(--blue);}
+.pill.open{background:rgba(125,216,125,0.15);color:var(--green);}
+.pill.closed{background:rgba(240,180,108,0.15);color:var(--warn);}
+.pill.price{background:#262c38;color:var(--ink);}
+.detail .use{font-size:13px;color:var(--muted);margin-top:10px;}
+.detail .use b{color:var(--ink);}
+.empty{color:var(--muted);font-size:14px;text-align:center;padding:30px 10px;}
+footer{margin-top:26px;color:var(--muted);font-size:13px;line-height:1.7;}
+footer a{color:var(--blue);}
+</style>
+</head>
+<body>
+<header>
+  <h1>Model Atlas</h1>
+  <p class="sub">Every AI model is one of a few <b>kinds</b>. Chat models talk. Embedding models measure. Image models draw. <b>Jev is a decision model</b>: you give it options, it picks winners and scores them. Tap any dot to see what kind a model is and what it costs.</p>
+</header>
+
+<div class="cats" id="cats"></div>
+
+<div class="controls">
+  <input type="text" id="q" placeholder="Search models or makers..." aria-label="Search">
+  <button class="toggle" id="openToggle">Open weights only</button>
+</div>
+
+<div class="chart-wrap">
+  <svg id="chart" viewBox="0 0 800 460" role="img" aria-label="Model atlas chart"></svg>
+  <div class="legend">
+    <span><i style="background:var(--green)"></i>Open weights</span>
+    <span><i style="background:var(--blue)"></i>API only</span>
+    <span style="margin-left:auto">y axis: typical cost band</span>
+  </div>
+</div>
+
+<div class="detail" id="detail"><div class="empty">Tap a dot to inspect a model.</div></div>
+
+<footer>
+  A curated atlas, not an exhaustive list. Prices are public list prices checked October 2026 and move fast; always check the provider before budgeting.
+  Cost bands: <b>Free</b> means $0 (self-hosted open weights or a free tier). <b>Cheap</b> is under about $0.50 per million tokens or equivalent. <b>Mid</b> and <b>Pricey</b> go up from there.
+  Embedding and image/video/audio models bill in different units, so bands compare typical usage cost, not identical units.
+</footer>
+
+<script>
+"use strict";
+const CATS = [
+  {id:"chat", name:"Chat LLMs", color:"#6cb8f0", desc:"Reads and writes words. The talkers."},
+  {id:"reason", name:"Reasoning", color:"#c39bf0", desc:"Thinks step by step before answering."},
+  {id:"embed", name:"Embeddings", color:"#7dd87d", desc:"Turns text into number fingerprints. The measurers."},
+  {id:"decide", name:"Decision", color:"#f0b46c", desc:"Picks winners: choices, scores, rankings. That is Jev."},
+  {id:"image", name:"Image", color:"#f08a6c", desc:"Makes pictures from words."},
+  {id:"video", name:"Video", color:"#e88ac0", desc:"Makes videos from words."},
+  {id:"audio", name:"Audio", color:"#6cd8c8", desc:"Hears speech, speaks back."},
+  {id:"judge", name:"Rank / Classify", color:"#9aa3b2", desc:"Labels things, re-orders results. The judges."}
+];
+const BANDS = ["Free","Cheap","Mid","Pricey"];
+/* name, maker, cat, price, band 0-3, open, blurb, best for */
+const MODELS = [
+["GPT-5.6 Sol","OpenAI","chat","$5 in / $30 out per 1M",3,false,"Flagship deep-reasoning model. The hardest problems live here.","agent backbones, hard reasoning"],
+["GPT-5.6 Luna","OpenAI","chat","$0.20 in / $1.20 out per 1M",1,false,"Budget tier of the 5.6 family. Cheap OpenAI brains.","high-volume chat"],
+["Claude Opus 5.5","Anthropic","chat","$4 in / $20 out per 1M",3,false,"Top capability scores in late 2026.","the hardest tasks"],
+["Claude Sonnet 5.5","Anthropic","chat","$2 in / $10 out per 1M",2,false,"The best-value flagship tier.","daily driver"],
+["Claude Haiku 4.5","Anthropic","chat","$1 in / $5 out per 1M",2,false,"Fast, cheap Claude for quick jobs.","quick tasks, tools"],
+["Gemini 3.1 Pro","Google","chat","$2 in / $12 out per 1M",2,false,"Huge context, strong all-rounder.","long documents"],
+["Gemini 3.8 Flash","Google","chat","~$0.30 in / ~$2.50 out per 1M",1,false,"Cheap and strong. The value pick.","production default"],
+["DeepSeek V4","DeepSeek","chat","$0.14 in / $0.28 out per 1M",1,true,"Cheapest serious model. Near-frontier quality.","budget builds"],
+["Llama 3.1 70B","Meta","chat","~$0.20 per 1M via API",1,true,"The classic open flagship.","self-hosted chat"],
+["Qwen3","Alibaba","chat","$0 self-hosted",0,true,"Strong open family in many sizes.","self-host everything"],
+["Mistral Large 3","Mistral","chat","$0.50 in / $1.50 out per 1M",1,false,"Efficient European flagship.","EU deployments"],
+["Grok 4.5","xAI","chat","$2 in / $6 out per 1M",2,false,"xAI flagship with live X data.","real-time answers"],
+["Gemma 4","Google","chat","$0 self-hosted",0,true,"Google open models, now Apache 2.0.","on-device, local"],
+["DeepSeek R2","DeepSeek","reason","~$0.40 per 1M",1,true,"Thinks step by step and shows its work.","math, code, logic"],
+["QwQ","Alibaba","reason","$0 self-hosted",0,true,"Alibaba's open reasoning model.","local reasoning"],
+["EmbeddingGemma-300M","Google","embed","$0 self-hosted",0,true,"Turns text into 768-number meaning fingerprints.","search, RAG"],
+["Qwen3-Embedding-0.6B","Alibaba","embed","$0 self-hosted",0,true,"Apache 2.0 embeddings, 32k context.","commercial search"],
+["text-embedding-3-small","OpenAI","embed","$0.02 per 1M",1,false,"The default cheap embedding API.","quick prototypes"],
+["gemini-embedding-001","Google","embed","$0.15 per 1M",1,false,"Top multilingual embedding API.","multilingual search"],
+["nomic-embed-text-v1.5","Nomic","embed","$0 self-hosted",0,true,"Tiny, fast, Apache 2.0.","edge devices"],
+["BGE-M3","BAAI","embed","$0 self-hosted",0,true,"Dense plus sparse plus ColBERT hybrid.","hybrid search"],
+["Jev System One","TypeSafe AI","decide","$0.042 in per 1M, out free",1,false,"Does not chat or measure. It picks: choices, scores, rankings.","A/B tests, rankings, decisions"],
+["Imagen 4","Google","image","$0.02-$0.06 per image",1,false,"Google's image generator.","product shots"],
+["GPT Image","OpenAI","image","pay per image",2,false,"Great at rendering text inside images.","posters, memes"],
+["Flux","Black Forest Labs","image","$0 self-hosted",0,true,"Open image model, huge community.","local generation"],
+["Veo 3.1","Google","video","$0.05-$0.60 per second",2,false,"Google's video generator.","clips, ads"],
+["Sora","OpenAI","video","subscription / API",2,false,"OpenAI's video model.","short films"],
+["Whisper","OpenAI","audio","pay per minute",1,true,"Speech to text. The standard.","transcription"],
+["Gemini TTS","Google","audio","pay per 1M chars",1,false,"Google's voice generator.","voiceovers"],
+["ElevenLabs","ElevenLabs","audio","pay per character",2,false,"The most lifelike voices.","audiobooks"],
+["Cohere Rerank","Cohere","judge","pay per search",1,false,"Re-orders search results by relevance.","search quality"],
+["Omni-moderation","OpenAI","judge","free",0,false,"Labels text safe or not.","content filters"]
+];
+
+const svg = document.getElementById("chart");
+const detail = document.getElementById("detail");
+const NS = "http://www.w3.org/2000/svg";
+const W=800, H=460, PL=64, PR=20, PT=16, PB=44;
+const colX = i => PL + (W-PL-PR) * (i+0.5) / CATS.length;
+const rowY = b => PT + (H-PT-PB) * (b+0.5) / BANDS.length;
+let activeCat = null, openOnly = false, query = "", selected = -1;
+
+function el(tag, attrs, parent){
+  const e = document.createElementNS(NS, tag);
+  for(const k in attrs) e.setAttribute(k, attrs[k]);
+  if(parent) parent.appendChild(e);
+  return e;
+}
+
+function renderCats(){
+  const wrap = document.getElementById("cats");
+  wrap.innerHTML = "";
+  CATS.forEach(c=>{
+    const b = document.createElement("button");
+    b.className = "cat" + (activeCat===c.id ? " on" : "");
+    b.innerHTML = '<h3><span class="dotk" style="background:'+c.color+'"></span>'+c.name+'</h3><p>'+c.desc+'</p>';
+    b.onclick = ()=>{ activeCat = activeCat===c.id ? null : c.id; selected=-1; render(); };
+    wrap.appendChild(b);
+  });
+}
+
+function matches(m){
+  const catOk = !activeCat || m[2]===activeCat;
+  const openOk = !openOnly || m[5];
+  const q = query.trim().toLowerCase();
+  const qOk = !q || (m[0]+" "+m[1]).toLowerCase().includes(q);
+  return catOk && openOk && qOk;
+}
+
+function render(){
+  renderCats();
+  svg.innerHTML = "";
+  // grid + axes
+  CATS.forEach((c,i)=>{
+    const x = colX(i);
+    el("line",{x1:x,y1:PT,x2:x,y2:H-PB,stroke:"#1e242f"},svg);
+    const t = el("text",{x:x,y:H-14,"class":"axis","text-anchor":"middle"},svg);
+    t.textContent = c.name;
+  });
+  BANDS.forEach((b,i)=>{
+    const y = rowY(i);
+    el("line",{x1:PL,y1:y,x2:W-PR,y2:y,stroke:"#1e242f"},svg);
+    const t = el("text",{x:PL-8,y:y+4,"class":"axis","text-anchor":"end"},svg);
+    t.textContent = b;
+  });
+  const yt = el("text",{x:14,y:PT+4,"class":"axis-title"},svg);
+  yt.textContent = "cost";
+  // dots, jittered within cells so they don't stack
+  let di = 0;
+  MODELS.forEach((m,mi)=>{
+    const ci = CATS.findIndex(c=>c.id===m[2]);
+    const x = colX(ci), y = rowY(m[4]);
+    const jx = ((mi*37)%5-2)*16, jy = ((mi*53)%5-2)*13;
+    const g = el("g",{"class":"mdot"+(mi===selected?" sel":"")+(matches(m)?"":" dim"),"data-mi":mi},svg);
+    el("circle",{cx:x+jx,cy:y+jy,r:11,fill:m[5]?"#7dd87d":"#6cb8f0",opacity:0.92},g);
+    if(matches(m)){
+      g.addEventListener("click",()=>{ selected = mi; render(); showDetail(mi); });
+    }
+    const lbl = el("text",{x:x+jx,y:y+jy+26,"class":"mlabel"},svg);
+    lbl.textContent = matches(m) ? shortName(m[0]) : "";
+    di++;
+  });
+  if(selected>=0) showDetail(selected);
+  else if(!detail.dataset.keep) detail.innerHTML = '<div class="empty">Tap a dot to inspect a model.</div>';
+}
+
+function shortName(n){
+  return n.length>16 ? n.slice(0,14)+".." : n;
+}
+
+function showDetail(mi){
+  const m = MODELS[mi];
+  const cat = CATS.find(c=>c.id===m[2]);
+  detail.dataset.keep = "1";
+  detail.innerHTML =
+    '<h2>'+esc(m[0])+'</h2><div class="maker">'+esc(m[1])+'</div>'
+    + '<p>'+esc(m[6])+'</p>'
+    + '<div class="meta"><span class="pill type">'+esc(cat.name)+'</span>'
+    + '<span class="pill '+(m[5]?"open":"closed")+'">'+(m[5]?"Open weights":"API only")+'</span>'
+    + '<span class="pill price">'+esc(m[3])+'</span></div>'
+    + '<div class="use">Best for: <b>'+esc(m[7])+'</b></div>';
+}
+function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
+
+document.getElementById("q").addEventListener("input", e=>{ query=e.target.value; selected=-1; render(); });
+document.getElementById("openToggle").onclick = e=>{
+  openOnly = !openOnly;
+  e.currentTarget.classList.toggle("on", openOnly);
+  selected=-1; render();
+};
+
+render();
+</script>
+</body>
+</html>

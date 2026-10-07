@@ -110,7 +110,10 @@ function setStatus(s){
 async function api(path, opts){
   opts = opts || {};
   var headers = opts.headers || {};
-  if (deviceKey) headers["authorization"] = "Bearer " + deviceKey;
+  var __sess = null;
+  try { __sess = localStorage.getItem(LS_DEVICE.replace(/\.device_key$/, ".session_token")); } catch(__e){}
+  if (__sess) headers["authorization"] = "Bearer " + __sess;
+  else if (deviceKey) headers["authorization"] = "Bearer " + deviceKey;
   if (opts.body) headers["content-type"] = "application/json";
   var res = await fetch(WORKER + path, {
     method: opts.method || "GET",
@@ -271,6 +274,8 @@ async function boot(){
       localStorage.setItem(LS_DEVICE, deviceKey);
     } catch(e){ setStatus("offline"); return; }
   }
+
+  try { if (window.__authBoot) await window.__authBoot({ repull: function(){ meta = {}; lastSync = 0; } }); } catch(e){}
   // Fresh device: push existing local data up. Existing device: pull first.
   lastPushed = snapshot(stateToRecords(window.__staylegal.getS()));
   if (fresh){ await pushDirty(); }

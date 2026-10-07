@@ -128,9 +128,9 @@ function showBanner(msg){
 }
 
 /* ---------------- Overview ---------------- */
-async function renderOverview(){
+async function renderOverview(soft){
   const el = document.getElementById("tab-overview");
-  el.innerHTML = '<div class="card"><span class="spin"></span> Loading…</div>';
+  if (!soft) el.innerHTML = '<div class="card"><span class="spin"></span> Loading…</div>';
   try {
     const [m, up, health] = await Promise.all([
       api("metrics"), api("uptime"), api("health").catch(() => null)
@@ -197,7 +197,7 @@ async function renderOverview(){
         const bad = (r.summary.checks || []).filter(c => c.status !== "ok");
         showBanner(bad.length ? bad.length + " check(s) failing: " + bad.map(c => c.key).join(", ") : "All checks passed.");
       } catch(err) { showBanner("Self-check failed: " + err.message); }
-      renderOverview();
+      renderOverview(true);
     });
     document.getElementById("test-alert").addEventListener("click", async (e) => {
       e.target.disabled = true; e.target.textContent = "Sending…";
@@ -206,7 +206,7 @@ async function renderOverview(){
         showBanner(r.ntfy && r.ntfy.ok ? "Test alert sent. Check your phone." : "Test alert failed to post: " + JSON.stringify(r.ntfy).slice(0, 120));
       } catch(err) { showBanner("Test alert failed: " + err.message); }
       e.target.disabled = false; e.target.textContent = "Send test alert";
-      renderOverview();
+      renderOverview(true);
     });
   } catch(e) {
     el.innerHTML = '<div class="card">Failed to load: ' + esc(e.message) + '. The Access session may have expired; reload the page.</div>';
@@ -348,7 +348,7 @@ document.querySelectorAll("nav button").forEach(b =>
 function tick(){
   const n = document.getElementById("refresh-note");
   n.textContent = lastOk ? "Last updated " + ago(lastOk) + " · refreshes every 30s" : "";
-  RENDER[activeTab]();
+  RENDER[activeTab](true);
 }
 switchTab("overview");
 timer = setInterval(tick, 30000);

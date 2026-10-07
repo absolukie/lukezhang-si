@@ -591,6 +591,7 @@ const STATUS_API_ROUTES = {
   "/status/api/ack": "/v1/admin/ack",
   "/status/api/users": "/v1/admin/users",
   "/status/api/selfcheck": "/v1/admin/selfcheck",
+  "/status/api/test-alert": "/v1/admin/test-alert",
   "/status/api/health": "/v1/health",
 };
 async function handleStatusApi(request, env) {

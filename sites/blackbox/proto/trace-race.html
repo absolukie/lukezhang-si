@@ -35,7 +35,7 @@
   #panel{
     flex:0 0 auto;background:var(--panel);border-top:1px solid #1e1e2e;
     padding:10px 14px 12px;display:flex;align-items:center;gap:12px;
-    height:78px;box-sizing:border-box;overflow:hidden;
+    height:102px;box-sizing:border-box;overflow:hidden;
   }
   #status{flex:1 1 auto;font-size:15px;font-weight:600;color:#c9c9dd;line-height:1.4;}
   #status .big{font-size:26px;font-weight:800;color:var(--cyan);}
@@ -69,6 +69,9 @@
   .overlay .bestline b{color:var(--cyan);}
   #resTotal{font-size:22px;font-weight:800;color:#e8e8f2;}
   #resTotal b{color:var(--cyan);font-size:34px;}
+  #vsLine{font-size:16px;font-weight:700;color:#c9c9dd;margin-top:6px;}
+  #vsLine b{color:var(--cyan);}
+  #vsLine .vswin{color:var(--magenta);font-weight:800;display:block;margin-top:2px;}
   #newBest{font-size:15px;font-weight:800;color:var(--magenta);
     text-shadow:0 0 14px rgba(255,79,216,.6);}
   #challengeLbl{font-size:14px;color:var(--magenta);font-weight:700;letter-spacing:1px;}
@@ -108,6 +111,7 @@
 <div id="results" class="overlay hidden">
   <h1 id="resTitle">DONE</h1>
   <div id="resTotal"></div>
+  <div id="vsLine" class="hidden"></div>
   <div id="newBest" class="hidden">NEW BEST!</div>
   <div id="thumbWrap"></div>
   <div class="bestline" id="postMsg"></div>
@@ -1113,12 +1117,13 @@ function startGame(){
 
 /* Fetch the top entries (with drawings) so each round can show a rival.
    Only for shared friend links (?c=) — the daily is a solo run. */
-function fetchRival(){
-  if(CH.id.charAt(0) !== 'c') return;
+function fetchRival(cb){
+  function done(){ if(cb) cb(); }
+  if(CH.id.charAt(0) !== 'c'){ done(); return; }
   fetch(API + '/rival?challenge=' + encodeURIComponent(apiChallenge()))
     .then(function(r){ return r.json(); })
     .then(function(d){
-      if(!d || !d.top || !d.top.length) return;
+      if(!d || !d.top || !d.top.length){ done(); return; }
       var me = playerName();
       var pick = null;
       for(var i = 0; i < d.top.length; i++){
@@ -1132,8 +1137,9 @@ function fetchRival(){
         }
       }
       if(pick) game.rival = pick;
+      done();
     })
-    .catch(function(){});
+    .catch(function(){ done(); });
 }
 
 function rivalForRound(){
@@ -1237,13 +1243,12 @@ function showRivalReveal(){
   game.revealStep = 'rival';
   game.rivalPx = rivalToPx(r.drawings[game.roundIdx]);
   var rs = r.scores[game.roundIdx], mine = game.lastScore;
-  var line = mine > rs ? 'You beat ' + escHtml(r.name) + '!'
-    : mine < rs ? escHtml(r.name) + ' beat you.' : 'Dead even.';
+  var verdict = mine > rs ? 'you win' : mine < rs ? 'they win' : 'tie';
   var sb = game.lastSpeedBonus ? '<br><span class="vsline">trace ' + game.lastBase +
     ' + ' + game.lastSpeedBonus + ' speed</span>' : '';
   // your score stays big in the same spot; the friend's score lands below it
   statusEl.innerHTML = '<span class="big">' + mine + '</span> <span class="quip">you</span>' + sb +
-    '<br><span class="vsline">' + escHtml(r.name) + ': ' + rs + ' &middot; ' + line + '</span>';
+    '<br><span class="vsline">' + escHtml(r.name) + ' ' + rs + ' &middot; ' + verdict + '</span>';
   nextBtn.textContent = (game.roundIdx === 4) ? 'See results →' : 'Next shape →';
   nextBtn.classList.remove('hidden');
 }
@@ -1271,6 +1276,25 @@ function showResults(){
   document.getElementById('postMsg').textContent = '';
   renderThumbs();
   resultsEl.classList.remove('hidden');
+  // re-fetch: the friend may have posted during the last round
+  fetchRival(renderVsLine);
+}
+
+/* Final you-vs-friend verdict on the results screen (rooms only). */
+function renderVsLine(){
+  var el = document.getElementById('vsLine');
+  var r = game.rival;
+  var myName = playerName() || 'Your friend';
+  if(!r || typeof r.total !== 'number' || !r.scores || r.scores.length !== 5 ||
+     (r.name === myName && r.total === game.total)){
+    el.classList.add('hidden');
+    return;
+  }
+  var win = game.total > r.total ? 'You win the race!'
+    : game.total < r.total ? escHtml(r.name) + ' wins the race.' : 'Dead even.';
+  el.innerHTML = 'you <b>' + game.total + '</b> &middot; ' + escHtml(r.name) +
+    ' <b>' + r.total + '</b><span class="vswin">' + win + '</span>';
+  el.classList.remove('hidden');
 }
 
 /* ---------- results gallery: your 5 drawings ---------- */

@@ -27,7 +27,7 @@ const SITES = ["america-gov-render", "leetcode-games", "ergosphere", "illusion-b
   "ab-toggle",
   "hairball",
   "peggie",
-  "get-clocked",
+  "rebalancer-lab", "get-clocked",
   "black-hole-post-doc",
   "china-korea-hq",
   "draw-guess",

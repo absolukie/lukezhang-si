@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meta Open-Sourced Their Scheduler: luke's blog</title>
+<meta name="description" content="Meta just open-sourced Rebalancer, the tool that assigns tasks to machines across their data centers. It solves 40 million assignment problems a day. Here's what the assignment problem is and why it's everywhere.">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    min-height: 100%;
+    background: #0b0e14;
+    background-attachment: fixed;
+    color: #e8ecf3;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.7;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 56px 22px 80px; }
+  nav.top { margin-bottom: 40px; font-size: 14px; }
+  nav.top a { color: rgba(232,236,243,0.55); text-decoration: none; }
+  nav.top a:hover { color: #5eb1ff; }
+  h1 { font-size: 32px; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 8px; }
+  .meta { color: rgba(232,236,243,0.5); font-size: 14px; margin-bottom: 24px; }
+  .verdict { font-size: 17px; color: #bfe0ff; border-left: 3px solid #5eb1ff;
+    padding: 4px 0 4px 18px; margin: 0 0 28px; line-height: 1.65; }
+  p { margin-bottom: 16px; font-size: 16px; color: rgba(232,236,243,0.88); }
+  p strong, li strong { color: #bfe0ff; }
+  h2 { font-size: 23px; color: #bfe0ff; margin: 40px 0 10px; letter-spacing: -0.01em; }
+  ul { margin: 0 0 16px 20px; font-size: 16px; color: rgba(232,236,243,0.88); }
+  li { margin-bottom: 8px; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px;
+    background: rgba(94,177,255,0.12); border: 1px solid rgba(94,177,255,0.25);
+    border-radius: 6px; padding: 1px 7px; color: #bfe0ff; white-space: nowrap; }
+  a { color: #5eb1ff; }
+  .demo { display: block; margin: 28px 0; border: 1px solid rgba(94,177,255,0.3);
+    border-radius: 16px; padding: 22px; text-decoration: none; color: inherit;
+    background: rgba(255,255,255,0.02); touch-action: manipulation; }
+  .demo:hover { border-color: rgba(94,177,255,0.6); }
+  .demo h3 { color: #bfe0ff; font-size: 19px; margin-bottom: 6px; }
+  .demo p { margin: 0; font-size: 15px; color: rgba(232,236,243,0.75); }
+  .demo .go { display: inline-block; margin-top: 10px; color: #5eb1ff; font-weight: 700; font-size: 15px; }
+  .num { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 24px 0; }
+  .num .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(94,177,255,0.2);
+    border-radius: 12px; padding: 14px 16px; }
+  .num .card b { display: block; font-size: 26px; color: #bfe0ff; font-variant-numeric: tabular-nums; }
+  .num .card span { font-size: 13px; color: rgba(232,236,243,0.6); }
+  footer { margin-top: 60px; font-size: 13px; color: rgba(232,236,243,0.35); }
+  footer a { color: rgba(232,236,243,0.6); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="top"><a href="/blog/">← blog</a></nav>
+  <h1>Meta Open-Sourced Their Scheduler</h1>
+  <div class="meta">October 6, 2026 · infrastructure · optimization</div>
+
+  <p class="verdict">Meta just open-sourced Rebalancer, the tool that decides which task runs on which machine across their data centers. It has been running in production for 9 years and solves about 40 million assignment problems every single day. The assignment problem sounds academic. It is actually one of the most practical problems in computing, and you've been living inside it your whole life.</p>
+
+  <a class="demo" href="https://projects.lukezhang.si/rebalancer-lab/">
+    <h3>Rebalancer Lab: watch a solver think</h3>
+    <p>An interactive visualizer. Press solve and watch local search assign tasks to machines, one improving swap at a time.</p>
+    <span class="go">Open the visualizer →</span>
+  </a>
+
+  <h2>1. The problem</h2>
+  <p>You have a pile of tasks and a row of machines. Every task costs a different amount to run on every machine. Put each task on exactly one machine, keep the machines reasonably balanced, and make the total cost as low as possible. That's it. That's the assignment problem.</p>
+  <p>It shows up everywhere once you start looking. Which delivery driver takes which order. Which cell tower handles your phone call. Which server runs your Instagram request. Airlines use it to assign crews to flights. Meta uses it to place hardware, schedule services, and route traffic. Your life is a long series of assignment problems being solved by computers you will never meet.</p>
+  <p>The cruel part: the number of possible assignments explodes. With 24 tasks and 6 machines, there are more combinations than you could check in the lifetime of the universe. You cannot brute force it. You need to be clever.</p>
+
+  <h2>2. The clever part</h2>
+  <p>Rebalancer ships two solvers. The first is an <strong>optimal MIP solver</strong>: it finds the mathematically perfect answer, and it takes as long as it takes. The second is a <strong>parallelized local search solver</strong>: it starts with a random assignment, then keeps trying small swaps. If a swap lowers the total cost, keep it. If not, throw it away. Repeat until nothing improves.</p>
+  <p>Local search almost never finds the perfect answer. It finds a great answer fast, which at Meta's scale is the whole game. When you're solving 40 million problems a day, "perfect" is a luxury and "great in 12 seconds" is the product. The visualizer above runs this exact strategy. Press solve and you'll watch it happen: the cost drops fast at first, then in smaller and smaller steps, then it stalls. That stall is the solver admitting it's done.</p>
+
+  <div class="num">
+    <div class="card"><b>40M</b><span>assignment problems solved per day at Meta</span></div>
+    <div class="card"><b>9+</b><span>years running in production before open source</span></div>
+    <div class="card"><b>12s</b><span>P99 solve time on 265k objects, 3.2k bins</span></div>
+    <div class="card"><b>30+</b><span>different problem formulations in use</span></div>
+  </div>
+
+  <h2>3. Why open source it now</h2>
+  <p>Nine years is a long time to sit on something useful. The generous read: Meta cleaned it up, generalized it, and decided the goodwill was worth more than the moat. The cynical read: after nine years, the moat already did its job. Both can be true.</p>
+  <p>What I like about the release is the design. Rebalancer separates <strong>how you describe the problem</strong> from <strong>how it's stored, solved, and debugged</strong>. That's the kind of separation that sounds obvious and is rare in practice. Most solvers glue all of it together and you spend your weekends untangling it. Whoever designed this interface has debugged a scheduler at 3am and vowed never again. Respect.</p>
+  <p>The code is C++ and Python, at <a href="https://github.com/facebook/rebalancer">github.com/facebook/rebalancer</a>. If you've ever written a greedy assigner and felt vaguely guilty about it, this is your upgrade path.</p>
+
+  <footer>Via <a href="https://x.com/meta_engineers/status/2107472235350962351">@meta_engineers</a>. The visualizer runs a faithful miniature of local search, not Meta's actual code.</footer>
+</div>
+</body>
+</html>

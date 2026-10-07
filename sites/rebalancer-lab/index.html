@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rebalancer Lab: watch an assignment solver think</title>
+<meta name="description" content="An interactive visualizer for the assignment problem behind Meta's open-source Rebalancer. Watch local search assign tasks to machines.">
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { touch-action: manipulation; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif;
+    background: #0b0e14; color: #e8ecf3; line-height: 1.5;
+  }
+  button { touch-action: manipulation; font: inherit; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 0 18px 80px; }
+  header.top {
+    position: sticky; top: 0; z-index: 20;
+    background: rgba(11,14,20,.94); backdrop-filter: blur(10px);
+    border-bottom: 1px solid #1e2430;
+  }
+  header.top .inner { max-width: 1000px; margin: 0 auto; padding: 12px 18px; display: flex; align-items: center; gap: 12px; }
+  header.top h1 { font-size: 16px; margin: 0; font-weight: 700; }
+  header.top .sub { font-size: 12px; color: #8b93a7; }
+  .badge { margin-left: auto; font-size: 11px; color: #8b93a7; border: 1px solid #2a3140; padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
+  .hero { padding: 30px 0 6px; }
+  .hero .kicker { color: #5eb1ff; font-weight: 700; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; }
+  .hero h2 { font-size: clamp(28px, 5vw, 42px); margin: 8px 0 6px; line-height: 1.15; font-weight: 800; }
+  .hero p.lede { color: #aab2c5; max-width: 640px; margin: 0 0 6px; font-size: 15px; }
+  .hero p.lede a { color: #5eb1ff; }
+  .controls {
+    background: #12161f; border: 1px solid #1e2430; border-radius: 16px;
+    padding: 18px; margin: 18px 0; display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); align-items: end;
+  }
+  .ctl label { display: flex; justify-content: space-between; font-size: 13px; color: #aab2c5; margin-bottom: 6px; }
+  .ctl label b { color: #fff; }
+  .ctl input[type=range] { width: 100%; accent-color: #5eb1ff; height: 28px; font-size: 16px; }
+  .btn {
+    background: #5eb1ff; color: #06121f; border: 0; border-radius: 12px;
+    padding: 12px 20px; font-weight: 800; font-size: 15px; cursor: pointer;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn.ghost { background: #1e2430; color: #e8ecf3; }
+  .btn:disabled { opacity: .45; }
+  .stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px; margin: 0 0 18px;
+  }
+  .stat { background: #12161f; border: 1px solid #1e2430; border-radius: 12px; padding: 12px 14px; }
+  .stat .k { font-size: 11px; color: #8b93a7; text-transform: uppercase; letter-spacing: 1px; }
+  .stat .v { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .stat .v small { font-size: 13px; color: #8b93a7; font-weight: 500; }
+  #stage {
+    background: #12161f; border: 1px solid #1e2430; border-radius: 16px;
+    padding: 18px; min-height: 420px; position: relative; overflow: hidden;
+  }
+  #stage svg { width: 100%; height: auto; display: block; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: #8b93a7; margin-top: 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+  section.block { margin-top: 40px; }
+  section.block > h2 { font-size: 22px; margin: 0 0 4px; }
+  section.block > p { color: #aab2c5; font-size: 14.5px; max-width: 680px; }
+  section.block a { color: #5eb1ff; }
+  .matrix { overflow-x: auto; margin-top: 12px; }
+  table.cost { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+  table.cost th, table.cost td { border: 1px solid #1e2430; padding: 5px 8px; text-align: center; min-width: 44px; }
+  table.cost th { background: #0b0e14; color: #8b93a7; font-weight: 600; }
+  table.cost td.assigned { background: rgba(94,177,255,.22); color: #fff; font-weight: 700; }
+  footer { margin-top: 48px; border-top: 1px solid #1e2430; padding-top: 16px; font-size: 12.5px; color: #6d7688; }
+  footer a { color: #8b93a7; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="inner">
+    <div>
+      <h1>⚖️ Rebalancer Lab</h1>
+      <div class="sub">Meta's assignment problem, visualized</div>
+    </div>
+    <span class="badge">v1.0</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="hero">
+    <div class="kicker">Interactive visualizer</div>
+    <h2>Watch a solver assign 40 million puzzles a day.</h2>
+    <p class="lede">Meta <a href="https://x.com/meta_engineers/status/2107472235350962351">open-sourced Rebalancer</a>, the tool that matches tasks to machines across their data centers. Below is a miniature version of its local-search solver: it starts with a random assignment, then keeps swapping until nothing improves. Press solve and watch it think.</p>
+  </div>
+
+  <div class="controls">
+    <div class="ctl">
+      <label>Tasks <b id="v-tasks">24</b></label>
+      <input type="range" id="in-tasks" min="8" max="48" step="4" value="24">
+    </div>
+    <div class="ctl">
+      <label>Machines <b id="v-machines">6</b></label>
+      <input type="range" id="in-machines" min="3" max="10" step="1" value="6">
+    </div>
+    <div class="ctl">
+      <label>Speed <b id="v-speed">1×</b></label>
+      <input type="range" id="in-speed" min="1" max="8" step="1" value="1">
+    </div>
+    <div>
+      <button class="btn" id="btn-solve">▶ Solve</button>
+      <button class="btn ghost" id="btn-shuffle" style="margin-left:8px">Shuffle costs</button>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="k">Current cost</div><div class="v" id="st-cost">–</div></div>
+    <div class="stat"><div class="k">Best found</div><div class="v" id="st-best">–</div></div>
+    <div class="stat"><div class="k">Swaps tried</div><div class="v" id="st-tried">0</div></div>
+    <div class="stat"><div class="k">Improving swaps</div><div class="v" id="st-good">0</div></div>
+  </div>
+
+  <div id="stage"><svg id="svg" viewBox="0 0 960 460" role="img" aria-label="Task to machine assignment visualization"></svg></div>
+  <div class="legend">
+    <span><span class="dot" style="background:#5eb1ff"></span> task (left)</span>
+    <span><span class="dot" style="background:#3ddc84;border-radius:3px"></span> machine (right)</span>
+    <span><span class="dot" style="background:#ffd60a"></span> just swapped</span>
+    <span style="color:#6d7688">line thickness = assignment cost (thinner is cheaper)</span>
+  </div>
+
+  <section class="block">
+    <h2>What am I looking at?</h2>
+    <p>Every task has a cost for running on every machine (the matrix below). The solver's job: give each task exactly one machine, each machine gets a fair share, and the <b style="color:#fff">total cost is as low as possible</b>. Trying every combination is impossible (24 tasks on 6 machines has more options than atoms in the universe, roughly). So Rebalancer uses <b style="color:#fff">local search</b>: start random, then repeatedly try swapping two tasks. Keep the swap if the total drops. Stop when nothing helps. It's not guaranteed perfect, but at Meta's scale it's fast and close.</p>
+    <div class="matrix" id="matrix"></div>
+  </section>
+
+  <section class="block">
+    <h2>The real numbers</h2>
+    <p>From Meta's announcement: Rebalancer has run in production for <b style="color:#fff">9+ years</b>, solves <b style="color:#fff">~40 million assignment problems per day</b> across 30+ formulations (hardware placement, service placement, traffic routing), and hits <b style="color:#fff">P99 of 12 seconds</b> on a problem with 265,000 objects and 3,200 bins. It ships two solvers: an optimal MIP solver for when you need the true best answer, and the parallelized local search you just watched for when you need a great answer fast. C++ and Python, at <a href="https://github.com/facebook/rebalancer">github.com/facebook/rebalancer</a>.</p>
+  </section>
+
+  <footer>
+    Built as a companion to <a href="https://lukezhang.si/blog/meta-rebalancer/">the blog post</a>. The solver here is a faithful miniature of local search, not Meta's actual code. Costs are random per shuffle.
+  </footer>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const SVGNS = "http://www.w3.org/2000/svg";
+const COLORS = ["#5eb1ff","#3ddc84","#ffd60a","#ff6b6b","#c77dff","#4dd0e1","#ffb74d","#a5d6a7","#90caf9","#f48fb1"];
+
+let N = 24, M = 6, speed = 1;
+let cost = [];        // cost[t][m]
+let assign = [];      // assign[t] = machine index
+let running = false, timer = null;
+let tried = 0, good = 0, best = Infinity;
+
+function randCosts() {
+  cost = [];
+  for (let t = 0; t < N; t++) {
+    const row = [];
+    for (let m = 0; m < M; m++) row.push(1 + Math.floor(Math.random() * 99));
+    cost.push(row);
+  }
+}
+
+function totalCost(a) {
+  let s = 0;
+  for (let t = 0; t < N; t++) s += cost[t][a[t]];
+  return s;
+}
+
+function randomAssign() {
+  // balanced: shuffle tasks, deal round-robin
+  const order = [...Array(N).keys()];
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  assign = new Array(N);
+  order.forEach((t, i) => assign[t] = i % M);
+}
+
+function el(tag, attrs) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+
+function layout() {
+  const W = 960, H = 460, pad = 30;
+  const tx = 90, mx = W - 90;
+  const tGap = (H - pad * 2) / Math.max(N - 1, 1);
+  const mGap = (H - pad * 2) / Math.max(M - 1, 1);
+  return { W, H, tx, mx,
+    ty: t => pad + t * tGap,
+    my: m => pad + m * mGap };
+}
+
+function draw(highlight) {
+  const svg = $("svg"), L = layout();
+  svg.setAttribute("viewBox", `0 0 ${L.W} ${L.H}`);
+  svg.innerHTML = "";
+  // edges
+  for (let t = 0; t < N; t++) {
+    const m = assign[t];
+    const c = cost[t][m];
+    const w = Math.max(0.6, 4.5 - c / 28); // cheaper = thicker? no: thinner is cheaper per legend... use opacity
+    const line = el("line", {
+      x1: L.tx + 14, y1: L.ty(t), x2: L.mx - 16, y2: L.my(m),
+      stroke: (highlight && highlight.includes(t)) ? "#ffd60a" : "#5eb1ff",
+      "stroke-width": (highlight && highlight.includes(t)) ? 3.5 : Math.max(0.8, 3.2 - c / 40),
+      opacity: (highlight && highlight.includes(t)) ? 1 : 0.28 + (1 - c / 100) * 0.5,
+      "stroke-linecap": "round"
+    });
+    svg.appendChild(line);
+  }
+  // task nodes
+  for (let t = 0; t < N; t++) {
+    const g = el("g", {});
+    g.appendChild(el("circle", { cx: L.tx, cy: L.ty(t), r: 9,
+      fill: (highlight && highlight.includes(t)) ? "#ffd60a" : COLORS[t % COLORS.length],
+      stroke: "#0b0e14", "stroke-width": 2 }));
+    const lab = el("text", { x: L.tx - 18, y: L.ty(t) + 4, "text-anchor": "end",
+      fill: "#8b93a7", "font-size": "11" });
+    lab.textContent = "T" + (t + 1);
+    g.appendChild(lab);
+    svg.appendChild(g);
+  }
+  // machine nodes
+  const perMachine = new Array(M).fill(0);
+  assign.forEach(m => perMachine[m]++);
+  for (let m = 0; m < M; m++) {
+    const g = el("g", {});
+    g.appendChild(el("rect", { x: L.mx - 10, y: L.my(m) - 10, width: 20, height: 20, rx: 5,
+      fill: "#3ddc84", stroke: "#0b0e14", "stroke-width": 2 }));
+    const lab = el("text", { x: L.mx + 18, y: L.my(m) + 4, fill: "#8b93a7", "font-size": "11" });
+    lab.textContent = "M" + (m + 1) + " ×" + perMachine[m];
+    g.appendChild(lab);
+    svg.appendChild(g);
+  }
+}
+
+function drawMatrix() {
+  let h = '<table class="cost"><tr><th></th>';
+  for (let m = 0; m < M; m++) h += `<th>M${m + 1}</th>`;
+  h += "</tr>";
+  for (let t = 0; t < N; t++) {
+    h += `<tr><th>T${t + 1}</th>`;
+    for (let m = 0; m < M; m++)
+      h += `<td class="${assign[t] === m ? "assigned" : ""}">${cost[t][m]}</td>`;
+    h += "</tr>";
+  }
+  $("matrix").innerHTML = h + "</table>";
+}
+
+function updateStats() {
+  const c = totalCost(assign);
+  $("st-cost").textContent = c;
+  $("st-best").textContent = best === Infinity ? "–" : best;
+  $("st-tried").textContent = tried.toLocaleString();
+  $("st-good").textContent = good.toLocaleString();
+}
+
+function stop() {
+  running = false;
+  clearInterval(timer); timer = null;
+  $("btn-solve").textContent = "▶ Solve";
+  $("btn-solve").disabled = false;
+  draw(); drawMatrix();
+}
+
+function step() {
+  // try one random pairwise swap
+  const a = Math.floor(Math.random() * N);
+  let b = Math.floor(Math.random() * N);
+  if (b === a) b = (b + 1) % N;
+  if (assign[a] === assign[b]) return; // same machine, no-op
+  tried++;
+  const before = cost[a][assign[a]] + cost[b][assign[b]];
+  const after = cost[a][assign[b]] + cost[b][assign[a]];
+  if (after < before) {
+    const tmp = assign[a]; assign[a] = assign[b]; assign[b] = tmp;
+    good++;
+    const c = totalCost(assign);
+    if (c < best) best = c;
+    draw([a, b]); drawMatrix(); updateStats();
+  } else {
+    if (tried % (20 * speed) === 0) updateStats();
+  }
+  // stop after enough fruitless tries
+  if (tried > N * N * 6) stop();
+}
+
+function solve() {
+  if (running) { stop(); return; }
+  running = true; tried = 0; good = 0; best = totalCost(assign);
+  $("btn-solve").textContent = "■ Stop";
+  updateStats();
+  const batch = 6 * speed;
+  timer = setInterval(() => { for (let i = 0; i < batch && running; i++) step(); }, 60);
+}
+
+function reset() {
+  stop();
+  randCosts(); randomAssign();
+  best = Infinity; tried = 0; good = 0;
+  draw(); drawMatrix(); updateStats();
+}
+
+$("in-tasks").addEventListener("input", e => {
+  N = +e.target.value; $("v-tasks").textContent = N; reset();
+});
+$("in-machines").addEventListener("input", e => {
+  M = +e.target.value; $("v-machines").textContent = M; reset();
+});
+$("in-speed").addEventListener("input", e => {
+  speed = +e.target.value; $("v-speed").textContent = speed + "×";
+});
+$("btn-solve").addEventListener("click", solve);
+$("btn-shuffle").addEventListener("click", reset);
+
+reset();
+</script>
+</body>
+</html>

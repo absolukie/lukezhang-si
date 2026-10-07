@@ -47,6 +47,7 @@ const SITES = ["america-gov-render", "leetcode-games", "ergosphere", "illusion-b
   "buyback",
   "backfill",
   "fineprint",
+  "builds",
   "skill-tree-directions",
   "sysdesign-build-a-job-scheduler",
   "sysdesign-build-a-tokenizer",

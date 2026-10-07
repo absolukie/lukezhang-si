@@ -33,7 +33,7 @@ function stateToRecords(S){
   var R = [];
   function put(collection, key, value){ R.push({ collection: collection, key: key, value: value }); }
   (S.permits || []).forEach(function(p){
-    put("permits", p.id, { status: p.status, expires: p.expires, cost: p.cost });
+    put("permits", p.id, { status: p.status, expires: p.expires, cost: p.cost, expiresEst: !!p.expiresEst });
   });
   (S.customDefs || []).forEach(function(d){ put("permit_defs", d.id, d); });
   Object.keys(S.locations || {}).forEach(function(k){ put("locations", k, S.locations[k]); });
@@ -115,22 +115,53 @@ var lastPushed = {};   // "collection:key" -> hash, in-memory baseline
 var lastSync = 0;
 var applyingRemote = false;
 var pushTimer = null;
-var status = "starting";
+var inflight = 0;      // pushes/pulls currently in flight
+var status = "starting"; // starting|syncing|offline|pending|synced (see updatePill)
 
 try { meta = JSON.parse(localStorage.getItem(LS_META) || "{}") || {}; } catch(e){ meta = {}; }
 try { lastSync = +localStorage.getItem(LS_LAST) || 0; } catch(e){}
 function saveMeta(){ try{ localStorage.setItem(LS_META, JSON.stringify(meta)); }catch(e){} }
 function saveLastSync(){ try{ localStorage.setItem(LS_LAST, String(lastSync)); }catch(e){} }
 
-function setStatus(s){
+/* Records that differ from the last acknowledged push (the outbox). */
+function diffOut(){
+  var S = window.__curbside.getS();
+  var records = stateToRecords(S);
+  var now = Date.now();
+  var cur = snapshot(records);
+  var out = [];
+  records.forEach(function(r){
+    var mk = r.collection + ":" + r.key;
+    if (lastPushed[mk] !== cur[mk]){
+      out.push({ app_slug: APP, collection: r.collection, key: r.key,
+        value: r.value, updated_at: now });
+    }
+  });
+  Object.keys(lastPushed).forEach(function(mk){
+    if (!(mk in cur)){
+      var i = mk.indexOf(":");
+      out.push({ app_slug: APP, collection: mk.slice(0, i), key: mk.slice(i + 1),
+        value: null, updated_at: now, deleted: true });
+    }
+  });
+  return out;
+}
+
+/* The one honest status function. Four states, derived from real conditions:
+ * "Synced" only when nothing is pending and nothing is in flight;
+ * "Syncing…" while a push/pull is in flight;
+ * "Offline" when the network is down;
+ * "Not synced — N changes pending" whenever work is unacknowledged. */
+function updatePill(){
+  var n, s, label, cls;
+  try { n = diffOut().length; } catch(e){ n = 0; }
+  if (inflight > 0){ s = "syncing"; label = "Syncing…"; cls = "warn"; }
+  else if (typeof navigator !== "undefined" && navigator.onLine === false){ s = "offline"; label = "Offline"; cls = ""; }
+  else if (n > 0){ s = "pending"; label = "Not synced — " + n + " change" + (n === 1 ? "" : "s") + " pending"; cls = "crit"; }
+  else { s = "synced"; label = "Synced"; cls = "ok"; }
   status = s;
   var el = document.querySelector("#syncStatus");
-  if (el){
-    var label = { synced: "Synced", syncing: "Syncing…", offline: "Offline",
-      error: "Sync error", starting: "Starting…" }[s] || s;
-    el.textContent = label;
-    el.className = "pill " + (s === "synced" ? "ok" : s === "offline" ? "" : s === "error" ? "crit" : "warn");
-  }
+  if (el){ el.textContent = label; el.className = "pill " + cls; }
 }
 
 async function api(path, opts){
@@ -161,45 +192,28 @@ function snapshot(records){
 /* Push locally-changed records. Diffed against lastPushed; deletions become
  * tombstones automatically. Idempotent by key; safe to retry. */
 async function pushDirty(){
-  if (!deviceKey || applyingRemote) return;
-  var S = window.__curbside.getS();
-  var records = stateToRecords(S);
-  var now = Date.now();
-  var cur = snapshot(records);
-  var out = [];
-  records.forEach(function(r){
-    var mk = r.collection + ":" + r.key;
-    if (lastPushed[mk] !== cur[mk]){
-      out.push({ app_slug: APP, collection: r.collection, key: r.key,
-        value: r.value, updated_at: now });
-    }
-  });
-  Object.keys(lastPushed).forEach(function(mk){
-    if (!(mk in cur)){
-      var i = mk.indexOf(":");
-      out.push({ app_slug: APP, collection: mk.slice(0, i), key: mk.slice(i + 1),
-        value: null, updated_at: now, deleted: true });
-    }
-  });
-  if (!out.length) return;
-  setStatus("syncing");
+  if (!deviceKey || applyingRemote){ updatePill(); return; }
+  var out = diffOut();
+  if (!out.length){ updatePill(); return; } // honest no-op: recompute, don't claim
+  inflight++; updatePill();
   try {
     await api("/v1/sync/push", { method: "POST", body: { records: out } });
     out.forEach(function(r){
       var mk = r.collection + ":" + r.key;
       meta[mk] = Math.max(meta[mk] || 0, r.updated_at);
-      lastPushed[mk] = r.deleted ? undefined : hashRecord(r);
       if (r.deleted) delete lastPushed[mk];
+      else lastPushed[mk] = hashRecord(r);
     });
     saveMeta();
-    setStatus("synced");
-  } catch(e){ setStatus(navigator.onLine === false ? "offline" : "error"); }
+  } catch(e){ /* pill below reports the unacknowledged work honestly */ }
+  inflight--;
+  updatePill();
 }
 
 /* Pull remote changes since lastSync; apply newer-wins; re-render. */
 async function pull(){
   if (!deviceKey || applyingRemote) return;
-  setStatus("syncing");
+  inflight++; updatePill();
   try {
     var data = await api("/v1/sync/pull?app=" + APP + "&since=" + lastSync);
     var S = window.__curbside.getS();
@@ -211,20 +225,19 @@ async function pull(){
       window.__curbside.refresh();
       lastPushed = snapshot(stateToRecords(S));
     }
-    applyingRemote = false;
     lastSync = data.server_time || Date.now();
     saveLastSync();
-    setStatus("synced");
-  } catch(e){
-    applyingRemote = false;
-    setStatus(navigator.onLine === false ? "offline" : "error");
-  }
+  } catch(e){ /* honest pill below */ }
+  applyingRemote = false;
+  inflight--;
+  updatePill();
 }
 
 function onSave(){
   if (applyingRemote || !deviceKey) return;
   clearTimeout(pushTimer);
   pushTimer = setTimeout(pushDirty, PUSH_DEBOUNCE_MS);
+  updatePill(); // show the pending work now, not after the debounce fires
 }
 
 /* Settings sheet UI (injected by app.js hook). */
@@ -244,7 +257,7 @@ function renderSettingsUI(){
     '<label>Use a key from another device<input id="syncPaste" type="text" placeholder="paste 64-char key" maxlength="64" style="font-size:12px"></label>' +
     '<button class="btn small" id="syncUse" style="margin-top:6px">Switch to this key</button>';
   sheet.appendChild(box);
-  setStatus(status);
+  updatePill();
   var cp = box.querySelector("#syncCopy");
   cp.onclick = function(){
     var done = function(){ cp.textContent = "Copied!"; setTimeout(function(){ cp.textContent = "Copy"; }, 1500); };
@@ -273,7 +286,7 @@ async function boot(){
     try {
       deviceKey = await register();
       localStorage.setItem(LS_DEVICE, deviceKey);
-    } catch(e){ setStatus("offline"); return; }
+    } catch(e){ updatePill(); return; }
   }
   // Fresh device: push existing local data up. Existing device: pull first.
   lastPushed = snapshot(stateToRecords(window.__curbside.getS()));
@@ -281,6 +294,8 @@ async function boot(){
   else { await pull(); }
   setInterval(pull, PULL_INTERVAL_MS);
   window.addEventListener("online", pull);
+  window.addEventListener("offline", updatePill);
+  updatePill();
 }
 
 /* hooks consumed by app.js */

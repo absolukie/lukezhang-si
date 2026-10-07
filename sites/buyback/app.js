@@ -69,6 +69,7 @@ const STATES = {
     abbr: "IL", name: "Illinois",
     law: "Illinois New Vehicle Buyer Protection Act",
     cite: "815 ILCS 380/1 et seq.",
+    daysBasis: "business",
     windowMonths: 12, windowMiles: 12000,
     blurb: "4+ repairs, or 30+ business days",
     routes: [
@@ -121,6 +122,7 @@ const STATES = {
     abbr: "NC", name: "North Carolina",
     law: "North Carolina New Motor Vehicles Warranties Act",
     cite: "N.C. Gen. Stat. \u00A7\u00A720-351 to 20-351.8",
+    daysBasis: "business",
     windowMonths: 24, windowMiles: 24000,
     blurb: "4+ repairs, or 20+ business days",
     routes: [
@@ -147,6 +149,7 @@ const STATES = {
     abbr: "CO", name: "Colorado",
     law: "Colorado Lemon Law",
     cite: "Colo. Rev. Stat. \u00A7\u00A742-10-101 to 42-10-108",
+    daysBasis: "business",
     windowMonths: 24, windowMiles: 24000,
     blurb: "3+ repairs (2 for safety), or 24+ business days",
     routes: [
@@ -172,6 +175,7 @@ const STATES = {
     abbr: "MA", name: "Massachusetts",
     law: "Massachusetts New Car Lemon Law",
     cite: "Mass. Gen. Laws ch. 90, \u00A77N\u00BD",
+    daysBasis: "business",
     windowMonths: 12, windowMiles: 15000,
     blurb: "3+ repairs, or 15+ business days",
     routes: [
@@ -213,7 +217,18 @@ const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmtDate = iso => { if (!iso) return ""; const d = new Date(iso + "T12:00:00"); return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
 const daysBetween = (a, b) => Math.max(1, Math.round((new Date(b + "T12:00:00") - new Date(a + "T12:00:00")) / 86400000));
-function daysOut(r) {
+/* Business-day counter for IL, NC, CO, MA day thresholds. Counts Mon-Fri in
+   [a, b] inclusive. Federal holidays are NOT excluded (noted limitation). */
+function businessDaysBetween(a, b) {
+  let n = 0;
+  const d = new Date(a + "T12:00:00"), end = new Date(b + "T12:00:00");
+  for (; d <= end; d.setDate(d.getDate() + 1)) { const w = d.getDay(); if (w !== 0 && w !== 6) n++; }
+  return Math.max(1, n);
+}
+function todayLocalISO() { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function daysOut(r, business) {
+  const out = r.dateOut || todayLocalISO();
+  if (business) return businessDaysBetween(r.dateIn, out);
   if (!r.dateOut) return Math.max(1, Math.round((Date.now() - new Date(r.dateIn + "T12:00:00")) / 86400000));
   return daysBetween(r.dateIn, r.dateOut);
 }
@@ -244,24 +259,24 @@ function computeCase() {
   const windowStart = new Date(db.car.deliveryDate + "T12:00:00");
   const inWin = db.repairs.filter(r => { const d = new Date(r.dateIn + "T12:00:00"); return d >= windowStart && d <= windowEnd; });
   const outWin = db.repairs.length - inWin.length;
+  const biz = st.daysBasis === "business";
   const byProblem = Object.create(null);
   inWin.forEach(r => { const k = String(r.problem || "").trim().toLowerCase(); (byProblem[k] = byProblem[k] || []).push(r); });
   const probs = Object.entries(byProblem).map(([k, arr]) => ({
     name: String(arr[0].problem || "").trim() || "(no description)", attempts: arr.length,
     safety: arr.filter(r => r.safety).length
   })).sort((a, b) => b.attempts - a.attempts);
-  const totalDays = inWin.reduce((a, r) => a + daysOut(r), 0);
-  const routes = st.routes.map(rt => {
+  const totalDays = inWin.reduce((a, r) => a + daysOut(r, biz), 0);  const routes = st.routes.map(rt => {
     let val = 0, detail = "";
     if (rt.id === "repeat") { val = probs.length ? probs[0].attempts : 0; detail = probs.length ? "\u201C" + probs[0].name + "\u201D leads with " + val : "Log repairs to start counting"; }
     else if (rt.id === "safety") { val = probs.reduce((m, p) => Math.max(m, p.safety), 0); detail = val ? val + " flagged safety attempt(s)" : "Flag a repair as a safety issue if it applies"; }
-    else if (rt.id === "days") { val = totalDays; detail = val + " cumulative day(s) in the shop"; }
+    else if (rt.id === "days") { val = totalDays; detail = val + " cumulative " + (biz ? "business " : "") + "day(s) in the shop"; }
     else if (rt.id === "total") { val = inWin.length; detail = val + " total logged repair(s)"; }
     return Object.assign({}, rt, { val, detail, met: val >= rt.need });
   });
   const qualified = routes.some(r => r.met);
   const best = routes.reduce((m, r) => Math.max(m, Math.min(1, r.val / r.need)), 0);
-  return { st, routes, qualified, best, probs, totalDays, inWin, outWin, windowEnd };
+  return { st, routes, qualified, best, probs, totalDays, inWin, outWin, windowEnd, biz };
 }
 
 /* ---- sample case ---- */
@@ -439,7 +454,7 @@ function renderCase() {
         ${r.photo ? `<img class="ri-photo" src="${r.photo}" alt="Repair order photo">` : ""}
         <div class="ri-body">
           <div class="ri-problem">${esc(r.problem)}${r.safety ? '<span class="safety-tag">SAFETY</span>' : ""}</div>
-          <div class="ri-meta">${fmtDate(r.dateIn)}${r.dateOut ? " \u2192 " + fmtDate(r.dateOut) : " \u2192 in shop now"} \u00B7 ${daysOut(r)} day(s)${r.dealer ? " \u00B7 " + esc(r.dealer) : ""}</div>
+          <div class="ri-meta">${fmtDate(r.dateIn)}${r.dateOut ? " \u2192 " + fmtDate(r.dateOut) : " \u2192 in shop now"} \u00B7 ${daysOut(r, c.biz)} ${(c.biz ? "business " : "")}day(s)${r.dealer ? " \u00B7 " + esc(r.dealer) : ""}</div>
           ${r.desc ? `<div class="ri-meta">${esc(r.desc)}</div>` : ""}
         </div>
         <button class="ri-del" data-del="${r.id}" aria-label="Delete repair"><svg class="ic"><use href="#i-trash"/></svg></button>
@@ -451,7 +466,7 @@ function renderCase() {
   tl.innerHTML = db.repairs.length ? db.repairs.map(r => `
     <div class="tl-item"><div class="tl-date">${fmtDate(r.dateIn)}</div>
     <div class="tl-what">${esc(r.problem)}</div>
-    <div class="tl-days">${daysOut(r)} day(s) out of service${r.dealer ? " \u2014 " + esc(r.dealer) : ""}</div></div>`).join("")
+    <div class="tl-days">${daysOut(r, c.biz)} ${(c.biz ? "business " : "")}day(s) out of service${r.dealer ? " \u2014 " + esc(r.dealer) : ""}</div></div>`).join("")
     : `<p class="micro">Your timeline will appear here as you log repairs.</p>`;
 
   // next steps
@@ -487,14 +502,14 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") closeModals(
 function caseSummaryText() {
   const c = computeCase(); if (!c) return "";
   const car = db.car;
-  const lines = c.inWin.map(r => `${fmtDate(r.dateIn)}${r.dateOut ? " to " + fmtDate(r.dateOut) : " (in shop)"} — ${r.problem} (${daysOut(r)}d)${r.dealer ? " @ " + r.dealer : ""}${r.safety ? " [SAFETY]" : ""}`);
+  const lines = c.inWin.map(r => `${fmtDate(r.dateIn)}${r.dateOut ? " to " + fmtDate(r.dateOut) : " (in shop)"} — ${r.problem} (${daysOut(r, c.biz)}${c.biz ? " business" : ""}d)${r.dealer ? " @ " + r.dealer : ""}${r.safety ? " [SAFETY]" : ""}`);
   return { c, car, lines };
 }
 function openIntake() {
   $("#intakeForm").classList.remove("hidden"); $("#intakeDone").classList.add("hidden");
   const { c, car } = caseSummaryText();
   if (c && !$("#iSummary").value) {
-    $("#iSummary").value = `${car.year} ${car.make} ${car.model} (${c.st.name}): ${c.inWin.length} repair(s), ${c.totalDays} days out of service. ` +
+    $("#iSummary").value = `${car.year} ${car.make} ${car.model} (${c.st.name}): ${c.inWin.length} repair(s), ${c.totalDays} ${c.biz ? "business " : ""}days out of service. ` +
       c.routes.map(r => `${r.label}: ${r.val}/${r.need}${r.met ? " MET" : ""}`).join("; ") + ".";
   }
   if (db.intake) { $("#iName").value = db.intake.name || ""; $("#iPhone").value = db.intake.phone || ""; $("#iEmail").value = db.intake.email || ""; }
@@ -515,7 +530,7 @@ $("#intakeForm").addEventListener("submit", e => {
 
 function demandLetterText() {
   const { c, car, lines } = caseSummaryText();
-  const met = c.routes.filter(r => r.met).map(r => r.label.toLowerCase()).join("; ");
+  const met = c.routes.filter(r => r.met).map(r => (r.id === "days" && c.biz ? "business days out of service" : r.label.toLowerCase())).join("; ");
   return `DEMAND FOR REPURCHASE / REPLACEMENT UNDER STATE LEMON LAW
 (Draft only \u2014 have an attorney review before sending)
 

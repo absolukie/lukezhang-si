@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Backfill — Waitlist backfill for dental practices</title>
+<style>
+:root{
+  --teal:#0d9488; --teal-dark:#0b6f66; --teal-50:#effaf9; --teal-100:#d7f2ef;
+  --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f6f9f9; --card:#ffffff;
+  --red:#dc2626; --red-50:#fef2f2; --amber:#d97706; --amber-50:#fffbeb;
+  --green:#16a34a; --green-50:#f0fdf4;
+  --radius:14px; --shadow:0 1px 3px rgba(15,40,38,.08),0 4px 14px rgba(15,40,38,.06);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  background:var(--bg);color:var(--ink);font-size:16px;line-height:1.45;min-height:100vh}
+button{touch-action:manipulation;font:inherit;cursor:pointer}
+input,select,textarea{font-size:16px;font-family:inherit}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+
+/* ---------- header ---------- */
+.topbar{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:40}
+.topbar-inner{max-width:1100px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;gap:12px}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:18px;letter-spacing:-.01em}
+.logo svg{width:28px;height:28px}
+.practice{margin-left:auto;text-align:right;font-size:13px;color:var(--muted);line-height:1.3}
+.practice strong{display:block;color:var(--ink);font-size:14px}
+.sim-badge{display:inline-flex;align-items:center;gap:6px;background:#fff7ed;border:1px solid #fed7aa;
+  color:#9a3412;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;white-space:nowrap}
+.sim-badge .dot{width:7px;height:7px;border-radius:50%;background:#f59e0b;animation:pulse 1.6s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* ---------- nav ---------- */
+.nav{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:57px;z-index:39}
+.nav-inner{max-width:1100px;margin:0 auto;padding:0 16px;display:flex;gap:4px;overflow-x:auto}
+.nav button{border:0;background:none;padding:13px 14px;font-weight:600;font-size:15px;color:var(--muted);
+  border-bottom:3px solid transparent;white-space:nowrap;display:flex;align-items:center;gap:8px}
+.nav button svg{width:18px;height:18px}
+.nav button.active{color:var(--teal-dark);border-bottom-color:var(--teal)}
+
+/* ---------- layout ---------- */
+.wrap{max-width:1100px;margin:0 auto;padding:20px 16px 90px}
+.view{display:none}
+.view.active{display:block;animation:fade .18s ease}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 0 14px;flex-wrap:wrap}
+.section-head h2{font-size:21px;letter-spacing:-.01em}
+.section-head p{color:var(--muted);font-size:14px;margin-top:2px}
+
+/* ---------- stat strip ---------- */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow)}
+.stat .label{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.stat .value{font-size:24px;font-weight:700;margin-top:4px;letter-spacing:-.02em}
+.stat .value.teal{color:var(--teal-dark)}
+.stat .sub{font-size:12px;color:var(--muted);margin-top:2px}
+
+/* ---------- appointment cards ---------- */
+.appt{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;
+  margin-bottom:10px;display:flex;gap:14px;align-items:center;box-shadow:var(--shadow)}
+.appt .time{font-weight:700;font-size:15px;min-width:76px;color:var(--ink)}
+.appt .time small{display:block;font-weight:500;color:var(--muted);font-size:12px}
+.appt .body{flex:1;min-width:0}
+.appt .name{font-weight:600;font-size:16px}
+.appt .proc{color:var(--muted);font-size:14px;margin-top:2px}
+.appt .value{font-weight:700;font-size:15px;white-space:nowrap}
+.status{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:4px 10px;
+  border-radius:999px;margin-top:6px;text-transform:uppercase;letter-spacing:.04em}
+.status.confirmed{background:var(--teal-50);color:var(--teal-dark)}
+.status.arrived{background:var(--green-50);color:var(--green)}
+.status.cancelled{background:var(--red-50);color:var(--red)}
+.status.noshow{background:var(--red-50);color:var(--red)}
+.status.filled{background:var(--teal-100);color:var(--teal-dark)}
+.status.pending{background:var(--amber-50);color:var(--amber)}
+.appt.cancelled-card{border:2px solid #fca5a5;background:#fffafa}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:10px;
+  font-weight:700;font-size:15px;padding:12px 18px;transition:transform .05s ease, background .15s}
+.btn:active{transform:scale(.97)}
+.btn svg{width:18px;height:18px}
+.btn-primary{background:var(--teal);color:#fff}
+.btn-primary:hover{background:var(--teal-dark)}
+.btn-ghost{background:var(--teal-50);color:var(--teal-dark)}
+.btn-danger-ghost{background:var(--red-50);color:var(--red)}
+.btn-sm{padding:8px 12px;font-size:14px;border-radius:8px}
+.btn[disabled]{opacity:.55;cursor:default}
+
+/* ---------- waitlist ---------- */
+.wl-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;
+  margin-bottom:10px;display:flex;gap:14px;align-items:center;box-shadow:var(--shadow)}
+.wl-rank{width:38px;height:38px;border-radius:50%;background:var(--teal-100);color:var(--teal-dark);
+  font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px}
+.wl-card .body{flex:1;min-width:0}
+.wl-card .name{font-weight:600;font-size:16px}
+.wl-card .meta{color:var(--muted);font-size:13px;margin-top:3px;display:flex;gap:10px;flex-wrap:wrap}
+.wl-card .meta span{display:inline-flex;align-items:center;gap:4px}
+.wl-card .meta svg{width:14px;height:14px}
+.score{font-size:12px;font-weight:700;color:var(--teal-dark);background:var(--teal-50);
+  padding:4px 9px;border-radius:999px;white-space:nowrap}
+
+/* ---------- activity log ---------- */
+.log{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.log-row{display:flex;gap:12px;padding:13px 16px;border-bottom:1px solid var(--line);font-size:14px;align-items:flex-start}
+.log-row:last-child{border-bottom:0}
+.log-row .t{color:var(--muted);font-size:12px;min-width:64px;padding-top:2px;font-variant-numeric:tabular-nums}
+.log-row .amt{margin-left:auto;font-weight:700;white-space:nowrap}
+.log-row .amt.pos{color:var(--teal-dark)}
+.log-row .amt.neg{color:var(--red)}
+
+/* ---------- big stats ---------- */
+.big-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.big-stat{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.big-stat .label{font-size:13px;color:var(--muted);font-weight:600}
+.big-stat .value{font-size:32px;font-weight:800;letter-spacing:-.02em;margin-top:6px}
+.big-stat .value.teal{color:var(--teal-dark)}
+.big-stat .note{font-size:13px;color:var(--muted);margin-top:6px}
+
+/* ---------- modal ---------- */
+.modal-back{position:fixed;inset:0;background:rgba(15,35,33,.5);z-index:100;display:none;
+  align-items:flex-end;justify-content:center;padding:0}
+.modal-back.open{display:flex}
+.modal{background:#fff;width:100%;max-width:640px;max-height:92vh;border-radius:20px 20px 0 0;
+  display:flex;flex-direction:column;overflow:hidden;animation:sheet .25s ease}
+@keyframes sheet{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+.modal-head{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
+.modal-head h3{font-size:18px;flex:1}
+.modal-head .sub{font-size:13px;color:var(--muted)}
+.modal-body{padding:18px 20px;overflow-y:auto;flex:1}
+.modal-foot{padding:14px 20px;border-top:1px solid var(--line);display:flex;gap:10px}
+.modal-foot .btn{flex:1}
+
+/* sequence steps */
+.seq-steps{display:flex;gap:8px;margin-bottom:16px}
+.seq-step{flex:1;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;
+  text-align:center;font-size:12px;color:var(--muted)}
+.seq-step .n{font-weight:800;font-size:15px;color:var(--ink);display:block;margin-bottom:2px}
+.seq-step.active{border-color:var(--teal);background:var(--teal-50);color:var(--teal-dark)}
+.seq-step.done{border-color:var(--teal-100);background:var(--teal-50)}
+.seq-step.declined{opacity:.55}
+
+/* message thread */
+.thread{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.bubble{max-width:82%;padding:10px 14px;border-radius:16px;font-size:15px;line-height:1.4;animation:pop .25s ease}
+@keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.bubble.out{align-self:flex-end;background:var(--teal);color:#fff;border-bottom-right-radius:4px}
+.bubble.in{align-self:flex-start;background:#eef2f2;color:var(--ink);border-bottom-left-radius:4px}
+.bubble .who{font-size:11px;font-weight:700;opacity:.75;margin-bottom:3px}
+.typing{align-self:flex-start;background:#eef2f2;border-radius:16px;padding:12px 16px;display:flex;gap:5px}
+.typing span{width:7px;height:7px;border-radius:50%;background:#94a3b8;animation:tp 1s infinite}
+.typing span:nth-child(2){animation-delay:.15s}.typing span:nth-child(3){animation-delay:.3s}
+@keyframes tp{0%,60%,100%{transform:none;opacity:.5}30%{transform:translateY(-4px);opacity:1}}
+.result-banner{border-radius:12px;padding:14px 16px;margin-top:14px;font-weight:600;display:none}
+.result-banner.show{display:block;animation:pop .3s ease}
+.result-banner.win{background:var(--green-50);border:1px solid #bbf7d0;color:#166534}
+.result-banner.lose{background:var(--amber-50);border:1px solid #fde68a;color:#92400e}
+
+/* forms */
+.form-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);margin-top:18px}
+.form-card h3{font-size:16px;margin-bottom:12px}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:5px}
+.field input,.field select{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 12px;background:#fff;color:var(--ink)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+.empty{background:var(--card);border:1px dashed var(--line);border-radius:var(--radius);padding:28px;text-align:center;color:var(--muted)}
+.empty svg{width:36px;height:36px;margin-bottom:8px;opacity:.5}
+
+.revenue-flash{animation:flash 1.2s ease}
+@keyframes flash{0%{background:#d7f2ef}100%{background:transparent}}
+
+/* demo tip + desktop side panel (iteration 2) */
+.demo-tip{display:flex;gap:10px;align-items:flex-start;background:#fffbeb;border:1px solid #fde68a;
+  border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;font-size:14px;color:#92400e}
+.demo-tip[hidden]{display:none}
+.demo-tip svg{width:20px;height:20px;flex-shrink:0;margin-top:1px}
+.demo-tip button{margin-left:auto;border:0;background:none;color:#92400e;font-size:16px;padding:2px 6px}
+.sched-grid{display:block}
+.side-panel{display:none}
+@media(min-width:900px){
+  .sched-grid{display:grid;grid-template-columns:1fr 300px;gap:18px;align-items:start}
+  .side-panel{display:block;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:18px;box-shadow:var(--shadow);position:sticky;top:130px}
+  .side-panel h3{font-size:16px;margin-bottom:10px}
+  .side-panel ol{margin:0 0 14px 18px;font-size:14px;color:var(--muted);display:flex;flex-direction:column;gap:8px}
+  .side-panel ol strong{color:var(--ink)}
+  .side-rev{background:var(--teal-50);border-radius:10px;padding:12px 14px;margin-bottom:12px}
+  .side-rev .label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  .side-rev .value{font-size:26px;font-weight:800;color:var(--teal-dark)}
+  .side-panel .fine{font-size:12.5px;color:var(--muted);line-height:1.55}
+}
+
+/* 7-day bars (iteration 3) */
+.bars{display:flex;align-items:flex-end;gap:8px;height:120px;margin-top:10px;padding-top:24px}
+.bar{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
+.bar .col{width:100%;max-width:44px;background:var(--teal-100);border-radius:6px 6px 0 0;position:relative}
+.bar .col span{position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-size:11px;font-weight:700;color:var(--teal-dark);white-space:nowrap}
+.bar.today .col{background:var(--teal)}
+.bar .day{font-size:11px;color:var(--muted);font-weight:600}
+
+/* rank explainer (iteration 3) */
+.rank-why{margin-top:8px}
+.rank-why summary{font-size:13px;color:var(--teal-dark);font-weight:600;cursor:pointer;touch-action:manipulation}
+.rank-why ul{margin:6px 0 2px 18px;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+
+@media(min-width:760px){
+  .modal-back{align-items:center;padding:24px}
+  .modal{border-radius:20px}
+  .nav{top:58px}
+  .stats{grid-template-columns:repeat(4,1fr)}
+}
+/* money burst (iteration 4: the recovered-revenue moment should feel like money) */
+.recovered-big{font-size:44px;font-weight:800;color:#166534;letter-spacing:-.02em;margin-top:8px;font-variant-numeric:tabular-nums}
+.recovered-sub{font-size:13px;color:#166534;font-weight:600}
+.money-burst{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:5}
+.burst-dollar{position:absolute;bottom:18%;font-weight:800;color:#16a34a;opacity:0;animation:burstUp 1.5s ease-out forwards}
+@keyframes burstUp{0%{opacity:0;transform:translateY(10px) scale(.6)}15%{opacity:1}100%{opacity:0;transform:translateY(-190px) scale(1.15) rotate(var(--rot,8deg))}}
+.modal{position:relative}
+
+@media(max-width:560px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .big-stats{grid-template-columns:1fr}
+  .appt{flex-wrap:wrap}
+  .practice{display:none}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#0d9488" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 014-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 01-4 4H3"/></svg>
+      Backfill
+    </div>
+    <span class="sim-badge"><span class="dot"></span>Demo simulation</span>
+    <div class="practice"><strong>Brightline Dental</strong>Front desk demo</div>
+  </div>
+</header>
+
+<nav class="nav"><div class="nav-inner">
+  <button class="active" data-view="schedule">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+    Schedule</button>
+  <button data-view="waitlist">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1.4" fill="currentColor"/><circle cx="4" cy="12" r="1.4" fill="currentColor"/><circle cx="4" cy="18" r="1.4" fill="currentColor"/></svg>
+    Waitlist <span id="wl-count" class="score">0</span></button>
+  <button data-view="activity">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
+    Activity</button>
+  <button data-view="stats">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>
+    Stats</button>
+  <button data-view="sync">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
+    Sync</button>
+</div></nav>
+
+<main class="wrap">
+
+  <!-- SCHEDULE -->
+  <section class="view active" id="view-schedule">
+    <div class="section-head">
+      <div><h2 id="today-title">Today's schedule</h2><p id="today-sub"></p></div>
+      <button class="btn btn-ghost btn-sm" id="reset-demo">Reset demo</button>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="label">Fill rate today</div><div class="value" id="st-fill">–</div><div class="sub">of booked slots kept</div></div>
+      <div class="stat"><div class="label">Open slots</div><div class="value" id="st-open">–</div><div class="sub">need backfilling</div></div>
+      <div class="stat"><div class="label">Recovered this week</div><div class="value teal" id="st-rev">$0</div><div class="sub">via backfill</div></div>
+      <div class="stat"><div class="label">Avg time to fill</div><div class="value" id="st-ttf">–</div><div class="sub">last 7 days</div></div>
+    </div>
+    <div id="demo-tip" class="demo-tip" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
+      <div><strong>Try the magic moment:</strong> tap <strong>Backfill</strong> on the cancelled 10:30 slot and watch the waitlist fill it.</div>
+      <button id="demo-tip-x" aria-label="Dismiss">✕</button>
+    </div>
+    <div class="sched-grid">
+    <div id="schedule-list"></div>
+    <aside class="side-panel">
+      <h3>How backfill works</h3>
+      <ol>
+        <li><strong>Slot opens</strong> — a cancellation or no-show hits the schedule.</li>
+        <li><strong>Waitlist gets texted</strong> — in priority order, seconds after the cancel.</li>
+        <li><strong>First YES wins</strong> — the slot fills, the calendar updates, revenue is recovered.</li>
+      </ol>
+      <div class="side-rev"><div class="label">Recovered this week</div><div class="value teal" id="side-rev">$0</div></div>
+      <p class="fine">Dental practices lose 10–15% of appointments to cancellations and no-shows. One unfilled cancellation a day is $3k–$8k a month gone.</p>
+    </aside>
+    </div>
+  </section>
+
+  <!-- WAITLIST -->
+  <section class="view" id="view-waitlist">
+    <div class="section-head">
+      <div><h2>Waitlist</h2><p>Ranked by likelihood to accept on short notice. Backfill contacts from the top.</p></div>
+    </div>
+    <div id="waitlist-list"></div>
+    <div class="form-card">
+      <h3>Add to waitlist</h3>
+      <div class="row2">
+        <div class="field"><label for="f-name">Patient name</label><input id="f-name" placeholder="e.g. Dana P." autocomplete="off"></div>
+        <div class="field"><label for="f-proc">Needed treatment</label>
+          <select id="f-proc"><option>Cleaning / hygiene</option><option>Filling</option><option>Crown</option><option>Checkup</option><option>Root canal</option><option>Extraction</option></select></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label for="f-pref">Contact preference</label>
+          <select id="f-pref"><option>SMS</option><option>Call</option></select></div>
+        <div class="field"><label for="f-flex">Availability</label>
+          <select id="f-flex"><option>Flexible today</option><option>Mornings only</option><option>Afternoons only</option></select></div>
+      </div>
+      <button class="btn btn-primary" id="add-wl" style="width:100%">Add patient</button>
+    </div>
+  </section>
+
+  <!-- ACTIVITY -->
+  <section class="view" id="view-activity">
+    <div class="section-head"><div><h2>Cancellations &amp; no-shows</h2><p>Every broken appointment, and what backfill did about it.</p></div></div>
+    <div class="log" id="activity-log"></div>
+  </section>
+
+  <!-- STATS -->
+  <section class="view" id="view-stats">
+    <div class="section-head"><div><h2>Recovery stats</h2><p>What backfill earned back this week.</p></div></div>
+    <div class="big-stats">
+      <div class="big-stat"><div class="label">Revenue recovered</div><div class="value teal" id="bs-rev">$0</div><div class="note">Slots that would have sat empty</div></div>
+      <div class="big-stat"><div class="label">Slots recovered</div><div class="value" id="bs-slots">0</div><div class="note">This week</div></div>
+      <div class="big-stat"><div class="label">Fill rate</div><div class="value" id="bs-fill">–</div><div class="note">Kept + recovered vs booked</div></div>
+      <div class="big-stat"><div class="label">Avg time to fill</div><div class="value" id="bs-ttf">–</div><div class="note">Cancellation to acceptance</div></div>
+    </div>
+    <div class="form-card">
+      <h3>Recovered revenue — last 7 days</h3>
+      <div class="bars" id="rev-bars"></div>
+    </div>
+    <div class="form-card">
+      <h3>Why this matters</h3>
+      <p style="font-size:14px;color:var(--muted);line-height:1.6">Dental practices lose 10-15% of appointments to cancellations and no-shows. At $150-400 per chair hour, one unfilled cancellation a day is $3,000-8,000 a month walking out the door. Backfill's job: turn a cancellation into a filled slot in minutes, not hours of phone tag.</p>
+    </div>
+  </section>
+
+  <!-- SYNC -->
+  <section class="view" id="view-sync">
+    <div class="section-head"><div><h2>Device sync</h2><p>Same schedule and waitlist on your phone and laptop.</p></div></div>
+    <div id="syncBoxHost"></div>
+  </section>
+
+</main>
+
+<!-- BACKFILL MODAL -->
+<div class="modal-back" id="bf-back">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="bf-title">
+    <div class="modal-head">
+      <div style="flex:1"><h3 id="bf-title">Backfilling 10:30 slot</h3><div class="sub" id="bf-sub">Contacting waitlist in priority order</div></div>
+      <span class="sim-badge"><span class="dot"></span>Simulated</span>
+    </div>
+    <div class="modal-body">
+      <div class="seq-steps" id="bf-steps"></div>
+      <div class="thread" id="bf-thread"></div>
+      <div class="result-banner" id="bf-result"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="bf-close">Close</button>
+      <button class="btn btn-primary" id="bf-done" disabled>Done</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ================= state ================= */
+const KEY = "backfill-v1";
+const PROC_VALUES = {"Cleaning / hygiene":185,"Filling":310,"Crown":850,"Checkup":140,"Root canal":950,"Extraction":275};
+
+function seed(){
+  const now = new Date();
+  const t = (h,m)=>`${h}:${String(m).padStart(2,"0")}`;
+  return {
+    schedule:[
+      {id:"a1",time:"8:00 AM", patient:"Priya S.", proc:"Cleaning / hygiene", value:165, status:"arrived"},
+      {id:"a2",time:"8:45 AM", patient:"Marcus T.", proc:"Filling", value:310, status:"arrived"},
+      {id:"a3",time:"9:30 AM", patient:"Elena V.", proc:"Crown prep", value:850, status:"confirmed"},
+      {id:"a4",time:"10:30 AM",patient:"Jordan L.", proc:"Cleaning / hygiene", value:185, status:"cancelled", cancelledAt:"9:42 AM"},
+      {id:"a5",time:"11:15 AM",patient:"Sam W.",   proc:"Checkup", value:140, status:"confirmed"},
+      {id:"a6",time:"1:00 PM", patient:"Ana G.",   proc:"Root canal", value:950, status:"confirmed"},
+      {id:"a7",time:"2:30 PM", patient:"Chris D.", proc:"Cleaning / hygiene", value:165, status:"confirmed"},
+      {id:"a8",time:"3:15 PM", patient:"Ruth K.",  proc:"Filling", value:310, status:"confirmed"}
+    ],
+    waitlist:[
+      {id:"w1",name:"Maya R.", proc:"Filling", pref:"SMS", flex:"Flexible today", waited:"6 days", score:92, note:"Wants morning if possible"},
+      {id:"w2",name:"Devon K.",proc:"Cleaning / hygiene", pref:"SMS", flex:"Mornings only", waited:"4 days", score:85, note:"Prefers hygienist Jen"},
+      {id:"w3",name:"Luis H.", proc:"Crown consult", pref:"Call", flex:"Flexible today", waited:"9 days", score:78, note:"Needs estimate first"},
+      {id:"w4",name:"Grace N.",proc:"Checkup", pref:"SMS", flex:"Flexible today", waited:"2 days", score:70, note:"New patient"},
+      {id:"w5",name:"Omar F.", proc:"Filling", pref:"SMS", flex:"Afternoons only", waited:"1 day", score:64, note:""}
+    ],
+    activity:[
+      {t:"9:42 AM", text:"Jordan L. cancelled 10:30 AM hygiene", amt:-185},
+      {t:"8:15 AM", text:"Backfill filled 8:45 AM hygiene for T. Okafor", amt:165},
+      {t:"Yesterday", text:"Backfill filled 2:00 PM filling for P. Nguyen", amt:310},
+      {t:"Yesterday", text:"R. Alvarez no-showed 11:00 AM checkup", amt:-140}
+    ],
+    weekRev:[165, 310, 0, 240, 185, 0, 340], // last 7 days, today last
+    recoveredWeek: 1240, slotsRecovered: 7, fillTimes: [9,14,7,12,11,8,13] // minutes
+  };
+}
+let S;
+try{ S = JSON.parse(localStorage.getItem(KEY)) || seed(); }
+catch(e){ S = seed(); }
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); }
+  catch(e){ /* storage blocked or full: demo continues in memory */ }
+  try{ if(window.__backfillSync) window.__backfillSync.onSave(); }catch(e){}
+}
+
+/* ---------- sync bridge (prototype backend; see sync.js) ---------- */
+window.__backfill = {
+  getS: function(){ return S; },
+  saveLocal: function(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} },
+  refresh: function(){
+    renderSchedule(); renderWaitlist(); renderActivity(); renderStats(); renderBars();
+  }
+};
+
+const $ = id => document.getElementById(id);
+const money = n => "$" + n.toLocaleString();
+
+/* ================= header date ================= */
+(function(){
+  const d = new Date();
+  const days=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  $("today-title").textContent = days[d.getDay()] + "'s schedule";
+  $("today-sub").textContent = months[d.getMonth()]+" "+d.getDate()+", "+d.getFullYear()+" · 8 appointments";
+})();
+
+/* ================= schedule ================= */
+const STATUS_LABEL = {confirmed:"Confirmed",arrived:"Arrived",cancelled:"Cancelled",noshow:"No-show",filled:"Filled",pending:"Pending"};
+
+function renderSchedule(){
+  const list = $("schedule-list"); list.innerHTML = "";
+  S.schedule.forEach(a=>{
+    const el = document.createElement("div");
+    el.className = "appt" + ((a.status==="cancelled"||a.status==="noshow") ? " cancelled-card" : "");
+    el.innerHTML = `
+      <div class="time">${a.time}</div>
+      <div class="body">
+        <div class="name">${esc(a.patient)}</div>
+        <div class="proc">${esc(a.proc)} · ${money(a.value)}</div>
+        <span class="status ${a.status}">${STATUS_LABEL[a.status]||a.status}</span>
+      </div>
+      <div class="actions"></div>`;
+    const act = el.querySelector(".actions");
+    if(a.status==="cancelled"||a.status==="noshow"){
+      const b = document.createElement("button");
+      b.className = "btn btn-primary";
+      b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 014-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 01-4 4H3"/></svg>Backfill`;
+      b.onclick = ()=>openBackfill(a.id);
+      act.appendChild(b);
+    } else if(a.status==="confirmed"){
+      const wrap = document.createElement("div");
+      wrap.style.display = "flex"; wrap.style.gap = "6px"; wrap.style.flexWrap = "wrap";
+      [["Simulate cancel","cancelled"],["Simulate no-show","noshow"]].forEach(([label,kind])=>{
+        const b = document.createElement("button");
+        b.className = "btn btn-danger-ghost btn-sm";
+        b.textContent = label;
+        b.title = "Demo: mark this appointment " + kind;
+        b.onclick = ()=>simulateBreak(a.id, kind);
+        wrap.appendChild(b);
+      });
+      act.appendChild(wrap);
+    }
+    list.appendChild(el);
+  });
+  renderStats();
+}
+
+function simulateBreak(id, kind){
+  const a = S.schedule.find(x=>x.id===id); if(!a||a.status!=="confirmed") return;
+  const now = new Date();
+  let h = now.getHours(), m = String(now.getMinutes()).padStart(2,"0");
+  const ap = h>=12?"PM":"AM"; h = h%12||12;
+  a.status = kind; a.cancelledAt = `${h}:${m} ${ap}`;
+  const verb = kind==="noshow" ? "no-showed" : "cancelled";
+  S.activity.unshift({t:a.cancelledAt, text:`${a.patient} ${verb} ${a.time} ${a.proc.toLowerCase()}`, amt:-a.value});
+  save(); renderSchedule(); renderActivity();
+}
+
+/* ================= waitlist ================= */
+function renderWaitlist(){
+  const list = $("waitlist-list"); list.innerHTML = "";
+  $("wl-count").textContent = S.waitlist.length;
+  if(!S.waitlist.length){
+    list.innerHTML = `<div class="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h9"/></svg>
+      <div>Waitlist is empty. Add patients who want earlier slots.</div></div>`;
+    return;
+  }
+  S.waitlist.forEach((w,i)=>{
+    const el = document.createElement("div");
+    el.className = "wl-card";
+    el.innerHTML = `
+      <div class="wl-rank">${i+1}</div>
+      <div class="body">
+        <div class="name">${esc(w.name)}</div>
+        <div class="meta">
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>Waiting ${esc(w.waited)}</span>
+          <span>${esc(w.proc)}</span>
+          <span>${esc(w.pref)} · ${esc(w.flex)}</span>
+          ${w.note?`<span>· ${esc(w.note)}</span>`:""}
+        </div>
+        <details class="rank-why">
+          <summary>Why rank ${i+1}?</summary>
+          <ul>${rankFactors(w).map(f=>`<li>${esc(f)}</li>`).join("")}</ul>
+        </details>
+      </div>
+      <div class="score">${w.score}</div>`;
+    list.appendChild(el);
+  });
+}
+
+function rankFactors(w){
+  const f = [];
+  const days = parseInt(w.waited) || 0;
+  if(days >= 5) f.push(`Waiting ${w.waited} — longest waiters get priority`);
+  else f.push(`Waiting ${w.waited}`);
+  if(w.flex === "Flexible today") f.push("Flexible today — can take any open slot");
+  else f.push(w.flex + " — narrower window, lower odds");
+  if(w.pref === "SMS") f.push("SMS preferred — replies 3x faster than calls");
+  else f.push("Prefers a call — slower to confirm");
+  if(/cleaning|checkup/i.test(w.proc)) f.push("Routine visit — easy to slot in");
+  return f;
+}
+
+$("add-wl").onclick = ()=>{
+  const name = $("f-name").value.trim(); if(!name) { $("f-name").focus(); return; }
+  const proc = $("f-proc").value;
+  S.waitlist.push({id:"w"+Date.now(), name, proc, pref:$("f-pref").value, flex:$("f-flex").value,
+    waited:"0 days", score: 55 + Math.floor(Math.random()*20), note:""});
+  S.waitlist.sort((a,b)=>b.score-a.score);
+  $("f-name").value = "";
+  save(); renderWaitlist();
+};
+
+/* ================= activity ================= */
+function renderActivity(){
+  const log = $("activity-log"); log.innerHTML = "";
+  S.activity.forEach(e=>{
+    const row = document.createElement("div");
+    row.className = "log-row";
+    const cls = e.amt>0 ? "pos" : e.amt<0 ? "neg" : "";
+    const txt = e.amt>0 ? "+"+money(e.amt) : e.amt<0 ? "−"+money(-e.amt) : "";
+    row.innerHTML = `<div class="t">${esc(e.t)}</div><div>${esc(e.text)}</div><div class="amt ${cls}">${txt}</div>`;
+    log.appendChild(row);
+  });
+}
+
+/* ================= stats ================= */
+function renderStats(){
+  const kept = S.schedule.filter(a=>["arrived","confirmed","filled"].includes(a.status)).length;
+  const open = S.schedule.filter(a=>["cancelled","noshow"].includes(a.status)).length;
+  const total = S.schedule.length;
+  const fill = Math.round(kept/total*100);
+  $("st-fill").textContent = fill + "%";
+  $("st-open").textContent = open;
+  $("st-rev").textContent = money(S.recoveredWeek);
+  const avg = S.fillTimes.length ? Math.round(S.fillTimes.reduce((x,y)=>x+y,0)/S.fillTimes.length) : 0;
+  $("st-ttf").textContent = avg ? avg+" min" : "–";
+  $("bs-rev").textContent = money(S.recoveredWeek);
+  $("bs-slots").textContent = S.slotsRecovered;
+  $("bs-fill").textContent = fill + "%";
+  $("bs-ttf").textContent = avg ? avg+" min" : "–";
+  const sr = $("side-rev"); if(sr) sr.textContent = money(S.recoveredWeek);
+  renderBars();
+}
+
+/* 7-day recovered revenue bars (iteration 3) */
+function renderBars(){
+  const c = $("rev-bars"); if(!c) return; c.innerHTML = "";
+  const names = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const today = new Date().getDay();
+  const days = [];
+  for(let i=6;i>=0;i--) days.push(names[(today-i+7)%7]);
+  const max = Math.max(...S.weekRev, 1);
+  S.weekRev.forEach((v,i)=>{
+    const last = i === S.weekRev.length-1;
+    const d = document.createElement("div");
+    d.className = "bar" + (last ? " today" : "");
+    const h = Math.max(4, Math.round(v/max*96));
+    d.innerHTML = `<div class="col" style="height:${h}px">${v?`<span>$${v}</span>`:""}</div><div class="day">${last?"Today":days[i]}</div>`;
+    c.appendChild(d);
+  });
+}
+
+/* ================= nav ================= */
+document.querySelectorAll(".nav button").forEach(b=>{
+  b.onclick = ()=>{
+    document.querySelectorAll(".nav button").forEach(x=>x.classList.remove("active"));
+    document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    $("view-"+b.dataset.view).classList.add("active");
+    window.scrollTo({top:0});
+  };
+});
+
+$("reset-demo").onclick = ()=>{ localStorage.removeItem(KEY);
+  ["backfill.device_key","backfill.syncmeta.v1","backfill.lastsync.v1"].forEach(function(k){ try{ localStorage.removeItem(k); }catch(e){} });
+  S = seed(); save();
+  renderSchedule(); renderWaitlist(); renderActivity(); };
+
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+/* ================= backfill sequence (magic moment) ================= */
+const wait = ms => new Promise(r=>setTimeout(r,ms));
+let bfRunning = false;
+
+/* ---------- waitlist matching (iteration 6) ----------
+   Candidates must: need the same treatment, be available at the slot's
+   time of day, and accept SMS outreach. Acceptance is probabilistic and
+   driven by each patient's score, so who accepts varies run to run. */
+function normProc(p){
+  return String(p||"").toLowerCase()
+    .replace(/\b(prep|consult(ation)?|procedure|treatment|appt|appointment)\b/g,"")
+    .replace(/[^a-z\/ ]/g," ").replace(/\s+/g," ").trim();
+}
+function procMatch(a,b){
+  a = normProc(a); b = normProc(b);
+  if(!a || !b) return false;
+  if(a === b) return true;
+  return a.split(/[\s\/]+/)[0] === b.split(/[\s\/]+/)[0];
+}
+function slotHour(t){
+  const m = String(t||"").match(/(\d+):(\d+)\s*(AM|PM)/i);
+  if(!m) return null;
+  let h = parseInt(m[1],10)%12; if(/pm/i.test(m[3])) h += 12;
+  return h + parseInt(m[2],10)/60;
+}
+function availOK(w, appt){
+  const h = slotHour(appt.time);
+  if(h === null) return true;
+  if(w.flex === "Mornings only") return h < 12;
+  if(w.flex === "Afternoons only") return h >= 12;
+  return true; // Flexible today
+}
+function matchWaitlist(appt){
+  const candidates = [], skipped = [];
+  S.waitlist.forEach(w=>{
+    if(!procMatch(w.proc, appt.proc)){ skipped.push({w:w, reason:"needs "+w.proc}); return; }
+    if(!availOK(w, appt)){ skipped.push({w:w, reason:String(w.flex).toLowerCase()+" but slot is "+appt.time}); return; }
+    if(w.pref !== "SMS"){ skipped.push({w:w, reason:"prefers a call, not SMS"}); return; }
+    candidates.push(w);
+  });
+  return {candidates:candidates, skipped:skipped};
+}
+function acceptProb(w){
+  const p = 0.35 + (w.score || 60)/200;
+  return Math.min(0.9, Math.max(0.35, p));
+}
+const DECLINES = [
+  "Sorry, can't make it today — thanks for thinking of me!",
+  "Can't do today, but keep me on the list please!",
+  "Ugh, I have a conflict — next time!",
+  "Not today, I'm stuck at work. Thanks though!"
+];
+
+function openBackfill(apptId){
+  if(bfRunning) return;
+  const appt = S.schedule.find(a=>a.id===apptId);
+  if(!appt || !["cancelled","noshow"].includes(appt.status)) return;
+  bfRunning = true;
+  const matched = matchWaitlist(appt);
+  const nCand = matched.candidates.length;
+  $("bf-title").textContent = `Backfilling ${appt.time} slot`;
+  $("bf-sub").textContent = `${appt.proc} · ${money(appt.value)} · ${nCand} eligible match${nCand===1?"":"es"} on waitlist`;
+  $("bf-thread").innerHTML = ""; $("bf-result").className = "result-banner"; $("bf-result").innerHTML = "";
+  $("bf-done").disabled = true;
+  // step chips for matched candidates
+  const steps = $("bf-steps"); steps.innerHTML = "";
+  matched.candidates.slice(0,4).forEach((w,i)=>{
+    const d = document.createElement("div");
+    d.className = "seq-step"; d.id = "bf-step-"+i;
+    d.innerHTML = `<span class="n">${i+1}</span>${esc(w.name)}`;
+    steps.appendChild(d);
+  });
+  if(!nCand){
+    const d = document.createElement("div");
+    d.className = "seq-step"; d.style.flex = "1 1 100%";
+    d.textContent = "No eligible matches";
+    steps.appendChild(d);
+  }
+  $("bf-back").classList.add("open");
+  document.body.style.overflow = "hidden";
+  runSequence(appt, matched).catch(function(){
+    // last resort: never strand the modal if the sequence throws
+    try{ $("bf-done").disabled = false; }catch(e){}
+    bfRunning = false;
+  });
+}
+
+function closeBackfill(){
+  $("bf-back").classList.remove("open");
+  document.body.style.overflow = "";
+  bfRunning = false;
+}
+$("bf-close").onclick = closeBackfill;
+$("bf-done").onclick = ()=>{ closeBackfill(); };
+
+function bubble(who, text, dir){
+  const t = $("bf-thread");
+  const b = document.createElement("div");
+  b.className = "bubble " + dir;
+  b.innerHTML = `<div class="who">${esc(who)}</div>${text}`;
+  t.appendChild(b);
+  t.parentElement.scrollTop = t.parentElement.scrollHeight;
+  return b;
+}
+function typing(){
+  const t = $("bf-thread");
+  const d = document.createElement("div");
+  d.className = "typing"; d.innerHTML = "<span></span><span></span><span></span>";
+  t.appendChild(d);
+  t.parentElement.scrollTop = t.parentElement.scrollHeight;
+  return d;
+}
+
+async function runSequence(appt, matched){
+  const candidates = matched.candidates.slice(0,4);
+  const r = $("bf-result");
+  try{
+    if(matched.skipped.length){
+      const note = document.createElement("div");
+      note.className = "result-banner";
+      note.style.display = "block";
+      note.style.background = "var(--bg)";
+      note.style.border = "1px solid var(--line)";
+      note.style.color = "var(--muted)";
+      note.style.fontWeight = "500";
+      note.style.marginBottom = "12px";
+      note.textContent = "Skipped " + matched.skipped.length + ": " +
+        matched.skipped.map(function(s){ return s.w.name.split(" ")[0] + " (" + s.reason + ")"; }).join(", ") + ".";
+      $("bf-thread").appendChild(note);
+    }
+    if(!candidates.length){
+      r.className = "result-banner show lose";
+      r.textContent = "Nobody on the waitlist matches this slot. Add patients who need " +
+        appt.proc + " and are reachable by SMS, then try again.";
+      return;
+    }
+    const msg = w => `Hi ${w.name.split(" ")[0]}, a ${appt.time} ${appt.proc.toLowerCase()} slot opened today at Brightline Dental. Reply YES to claim it, or NO to pass.`;
+    let filled = false, acceptedBy = null, contacted = 0;
+
+    for(let i=0;i<candidates.length && !filled;i++){
+      const w = candidates[i], step = $("bf-step-"+i);
+      if(step) step.classList.add("active");
+      contacted++;
+      bubble("Backfill · SMS to "+w.name, esc(msg(w)), "out");
+      await wait(900);
+      const tp = typing();
+      await wait(1400);
+      tp.remove();
+      if(Math.random() < acceptProb(w)){
+        bubble(w.name, "Yes! I'll take the "+appt.time+" slot.", "in");
+        filled = true; acceptedBy = w;
+        if(step){ step.classList.remove("active"); step.classList.add("done"); }
+        await wait(600);
+        bubble("Backfill", "Confirmed — "+esc(w.name.split(" ")[0])+" is booked for "+appt.time+". Calendar updated.", "out");
+      } else {
+        bubble(w.name, DECLINES[Math.floor(Math.random()*DECLINES.length)], "in");
+        if(step){ step.classList.remove("active"); step.classList.add("declined"); }
+        await wait(900);
+      }
+    }
+
+    if(filled){
+      const mins = 4 + Math.floor(Math.random()*9);
+      r.className = "result-banner show win";
+      r.innerHTML = `Slot filled by ${esc(acceptedBy.name)} in ~${mins} minutes (simulated).<div class="recovered-big" id="bf-countup">+$0</div><div class="recovered-sub">recovered revenue</div>`;
+      countUp($("bf-countup"), appt.value);
+      moneyBurst();
+      // apply to state — storage may fail; the demo result above still stands
+      try{
+        appt.status = "filled"; appt.patient = acceptedBy.name;
+        S.waitlist = S.waitlist.filter(w=>w.id!==acceptedBy.id);
+        S.recoveredWeek += appt.value; S.slotsRecovered += 1; S.fillTimes.push(mins);
+        S.weekRev[S.weekRev.length-1] += appt.value;
+        const now = new Date(); let h=now.getHours(), ap= h>=12?"PM":"AM"; h=h%12||12;
+        S.activity.unshift({t:`${h}:${String(now.getMinutes()).padStart(2,"0")} ${ap}`,
+          text:`Backfill filled ${appt.time} ${appt.proc.toLowerCase()} for ${acceptedBy.name}`, amt:appt.value});
+        save(); renderSchedule(); renderWaitlist(); renderActivity();
+        const rev = $("st-rev"); rev.classList.remove("revenue-flash"); void rev.offsetWidth; rev.classList.add("revenue-flash");
+      }catch(stateErr){
+        const note = document.createElement("div");
+        note.style.cssText = "font-size:13px;margin-top:8px";
+        note.textContent = "Note: couldn't save to this browser's storage — the result above is still accurate for this session.";
+        r.appendChild(note);
+      }
+    } else {
+      r.className = "result-banner show lose";
+      r.textContent = `No one accepted after ${contacted} contact${contacted>1?"s":""}. Slot stays open — try again later or call down the list.`;
+    }
+  } finally {
+    // always release the UI: the modal must never strand mid-sequence
+    $("bf-done").disabled = false;
+    bfRunning = false;
+  }
+  // make sure the payoff banner is visible (thread may have scrolled past it)
+  try{ r.scrollIntoView({behavior:"smooth", block:"nearest"}); }catch(e){}
+}
+
+// close modal on backdrop tap
+$("bf-back").addEventListener("click", e=>{ if(e.target===$("bf-back") && !bfRunning) closeBackfill(); });
+// Escape closes modal when idle
+document.addEventListener("keydown", e=>{
+  if(e.key==="Escape" && $("bf-back").classList.contains("open") && !bfRunning) closeBackfill();
+});
+
+/* demo tip (iteration 2) */
+(function(){
+  const tip = $("demo-tip");
+  try{
+    if(!localStorage.getItem("backfill-tip-seen")) tip.hidden = false;
+  }catch(e){ tip.hidden = false; }
+  $("demo-tip-x").onclick = ()=>{
+    tip.hidden = true;
+    try{ localStorage.setItem("backfill-tip-seen","1"); }catch(e){}
+  };
+})();
+
+/* money moment helpers (iteration 4) */
+function countUp(el, target){
+  if(!el) return;
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if(reduce){ el.textContent = "+$"+target.toLocaleString(); return; }
+  const t0 = performance.now(), dur = 1100;
+  (function tick(t){
+    const k = Math.min(1, (t-t0)/dur), e = 1-Math.pow(1-k,3);
+    el.textContent = "+$"+Math.round(target*e).toLocaleString();
+    if(k<1) requestAnimationFrame(tick);
+  })(t0);
+}
+function moneyBurst(){
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if(reduce) return;
+  const modal = document.querySelector("#bf-back .modal");
+  const layer = document.createElement("div");
+  layer.className = "money-burst"; layer.setAttribute("aria-hidden","true");
+  for(let i=0;i<22;i++){
+    const s = document.createElement("span");
+    s.className = "burst-dollar"; s.textContent = "$";
+    s.style.left = (8+Math.random()*84)+"%";
+    s.style.fontSize = (16+Math.random()*22)+"px";
+    s.style.setProperty("--rot", (Math.random()*36-18)+"deg");
+    s.style.animationDelay = (Math.random()*0.45)+"s";
+    layer.appendChild(s);
+  }
+  modal.appendChild(layer);
+  setTimeout(()=>layer.remove(), 2400);
+}
+
+/* nav aria labels (iteration 2) */
+document.querySelectorAll(".nav button").forEach(b=>{
+  b.setAttribute("aria-label", b.dataset.view + " view");
+});
+
+/* ================= init ================= */
+renderSchedule(); renderWaitlist(); renderActivity();
+</script>
+<script src="sync.js"></script>
+</body>
+</html>

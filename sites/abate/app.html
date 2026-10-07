@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ABATE — Asbestos Abatement Compliance Dossier</title>
+<meta name="description" content="Compliance-dossier software for asbestos abatement contractors. Daily logs, air monitoring, waste manifests, clearance certificates — assembled into one audit-proof file.">
+<style>
+:root{
+  --bg:#141414; --bg2:#1d1d1d; --bg3:#262626; --line:#333;
+  --ink:#f2f2f2; --muted:#a8a8a8; --dim:#6e6e6e;
+  --orange:#ff6a00; --orange-d:#c25200;
+  --green:#2ecc71; --red:#ff4d4d; --amber:#ffb020; --blue:#4da3ff;
+  --radius:10px;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:16px; line-height:1.45;}
+button{touch-action:manipulation; font-size:16px; cursor:pointer;}
+input,select,textarea{font-size:16px !important; width:100%; background:#101010; color:var(--ink);
+  border:1px solid var(--line); border-radius:8px; padding:12px; margin:0;}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--orange); border-color:var(--orange);}
+label{display:block; font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:14px 0 6px;}
+.stencil{font-family:"Arial Black","Archivo Black",Impact,Haettenschweiler,sans-serif;
+  text-transform:uppercase; letter-spacing:.06em;}
+#app{max-width:860px; margin:0 auto; min-height:100vh; display:flex; flex-direction:column;}
+header.top{position:sticky; top:0; z-index:20; background:#0d0d0d; border-bottom:3px solid var(--orange);
+  padding:10px 14px; display:flex; align-items:center; gap:10px;}
+.logo{display:flex; align-items:center; gap:9px;}
+.logo .mark{width:34px;height:34px;flex:0 0 34px;}
+.logo .name{font-size:20px; color:#fff;}
+.logo .name em{font-style:normal; color:var(--orange);}
+.hazard{height:8px; background:repeating-linear-gradient(-45deg,var(--orange) 0 14px,#141414 14px 28px);}
+main{flex:1; padding:14px 14px 96px;}
+.disclaimer{background:#2a1a05; border:1px solid var(--orange-d); color:#ffd9ae; border-radius:var(--radius);
+  padding:10px 12px; font-size:13px; margin-bottom:14px;}
+.disclaimer strong{color:var(--orange);}
+/* cards */
+.card{background:var(--bg2); border:1px solid var(--line); border-radius:var(--radius); padding:14px; margin-bottom:12px;}
+.card h3{margin:0 0 8px; font-size:15px;}
+.row{display:flex; gap:10px; align-items:center;}
+.grow{flex:1;}
+.muted{color:var(--muted);} .dim{color:var(--dim);} .small{font-size:13px;}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+/* buttons */
+.btn{display:inline-flex; align-items:center; gap:8px; justify-content:center;
+  background:var(--orange); color:#141414; border:none; border-radius:9px; padding:13px 18px;
+  font-weight:800; text-transform:uppercase; letter-spacing:.05em; font-size:15px;}
+.btn:active{transform:scale(.98);}
+.btn.ghost{background:transparent; color:var(--orange); border:2px solid var(--orange);}
+.btn.dark{background:var(--bg3); color:var(--ink); border:1px solid var(--line);}
+.btn.danger{background:transparent; color:var(--red); border:1px solid var(--red);}
+.btn.block{width:100%;}
+.btn.sm{padding:9px 12px; font-size:13px;}
+svg.ic{width:18px; height:18px; flex:0 0 18px;}
+/* project list */
+.proj{background:var(--bg2); border:1px solid var(--line); border-radius:var(--radius); padding:14px; margin-bottom:12px;}
+.proj .t{font-size:18px; font-weight:800; margin:0 0 2px;}
+.proj .a{color:var(--muted); font-size:14px; margin-bottom:10px;}
+.meter{height:10px; background:#0e0e0e; border-radius:6px; overflow:hidden; border:1px solid var(--line);}
+.meter > i{display:block; height:100%; background:linear-gradient(90deg,var(--orange-d),var(--orange)); transition:width .5s;}
+.meter.green > i{background:linear-gradient(90deg,#1e9e54,var(--green));}
+.meter.red > i{background:linear-gradient(90deg,#a11,var(--red));}
+.pill{display:inline-block; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
+  padding:4px 10px; border-radius:20px; border:1px solid var(--line); color:var(--muted);}
+.pill.active{color:var(--amber); border-color:var(--amber);}
+.pill.clear{color:var(--blue); border-color:var(--blue);}
+.pill.closed{color:var(--green); border-color:var(--green);}
+.alert{background:#2b0d0d; border:1px solid var(--red); color:#ffc9c9; border-radius:var(--radius); padding:10px 12px; margin-bottom:12px; font-size:14px;}
+.alert b{color:var(--red);}
+/* tabs */
+.tabs{position:sticky; top:57px; z-index:15; background:#0d0d0d; margin:0 -14px; padding:8px 14px;
+  display:flex; gap:8px; overflow-x:auto; border-bottom:1px solid var(--line); scrollbar-width:none;}
+.tabs::-webkit-scrollbar{display:none;}
+.tab{flex:0 0 auto; background:var(--bg3); color:var(--muted); border:1px solid var(--line);
+  border-radius:20px; padding:9px 14px; font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;}
+.tab.on{background:var(--orange); border-color:var(--orange); color:#141414;}
+/* fab */
+.fab{position:fixed; right:18px; bottom:24px; width:62px; height:62px; border-radius:50%;
+  background:var(--orange); color:#141414; border:none; font-size:34px; line-height:1;
+  box-shadow:0 6px 24px rgba(255,106,0,.4); z-index:30; display:flex; align-items:center; justify-content:center;}
+/* sheet (modal form) */
+.sheet-wrap{position:fixed; inset:0; background:rgba(0,0,0,.72); z-index:40; display:none; align-items:flex-end; justify-content:center;}
+.sheet-wrap.open{display:flex;}
+.sheet{background:var(--bg2); width:100%; max-width:860px; max-height:92vh; overflow-y:auto;
+  border-radius:16px 16px 0 0; border-top:3px solid var(--orange); padding:18px 16px 40px;}
+.sheet h2{margin:0 0 4px; font-size:19px;}
+.checks{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;}
+.check{display:flex; gap:8px; align-items:center; background:#101010; border:1px solid var(--line);
+  border-radius:8px; padding:10px; font-size:14px;}
+.check input{width:auto; margin:0;}
+.kv{display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); font-size:14px;}
+.kv:last-child{border-bottom:none;}
+.kv .k{color:var(--muted);}
+.badge{font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; padding:4px 10px; border-radius:6px;}
+.badge.pass{background:#0e2b1a; color:var(--green); border:1px solid var(--green);}
+.badge.fail{background:#2b0d0d; color:var(--red); border:1px solid var(--red);}
+.badge.pend{background:#2a1e05; color:var(--amber); border:1px solid var(--amber);}
+.badge.info{background:#0d1c2b; color:var(--blue); border:1px solid var(--blue);}
+/* timeline */
+.tl{position:relative; margin:8px 0 0 6px; padding-left:22px; border-left:2px solid var(--line);}
+.tl .ev{position:relative; padding:0 0 16px;}
+.tl .ev::before{content:""; position:absolute; left:-29px; top:2px; width:12px; height:12px; border-radius:50%;
+  background:var(--bg); border:2px solid var(--orange);}
+.tl .ev.warn::before{border-color:var(--red);}
+.tl .ev.good::before{border-color:var(--green);}
+.tl .when{font-size:12px; color:var(--dim); text-transform:uppercase; letter-spacing:.06em;}
+.tl .what{font-size:15px; margin-top:2px;}
+/* ring */
+.ringwrap{display:flex; align-items:center; gap:14px;}
+.ring{transform:rotate(-90deg);}
+.ring .bg{stroke:#2c2c2c;}
+.ring .fg{stroke:var(--orange); transition:stroke-dashoffset .6s;}
+.ringtxt{font-size:26px; font-weight:800;}
+/* photos */
+.photogrid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
+.photo{position:relative; border-radius:8px; overflow:hidden; border:1px solid var(--line); aspect-ratio:1; background:#0e0e0e;}
+.photo img{width:100%; height:100%; object-fit:cover; display:block;}
+.photo .cap{position:absolute; left:0; right:0; bottom:0; font-size:10px; padding:4px 6px;
+  background:rgba(0,0,0,.75); color:#fff;}
+.photo .ts{position:absolute; top:4px; left:4px; font-size:10px; background:rgba(0,0,0,.75);
+  color:var(--orange); padding:2px 6px; border-radius:4px; font-family:ui-monospace,monospace;}
+.empty{border:2px dashed var(--line); border-radius:var(--radius); padding:26px 16px; text-align:center; color:var(--dim); font-size:14px;}
+.print-only{display:none;}
+footer.app{padding:18px 14px 110px; color:var(--dim); font-size:12px; text-align:center; border-top:1px solid var(--line);}
+.toast{position:fixed; bottom:100px; left:50%; transform:translateX(-50%) translateY(16px); background:#262626;
+  border:1px solid var(--orange); color:var(--ink); padding:12px 18px; border-radius:10px; font-size:14px;
+  font-weight:600; z-index:70; opacity:0; transition:opacity .25s, transform .25s; max-width:92vw;
+  text-align:center; pointer-events:none;}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+.coach{position:fixed; left:12px; right:12px; bottom:96px; z-index:65; background:#1d1d1d;
+  border:2px solid var(--orange); border-radius:14px; padding:16px; box-shadow:0 10px 40px rgba(0,0,0,.6);}
+.coach h3{margin:0 0 6px; font-size:16px; color:var(--orange);}
+.coach p{margin:0 0 12px; font-size:14px; color:var(--muted);}
+.coach .dots{display:flex; gap:6px; margin-bottom:12px;}
+.coach .dots i{width:8px; height:8px; border-radius:50%; background:#3a3a3a;}
+.coach .dots i.on{background:var(--orange);}
+.verdict{display:inline-block; font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:.06em;
+  padding:6px 14px; border-radius:8px; margin-top:8px;}
+.verdict.ready{background:#0e2b1a; color:var(--green); border:1px solid var(--green);}
+.verdict.soon{background:#2a1e05; color:var(--amber); border:1px solid var(--amber);}
+.verdict.early{background:#2b0d0d; color:var(--red); border:1px solid var(--red);}
+.misslist{margin:10px 0 0; padding:0; list-style:none;}
+.misslist li{font-size:14px; color:var(--muted); padding:7px 0 7px 28px; position:relative; border-bottom:1px solid var(--line);}
+.misslist li:last-child{border-bottom:none;}
+.misslist li::before{content:""; position:absolute; left:4px; top:11px; width:14px; height:14px; border-radius:4px;
+  border:2px solid var(--amber);}
+.countdown{font-weight:800;}
+.countdown.over{color:var(--red);}
+.countdown.soon{color:var(--amber);}
+@media print{
+  header.top,.tabs,.fab,.sheet-wrap,.disclaimer,.btn,footer.app,.no-print,#dashSearch{display:none !important;}
+  .print-only{display:block !important;}
+  body{background:#fff; color:#000; font-size:12px;}
+  #app{max-width:100%;}
+  main{padding:0;}
+  .card,.proj{background:#fff; border:1px solid #999; color:#000; break-inside:avoid;}
+  .muted,.dim,.kv .k{color:#444;}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <button id="backBtn" class="btn dark sm no-print" style="display:none" aria-label="Back">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <div class="logo">
+      <svg class="mark" viewBox="0 0 40 40" aria-hidden="true">
+        <rect x="2" y="2" width="36" height="36" rx="6" fill="#ff6a00"/>
+        <path d="M10 27 L20 10 L30 27 Z" fill="none" stroke="#141414" stroke-width="3.4" stroke-linejoin="round"/>
+        <line x1="15" y1="22" x2="25" y2="22" stroke="#141414" stroke-width="3.4"/>
+      </svg>
+      <div class="name stencil">AB<em>A</em>TE</div>
+    </div>
+    <div class="grow"></div>
+    <div id="headRight" class="small muted"></div>
+  </header>
+  <div class="hazard"></div>
+  <main id="main"></main>
+  <footer class="app">
+    <div class="stencil" style="color:var(--orange); font-size:13px; margin-bottom:6px;">Retain exposure &amp; medical records 30 years — OSHA 29 CFR 1926.1101</div>
+    <div>ABATE prototype. Not legal or compliance advice. Verify all requirements with your accredited program.</div>
+  </footer>
+</div>
+<button class="fab" id="fab" aria-label="Add">+</button>
+<div class="sheet-wrap" id="sheetWrap"><div class="sheet" id="sheet"></div></div>
+<script>
+"use strict";
+/* ============ utils ============ */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const todayISO=()=>new Date().toISOString().slice(0,10);
+const fmtD=iso=>{ if(!iso) return "—"; const d=new Date(iso+"T12:00:00"); return d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}); };
+const fmtDT=ts=>new Date(ts).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+const daysBetween=(a,b)=>Math.round((new Date(b+"T12:00:00")-new Date(a+"T12:00:00"))/864e5);
+const store={
+  load(){ try{ return JSON.parse(localStorage.getItem("abate.v1"))||null; }catch(e){ return null; } },
+  save(d){ localStorage.setItem("abate.v1", JSON.stringify(d)); }
+};
+</script>
+<script>
+"use strict";
+/* ============ seed data ============ */
+function seedPhoto(label, hue){
+  const c=document.createElement("canvas"); c.width=320; c.height=320;
+  const x=c.getContext("2d");
+  const g=x.createLinearGradient(0,0,320,320); g.addColorStop(0,"hsl("+hue+",30%,22%)"); g.addColorStop(1,"hsl("+hue+",25%,10%)");
+  x.fillStyle=g; x.fillRect(0,0,320,320);
+  x.strokeStyle="rgba(255,106,0,.55)"; x.lineWidth=3;
+  for(let i=0;i<5;i++){ x.strokeRect(24+i*14,24+i*14,272-i*28,272-i*28); }
+  x.fillStyle="#ff6a00"; x.font="bold 26px Arial"; x.textAlign="center";
+  x.fillText(label,160,160);
+  x.fillStyle="rgba(255,255,255,.65)"; x.font="15px Arial";
+  x.fillText("SAMPLE PLACEHOLDER",160,190);
+  return c.toDataURL("image/jpeg",0.7);
+}
+function seed(){
+  const t=Date.now();
+  const demo={
+    id:"demo1", name:"Jefferson Elementary — Gym Ceiling Tile Removal",
+    address:"4120 W Jefferson St, Phoenix, AZ 85009", owner:"Roosevelt School District",
+    ownerPhone:"(602) 555-0148", contractNo:"RSD-2026-118",
+    neshapNotified:true, neshapDate:"2026-09-28",
+    competentPerson:"Marcus Webb", competentLicense:"AZ-ABT-4471",
+    startDate:"2026-10-01", estEndDate:"2026-10-12", status:"active",
+    dailyLogs:[
+      {id:uid(), date:"2026-10-01", crew:[{name:"Marcus Webb",cred:"AZ-ABT-4471 (supervisor)"},{name:"D. Okafor",cred:"AZ-ABT-5120"},{name:"R. Sandoval",cred:"AZ-ABT-5332"}],
+       start:"06:30", end:"15:00", activities:["Containment setup","Negative-air units placed"],
+       negAir:"-0.024", notes:"Poly sheeting 6-mil, double flap decon. Two HEPA neg-air units running.", createdAt:t-6*864e5},
+      {id:uid(), date:"2026-10-02", crew:[{name:"Marcus Webb",cred:"AZ-ABT-4471 (supervisor)"},{name:"D. Okafor",cred:"AZ-ABT-5120"}],
+       start:"06:30", end:"14:30", activities:["Tile removal","Wet methods","Bagging"],
+       negAir:"-0.031", notes:"Approx 900 sq ft 2x4 ceiling tile removed. All waste double-bagged in 6-mil, labeled.", createdAt:t-5*864e5},
+      {id:uid(), date:"2026-10-05", crew:[{name:"Marcus Webb",cred:"AZ-ABT-4471 (supervisor)"},{name:"R. Sandoval",cred:"AZ-ABT-5332"}],
+       start:"07:00", end:"15:30", activities:["Mastic removal","HEPA vacuuming"],
+       negAir:"-0.028", notes:"Chemical mastic remover applied per spec. Final HEPA pass on deck.", createdAt:t-2*864e5}
+    ],
+    airSamples:[
+      {id:uid(), date:"2026-10-02", location:"Inside containment — gym center", type:"area",
+       result:0.042, basis:"8hr", pump:"SKC-03", pass:true, createdAt:t-5*864e5},
+      {id:uid(), date:"2026-10-02", location:"D. Okafor breathing zone", type:"personal",
+       result:0.018, basis:"8hr", pump:"SKC-07", pass:true, createdAt:t-5*864e5},
+      {id:uid(), date:"2026-10-05", location:"Decon unit entrance", type:"area",
+       result:0.006, basis:"8hr", pump:"SKC-03", pass:true, createdAt:t-2*864e5}
+    ],
+    manifests:[
+      {id:uid(), manifestNo:"AZ-2026-88412", transporter:"Desert Haul Environmental", transporterPhone:"(480) 555-2290",
+       disposalSite:"Salt River Secure Landfill", disposalPhone:"(602) 555-7710",
+       qtyYd3:"14", dateShipped:"2026-10-03", signedCopyReceived:true, signedDate:"2026-10-05", certSigned:true, createdAt:t-4*864e5},
+      {id:uid(), manifestNo:"AZ-2026-88457", transporter:"Desert Haul Environmental", transporterPhone:"(480) 555-2290",
+       disposalSite:"Salt River Secure Landfill", disposalPhone:"(602) 555-7710",
+       qtyYd3:"9", dateShipped:"2026-10-06", signedCopyReceived:false, signedDate:"", certSigned:true, createdAt:t-864e5}
+    ],
+    photos:(()=>{ const sp=(l,h)=>{ const u=seedPhoto(l,h); return {id:uid(),dataUrl:u,thumb:u}; };
+      return [
+      Object.assign(sp("CONTAINMENT",28),{caption:"Containment entry — double flap", category:"Containment", takenAt:new Date("2026-10-01T08:12:00").getTime()}),
+      Object.assign(sp("NEG AIR",210),{caption:"Neg-air unit gauge -0.024 in w.g.", category:"Containment", takenAt:new Date("2026-10-01T08:15:00").getTime()}),
+      Object.assign(sp("REMOVAL",120),{caption:"Tile removal in progress, wet methods", category:"Removal", takenAt:new Date("2026-10-02T10:40:00").getTime()}),
+      Object.assign(sp("WASTE",0),{caption:"Double-bagged labeled waste staged", category:"Waste", takenAt:new Date("2026-10-02T14:05:00").getTime()})
+      ]; })(),
+    clearance:{ visual:false, visualBy:"", visualDate:"",
+      airClear:false, airClearBy:"", airClearDate:"",
+      wasteShipped:true, manifestsBack:false, neshapFiled:true, areaReleased:false }
+  };
+  return { projects:[demo], archived:[] };
+}
+/* ============ state ============ */
+let DB = store.load() || seed();
+let view = { name:"dash", projectId:null, tab:"overview" };
+function persist(){ store.save(DB); try{ if(window.__abateSync) window.__abateSync.onSave(); }catch(e){} }
+
+/* Sync bridge (sync.js). Local-first: app works fully offline; sync is debounced and never blocks UI. */
+window.__abate = {
+  getS(){ return DB; },
+  getView(){ try{ return view.name; }catch(e){ return ""; } },
+  saveLocal(){ store.save(DB); },
+  refresh(){ render(); }
+};
+function proj(){ return DB.projects.find(p=>p.id===view.projectId); }
+function save(){ persist(); render(); }
+
+/* ============ dossier completeness ============ */
+function completeness(p){
+  const parts=[];
+  const setup = (p.neshapNotified?0.5:0) + (p.competentPerson?0.5:0);
+  parts.push({label:"Regulatory setup (NESHAP notice + competent person)", pct:setup*15, max:15});
+  parts.push({label:"Daily logs ("+p.dailyLogs.length+")", pct:Math.min(p.dailyLogs.length,3)/3*10, max:10});
+  const hasArea=p.airSamples.some(s=>s.type!=="clearance"), hasClear=p.airSamples.some(s=>s.type==="clearance");
+  parts.push({label:"Air monitoring (work-area + clearance samples)", pct:((hasArea?0.6:0)+(hasClear?0.4:0))*15, max:15});
+  const m=p.manifests, allSigned=m.length>0&&m.every(x=>x.signedCopyReceived);
+  parts.push({label:"Waste manifests ("+m.length+", "+(allSigned?"all signed":"awaiting signatures")+")",
+    pct:(m.length?0.5:0)*20 + (allSigned?0.5:0)*20, max:20});
+  parts.push({label:"Photo documentation ("+p.photos.length+")", pct:Math.min(p.photos.length,6)/6*10, max:10});
+  const cl=p.clearance, keys=["visual","airClear","wasteShipped","manifestsBack","neshapFiled","areaReleased"];
+  const done=keys.filter(k=>cl[k]).length;
+  parts.push({label:"Clearance certificate ("+done+"/6)", pct:done/6*30, max:30});
+  const total=Math.round(parts.reduce((a,x)=>a+x.pct,0));
+  return {parts, total};
+}
+function missingItems(p){
+  const out=[];
+  if(!p.neshapNotified) out.push("File the NESHAP notification (Regulatory setup tab)");
+  if(!p.competentPerson) out.push("Name the OSHA competent person for this job");
+  if(p.dailyLogs.length<3) out.push("Log "+(3-p.dailyLogs.length)+" more daily shift"+(3-p.dailyLogs.length===1?"":"s")+" (Daily Log tab)");
+  if(!p.airSamples.some(s=>s.type!=="clearance")) out.push("Log at least one work-area or personal air sample");
+  if(!p.airSamples.some(s=>s.type==="clearance")) out.push("Log the aggressive clearance sample (≤ 0.01 f/cc)");
+  const pend=p.manifests.filter(m=>!m.signedCopyReceived);
+  if(!p.manifests.length) out.push("Record each waste shipment as it leaves the site");
+  else if(pend.length) out.push("Chase "+pend.length+" signed manifest cop"+(pend.length===1?"y":"ies")+" back from the disposal site");
+  if(p.photos.length<6) out.push("Add "+(6-p.photos.length)+" more timestamped site photos");
+  const cl=p.clearance, keys=[["visual","Visual inspection sign-off"],["airClear","Clearance air sampling sign-off"],["wasteShipped","Waste shipped sign-off"],["manifestsBack","Manifests-back sign-off"],["neshapFiled","Notifications filed sign-off"],["areaReleased","Area released sign-off"]];
+  keys.forEach(k=>{ if(!cl[k[0]]) out.push(k[1]+" (Clearance tab)"); });
+  return out;
+}
+function dossierVerdict(total){
+  if(total>=95) return '<span class="verdict ready">Audit-ready</span>';
+  if(total>=70) return '<span class="verdict soon">Nearly there</span>';
+  return '<span class="verdict early">In progress</span>';
+}
+function overdueManifests(p){
+  const t=todayISO();
+  return p.manifests.filter(m=>!m.signedCopyReceived && daysBetween(m.dateShipped,t)>35);
+}
+function manifestCountdown(m){
+  const t=todayISO(), left=35-daysBetween(m.dateShipped,t);
+  if(m.signedCopyReceived) return {cls:"", txt:"Signed copy received "+fmtD(m.signedDate)};
+  if(left<0) return {cls:"over", txt:Math.abs(left)+" days OVERDUE — contact transporter/disposal site (NESHAP 35-day rule)"};
+  if(left<=7) return {cls:"soon", txt:left+" days left to receive signed copy"};
+  return {cls:"", txt:left+" days left to receive signed copy"};
+}
+</script>
+<script>
+"use strict";
+/* ============ icons ============ */
+const IC={
+  plus:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 5v14M5 12h14"/></svg>',
+  doc:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6"/></svg>',
+  alert:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3L2 20h20z"/><path d="M12 10v5M12 17.5v.5"/></svg>',
+  check:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M4 12l6 6L20 6"/></svg>',
+  cam:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="7" width="13" height="11" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>',
+  print:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 8V3h10v5M7 17H4v-7h16v7h-3M7 14h10v7H7z"/></svg>',
+  down:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>',
+  trash:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14"/></svg>'
+};
+/* ============ views ============ */
+const TABS=[["overview","Overview"],["daily","Daily Log"],["air","Air"],["waste","Waste"],["photos","Photos"],["clearance","Clearance"],["dossier","Dossier"]];
+function ring(pct,size){
+  const r=(size||64)/2-7, c=2*Math.PI*r, off=c*(1-pct/100);
+  const col=pct>=90?"var(--green)":pct>=50?"var(--orange)":"var(--red)";
+  return '<svg class="ring" width="'+(size||64)+'" height="'+(size||64)+'">'+
+    '<circle class="bg" cx="'+(size||64)/2+'" cy="'+(size||64)/2+'" r="'+r+'" fill="none" stroke-width="7"/>'+
+    '<circle class="fg" cx="'+(size||64)/2+'" cy="'+(size||64)/2+'" r="'+r+'" fill="none" stroke="'+col+'" stroke-width="7"'+
+    ' stroke-linecap="round" stroke-dasharray="'+c.toFixed(1)+'" stroke-dashoffset="'+off.toFixed(1)+'"/></svg>';
+}
+function render(){
+  const main=$("#main"), fab=$("#fab"), back=$("#backBtn");
+  if(view.name==="dash"){ back.style.display="none"; fab.style.display="flex"; $("#headRight").textContent=DB.projects.length+" projects"; renderDash(main); }
+  else{ back.style.display="inline-flex"; fab.style.display="flex"; const p=proj(); $("#headRight").textContent=p?completeness(p).total+"% dossier":""; renderProject(main,p); }
+  window.scrollTo(0,0);
+}
+function renderDash(main){
+  let alerts="";
+  DB.projects.forEach(p=>{
+    const od=overdueManifests(p);
+    if(od.length) alerts+='<div class="alert"><b>'+od.length+' overdue manifest'+(od.length>1?"s":"")+'</b> — '+esc(p.name)+': signed copies past the 35-day NESHAP window.</div>';
+  });
+  main.innerHTML=
+    '<div class="disclaimer"><strong>Prototype.</strong> Abate helps assemble abatement records. It is not legal or compliance advice. Confirm every requirement with your accredited AHERA / OSHA program.</div>'+
+    alerts+
+    '<h2 class="stencil" style="font-size:15px; color:var(--muted); margin:4px 0 12px;">Active dossiers</h2>'+
+    '<input id="dashSearch" placeholder="Search projects or addresses…" value="'+esc(view.q||"")+'" style="margin-bottom:12px" autocomplete="off">'+
+    '<div id="projList"></div>'+
+    '<div class="card" style="margin-top:16px"><h3 class="stencil" style="color:var(--orange)">Why this exists</h3>'+
+    '<div class="small muted">Asbestos jobs live or die on paper. OSHA keeps your air-monitoring and medical records for <b>30 years</b>. NESHAP wants every waste shipment tracked with a signed copy back inside <b>35 days</b>. One missing manifest can stall a property sale or trigger an audit. Abate assembles the whole file as the work happens — so the dossier is never the thing you scramble to rebuild.</div></div>';
+  const paint=()=>{
+    const q=(view.q||"").toLowerCase();
+    const list=DB.projects.filter(p=>(p.name+" "+(p.address||"")).toLowerCase().includes(q));
+    $("#projList").innerHTML=list.map(p=>{
+      const c=completeness(p);
+      const st=p.status==="closed"?'<span class="pill closed">Closed</span>':p.status==="clearance"?'<span class="pill clear">Clearance</span>':'<span class="pill active">Active</span>';
+      return '<div class="proj" data-open="'+p.id+'">'+
+        '<div class="row"><div class="grow"><p class="t">'+esc(p.name)+'</p><div class="a">'+esc(p.address)+'</div></div>'+st+'</div>'+
+        '<div class="row" style="margin-top:6px"><div class="meter grow '+(c.total>=90?"green":c.total<40?"red":"")+'"><i style="width:'+c.total+'%"></i></div>'+
+        '<div class="small mono" style="min-width:44px; text-align:right">'+c.total+'%</div></div>'+
+        '<div class="small dim" style="margin-top:6px">Dossier completeness · '+p.dailyLogs.length+' daily logs · '+p.airSamples.length+' air samples · '+p.manifests.length+' manifests</div>'+
+      '</div>';
+    }).join("")||'<div class="empty">No projects match.</div>';
+    main.querySelectorAll("[data-open]").forEach(el=>el.onclick=()=>{ view={name:"project",projectId:el.dataset.open,tab:"overview"}; save(); });
+  };
+  paint();
+  $("#dashSearch").oninput=e=>{ view.q=e.target.value; paint(); };
+  try{ if(window.__abateSyncUI) window.__abateSyncUI(); }catch(e){}
+}
+function renderProject(main,p){
+  if(!p){ view={name:"dash"}; save(); return; }
+  const c=completeness(p);
+  const tabs=TABS.map(t=>'<button class="tab'+(view.tab===t[0]?" on":"")+'" data-tab="'+t[0]+'">'+t[1]+'</button>').join("");
+  let body="";
+  if(view.tab==="overview") body=vOverview(p,c);
+  else if(view.tab==="daily") body=vDaily(p);
+  else if(view.tab==="air") body=vAir(p);
+  else if(view.tab==="waste") body=vWaste(p);
+  else if(view.tab==="photos") body=vPhotos(p);
+  else if(view.tab==="clearance") body=vClearance(p);
+  else body=vDossier(p,c);
+  main.innerHTML='<div class="card"><div class="row"><div class="grow"><h3 class="stencil" style="font-size:17px">'+esc(p.name)+'</h3>'+
+    '<div class="small muted">'+esc(p.address)+'</div></div><div class="ringwrap">'+ring(c.total,64)+
+    '<div><div class="ringtxt">'+c.total+'<span class="small">%</span></div><div class="small dim">dossier</div></div></div></div></div>'+
+    '<div class="tabs">'+tabs+'</div><div style="height:12px"></div>'+body;
+  main.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{ view.tab=b.dataset.tab; save(); });
+  bindActions(main,p);
+  const rn=document.getElementById("ringNum");
+  if(rn){ const target=c.total; let n=0; const step=Math.max(1,Math.round(target/30));
+    const tick=()=>{ n=Math.min(target,n+step); rn.textContent=n; if(n<target) requestAnimationFrame(tick); };
+    requestAnimationFrame(tick); }
+  maybeCoach(p);
+}
+const COACH_STEPS=[
+  ["Your dossier score","This ring is the whole product. Every log, sample, manifest, and photo moves it. Auditors read the file this ring represents."],
+  ["Log from the field","Daily Log, Air, Waste, Photos: each tab is one clipboard the crew already fills out. The foreman can do a shift log in under a minute."],
+  ["Close with clearance","The Clearance tab is the legal finish line. Nothing closes until every sign-off is named and dated."]
+];
+function maybeCoach(p){
+  if(!p || localStorage.getItem("abate.coach1")) return;
+  let i=0;
+  const paint=()=>{
+    let el=document.getElementById("coach");
+    if(!el){ el=document.createElement("div"); el.id="coach"; el.className="coach"; document.body.appendChild(el); }
+    el.innerHTML='<div class="dots">'+COACH_STEPS.map((_,k)=>'<i class="'+(k===i?"on":"")+'"></i>').join("")+'</div>'+
+      '<h3>'+esc(COACH_STEPS[i][0])+'</h3><p>'+esc(COACH_STEPS[i][1])+'</p>'+
+      '<div class="row"><button class="btn grow" id="coachNext">'+(i<COACH_STEPS.length-1?"Next":"Got it")+'</button>'+
+      '<button class="btn dark" id="coachSkip">Skip</button></div>';
+    document.getElementById("coachNext").onclick=()=>{ i++; if(i>=COACH_STEPS.length){ done(); } else paint(); };
+    document.getElementById("coachSkip").onclick=done;
+  };
+  const done=()=>{ const el=document.getElementById("coach"); if(el) el.remove(); localStorage.setItem("abate.coach1","1"); };
+  setTimeout(paint,600);
+}
+function vOverview(p,c){
+  const od=overdueManifests(p);
+  return (od.length?'<div class="alert"><b>'+od.length+' manifest'+(od.length>1?"s":"")+' overdue</b> — signed copies not received within 35 days of shipment. Contact the transporter and disposal site now.</div>':"")+
+  '<div class="card"><h3 class="stencil" style="color:var(--orange)">Regulatory setup</h3>'+
+    kv("Building owner",esc(p.owner||"—"))+kv("Owner phone",esc(p.ownerPhone||"—"))+kv("Contract #",esc(p.contractNo||"—"))+
+    kv("NESHAP notified",p.neshapNotified?("Yes — "+fmtD(p.neshapDate)):'<span style="color:var(--red)">Not recorded</span>')+
+    kv("Competent person",p.competentPerson?esc(p.competentPerson)+(p.competentLicense?" · "+esc(p.competentLicense):""):'<span style="color:var(--red)">Not recorded</span>')+
+    kv("Work window",fmtD(p.startDate)+" → "+fmtD(p.estEndDate))+
+    '<div style="margin-top:12px"><button class="btn dark sm" data-act="edit-project">Edit project details</button></div></div>'+
+  '<div class="card"><h3 class="stencil" style="color:var(--orange)">Dossier completeness</h3>'+
+    c.parts.map(x=>'<div style="margin-bottom:10px"><div class="row"><div class="grow small">'+esc(x.label)+'</div><div class="small mono">'+Math.round(x.pct)+'/'+x.max+'</div></div>'+
+    '<div class="meter"><i style="width:'+(x.pct/x.max*100)+'%"></i></div></div>').join("")+
+    '<div class="small dim" style="margin-top:8px">The meter only moves when real records exist: logs, lab-grade sample entries, signed manifests, timestamped photos. Nothing here can be faked with a checkbox.</div></div>';
+}
+function kv(k,v){ return '<div class="kv"><div class="k">'+esc(k)+'</div><div style="text-align:right">'+v+'</div></div>'; }
+function vDaily(p){
+  const items=[...p.dailyLogs].sort((a,b)=>b.date.localeCompare(a.date)).map(l=>
+    '<div class="card"><div class="row"><div class="grow"><b>'+fmtD(l.date)+'</b> <span class="dim small">'+esc(l.start||"")+'–'+esc(l.end||"")+'</span></div>'+
+    '<button class="btn dark sm" data-act="edit-log" data-id="'+l.id+'">Edit</button> '+
+    '<button class="btn danger sm" data-act="del-log" data-id="'+l.id+'">Delete</button></div>'+
+    '<div class="small muted" style="margin:6px 0">'+l.crew.map(c=>esc(c.name)+(c.cred?" ("+esc(c.cred)+")":"")).join(" · ")+'</div>'+
+    '<div class="small">'+l.activities.map(a=>'<span class="badge info" style="margin:0 4px 4px 0">'+esc(a)+'</span>').join("")+'</div>'+
+    (l.negAir?'<div class="small" style="margin-top:6px">Neg-air differential: <b class="mono">'+esc(l.negAir)+' in w.g.</b></div>':"")+
+    (l.notes?'<div class="small muted" style="margin-top:6px">'+esc(l.notes)+'</div>':"")+'</div>').join("");
+  return '<h2 class="stencil" style="font-size:15px; color:var(--muted); margin:4px 0 12px;">Daily field logs</h2>'+
+    (items||'<div class="empty">No daily logs yet.<br>Foremen: log each shift from the site.</div>');
+}
+function vAir(p){
+  const ss=[...p.airSamples].sort((a,b)=>a.date.localeCompare(b.date)||a.createdAt-b.createdAt);  let spark="";
+  if(ss.length>=2){
+    const W=340,H=90,pad=8;
+    const maxV=Math.max(0.12,...ss.map(s=>s.result));
+    const xy=(i,v)=>[pad+i*(W-2*pad)/Math.max(ss.length-1,1), H-pad-(v/maxV)*(H-2*pad)];
+    const pts=ss.map((s,i)=>xy(i,s.result).map(n=>n.toFixed(1)).join(",")).join(" ");
+    const limY=H-pad-(0.1/maxV)*(H-2*pad);
+    spark='<div class="card"><h3 class="stencil" style="color:var(--orange)">Exposure trend</h3>'+
+      '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%; display:block">'+
+      '<line x1="'+pad+'" y1="'+limY.toFixed(1)+'" x2="'+(W-pad)+'" y2="'+limY.toFixed(1)+'" stroke="var(--red)" stroke-width="1.5" stroke-dasharray="5,4"/>'+
+      '<text x="'+(W-pad)+'" y="'+(limY-4).toFixed(1)+'" fill="var(--red)" font-size="10" text-anchor="end">PEL 0.1 f/cc</text>'+
+      '<polyline points="'+pts+'" fill="none" stroke="var(--orange)" stroke-width="2.5"/>'+
+      ss.map((s,i)=>{ const q=xy(i,s.result); return '<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="4" fill="'+(s.pass?"var(--green)":"var(--red)")+'"><title>'+esc(s.location)+': '+s.result+' f/cc</title></circle>'; }).join("")+
+      '</svg><div class="small dim">Fiber concentration over time. Dashed line is the OSHA PEL. Green dots pass, red exceed.</div></div>';
+  }
+  const items=[...p.airSamples].sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt-a.createdAt).map(s=>
+    '<div class="card"><div class="row"><div class="grow"><b>'+fmtD(s.date)+'</b><div class="small muted">'+esc(s.location)+'</div></div>'+
+    (s.pass?'<span class="badge pass">Pass</span>':'<span class="badge fail">Exceeds</span>')+'</div>'+
+    '<div class="kv"><div class="k">Result</div><div><b class="mono" style="font-size:18px">'+s.result+' f/cc</b></div></div>'+
+    kv("Sample type",s.type==="personal"?"Personal (breathing zone)":s.type==="clearance"?"Clearance":"Work-area")+
+    kv("Basis",(s.basis==="8hr"?"8-hr TWA (PEL 0.1 f/cc)":s.basis==="exc"?"30-min excursion (1.0 f/cc)":"Clearance (0.01 f/cc)"))+
+    kv("Pump",esc(s.pump||"—"))+
+    '<div class="row" style="margin-top:8px"><button class="btn dark sm" data-act="edit-air" data-id="'+s.id+'">Edit</button>'+
+    '<button class="btn danger sm" data-act="del-air" data-id="'+s.id+'">Delete</button></div></div>').join("");
+  return '<div class="disclaimer"><strong>Limits encoded:</strong> OSHA PEL 0.1 f/cc (8-hr TWA) · excursion 1.0 f/cc (30-min) · AHERA-style clearance 0.01 f/cc. Pass/fail is computed automatically — it cannot be overridden by hand.</div>'+
+    '<h2 class="stencil" style="font-size:15px; color:var(--muted); margin:4px 0 12px;">Air monitoring log</h2>'+spark+
+    (items||'<div class="empty">No air samples logged yet.</div>');
+}
+function vWaste(p){
+  const items=p.manifests.map(m=>{ const cd=manifestCountdown(m);
+    return '<div class="card"><div class="row"><div class="grow"><b class="mono">'+esc(m.manifestNo)+'</b>'+
+    '<div class="small muted">'+esc(m.qtyYd3)+' yd³ · shipped '+fmtD(m.dateShipped)+'</div></div>'+
+    (m.signedCopyReceived?'<span class="badge pass">Signed</span>':'<span class="badge pend">Pending</span>')+'</div>'+
+    kv("Transporter",esc(m.transporter)+(m.transporterPhone?'<br><span class="dim">'+esc(m.transporterPhone)+'</span>':""))+
+    kv("Disposal site",esc(m.disposalSite)+(m.disposalPhone?'<br><span class="dim">'+esc(m.disposalPhone)+'</span>':""))+
+    '<div class="small" style="margin:8px 0"><span class="countdown '+cd.cls+'">'+esc(cd.txt)+'</span></div>'+
+    '<div class="row"><button class="btn dark sm" data-act="edit-manifest" data-id="'+m.id+'">Edit</button>'+
+    '<button class="btn ghost sm" data-act="sign-manifest" data-id="'+m.id+'">'+(m.signedCopyReceived?"Update signed copy":"Mark signed copy received")+'</button>'+
+    '<button class="btn danger sm" data-act="del-manifest" data-id="'+m.id+'">Delete</button></div></div>'; }).join("");
+  return '<div class="disclaimer"><strong>NESHAP 35-day rule:</strong> if the signed waste-shipment copy is not back from the disposal site within 35 days of shipment, you must contact the transporter and disposal site. Abate counts it down for you.</div>'+
+    '<h2 class="stencil" style="font-size:15px; color:var(--muted); margin:4px 0 12px;">Waste shipment records</h2>'+
+    (items||'<div class="empty">No manifests yet.<br>Add each waste shipment as it leaves the site.</div>');
+}
+function vPhotos(p){
+  const cats=["All","Containment","Removal","Waste","Decon","Clearance","Other"];
+  const f=view.photoCat||"All";
+  const list=p.photos.filter(x=>f==="All"||x.category===f).sort((a,b)=>b.takenAt-a.takenAt);
+  const chips=cats.map(c=>'<button class="tab'+(f===c?" on":"")+'" data-pcat="'+c+'">'+c+'</button>').join("");
+  const grid=list.map(x=>'<div class="photo" data-photo="'+x.id+'"><img src="'+x.dataUrl+'" alt="'+esc(x.caption||"site photo")+'" loading="lazy">'+
+    '<div class="ts">'+fmtDT(x.takenAt)+'</div><div class="cap">'+esc(x.caption||x.category)+'</div></div>').join("");
+  return '<h2 class="stencil" style="font-size:15px; color:var(--muted); margin:4px 0 12px;">Photo documentation</h2>'+
+    '<div class="small dim" style="margin-bottom:8px">Every photo is timestamped at capture and locked to the dossier. Courts and insurers trust timestamps; captions are free.</div>'+
+    '<div class="tabs" style="position:static; margin:0 0 10px; padding:0; border:none; background:none">'+chips+'</div>'+
+    (grid?'<div class="photogrid">'+grid+'</div>':'<div class="empty">No photos in this category yet.<br>Tap + to add timestamped site photos.</div>');
+}
+function vClearance(p){
+  const cl=p.clearance;
+  const item=(key,label,sub)=>'<div class="card"><label class="check" style="margin:0; font-size:15px; text-transform:none; letter-spacing:0; color:var(--ink)">'+
+    '<input type="checkbox" data-clear="'+key+'" '+(cl[key]?"checked":"")+' style="width:22px;height:22px"> <span><b>'+label+'</b><br><span class="small muted">'+sub+'</span></span></label>'+
+    (cl[key]&&cl[key+"By"]?'<div class="small dim" style="margin-top:6px">Signed: '+esc(cl[key+"By"])+' · '+fmtD(cl[key+"Date"])+'</div>':"")+'</div>';
+  return '<h2 class="stencil" style="font-size:15px; color:var(--muted); margin:4px 0 12px;">Clearance certificate checklist</h2>'+
+    '<div class="small dim" style="margin-bottom:10px">The job cannot legally close until every item is evidenced. Each sign-off is stamped with who and when.</div>'+
+    item("visual","Visual inspection passed","No visible residue, dust, or debris in the work area — competent person walkthrough.")+
+    item("airClear","Clearance air sampling passed","Aggressive sampling ≤ 0.01 f/cc. Log the samples under the Air tab.")+
+    item("wasteShipped","All waste shipped off-site","Every load has a manifest number recorded.")+
+    item("manifestsBack","All signed manifests received","35-day NESHAP loop closed on every shipment.")+
+    item("neshapFiled","Notifications filed","EPA / state / local NESHAP notices on record.")+
+    item("areaReleased","Regulated area released","Signs down, barriers removed, area returned to owner.")+
+    '<button class="btn dark block" data-act="close-project" style="margin-top:8px">Mark project closed</button>';
+}
+function vDossier(p,c){
+  const miss=missingItems(p);
+  const ev=[];
+  p.dailyLogs.forEach(l=>ev.push({t:new Date(l.date+"T12:00:00").getTime(), cls:"", when:fmtD(l.date), what:"Daily log — "+l.crew.length+" crew, "+l.activities.slice(0,3).join(", ")}));
+  p.airSamples.forEach(s=>ev.push({t:new Date(s.date+"T12:00:00").getTime()+1, cls:s.pass?"good":"warn", when:fmtD(s.date), what:"Air sample — "+s.location+": "+s.result+" f/cc ("+(s.pass?"PASS":"EXCEEDS")+")"}));
+  p.manifests.forEach(m=>ev.push({t:new Date(m.dateShipped+"T12:00:00").getTime()+2, cls:m.signedCopyReceived?"good":"warn", when:fmtD(m.dateShipped), what:"Waste manifest "+m.manifestNo+" — "+m.qtyYd3+" yd³ → "+m.disposalSite+(m.signedCopyReceived?" (signed copy back)":" (signature PENDING)")}));
+  p.photos.forEach(x=>ev.push({t:x.takenAt, cls:"", when:fmtDT(x.takenAt), what:"Photo — "+(x.caption||x.category)}));
+  ev.sort((a,b)=>a.t-b.t);
+  const retainUntil=new Date(Math.max(...ev.map(e=>e.t),Date.now())+30*365.25*864e5).getFullYear();
+  const printHead='<div class="print-only"><h1 style="font-size:20px;margin:0 0 4px">ABATE — Abatement Compliance Dossier</h1>'+
+    '<div><b>'+esc(p.name)+'</b><br>'+esc(p.address)+'<br>Owner: '+esc(p.owner||"—")+' · Contract '+esc(p.contractNo||"—")+
+    '<br>Generated '+new Date().toLocaleString("en-US")+' · Dossier completeness '+c.total+'%'+
+    '<br>Retain this file until '+retainUntil+' (30-yr OSHA retention, 29 CFR 1926.1101)'+
+    '<br><i>Prototype record — not legal or compliance advice.</i></div><hr></div>';
+  return printHead+'<div class="card" id="dossierHero"><div class="ringwrap">'+ring(c.total,84)+
+    '<div><div class="ringtxt" style="font-size:34px"><span id="ringNum">0</span><span class="small">%</span></div>'+
+    '<div class="small muted">dossier complete</div>'+dossierVerdict(c.total)+
+    '<div class="small dim" style="margin-top:6px">Retain this file until <b style="color:var(--orange)">'+retainUntil+'</b> (30-yr OSHA retention)</div></div></div>'+
+    (miss.length?'<h3 class="stencil" style="color:var(--amber); font-size:14px; margin:14px 0 2px;">To reach 100% — '+miss.length+' item'+(miss.length===1?"":"s")+'</h3><ul class="misslist">'+miss.map(m=>'<li>'+esc(m)+'</li>').join("")+'</ul>'
+      :'<div class="alert" style="background:#0e2b1a; border-color:var(--green); color:#c9f5da; margin:14px 0 0"><b style="color:var(--green)">Dossier sealed.</b> Every required record is present. This file is ready for the auditor, the insurer, or the property buyer.</div>')+
+    '<div class="row" style="margin-top:12px"><button class="btn ghost sm grow" data-act="print">'+IC.print+' Print dossier</button>'+
+    '<button class="btn ghost sm grow" data-act="export">'+IC.down+' Export archive</button></div></div>'+
+    '<h2 class="stencil" style="font-size:15px; color:var(--muted); margin:4px 0 4px;">Assembled timeline</h2>'+
+    '<div class="small dim" style="margin-bottom:8px">Everything logged, in order. This is the file an auditor, insurer, or buyer reads.</div>'+
+    (ev.length?'<div class="tl">'+ev.map(e=>'<div class="ev '+e.cls+'"><div class="when">'+esc(e.when)+'</div><div class="what">'+esc(e.what)+'</div></div>').join("")+'</div>'
+    :'<div class="empty">Nothing logged yet. The timeline assembles itself as the crew works.</div>');
+}
+</script>
+<script>
+"use strict";
+/* ============ forms ============ */
+function openSheet(html){ $("#sheet").innerHTML=html; $("#sheetWrap").classList.add("open"); }
+function closeSheet(){ $("#sheetWrap").classList.remove("open"); }
+let toastT=null;
+function toast(m){ let t=$("#toast"); if(!t){ t=document.createElement("div"); t.id="toast"; t.className="toast"; document.body.appendChild(t); }
+  t.textContent=m; t.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove("show"),2400); }
+function openConfirm(title,body,okLabel,danger){
+  return new Promise(res=>{
+    openSheet('<h2 class="stencil">'+esc(title)+'</h2><div class="small muted" style="margin-bottom:16px">'+body+'</div>'+
+      '<div class="row"><button class="btn '+(danger?"danger":"")+' grow" id="cfOk">'+esc(okLabel||"Confirm")+'</button>'+
+      '<button class="btn dark" id="cfNo">Cancel</button></div>');
+    $("#cfOk").onclick=()=>{ closeSheet(); res(true); };
+    $("#cfNo").onclick=()=>{ closeSheet(); res(false); };
+  });
+}
+function openSignoff(title,sub,defName){
+  return new Promise(res=>{
+    openSheet('<h2 class="stencil">'+esc(title)+'</h2><div class="small dim" style="margin-bottom:6px">'+esc(sub||"Each sign-off is stamped with name and date.")+'</div>'+
+      '<form id="soForm"><label>Sign-off name</label><input name="who" required autocomplete="off" placeholder="Competent person name" value="'+esc(defName||"")+'">'+
+      '<div style="height:14px"></div><div class="row"><button class="btn grow" type="submit">Sign off</button>'+
+      '<button class="btn dark" type="button" id="soNo">Cancel</button></div></form>');
+    $("#soNo").onclick=()=>{ closeSheet(); res(null); };
+    $("#soForm").onsubmit=e=>{ e.preventDefault(); const v=e.target.who.value.trim(); closeSheet(); res(v||null); };
+  });
+}
+function openDatePrompt(title){
+  return new Promise(res=>{
+    openSheet('<h2 class="stencil">'+esc(title)+'</h2><form id="dtForm"><label>Date signed copy received</label>'+
+      '<input name="d" type="date" value="'+todayISO()+'" required>'+
+      '<div style="height:14px"></div><div class="row"><button class="btn grow" type="submit">Save</button>'+
+      '<button class="btn dark" type="button" id="dtNo">Cancel</button></div></form>');
+    $("#dtNo").onclick=()=>{ closeSheet(); res(null); };
+    $("#dtForm").onsubmit=e=>{ e.preventDefault(); const v=e.target.d.value; closeSheet(); res(v||null); };
+  });
+}
+$("#sheetWrap").addEventListener("click",e=>{ if(e.target.id==="sheetWrap") closeSheet(); });
+function field(label,name,val,type,attrs){
+  return '<label>'+esc(label)+'</label><input name="'+name+'" type="'+(type||"text")+'" value="'+esc(val==null?"":val)+'" '+(attrs||"")+'>';
+}
+function formShell(title,inner,saveLabel){
+  return '<h2 class="stencil">'+esc(title)+'</h2><div class="small dim" style="margin-bottom:6px">Fields marked * are required for the dossier.</div>'+
+    '<form id="sheetForm">'+inner+'<div style="height:14px"></div>'+
+    '<div class="row"><button type="submit" class="btn grow">'+esc(saveLabel||"Save")+'</button>'+
+    '<button type="button" class="btn dark" id="sheetCancel">Cancel</button></div></form>';
+}
+function collect(form){
+  const d={};
+  new FormData(form).forEach((v,k)=>{
+    if(d[k]!==undefined){ if(!Array.isArray(d[k])) d[k]=[d[k]]; d[k].push(v); } else d[k]=v;
+  });
+  return d;
+}
+const ACTIVITIES=["Containment setup","Negative-air units placed","Tile removal","Pipe insulation removal","Mastic removal","Wet methods","Bagging","HEPA vacuuming","Decon","Teardown","Air monitoring","Waste loadout"];
+function fProject(p){
+  p=p||{};
+  openSheet(formShell(p.id?"Edit project":"New abatement project",
+    field("Project name *","name",p.name,"text","required")+
+    field("Site address *","address",p.address,"text","required")+
+    field("Building owner","owner",p.owner)+
+    field("Owner phone","ownerPhone",p.ownerPhone,"tel")+
+    field("Contract #","contractNo",p.contractNo)+
+    '<label>NESHAP notification filed? *</label><select name="neshapNotified"><option value="1"'+(p.neshapNotified?" selected":"")+'>Yes — agency notified</option><option value="0"'+(!p.neshapNotified?" selected":"")+'>Not yet</option></select>'+
+    field("NESHAP notice date","neshapDate",p.neshapDate,"date")+
+    field("Competent person (OSHA 1926.1101) *","competentPerson",p.competentPerson,"text","required")+
+    field("Competent person license #","competentLicense",p.competentLicense)+
+    field("Start date","startDate",p.startDate||todayISO(),"date")+
+    field("Est. end date","estEndDate",p.estEndDate,"date"),
+    p.id?"Save changes":"Create dossier"));
+  $("#sheetCancel").onclick=closeSheet;
+  $("#sheetForm").onsubmit=e=>{ e.preventDefault(); const d=collect(e.target);
+    const rec=p.id?p:Object.assign({id:uid(),status:"active",dailyLogs:[],airSamples:[],manifests:[],photos:[],
+      clearance:{visual:false,airClear:false,wasteShipped:false,manifestsBack:false,neshapFiled:false,areaReleased:false}},d);
+    Object.assign(rec,{name:d.name,address:d.address,owner:d.owner,ownerPhone:d.ownerPhone,contractNo:d.contractNo,
+      neshapNotified:d.neshapNotified==="1",neshapDate:d.neshapDate,competentPerson:d.competentPerson,
+      competentLicense:d.competentLicense,startDate:d.startDate,estEndDate:d.estEndDate});
+    if(!p.id){ DB.projects.unshift(rec); view={name:"project",projectId:rec.id,tab:"overview"}; }
+    closeSheet(); save();
+  };
+}
+function fDaily(p, existing){
+  const L=existing||{};
+  const crewTxt=(L.crew||[]).map(c=>c.name+(c.cred?", "+c.cred:"")).join("\n");
+  const has=a=>(L.activities||[]).includes(a);
+  openSheet(formShell(existing?"Edit daily log — "+fmtD(L.date):"Daily field log — "+fmtD(todayISO()),
+    field("Date *","date",L.date||todayISO(),"date","required")+
+    '<label>Crew (one per line: name, accreditation #)</label><textarea name="crew" rows="3" placeholder="Marcus Webb, AZ-ABT-4471 (supervisor)&#10;D. Okafor, AZ-ABT-5120">'+esc(crewTxt)+'</textarea>'+
+    '<div class="row"><div class="grow">'+field("Shift start","start",L.start||"06:30","time")+'</div><div class="grow">'+field("Shift end","end",L.end||"15:00","time")+'</div></div>'+
+    '<label>Activities performed</label><div class="checks">'+ACTIVITIES.map(a=>'<label class="check"><input type="checkbox" name="activities" value="'+esc(a)+'"'+(has(a)?" checked":"")+'> '+esc(a)+'</label>').join("")+'</div>'+
+    field("Neg-air differential (in w.g., e.g. -0.024)","negAir",L.negAir||"")+
+    '<label>Notes</label><textarea name="notes" rows="3" placeholder="Containment intact, decon shower operational…">'+esc(L.notes||"")+'</textarea>',
+    existing?"Save changes":"Log shift"));
+  $("#sheetCancel").onclick=closeSheet;
+  $("#sheetForm").onsubmit=e=>{ e.preventDefault(); const d=collect(e.target);
+    const crew=String(d.crew||"").split("\n").map(s=>s.trim()).filter(Boolean).map(s=>{ const m=s.match(/^(.*?),\s*(.*)$/); return {name:m?m[1]:s, cred:m?m[2]:""}; });
+    let acts=d.activities||[]; if(!Array.isArray(acts)) acts=[acts];
+    const rec={id:existing?existing.id:uid(),date:d.date,crew,start:d.start,end:d.end,activities:acts,negAir:d.negAir,notes:d.notes,createdAt:existing?existing.createdAt:Date.now()};
+    if(existing){ const i=p.dailyLogs.findIndex(x=>x.id===existing.id); p.dailyLogs[i]=rec; }
+    else p.dailyLogs.push(rec);
+    closeSheet(); save();
+  };
+}
+function fAir(p, existing){
+  const S=existing||{};
+  openSheet(formShell(existing?"Edit air sample":"Log air sample",
+    field("Date *","date",S.date||todayISO(),"date","required")+
+    field("Sample location *","location",S.location||"","text","required placeholder='Inside containment — north corner'")+
+    '<label>Sample type *</label><select name="type">'+
+      [["area","Work-area"],["personal","Personal (breathing zone)"],["clearance","Clearance"]].map(o=>'<option value="'+o[0]+'"'+(S.type===o[0]?" selected":"")+'>'+o[1]+'</option>').join("")+'</select>'+
+    field("Result (fibers/cc) *","result",S.result==null?"":S.result,"number","required step='0.001' min='0' placeholder='0.042'")+
+    '<label>Limit basis *</label><select name="basis">'+
+      [["8hr","8-hr TWA — PEL 0.1 f/cc"],["exc","30-min excursion — 1.0 f/cc"],["clr","Clearance — 0.01 f/cc"]].map(o=>'<option value="'+o[0]+'"'+(S.basis===o[0]?" selected":"")+'>'+o[1]+'</option>').join("")+'</select>'+
+    field("Pump / cassette ID","pump",S.pump||"","text placeholder='SKC-03'"),
+    existing?"Save changes":"Log sample"));
+  $("#sheetCancel").onclick=closeSheet;
+  $("#sheetForm").onsubmit=e=>{ e.preventDefault(); const d=collect(e.target);
+    const r=parseFloat(d.result);
+    const limit=d.type==="clearance"?0.01:(d.basis==="8hr"?0.1:d.basis==="exc"?1.0:0.01);
+    const rec={id:existing?existing.id:uid(),date:d.date,location:d.location,type:d.type,result:r,basis:d.basis,pump:d.pump,pass:r<=limit,createdAt:existing?existing.createdAt:Date.now()};
+    if(existing){ const i=p.airSamples.findIndex(x=>x.id===existing.id); p.airSamples[i]=rec; }
+    else p.airSamples.push(rec);
+    closeSheet(); save();
+  };
+}
+function fManifest(p, existing){
+  const M=existing||{};
+  openSheet(formShell(existing?"Edit waste shipment":"Waste shipment record (NESHAP)",
+    field("Manifest # *","manifestNo",M.manifestNo||"","text","required placeholder='AZ-2026-00000'")+
+    field("Quantity (cubic yards) *","qtyYd3",M.qtyYd3||"","number","required min='0' step='0.5'")+
+    field("Date shipped *","dateShipped",M.dateShipped||todayISO(),"date","required")+
+    field("Transporter name *","transporter",M.transporter||"","text","required")+
+    field("Transporter phone","transporterPhone",M.transporterPhone||"","tel")+
+    field("Disposal site *","disposalSite",M.disposalSite||"","text","required")+
+    field("Disposal site phone","disposalPhone",M.disposalPhone||"","tel")+
+    '<label class="check" style="margin-top:12px"><input type="checkbox" name="certSigned"'+(M.certSigned===false?"":" checked")+'> Contents certified: properly described, packed, marked, and labeled for highway transport</label>',
+    existing?"Save changes":"Record shipment"));
+  $("#sheetCancel").onclick=closeSheet;
+  $("#sheetForm").onsubmit=e=>{ e.preventDefault(); const d=collect(e.target);
+    const rec={id:existing?existing.id:uid(),manifestNo:d.manifestNo,qtyYd3:d.qtyYd3,dateShipped:d.dateShipped,
+      transporter:d.transporter,transporterPhone:d.transporterPhone,disposalSite:d.disposalSite,disposalPhone:d.disposalPhone,
+      certSigned:!!d.certSigned,
+      signedCopyReceived:existing?existing.signedCopyReceived:false,
+      signedDate:existing?existing.signedDate:"",createdAt:existing?existing.createdAt:Date.now()};
+    if(existing){ const i=p.manifests.findIndex(x=>x.id===existing.id); p.manifests[i]=rec; }
+    else p.manifests.push(rec);
+    closeSheet(); save();
+  };
+}
+function fPhoto(p){
+  const cats=["Containment","Removal","Waste","Decon","Clearance","Other"];
+  openSheet(formShell("Add site photo",
+    '<label>Photo *</label><input type="file" name="photo" accept="image/*" capture="environment" required>'+
+    '<label>Category</label><select name="category">'+cats.map(c=>'<option>'+c+'</option>').join("")+'</select>'+
+    field("Caption","caption","","text placeholder='North wall after final HEPA pass'"),
+    "Add to dossier"));
+  $("#sheetCancel").onclick=closeSheet;
+  $("#sheetForm").onsubmit=e=>{ e.preventDefault();
+    const file=e.target.photo.files[0]; if(!file){ return; }
+    const d=collect(e.target);
+    const img=new Image();
+    img.onload=()=>{ const cv=document.createElement("canvas");
+      const s=Math.min(1,900/Math.max(img.width,img.height));
+      cv.width=Math.round(img.width*s); cv.height=Math.round(img.height*s);
+      cv.getContext("2d").drawImage(img,0,0,cv.width,cv.height);
+      const stamp=new Date().toLocaleString("en-US");
+      const cx=cv.getContext("2d"); cx.fillStyle="rgba(0,0,0,.7)"; cx.fillRect(0,cv.height-30,cv.width,30);
+      cx.fillStyle="#ff6a00"; cx.font="16px monospace"; cx.fillText(stamp+" — ABATE",10,cv.height-9);
+      const full= cv.toDataURL("image/jpeg",0.72);
+      const tc=document.createElement("canvas"); const tr=240/Math.max(cv.width,cv.height);
+      tc.width=Math.round(cv.width*tr); tc.height=Math.round(cv.height*tr);
+      tc.getContext("2d").drawImage(cv,0,0,tc.width,tc.height);
+      p.photos.push({id:uid(),dataUrl:full,thumb:tc.toDataURL("image/jpeg",0.6),caption:d.caption,category:d.category,takenAt:Date.now()});
+      URL.revokeObjectURL(img.src); closeSheet(); save();
+    };
+    img.src=URL.createObjectURL(file);
+  };
+}
+/* ============ actions ============ */
+function bindActions(main,p){
+  main.querySelectorAll("[data-act]").forEach(b=>{
+    const act=b.dataset.act, id=b.dataset.id;
+    if(act==="edit-project") b.onclick=()=>fProject(p);
+    else if(act==="edit-log") b.onclick=()=>fDaily(p, p.dailyLogs.find(x=>x.id===id));
+    else if(act==="del-log") b.onclick=async()=>{ if(await openConfirm("Delete daily log?","This removes the shift record from the dossier. This cannot be undone.","Delete",true)){ p.dailyLogs=p.dailyLogs.filter(x=>x.id!==id); save(); toast("Daily log deleted"); } };
+    else if(act==="del-air") b.onclick=async()=>{ if(await openConfirm("Delete air sample?","This removes the sample and its pass/fail record from the dossier.","Delete",true)){ p.airSamples=p.airSamples.filter(x=>x.id!==id); save(); toast("Air sample deleted"); } };
+    else if(act==="edit-air") b.onclick=()=>fAir(p, p.airSamples.find(x=>x.id===id));
+    else if(act==="edit-manifest") b.onclick=()=>fManifest(p, p.manifests.find(x=>x.id===id));
+    else if(act==="del-manifest") b.onclick=async()=>{ if(await openConfirm("Delete manifest record?","This removes the waste shipment record. Keep paper copies per the 30-year retention rule.","Delete",true)){ p.manifests=p.manifests.filter(x=>x.id!==id); save(); toast("Manifest record deleted"); } };
+    else if(act==="sign-manifest") b.onclick=async()=>{ const m=p.manifests.find(x=>x.id===id);
+      const d=await openDatePrompt("Signed copy received"); if(!d) return;
+      m.signedCopyReceived=true; m.signedDate=d; save(); toast("Manifest signed copy recorded"); };
+    else if(act==="print") b.onclick=()=>window.print();
+    else if(act==="export") b.onclick=()=>exportArchive(p);
+    else if(act==="close-project") b.onclick=async()=>{ const c=completeness(p);
+      if(c.total<100 && !(await openConfirm("Close with incomplete dossier?","Dossier is only "+c.total+"% complete. Closed projects keep every record for the 30-year retention file.","Close anyway",true))) return;
+      p.status="closed"; save(); toast("Project closed — records retained"); };
+  });
+  main.querySelectorAll("[data-clear]").forEach(cb=>cb.onchange=async()=>{
+    const k=cb.dataset.clear, cl=p.clearance;
+    if(cb.checked){ const who=await openSignoff("Sign off: "+cb.closest(".card").querySelector("b").textContent,
+        "Your name and today's date are stamped into the dossier.", p.competentPerson||"");
+      if(!who){ cb.checked=false; return; }
+      cl[k]=true; cl[k+"By"]=who; cl[k+"Date"]=todayISO();
+      if(k==="airClear"&&!p.airSamples.some(s=>s.type==="clearance"&&s.pass)){ if(await openConfirm("No passing clearance sample","Clearance sign-off needs an aggressive air sample at or below 0.01 f/cc. Add one now?","Add sample")){ view.tab="air"; save(); fAir(p); return; } }
+      if(k==="manifestsBack"){ p.manifests.forEach(m=>{ if(!m.signedCopyReceived){ m.signedCopyReceived=true; m.signedDate=todayISO(); } }); }
+      toast("Signed off by "+who);
+    } else { cl[k]=false; }
+    save();
+  });
+  main.querySelectorAll("[data-pcat]").forEach(ch=>ch.onclick=()=>{ view.photoCat=ch.dataset.pcat; save(); });
+  main.querySelectorAll("[data-photo]").forEach(el=>el.onclick=()=>photoSheet(p,el.dataset.photo));
+}
+function photoSheet(p,id){
+  const x=p.photos.find(y=>y.id===id); if(!x) return;
+  openSheet('<h2 class="stencil">Site photo</h2>'+
+    '<img src="'+x.dataUrl+'" style="width:100%;border-radius:10px;margin:10px 0" alt="site photo">'+
+    kv("Captured",fmtDT(x.takenAt))+kv("Category",esc(x.category))+kv("Caption",esc(x.caption||"—"))+
+    '<div style="height:12px"></div><div class="row"><button class="btn danger grow" id="phDel">'+IC.trash+' Delete photo</button>'+
+    '<button class="btn dark" id="sheetCancel2">Close</button></div>');
+  $("#sheetCancel2").onclick=closeSheet;
+  $("#phDel").onclick=()=>{ if(confirm("Delete this photo from the dossier?")){ p.photos=p.photos.filter(y=>y.id!==id); closeSheet(); save(); } };
+}
+function exportArchive(p){
+  const c=completeness(p);
+  const archive={ exportedAt:new Date().toISOString(), app:"ABATE prototype",
+    retention:"Retain 30 years per OSHA 29 CFR 1926.1101", completeness:c.total, project:p };
+  const blob=new Blob([JSON.stringify(archive,null,2)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="abate-dossier-"+p.id+"-"+todayISO()+".json"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+/* ============ fab + init ============ */
+$("#fab").onclick=()=>{
+  if(view.name==="dash"){ fProject(); return; }
+  const p=proj(); if(!p) return;
+  if(view.tab==="overview") fProject(p);
+  else if(view.tab==="daily") fDaily(p);
+  else if(view.tab==="air") fAir(p);
+  else if(view.tab==="waste") fManifest(p);
+  else if(view.tab==="photos") fPhoto(p);
+  else if(view.tab==="clearance"){ toast("Use the checklist above — each item needs a named sign-off."); }
+  else if(view.tab==="dossier") exportArchive(p);
+};
+$("#backBtn").onclick=()=>{ view={name:"dash"}; save(); };
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeSheet(); });
+persist();
+render();
+</script>
+<script src="sync.js"></script>
+<style>
+/* device sync (prototype) */
+.sync-card{margin-top:16px}
+.sync-pill{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:3px 10px;border-radius:999px;border:1px solid var(--line,#3a3a3a);color:var(--muted,#999);vertical-align:middle}
+.sync-pill.ok{color:#7ee2a8;border-color:#2f6b4a}
+.sync-pill.warn{color:#f0c96a;border-color:#6b5a2f}
+.sync-pill.crit{color:#ff8f8f;border-color:#6b2f2f}
+#syncBox input{font-size:12px}
+</style>
+</body>
+</html>

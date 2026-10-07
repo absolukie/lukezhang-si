@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="FinePrint reads warranty fine print and exposes the traps: exclusion clauses, maintenance gotchas, claim caps, arbitration. Plain English, 0-100 deal score.">
+<title>FinePrint — Warranty Red-Flag Reader</title>
+<style>
+:root{
+  --paper:#faf7ef; --paper2:#f3eee0; --ink:#1c1a15; --ink2:#5c564a;
+  --hi-y:#ffe14d; --hi-r:#ff6b5e; --hi-g:#a8e6a1;
+  --red:#c92a1e; --amber:#b97e0c; --green:#1e7a34;
+  --card:#fffdf7; --line:#e2dcc8; --shadow:0 2px 14px rgba(28,26,21,.08);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:16px;line-height:1.55}
+button{touch-action:manipulation;font:inherit}
+.wrap{max-width:900px;margin:0 auto;padding:0 20px}
+.topbar{border-bottom:2px solid var(--ink);background:var(--paper);position:sticky;top:0;z-index:20}
+.topbar-inner{display:flex;align-items:center;gap:10px;padding:12px 0}
+.logo{display:flex;align-items:center;gap:9px;font-weight:800;font-size:20px;letter-spacing:-.02em}
+.logo svg{width:28px;height:28px}
+.btn{border:2px solid var(--ink);border-radius:10px;padding:13px 24px;font-size:16px;font-weight:800;
+  cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none}
+.btn:active{transform:translateY(1px)}
+.btn-primary{background:var(--ink);color:var(--paper)}
+.btn-ghost{background:var(--card);color:var(--ink)}
+.btn-sm{padding:9px 16px;font-size:14px}
+.topbar .btn{margin-left:auto}
+.hero{padding:60px 0 30px;text-align:center}
+.hero h1{font-size:clamp(32px,6.5vw,50px);line-height:1.08;letter-spacing:-.03em;margin:0 0 12px}
+.hero h1 .hl{background:var(--hi-y);padding:0 8px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.hero p.lede{color:var(--ink2);font-size:18px;max-width:34em;margin:0 auto 26px}
+.cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.fine{font-size:13px;color:var(--ink2);margin-top:14px}
+.problem{padding:48px 0}
+.problem h2{font-size:clamp(24px,4.5vw,32px);letter-spacing:-.02em;margin:0 0 14px;text-align:center}
+.finance-card{background:var(--card);border:2px solid var(--ink);border-radius:14px;padding:24px;box-shadow:var(--shadow);
+  max-width:640px;margin:24px auto;font-size:16px}
+.finance-card .scene{font-style:italic;color:var(--ink2);margin-bottom:14px}
+.finance-card mark{background:var(--hi-r);padding:1px 4px;border-radius:3px}
+.problem p{color:var(--ink2);max-width:38em;margin:0 auto 12px}
+.how{padding:16px 0 48px}
+.how h2,.demo h2,.pricing h2,.faq h2{text-align:center;font-size:clamp(24px,4.5vw,32px);letter-spacing:-.02em;margin:0 0 8px}
+.sub{text-align:center;color:var(--ink2);margin:0 auto 28px;max-width:32em}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.step{background:var(--card);border:2px solid var(--ink);border-radius:14px;padding:22px;box-shadow:var(--shadow)}
+.step .n{display:inline-flex;width:36px;height:36px;border-radius:50%;background:var(--ink);color:var(--paper);
+  font-weight:800;align-items:center;justify-content:center;margin-bottom:12px;font-size:17px}
+.step h3{margin:0 0 6px;font-size:17px}
+.step p{margin:0;font-size:14.5px;color:var(--ink2)}
+.demo{background:var(--ink);color:var(--paper);padding:52px 0}
+.demo h2{color:var(--paper)}
+.demo .sub{color:#b9b2a2}
+.scan-card{max-width:640px;margin:0 auto;background:var(--card);color:var(--ink);border-radius:14px;padding:22px;box-shadow:var(--shadow)}
+.scan-text{font-family:Georgia,serif;font-size:16.5px;line-height:1.8;min-height:150px}
+.scan-text mark{padding:1px 4px;border-radius:3px;animation:hiIn .4s ease}
+.scan-text mark.r{background:var(--hi-r)}
+.scan-text mark.y{background:var(--hi-y)}
+@keyframes hiIn{from{background:transparent}to{}}
+.scan-labels{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.scan-label{display:none;font-size:14px;font-weight:700;align-items:center;gap:8px;animation:hiIn .3s ease}
+.scan-label.show{display:flex}
+.sev-tag{font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;border-radius:6px;
+  padding:3px 9px;border:1.5px solid var(--ink);background:var(--hi-r);flex:none}
+.scan-score{display:none;text-align:center;margin-top:16px;position:relative}
+.scan-score.show{display:block}
+.scan-score .num{font-size:56px;font-weight:900;letter-spacing:-.03em;color:var(--red);font-variant-numeric:tabular-nums}
+.scan-score .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--ink2)}
+.stamp{position:absolute;top:8px;left:50%;display:none;font-size:26px;font-weight:900;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--red);border:4px double var(--red);border-radius:10px;padding:8px 20px;
+  background:rgba(255,255,255,.85);transform:translateX(-50%) rotate(-12deg);pointer-events:none;white-space:nowrap}
+.stamp.slam{display:block;animation:slam .45s cubic-bezier(.2,2.4,.4,1)}
+@keyframes slam{0%{transform:translateX(-50%) rotate(-12deg) scale(3);opacity:0}
+  60%{transform:translateX(-50%) rotate(-12deg) scale(.94);opacity:1}
+  100%{transform:translateX(-50%) rotate(-12deg) scale(1);opacity:1}}
+.demo-controls{display:flex;gap:10px;justify-content:center;margin-top:22px;flex-wrap:wrap}
+.demo .btn-ghost{background:transparent;color:var(--paper);border-color:var(--paper)}
+.demo-note{text-align:center;color:#b9b2a2;font-size:13.5px;margin-top:14px}
+.demo-note a{color:var(--paper)}
+.pricing{padding:52px 0}
+.price-card{max-width:440px;margin:0 auto;background:var(--card);border:2px solid var(--ink);border-radius:16px;
+  padding:32px 28px;box-shadow:var(--shadow);text-align:center}
+.price-card .plan{font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--ink2)}
+.price-card .amt{font-size:56px;font-weight:900;letter-spacing:-.03em;margin:8px 0 2px}
+.price-card .per{color:var(--ink2);font-size:15px}
+.price-card ul{list-style:none;text-align:left;margin:22px 0;padding:0;font-size:15px}
+.price-card li{padding:8px 0;border-top:1px solid var(--line);display:flex;gap:10px;align-items:flex-start}
+.price-card li svg{width:18px;height:18px;flex:none;margin-top:3px}
+.faq{padding:0 0 52px}
+.faq details{background:var(--card);border:2px solid var(--ink);border-radius:12px;margin-bottom:10px;overflow:hidden}
+.faq summary{padding:16px 18px;font-weight:700;font-size:16px;cursor:pointer;list-style:none}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";float:right;font-size:20px}
+.faq details[open] summary::after{content:"–"}
+.faq .a{padding:0 18px 18px;color:var(--ink2);font-size:15px}
+.final{background:var(--hi-y);border-top:2px solid var(--ink);border-bottom:2px solid var(--ink);
+  text-align:center;padding:56px 20px}
+.final h2{font-size:clamp(26px,5vw,36px);letter-spacing:-.02em;margin:0 0 12px}
+.final p{color:var(--ink2);margin:0 0 24px}
+footer.site{text-align:center;color:var(--ink2);font-size:13px;padding:26px 20px 34px}
+@media(max-width:640px){.steps{grid-template-columns:1fr}.hero{padding:44px 0 24px}}
+</style>
+</head>
+<body>
+
+<header class="topbar"><div class="wrap topbar-inner">
+  <div class="logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M8.5 11h5M11 8.5v5"/></svg>
+    FinePrint
+  </div>
+  <a class="btn btn-primary btn-sm" href="app">Try the live demo</a>
+</div></header>
+
+<section class="hero"><div class="wrap">
+  <h1>Paste your warranty.<br><span class="hl">We'll find the traps.</span></h1>
+  <p class="lede">Extended warranties are written to be skimmed and signed. FinePrint scans the contract against 30+ known trap patterns and gives you a 0-100 deal score in plain English.</p>
+  <div class="cta-row">
+    <a class="btn btn-primary" href="app">Try the live demo</a>
+    <a class="btn btn-ghost" href="#demo">See it catch a trap</a>
+  </div>
+  <p class="fine">Free demo · runs entirely in your browser · your contract never leaves your device</p>
+</div></section>
+
+<section class="problem"><div class="wrap">
+  <h2>The finance office slide</h2>
+  <div class="finance-card">
+    <div class="scene">"And this is our platinum protection plan, just $2,400 rolled into the loan. Sign here, here, and here."</div>
+    <p style="margin:0">Twelve pages slide across the desk. You have four minutes. The traps are on page 9: <mark>wear and tear excluded</mark>, <mark>sole discretion</mark> on every claim, <mark>binding arbitration</mark> if you fight back.</p>
+  </div>
+  <p>You are not going to read twelve pages in four minutes. Nobody does. That is exactly what the contract is counting on.</p>
+  <p>FinePrint reads it for you: every exclusion trap, maintenance gotcha, claim cap, and arbitration clause, highlighted in the text and explained like a friend who has seen this movie before.</p>
+</div></section>
+
+<section class="how"><div class="wrap">
+  <h2>How it works</h2>
+  <p class="sub">Three steps. Thirty seconds.</p>
+  <div class="steps">
+    <div class="step"><div class="n">1</div><h3>Paste the contract</h3><p>Copy the text from the PDF or email, or upload a .txt file. Nothing leaves your browser.</p></div>
+    <div class="step"><div class="n">2</div><h3>Get the deal score</h3><p>A 0-100 score with every trap highlighted in the document and ranked by severity.</p></div>
+    <div class="step"><div class="n">3</div><h3>Copy the report</h3><p>One tap copies a plain-English report. Text it to your mechanic before you sign.</p></div>
+  </div>
+</div></section>
+
+<section class="demo" id="demo"><div class="wrap">
+  <h2>See it catch a trap</h2>
+  <p class="sub">A 15-second taste of the magic moment. This clause is real contract language.</p>
+  <div class="scan-card">
+    <div class="scan-text" id="scan-text">This Contract does not cover any repair necessitated by normal <b>wear and tear</b>. All claim decisions are made by the Administrator in its <b>sole discretion</b>. Any dispute shall be resolved by <b>binding arbitration</b>, and the parties waive any right to participate in a class action.</div>
+    <div class="scan-labels" id="scan-labels"></div>
+    <div class="scan-score" id="scan-score">
+      <div class="stamp" id="scan-stamp">Walk away</div>
+      <div class="num" id="scan-num">100</div>
+      <div class="lbl">Deal score</div>
+    </div>
+  </div>
+  <div class="demo-controls">
+    <button class="btn btn-primary" id="scan-run" style="background:var(--hi-y);color:var(--ink);border-color:var(--hi-y)">Scan this clause</button>
+    <button class="btn btn-ghost" id="scan-replay" style="display:none">Replay</button>
+  </div>
+  <p class="demo-note">The <a href="app">full demo</a> scans two complete sample contracts with 30+ trap patterns, flag cards, and a reputation checklist.</p>
+</div></section>
+
+<section class="pricing"><div class="wrap">
+  <h2>Honest pricing</h2>
+  <p class="sub">Pay per review. No subscription needed.</p>
+  <div class="price-card">
+    <div class="plan">Contract review</div>
+    <div class="amt">$15</div>
+    <div class="per">per review · first one free</div>
+    <ul>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 13l4 4L19 7"/></svg>0-100 deal score with severity-ranked flags</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 13l4 4L19 7"/></svg>Marked-up contract: every trap highlighted in context</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 13l4 4L19 7"/></svg>Copy-ready report for your mechanic or advisor</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 13l4 4L19 7"/></svg>Reputation checklist: complaints, BBB, state AG</li>
+    </ul>
+    <a class="btn btn-primary" href="app" style="width:100%;justify-content:center">Try the free demo</a>
+  </div>
+</div></section>
+
+<section class="faq"><div class="wrap">
+  <h2>Questions</h2>
+  <p class="sub">Straight answers.</p>
+  <details><summary>Is this legal advice?</summary><div class="a">No. FinePrint is pattern matching against 30+ known warranty-trap phrases, explained in plain English. It will miss cleverly worded traps and occasionally flag harmless text. If the score is low, take the contract to a mechanic you trust or your state attorney general's consumer protection office.</div></details>
+  <details><summary>How does the detection work?</summary><div class="a">The demo runs entirely in your browser: it scans your contract text for known trap patterns (exclusion language, maintenance requirements, claim caps, arbitration clauses) and scores what it finds. No AI, no servers, no account.</div></details>
+  <details><summary>Does my contract leave my device?</summary><div class="a">No. Everything runs locally in your browser. Analyses are stored only in your browser's local storage, which you can delete anytime.</div></details>
+  <details><summary>What about PDF contracts?</summary><div class="a">Copy the text out of the PDF and paste it in, or save as .txt and upload. Direct PDF parsing is on the roadmap.</div></details>
+  <details><summary>What if it finds nothing?</summary><div class="a">That means none of the known patterns matched, not that the contract is safe. Clever drafting can dodge pattern matching. Always read the exclusions section yourself.</div></details>
+</div></section>
+
+<section class="final">
+  <h2>Don't sign what you haven't scanned.</h2>
+  <p>The next warranty pitch is coming. Be ready for it.</p>
+  <a class="btn btn-primary" href="app">Try the live demo</a>
+</section>
+
+<footer class="site">FinePrint · read the fine print, skip the traps · educational tool, not legal advice</footer>
+
+<script>
+"use strict";
+(function(){
+  var wait = function(ms){return new Promise(function(r){setTimeout(r,ms);});};
+  var running = false;
+  var TRAPS = [
+    {phrase:"wear and tear", label:"'Wear and tear' exclusion — the #1 denial phrase in the industry"},
+    {phrase:"sole discretion", label:"'Sole discretion' — denials are effectively unappealable"},
+    {phrase:"binding arbitration", label:"Binding arbitration — you give up your right to sue"}
+  ];
+  function reset(){
+    var t = document.getElementById("scan-text");
+    t.innerHTML = "This Contract does not cover any repair necessitated by normal <b>wear and tear</b>. All claim decisions are made by the Administrator in its <b>sole discretion</b>. Any dispute shall be resolved by <b>binding arbitration</b>, and the parties waive any right to participate in a class action.";
+    document.getElementById("scan-labels").innerHTML = "";
+    document.getElementById("scan-score").classList.remove("show");
+    document.getElementById("scan-stamp").classList.remove("slam");
+    document.getElementById("scan-num").textContent = "100";
+  }
+  function markPhrase(phrase, cls){
+    var t = document.getElementById("scan-text");
+    var html = t.innerHTML;
+    var idx = html.toLowerCase().indexOf(phrase);
+    if(idx < 0) return;
+    t.innerHTML = html.slice(0,idx) + '<mark class="'+cls+'">' + html.slice(idx, idx+phrase.length) + "</mark>" + html.slice(idx+phrase.length);
+  }
+  function addLabel(label){
+    var d = document.createElement("div");
+    d.className = "scan-label";
+    d.innerHTML = '<span class="sev-tag">Dealbreaker</span><span></span>';
+    d.querySelector("span:last-child").textContent = label;
+    document.getElementById("scan-labels").appendChild(d);
+    requestAnimationFrame(function(){ d.classList.add("show"); });
+  }
+  async function run(){
+    if(running) return; running = true;
+    document.getElementById("scan-run").style.display = "none";
+    document.getElementById("scan-replay").style.display = "none";
+    reset();
+    await wait(500);
+    markPhrase("wear and tear", "r"); addLabel(TRAPS[0].label);
+    await wait(900);
+    markPhrase("sole discretion", "r"); addLabel(TRAPS[1].label);
+    await wait(900);
+    markPhrase("binding arbitration", "y"); addLabel(TRAPS[2].label);
+    await wait(600);
+    document.getElementById("scan-score").classList.add("show");
+    var num = document.getElementById("scan-num");
+    var t0 = performance.now(), dur = 1100;
+    await new Promise(function(res){
+      (function tick(t){
+        var k = Math.min(1,(t-t0)/dur), e = k*k;
+        num.textContent = Math.round(100 + (31-100)*e);
+        if(k<1) requestAnimationFrame(tick); else res();
+      })(t0);
+    });
+    document.getElementById("scan-stamp").classList.add("slam");
+    document.getElementById("scan-replay").style.display = "";
+    running = false;
+  }
+  document.getElementById("scan-run").addEventListener("click", run);
+  document.getElementById("scan-replay").addEventListener("click", run);
+})();
+</script>
+</body>
+</html>

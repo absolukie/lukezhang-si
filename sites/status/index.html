@@ -157,7 +157,8 @@ async function renderOverview(){
       cards += '<div class="t" style="margin-top:10px;font-size:13px;color:var(--mut)">D1: ' + esc(health.components.d1) +
         " · R2: " + esc(health.components.r2) + " · outbox: " + esc(health.components.outbox) + "</div>";
     }
-    cards += '<div style="margin-top:12px"><button class="act" id="run-checks">Run checks now</button></div></div>';
+    cards += '<div style="margin-top:12px"><button class="act" id="run-checks">Run checks now</button> ' +
+      '<button class="act" id="test-alert">Send test alert</button></div></div>';
 
     cards += '<div class="card"><h2>Apps, last 24h</h2><div class="grid">';
     for (const slug of APPS) {
@@ -196,6 +197,15 @@ async function renderOverview(){
         const bad = (r.summary.checks || []).filter(c => c.status !== "ok");
         showBanner(bad.length ? bad.length + " check(s) failing: " + bad.map(c => c.key).join(", ") : "All checks passed.");
       } catch(err) { showBanner("Self-check failed: " + err.message); }
+      renderOverview();
+    });
+    document.getElementById("test-alert").addEventListener("click", async (e) => {
+      e.target.disabled = true; e.target.textContent = "Sending…";
+      try {
+        const r = await api("test-alert", { method: "POST" });
+        showBanner(r.ntfy && r.ntfy.ok ? "Test alert sent. Check your phone." : "Test alert failed to post: " + JSON.stringify(r.ntfy).slice(0, 120));
+      } catch(err) { showBanner("Test alert failed: " + err.message); }
+      e.target.disabled = false; e.target.textContent = "Send test alert";
       renderOverview();
     });
   } catch(e) {

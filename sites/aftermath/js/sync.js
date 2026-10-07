@@ -305,3 +305,95 @@ if (document.readyState === "loading")
 else boot();
 
 })();
+
+/* Client error reporter (v1).
+ * Reports window errors and unhandled promise rejections to the sync backend
+ * so crashes can be triaged from the status dashboard. Fire and forget:
+ * it never throws, never blocks the app, and skips silently when the backend
+ * is unreachable or no device key exists yet. PII patterns are scrubbed
+ * client-side before sending (the server scrubs again).
+ */
+(function(){
+  "use strict";
+  try {
+    var SLUG = "";
+    try { SLUG = String(typeof LS_DEVICE === "string" ? LS_DEVICE : "").replace(/\.device_key$/, ""); } catch(e){}
+    var BASE = "https://sync-proto.lukezhang.si";
+    try { if (typeof WORKER === "string" && WORKER) BASE = WORKER; } catch(e){}
+    var ENDPOINT = BASE + "/v1/client-errors";
+
+    function trunc(s, n){
+      s = String(s === null || s === undefined ? "" : s);
+      return s.length > n ? s.slice(0, n) : s;
+    }
+    function scrub(s){
+      s = String(s === null || s === undefined ? "" : s);
+      s = s.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[email]");
+      s = s.replace(/\+?\d[\d][\d\s().-]{6,}\d/g, "[phone]");
+      s = s.replace(/(bearer[ :]+)[A-Za-z0-9\-._~+/=]{8,}/gi, "$1[token]");
+      s = s.replace(/(api[_-]?key|device[_-]?key|token|secret|password|passwd|auth)\s*[:=]\s*["']?[^"'\s,}]{6,}/gi, "$1=[redacted]");
+      return s;
+    }
+
+    var busy = false;
+    var queue = [];
+    function pump(){
+      try {
+        if (busy) return;
+        var item = queue.shift();
+        if (!item) return;
+        var key = null;
+        try { key = localStorage.getItem(LS_DEVICE); } catch(e){}
+        if (!key || !SLUG) { pump(); return; }
+        busy = true;
+        var page = "";
+        try { page = location.href.split("#")[0]; } catch(e){}
+        var body = JSON.stringify({
+          app_slug: SLUG,
+          message: trunc(scrub(item.message), 500),
+          stack: trunc(scrub(item.stack), 4000),
+          page_url: trunc(page, 500)
+        });
+        fetch(ENDPOINT, {
+          method: "POST",
+          headers: {"Content-Type": "application/json", "Authorization": "Bearer " + key},
+          body: body,
+          keepalive: true
+        }).then(function(){ busy = false; pump(); }, function(){ busy = false; pump(); });
+      } catch(e){ busy = false; }
+    }
+    function send(message, stack){
+      try {
+        if (!SLUG) return;
+        queue.push({message: message, stack: stack});
+        if (queue.length > 5) queue.shift();
+        pump();
+      } catch(e){}
+    }
+
+    window.addEventListener("error", function(ev){
+      try {
+        var msg = ev && ev.message ? ev.message : "window.onerror";
+        try {
+          if (ev && ev.filename) msg += " @ " + ev.filename + ":" + (ev.lineno || 0) + ":" + (ev.colno || 0);
+        } catch(e){}
+        var stack = "";
+        try { stack = (ev && ev.error && ev.error.stack) ? ev.error.stack : ""; } catch(e){}
+        send(msg, stack);
+      } catch(e){}
+    });
+    window.addEventListener("unhandledrejection", function(ev){
+      try {
+        var r = ev ? ev.reason : null;
+        var msg = "unhandledrejection";
+        var stack = "";
+        try {
+          if (r instanceof Error) { msg = r.message || msg; stack = r.stack || ""; }
+          else if (typeof r === "string") { msg = r; }
+          else { msg = trunc(JSON.stringify(r), 500); }
+        } catch(e){}
+        send(msg, stack);
+      } catch(e){}
+    });
+  } catch(e){}
+})();

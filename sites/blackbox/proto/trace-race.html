@@ -73,13 +73,6 @@
     text-shadow:0 0 14px rgba(255,79,216,.6);}
   #challengeLbl{font-size:14px;color:var(--magenta);font-weight:700;letter-spacing:1px;}
   #friendBtn{margin-top:4px;}
-  #codeRow{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:10px;}
-  #codeInput{font-size:16px;font-family:inherit;color:#e8e8f2;background:#181826;
-    border:1px solid #2c2c44;border-radius:10px;padding:10px 12px;min-height:44px;
-    width:130px;text-align:center;letter-spacing:2px;text-transform:uppercase;
-    touch-action:manipulation;}
-  #joinBtn{padding:10px 18px;min-height:44px;}
-  #codeMsg{min-height:18px;}
   #codeBig{font-size:22px;font-weight:800;letter-spacing:4px;color:var(--cyan);}
   #shareRow{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;margin-top:6px;}
   #nameInput{font-size:16px;font-family:inherit;color:#e8e8f2;background:#181826;
@@ -121,11 +114,6 @@
   <div class="bestline" id="titleBest"></div>
   <button id="startBtn" class="primary">Start</button>
   <button id="friendBtn">Challenge a friend</button>
-  <div id="codeRow">
-    <input id="codeInput" maxlength="12" placeholder="Race code" autocomplete="off" autocapitalize="characters" spellcheck="false">
-    <button id="joinBtn">Join</button>
-  </div>
-  <div class="bestline" id="codeMsg"></div>
 </div>
 
 <div id="results" class="overlay hidden">
@@ -552,14 +540,42 @@ function getChallenge(){
       if(p[0]) q[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || '');
     });
   }catch(e){}
-  if(q.c && /^[A-Za-z0-9]{4,12}$/.test(q.c)) return { id: 'c' + q.c, kind: 'friend' };
+  if(q.c){
+    var cUp = q.c.toUpperCase();
+    if(/^[A-Z0-9]{5}$/.test(cUp)){
+      var ord = decodeOrder(cUp);
+      if(ord) return { id: 'c' + cUp, kind: 'friend', order: ord };
+    }
+    // legacy 6-char random seeds (pre order-encoding): seeded shuffle
+    if(/^[A-Za-z0-9]{6}$/.test(q.c)) return { id: 'c' + q.c.toUpperCase(), kind: 'friend', order: null };
+  }
   if(q.d && /^\d{4}-\d{2}-\d{2}$/.test(q.d)) return { id: 'd' + q.d, kind: 'daily' };
   return { id: 'd' + todayStr(), kind: 'daily' };
 }
-function randomSeed(){
-  var chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789', s = '';
-  for(var i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
-  return s;
+/* Room codes: the 5 shape indices ARE the code. Each char of the 6-letter
+   alphabet below is a pool index, so ?c=ABCDE always deals the same 5 shapes
+   in the same order — no lookup needed. (Pool has 23 shapes; alphabet covers 32.) */
+var CODE_ALPHA = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+function encodeOrder(order){
+  return order.map(function(i){ return CODE_ALPHA.charAt(i); }).join('');
+}
+function decodeOrder(code){
+  var out = [], k;
+  for(k = 0; k < code.length; k++){
+    var i = CODE_ALPHA.indexOf(code.charAt(k));
+    if(i < 0 || i >= SHAPES.length) return null;
+    out.push(i);
+  }
+  return out.length === 5 ? out : null;
+}
+function randomOrder(){
+  var pool = [], i, j, k, t;
+  for(i = 0; i < SHAPES.length; i++) pool.push(i);
+  for(j = pool.length - 1; j > 0; j--){
+    k = Math.floor(Math.random() * (j + 1));
+    t = pool[j]; pool[j] = pool[k]; pool[k] = t;
+  }
+  return pool.slice(0, 5);
 }
 function challengeURL(id){
   var base = window.location.href.split('?')[0].split('#')[0];
@@ -643,10 +659,14 @@ function quip(s){
 /* ---------- game flow ---------- */
 
 function startGame(){
-  var rand = mulberry32(hashStr(CH.id));
-  var pool = [];
-  for(var i = 0; i < SHAPES.length; i++) pool.push(i);
-  game.order = seededShuffle(pool, rand).slice(0, 5);
+  if(CH.order){
+    game.order = CH.order.slice(0, 5);
+  }else{
+    var rand = mulberry32(hashStr(CH.id));
+    var pool = [];
+    for(var i = 0; i < SHAPES.length; i++) pool.push(i);
+    game.order = seededShuffle(pool, rand).slice(0, 5);
+  }
   game.roundIdx = 0;
   game.total = 0;
   game.scores = [];
@@ -657,7 +677,6 @@ function startGame(){
   game.rival = null;
   titleEl.classList.add('hidden');
   resultsEl.classList.add('hidden');
-  fetchRival();
   startRound();
 }
 
@@ -726,6 +745,8 @@ function startRound(){
   game.raw = [];
   hideMag();
   game.phase = 'draw';
+  game.revealStep = 'you';
+  fetchRival(); // re-fetch each round: a friend may have posted mid-race
   roundLbl.innerHTML = 'Round <b>' + (game.roundIdx + 1) + '</b>/5';
   totalLbl.innerHTML = '<b>' + game.total + '</b> pts';
   statusEl.textContent = 'Draw the ' + sh.label + ' in one stroke';
@@ -1117,27 +1138,53 @@ function shareLink(url, msgEl, okText){
   }
   copyText(url, done);
 }
+/* "Share this race" (results): mint a room code for the exact 5 shapes just
+   played, post my run into the room so the friend has a rival to beat, share it. */
 document.getElementById('shareBtn').addEventListener('click', function(){
-  shareLink(challengeURL(CH.id), document.getElementById('postMsg'),
-    'Link copied — same 5 shapes for everyone.');
-});
-document.getElementById('friendBtn').addEventListener('click', function(){
-  var seed = randomSeed();
-  var url = challengeURL('c' + seed);
-  var el = document.getElementById('challengeLbl');
-  el.innerHTML = 'Race code: <span id="codeBig">' + seed + '</span>';
-  shareLink(url, document.getElementById('codeMsg'),
-    'Link shared — or tell them the code.');
-});
-document.getElementById('joinBtn').addEventListener('click', function(){
-  var msg = document.getElementById('codeMsg');
-  var code = document.getElementById('codeInput').value.trim().toUpperCase();
-  if(!/^[A-Za-z0-9]{4,12}$/.test(code)){
-    msg.textContent = 'Enter the 6-letter race code.';
-    return;
+  var msg = document.getElementById('postMsg');
+  var code = encodeOrder(game.order);
+  var url = challengeURL('c' + code);
+  var nm = playerName();
+  function go(){
+    shareLink(url, msg, nm
+      ? 'Room ' + code + ' shared — your ' + game.total + ' is waiting in it.'
+      : 'Room ' + code + ' shared — same 5 shapes.');
   }
-  window.location.href = challengeURL('c' + code);
+  if(nm && !game.sharedToRoom && game.scores.length === 5){
+    game.sharedToRoom = true;
+    fetch(API + '/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        challenge: 'c' + code,
+        name: nm,
+        total: game.total,
+        scores: game.scores.map(function(s){ return s.score; }),
+        drawings: game.drawings
+      })
+    }).then(go, go);
+  }else{ go(); }
 });
+/* Title screen: daily -> "Challenge a friend" mints a room and joins it;
+   inside a room the button becomes "Share room". */
+(function initShare(){
+  var btn = document.getElementById('friendBtn');
+  if(CH.kind === 'friend'){
+    btn.textContent = 'Share room';
+    btn.addEventListener('click', function(){
+      var lbl = document.getElementById('challengeLbl');
+      shareLink(challengeURL(CH.id), lbl, 'Room shared — send it to a friend.');
+      setTimeout(function(){
+        lbl.innerHTML = 'Friend challenge<br><span id="codeBig">' + escHtml(CH.id.slice(1)) + '</span>';
+      }, 4000);
+    });
+  }else{
+    btn.addEventListener('click', function(){
+      var code = encodeOrder(randomOrder());
+      window.location.href = challengeURL('c' + code);
+    });
+  }
+})();
 
 (function initMeta(){
   var lbl = document.getElementById('challengeLbl');

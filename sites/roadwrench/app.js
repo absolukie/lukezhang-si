@@ -1,4 +1,4 @@
-/* RoadWrench — mobile RV repair tech OS. Vanilla JS, localStorage. */
+/* RoadWrench: mobile RV repair tech OS. Vanilla JS, localStorage. */
 "use strict";
 
 /* ---------- inline SVG icons (no emoji in chrome) ---------- */
@@ -23,7 +23,8 @@ const I = {
   pen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>',
   play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
   stop: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
-  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>'
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>',
+  cal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 9h18M12 13v6M9 16h6"/></svg>'
 };
 /* self-sizing icons: 1em of surrounding text; explicit CSS sizes still override */
 Object.keys(I).forEach(k => { I[k] = I[k].replace('<svg ', '<svg width="1em" height="1em" '); });
@@ -41,7 +42,7 @@ const safeDataUrl = u => {
 };
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const money = n => "$" + (Number(n) || 0).toFixed(2);
-const fmtDate = iso => { if (!iso) return "—"; const d = new Date(iso + (iso.length <= 10 ? "T12:00:00" : "")); return isNaN(d) ? "—" : d.toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"}); };
+const fmtDate = iso => { if (!iso) return "Not provided"; const d = new Date(iso + (iso.length <= 10 ? "T12:00:00" : "")); return isNaN(d) ? "Not provided" : d.toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"}); };
 const fmtDT = ts => new Date(ts).toLocaleString("en-US", {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"});
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -53,18 +54,68 @@ function toast(msg) {
 
 /* ---------- store ---------- */
 const KEY = "roadwrench.v1";
+/* localStorage ceiling is ~5MB. Track size on every save and never fail silently. */
+const STORAGE_WARN_BYTES = 3.5 * 1024 * 1024;
+let lastSaveBytes = 0;
+let storageFullToasted = false;
+function storeBytes() {
+  try { return (localStorage.getItem(KEY) || "").length; } catch (e) { return lastSaveBytes; }
+}
+function updateStorageBanner(mode) {
+  const el = document.getElementById("storageBanner");
+  if (!el) return;
+  const bytes = storeBytes();
+  const full = mode === "full" || bytes >= STORAGE_WARN_BYTES;
+  if (!full) { el.hidden = true; el.innerHTML = ""; return; }
+  const mb = (bytes / 1048576).toFixed(1);
+  el.hidden = false;
+  el.innerHTML = `<span>${mode === "full"
+    ? "Device storage is full. New changes are not being saved."
+    : "Device storage is nearly full (" + mb + " MB of about 5 MB)."}
+    Export a backup from Setup or delete old photos so no work is lost.</span>
+    <button class="btn small" id="storageGo">Open Setup</button>`;
+  el.querySelector("#storageGo").onclick = () => location.hash = "#/settings";
+}
+const CLAIM_STATUSES = ["draft", "filed", "approved", "paid", "denied"];
+const CLAIM_LABEL = { draft: "Draft", filed: "Filed", approved: "Approved", paid: "Paid", denied: "Denied" };
 function blankState() {
   return {
     company: { name: "Pine Ridge Mobile RV Repair", phone: "(555) 014-2288", email: "", address: "", laborRate: 125 },
-    jobs: [], reminders: []
+    jobs: [], reminders: [], settings: { requirePhotos: false }, invoiceSeq: 1
   };
 }
 function load() {
-  try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.jobs) return s; } catch (e) {}
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    if (s && Array.isArray(s.jobs)) {
+      s.jobs.forEach(j => {
+        j.claim = j.claim || {};
+        if (!CLAIM_STATUSES.includes(j.claim.status)) {
+          j.claim.status = j.filedAt ? "filed" : "draft";
+          j.claim.statusDate = j.claim.statusDate || j.filedAt || 0;
+        }
+      });
+      if (!s.settings) s.settings = { requirePhotos: false };
+      if (s.invoiceSeq == null) s.invoiceSeq = 1;
+      return s;
+    }
+  } catch (e) {}
   const s = blankState(); seed(s); save(s); return s;
 }
 function save(s) {
-  localStorage.setItem(KEY, JSON.stringify(s));
+  let raw;
+  try { raw = JSON.stringify(s); } catch (e) { toast("Could not save: data error"); return; }
+  lastSaveBytes = raw.length;
+  window.__roadwrench.stateBytes = lastSaveBytes;
+  try {
+    localStorage.setItem(KEY, raw);
+    storageFullToasted = false;
+  } catch (e) {
+    updateStorageBanner("full");
+    if (!storageFullToasted) { storageFullToasted = true; toast("Storage is full. Export a backup now so no work is lost."); }
+    return;
+  }
+  updateStorageBanner();
   try { if (window.__roadwrenchSync) window.__roadwrenchSync.onSave(); } catch (e) {}
 }
 
@@ -88,7 +139,7 @@ function seed(s) {
       parts: [{id: uid(), name: "R-410A refrigerant", partNumber: "R410A-25LB", qty: 1, unitCost: 68, serial: ""}],
       labor: [{id: uid(), desc: "AC diagnosis + recharge", hours: 1.5, rate: 125}], timerStart: 0,
       photos: [], notes: "Customer full-timing; prefers morning appointments.",
-      claim: {insurer: "Wholesale Warranties", claimNumber: "", authNumber: "", authBy: "", authDate: ""},
+      claim: {insurer: "Wholesale Warranties", claimNumber: "", authNumber: "", authBy: "", authDate: "", status: "draft", statusDate: 0},
       customerSig: "", techSig: "", filedAt: 0, completedAt: 0, createdAt: t - 3 * D },
     { id: uid(), sample: true, status: "onsite", customer: "Marcus Tran", phone: "(555) 338-9041",
       site: "Boondocking, BLM mile 12 off Hwy 89", scheduledAt: todayISO(),
@@ -97,7 +148,7 @@ function seed(s) {
       correction: "",
       parts: [{id: uid(), name: "Slide-out gearbox assembly", partNumber: "LCI-191073", qty: 1, unitCost: 214, serial: "GBX-88412"}],
       labor: [], timerStart: 0, photos: [], notes: "",
-      claim: {insurer: "Good Sam ESP", claimNumber: "", authNumber: "", authBy: "", authDate: ""},
+      claim: {insurer: "Good Sam ESP", claimNumber: "", authNumber: "", authBy: "", authDate: "", status: "draft", statusDate: 0},
       customerSig: "", techSig: "", filedAt: 0, completedAt: 0, createdAt: t - D },
     { id: uid(), sample: true, status: "complete", customer: "Priya Natarajan", phone: "(555) 771-3302",
       site: "Home driveway, 4410 Cedar Bend Ln", scheduledAt: new Date(t - 2 * D).toISOString().slice(0, 10),
@@ -110,8 +161,8 @@ function seed(s) {
       ],
       labor: [{id: uid(), desc: "Pump replacement + leak repair", hours: 2, rate: 125}], timerStart: 0,
       photos: [], notes: "",
-      claim: {insurer: "Wholesale Warranties", claimNumber: "WW-88231", authNumber: "AUTH-55190", authBy: "R. Delgado", authDate: new Date(t - 2 * D).toISOString().slice(0, 10)},
-      customerSig: "", techSig: "", filedAt: 0, completedAt: t - 2 * D, createdAt: t - 4 * D }
+      claim: {insurer: "Wholesale Warranties", claimNumber: "WW-88231", authNumber: "AUTH-55190", authBy: "R. Delgado", authDate: new Date(t - 2 * D).toISOString().slice(0, 10), status: "filed", statusDate: t - 2 * D},
+      customerSig: "", techSig: "", filedAt: t - 2 * D, completedAt: t - 2 * D, createdAt: t - 4 * D }
   ];
   s.reminders = [
     { id: uid(), sample: true, customer: "Dana Whitfield", rvLabel: "2022 Reflection 260RD", service: "Roof reseal inspection", lastDone: new Date(t - 300 * D).toISOString().slice(0, 10), intervalMonths: 12 },
@@ -127,6 +178,18 @@ function partsTotal(j) { return j.parts.reduce((a, p) => a + p.qty * p.unitCost,
 function laborTotal(j) { return j.labor.reduce((a, l) => a + l.hours * l.rate, 0); }
 function jobTotal(j) { return partsTotal(j) + laborTotal(j); }
 function laborHours(j) { return j.labor.reduce((a, l) => a + l.hours, 0); }
+function packetChecks(j) {
+  const photos = j.photos || [], claim = j.claim || {};
+  return [
+    { key: "before", label: "Before photo", ok: photos.some(p => p.tag === "before") },
+    { key: "after", label: "After photo", ok: photos.some(p => p.tag === "after") },
+    { key: "cause", label: "Cause documented", ok: !!(j.cause || "").trim() },
+    { key: "correction", label: "Correction documented", ok: !!(j.correction || "").trim() },
+    { key: "csig", label: "Customer signature", ok: !!j.customerSig },
+    { key: "tsig", label: "Technician signature", ok: !!j.techSig },
+    { key: "claim", label: "Claim number or insurer", ok: !!((claim.claimNumber || "").trim() || (claim.insurer || "").trim()) }
+  ];
+}
 function nextDue(r) { const d = new Date(r.lastDone + "T12:00:00"); d.setMonth(d.getMonth() + r.intervalMonths); return d; }
 
 /* ---------- tabs ---------- */
@@ -148,11 +211,13 @@ function route() {
   const h = location.hash || "#/jobs";
   const parts = h.replace(/^#\//, "").split("/");
   renderTabs("#/" + parts[0]);
+  updateStorageBanner();
   window.scrollTo(0, 0);
   if (parts[0] === "jobs") viewJobs();
   else if (parts[0] === "job" && parts[1] === "new") viewJobForm();
   else if (parts[0] === "job" && parts[1]) viewJobDetail(parts[1]);
   else if (parts[0] === "packet" && parts[1]) viewPacket(parts[1]);
+  else if (parts[0] === "invoice" && parts[1]) viewInvoice(parts[1]);
   else if (parts[0] === "customer" && parts[1]) viewCustomer(decodeURIComponent(parts[1]));
   else if (parts[0] === "reminders") viewReminders();
   else if (parts[0] === "dashboard") viewDashboard();
@@ -162,34 +227,68 @@ function route() {
 window.addEventListener("hashchange", route);
 
 /* ================= JOBS BOARD ================= */
-let jobFilter = "all";
+let jobFilter = "all", claimFilter = "all";
 function viewJobs() {
-  const counts = { all: S.jobs.length };
+  const counts = { all: S.jobs.length, today: S.jobs.filter(j => j.scheduledAt === todayISO()).length };
   STATUSES.forEach(s => counts[s] = S.jobs.filter(j => j.status === s).length);
-  const list = S.jobs.filter(j => jobFilter === "all" || j.status === jobFilter)
-    .sort((a, b) => (a.scheduledAt || "").localeCompare(b.scheduledAt || ""));
+  const claimCounts = { all: S.jobs.length };
+  CLAIM_STATUSES.forEach(s => claimCounts[s] = S.jobs.filter(j => j.claim.status === s).length);
+  const isToday = jobFilter === "today";
+  const list = S.jobs.filter(j => isToday ? j.scheduledAt === todayISO()
+      : (jobFilter === "all" || j.status === jobFilter)
+        && (claimFilter === "all" || j.claim.status === claimFilter))
+    .sort(isToday
+      ? (a, b) => (a.site || "").localeCompare(b.site || "") || (a.customer || "").localeCompare(b.customer || "")
+      : (a, b) => (a.scheduledAt || "").localeCompare(b.scheduledAt || ""));
   const hasSample = S.jobs.some(j => j.sample);
   $("#view").innerHTML = `
     ${hasSample ? `<div class="samplebar">${I.doc}<span>Sample jobs shown so you can try the warranty packet. Real jobs you add are kept separate.</span><button class="btn small ghost" id="clearSamples">Clear</button></div>` : ""}
+    ${S.samplePurgeOffered && hasSample ? `<div class="card purgeoffer"><h2>Samples</h2>
+      <p style="margin:0 0 10px">Your first real job is in. Delete the sample jobs and reminders?</p>
+      <div class="row"><button class="btn small" id="purgeSamples">${I.trash}Delete samples</button>
+      <button class="btn small ghost" id="keepSamples">Keep them</button></div></div>` : ""}
     <div class="sectionhead"><h2>Jobs</h2><button class="btn small" id="newJob">${I.plus}New job</button></div>
     <div class="chips">
+      <button class="chip${jobFilter === "today" ? " active" : ""}" data-f="today">Today (${counts.today})</button>
       <button class="chip${jobFilter === "all" ? " active" : ""}" data-f="all">All (${counts.all})</button>
       ${STATUSES.map(s => `<button class="chip${jobFilter === s ? " active" : ""}" data-f="${s}">${STATUS_LABEL[s]} (${counts[s]})</button>`).join("")}
     </div>
+    <div class="filter-label" id="claimFilterLabel">Claim</div>
+    <div class="chips" role="group" aria-labelledby="claimFilterLabel">
+      <button class="chip${claimFilter === "all" ? " active" : ""}" data-claim-f="all" aria-pressed="${claimFilter === "all"}">All (${claimCounts.all})</button>
+      ${CLAIM_STATUSES.map(s => `<button class="chip${claimFilter === s ? " active" : ""}" data-claim-f="${s}" aria-pressed="${claimFilter === s}">${CLAIM_LABEL[s]} (${claimCounts[s]})</button>`).join("")}
+    </div>
     <div id="joblist">
-      ${list.length ? list.map(jobCard).join("") : `<div class="card empty">${I.jobs}<div>No jobs here yet.<br>Tap New job to book the first one.</div></div>`}
+      ${list.length ? list.map(j => isToday ? jobCardToday(j) : jobCard(j)).join("") : `<div class="card empty">${I.jobs}<div>${isToday ? "Nothing scheduled for today." : "No jobs here yet.<br>Tap New job to book the first one."}</div></div>`}
     </div>`;
-  document.querySelectorAll(".chip").forEach(c => c.onclick = () => { jobFilter = c.dataset.f; viewJobs(); });
-  document.querySelectorAll("[data-job]").forEach(el => el.onclick = () => location.hash = "#/job/" + el.dataset.job);
+  document.querySelectorAll("[data-claim-f]").forEach(c => c.onclick = () => { claimFilter = c.dataset.claimF; viewJobs(); });
+  document.querySelectorAll("[data-f]").forEach(c => c.onclick = () => { jobFilter = c.dataset.f; viewJobs(); });
+  document.querySelectorAll("[data-job]").forEach(el => {
+    el.onclick = () => location.hash = "#/job/" + el.dataset.job;
+    if (el.tagName !== "BUTTON") el.onkeydown = e => { if (e.key === "Enter") location.hash = "#/job/" + el.dataset.job; };
+  });
+  document.querySelectorAll("[data-next]").forEach(b => b.onclick = e => {
+    e.stopPropagation();
+    const job = jobById(b.dataset.next);
+    if (job) setStatus(job, b.dataset.to, true);
+  });
   $("#newJob").onclick = () => location.hash = "#/job/new";
+  const clearSamples = () => {
+    S.jobs = S.jobs.filter(j => !j.sample); S.reminders = S.reminders.filter(r => !r.sample);
+    S.samplePurgeOffered = false; save(S); toast("Sample data cleared"); viewJobs();
+  };
   const cs = $("#clearSamples");
-  if (cs) cs.onclick = () => { S.jobs = S.jobs.filter(j => !j.sample); S.reminders = S.reminders.filter(r => !r.sample); save(S); toast("Sample data cleared"); viewJobs(); };
+  if (cs) cs.onclick = clearSamples;
+  const ps = $("#purgeSamples");
+  if (ps) ps.onclick = clearSamples;
+  const ks = $("#keepSamples");
+  if (ks) ks.onclick = () => { S.samplePurgeOffered = false; save(S); viewJobs(); };
 }
 function jobCard(j) {
   const rv = [j.rvYear, j.rvMake, j.rvModel].filter(Boolean).join(" ");
-  return `<button class="jobcard" data-job="${j.id}">
+  return `<button class="jobcard" data-job="${esc(j.id)}">
     <div class="jc-top"><span class="jc-name">${esc(j.customer) || "Unnamed"}</span>
-      <span class="pill ${j.status}">${STATUS_LABEL[j.status]}</span></div>
+      <span class="pill ${esc(j.status)}">${STATUS_LABEL[j.status]}</span></div>
     ${j.sample ? `<span class="pill sample">Sample</span> ` : ""}<span class="jc-rv">${I.rv} ${esc(rv) || "RV details not set"}</span>
     <div class="jc-meta">
       <span>${I.pin}${esc(j.site) || "No site set"}</span>
@@ -198,6 +297,23 @@ function jobCard(j) {
     </div>
   </button>`;
 }
+/* Today-mode card: a div (not a button, since it nests a quick-action button),
+ * with the next status step front and center. */
+function jobCardToday(j) {
+  const rv = [j.rvYear, j.rvMake, j.rvModel].filter(Boolean).join(" ");
+  const next = { scheduled: ["enroute", "En route"], enroute: ["onsite", "On site"], onsite: ["complete", "Mark complete"] }[j.status];
+  return `<div class="jobcard" data-job="${j.id}" role="button" tabindex="0" aria-label="Open job for ${esc(j.customer) || "unnamed"}">
+    <div class="jc-top"><span class="jc-name">${esc(j.customer) || "Unnamed"}</span>
+      <span class="pill ${j.status}">${STATUS_LABEL[j.status]}</span></div>
+    ${j.sample ? `<span class="pill sample">Sample</span> ` : ""}<span class="jc-rv">${I.rv} ${esc(rv) || "RV details not set"}</span>
+    <div class="jc-meta">
+      <span>${I.pin}${esc(j.site) || "No site set"}</span>
+      <span>${I.clock}${fmtDate(j.scheduledAt)}</span>
+      ${j.status === "complete" ? `<span class="mono">${money(jobTotal(j))}</span>` : ""}
+    </div>
+    ${next ? `<button class="btn small rust block" data-next="${j.id}" data-to="${next[0]}" style="margin-top:10px">${next[1]}</button>` : ""}
+  </div>`;
+}
 
 /* ================= JOB FORM ================= */
 function viewJobForm() {
@@ -205,7 +321,7 @@ function viewJobForm() {
     <button class="backlink" id="back">${I.back}Jobs</button>
     <div class="sectionhead"><h2>New job</h2></div>
     <div class="card">
-      <div class="field"><label>Customer name</label><input id="f_customer" placeholder="Full name" autocomplete="off"></div>
+      <div class="field" style="position:relative"><label>Customer name</label><input id="f_customer" placeholder="Full name" autocomplete="off"><div id="custSuggest" class="suggest" hidden></div></div>
       <div class="f2">
         <div class="field"><label>Phone</label><input id="f_phone" inputmode="tel" placeholder="(555) 000-0000"></div>
         <div class="field"><label>Date</label><input id="f_date" type="date" value="${todayISO()}"></div>
@@ -221,6 +337,39 @@ function viewJobForm() {
       <button class="btn block" id="save">${I.check}Create job</button>
     </div>`;
   $("#back").onclick = () => location.hash = "#/jobs";
+  /* customer autocomplete: suggest past customers, prefill rig on tap */
+  const custInput = $("#f_customer"), suggBox = $("#custSuggest");
+  const pastCustomers = () => {
+    const map = new Map();
+    [...S.jobs].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).forEach(j => {
+      const n = (j.customer || "").trim();
+      if (!n || map.has(n.toLowerCase())) return;
+      map.set(n.toLowerCase(), { name: n, phone: j.phone, site: j.site,
+        rvYear: j.rvYear, rvMake: j.rvMake, rvModel: j.rvModel, vin: j.vin });
+    });
+    return [...map.values()];
+  };
+  custInput.addEventListener("input", () => {
+    const q = custInput.value.trim().toLowerCase();
+    const matches = q ? pastCustomers().filter(c => c.name.toLowerCase().includes(q)).slice(0, 5) : [];
+    if (!matches.length) { suggBox.hidden = true; return; }
+    suggBox.innerHTML = matches.map((m, i) => `<button type="button" class="suggest-row" data-i="${i}">
+      <span class="t">${esc(m.name)}</span>
+      <span class="s">${esc([m.phone, [m.rvYear, m.rvMake, m.rvModel].filter(Boolean).join(" ")].filter(Boolean).join(" · "))}</span>
+    </button>`).join("");
+    suggBox.hidden = false;
+    suggBox.querySelectorAll(".suggest-row").forEach(b => b.addEventListener("mousedown", e => {
+      e.preventDefault();
+      const m = matches[+b.dataset.i];
+      $("#f_customer").value = m.name; $("#f_phone").value = m.phone || "";
+      $("#f_site").value = m.site || ""; $("#f_year").value = m.rvYear || "";
+      $("#f_make").value = m.rvMake || ""; $("#f_model").value = m.rvModel || "";
+      $("#f_vin").value = m.vin || "";
+      suggBox.hidden = true; toast("Customer details filled in");
+    }));
+  });
+  custInput.addEventListener("keydown", e => { if (e.key === "Escape") suggBox.hidden = true; });
+  custInput.addEventListener("blur", () => setTimeout(() => { suggBox.hidden = true; }, 150));
   $("#save").onclick = () => {
     const j = {
       id: uid(), status: "scheduled",
@@ -230,10 +379,12 @@ function viewJobForm() {
       rvModel: $("#f_model").value.trim(), vin: $("#f_vin").value.trim().toUpperCase(),
       complaint: $("#f_complaint").value.trim(), cause: "", correction: "",
       parts: [], labor: [], timerStart: 0, photos: [], notes: "",
-      claim: { insurer: "", claimNumber: "", authNumber: "", authBy: "", authDate: "" },
+      claim: { insurer: "", claimNumber: "", authNumber: "", authBy: "", authDate: "", status: "draft", statusDate: 0 },
       customerSig: "", techSig: "", filedAt: 0, completedAt: 0, createdAt: Date.now()
     };
-    S.jobs.push(j); save(S); toast("Job created"); location.hash = "#/job/" + j.id;
+    S.jobs.push(j);
+    if (S.jobs.filter(x => !x.sample).length === 1 && S.jobs.some(x => x.sample)) S.samplePurgeOffered = true;
+    save(S); toast("Job created"); location.hash = "#/job/" + j.id;
   };
 }
 
@@ -247,7 +398,7 @@ function viewJobDetail(id) {
   const rv = [j.rvYear, j.rvMake, j.rvModel].filter(Boolean).join(" ");
   $("#view").innerHTML = `
     <button class="backlink" id="back">${I.back}Jobs</button>
-    <div class="sectionhead"><h2>${esc(j.customer) || "Unnamed job"}</h2><span class="pill ${j.status}">${STATUS_LABEL[j.status]}</span></div>
+    <div class="sectionhead"><h2>${esc(j.customer) || "Unnamed job"}</h2><span class="pill ${esc(j.status)}">${STATUS_LABEL[j.status]}</span></div>
     ${j.sample ? `<div class="samplebar">${I.doc}<span>This is a sample job. Edit freely or clear samples from the Jobs tab.</span></div>` : ""}
 
     <div class="card"><h2>Job progress</h2>
@@ -292,9 +443,9 @@ function viewJobDetail(id) {
     <div class="card"><h2>Parts</h2>
       <div id="partsList">${j.parts.length ? j.parts.map(p => `
         <div class="item"><div class="grow"><div class="t">${esc(p.name)}</div>
-          <div class="s">${esc(p.partNumber)}${p.serial ? " · SN " + esc(p.serial) : ""} · ${p.qty} × ${money(p.unitCost)}</div></div>
+          <div class="s">${esc(p.partNumber)}${p.serial ? " · SN " + esc(p.serial) : ""} · ${esc(p.qty)} × ${money(p.unitCost)}</div></div>
           <div class="mono" style="font-weight:800">${money(p.qty * p.unitCost)}</div>
-          <button class="iconbtn danger" data-delpart="${p.id}">${I.trash}</button></div>`).join("")
+          <button class="iconbtn danger" data-delpart="${esc(p.id)}">${I.trash}</button></div>`).join("")
         : `<div class="muted">No parts logged yet.</div>`}</div>
       <div class="total"><span>Parts total</span><span class="mono">${money(partsTotal(j))}</span></div>
       <h3>Add part</h3>
@@ -315,20 +466,22 @@ function viewJobDetail(id) {
       <div class="field"><label>Task description</label><input id="t_desc" placeholder="e.g. Slide-out gearbox replacement"></div>
       <div id="laborList">${j.labor.length ? j.labor.map(l => `
         <div class="item"><div class="grow"><div class="t">${esc(l.desc) || "Labor"}</div>
-          <div class="s">${l.hours} hrs × ${money(l.rate)}/hr</div></div>
+          <div class="s">${esc(l.hours)} hrs × ${money(l.rate)}/hr</div></div>
           <div class="mono" style="font-weight:800">${money(l.hours * l.rate)}</div>
-          <button class="iconbtn danger" data-dellabor="${l.id}">${I.trash}</button></div>`).join("")
+          <button class="iconbtn danger" data-dellabor="${esc(l.id)}">${I.trash}</button></div>`).join("")
         : `<div class="muted">No labor logged yet.</div>`}</div>
       <div class="total"><span>Labor total (${laborHours(j).toFixed(2)} hrs)</span><span class="mono">${money(laborTotal(j))}</span></div>
       <h3>Add labor manually</h3>
       <div class="f3">
         <div class="field"><label>Hours</label><input id="l_hours" inputmode="decimal" placeholder="1.5"></div>
-        <div class="field"><label>Rate $/hr</label><input id="l_rate" inputmode="decimal" value="${S.company.laborRate}"></div>
+        <div class="field"><label>Rate $/hr</label><input id="l_rate" inputmode="decimal" value="${esc(S.company.laborRate)}"></div>
         <div class="field"><label>&nbsp;</label><button class="btn block" id="addLabor">${I.plus}Add</button></div>
       </div>
     </div>
 
     <div class="card"><h2>Photos</h2>
+      ${(() => { const n = j.photos.filter(p => !(p.caption || "").trim()).length;
+        return n ? `<div class="nudge">${I.pen}<span>${n} photo${n > 1 ? "s" : ""} missing captions. Captions help the adjuster read your evidence.</span></div>` : ""; })()}
       <div class="tagbtns" id="tagBtns">
         ${["before", "after", "data tag", "part"].map((t, i) =>
           `<button class="tagbtn${i === 0 ? " sel" : ""}" data-tag="${t}">${t}</button>`).join("")}
@@ -337,6 +490,11 @@ function viewJobDetail(id) {
       <button class="btn secondary block" id="takePhoto">${I.camera}Take / upload photo</button>
       <input type="file" id="fileInput" class="hiddenfile" accept="image/*" capture="environment">
       <div class="photogrid" id="photoGrid">${j.photos.map(photoHtml).join("")}</div>
+      ${j.photos.length ? `<h3>Captions</h3><div id="capList">${j.photos.map(p => `
+        <div class="caprow"><img src="${safeDataUrl(p.thumb || p.dataUrl)}" alt="">
+          <div class="grow"><div class="s">${esc(p.tag)} · ${fmtDT(p.ts)}</div>
+          <input data-cap="${p.id}" value="${esc(p.caption || "")}" placeholder="Add a caption" aria-label="Caption for ${esc(p.tag)} photo"></div>
+        </div>`).join("")}</div>` : ""}
     </div>
 
     <div class="card"><h2>Warranty / insurance claim</h2>
@@ -354,6 +512,7 @@ function viewJobDetail(id) {
     <div class="card"><h2>Finish</h2>
       <div class="total" style="padding-top:0"><span>Job total</span><span class="mono">${money(jobTotal(j))}</span></div>
       <button class="btn rust block" id="buildPacket" style="margin:10px 0">${I.doc}Build warranty packet</button>
+      <button class="btn secondary block" id="viewInvoice">${I.doc}Customer invoice</button>
       ${j.status !== "complete"
         ? `<button class="btn secondary block" id="markComplete">${I.check}Mark job complete</button>`
         : `<button class="btn ghost block" id="reopen">${I.back}Reopen job</button>`}
@@ -425,9 +584,14 @@ function viewJobDetail(id) {
   document.querySelectorAll("[data-delphoto]").forEach(b => b.onclick = () => {
     j.photos = j.photos.filter(p => p.id !== b.dataset.delphoto); save(S); viewJobDetail(j.id);
   });
+  document.querySelectorAll("[data-cap]").forEach(inp => inp.addEventListener("change", () => {
+    const p = j.photos.find(x => x.id === inp.dataset.cap);
+    if (p) { p.caption = inp.value.trim(); save(S); toast("Caption saved"); }
+  }));
 
   /* finish */
   $("#buildPacket").onclick = () => { save(S); location.hash = "#/packet/" + j.id; };
+  $("#viewInvoice").onclick = () => { save(S); location.hash = "#/invoice/" + j.id; };
   const mc = $("#markComplete");
   if (mc) mc.onclick = () => { setStatus(j, "complete"); };
   const ro = $("#reopen");
@@ -438,15 +602,29 @@ function viewJobDetail(id) {
     }
   };
 }
-function setStatus(j, s) {
+/* Photo gate: when S.settings.requirePhotos is on, a job cannot be marked
+ * complete without at least one before and one after photo. */
+function photosGateOk(j) {
+  if (!S.settings.requirePhotos) return true;
+  const hasBefore = j.photos.some(p => p.tag === "before");
+  const hasAfter = j.photos.some(p => p.tag === "after");
+  if (!hasBefore || !hasAfter) {
+    toast("Add a before photo and an after photo before completing this job");
+    return false;
+  }
+  return true;
+}
+function setStatus(j, s, stay) {
+  if (s === "complete" && !photosGateOk(j)) { stay ? viewJobs() : viewJobDetail(j.id); return; }
   j.status = s;
   if (s === "complete" && !j.completedAt) j.completedAt = Date.now();
   if (s !== "complete") j.completedAt = 0;
-  save(S); toast("Status: " + STATUS_LABEL[s]); viewJobDetail(j.id);
+  save(S); toast("Status: " + STATUS_LABEL[s]);
+  stay ? viewJobs() : viewJobDetail(j.id);
 }
 function photoHtml(p) {
-  return `<div class="photo"><img src="${safeDataUrl(p.dataUrl)}" alt="${esc(p.caption || p.tag)}" loading="lazy">
-    <button class="del" data-delphoto="${p.id}" aria-label="Delete photo">×</button>
+  return `<div class="photo"><img src="${esc(safeDataUrl(p.dataUrl))}" alt="${esc(p.caption || p.tag)}" loading="lazy">
+    <button class="del" data-delphoto="${esc(p.id)}" aria-label="Delete photo">×</button>
     <div class="cap">${esc(p.tag)} · ${fmtDT(p.ts)}${p.caption ? " · " + esc(p.caption) : ""}</div></div>`;
 }
 function renderTimer(j) {
@@ -460,15 +638,32 @@ function renderTimer(j) {
   $("#timerBtn").onclick = () => {
     if (j.timerStart) {
       const hrs = Math.round(((Date.now() - j.timerStart) / 36e5) * 100) / 100;
-      j.timerStart = 0;
-      if (hrs > 0) {
-        j.labor.push({ id: uid(), desc: $("#t_desc").value.trim() || "On-site labor", hours: hrs, rate: S.company.laborRate });
-        toast("Logged " + hrs.toFixed(2) + " hrs");
-      }
-      save(S); viewJobDetail(j.id);
+      if (hrs > 0) { renderTimerConfirm(j, hrs); }
+      else { j.timerStart = 0; save(S); renderTimer(j); }
     } else { j.timerStart = Date.now(); save(S); renderTimer(j); tickTimer(j); }
   };
   if (running) tickTimer(j);
+}
+/* Confirm panel shown when the timer stops: prefilled hours, description to confirm. */
+function renderTimerConfirm(j, hrs) {
+  clearInterval(timerInt);
+  const box = $("#timerBox"); if (!box) return;
+  const pre = $("#t_desc") ? $("#t_desc").value : "";
+  const rate = S.company.laborRate;
+  box.innerHTML = `<div class="timerconfirm">
+    <div class="tc-title">Log <span class="mono">${hrs.toFixed(2)} hrs</span> as labor? (${money(hrs * rate)})</div>
+    <div class="field"><label>Task description</label><input id="tc_desc" value="${esc(pre)}" placeholder="What was this time for"></div>
+    <div class="row">
+      <button class="btn grow" id="tcAdd">${I.check}Add labor</button>
+      <button class="btn ghost grow" id="tcDiscard">Discard</button>
+    </div>
+  </div>`;
+  $("#tcAdd").onclick = () => {
+    j.labor.push({ id: uid(), desc: $("#tc_desc").value.trim() || "On-site labor",
+      hours: hrs, rate });
+    j.timerStart = 0; save(S); toast("Logged " + hrs.toFixed(2) + " hrs"); viewJobDetail(j.id);
+  };
+  $("#tcDiscard").onclick = () => { j.timerStart = 0; save(S); viewJobDetail(j.id); };
 }
 function tickTimer(j) {
   clearInterval(timerInt);
@@ -514,11 +709,19 @@ function viewPacket(id) {
   const before = j.photos.filter(p => p.tag === "before");
   const after = j.photos.filter(p => p.tag === "after");
   const tags = j.photos.filter(p => p.tag === "data tag" || p.tag === "part");
+  const checks = packetChecks(j), missing = checks.filter(check => !check.ok);
 
   $("#view").innerHTML = `
     <button class="backlink noprint" id="back">${I.back}Back to job</button>
     <div class="sectionhead noprint"><h2>Warranty packet</h2>
-      <span class="pill ${j.filedAt ? "complete" : "scheduled"}">${j.filedAt ? "Claim filed" : "Draft"}</span></div>
+      <span class="pill ${esc(j.claim.status)}">${esc(CLAIM_LABEL[j.claim.status])}</span></div>
+
+    <div class="card noprint packet-readiness" id="packetReadiness">
+      <h2>Packet readiness</h2>
+      <ul class="packet-checks">${checks.map(check => `<li class="packet-check ${check.ok ? "ok" : "missing"}"><span aria-hidden="true">${check.ok ? I.check : I.x}</span><span class="sr-only">${check.ok ? "Complete:" : "Missing:"} </span>${esc(check.label)}</li>`).join("")}</ul>
+      <strong>${missing.length ? missing.length + " items missing" : "Ready to print"}</strong>
+      ${missing.length ? `<div class="packet-override"><p class="muted">For edge cases only, like non-warranty jobs.</p><button class="btn secondary" id="printAnyway">${I.printer}Print anyway</button></div>` : ""}
+    </div>
 
     <div class="packet" id="packetDoc">
       <div class="p-head">
@@ -529,10 +732,10 @@ function viewPacket(id) {
 
       <div class="p-sec"><h4>Claim information</h4>
         <dl class="kv">
-          <dt>Insurer</dt><dd>${esc(j.claim.insurer) || "—"}</dd>
-          <dt>Claim #</dt><dd>${esc(j.claim.claimNumber) || "—"}</dd>
-          <dt>Auth #</dt><dd>${esc(j.claim.authNumber) || "—"}</dd>
-          <dt>Authorized by</dt><dd>${esc(j.claim.authBy) || "—"}${j.claim.authDate ? " on " + fmtDate(j.claim.authDate) : ""}</dd>
+          <dt>Insurer</dt><dd>${esc(j.claim.insurer) || "Not provided"}</dd>
+          <dt>Claim #</dt><dd>${esc(j.claim.claimNumber) || "Not provided"}</dd>
+          <dt>Auth #</dt><dd>${esc(j.claim.authNumber) || "Not provided"}</dd>
+          <dt>Authorized by</dt><dd>${esc(j.claim.authBy) || "Not provided"}${j.claim.authDate ? " on " + fmtDate(j.claim.authDate) : ""}</dd>
           <dt>Reimburse to</dt><dd>${esc(c.name)}${c.address ? ", " + esc(c.address) : ""}${c.phone ? " · " + esc(c.phone) : ""}</dd>
         </dl>
       </div>
@@ -540,32 +743,32 @@ function viewPacket(id) {
       <div class="p-sec"><h4>Customer &amp; unit</h4>
         <dl class="kv">
           <dt>Customer</dt><dd>${esc(j.customer)}${j.phone ? ' · <span style="white-space:nowrap">' + esc(j.phone) + "</span>" : ""}</dd>
-          <dt>Service site</dt><dd>${esc(j.site) || "—"}</dd>
-          <dt>Unit</dt><dd>${esc(rv) || "—"}</dd>
-          <dt>VIN</dt><dd class="mono">${esc(j.vin) || "—"}</dd>
+          <dt>Service site</dt><dd>${esc(j.site) || "Not provided"}</dd>
+          <dt>Unit</dt><dd>${esc(rv) || "Not provided"}</dd>
+          <dt>VIN</dt><dd class="mono">${esc(j.vin) || "Not provided"}</dd>
           <dt>Service date</dt><dd>${fmtDate(j.scheduledAt)}${j.completedAt ? " · completed " + fmtDate(new Date(j.completedAt).toISOString().slice(0, 10)) : ""}</dd>
         </dl>
       </div>
 
       <div class="p-sec"><h4>Complaint / cause / correction</h4>
         <dl class="kv">
-          <dt>Complaint</dt><dd>${esc(j.complaint) || "—"}</dd>
-          <dt>Cause</dt><dd>${esc(j.cause) || "—"}</dd>
-          <dt>Correction</dt><dd>${esc(j.correction) || "—"}</dd>
+          <dt>Complaint</dt><dd>${esc(j.complaint) || "Not provided"}</dd>
+          <dt>Cause</dt><dd>${esc(j.cause) || "Not provided"}</dd>
+          <dt>Correction</dt><dd>${esc(j.correction) || "Not provided"}</dd>
         </dl>
         ${j.notes ? `<div class="muted" style="margin-top:6px">Notes: ${esc(j.notes)}</div>` : ""}
       </div>
 
       <div class="p-sec"><h4>Parts</h4>
         ${j.parts.length ? `<table><tr><th>Part</th><th>Part #</th><th>Serial #</th><th class="r">Qty</th><th class="r">Unit</th><th class="r">Total</th></tr>
-        ${j.parts.map(p => `<tr><td>${esc(p.name)}</td><td class="mono">${esc(p.partNumber) || "—"}</td><td class="mono">${esc(p.serial) || "—"}</td><td class="r">${p.qty}</td><td class="r">${money(p.unitCost)}</td><td class="r">${money(p.qty * p.unitCost)}</td></tr>`).join("")}
+        ${j.parts.map(p => `<tr><td>${esc(p.name)}</td><td class="mono">${esc(p.partNumber) || "Not provided"}</td><td class="mono">${esc(p.serial) || "Not provided"}</td><td class="r">${esc(p.qty)}</td><td class="r">${money(p.unitCost)}</td><td class="r">${money(p.qty * p.unitCost)}</td></tr>`).join("")}
         <tr><td colspan="5" class="r"><strong>Parts subtotal</strong></td><td class="r"><strong>${money(pt)}</strong></td></tr></table>`
         : `<div class="muted">No parts recorded.</div>`}
       </div>
 
       <div class="p-sec"><h4>Labor</h4>
         ${j.labor.length ? `<table><tr><th>Description</th><th class="r">Hours</th><th class="r">Rate</th><th class="r">Total</th></tr>
-        ${j.labor.map(l => `<tr><td>${esc(l.desc)}</td><td class="r">${l.hours}</td><td class="r">${money(l.rate)}</td><td class="r">${money(l.hours * l.rate)}</td></tr>`).join("")}
+        ${j.labor.map(l => `<tr><td>${esc(l.desc)}</td><td class="r">${esc(l.hours)}</td><td class="r">${money(l.rate)}</td><td class="r">${money(l.hours * l.rate)}</td></tr>`).join("")}
         <tr><td colspan="3" class="r"><strong>Labor subtotal (${laborHours(j).toFixed(2)} hrs)</strong></td><td class="r"><strong>${money(lt)}</strong></td></tr></table>`
         : `<div class="muted">No labor recorded.</div>`}
       </div>
@@ -576,28 +779,28 @@ function viewPacket(id) {
 
       ${before.length || after.length ? `<div class="p-sec"><h4>Condition photos (timestamped)</h4>
         <div class="p-photos">
-        ${before.concat(after).map(p => `<figure><img src="${safeDataUrl(p.dataUrl)}" alt="${esc(p.caption || p.tag)}"><figcaption>${esc(p.tag)} · ${fmtDT(p.ts)}${p.caption ? " · " + esc(p.caption) : ""}</figcaption></figure>`).join("")}
+        ${before.concat(after).map(p => `<figure><img src="${esc(safeDataUrl(p.dataUrl))}" alt="${esc(p.caption || p.tag)}"><figcaption>${esc(p.tag)} · ${fmtDT(p.ts)}${p.caption ? " · " + esc(p.caption) : ""}</figcaption></figure>`).join("")}
         </div></div>` : ""}
 
       ${tags.length ? `<div class="p-sec"><h4>Data tags &amp; part photos</h4>
         <div class="p-photos">
-        ${tags.map(p => `<figure><img src="${safeDataUrl(p.dataUrl)}" alt="${esc(p.caption || p.tag)}"><figcaption>${esc(p.tag)} · ${fmtDT(p.ts)}${p.caption ? " · " + esc(p.caption) : ""}</figcaption></figure>`).join("")}
+        ${tags.map(p => `<figure><img src="${esc(safeDataUrl(p.dataUrl))}" alt="${esc(p.caption || p.tag)}"><figcaption>${esc(p.tag)} · ${fmtDT(p.ts)}${p.caption ? " · " + esc(p.caption) : ""}</figcaption></figure>`).join("")}
         </div></div>` : ""}
 
       <div class="p-sec"><h4>Signatures</h4>
         <div class="f2">
           <div><div class="muted" style="font-size:12px;margin-bottom:4px">CUSTOMER</div>
-            ${j.customerSig ? `<img class="sigimg" src="${j.customerSig}" alt="Customer signature">` : `<div class="muted">Not signed</div>`}
+            ${j.customerSig ? `<img class="sigimg" src="${esc(safeDataUrl(j.customerSig))}" alt="Customer signature">` : `<div class="muted">Not signed</div>`}
             <div style="font-size:13px;margin-top:4px">${esc(j.customer)}</div></div>
           <div><div class="muted" style="font-size:12px;margin-bottom:4px">TECHNICIAN</div>
-            ${j.techSig ? `<img class="sigimg" src="${j.techSig}" alt="Tech signature">` : `<div class="muted">Not signed</div>`}
+            ${j.techSig ? `<img class="sigimg" src="${esc(safeDataUrl(j.techSig))}" alt="Tech signature">` : `<div class="muted">Not signed</div>`}
             <div style="font-size:13px;margin-top:4px">${esc(c.name)}</div></div>
         </div>
       </div>
     </div>
 
     <div class="card noprint" style="margin-top:12px"><h2>Sign the packet</h2>
-      <div class="field"><label>Customer signature — sign below</label>
+      <div class="field"><label>Customer signature: sign below</label>
         <div class="sigwrap"><canvas class="sigpad" id="sigCustomer" width="600" height="150"></canvas>
         <button class="btn small ghost clear" id="clearCSig">Clear</button></div></div>
       <div class="field"><label>Technician signature</label>
@@ -607,6 +810,9 @@ function viewPacket(id) {
     </div>
 
     <div class="noprint" style="display:grid;gap:10px;margin-top:4px">
+      <div class="field"><label for="claimStatus">Claim status</label>
+        <select id="claimStatus">${CLAIM_STATUSES.map(s => `<option value="${s}"${j.claim.status === s ? " selected" : ""}>${CLAIM_LABEL[s]}</option>`).join("")}</select>
+      </div>
       <button class="btn rust block" id="printBtn">${I.printer}Print / save as PDF</button>
       <button class="btn secondary block" id="shareBtn">${I.doc}Share packet summary</button>
       ${j.filedAt
@@ -623,20 +829,39 @@ function viewPacket(id) {
   $("#clearTSig").onclick = () => clearSig($("#sigTech"));
   $("#saveSigs").onclick = () => {
     const cs = sigData($("#sigCustomer")), ts = sigData($("#sigTech"));
-    if (cs) j.customerSig = cs;
-    if (ts) j.techSig = ts;
-    save(S); toast("Signatures saved"); viewPacket(j.id);
+    const feedback = [];
+    if ($("#sigCustomer").dataset.used && !cs) feedback.push("Customer signature has no ink, draw it again");
+    if ($("#sigTech").dataset.used && !ts) feedback.push("Technician signature has no ink, draw it again");
+    j.customerSig = cs; j.techSig = ts;
+    save(S); toast(["Signatures saved", ...feedback].join(". ")); viewPacket(j.id);
   };
-  $("#printBtn").onclick = () => window.print();
+  const readyToOutput = () => {
+    const missing = packetChecks(j).filter(check => !check.ok);
+    if (!missing.length) return true;
+    toast("Missing: " + missing.map(check => check.label.toLowerCase()).join(", "));
+    $("#packetReadiness").scrollIntoView({ behavior: "smooth", block: "start" });
+    return false;
+  };
+  $("#claimStatus").onchange = e => {
+    const value = e.target.value;
+    if (!CLAIM_STATUSES.includes(value)) return;
+    j.claim.status = value; j.claim.statusDate = Date.now();
+    if (value === "filed" && !j.filedAt) j.filedAt = j.claim.statusDate;
+    save(S); toast("Claim: " + CLAIM_LABEL[value]); viewPacket(j.id);
+  };
+  const printAnyway = $("#printAnyway");
+  if (printAnyway) printAnyway.onclick = () => window.print();
+  $("#printBtn").onclick = () => { if (readyToOutput()) window.print(); };
   $("#shareBtn").onclick = () => {
+    if (!readyToOutput()) return;
     const lines = [
       c.name + (c.phone ? " · " + c.phone : ""),
       "WARRANTY CLAIM PACKET",
-      "Customer: " + (j.customer || "—"),
-      "Unit: " + (rv || "—") + (j.vin ? " · VIN " + j.vin : ""),
-      "Complaint: " + (j.complaint || "—"),
-      "Cause: " + (j.cause || "—"),
-      "Correction: " + (j.correction || "—"),
+      "Customer: " + (j.customer || "Not provided"),
+      "Unit: " + (rv || "Not provided") + (j.vin ? " · VIN " + j.vin : ""),
+      "Complaint: " + (j.complaint || "Not provided"),
+      "Cause: " + (j.cause || "Not provided"),
+      "Correction: " + (j.correction || "Not provided"),
       "Parts: " + money(pt) + " · Labor: " + money(lt) + " (" + laborHours(j).toFixed(2) + " hrs)",
       "TOTAL CLAIMED: " + money(total),
       j.claim.claimNumber ? "Claim #: " + j.claim.claimNumber : null,
@@ -644,38 +869,144 @@ function viewPacket(id) {
       "Photos: " + j.photos.length + " timestamped"
     ].filter(Boolean).join("\n");
     if (navigator.share) {
-      navigator.share({ title: "Warranty packet — " + (j.customer || "job"), text: lines }).catch(() => {});
+      navigator.share({ title: "Warranty packet: " + (j.customer || "job"), text: lines }).catch(() => {});
     } else if (navigator.clipboard) {
       navigator.clipboard.writeText(lines).then(() => toast("Packet summary copied"), () => toast("Copy failed"));
     } else { toast("Sharing not supported here"); }
   };
   const fb = $("#filedBtn");
   if (fb) fb.onclick = () => {
-    if (j.status !== "complete") setStatusSilent(j, "complete");
-    j.filedAt = Date.now(); save(S); toast("Claim marked filed"); viewPacket(j.id);
+    if (j.status !== "complete") {
+      if (!photosGateOk(j)) { viewPacket(j.id); return; }
+      setStatusSilent(j, "complete");
+    }
+    j.claim.status = "filed"; j.claim.statusDate = Date.now();
+    j.filedAt = j.claim.statusDate; save(S); toast("Claim marked filed"); viewPacket(j.id);
   };
 }
 function setStatusSilent(j, s) { j.status = s; if (s === "complete" && !j.completedAt) j.completedAt = Date.now(); }
 
+/* ================= CUSTOMER INVOICE ================= */
+function viewInvoice(id) {
+  const j = jobById(id);
+  if (!j) { location.hash = "#/jobs"; return; }
+  clearInterval(timerInt);
+  if (!j.invoiceNumber) {
+    j.invoiceNumber = "RW-" + new Date().getFullYear() + "-" + String(S.invoiceSeq).padStart(4, "0");
+    S.invoiceSeq++;
+  }
+  save(S);
+  const c = S.company;
+  const rv = [j.rvYear, j.rvMake, j.rvModel].filter(Boolean).join(" ");
+  const pt = partsTotal(j), lt = laborTotal(j);
+  const taxRate = Number(c.taxRate) || 0;
+  const sub = pt + lt, tax = sub * taxRate / 100, total = sub + tax;
+  $("#view").innerHTML = `
+    <button class="backlink noprint" id="back">${I.back}Back to job</button>
+    <div class="sectionhead noprint"><h2>Customer invoice</h2><span class="pill complete">${esc(j.invoiceNumber)}</span></div>
+
+    <div class="packet" id="invoiceDoc">
+      <div class="p-head">
+        <h2>${esc(c.name)}</h2>
+        <div class="muted">${esc(c.phone)}${c.email ? " · " + esc(c.email) : ""}${c.address ? "<br>" + esc(c.address) : ""}</div>
+        <div style="margin-top:8px;font-size:13px"><strong>INVOICE ${esc(j.invoiceNumber)}</strong> · ${fmtDate(todayISO())}</div>
+      </div>
+
+      <div class="p-sec"><h4>Bill to</h4>
+        <dl class="kv">
+          <dt>Customer</dt><dd>${esc(j.customer)}${j.phone ? ' · <span style="white-space:nowrap">' + esc(j.phone) + "</span>" : ""}</dd>
+          <dt>Service site</dt><dd>${esc(j.site) || "Not provided"}</dd>
+          <dt>Unit</dt><dd>${esc(rv) || "Not provided"}</dd>
+          ${j.vin ? `<dt>VIN</dt><dd class="mono">${esc(j.vin)}</dd>` : ""}
+          <dt>Service date</dt><dd>${fmtDate(j.scheduledAt)}</dd>
+        </dl>
+      </div>
+
+      <div class="p-sec"><h4>Line items</h4>
+        ${(j.parts.length || j.labor.length) ? `<table>
+          <tr><th>Description</th><th class="r">Qty / hrs</th><th class="r">Unit</th><th class="r">Total</th></tr>
+          ${j.parts.map(p => `<tr><td>${esc(p.name)}${p.partNumber ? '<div class="muted" style="font-size:12px">Part # ' + esc(p.partNumber) + "</div>" : ""}</td><td class="r">${p.qty}</td><td class="r">${money(p.unitCost)}</td><td class="r">${money(p.qty * p.unitCost)}</td></tr>`).join("")}
+          ${j.labor.map(l => `<tr><td>${esc(l.desc)}</td><td class="r">${l.hours}</td><td class="r">${money(l.rate)}</td><td class="r">${money(l.hours * l.rate)}</td></tr>`).join("")}
+        </table>` : `<div class="muted">No parts or labor recorded yet.</div>`}
+      </div>
+
+      <div class="p-sec"><h4>Totals</h4>
+        <table>
+          <tr><td>Subtotal</td><td class="r">${money(sub)}</td></tr>
+          ${taxRate > 0 ? `<tr><td>Tax (${taxRate}%)</td><td class="r">${money(tax)}</td></tr>` : ""}
+          <tr><td><strong>Total due</strong></td><td class="r" style="font-size:20px"><strong>${money(total)}</strong></td></tr>
+        </table>
+        <div class="muted" style="margin-top:8px">Payment due on receipt. Thank you for your business.</div>
+      </div>
+    </div>
+
+    <div class="noprint" style="display:grid;gap:10px;margin-top:12px">
+      <button class="btn rust block" id="printInv">${I.printer}Print / save as PDF</button>
+      <button class="btn secondary block" id="shareInv">${I.doc}Share invoice</button>
+      <button class="btn ghost block" id="backJob">Back to job</button>
+    </div>`;
+  $("#back").onclick = () => location.hash = "#/job/" + j.id;
+  $("#backJob").onclick = () => location.hash = "#/job/" + j.id;
+  $("#printInv").onclick = () => window.print();
+  $("#shareInv").onclick = () => {
+    const lines = [
+      "INVOICE " + j.invoiceNumber + " · " + c.name + (c.phone ? " · " + c.phone : ""),
+      "Bill to: " + (j.customer || "Not provided"),
+      "Unit: " + (rv || "Not provided"),
+      "Service date: " + fmtDate(j.scheduledAt),
+      "Parts: " + money(pt) + " · Labor: " + money(lt) + " (" + laborHours(j).toFixed(2) + " hrs)",
+      taxRate > 0 ? "Tax (" + taxRate + "%): " + money(tax) : null,
+      "TOTAL DUE: " + money(total),
+      "Payment due on receipt. Thank you for your business."
+    ].filter(Boolean).join("\n");
+    if (navigator.share) {
+      navigator.share({ title: "Invoice " + j.invoiceNumber, text: lines }).catch(() => {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(lines).then(() => toast("Invoice copied"), () => toast("Copy failed"));
+    } else { toast("Sharing not supported here"); }
+  };
+}
+
 function initSigPad(canvas, existing) {
   const ctx = canvas.getContext("2d");
   ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.strokeStyle = "#1e3d2b";
-  if (existing) { const img = new Image(); img.onload = () => ctx.drawImage(img, 0, 0, canvas.width, canvas.height); img.src = existing; }
+  canvas.dataset.used = "";
+  canvas.dataset.dist = "0";
+  canvas._sigPending = null;
+  if (safeDataUrl(existing)) {
+    const img = new Image();
+    canvas._sigPending = img;
+    canvas.dataset.used = "1"; canvas.dataset.dist = "9999";
+    img.onload = () => {
+      if (canvas._sigPending !== img) return;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.dataset.used = "1"; canvas.dataset.dist = "9999";
+      canvas._sigPending = null;
+    };
+    img.onerror = () => { if (canvas._sigPending === img) clearSig(canvas); };
+    img.src = safeDataUrl(existing);
+  }
   let drawing = false, last = null;
   const pos = e => { const r = canvas.getBoundingClientRect(); const p = e.touches ? e.touches[0] : e;
     return { x: (p.clientX - r.left) * canvas.width / r.width, y: (p.clientY - r.top) * canvas.height / r.height }; };
-  const start = e => { drawing = true; last = pos(e); e.preventDefault(); };
-  const move = e => { if (!drawing) return; const p = pos(e); ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke(); last = p; e.preventDefault(); };
+  const start = e => { if (canvas._sigPending) return; drawing = true; canvas.dataset.used = "1"; canvas.setPointerCapture(e.pointerId); last = pos(e); e.preventDefault(); };
+  const move = e => { if (!drawing) return; const p = pos(e); ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke(); canvas.dataset.dist = String(parseFloat(canvas.dataset.dist || "0") + Math.hypot(p.x - last.x, p.y - last.y)); last = p; e.preventDefault(); };
   const end = () => drawing = false;
   canvas.addEventListener("pointerdown", start);
   canvas.addEventListener("pointermove", move);
   canvas.addEventListener("pointerup", end);
   canvas.addEventListener("pointercancel", end);
-  canvas.dataset.used = existing ? "1" : "";
-  canvas.addEventListener("pointerdown", () => { canvas.dataset.used = "1"; });
 }
-function clearSig(canvas) { canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height); canvas.dataset.used = ""; }
-function sigData(canvas) { return canvas.dataset.used ? canvas.toDataURL("image/png") : ""; }
+function clearSig(canvas) {
+  canvas._sigPending = null;
+  canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+  canvas.dataset.used = ""; canvas.dataset.dist = "0";
+}
+function sigData(canvas) {
+  if (!canvas.dataset.used || !(parseFloat(canvas.dataset.dist || "0") > 120)) return "";
+  // Preserve existing ink if Save is tapped before its image finishes loading.
+  return canvas._sigPending ? safeDataUrl(canvas._sigPending.src) : canvas.toDataURL("image/png");
+}
 
 /* ================= CUSTOMER HISTORY ================= */
 function viewCustomer(name) {
@@ -691,9 +1022,9 @@ function viewCustomer(name) {
       <div class="stat"><div class="v">${money(spent)}</div><div class="l">Lifetime</div></div>
     </div>
     ${jobs.length ? jobs.map(j => `
-      <button class="jobcard" data-job="${j.id}">
+      <button class="jobcard" data-job="${esc(j.id)}">
         <div class="jc-top"><span class="jc-name">${fmtDate(j.scheduledAt)}</span>
-          <span class="pill ${j.status}">${STATUS_LABEL[j.status]}</span></div>
+          <span class="pill ${esc(j.status)}">${STATUS_LABEL[j.status]}</span></div>
         <div class="jc-rv">${esc([j.rvYear, j.rvMake, j.rvModel].filter(Boolean).join(" "))}</div>
         <div class="jc-meta"><span>${esc(j.complaint || "No complaint recorded").slice(0, 60)}</span>
         <span class="mono">${money(jobTotal(j))}</span></div>
@@ -709,6 +1040,7 @@ function viewReminders() {
   const now = new Date(); now.setHours(0, 0, 0, 0);
   $("#view").innerHTML = `
     <div class="sectionhead"><h2>Reminders</h2></div>
+    <div class="muted" style="margin-bottom:10px">RoadWrench does not send reminders by itself. Tap the phone icon to text the customer yourself.</div>
     <div class="card"><h2>Recurring maintenance</h2>
       ${sorted.length ? sorted.map(r => {
         const due = nextDue(r); const days = Math.round((due - now) / 864e5);
@@ -717,10 +1049,11 @@ function viewReminders() {
         return `<div class="rem">
           <div class="duebadge ${cls}">${lbl}</div>
           <div class="grow"><div style="font-weight:800">${esc(r.service)}</div>
-            <div class="muted">${esc(r.customer)} · ${esc(r.rvLabel)}<br>Every ${r.intervalMonths} mo · last done ${fmtDate(r.lastDone)}</div></div>
-          <button class="iconbtn" data-done="${r.id}" title="Mark done">${I.check}</button>
+            <div class="muted">${esc(r.customer)} · ${esc(r.rvLabel)}<br>Every ${esc(r.intervalMonths)} mo · last done ${fmtDate(r.lastDone)}</div></div>
+          <button class="iconbtn" data-done="${esc(r.id)}" title="Mark done">${I.check}</button>
+          <button class="iconbtn" data-sched="${esc(r.id)}" title="Schedule job">${I.cal}</button>
           <a class="iconbtn" title="Text customer" href="sms:?&body=${encodeURIComponent(`Hi ${r.customer}, this is ${S.company.name}: your ${r.service} for your ${r.rvLabel || "RV"} is due. Reply to schedule a visit!`)}">${I.phone}</a>
-          <button class="iconbtn danger" data-delrem="${r.id}">${I.trash}</button>
+          <button class="iconbtn danger" data-delrem="${esc(r.id)}">${I.trash}</button>
         </div>`;
       }).join("") : `<div class="empty">${I.bell}<div>No reminders yet.<br>Set one below and never miss a reseal again.</div></div>`}
     </div>
@@ -747,10 +1080,30 @@ function viewReminders() {
   };
   document.querySelectorAll("[data-done]").forEach(b => b.onclick = () => {
     const r = S.reminders.find(x => x.id === b.dataset.done);
-    if (r) { r.lastDone = todayISO(); save(S); toast("Marked done — next due reset"); viewReminders(); }
+    if (r) { r.lastDone = todayISO(); save(S); toast("Marked done: next due reset"); viewReminders(); }
   });
   document.querySelectorAll("[data-delrem]").forEach(b => b.onclick = () => {
     S.reminders = S.reminders.filter(x => x.id !== b.dataset.delrem); save(S); viewReminders();
+  });
+  document.querySelectorAll("[data-sched]").forEach(b => b.onclick = () => {
+    const r = S.reminders.find(x => x.id === b.dataset.sched);
+    if (!r) return;
+    const prev = [...S.jobs]
+      .filter(j => (j.customer || "").toLowerCase() === (r.customer || "").toLowerCase())
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
+    let rvYear = "", rvModel = r.rvLabel || "";
+    const ym = (r.rvLabel || "").match(/^(\d{4})\s+(.*)$/);
+    if (ym) { rvYear = ym[1]; rvModel = ym[2]; }
+    const due = nextDue(r);
+    const iso = due.getFullYear() + "-" + String(due.getMonth() + 1).padStart(2, "0") + "-" + String(due.getDate()).padStart(2, "0");
+    const j = { id: uid(), status: "scheduled", customer: r.customer,
+      phone: (prev && prev.phone) || "", site: (prev && prev.site) || "", scheduledAt: iso,
+      rvYear, rvMake: "", rvModel, vin: (prev && prev.vin) || "",
+      complaint: (r.service || "Maintenance") + " (scheduled maintenance)",
+      cause: "", correction: "", parts: [], labor: [], timerStart: 0, photos: [], notes: "",
+      claim: { insurer: "", claimNumber: "", authNumber: "", authBy: "", authDate: "", status: "draft", statusDate: 0 },
+      customerSig: "", techSig: "", filedAt: 0, completedAt: 0, createdAt: Date.now() };
+    S.jobs.push(j); save(S); toast("Job created from reminder"); location.hash = "#/job/" + j.id;
   });
 }
 
@@ -779,15 +1132,21 @@ function viewDashboard() {
       <div class="stat"><div class="v">${done.length}</div><div class="l">Jobs completed</div></div>
       <div class="stat"><div class="v">${money(avg)}</div><div class="l">Avg ticket</div></div>
     </div>
-    <div class="card"><h2>Revenue — last 6 months</h2>
+    <div class="card"><h2>Claims pipeline</h2>
+      ${CLAIM_STATUSES.map(s => {
+        const jobs = S.jobs.filter(j => j.claim.status === s);
+        return `<div class="item claim-pipeline-row"><span class="pill ${s}">${CLAIM_LABEL[s]}</span><div class="grow">${jobs.length} ${jobs.length === 1 ? "job" : "jobs"} · <span class="mono">${money(jobs.reduce((sum, j) => sum + jobTotal(j), 0))}</span>${s === "filed" || s === "approved" ? `<div class="muted">Money waiting on the insurer</div>` : ""}</div></div>`;
+      }).join("")}
+    </div>
+    <div class="card"><h2>Revenue: last 6 months</h2>
       <div class="bars">${months.map(m => `<div class="bar" style="height:${Math.max(4, (m.rev / max) * 100)}%" title="${m.label}: ${money(m.rev)}"><span>${m.label}</span></div>`).join("")}</div>
       <div style="height:22px"></div>
     </div>
     <div class="card"><h2>Active jobs (${active.length})</h2>
       ${active.length ? active.slice(0, 5).map(j => `
-        <div class="item" data-gojob="${j.id}" style="cursor:pointer"><div class="grow">
+        <div class="item" data-gojob="${esc(j.id)}" style="cursor:pointer"><div class="grow">
           <div class="t">${esc(j.customer)}</div><div class="s">${esc([j.rvYear, j.rvMake, j.rvModel].filter(Boolean).join(" "))}</div></div>
-          <span class="pill ${j.status}">${STATUS_LABEL[j.status]}</span></div>`).join("")
+          <span class="pill ${esc(j.status)}">${STATUS_LABEL[j.status]}</span></div>`).join("")
         : `<div class="muted">No active jobs. Book one from the Jobs tab.</div>`}
     </div>
     <button class="btn secondary block" id="csvBtn">${I.doc}Export completed jobs (CSV)</button>`;
@@ -822,11 +1181,18 @@ function viewSettings() {
         <div class="field"><label>Email</label><input id="s_email" value="${esc(c.email)}"></div>
       </div>
       <div class="field"><label>Address</label><input id="s_addr" value="${esc(c.address)}" placeholder="Street, city, state, zip"></div>
-      <div class="field"><label>Default labor rate ($/hr)</label><input id="s_rate" inputmode="decimal" value="${c.laborRate}"></div>
+      <div class="f2">
+        <div class="field"><label>Default labor rate ($/hr)</label><input id="s_rate" inputmode="decimal" value="${esc(c.laborRate)}"></div>
+        <div class="field"><label>Tax rate (%)</label><input id="s_tax" inputmode="decimal" value="${esc(c.taxRate || 0)}" placeholder="0"></div>
+      </div>
       <button class="btn block" id="saveCo">${I.check}Save</button>
     </div>
+    <div class="card"><h2>Quality</h2>
+      <label class="checkrow"><input type="checkbox" id="s_reqPhotos"${S.settings.requirePhotos ? " checked" : ""}> Require before and after photos before a job can be marked complete</label>
+      <div class="muted" style="margin-top:8px">For warranty-heavy shops. Leave it off for quick jobs like oil changes.</div>
+    </div>
     <div class="card"><h2>Data</h2>
-      <div class="muted" style="margin-bottom:10px">Everything lives in this browser (localStorage). No account, works offline in a campground.</div>
+      <div class="muted" style="margin-bottom:10px">Your jobs live on this device first. Optional device sync is a prototype convenience, not a backup. Export a backup regularly.</div>
       <div class="row">
         <button class="btn secondary grow" id="exportBtn">Export backup</button>
         <button class="btn ghost danger grow" id="wipeBtn" style="color:var(--danger);border-color:#e5c4bd">Erase all</button>
@@ -834,15 +1200,20 @@ function viewSettings() {
     </div>
     <div id="syncSettings"></div>
     <div class="card"><h2>About</h2>
-      <div class="muted">RoadWrench v1 — built for mobile RV techs. Job board, parts, labor timer, timestamped photos, and warranty claim packets that adjusters actually accept.</div>
+      <div class="muted">RoadWrench v1: built for mobile RV techs. Job board, parts, labor timer, timestamped photos, and warranty claim packets that adjusters actually accept.</div>
+      <div style="margin-top:10px; display:flex; gap:14px; flex-wrap:wrap">
+        <a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="mailto:absolukie@gmail.com">Contact support</a>
+      </div>
     </div>`;
   $("#saveCo").onclick = () => {
     c.name = $("#s_name").value.trim() || c.name;
     c.phone = $("#s_phone").value.trim(); c.email = $("#s_email").value.trim();
     c.address = $("#s_addr").value.trim();
     c.laborRate = parseFloat($("#s_rate").value) || c.laborRate;
+    const tx = parseFloat($("#s_tax").value); c.taxRate = isNaN(tx) || tx < 0 ? 0 : tx;
     save(S); toast("Saved");
   };
+  $("#s_reqPhotos").onchange = e => { S.settings.requirePhotos = e.target.checked; save(S); toast("Saved"); };
   $("#exportBtn").onclick = () => {
     const blob = new Blob([JSON.stringify(S, null, 2)], { type: "application/json" });
     const a = document.createElement("a");

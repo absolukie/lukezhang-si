@@ -21,12 +21,60 @@ function esc(s){
   });
 }
 
+function csvSafe(v){
+  var s = String(v==null?"":v);
+  if(s.charAt(0)==="="||s.charAt(0)==="+"||s.charAt(0)==="-"||s.charAt(0)==="@") s = "'"+s;
+  return '"'+s.replace(/"/g,'""')+'"';
+}
+
 /* ---------- state ---------- */
 var state = { jobs:[], photos:[], checklist:[], lineItems:[], events:[] };
 var currentJobId = null;
 var taggingPhotoId = null;
 var pinMode = false;
 var pinDraft = [];
+var rapidDefaults = null;   // {room, phase} while rapid capture is active
+var rapidPhase = "before";
+var notingStepId = null;    // checklist step id being note-edited
+var jobSearch = "";
+var jobStatusFilter = "all";
+
+/* Per-phase photo minimums: the dossier must show the full before/during/after arc. */
+var PHASE_MIN = {before:2, during:2, after:2};
+function phaseCounts(jobId){
+  var counts = {before:0, during:0, after:0};
+  jobPhotos(jobId).forEach(function(p){
+    if(p.sample) return;
+    if(p.phase==="before") counts.before++;
+    else if(p.phase==="during") counts.during++;
+    else if(p.phase==="after") counts.after++;
+  });
+  return counts;
+}
+
+/* Work-log totals with job-level discount. */
+function worklogTotals(jobId){
+  var items = jobItems(jobId);
+  var sub = items.reduce(function(s,i){ return s + (i.qty*i.rate); }, 0);
+  var j = getJob(jobId);
+  var pct = j && j.discountPct ? Math.max(0, Math.min(100, Number(j.discountPct)||0)) : 0;
+  var disc = sub * pct / 100;
+  return {sub:sub, pct:pct, disc:disc, total:sub-disc};
+}
+
+/* Rate presets per job type for the line-item form. */
+var RATE_PRESETS = {
+  "Hoarding cleanup": [["Crew labor",185,"hr"],["Debris disposal",320,"ton"],["Deodorizing treatment",950,"job"],["PPE and consumables",420,"lot"]],
+  "Crime scene / trauma": [["Crew labor",225,"hr"],["Biohazard disposal",480,"box"],["Disinfection treatment",1200,"job"],["PPE and consumables",520,"lot"]],
+  "Biohazard remediation": [["Crew labor",195,"hr"],["Disposal",350,"load"],["Disinfection treatment",1100,"job"],["PPE and consumables",450,"lot"]],
+  "Unattended death": [["Crew labor",225,"hr"],["Disposal",380,"load"],["Deodorizing treatment",1400,"job"],["PPE and consumables",520,"lot"]],
+  "Sewage backup": [["Crew labor",165,"hr"],["Extraction",850,"job"],["Drying equipment",95,"day"],["Disinfection treatment",750,"job"]],
+  "Other": [["Crew labor",150,"hr"],["Materials",0,"lot"]]
+};
+
+function photoBytes(jobId){
+  return jobPhotos(jobId).reduce(function(s,p){ return s + ((p.dataUrl||"").length + (p.thumb||"").length); }, 0);
+}
 
 function save(){
   var ok = true;
@@ -133,9 +181,11 @@ function renderJobs(){
     }
   });
   var mb = storageMB();
-  stats.textContent = state.jobs.length + (state.jobs.length===1?" job":" jobs") + " · " + open + " open" +
-    (totalVal>0 ? " · " + money(totalVal) + " documented" : "") +
-    " · Storage " + mb.toFixed(1) + "/5 MB" + (mb>4 ? " (almost full)" : "");
+  stats.innerHTML = esc(state.jobs.length + (state.jobs.length===1?" job":" jobs") + " · " + open + " open" +
+    (totalVal>0 ? " · " + money(totalVal) + " documented" : "") + " · ") +
+    '<button type="button" class="linklike" id="btn-storage">Storage '+mb.toFixed(1)+'/5 MB'+(mb>4?" (almost full)":"")+'</button>';
+  var bstor = $("btn-storage");
+  if(bstor) bstor.addEventListener("click", openStorageModal);
   if(!state.jobs.length){
     var welcomed = false;
     try{ welcomed = !!localStorage.getItem("aftermath.welcomed"); }catch(e){}
@@ -168,20 +218,66 @@ function renderJobs(){
     });
     return;
   }
-  list.innerHTML = state.jobs.map(function(j){
+  var q = jobSearch.trim().toLowerCase();
+  var filtersOn = q !== "" || jobStatusFilter !== "all";
+  var shown = state.jobs.filter(function(j){
+    if(jobStatusFilter!=="all" && j.status!==jobStatusFilter) return false;
+    if(!q) return true;
+    return [j.name,j.client,j.address,j.claim,j.insurer].some(function(v){
+      return (v||"").toLowerCase().indexOf(q)>=0;
+    });
+  });
+  if(filtersOn && !shown.length){
+    list.innerHTML = '<div class="empty"><div style="font-weight:700;color:var(--text);margin-bottom:6px;">No jobs match</div>' +
+      '<div>Try a different search or filter.</div>' +
+      '<div style="margin-top:14px;"><button id="btn-clear-filters" class="btn btn-secondary btn-small">Clear filters</button></div></div>';
+    var bcf = $("btn-clear-filters");
+    if(bcf) bcf.addEventListener("click", function(){
+      jobSearch = ""; jobStatusFilter = "all";
+      var si = $("job-search"); if(si) si.value = "";
+      document.querySelectorAll("#job-filters .chip-btn").forEach(function(x){
+        x.classList.toggle("sel", x.getAttribute("data-filter")==="all");
+      });
+      renderJobs();
+    });
+    return;
+  }
+  list.innerHTML = shown.map(function(j){
     var pc = jobPhotos(j.id).length;
-    return '<div class="job-card" data-id="'+j.id+'">' +
+    return '<div class="job-card" data-id="'+esc(j.id)+'">' +
       '<div class="job-card-top"><div class="job-card-name">'+esc(j.name)+'</div>' +
-      '<div class="status-pill status-'+j.status+'">'+statusLabel(j.status)+'</div></div>' +
+      '<div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">' +
+      (j.demo?'<span class="badge sample">DEMO</span>':'') +
+      '<div class="status-pill status-'+esc(j.status)+'">'+esc(statusLabel(j.status))+'</div></div></div>' +
       '<div class="job-card-meta">' +
       (j.client?'<div>'+esc(j.client)+'</div>':'') +
       (j.address?'<div>'+esc(j.address)+'</div>':'') +
-      '<div>'+pc+' photo'+(pc===1?"":"s")+' · opened '+fmtTime(j.createdAt)+'</div>' +
+      '<div>'+esc(pc)+' photo'+(pc===1?"":"s")+' · opened '+esc(fmtTime(j.createdAt))+'</div>' +
       '</div></div>';
   }).join("");
   list.querySelectorAll(".job-card").forEach(function(c){
     c.addEventListener("click", function(){ openJob(c.getAttribute("data-id")); });
   });
+}
+
+/* ---------- storage honesty ---------- */
+function openStorageModal(){
+  var mb = storageMB();
+  var pct = Math.min(100, mb/5*100);
+  var barCol = mb>4.75 ? "var(--red)" : mb>4 ? "var(--accent)" : "var(--green)";
+  var rows = state.jobs.map(function(j){
+    var b = photoBytes(j.id);
+    var n = jobPhotos(j.id).length;
+    return '<div class="custody-row"><div class="custody-text" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(j.name)+'</div>' +
+      '<div class="custody-time">'+n+' photo'+(n===1?"":"s")+' · '+(b/1048576).toFixed(1)+' MB</div></div>';
+  }).join("") || '<div class="muted">No jobs yet.</div>';
+  $("storage-body").innerHTML =
+    '<div style="font-size:22px;font-weight:800;margin-bottom:8px;">'+mb.toFixed(1)+' MB <span class="muted" style="font-size:14px;font-weight:400;">of about 5 MB used</span></div>' +
+    '<div class="checklist-progress" style="margin-bottom:14px;"><div class="checklist-bar" style="width:'+pct.toFixed(0)+'%;background:'+barCol+';"></div></div>' +
+    rows +
+    '<p class="muted" style="margin-top:14px;">Full-resolution photos are stored on this device only. Device sync backs up thumbnails, not originals. If this device is lost, originals cannot be recovered from another device.</p>' +
+    (mb>4 ? '<p class="sample-note">Storage is almost full. Export your CSVs and dossiers, then delete old photos to free space.</p>' : '');
+  openModal("modal-storage");
 }
 
 function openJob(id){
@@ -199,6 +295,19 @@ function renderJobHeader(){
   $("job-status").value = j.status;
 }
 
+var JOB_EDIT_FIELDS = [
+  ["name", "Job name"], ["client", "Client"], ["address", "Address"],
+  ["claim", "Claim #"], ["insurer", "Insurer"], ["type", "Job type"],
+  ["company", "Company"], ["invoice", "Invoice #"], ["discountPct", "Discount"]
+];
+function openJobEdit(){
+  var j = getJob(currentJobId); if(!j) return;
+  JOB_EDIT_FIELDS.forEach(function(field){
+    $("edit-"+field[0]).value = j[field[0]] || "";
+  });
+  openModal("modal-job-edit");
+}
+
 /* ---------- tabs ---------- */
 function switchTab(name){
   document.querySelectorAll("#job-tabs .tab").forEach(function(t){
@@ -213,6 +322,7 @@ function renderPhotos(){
   var grid = $("photo-grid");
   var photos = jobPhotos(currentJobId);
   $("count-photos").textContent = photos.length || "";
+  renderRapidBanner();
   if(!photos.length){
     grid.innerHTML = '<div class="empty" style="grid-column:1/-1;padding:30px 10px;">No photos yet.<br>Add photos from the camera or gallery.</div>';
     return;
@@ -222,12 +332,12 @@ function renderPhotos(){
     if(p.room) badges += '<span class="badge">'+esc(p.room)+'</span>';
     if(p.damageType) badges += '<span class="badge">'+esc(p.damageType)+'</span>';
     if(p.severity) badges += '<span class="badge sev-'+esc(p.severity)+'">'+esc(p.severity)+'</span>';
-    if(p.phase) badges += '<span class="badge phase-'+p.phase+'">'+p.phase.charAt(0).toUpperCase()+p.phase.slice(1)+'</span>';
+    if(p.phase) badges += '<span class="badge phase-'+esc(p.phase)+'">'+esc(p.phase.charAt(0).toUpperCase()+p.phase.slice(1))+'</span>';
     if(p.sample) badges += '<span class="badge sample">SAMPLE</span>';
     var pins = (p.pins||[]).map(function(pin,i){
-      return '<div class="pin-dot" style="left:'+pin.x+'%;top:'+pin.y+'%">'+(i+1)+'</div>';
+      return '<div class="pin-dot" style="left:'+esc(pin.x)+'%;top:'+esc(pin.y)+'%">'+(i+1)+'</div>';
     }).join("");
-    return '<div class="photo-cell" data-id="'+p.id+'"><img src="'+p.dataUrl+'" alt="" loading="lazy">' +
+    return '<div class="photo-cell" data-id="'+esc(p.id)+'"><img src="'+esc(p.dataUrl)+'" alt="" loading="lazy">' +
       '<div style="position:absolute;inset:0;pointer-events:none;">'+pins+'</div>' +
       '<div class="badges">'+badges+'</div></div>';
   }).join("");
@@ -236,8 +346,29 @@ function renderPhotos(){
   });
 }
 
+/* ---------- rapid capture ---------- */
+function paintRapidPhaseBtns(){
+  document.querySelectorAll("#rapid-phase .phase-btn").forEach(function(b){
+    b.classList.toggle("sel", b.getAttribute("data-phase")===rapidPhase);
+  });
+}
+function renderRapidBanner(){
+  var w = $("rapid-banner");
+  if(!w) return;
+  if(!rapidDefaults){ w.innerHTML = ""; w.hidden = true; return; }
+  w.hidden = false;
+  w.innerHTML = '<div class="rapid-banner-inner"><span>Rapid capture: <b>'+esc(rapidDefaults.room||"Untagged room")+'</b> · '+esc(rapidDefaults.phase)+'</span>' +
+    '<span style="display:flex;gap:8px;flex-shrink:0;"><button type="button" id="rapid-snap" class="btn btn-primary btn-small">Snap</button>' +
+    '<button type="button" id="rapid-done" class="btn btn-ghost btn-small">Done</button></span></div>';
+  $("rapid-snap").addEventListener("click", function(){ $("photo-input").click(); });
+  $("rapid-done").addEventListener("click", function(){
+    rapidDefaults = null; renderRapidBanner(); toast("Rapid capture finished");
+  });
+}
+
 function handlePhotoFiles(files){
   var jobId = currentJobId; // capture now: async callbacks must not use the live currentJobId
+  var rapid = rapidDefaults; // capture now: banner may change mid-batch
   var arr = Array.prototype.slice.call(files);
   var images = arr.filter(function(f){ return f.type && f.type.indexOf("image/")===0; });
   var done = 0, failed = 0;
@@ -249,14 +380,16 @@ function handlePhotoFiles(files){
         state.photos.push({
           id:uid(), jobId:jobId, dataUrl:dataUrl, thumb:thumb,
           takenAt: f.lastModified || Date.now(),
-          room:"", damageType:"", severity:"", notes:"", pins:[], phase:"", sample:false
+          room: rapid ? rapid.room : "", damageType:"", severity:"", notes:"", pins:[],
+          phase: rapid ? rapid.phase : "", sample:false
         });
         if(save()){ done++; hideSaveBanner(); }
         else { failed++; showSaveBanner("photo ("+(f.name||"upload")+")"); }
         if(currentJobId===jobId){ renderPhotos(); renderDossierTab(); }
-        logEvent(jobId, "Photo added ("+(f.name||"upload")+")");
+        logEvent(jobId, "Photo added ("+(f.name||"upload")+")" + (rapid ? " ["+rapid.room+", "+rapid.phase+"]" : ""));
         if(done+failed===images.length && images.length && failed===0){
-          toast(images.length + (images.length===1?" photo":" photos") + " added");
+          toast(images.length + (images.length===1?" photo":" photos") + " added" +
+            (rapid ? " ("+rapid.room+", "+rapid.phase+")" : ""));
         }
       });
     };
@@ -311,9 +444,9 @@ function makeSamplePhoto(){
   // label
   x.fillStyle = "rgba(0,0,0,0.6)"; x.fillRect(0,0,w,64);
   x.fillStyle = "#f0a832"; x.font = "bold 26px sans-serif";
-  x.fillText("SAMPLE PHOTO — " + room.toUpperCase(), 20, 42);
+  x.fillText("SAMPLE PHOTO: " + room.toUpperCase(), 20, 42);
   x.fillStyle = "rgba(255,255,255,0.75)"; x.font = "20px sans-serif";
-  x.fillText("placeholder — replace with real job photos", 20, h-24);
+  x.fillText("placeholder: replace with real job photos", 20, h-24);
   var du = c.toDataURL("image/jpeg", 0.85);
   return {dataUrl: du, thumb: du, room: room}; // sample photo is already small; reuse as its own thumb
 }
@@ -351,7 +484,7 @@ function openTagModal(photoId){
 function renderPinLayer(){
   var layer = $("pin-layer");
   layer.innerHTML = pinDraft.map(function(pin,i){
-    return '<div class="pin-dot" style="left:'+pin.x+'%;top:'+pin.y+'%">'+(i+1)+'</div>';
+    return '<div class="pin-dot" style="left:'+esc(pin.x)+'%;top:'+esc(pin.y)+'%">'+(i+1)+'</div>';
   }).join("");
 }
 function renderPinList(){
@@ -359,8 +492,8 @@ function renderPinList(){
   if(!pinDraft.length){ list.innerHTML = '<span class="muted" style="font-size:13px;">No markers yet.</span>'; return; }
   list.innerHTML = pinDraft.map(function(pin,i){
     return '<span class="pin-chip"><b>'+(i+1)+'</b> ' +
-      '<input type="text" data-pin="'+i+'" value="'+esc(pin.label)+'" placeholder="Label (e.g. stain)" maxlength="40" style="width:130px;margin:0;padding:5px 8px;font-size:13px;">' +
-      '<button type="button" data-delpin="'+i+'">×</button></span>';
+      '<input type="text" data-pin="'+i+'" value="'+esc(pin.label)+'" placeholder="Label (e.g. stain)" maxlength="40" style="width:130px;margin:0;padding:5px 8px;font-size:16px;">' +
+      '<button type="button" data-delpin="'+i+'" aria-label="Remove marker"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M6 18L18 6"/></svg></button></span>';
   }).join("");
   list.querySelectorAll("[data-delpin]").forEach(function(b){
     b.addEventListener("click", function(){
@@ -382,7 +515,7 @@ function paintPhaseBtns(){
 }
 function updatePinBtn(){
   $("btn-pin-mode").classList.toggle("armed", pinMode);
-  $("btn-pin-mode").textContent = pinMode ? "Placing markers — tap Done" : "Tap photo to place marker";
+  $("btn-pin-mode").textContent = pinMode ? "Placing markers: tap Done" : "Tap photo to place marker";
 }
 
 /* ---------- checklist ---------- */
@@ -393,12 +526,14 @@ function renderChecklist(){
   $("count-checklist").textContent = done + "/" + items.length;
   $("checklist-bar").style.width = (items.length ? Math.round(done/items.length*100) : 0) + "%";
   list.innerHTML = items.map(function(c){
-    return '<div class="check-item'+(c.done?" done":"")+'" data-id="'+c.id+'">' +
+    return '<div class="check-item'+(c.done?" done":"")+'" data-id="'+esc(c.id)+'">' +
       '<div class="check-box"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>' +
-      '<div><div class="check-label">'+esc(c.label)+'</div>' +
+      '<div style="flex:1;min-width:0;"><div class="check-label">'+esc(c.label)+'</div>' +
       '<div class="check-sub">'+esc(c.sub)+'</div>' +
-      (c.done && c.doneAt ? '<div class="check-time">Completed '+fmtTimeShort(c.doneAt)+'</div>' : '') +
-      '</div></div>';
+      (c.note?'<div class="check-note">'+esc(c.note)+'</div>':'') +
+      (c.done && c.doneAt ? '<div class="check-time">Completed '+esc(fmtTimeShort(c.doneAt))+'</div>' : '') +
+      '</div>' +
+      '<button type="button" class="note-btn" data-note="'+esc(c.id)+'" aria-label="Note for step: '+esc(c.label)+'"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button></div>';
   }).join("");
   list.querySelectorAll(".check-item").forEach(function(el){
     el.addEventListener("click", function(){
@@ -407,25 +542,46 @@ function renderChecklist(){
       c.done = !c.done; c.doneAt = c.done ? Date.now() : null;
       save(); renderChecklist(); renderDossierTab();
       if(c.done) logEvent(currentJobId, "Checklist: " + c.label);
+      else logEvent(currentJobId, "Checklist step reopened: " + c.label);
     });
   });
+  list.querySelectorAll("[data-note]").forEach(function(b){
+    b.addEventListener("click", function(ev){
+      ev.stopPropagation();
+      openStepNote(b.getAttribute("data-note"));
+    });
+  });
+}
+
+function openStepNote(id){
+  var c = state.checklist.find(function(x){return x.id===id;});
+  if(!c) return;
+  notingStepId = id;
+  $("step-note-title").textContent = "Note: " + c.label;
+  $("step-note-text").value = c.note || "";
+  openModal("modal-step-note");
 }
 
 /* ---------- work log ---------- */
 function renderWorklog(){
   var items = jobItems(currentJobId);
-  var total = items.reduce(function(s,i){ return s + (i.qty*i.rate); }, 0);
+  var t = worklogTotals(currentJobId);
   $("count-worklog").textContent = items.length || "";
-  $("worklog-total").innerHTML = '<div><div class="t-label">Work record total</div><div class="t-val">'+money(total)+'</div></div>' +
-    '<div class="t-label">'+items.length+' line item'+(items.length===1?"":"s")+'</div>';
+  $("worklog-total").innerHTML = '<div><div class="t-label">Work record total</div><div class="t-val">'+esc(money(t.total))+'</div>' +
+    (t.pct?'<div class="t-label">Subtotal '+esc(money(t.sub))+' · Discount '+esc(t.pct)+'%</div>':'') + '</div>' +
+    '<div class="t-label">'+esc(items.length)+' line item'+(items.length===1?"":"s")+'</div>';
+  var j = getJob(currentJobId);
+  $("worklog-invoice").textContent = j && j.invoice ? "Invoice #"+j.invoice : "";
+  $("worklog-invoice").hidden = !(j && j.invoice);
+  renderPresets();
   var list = $("worklog-list");
   if(!items.length){ list.innerHTML = '<div class="empty" style="padding:20px;">No line items yet.</div>'; return; }
   list.innerHTML = items.map(function(i){
-    return '<div class="li-row" data-id="'+i.id+'">' +
+    return '<div class="li-row" data-id="'+esc(i.id)+'">' +
       '<div><div class="li-desc">'+esc(i.desc)+'</div>' +
-      '<div class="li-meta">'+i.qty+' '+esc(i.unit||"")+' × '+money(i.rate)+'</div></div>' +
-      '<div style="display:flex;align-items:center;gap:6px;"><div class="li-amt">'+money(i.qty*i.rate)+'</div>' +
-      '<button class="li-del" data-del="'+i.id+'" aria-label="Delete"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button></div></div>';
+      '<div class="li-meta">'+esc(i.qty)+' '+esc(i.unit||"")+' × '+esc(money(i.rate))+'</div></div>' +
+      '<div style="display:flex;align-items:center;gap:6px;"><div class="li-amt">'+esc(money(i.qty*i.rate))+'</div>' +
+      '<button class="li-del" data-del="'+esc(i.id)+'" aria-label="Delete"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button></div></div>';
   }).join("");
   list.querySelectorAll("[data-del]").forEach(function(b){
     b.addEventListener("click", function(ev){
@@ -440,18 +596,39 @@ function renderWorklog(){
   });
 }
 
+/* ---------- rate presets ---------- */
+function renderPresets(){
+  var pr = $("preset-row");
+  if(!pr) return;
+  var j = getJob(currentJobId);
+  var presets = (j && RATE_PRESETS[j.type]) || RATE_PRESETS["Other"];
+  pr.innerHTML = presets.map(function(p,idx){
+    return '<button type="button" class="preset-chip" data-preset="'+idx+'">'+esc(p[0])+' · '+esc(money(p[1]))+'</button>';
+  }).join("");
+  pr.querySelectorAll("[data-preset]").forEach(function(b){
+    b.addEventListener("click", function(){
+      var p = presets[parseInt(b.getAttribute("data-preset"),10)];
+      if(!p) return;
+      $("li-desc").value = p[0]; $("li-rate").value = p[1]; $("li-unit").value = p[2];
+      $("li-desc").focus();
+    });
+  });
+}
+
 /* ---------- dossier score ---------- */
 function dossierScore(jobId){
   var j = getJob(jobId);
-  var photos = jobPhotos(jobId);
   var items = jobChecklist(jobId);
   var done = items.filter(function(c){return c.done;}).length;
   var lis = jobItems(jobId);
   var parts = [];
   var metaPts = (j.claim?8:0)+(j.insurer?7:0)+(j.client?5:0)+(j.address?5:0);
   parts.push({label:"Claim details (claim #, insurer, client, address)", pts:metaPts, max:25});
-  var photoPts = Math.round(Math.min(photos.length,8)/8*25);
-  parts.push({label:"Photo evidence ("+photos.length+" of 8+)", pts:photoPts, max:25});
+  var pc = phaseCounts(jobId);
+  var photoPts = Math.round(25*(Math.min(pc.before,PHASE_MIN.before)/PHASE_MIN.before +
+    Math.min(pc.during,PHASE_MIN.during)/PHASE_MIN.during +
+    Math.min(pc.after,PHASE_MIN.after)/PHASE_MIN.after)/3);
+  parts.push({label:"Photo evidence (before "+pc.before+"/"+PHASE_MIN.before+", during "+pc.during+"/"+PHASE_MIN.during+", after "+pc.after+"/"+PHASE_MIN.after+")", pts:photoPts, max:25});
   var checkPts = items.length ? Math.round(done/items.length*25) : 0;
   parts.push({label:"Decontamination checklist ("+done+"/"+items.length+")", pts:checkPts, max:25});
   var workPts = Math.round(Math.min(lis.length,4)/4*25);
@@ -462,21 +639,28 @@ function dossierScore(jobId){
 function scoreMissing(jobId, sc){
   var j = getJob(jobId);
   var out = [];
-  if(!j.claim) out.push("Add the insurance claim number (New job form)");
-  if(!j.insurer) out.push("Add the insurer name");
-  if(jobPhotos(jobId).length<8) out.push("Add "+(8-jobPhotos(jobId).length)+" more tagged photos");
+  if(!j.claim) out.push({text:"Add the insurance claim number", target:"edit"});
+  if(!j.insurer) out.push({text:"Add the insurer name", target:"edit"});
+  var photos = jobPhotos(jobId);
+  var sampleCount = photos.filter(function(p){return p.sample;}).length;
+  var pc = phaseCounts(jobId);
+  ["before","during","after"].forEach(function(ph){
+    var need = PHASE_MIN[ph] - pc[ph];
+    if(need>0) out.push({text:"Add "+need+" "+ph+" photo"+(need===1?"":"s"), target:"photos"});
+  });
   var items = jobChecklist(jobId);
   var left = items.filter(function(c){return !c.done;}).length;
-  if(left) out.push("Complete "+left+" checklist step"+(left===1?"":"s"));
-  if(!jobItems(jobId).length) out.push("Add line items to the work log");
+  if(left) out.push({text:"Complete "+left+" checklist step"+(left===1?"":"s"), target:"checklist"});
+  if(!jobItems(jobId).length) out.push({text:"Add line items to the work log", target:"worklog"});
+  if(sampleCount) out.push({text:"Replace "+sampleCount+" sample photo"+(sampleCount===1?"":"s")+" with real evidence photos", target:"photos"});
   return out;
 }
 function scoreRing(pct, size){
   var s = size||84, r = s/2-8, c = 2*Math.PI*r, off = c*(1-pct/100);
   var col = pct>=90 ? "#3ecf8e" : pct>=55 ? "#f0a832" : "#ff6b6b";
-  return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 '+s+' '+s+'" style="transform:rotate(-90deg)">'+
-    '<circle cx="'+s/2+'" cy="'+s/2+'" r="'+r+'" fill="none" stroke="#26303e" stroke-width="9"/>'+
-    '<circle cx="'+s/2+'" cy="'+s/2+'" r="'+r+'" fill="none" stroke="'+col+'" stroke-width="9" stroke-linecap="round" '+
+  return '<svg width="'+esc(s)+'" height="'+esc(s)+'" viewBox="0 0 '+esc(s)+' '+esc(s)+'" style="transform:rotate(-90deg)">'+
+    '<circle cx="'+esc(s/2)+'" cy="'+esc(s/2)+'" r="'+esc(r)+'" fill="none" stroke="#26303e" stroke-width="9"/>'+
+    '<circle cx="'+esc(s/2)+'" cy="'+esc(s/2)+'" r="'+esc(r)+'" fill="none" stroke="'+esc(col)+'" stroke-width="9" stroke-linecap="round" '+
     'stroke-dasharray="'+c.toFixed(1)+'" stroke-dashoffset="'+off.toFixed(1)+'" style="transition:stroke-dashoffset .8s;"/></svg>';
 }
 
@@ -485,10 +669,11 @@ function renderDossierTab(){
   var photos = jobPhotos(currentJobId);
   var items = jobChecklist(currentJobId);
   var done = items.filter(function(c){return c.done;}).length;
-  var total = jobItems(currentJobId).reduce(function(s,i){return s+(i.qty*i.rate);},0);
+  var total = worklogTotals(currentJobId).total;
   var sc = dossierScore(currentJobId);
   var miss = scoreMissing(currentJobId, sc);
-  var verdict = sc.total>=90
+  var sampleCount = photos.filter(function(p){return p.sample;}).length;
+  var verdict = sc.total>=90 && !sampleCount
     ? '<span class="verdict-pill v-ready">Adjuster-ready</span>'
     : sc.total>=55
     ? '<span class="verdict-pill v-soon">Nearly there</span>'
@@ -496,12 +681,21 @@ function renderDossierTab(){
   $("dossier-stats").innerHTML =
     '<div class="score-hero"><div class="score-ring-wrap">'+scoreRing(sc.total,92)+
     '<div class="score-num"><span id="scoreNum">0</span><small>%</small></div></div>'+
-    '<div><div class="score-label">Dossier score</div>'+verdict+
-    '<div class="muted" style="margin-top:6px;font-size:13px;">'+money(total)+' documented · '+photos.length+' photos</div></div></div>'+
+    '<div><div class="score-label">Dossier completeness</div>'+verdict+
+    '<div class="muted" style="margin-top:6px;font-size:13px;">How complete the file is. It does not guarantee coverage or payment.</div>'+
+    '<div class="muted" style="margin-top:6px;font-size:13px;">'+esc(money(total))+' documented · '+esc(photos.length)+' photos</div></div></div>'+
+    (sampleCount ? '<div class="sample-note">'+esc(sampleCount)+' sample photo'+(sampleCount===1?' is a placeholder':'s are placeholders')+(sampleCount===1?' and does not':' and do not')+' count toward completeness.</div>' : '')+
     (miss.length
-      ? '<div class="miss-card"><div class="miss-title">To reach 100% — '+miss.length+' item'+(miss.length===1?"":"s")+'</div><ul class="miss-list">'+
-        miss.map(function(m){return '<li>'+esc(m)+'</li>';}).join("")+'</ul></div>'
+      ? '<div class="miss-card"><div class="miss-title">To reach 100%: '+esc(miss.length)+' item'+(miss.length===1?"":"s")+'</div><div class="miss-links">'+
+        miss.map(function(m){return '<button type="button" class="miss-link" data-target="'+esc(m.target)+'"><span>'+esc(m.text)+'</span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>';}).join("")+'</div></div>'
       : '<div class="miss-card sealed"><div class="miss-title">Dossier sealed.</div><div class="muted">Every record an adjuster asks for is present and timestamped. Generate it and send.</div></div>');
+  $("dossier-stats").querySelectorAll(".miss-link").forEach(function(b){
+    b.addEventListener("click", function(){
+      var target = b.getAttribute("data-target");
+      if(target==="edit") openJobEdit();
+      else switchTab(target);
+    });
+  });
   var cust = $("custody-list");
   var evs = jobEvents(currentJobId);
   var sn = $("scoreNum");
@@ -511,10 +705,27 @@ function renderDossierTab(){
     var tick = function(){ n = Math.min(target, n+step); sn.textContent = n; if(n<target) requestAnimationFrame(tick); };
     requestAnimationFrame(tick);
   }
-  if(!evs.length){ cust.innerHTML = '<div class="muted">No events yet.</div>'; return; }
-  cust.innerHTML = evs.slice(-8).reverse().map(function(e){
-    return '<div class="custody-row"><div class="custody-time">'+fmtTimeShort(e.ts)+'</div><div class="custody-text">'+esc(e.text)+'</div></div>';
-  }).join("");
+  if(!evs.length){ cust.innerHTML = '<div class="muted">No events yet.</div>'; }
+  else {
+    cust.innerHTML = evs.slice(-8).reverse().map(function(e){
+      return '<div class="custody-row"><div class="custody-time">'+esc(fmtTimeShort(e.ts))+'</div><div class="custody-text">'+esc(e.text)+'</div></div>';
+    }).join("");
+  }
+  renderSendLog();
+}
+
+/* ---------- dossier send log ---------- */
+function renderSendLog(){
+  var el = $("send-log");
+  if(!el) return;
+  var j = getJob(currentJobId);
+  var log = (j && j.sendLog) || [];
+  if(!log.length){ el.innerHTML = ""; return; }
+  el.innerHTML = '<div class="form-title" style="margin:12px 0 4px;">Sent</div>' +
+    log.slice(-3).reverse().map(function(s){
+      return '<div class="custody-row"><div class="custody-time">'+esc(fmtTime(s.at))+'</div>' +
+        '<div class="custody-text">'+esc(s.name)+' ('+esc(s.email)+')</div></div>';
+    }).join("");
 }
 
 function buildDossierHTML(){
@@ -523,14 +734,14 @@ function buildDossierHTML(){
   var items = jobChecklist(currentJobId);
   var lis = jobItems(currentJobId);
   var evs = jobEvents(currentJobId);
-  var total = lis.reduce(function(s,i){return s+(i.qty*i.rate);},0);
+  var t = worklogTotals(currentJobId);
 
   function photoCard(p, pi){
     var pins = (p.pins||[]).map(function(pin,i){
       return '<span class="cap-tag">Marker '+(i+1)+(pin.label?": "+esc(pin.label):"")+'</span>';
     }).join("");
-    return '<div class="dz-photo"><img src="'+p.dataUrl+'" alt="Evidence photo '+(pi+1)+'">' +
-      '<div class="dz-photo-cap"><b>Photo '+(pi+1)+'</b> — captured '+fmtTime(p.takenAt) +
+    return '<div class="dz-photo"><img src="'+esc(p.dataUrl)+'" alt="Evidence photo '+(pi+1)+'">' +
+      '<div class="dz-photo-cap"><b>Photo '+(pi+1)+'</b>, captured '+esc(fmtTime(p.takenAt)) +
       (p.sample ? ' <span class="cap-tag">SAMPLE</span>' : '') +
       '<div class="cap-tags">' +
       (p.room?'<span class="cap-tag">'+esc(p.room)+'</span>':'') +
@@ -550,43 +761,47 @@ function buildDossierHTML(){
     groups.forEach(function(g){
       var gp = photos.filter(function(p){ return (p.phase||"")===g[0]; });
       if(!gp.length) return;
-      photoHTML += '<h3>'+g[1]+' ('+gp.length+')</h3>';
+      photoHTML += '<h3>'+esc(g[1])+' ('+esc(gp.length)+')</h3>';
       gp.forEach(function(p){ n++; photoHTML += photoCard(p, n); });
     });
   }
 
   var checkHTML = items.map(function(c){
-    return '<div class="dz-check"><div class="box">'+(c.done?"✓":"")+'</div>' +
+    return '<div class="dz-check"><div class="box">'+(c.done?'<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" aria-label="Completed"><path d="M20 6L9 17l-5-5"/></svg>':"")+'</div>' +
       '<div><b>'+esc(c.label)+'</b><br><span style="color:#555;">'+esc(c.sub)+'</span>' +
-      (c.done&&c.doneAt?' <span style="color:#0a7a4a;">— completed '+fmtTime(c.doneAt)+'</span>':'') +
+      (c.done&&c.doneAt?'<span style="color:#0a7a4a;">, completed '+esc(fmtTime(c.doneAt))+'</span>':'') +
+      (c.note?'<br><span style="color:#555;">Note: '+esc(c.note)+'</span>':'') +
       '</div></div>';
   }).join("");
 
   var liHTML = lis.length ? '<table class="dz-table"><tr><th>Description</th><th>Qty</th><th>Rate</th><th style="text-align:right;">Amount</th></tr>' +
     lis.map(function(i){
-      return '<tr><td>'+esc(i.desc)+'</td><td>'+i.qty+' '+esc(i.unit||"")+'</td><td>'+money(i.rate)+'</td><td style="text-align:right;">'+money(i.qty*i.rate)+'</td></tr>';
+      return '<tr><td>'+esc(i.desc)+'</td><td>'+esc(i.qty)+' '+esc(i.unit||"")+'</td><td>'+esc(money(i.rate))+'</td><td style="text-align:right;">'+esc(money(i.qty*i.rate))+'</td></tr>';
     }).join("") +
-    '<tr class="dz-total-row"><td colspan="3">Total</td><td style="text-align:right;">'+money(total)+'</td></tr></table>'
+    (t.pct?'<tr><td colspan="3">Discount ('+esc(t.pct)+'%)</td><td style="text-align:right;">-'+esc(money(t.disc))+'</td></tr>':'') +
+    '<tr class="dz-total-row"><td colspan="3">Total</td><td style="text-align:right;">'+esc(money(t.total))+'</td></tr></table>'
     : '<p>No line items recorded.</p>';
 
   var custHTML = evs.length ? '<table class="dz-table"><tr><th>Timestamp</th><th>Event</th></tr>' +
-    evs.map(function(e){ return '<tr><td style="white-space:nowrap;">'+fmtTime(e.ts)+'</td><td>'+esc(e.text)+'</td></tr>'; }).join("") +
+    evs.map(function(e){ return '<tr><td style="white-space:nowrap;">'+esc(fmtTime(e.ts))+'</td><td>'+esc(e.text)+'</td></tr>'; }).join("") +
     '</table>' : '<p>No custody events recorded.</p>';
 
-  return '<h1>REMEDIATION DOSSIER</h1>' +
-    '<div class="dz-cover-sub">Prepared by '+esc(j.company||"Cleanup contractor")+' · Generated '+fmtTime(Date.now())+' via Aftermath</div>' +
+  return (j.demo ? '<div class="dz-demo-banner">DEMONSTRATION DOSSIER: this file uses sample photos and is not a real claim file.</div>' : '') +
+    '<div class="dz-cover"><h1>REMEDIATION DOSSIER</h1>' +
+    '<div class="dz-cover-sub">Prepared by '+esc(j.company||"Cleanup contractor")+' · Generated '+esc(fmtTime(Date.now()))+' via Aftermath</div>' +
     '<div class="dz-meta">' +
-    '<div><b>Job</b>'+esc(j.name)+'</div><div><b>Job type</b>'+esc(j.type||"—")+'</div>' +
-    '<div><b>Client / policyholder</b>'+esc(j.client||"—")+'</div><div><b>Property address</b>'+esc(j.address||"—")+'</div>' +
-    '<div><b>Claim number</b>'+esc(j.claim||"—")+'</div><div><b>Insurer</b>'+esc(j.insurer||"—")+'</div>' +
-    '</div>' +
-    '<h2>1 · Photo evidence ('+photos.length+')</h2>' + photoHTML +
-    '<h2>2 · Decontamination checklist</h2>' + checkHTML +
-    '<h2>3 · Line-item work record</h2>' + liHTML +
-    '<h2>4 · Chain of custody</h2>' + custHTML +
-    '<div class="dz-sign"><div><div class="sig-line">Technician signature / date</div></div>' +
+    '<div><b>Job</b>'+esc(j.name)+'</div><div><b>Job type</b>'+esc(j.type||"Not provided")+'</div>' +
+    '<div><b>Client / policyholder</b>'+esc(j.client||"Not provided")+'</div><div><b>Property address</b>'+esc(j.address||"Not provided")+'</div>' +
+    '<div><b>Claim number</b>'+esc(j.claim||"Not provided")+'</div><div><b>Insurer</b>'+esc(j.insurer||"Not provided")+'</div>' +
+    (j.invoice?'<div><b>Invoice #</b>'+esc(j.invoice)+'</div>':'') +
+    '</div></div>' +
+    '<h2 class="dz-h2">1 · Photo evidence ('+esc(photos.length)+')</h2>' + photoHTML +
+    '<h2 class="dz-h2 dz-h2-break">2 · Decontamination checklist</h2>' + checkHTML +
+    '<h2 class="dz-h2 dz-h2-break">3 · Line-item work record</h2>' + liHTML +
+    '<h2 class="dz-h2 dz-h2-break">4 · Chain of custody</h2>' + custHTML +
+    '<div class="dz-sign-wrap"><div class="dz-sign"><div><div class="sig-line">Technician signature / date</div></div>' +
     '<div><div class="sig-line">Client / adjuster signature / date</div></div></div>' +
-    '<div class="dz-footer">This dossier documents conditions observed and work performed. Timestamps are captured at the time of photo capture and checklist completion. Retain with claim file.</div>';
+    '<div class="dz-footer">This dossier documents conditions observed and work performed. Timestamps are captured at the time of photo capture and checklist completion. Retain with claim file.</div></div>';
 }
 
 /* ---------- demo seed ---------- */
@@ -595,7 +810,7 @@ function seedDemo(toDossier){
   var jobId = uid();
   var now = Date.now(), H = 3600000, D = 24*H;
   state.jobs.push({
-    id:jobId, name:"Hoarding cleanup — 418 Maple St", client:"M. Alvarez (policyholder)",
+    id:jobId, name:"Hoarding cleanup, 418 Maple St", client:"M. Alvarez (policyholder)",
     address:"418 Maple St, Fresno, CA 93721", claim:"CLM-8841023", insurer:"Meridian Home Insurance",
     type:"Hoarding cleanup", company:"Aftermath Demo Services",
     status:"awaiting", createdAt: now - 6*D, demo:true
@@ -636,7 +851,7 @@ function seedDemo(toDossier){
   openJob(jobId);
   if(toDossier){
     switchTab("dossier");
-    toast("This is the magic moment — one tap generates the dossier");
+    toast("This is the magic moment: one tap generates the dossier");
   }
 }
 
@@ -649,6 +864,16 @@ document.addEventListener("DOMContentLoaded", function(){
   if(sbx) sbx.addEventListener("click", hideSaveBanner);
 
   $("btn-new-job").addEventListener("click", function(){ openModal("modal-job"); });
+  $("job-search").addEventListener("input", function(){ jobSearch = this.value; renderJobs(); });
+  document.querySelectorAll("#job-filters .chip-btn").forEach(function(b){
+    b.addEventListener("click", function(){
+      jobStatusFilter = b.getAttribute("data-filter");
+      document.querySelectorAll("#job-filters .chip-btn").forEach(function(x){
+        x.classList.toggle("sel", x===b);
+      });
+      renderJobs();
+    });
+  });
   $("btn-demo").addEventListener("click", seedDemo);
   $("btn-wipe").addEventListener("click", function(){
     askConfirm("Delete all data?", "Every job, photo, and work record on this device will be removed. This cannot be undone.", "Delete everything", true, function(){
@@ -693,6 +918,34 @@ document.addEventListener("DOMContentLoaded", function(){
     openJob(id);
   });
 
+  $("btn-edit-job").addEventListener("click", openJobEdit);
+  $("job-edit-form").addEventListener("submit", function(e){
+    e.preventDefault();
+    var j = getJob(currentJobId); if(!j) return;
+    if(!$("edit-name").value.trim()) return;
+    var changedLabels = [];
+    JOB_EDIT_FIELDS.forEach(function(field){
+      var raw = $("edit-"+field[0]).value.trim();
+      var cur = j[field[0]];
+      var value = raw;
+      if(field[0]==="discountPct"){
+        value = Math.max(0, Math.min(100, parseFloat(raw)||0));
+        cur = Number(j.discountPct)||0;
+      } else {
+        cur = cur || "";
+      }
+      if(value !== cur){
+        j[field[0]] = value;
+        changedLabels.push(field[1]);
+      }
+    });
+    if(!changedLabels.length){ toast("No changes"); closeModals(); return; }
+    logEvent(currentJobId, "Job details updated: " + changedLabels.join(", "));
+    saveChecked("job details", "Job details updated");
+    closeModals();
+    renderJobHeader(); renderWorklog(); renderDossierTab();
+  });
+
   $("btn-back").addEventListener("click", function(){ currentJobId=null; renderJobs(); showView("jobs"); });
   $("job-status").addEventListener("change", function(){
     var j = getJob(currentJobId); if(!j) return;
@@ -716,6 +969,47 @@ document.addEventListener("DOMContentLoaded", function(){
     });
     saveChecked("sample photo", "Sample photo added"); renderPhotos(); renderDossierTab();
     logEvent(currentJobId, "Sample photo added ("+s.room+")");
+  });
+
+  /* rapid capture */
+  $("btn-rapid").addEventListener("click", function(){
+    rapidPhase = "before"; paintRapidPhaseBtns();
+    $("rapid-room").value = "";
+    openModal("modal-rapid");
+  });
+  document.querySelectorAll("#rapid-phase .phase-btn").forEach(function(b){
+    b.addEventListener("click", function(){
+      rapidPhase = b.getAttribute("data-phase");
+      paintRapidPhaseBtns();
+    });
+  });
+  $("btn-rapid-start").addEventListener("click", function(){
+    rapidDefaults = {room:$("rapid-room").value, phase:rapidPhase};
+    closeModals(); renderRapidBanner();
+    $("photo-input").click();
+  });
+
+  /* photo manifest export */
+  $("btn-manifest").addEventListener("click", function(){
+    var photos = jobPhotos(currentJobId);
+    if(!photos.length){ toast("No photos to export yet"); return; }
+    var rows = [["Photo #","Timestamp","Phase","Room","Damage type","Severity","Notes","Markers","Sample","Size KB"]];
+    photos.forEach(function(p, idx){
+      var markers = (p.pins||[]).map(function(pin,i){ return (i+1)+": "+(pin.label||""); }).join("; ");
+      rows.push([idx+1, fmtTime(p.takenAt),
+        p.phase ? p.phase.charAt(0).toUpperCase()+p.phase.slice(1) : "Unclassified",
+        p.room||"", p.damageType||"", p.severity||"", p.notes||"", markers,
+        p.sample?"Yes":"No", Math.round((p.dataUrl||"").length/1024)]);
+    });
+    var csv = rows.map(function(r){ return r.map(csvSafe).join(","); }).join("\r\n");
+    var blob = new Blob([csv], {type:"text/csv"});
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "aftermath-manifest-" + currentJobId + ".csv";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 800);
+    logEvent(currentJobId, "Photo manifest exported (CSV, "+photos.length+" photos)");
+    toast("Manifest exported");
   });
 
   /* tag modal wiring */
@@ -751,6 +1045,21 @@ document.addEventListener("DOMContentLoaded", function(){
     renderPhotos(); renderDossierTab();
     logEvent(currentJobId, "Photo tagged ("+[p.room,p.damageType].filter(Boolean).join(", ")+")");
   });
+
+  /* checklist step notes */
+  $("step-note-form").addEventListener("submit", function(e){
+    e.preventDefault();
+    var c = state.checklist.find(function(x){return x.id===notingStepId;});
+    if(!c){ closeModals(); return; }
+    var v = $("step-note-text").value.trim();
+    if(v !== (c.note||"")){
+      c.note = v;
+      saveChecked("step note", "Note saved");
+      logEvent(currentJobId, "Checklist note updated: " + c.label);
+      renderChecklist(); renderDossierTab();
+    }
+    closeModals();
+  });
   $("btn-photo-delete").addEventListener("click", function(){
     askConfirm("Delete this photo?", "It will be removed from the dossier.", "Delete photo", true, function(){
       state.photos = state.photos.filter(function(x){return x.id!==taggingPhotoId;});
@@ -782,8 +1091,10 @@ document.addEventListener("DOMContentLoaded", function(){
     items.forEach(function(i){
       rows.push([j.name, i.desc, i.qty, i.unit||"", i.rate, (i.qty*i.rate).toFixed(2)]);
     });
+    var tdisc = worklogTotals(currentJobId);
+    if(tdisc.pct) rows.push(["Discount ("+tdisc.pct+"%)","","","","", (-tdisc.disc).toFixed(2)]);
     var csv = rows.map(function(r){
-      return r.map(function(c){ return '"'+String(c).replace(/"/g,'""')+'"'; }).join(",");
+      return r.map(csvSafe).join(",");
     }).join("\r\n");
     var blob = new Blob([csv], {type:"text/csv"});
     var a = document.createElement("a");
@@ -793,6 +1104,21 @@ document.addEventListener("DOMContentLoaded", function(){
     setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 800);
     logEvent(currentJobId, "Work log exported (CSV, "+items.length+" items)");
     toast("CSV exported");
+  });
+
+  /* dossier send log */
+  $("btn-mark-sent").addEventListener("click", function(){
+    var j = getJob(currentJobId); if(!j) return;
+    var name = $("send-name").value.trim();
+    var email = $("send-email").value.trim();
+    if(!name || !/^\S+@\S+\.\S+$/.test(email)){ toast("Enter the adjuster name and a valid email"); return; }
+    j.sendLog = j.sendLog || [];
+    j.sendLog.push({name:name, email:email, at:Date.now()});
+    if(saveChecked("send log", "Send recorded")){
+      logEvent(currentJobId, "Dossier sent to " + name + " (" + email + ")");
+      $("send-name").value = ""; $("send-email").value = "";
+      renderDossierTab();
+    }
   });
 
   /* dossier */
@@ -812,10 +1138,12 @@ document.addEventListener("DOMContentLoaded", function(){
       btn.disabled = false;
       btn.innerHTML = genBtnHTML;
       $("dossier-doc").innerHTML = buildDossierHTML();
-      logEvent(currentJobId, "Dossier generated ("+jobPhotos(currentJobId).length+" photos, "+money(jobItems(currentJobId).reduce(function(s,i){return s+(i.qty*i.rate);},0))+")");
+      j = getJob(currentJobId);
+      $("dz-running-head").innerHTML = esc(j.name)+" · "+(j.claim?"Claim "+esc(j.claim):"No claim #")+" · Remediation dossier";
+      logEvent(currentJobId, "Dossier generated ("+jobPhotos(currentJobId).length+" photos, "+money(worklogTotals(currentJobId).total)+")");
       renderDossierTab();
       showView("dossier");
-      toast("Dossier ready — print or save as PDF");
+      toast("Dossier ready: print or save as PDF");
     }, 900);
   });
   $("btn-dossier-back").addEventListener("click", function(){ showView("job"); });

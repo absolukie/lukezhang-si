@@ -8,11 +8,11 @@ const STATES = {
     law: "Song-Beverly Consumer Warranty Act",
     cite: "Cal. Civil Code \u00A71793.22",
     windowMonths: 18, windowMiles: 18000,
-    blurb: "4+ repairs, or 30+ days in the shop",
+    blurb: "4+ repairs, or more than 30 days in the shop",
     routes: [
       { id: "repeat", label: "Same-problem repairs", need: 4, unit: "repairs", note: "4+ failed attempts at the same defect within 18 mo / 18,000 mi." },
       { id: "safety", label: "Safety-defect repairs", need: 2, unit: "repairs", note: "2+ attempts for a defect that could cause death or serious injury." },
-      { id: "days", label: "Days out of service", need: 30, unit: "days", note: "30+ cumulative days in the shop (any warranty defects)." }
+      { id: "days", label: "Days out of service", need: 30, strict: true, unit: "days", note: "More than 30 cumulative days in the shop (the statute says \u201Cmore than 30\u201D, so 30 exactly does not count)." }
     ]
   },
   TX: {
@@ -216,21 +216,61 @@ const $ = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmtDate = iso => { if (!iso) return ""; const d = new Date(iso + "T12:00:00"); return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
-const daysBetween = (a, b) => Math.max(1, Math.round((new Date(b + "T12:00:00") - new Date(a + "T12:00:00")) / 86400000));
+/* Calendar-day counter, INCLUSIVE of both endpoints: Feb 3 -> Feb 10 is 8 days.
+   Same-day visits count as 1 day. Returns 0 when b < a (used by window clipping). */
+const daysBetween = (a, b) => {
+  const d = Math.round((new Date(b + "T12:00:00") - new Date(a + "T12:00:00")) / 86400000);
+  return d < 0 ? 0 : d + 1;
+};
 /* Business-day counter for IL, NC, CO, MA day thresholds. Counts Mon-Fri in
-   [a, b] inclusive. Federal holidays are NOT excluded (noted limitation). */
+   [a, b] inclusive. Federal holidays are NOT excluded (disclosed in the UI).
+   Returns 0 when b < a. */
 function businessDaysBetween(a, b) {
   let n = 0;
   const d = new Date(a + "T12:00:00"), end = new Date(b + "T12:00:00");
+  if (end < d) return 0;
   for (; d <= end; d.setDate(d.getDate() + 1)) { const w = d.getDay(); if (w !== 0 && w !== 6) n++; }
-  return Math.max(1, n);
+  return n;
 }
 function todayLocalISO() { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
-function daysOut(r, business) {
+function isoDateOf(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function nextDayISO(iso) { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + 1); return isoDateOf(d); }
+/* Days of [a, b] clipped to the presumption window [ws, we]. */
+function clippedDays(a, b, business, ws, we) {
+  const s = a < ws ? ws : a, e = b > we ? we : b;
+  if (e < s) return 0;
+  return business ? businessDaysBetween(s, e) : daysBetween(s, e);
+}
+/* Union of overlapping/adjacent intervals, clipped to [ws, we].
+   Overlapping shop visits count once. intervals: [[inISO, outISO], ...]. */
+function unionDays(intervals, business, ws, we) {
+  const clipped = [];
+  for (const iv of intervals) {
+    const s = iv[0] < ws ? ws : iv[0], e = iv[1] > we ? we : iv[1];
+    if (s <= e) clipped.push([s, e]);
+  }
+  clipped.sort((x, y) => x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0);
+  const merged = [];
+  for (const iv of clipped) {
+    const last = merged[merged.length - 1];
+    if (last && iv[0] <= nextDayISO(last[1])) { if (iv[1] > last[1]) last[1] = iv[1]; }
+    else merged.push([iv[0], iv[1]]);
+  }
+  return merged.reduce((n, iv) => n + (business ? businessDaysBetween(iv[0], iv[1]) : daysBetween(iv[0], iv[1])), 0);
+}
+/* NC: max business-day union inside any 12-month span of the warranty window. */
+function ncRollingDays(intervals, ws, we) {
+  let best = 0;
+  for (const iv of intervals) {
+    let winEnd = isoDateOf(addMonths(iv[0], 12));
+    if (winEnd > we) winEnd = we;
+    best = Math.max(best, unionDays(intervals, true, iv[0], winEnd));
+  }
+  return best;
+}
+function daysOut(r, business, ws, we) {
   const out = r.dateOut || todayLocalISO();
-  if (business) return businessDaysBetween(r.dateIn, out);
-  if (!r.dateOut) return Math.max(1, Math.round((Date.now() - new Date(r.dateIn + "T12:00:00")) / 86400000));
-  return daysBetween(r.dateIn, r.dateOut);
+  return clippedDays(r.dateIn, out, business, ws || "0000-01-01", we || "9999-12-31");
 }
 function addMonths(iso, m) { const d = new Date(iso + "T12:00:00"); d.setMonth(d.getMonth() + m); return d; }
 function fileToDataURL(file) {
@@ -255,9 +295,11 @@ function fileToDataURL(file) {
 function computeCase() {
   const st = STATES[db.state];
   if (!st || !db.car || !db.car.deliveryDate) return null;
-  const windowEnd = addMonths(db.car.deliveryDate, st.windowMonths);
-  const windowStart = new Date(db.car.deliveryDate + "T12:00:00");
-  const inWin = db.repairs.filter(r => { const d = new Date(r.dateIn + "T12:00:00"); return d >= windowStart && d <= windowEnd; });
+  const windowEndD = addMonths(db.car.deliveryDate, st.windowMonths);
+  const windowStart = db.car.deliveryDate;
+  const windowEnd = isoDateOf(windowEndD);
+  const windowStartD = new Date(db.car.deliveryDate + "T12:00:00");
+  const inWin = db.repairs.filter(r => { const d = new Date(r.dateIn + "T12:00:00"); return d >= windowStartD && d <= windowEndD; });
   const outWin = db.repairs.length - inWin.length;
   const biz = st.daysBasis === "business";
   const byProblem = Object.create(null);
@@ -266,17 +308,27 @@ function computeCase() {
     name: String(arr[0].problem || "").trim() || "(no description)", attempts: arr.length,
     safety: arr.filter(r => r.safety).length
   })).sort((a, b) => b.attempts - a.attempts);
-  const totalDays = inWin.reduce((a, r) => a + daysOut(r, biz), 0);  const routes = st.routes.map(rt => {
+  const intervals = inWin.map(r => [r.dateIn, r.dateOut || todayLocalISO()]);
+  /* Overlapping shop visits count once; intervals clip to the presumption window. */
+  const totalDays = unionDays(intervals, biz, windowStart, windowEnd);
+  const routes = st.routes.map(rt => {
     let val = 0, detail = "";
     if (rt.id === "repeat") { val = probs.length ? probs[0].attempts : 0; detail = probs.length ? "\u201C" + probs[0].name + "\u201D leads with " + val : "Log repairs to start counting"; }
     else if (rt.id === "safety") { val = probs.reduce((m, p) => Math.max(m, p.safety), 0); detail = val ? val + " flagged safety attempt(s)" : "Flag a repair as a safety issue if it applies"; }
-    else if (rt.id === "days") { val = totalDays; detail = val + " cumulative " + (biz ? "business " : "") + "day(s) in the shop"; }
+    else if (rt.id === "days") {
+      /* NC evaluates business days inside any rolling 12-month warranty span. */
+      val = (db.state === "NC") ? ncRollingDays(intervals, windowStart, windowEnd) : totalDays;
+      detail = val + " cumulative " + (biz ? "business " : "") + "day(s) in the shop" + (db.state === "NC" ? " (best any 12-month span)" : "");
+    }
     else if (rt.id === "total") { val = inWin.length; detail = val + " total logged repair(s)"; }
-    return Object.assign({}, rt, { val, detail, met: val >= rt.need });
+    /* CA's days statute reads "more than 30": strictly greater, not >=. */
+    const met = rt.strict ? val > rt.need : val >= rt.need;
+    const prog = rt.strict ? val / (rt.need + 1) : val / rt.need;
+    return Object.assign({}, rt, { val, detail, met, prog });
   });
   const qualified = routes.some(r => r.met);
-  const best = routes.reduce((m, r) => Math.max(m, Math.min(1, r.val / r.need)), 0);
-  return { st, routes, qualified, best, probs, totalDays, inWin, outWin, windowEnd, biz };
+  const best = routes.reduce((m, r) => Math.max(m, Math.min(1, r.prog)), 0);
+  return { st, routes, qualified, best, probs, totalDays, inWin, outWin, windowEnd, windowStart, biz };
 }
 
 /* ---- sample case ---- */
@@ -325,7 +377,7 @@ function renderStateCards() {
       <div class="law">${esc(s.law)}</div>
       <ul>
         <li><svg class="ic"><use href="#i-cal"/></svg><span>Presumption window: <strong>${win}</strong> from delivery</span></li>
-        ${s.routes.map(r => `<li><svg class="ic"><use href="#i-check"/></svg><span><strong>${r.need}+ ${r.unit}</strong> \u2014 ${esc(r.label.toLowerCase())}</span></li>`).join("")}
+        ${s.routes.map(r => `<li><svg class="ic"><use href="#i-check"/></svg><span><strong>${r.strict ? "&gt;" + r.need : r.need + "+"} ${r.unit}</strong> \u2014 ${esc(r.label.toLowerCase())}</span></li>`).join("")}
       </ul>
       ${s.extra ? `<p class="micro" style="margin-top:10px">${esc(s.extra)}</p>` : ""}
       ${s.arb ? `<p class="micro" style="margin-top:6px">State dispute program: <a href="${esc(s.arb.url)}" target="_blank" rel="noopener">${esc(s.arb.name)}</a></p>` : ""}
@@ -346,6 +398,7 @@ $("#carForm").addEventListener("submit", e => {
   const year = $("#fYear").value.trim(), make = $("#fMake").value.trim(),
         model = $("#fModel").value.trim(), delivery = $("#fDelivery").value;
   if (!make || !model || !delivery) { err.textContent = "Make, model, and delivery date are required."; return; }
+  if (delivery > todayLocalISO()) { err.textContent = "Delivery date can't be in the future."; return; }
   if (year && !/^\d{4}$/.test(year)) { err.textContent = "Year should be 4 digits."; return; }
   err.textContent = "";
   db.car = { year, make, model, vin: $("#fVin").value.trim().toUpperCase(), deliveryDate: delivery, miles: $("#fMiles").value.trim() };
@@ -363,6 +416,9 @@ $("#repairForm").addEventListener("submit", async e => {
   const problem = $("#rProblem").value.trim(), dateIn = $("#rIn").value, dateOut = $("#rOut").value;
   if (!problem || !dateIn) { err.textContent = "Describe the problem and pick the drop-off date."; return; }
   if (dateOut && dateOut < dateIn) { err.textContent = "Pick-up date can't be before drop-off."; return; }
+  const today = todayLocalISO();
+  if (dateIn > today) { err.textContent = "Drop-off date can't be in the future."; return; }
+  if (dateOut && dateOut > today) { err.textContent = "Pick-up date can't be in the future."; return; }
   err.textContent = "";
   let photo = null;
   const f = $("#rPhoto").files[0];
@@ -406,15 +462,15 @@ function renderCase() {
   } else {
     const pct = Math.round(c.best * 100);
     banner.className = "status-banner building";
-    const next = c.routes.slice().sort((a, b) => (b.val / b.need) - (a.val / a.need))[0];
+    const next = c.routes.slice().sort((a, b) => b.prog - a.prog)[0];
     banner.innerHTML = `<h3>Building your case \u2014 ${pct}% of the way there</h3><p>Closest route: <strong>${esc(next.label)}</strong> (${next.val}/${next.need} ${next.unit}). ${c.inWin.length === 0 ? "Log your first repair below to start the meter." : "Keep logging every visit. Each one moves the needle."}</p>`;
   }
 
   // meters
   $("#routeMeters").innerHTML = c.routes.map(r => {
-    const pct = Math.min(100, Math.round(r.val / r.need * 100));
+    const pct = Math.min(100, Math.round(r.prog * 100));
     return `<div class="route${r.met ? " met" : ""}">
-      <div class="route-top"><strong>${esc(r.label)}${r.met ? '<span class="met-tag">THRESHOLD MET</span>' : ""}</strong><span class="frac">${r.val}/${r.need} ${r.unit}</span></div>
+      <div class="route-top"><strong>${esc(r.label)}${r.met ? '<span class="met-tag">THRESHOLD MET</span>' : ""}</strong><span class="frac">${r.val}/${r.strict ? "&gt;" + r.need : r.need} ${r.unit}</span></div>
       <div class="meter" role="progressbar" aria-valuenow="${r.val}" aria-valuemax="${r.need}" aria-label="${esc(r.label)}"><div style="width:${pct}%"></div></div>
       <div class="rnote">${esc(r.detail)}. ${esc(r.note)}</div></div>`;
   }).join("");
@@ -440,6 +496,7 @@ function renderCase() {
   if (c.st.windowMiles && car.miles && parseInt(car.miles.replace(/\D/g, ""), 10) > c.st.windowMiles)
     wn += `<strong>Mileage check:</strong> your current mileage may exceed the ${c.st.windowMiles.toLocaleString()}-mile window. A lawyer can still evaluate your case outside the presumption.`;
   if (c.st.extra) wn += (wn ? "<br>" : "") + esc(c.st.extra);
+  if (c.biz) wn += (wn ? "<br>" : "") + `<strong>Business-day counting:</strong> Mon\u2013Fri only; federal holidays are <strong>not</strong> excluded, so this total can differ from your state's official count (${esc(c.st.cite)}).`;
   $("#windowNote").innerHTML = wn;
   $("#windowNote").style.display = wn ? "" : "none";
 
@@ -454,7 +511,7 @@ function renderCase() {
         ${r.photo ? `<img class="ri-photo" src="${r.photo}" alt="Repair order photo">` : ""}
         <div class="ri-body">
           <div class="ri-problem">${esc(r.problem)}${r.safety ? '<span class="safety-tag">SAFETY</span>' : ""}</div>
-          <div class="ri-meta">${fmtDate(r.dateIn)}${r.dateOut ? " \u2192 " + fmtDate(r.dateOut) : " \u2192 in shop now"} \u00B7 ${daysOut(r, c.biz)} ${(c.biz ? "business " : "")}day(s)${r.dealer ? " \u00B7 " + esc(r.dealer) : ""}</div>
+          <div class="ri-meta">${fmtDate(r.dateIn)}${r.dateOut ? " \u2192 " + fmtDate(r.dateOut) : " \u2192 in shop now"} \u00B7 ${daysOut(r, c.biz, c.windowStart, c.windowEnd)} ${(c.biz ? "business " : "")}day(s)${r.dealer ? " \u00B7 " + esc(r.dealer) : ""}</div>
           ${r.desc ? `<div class="ri-meta">${esc(r.desc)}</div>` : ""}
         </div>
         <button class="ri-del" data-del="${r.id}" aria-label="Delete repair"><svg class="ic"><use href="#i-trash"/></svg></button>
@@ -466,7 +523,7 @@ function renderCase() {
   tl.innerHTML = db.repairs.length ? db.repairs.map(r => `
     <div class="tl-item"><div class="tl-date">${fmtDate(r.dateIn)}</div>
     <div class="tl-what">${esc(r.problem)}</div>
-    <div class="tl-days">${daysOut(r, c.biz)} ${(c.biz ? "business " : "")}day(s) out of service${r.dealer ? " \u2014 " + esc(r.dealer) : ""}</div></div>`).join("")
+    <div class="tl-days">${daysOut(r, c.biz, c.windowStart, c.windowEnd)} ${(c.biz ? "business " : "")}day(s) out of service${r.dealer ? " \u2014 " + esc(r.dealer) : ""}</div></div>`).join("")
     : `<p class="micro">Your timeline will appear here as you log repairs.</p>`;
 
   // next steps
@@ -502,7 +559,7 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") closeModals(
 function caseSummaryText() {
   const c = computeCase(); if (!c) return "";
   const car = db.car;
-  const lines = c.inWin.map(r => `${fmtDate(r.dateIn)}${r.dateOut ? " to " + fmtDate(r.dateOut) : " (in shop)"} — ${r.problem} (${daysOut(r, c.biz)}${c.biz ? " business" : ""}d)${r.dealer ? " @ " + r.dealer : ""}${r.safety ? " [SAFETY]" : ""}`);
+  const lines = c.inWin.map(r => `${fmtDate(r.dateIn)}${r.dateOut ? " to " + fmtDate(r.dateOut) : " (in shop)"} — ${r.problem} (${daysOut(r, c.biz, c.windowStart, c.windowEnd)}${c.biz ? " business" : ""}d)${r.dealer ? " @ " + r.dealer : ""}${r.safety ? " [SAFETY]" : ""}`);
   return { c, car, lines };
 }
 function openIntake() {

@@ -473,6 +473,9 @@ function renderSaved(){
   const all = storeGet("fineprint_analyses", []).filter(function(a){
     return a && typeof a.text === "string" && a.text.length > 0 && typeof a.score === "number";
   });
+  // analyses over the 100KB sync cap stay device-only; badge them honestly
+  let bigMap = {};
+  try { bigMap = JSON.parse(localStorage.getItem("fineprint.oversized.v1") || "{}") || {}; } catch(e){}
   if(!all.length){ box.innerHTML = '<p class="saved-empty">No saved analyses yet. Analyze a contract and it will appear here.</p>'; return; }
   box.innerHTML = "";
   all.forEach(function(a){
@@ -490,7 +493,14 @@ function renderSaved(){
       try{ if(window.__fineprintSync) window.__fineprintSync.onSave(); }catch(e){}
       renderSaved(); toast("Deleted.");
     });
-    row.appendChild(nm); row.appendChild(sc); row.appendChild(open); row.appendChild(del);
+    row.appendChild(nm); row.appendChild(sc);
+    if (a.id && bigMap["analyses:" + a.id]){
+      const badge = document.createElement("span"); badge.className = "devonly";
+      badge.textContent = "device only";
+      badge.title = "Over the 100KB sync cap: saved on this device, not backed up.";
+      row.appendChild(badge);
+    }
+    row.appendChild(open); row.appendChild(del);
     box.appendChild(row);
   });
 }

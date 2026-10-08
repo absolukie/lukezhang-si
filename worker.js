@@ -121,7 +121,7 @@ const SITES = ["america-gov-render", "leetcode-games", "ergosphere", "illusion-b
   "unsolved-lab",
   "second-brain-search",
   "todo-1000",
-  "peggie-preview", "shazam-lab", "wasm-craft", "vibe-check", "model-atlas", "llm-training-draft", "intelligent-ui", "ml-functions-draft", "math-curiosity-draft", "waves-draft", "taylor-mastery-draft", "high-agency-draft", "unit-tests-draft","derivatives-draft"];
+  "peggie-preview", "shazam-lab", "wasm-craft", "vibe-check", "model-atlas", "llm-training-draft", "intelligent-ui", "ml-functions-draft", "math-curiosity-draft", "waves-draft", "taylor-mastery-draft", "high-agency-draft"];
 // Trade Compass: proxies Yahoo Finance quotes via v8 chart API.
 async function handleTradeCompassQuotes(request) {
   const url = new URL(request.url);
@@ -219,6 +219,35 @@ function notFound() {
 
 // Fetch a static asset by path, following the asset system's one-hop
 // canonicalization redirect (e.g. /sites/x/index.html → /sites/x/).
+// ---- Lean-in-the-browser assets (R2) ----
+const LEAN_CT = {
+  ".gz": "application/gzip",
+  ".pack": "application/octet-stream",
+  ".json": "application/json",
+  ".js": "text/javascript",
+};
+async function serveLeanAsset(key, env) {
+  if (key.includes("..")) return notFound();
+  const obj = await env.LEAN_WASM.get(key);
+  if (!obj) return notFound();
+  const headers = new Headers();
+  obj.writeHttpMetadata(headers);
+  for (const [ext, ct] of Object.entries(LEAN_CT)) {
+    if (key.endsWith(ext)) { headers.set("content-type", ct); break; }
+  }
+  headers.set("cache-control", "public, max-age=31536000, immutable");
+  return new Response(obj.body, { headers });
+}
+// Temporary one-shot upload; the route is removed after the assets land.
+async function handleLeanUpload(url, request, env) {
+  const key = url.searchParams.get("key") || "";
+  if (!key.startsWith("lean-wasm-assets/") || key.includes("..")) {
+    return new Response("bad key", { status: 400 });
+  }
+  await env.LEAN_WASM.put(key, request.body);
+  return new Response("ok");
+}
+
 async function fetchAsset(request, env, path) {
   const url = new URL(request.url);
   let res = await env.ASSETS.fetch(new Request(new URL(path, url), request));
@@ -735,6 +764,23 @@ export default {
               ? url.pathname + "index.html"
               : url.pathname;
       } else {
+        // Lean-in-the-browser runtime assets (R2) for the lean-proofs post.
+        if (url.pathname.startsWith("/lean-wasm-assets/")) {
+          return serveLeanAsset(url.pathname.slice(1), env);
+        }
+        // Cross-origin isolation for the Lean widget page (SharedArrayBuffer).
+        if ((host === "lukezhang.si" || host === "www.lukezhang.si") &&
+            url.pathname.startsWith("/blog/lean-proofs")) {
+          const res = await env.ASSETS.fetch(request);
+          const headers = new Headers(res.headers);
+          headers.set("Cross-Origin-Opener-Policy", "same-origin");
+          headers.set("Cross-Origin-Embedder-Policy", "require-corp");
+          return new Response(res.body, { status: res.status, headers });
+        }
+        // One-shot R2 upload for the Lean assets (temporary; removed after upload).
+        if (url.pathname === "/__lean_up_7f3a9c" && request.method === "PUT") {
+          return handleLeanUpload(url, request, env);
+        }
         // Main domain and every other host: today's behavior, untouched.
         return env.ASSETS.fetch(request);
       }

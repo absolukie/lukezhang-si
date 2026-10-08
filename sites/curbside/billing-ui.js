@@ -347,9 +347,9 @@ BillingClient.prototype.buildOverlay = function(){
       ev.currentTarget.textContent = "Could not reach billing. Try again.";
     }
   });
-  // Block interaction with the app behind the overlay, but never trap scroll
-  // on the overlay itself.
-  ov.addEventListener("click", function(ev){ ev.stopPropagation(); }, true);
+  // The overlay is a fixed full-screen layer above the app, so nothing
+  // behind it can receive clicks. No stopPropagation needed here: one on the
+  // overlay itself would also swallow clicks on the plan cards and CTA.
   document.body.appendChild(ov);
   this._overlay = ov;
   return ov;

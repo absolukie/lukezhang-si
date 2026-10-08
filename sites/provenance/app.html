@@ -147,6 +147,7 @@ main{max-width:760px;margin:0 auto;padding:16px 16px calc(40px + env(safe-area-i
 .dossier .photofig{margin:16px 0;break-inside:avoid}
 .dossier .photofig .pwrap{position:relative}
 .dossier .photofig img{width:100%;border:1px solid var(--line);border-radius:4px;display:block}
+.photomiss{border:1px dashed var(--line);border-radius:4px;padding:28px 12px;text-align:center;font-size:13px;color:var(--ink2);background:rgba(0,0,0,.03)}
 .dossier .photofig .pin{width:28px;height:28px;margin:-14px 0 0 -14px;font-size:12px;pointer-events:none}
 .dossier .legend{font-size:13px;margin:8px 0 0;padding:0;list-style:none}
 .dossier .legend li{margin-bottom:4px}
@@ -457,7 +458,7 @@ function renderList(){
   const arts=DB.artworks.filter(a=>!q||(a.title+' '+(a.artist||'')+' '+(a.owner||'')).toLowerCase().includes(q));
   const cards = arts.map(a=>{
     const pins=a.photos.reduce((n,p)=>n+p.pins.length,0);
-    const thumb=a.photos[0]?`<img class="thumb" src="${a.photos[0].dataUrl}" alt="">`
+    const thumb=a.photos[0]&&a.photos[0].dataUrl?`<img class="thumb" src="${a.photos[0].dataUrl}" alt="">`
       :`<div class="thumb mono">${esc((a.title||'?')[0].toUpperCase())}</div>`;
     const last=a.photos.length?fmtDateShort(a.photos[a.photos.length-1].takenAt):'No photos yet';
     return `<button class="artcard" data-id="${a.id}">
@@ -590,8 +591,10 @@ function renderDetail(art, tab){
 function photosTab(art){
   const cards=art.photos.map((p,i)=>{
     const sev=p.pins.some(x=>x.severity==='severe');
+    const img=p.dataUrl?`<img src="${p.dataUrl}" alt="" data-act="annotate" data-pid="${p.id}" style="cursor:pointer">`
+      :`<div class="photomiss" style="margin-bottom:8px">Photo captured on another device; image bytes not on this device</div>`;
     return `<div class="photocard">
-      <img src="${p.dataUrl}" alt="" data-act="annotate" data-pid="${p.id}" style="cursor:pointer">
+      ${img}
       <div class="pbody">
         <p class="cap">${esc(p.caption)||'Untitled photo'}</p>
         <p class="when">${fmtDate(p.takenAt)} · ${p.pins.length} pin${p.pins.length===1?'':'s'}${sev?' · <b style="color:var(--red)">severe flagged</b>':''}</p>
@@ -632,7 +635,11 @@ function wirePhotos(art){
   app.querySelectorAll('[data-act]').forEach(el=>{
     const pid=el.dataset.pid, act=el.dataset.act;
     el.onclick=(e)=>{ e.stopPropagation();
-      if(act==='annotate') nav('/art/'+art.id+'/photo/'+pid);
+      if(act==='annotate'){
+        const ap=getPhoto(art,pid);
+        if(ap&&!ap.dataUrl){ toast('Photo bytes are on the capturing device; annotation needs the original.'); return; }
+        nav('/art/'+art.id+'/photo/'+pid);
+      }
       else if(act==='cap'){
         const p=getPhoto(art,pid);
         openSheet(`<h3>Photo details</h3><div class="field"><label>Caption</label>
@@ -676,6 +683,16 @@ function showCoach(art){
 /* ================= annotate view ================= */
 function renderAnnotate(art,pid){
   const p=getPhoto(art,pid); if(!p){ nav('/art/'+art.id); return; }
+  if(!p.dataUrl){
+    app.innerHTML=`
+    <div class="backrow noprint">
+      <button class="iconbtn" id="btnBack" aria-label="Back">${IC.back}</button>
+      <div style="flex:1"><b>${esc(p.caption)||'Photo'}</b><div style="font-size:12px;color:var(--ink2)">${fmtDate(p.takenAt)}</div></div>
+    </div>
+    <div class="photomiss" style="margin-top:12px">Photo captured on another device; image bytes not on this device.<br>Annotation needs the original photo bytes.</div>`;
+    document.getElementById('btnBack').onclick=()=>nav('/art/'+art.id+'/photos');
+    return;
+  }
   app.innerHTML=`
     <div class="backrow noprint">
       <button class="iconbtn" id="btnBack" aria-label="Back">${IC.back}</button>
@@ -885,8 +902,17 @@ function renderCompare(art){
   if(deliv && deliv.id!==A.value) B.value=deliv.id; else B.selectedIndex=Math.min(1,art.photos.length-1);
   const upd=()=>{
     const pa=getPhoto(art,A.value), pb=getPhoto(art,B.value);
-    document.getElementById('cmpImgA').src=pa.dataUrl;
-    document.getElementById('cmpImgB').src=pb.dataUrl;
+    for(const [id,ph] of [['cmpImgA',pa],['cmpImgB',pb]]){
+      const el=document.getElementById(id);
+      if(ph&&ph.dataUrl){ el.src=ph.dataUrl; el.style.visibility=''; el.alt=''; }
+      else { el.removeAttribute('src'); el.style.visibility='hidden'; el.alt='Photo bytes not on this device'; }
+    }
+    const miss=[pa,pb].some(ph=>!ph||!ph.dataUrl);
+    let note=document.getElementById('cmpMiss');
+    if(miss&&!note){ note=document.createElement('p'); note.id='cmpMiss'; note.className='photomiss'; note.style.margin='8px 0';
+      note.textContent='One of these photos was captured on another device; its image bytes are not on this device.';
+      document.getElementById('cmpwrap').after(note); }
+    else if(!miss&&note) note.remove();
   };
   A.onchange=upd; B.onchange=upd; upd();
   const range=document.getElementById('cmpRange'), top=document.getElementById('cmpTop'), handle=document.getElementById('cmpHandle');
@@ -1073,8 +1099,12 @@ function canonical(value){
 async function evidencePayload(art){
   const details={};
   for(const key of ['id','title','artist','type','year','medium','dimensions','value','owner','examiner','condition','notes']) details[key]=art[key]??null;
-  const photos=await Promise.all(art.photos.map(async p=>({id:p.id,caption:p.caption??'',takenAt:p.takenAt??null,pins:p.pins,
-    dataUrlDigest:await sha256(p.dataUrl||'')})));
+  const photos=await Promise.all(art.photos.map(async p=>{
+    const entry={id:p.id,caption:p.caption??'',takenAt:p.takenAt??null,pins:p.pins,stage:p.stage??null};
+    if(p.dataUrl) entry.dataUrlDigest=await sha256(p.dataUrl);
+    else entry.imageBytes='unavailable';
+    return entry;
+  }));
   const signature=art.signature?{name:art.signature.name,at:art.signature.at,digest:await sha256(canonical(art.signature))}:null;
   return {version:1,artwork:details,photos,custody:art.custody,climate:art.climate,signature};
 }
@@ -1091,7 +1121,9 @@ async function buildDossier(art){
   const photoFigs=art.photos.map((p,pi)=>{
     const legend=p.pins.map((pin,i)=>`<li><b>${i+1}.</b> ${esc(pin.type)}, ${SEV_LABEL[pin.severity]}${pin.note?': '+esc(pin.note):''}</li>`).join('');
     const overlay=p.pins.map((pin,i)=>`<span class="pin sev-${pin.severity}" style="left:${pin.x}%;top:${pin.y}%">${i+1}</span>`).join('');
-    return `<div class="photofig"><div class="pwrap"><img src="${p.dataUrl}" alt="">${overlay}</div>
+    const img=p.dataUrl?`<img src="${p.dataUrl}" alt="">`
+      :`<div class="photomiss">Photo captured on another device; image bytes not on this device</div>`;
+    return `<div class="photofig"><div class="pwrap">${img}${overlay}</div>
       <p style="font-size:13px;color:var(--ink2);margin:6px 0">${esc(p.caption)||('Photo '+(pi+1))} · ${fmtDate(p.takenAt)}</p>
       ${legend?`<ul class="legend">${legend}</ul>`:'<p style="font-size:13px;color:var(--ink2)">No condition pins on this photo.</p>'}</div>`;
   }).join('');
@@ -1123,7 +1155,7 @@ async function buildDossier(art){
       <h3 class="serif">Climate history</h3>
       ${climRows?`<table><tr><th>When</th><th>Temp</th><th>RH</th><th>Location</th></tr>${climRows}</table>`:'<p>No climate readings logged.</p>'}
       <h3 class="serif">Integrity</h3>
-      <p style="font-size:13px;color:var(--ink2)">This SHA-256 hash covers artwork details, all condition pins, photo image bytes (stored as data URLs), the full custody log, all climate readings, and the examiner signature when captured. It is computed in the browser on this device when the dossier is generated and records the evidence used for this document at that moment. The hash alone cannot prove that a printed document is unchanged. It does not verify who took the photos or countersign custody.</p>
+      <p style="font-size:13px;color:var(--ink2)">This SHA-256 hash covers artwork details, all condition pins, photo image bytes (stored as data URLs), the full custody log, all climate readings, and the examiner signature when captured. It is computed in the browser on this device when the dossier is generated and records the evidence used for this document at that moment. The hash alone cannot prove that a printed document is unchanged. It does not verify who took the photos or countersign custody.${art.photos.some(p=>!p.dataUrl)?' Photos marked image bytes unavailable were captured on another device; their recorded values cover metadata only, not image bytes.':''}</p>
       <div class="hash">${hash}</div>
       <div class="signature-block">
         ${art.signature?`<img class="signature-image" src="${esc(art.signature.dataUrl)}" alt="Captured examiner signature">`:''}
@@ -1149,7 +1181,7 @@ function wireDossier(art){
     output.innerHTML=`
       <div class="verdict noprint">
         <div class="vbig serif">${nPins} finding${nPins===1?'':'s'} documented</div>
-        <div class="vsub">${art.photos.length} photo${art.photos.length===1?'':'s'} · ${art.custody.length} custody event${art.custody.length===1?'':'s'} · ${art.climate.length} climate reading${art.climate.length===1?'':'s'} · tamper-evident hash sealed</div>
+        <div class="vsub">${art.photos.length} photo${art.photos.length===1?'':'s'} · ${art.custody.length} custody event${art.custody.length===1?'':'s'} · ${art.climate.length} climate reading${art.climate.length===1?'':'s'} · tamper-evident hash recorded</div>
         <div class="vrid">Dossier ${rid}</div>
       </div>`+html+`
       <div class="fabrow noprint">

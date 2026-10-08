@@ -48,11 +48,11 @@
   .viz input[type=range]::-webkit-slider-runnable-track { height: 10px; border-radius: 6px;
     background: rgba(43,43,43,0.18); }
   .viz input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none;
-    width: 30px; height: 30px; border-radius: 50%; background: #b3352b;
-    border: 3px solid #2b2b2b; margin-top: -10px; box-shadow: 0 2px 8px rgba(0,0,0,0.35); }
+    width: 42px; height: 42px; border-radius: 50%; background: #b3352b;
+    border: 3px solid #2b2b2b; margin-top: -16px; box-shadow: 0 2px 8px rgba(0,0,0,0.35); }
   .viz input[type=range]::-moz-range-track { height: 10px; border-radius: 6px;
     background: rgba(43,43,43,0.18); }
-  .viz input[type=range]::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50%;
+  .viz input[type=range]::-moz-range-thumb { width: 36px; height: 36px; border-radius: 50%;
     background: #b3352b; border: 3px solid #2b2b2b; }
   .viz input[type=text], .viz textarea { width: 100%; font-size: 16px; padding: 12px 14px;
     border: 1px solid rgba(43,43,43,0.25); border-radius: 10px; background: #fff;
@@ -129,7 +129,114 @@
   <p class="verdict">Every AI model you have ever used is, underneath the hype, about ten math functions applied a few billion times. Squash a number here. Split a pie there. Measure how surprised you were. That is the whole game, and this post makes each function something you can touch.</p>
 
   <p>People talk about neural networks like they are mysterious. They are not. A network is a long chain of very ordinary operations, and the interesting parts are just a handful of functions with funny names: sigmoid, softmax, ReLU, GELU, LayerNorm, cosine similarity. Learn these six families and you can read any model paper without flinching.</p>
-  <p>Each section below gives you one analogy and one toy. Drag the sliders, spin the dials, and watch what the function actually does. By the end you will know exactly what is happening inside a transformer block, an embedding search, and a game-playing agent.</p>
+  <p>Each section below gives you one analogy and one toy, and we start at section zero, because one idea underpins half of what follows: the logarithm. Drag the sliders, spin the dials, and watch what each function actually does. By the end you will know exactly what is happening inside a transformer block, an embedding search, and a game-playing agent.</p>
+
+  <h2>0. Logarithms, from scratch</h2>
+  <p>Before any of the functions below, you need one idea: the logarithm. It is older than calculus and older than the steam engine. A Scottish astronomer invented it in 1614 because he was sick of multiplying big numbers by hand. Four hundred years later it is the reason your chatbot can learn at all. Here is the whole thing, built up from zero.</p>
+
+  <p><strong>A logarithm is just a counter.</strong> log10(1000) = 3 means: multiply 10 by itself 3 times and you get 1000. That is all it is. The log asks one question: <strong>how many multiplications deep are you?</strong></p>
+
+  <div class="viz">
+    <h3>The multiplication counter</h3>
+    <p class="sub">Pick a base, then step the counter. The step count IS the logarithm.</p>
+    <div class="chips" id="lg-base">
+      <button class="chip on" data-b="2">base 2</button>
+      <button class="chip" data-b="10">base 10</button>
+      <button class="chip" data-b="e">base e</button>
+    </div>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Multiplications</span>
+      <span>
+        <button class="chip" id="lg-minus" aria-label="Fewer multiplications">&minus;</button>
+        <span class="big" id="lg-n" style="margin:0 10px;">3</span>
+        <button class="chip" id="lg-plus" aria-label="More multiplications">+</button>
+      </span>
+    </div>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);" id="lg-chain"></span>
+      <span class="big" id="lg-log" style="font-size:22px;"></span>
+    </div>
+    <div class="insight" id="lg-insight"></div>
+  </div>
+
+  <p><strong>How Napier discovered it.</strong> In 1614, John Napier was an astronomer drowning in arithmetic. Multiplying two 7-digit numbers by hand took all afternoon, and one slip ruined everything. Then he noticed something: if you write numbers as powers of a base, multiplication becomes addition. 10&sup2; &times; 10&sup3; = 10&#8309;. So instead of multiplying the numbers, you add the exponents and look the answer up. He published tables of these exponents, logarithms, and cut calculation time to a fraction. It was a machine that turned hard multiplications into easy additions.</p>
+
+  <div class="viz">
+    <h3>Napier's machine</h3>
+    <p class="sub">Drag A and B. The machine multiplies them the painful way and the Napier way: add the logs, then un-log. Same answer.</p>
+    <label for="np-a">A <span id="np-a-v" style="font-weight:400;">37</span></label>
+    <input type="range" id="np-a" min="2" max="200" step="1" value="37" aria-label="First number">
+    <label for="np-b">B <span id="np-b-v" style="font-weight:400;">42</span></label>
+    <input type="range" id="np-b" min="2" max="200" step="1" value="42" aria-label="Second number">
+    <div class="stat-grid">
+      <div class="stat-cell"><div class="n" id="np-direct">1,554</div><div class="l">A &times; B, the painful way</div></div>
+      <div class="stat-cell"><div class="n" id="np-back">1554.00</div><div class="l">e^(ln A + ln B), the Napier way</div></div>
+    </div>
+    <p class="cap" id="np-work"></p>
+  </div>
+
+  <p><strong>Logs compress ridiculous ranges.</strong> An earthquake's energy, a sound's loudness, a solution's acidity: all of them span so many zeros that raw numbers are useless. So we invented the Richter scale, decibels, and pH, and all three are just logarithms in disguise. A magnitude 9 quake is not a little stronger than a magnitude 5. It is about a million times stronger, and the log scale is what lets you say that in one syllable. Language models live in the same world: the token probabilities below span twelve orders of magnitude. Flip the scale and watch the linear view crush everything to zero.</p>
+
+  <div class="viz">
+    <h3>The scale zoomer</h3>
+    <p class="sub">One row of token probabilities, from certain down to one in a trillion. Toggle the scale.</p>
+    <div class="chips" id="zm-mode">
+      <button class="chip on" data-m="lin">Linear scale</button>
+      <button class="chip" data-m="log">Log scale</button>
+    </div>
+    <div id="zm-bars"></div>
+    <p class="cap">On the linear scale, six of the seven bars are invisible. They are not zero, your eyes just cannot see twelve orders of magnitude at once. The log scale gives every value its fair share of pixels.</p>
+  </div>
+
+  <p><strong>Why base e?</strong> Because e is what continuous growth converges to. Put $1 in a bank at 100% interest. Compounded once a year you get $2. Compounded every day you get about $2.71. Compounded every single instant, you approach $2.71828 and never pass it. That number is e: the speed limit of growth. Whenever something grows or decays continuously, e shows up, and calculus is cleanest in base e, because the derivative of e^x is just e^x again. So in ML, a log with no base written always means natural log. It is not a fashion choice. It is the base the math wants.</p>
+
+  <div class="viz">
+    <h3>The speed limit of growth</h3>
+    <p class="sub">Step up how often the bank compounds your $1. Watch the total stall out at e.</p>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Compounds per year</span>
+      <span>
+        <button class="chip" id="eul-minus" aria-label="Compound less often">&minus;</button>
+        <span class="big" id="eul-n" style="margin:0 10px; font-size:22px;">1</span>
+        <button class="chip" id="eul-plus" aria-label="Compound more often">+</button>
+      </span>
+    </div>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Your $1 becomes</span>
+      <span class="big" id="eul-val">$2.00000</span>
+    </div>
+    <div class="insight" id="eul-insight"></div>
+  </div>
+
+  <p><strong>The money demo: why log-softmax, not probabilities.</strong> A language model writes one token at a time, and the probability of a whole sentence is every token's probability multiplied together. Each one is small. Multiply enough small numbers and the computer surrenders: the product rounds to exactly zero, and training dies on the spot. Logs fix it, because adding logs is the same as multiplying the originals, and addition never underflows. Slide N up and watch the left column die while the right column cruises.</p>
+
+  <div class="viz">
+    <h3>Watch a probability die</h3>
+    <p class="sub">Each token gets the same small probability p. The left column multiplies them, the way probabilities do. The right column adds their logs, the way training does.</p>
+    <label for="ud-n">Token positions (N) <span id="ud-n-v" style="font-weight:400;">200</span></label>
+    <input type="range" id="ud-n" min="1" max="200" step="1" value="200" aria-label="Number of token positions">
+    <label for="ud-p">Probability per token (p) <span id="ud-p-v" style="font-weight:400;">0.01</span></label>
+    <input type="range" id="ud-p" min="0" max="100" step="1" value="33" aria-label="Probability per token">
+    <div class="stat-grid">
+      <div class="stat-cell">
+        <div class="n" id="ud-left" style="font-size:17px; word-break:break-all;">0</div>
+        <div class="l">p multiplied N times <span id="ud-badge" style="background:#b3352b; color:#fff; font-size:11px; font-weight:700; border-radius:6px; padding:1px 8px; margin-left:6px;">UNDERFLOW</span></div>
+        <div class="bar-track" style="margin-top:8px;"><div class="bar-fill" id="ud-leftbar" style="width:0%"></div></div>
+      </div>
+      <div class="stat-cell">
+        <div class="n" id="ud-right" style="font-size:17px;">-921.0</div>
+        <div class="l">log-probabilities added N times</div>
+        <div class="bar-track" style="margin-top:8px;"><div class="bar-fill alt" id="ud-rightbar" style="width:8%"></div></div>
+      </div>
+    </div>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Honest answer</span>
+      <span class="big" style="font-size:22px;" id="ud-true">10<sup>-400</sup></span>
+    </div>
+    <div class="insight" id="ud-insight"></div>
+  </div>
+
+  <p><strong>Now that logs make sense, here is why softmax wears a log coat.</strong></p>
 
   <h2>1. The squashers: sigmoid and tanh</h2>
   <p>Neural nets pass huge wild numbers around, and sometimes they need to calm one down. That is what the squashers do. <strong>Sigmoid</strong> takes any number and squeezes it into a 0-to-1 range. Think of a <strong>dimmer switch</strong>: any input becomes a brightness level between off and fully on. <strong>Tanh</strong> is the same idea but for a <strong>tug of war</strong>: any input becomes a pull between -1 and 1, negative one way, positive the other.</p>
@@ -279,6 +386,129 @@
 
   <footer>Draft. Interactive visualizers run entirely in your browser.</footer>
 </div>
+
+<script>
+(function(){
+"use strict";
+function $(id){ return document.getElementById(id); }
+function chips(id, fn){
+  var box = $(id);
+  box.addEventListener("click", function(ev){
+    var t = ev.target.closest("button"); if (!t) return;
+    Array.prototype.forEach.call(box.querySelectorAll("button"), function(b){ b.classList.remove("on"); });
+    t.classList.add("on"); fn(t);
+  });
+}
+
+/* ---------- 0a. multiplication counter: log is a counter ---------- */
+var lgBaseKey = "2", lgN = 3, LG_MAXN = 12;
+function lgBaseVal(){ return lgBaseKey === "e" ? Math.E : parseInt(lgBaseKey, 10); }
+function lgProdStr(v){
+  if (lgBaseKey === "e") return v.toFixed(2);
+  return Math.round(v).toLocaleString("en-US");
+}
+function lgRender(){
+  var b = lgBaseVal(), v = Math.pow(b, lgN);
+  var sym = lgBaseKey === "e" ? "e" : lgBaseKey, chain;
+  if (lgN === 0) chain = "1 (the empty product)";
+  else if (lgN <= 5) {
+    var parts = []; for (var i = 0; i < lgN; i++) parts.push(sym);
+    chain = parts.join(" \u00d7 ") + " = " + lgProdStr(v);
+  } else {
+    chain = sym + " \u00d7 " + sym + " \u00d7 ... \u00d7 " + sym + " (" + lgN + " times) = " + lgProdStr(v);
+  }
+  $("lg-chain").textContent = chain;
+  var lab = lgBaseKey === "e" ? "ln" : "log" + (lgBaseKey === "2" ? "\u2082" : "\u2081\u2080");
+  $("lg-log").textContent = lab + "(" + lgProdStr(v) + ") = " + lgN;
+  $("lg-n").textContent = lgN;
+  var note = lgBaseKey === "2"
+    ? "Base 2 logs count doublings. It is the native language of computers: every extra bit doubles what you can say."
+    : lgBaseKey === "10"
+    ? "Base 10 logs count digits minus one. 1,000 has four digits, so its log is 3. That is why scientists love it."
+    : "Base e logs count continuous growth. This is the one machine learning uses, always. More on why below.";
+  $("lg-insight").textContent = "Log asks: how many multiplications deep are you? Right now the answer is " + lgN + ". " + note;
+}
+chips("lg-base", function(t){ lgBaseKey = t.getAttribute("data-b"); lgRender(); });
+$("lg-minus").addEventListener("click", function(){ if (lgN > 0) { lgN--; lgRender(); } });
+$("lg-plus").addEventListener("click", function(){ if (lgN < LG_MAXN) { lgN++; lgRender(); } });
+lgRender();
+
+/* ---------- 0b. Napier's machine ---------- */
+function npRender(){
+  var a = +$("np-a").value, b = +$("np-b").value;
+  $("np-a-v").textContent = a; $("np-b-v").textContent = b;
+  var direct = a * b, la = Math.log(a), lb = Math.log(b), s = la + lb, back = Math.exp(s);
+  $("np-direct").textContent = direct.toLocaleString("en-US");
+  $("np-back").textContent = back.toFixed(2);
+  $("np-work").textContent = "ln(" + a + ") + ln(" + b + ") = " + la.toFixed(2) + " + " + lb.toFixed(2) +
+    " = " + s.toFixed(2) + ", then e^" + s.toFixed(2) + " = " + back.toFixed(1) + ". Same answer, no long multiplication.";
+}
+$("np-a").addEventListener("input", npRender);
+$("np-b").addEventListener("input", npRender);
+npRender();
+
+/* ---------- 0c. the scale zoomer ---------- */
+var ZM_P = [1, 0.1, 0.01, 1e-3, 1e-6, 1e-9, 1e-12], zmMode = "lin";
+function zmRender(){
+  var h = "";
+  ZM_P.forEach(function(p){
+    var w = zmMode === "lin" ? p * 100 : Math.max(0.8, (12 + Math.log10(p)) / 12 * 100);
+    var lab = p === 1 ? "1" : "10<sup>" + Math.round(Math.log10(p)) + "</sup>";
+    h += '<div class="bar-row"><div class="w">' + lab + '</div>' +
+      '<div class="bar-track"><div class="bar-fill' + (zmMode === "log" ? " alt" : "") +
+      '" style="width:' + Math.min(w, 100).toFixed(1) + '%"></div></div></div>';
+  });
+  $("zm-bars").innerHTML = h;
+}
+chips("zm-mode", function(t){ zmMode = t.getAttribute("data-m"); zmRender(); });
+zmRender();
+
+/* ---------- 0d. the speed limit of growth (why base e) ---------- */
+var EUL_NS = [1, 2, 4, 12, 52, 365, 8760, 31536000], eulI = 0;
+function eulRender(){
+  var n = EUL_NS[eulI], v = Math.pow(1 + 1 / n, n);
+  $("eul-n").textContent = n.toLocaleString("en-US");
+  $("eul-val").textContent = "$" + v.toFixed(5);
+  $("eul-insight").textContent = eulI === EUL_NS.length - 1
+    ? "Compounding every second of the year and you still land on 2.71828. That ceiling is e. Whenever growth never pauses, e is hiding inside, which is why ML does all of its logs in base e."
+    : "Bigger total, but watch it slow down. It is homing in on a ceiling it can never cross. Keep stepping.";
+}
+$("eul-minus").addEventListener("click", function(){ if (eulI > 0) { eulI--; eulRender(); } });
+$("eul-plus").addEventListener("click", function(){ if (eulI < EUL_NS.length - 1) { eulI++; eulRender(); } });
+eulRender();
+
+/* ---------- 0e. watch a probability die (why log-softmax) ---------- */
+function udP(){ return Math.pow(10, -3 + (+$("ud-p").value) * 3 / 100); }
+function udPStr(p){ return String(parseFloat(p.toPrecision(3))); }
+function udRender(){
+  var N = +$("ud-n").value, p = udP(), ps = udPStr(p);
+  $("ud-n-v").textContent = N; $("ud-p-v").textContent = ps;
+  var L = Math.pow(p, N), R = N * Math.log(p), E = N * Math.log10(p);
+  var leftEl = $("ud-left"), dead = (L === 0);
+  if (dead) {
+    leftEl.textContent = "0";
+    leftEl.style.color = "#b3352b";
+    $("ud-badge").style.display = "inline-block";
+  } else {
+    leftEl.textContent = L.toExponential(2);
+    leftEl.style.color = "";
+    $("ud-badge").style.display = "none";
+  }
+  $("ud-right").textContent = R.toFixed(1);
+  $("ud-true").innerHTML = "10<sup>" + Math.round(E) + "</sup>";
+  var lw = dead ? 0 : Math.max(0, Math.min(100, (324 + E) / 324 * 100));
+  var rw = Math.max(0, Math.min(100, (1400 + R) / 1400 * 100));
+  $("ud-leftbar").style.width = lw.toFixed(1) + "%";
+  $("ud-rightbar").style.width = rw.toFixed(1) + "%";
+  $("ud-insight").textContent = dead
+    ? "At N=" + N + " with p=" + ps + ", the honest answer is 10^" + Math.round(E) + ", but 64-bit floats bottom out near 10^-324. The left column reports 0 and training would die right here. The right column just says " + R.toFixed(1) + " and keeps going."
+    : "Left column still alive at " + L.toExponential(1) + ". Push N higher or p lower and watch it flatline to exactly 0. The right column does not care how far you go.";
+}
+$("ud-n").addEventListener("input", udRender);
+$("ud-p").addEventListener("input", udRender);
+udRender();
+})();
+</script>
 
 <script>
 (function(){
@@ -446,7 +676,8 @@ function fmt(x, d){ return Number(x).toFixed(d); }
     }
     s += '<path d="'+d+'" fill="none" stroke="#b3352b" stroke-width="2.5"/>';
     s += '<rect id="ac-hit" x="'+PL+'" y="'+PT+'" width="'+(W-PL-PR)+'" height="'+(H-PT-PB)+'" fill="transparent"/>';
-    s += '<circle id="ac-dot" r="11" fill="#b3352b" stroke="#fff" stroke-width="3" style="cursor:grab"/>';
+    s += '<circle id="ac-hitc" r="26" fill="transparent" style="cursor:grab"/>'; /* invisible grab halo */
+    s += '<circle id="ac-dot" r="14" fill="#b3352b" stroke="#fff" stroke-width="3" style="cursor:grab"/>';
     svg.innerHTML = s;
   }
   function moveDot(){
@@ -457,6 +688,8 @@ function fmt(x, d){ return Number(x).toFixed(d); }
     var y = f(x); if (y<-2) y=-2; if (y>6) y=6;
     var dot = $("ac-dot");
     if (dot){ dot.setAttribute("cx", X(x).toFixed(1)); dot.setAttribute("cy", Y(y).toFixed(1)); }
+    var halo = $("ac-hitc");
+    if (halo){ halo.setAttribute("cx", X(x).toFixed(1)); halo.setAttribute("cy", Y(y).toFixed(1)); }
     $("ac-x").textContent = fmt(x,1);
     $("ac-y").textContent = fmt(f(x),2);
   }

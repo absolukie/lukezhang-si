@@ -238,8 +238,13 @@ function updatePill(){
   else if (big > 0){ s = "limited"; label = "Sync limited \u2014 " + big + " too large"; cls = "warn"; }
   else { s = "synced"; label = "Synced"; cls = "ok"; }
   status = s;
-  var el = document.querySelector("#syncStatus");
-  if (el){ el.textContent = label; el.className = "sync-pill" + (cls ? " " + cls : ""); }
+  /* Every .sync-pill on the page stays honest: the dashboard card and the
+   * sticky project header both carry one. */
+  var els = document.querySelectorAll(".sync-pill");
+  for (var i = 0; i < els.length; i++){
+    els[i].textContent = label;
+    els[i].className = "sync-pill" + (cls ? " " + cls : "");
+  }
 }
 
 
@@ -474,6 +479,7 @@ async function boot(){
 
 /* hooks consumed by app.html */
 window.__abateSync = { onSave: onSave };
+window.__abateSyncPill = updatePill;   // lets the app refresh header pills on render
 window.__abateSyncUI = renderSettingsUI;
 window.__abateSyncPull = pull;   // exposed for testing
 window.__abateSyncPush = pushDirty;

@@ -255,6 +255,46 @@
     <p class="cap">Notice how both flatten out at the extremes. Push the input to 8 and more input barely changes anything. That flat zone is called saturation, and it is why training can stall: no change in output means no signal to learn from.</p>
   </div>
 
+  <div class="viz">
+    <h3>One curve becomes the other</h3>
+    <p class="sub">Drag the morph. At 0 you have pure sigmoid, 0 to 1. At 100 you have pure tanh, -1 to 1. The exact link is tanh(x) = 2 * sigmoid(2x) - 1.</p>
+    <label for="mp-t">Morph <span id="mp-t-v" style="font-weight:400;">0%</span></label>
+    <input type="range" id="mp-t" min="0" max="100" step="1" value="0" aria-label="Morph from sigmoid to tanh">
+    <svg class="curve" id="mp-svg" viewBox="0 0 600 230" role="img" aria-label="Curve morphing from sigmoid to tanh"></svg>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Formula in use</span>
+      <span class="big" id="mp-f" style="font-size:16px;">sigmoid(x)</span>
+    </div>
+    <p class="cap">Same rope, different markings: sigmoid measures off-to-on, tanh measures full-left to full-right with zero in the middle. Zero-centered matters for training. Sigmoid outputs are always positive, so gradients zigzag instead of heading straight downhill. Tanh averages to zero and converges faster. That is why old RNNs used tanh.</p>
+  </div>
+
+  <div class="viz">
+    <h3>Undo buttons</h3>
+    <p class="sub">Drag the input. Sigmoid squashes it into 0 to 1, logit stretches it right back. Watch the round trip land home.</p>
+    <label for="rt-x">Input value <span id="rt-x-v" style="font-weight:400;">1.5</span></label>
+    <input type="range" id="rt-x" min="-8" max="8" step="0.1" value="1.5" aria-label="Input for the sigmoid logit round trip">
+    <div class="stat-grid">
+      <div class="stat-cell"><div class="n" id="rt-sig">0.82</div><div class="l">sigmoid(x): squashed to 0-1</div></div>
+      <div class="stat-cell"><div class="n" id="rt-logit">1.50</div><div class="l">logit of that: stretched back</div></div>
+    </div>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Round-trip error</span>
+      <span class="big" id="rt-err" style="font-size:16px;">0</span>
+    </div>
+    <p class="cap">They are undo buttons for each other. Logit(p) = log(p / (1 - p)) is the exact inverse of sigmoid. Log-softmax is this same idea grown up for many choices instead of two.</p>
+  </div>
+
+  <div class="viz">
+    <h3>Paint the bell</h3>
+    <p class="sub">Drag the dot along the bell curve. The red paint is everyone at or below your x. That painted fraction is the CDF.</p>
+    <svg class="curve" id="cdf-svg" viewBox="0 0 600 230" role="img" aria-label="Bell curve with draggable CDF point"></svg>
+    <div class="stat-grid">
+      <div class="stat-cell"><div class="n" id="cdf-phi">0.500</div><div class="l">CDF: fraction painted so far</div></div>
+      <div class="stat-cell"><div class="n" id="cdf-erf">0.000</div><div class="l">erf(x / sqrt(2)): the same area, renamed</div></div>
+    </div>
+    <p class="cap">CDF answers "what fraction is at or below x." Erf is that same area wearing a costume: the bell's area cannot be written with normal algebra, so it earned a name. The link is CDF(x) = 0.5 * (1 + erf(x / sqrt(2))). And look at the shape: erf is an S-curve from -1 to 1, just like tanh. That is why the GELU tanh approximation works. Tanh is erf's stunt double.</p>
+  </div>
+
   <h2>2. The chooser: the softmax family</h2>
   <p>Often the model must pick: which word comes next, which word to attend to, which action to take. Raw scores are messy, so <strong>softmax</strong> turns them into a clean split of a pie. Think of <strong>splitting a pie where the loudest voice gets the biggest slice</strong>: bigger score, bigger slice, and the slices always add to 100%.</p>
   <p>Two knobs matter. <strong>Temperature</strong> is the randomness dial: cold temperature makes the winner take almost everything, hot temperature hands everyone a similar slice. And <strong>log-softmax</strong> is the Richter scale version of the same split: same information, but measured in logs so the math never underflows when probabilities get microscopic. There is also <strong>gumbel-softmax</strong>, which is softmax you can learn through, used for agents that sample an action and then improve from the result.</p>
@@ -630,6 +670,118 @@ function drawCurve(svg, fns, x0, x1, y0, y1, dots){
     }
   }
   render();
+})();
+
+/* ---------- 1b. sigmoid -> tanh morph ---------- */
+(function(){
+  var svg = $("mp-svg"), inp = $("mp-t");
+  function sig(x){ return 1/(1+Math.exp(-x)); }
+  function render(){
+    var t = parseFloat(inp.value)/100;
+    $("mp-t-v").textContent = inp.value + "%";
+    function f(x){ return (1-t)*sig(x) + t*Math.tanh(x); }
+    $("mp-f").textContent = t === 0 ? "sigmoid(x)" :
+      (t === 1 ? "tanh(x)" : "(1-t)*sigmoid(x) + t*tanh(x), t = " + fmt(t,2));
+    drawCurve(svg, [{f:f, color:"#b3352b"}], -8, 8, -1.2, 1.2, null);
+  }
+  inp.addEventListener("input", render);
+  render();
+})();
+
+/* ---------- 1c. sigmoid / logit round trip ---------- */
+(function(){
+  var inp = $("rt-x");
+  function sig(x){ return 1/(1+Math.exp(-x)); }
+  function render(){
+    var x = parseFloat(inp.value);
+    $("rt-x-v").textContent = fmt(x,1);
+    var p = sig(x);
+    var back = Math.log(p/(1-p));
+    $("rt-sig").textContent = fmt(p,4);
+    $("rt-logit").textContent = fmt(back,2);
+    $("rt-err").textContent = Math.abs(back-x).toExponential(1);
+  }
+  inp.addEventListener("input", render);
+  render();
+})();
+
+/* ---------- 1d. CDF / erf: paint the bell ---------- */
+(function(){
+  var svg = $("cdf-svg");
+  var x = 0;
+  var X0 = -3.5, X1 = 3.5, YMAX = 0.45;
+  var W = 600, H = 230, PL = 44, PR = 20, PT = 14, PB = 26;
+  function pdf(v){ return Math.exp(-v*v/2)/Math.sqrt(2*Math.PI); }
+  function erfA(v){
+    var s = v < 0 ? -1 : 1; v = Math.abs(v);
+    var t = 1/(1+0.3275911*v);
+    var y = 1 - (((((1.061405429*t - 1.453152027)*t) + 1.421413741)*t - 0.284496736)*t + 0.254829592)*t*Math.exp(-v*v);
+    return s*y;
+  }
+  function Phi(v){ return 0.5*(1+erfA(v/Math.SQRT2)); }
+  function X(v){ return PL + (v-X0)/(X1-X0)*(W-PL-PR); }
+  function Y(v){ return H-PB - v/YMAX*(H-PT-PB); }
+  function drawStatic(){
+    var s = "";
+    [-3,-2,-1,0,1,2,3].forEach(function(gx){
+      var px = X(gx);
+      s += '<line x1="'+px+'" y1="'+PT+'" x2="'+px+'" y2="'+(H-PB)+'" stroke="rgba(43,43,43,0.08)"/>';
+      s += '<text x="'+px+'" y="'+(H-PB+16)+'" font-size="11" fill="rgba(43,43,43,0.5)" text-anchor="middle">'+gx+'</text>';
+    });
+    var d = "";
+    for (var i=0;i<=140;i++){
+      var vx = X0+(X1-X0)*i/140, vy = pdf(vx);
+      d += (i===0?"M":"L")+X(vx).toFixed(1)+" "+Y(vy).toFixed(1);
+    }
+    s += '<path d="'+d+'" fill="none" stroke="#2b2b2b" stroke-width="2.5"/>';
+    s += '<line x1="'+PL+'" y1="'+Y(0)+'" x2="'+(W-PR)+'" y2="'+Y(0)+'" stroke="rgba(43,43,43,0.25)"/>';
+    s += '<path id="cdf-shade" fill="rgba(179,53,43,0.25)" stroke="none"/>';
+    s += '<line id="cdf-line" stroke="#b3352b" stroke-width="2" stroke-dasharray="5 4"/>';
+    s += '<rect id="cdf-hit" x="'+PL+'" y="'+PT+'" width="'+(W-PL-PR)+'" height="'+(H-PT-PB)+'" fill="transparent"/>';
+    s += '<circle id="cdf-halo" r="30" fill="transparent" style="cursor:grab"/>';
+    s += '<circle id="cdf-dot" r="15" fill="#b3352b" stroke="#fff" stroke-width="3" style="cursor:grab"/>';
+    svg.innerHTML = s;
+  }
+  function move(){
+    var px = X(x), py = Y(pdf(x));
+    var d = "M"+X(X0).toFixed(1)+" "+Y(0).toFixed(1);
+    var n = 80, i, vx;
+    for (i=0;i<=n;i++){
+      vx = X0 + (x-X0)*i/n;
+      d += "L"+X(vx).toFixed(1)+" "+Y(pdf(vx)).toFixed(1);
+    }
+    d += "L"+px.toFixed(1)+" "+Y(0).toFixed(1)+"Z";
+    $("cdf-shade").setAttribute("d", d);
+    var ln = $("cdf-line");
+    ln.setAttribute("x1", px.toFixed(1)); ln.setAttribute("y1", PT);
+    ln.setAttribute("x2", px.toFixed(1)); ln.setAttribute("y2", (H-PB).toFixed(1));
+    $("cdf-dot").setAttribute("cx", px.toFixed(1));
+    $("cdf-dot").setAttribute("cy", py.toFixed(1));
+    $("cdf-halo").setAttribute("cx", px.toFixed(1));
+    $("cdf-halo").setAttribute("cy", py.toFixed(1));
+    $("cdf-phi").textContent = fmt(Phi(x),3);
+    $("cdf-erf").textContent = fmt(erfA(x/Math.SQRT2),3);
+  }
+  drawStatic();
+  (function(){
+    var dragging = false;
+    function setFromEvent(e){
+      var r = svg.getBoundingClientRect();
+      var pxv = (e.clientX - r.left)/r.width*W;
+      var vx = X0 + (pxv-PL)/(W-PL-PR)*(X1-X0);
+      x = Math.max(X0, Math.min(X1, vx));
+      move();
+    }
+    svg.addEventListener("pointerdown", function(e){
+      dragging = true;
+      try { svg.setPointerCapture(e.pointerId); } catch(err){}
+      setFromEvent(e);
+    });
+    svg.addEventListener("pointermove", function(e){ if (dragging) setFromEvent(e); });
+    svg.addEventListener("pointerup", function(){ dragging = false; });
+    svg.addEventListener("pointercancel", function(){ dragging = false; });
+  })();
+  move();
 })();
 })();
 </script>

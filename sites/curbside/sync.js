@@ -39,7 +39,7 @@ function stateToRecords(S){
   var R = [];
   function put(collection, key, value){ R.push({ collection: collection, key: key, value: value }); }
   (S.permits || []).forEach(function(p){
-    put("permits", p.id, { status: p.status, expires: p.expires, cost: p.cost, expiresEst: !!p.expiresEst });
+    put("permits", p.id, { status: p.status, expires: p.expires, cost: p.cost, expiresEst: !!p.expiresEst, city: p.city || null });
   });
   (S.customDefs || []).forEach(function(d){ put("permit_defs", d.id, d); });
   Object.keys(S.locations || {}).forEach(function(k){ put("locations", k, S.locations[k]); });
@@ -47,7 +47,7 @@ function stateToRecords(S){
   (S.revenue || []).forEach(function(r){ put("revenue", r.id, r); });
   put("commissary", "main", S.commissary || {});
   put("settings", "main", { truckName: S.truckName, city: S.city,
-    truckType: S.truckType, onboarded: S.onboarded });
+    truckType: S.truckType, onboarded: S.onboarded, extraCities: S.extraCities || [] });
   return R;
 }
 
@@ -93,6 +93,7 @@ function upsertIntoState(S, collection, key, value){
   } else if (collection === "settings"){
     S.truckName = value.truckName; S.city = value.city;
     S.truckType = value.truckType; S.onboarded = value.onboarded;
+    if (Array.isArray(value.extraCities)) S.extraCities = value.extraCities;
   }
 }
 function removeFromState(S, collection, key){

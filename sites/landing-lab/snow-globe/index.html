@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snow Globe | Luke Zhang</title>
+<style>
+  :root{
+    --night:#0e1a33; --night2:#16294d; --ink:#eef3fb; --ink-soft:#93a5c4;
+    --warm:#ffca7a; --glass:rgba(255,255,255,.10); --gold:#f5c542;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    background:radial-gradient(ellipse 100% 60% at 50% 0%, var(--night2), var(--night) 75%);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    min-height:100vh; display:flex; justify-content:center;
+    padding:18px 14px 60px; -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  }
+  .wrap{width:100%; max-width:430px; display:flex; flex-direction:column; align-items:center;}
+  header{text-align:center; margin:10px 0 4px;}
+  .kicker{
+    font-size:12px; letter-spacing:.24em; text-transform:uppercase; color:var(--warm);
+    font-weight:700; margin-bottom:8px;
+  }
+  h1{font-size:32px; font-weight:800; letter-spacing:-.02em; margin-bottom:6px;}
+  .sub{font-size:14px; color:var(--ink-soft); line-height:1.55; max-width:30em;}
+  /* chapter dots */
+  .chapters{display:flex; gap:10px; margin:16px 0 4px;}
+  .ch{
+    border:2px solid rgba(238,243,251,.25); background:transparent; color:var(--ink);
+    border-radius:999px; font-size:13px; font-weight:700; padding:11px 16px; min-height:46px;
+    cursor:pointer; touch-action:manipulation;
+  }
+  .ch.on{background:var(--ink); color:var(--night); border-color:var(--ink);}
+  .ch-cap{font-size:12px; color:var(--ink-soft); margin-bottom:10px; min-height:18px; text-align:center; font-style:italic;}
+  /* globe */
+  .globe-wrap{position:relative; width:320px; max-width:88vw;}
+  .globe{
+    position:relative; width:100%; aspect-ratio:1; border-radius:50%; overflow:hidden;
+    cursor:pointer; touch-action:manipulation;
+    background:linear-gradient(180deg, #1b3358 0%, #10234a 55%, #0b1a38 100%);
+    box-shadow:0 24px 60px rgba(0,0,0,.55), inset 0 0 60px rgba(20,40,80,.6);
+    border:3px solid rgba(255,255,255,.14);
+  }
+  .globe canvas{position:absolute; inset:0; width:100%; height:100%;}
+  .glass{
+    position:absolute; inset:0; border-radius:50%; pointer-events:none;
+    background:
+      radial-gradient(ellipse 34% 20% at 30% 14%, rgba(255,255,255,.30), transparent 70%),
+      radial-gradient(ellipse 60% 90% at 82% 78%, rgba(255,255,255,.07), transparent 60%),
+      radial-gradient(ellipse 120% 40% at 50% 108%, rgba(255,255,255,.10), transparent 60%);
+  }
+  .base{
+    width:64%; height:64px; margin:-14px auto 0; border-radius:12px 12px 18px 18px;
+    background:linear-gradient(180deg, #6b4a2f, #4a3120);
+    box-shadow:0 10px 24px rgba(0,0,0,.5), inset 0 2px 0 rgba(255,255,255,.25);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .base .plaque{
+    font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--gold); font-weight:800;
+    border:1px solid rgba(245,197,66,.5); border-radius:6px; padding:6px 12px; background:rgba(0,0,0,.3);
+  }
+  .shake-flash{animation:shakeflash .5s ease;}
+  @keyframes shakeflash{0%,100%{transform:translateX(0);}20%{transform:translateX(-9px) rotate(-2deg);}40%{transform:translateX(8px) rotate(2deg);}60%{transform:translateX(-6px);}80%{transform:translateX(5px);}}
+  /* controls */
+  .controls{display:flex; gap:10px; margin-top:20px; width:100%; max-width:340px;}
+  .btn{
+    flex:1; border-radius:14px; cursor:pointer; font-size:15px; font-weight:800;
+    padding:15px 8px; min-height:58px; touch-action:manipulation; border:none;
+  }
+  .btn.shake{background:var(--warm); color:#3a2a12; box-shadow:0 4px 0 #b98a3e;}
+  .btn.shake:active{transform:translateY(3px); box-shadow:0 1px 0 #b98a3e;}
+  .btn.swirl{background:transparent; color:var(--ink); border:2px solid rgba(238,243,251,.4);}
+  .btn.swirl:active{transform:scale(.96);}
+  .slider-row{width:100%; max-width:340px; margin-top:18px;}
+  .slider-row label{display:flex; justify-content:space-between; font-size:13px; font-weight:700; color:var(--ink-soft); margin-bottom:8px;}
+  input[type="range"]{
+    width:100%; height:44px; -webkit-appearance:none; appearance:none; background:transparent; touch-action:manipulation; cursor:pointer;
+  }
+  input[type="range"]::-webkit-slider-runnable-track{height:8px; border-radius:99px; background:rgba(238,243,251,.2);}
+  input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:34px; height:34px; border-radius:50%; background:var(--ink);
+    margin-top:-13px; box-shadow:0 3px 8px rgba(0,0,0,.4); border:none;
+  }
+  input[type="range"]::-moz-range-track{height:8px; border-radius:99px; background:rgba(238,243,251,.2);}
+  input[type="range"]::-moz-range-thumb{width:34px; height:34px; border-radius:50%; background:var(--ink); border:none;}
+  .motion-note{font-size:12px; color:var(--ink-soft); margin-top:10px; text-align:center; line-height:1.6; max-width:320px;}
+  .motion-note button{
+    background:none; border:none; color:var(--warm); font-size:12px; font-weight:700; text-decoration:underline;
+    cursor:pointer; padding:8px; min-height:40px; touch-action:manipulation;
+  }
+  footer{text-align:center; margin-top:24px; font-size:13px;}
+  footer a{color:var(--warm); font-weight:700;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">luke zhang</div>
+    <h1>The Snow Globe</h1>
+    <p class="sub">Shake it and watch my life chapters swirl. Tap for a gentle swirl, pick a chapter, dial the snow.</p>
+  </header>
+
+  <div class="chapters" role="tablist" aria-label="life chapters">
+    <button class="ch on" data-ch="0" role="tab">bay area</button>
+    <button class="ch" data-ch="1" role="tab">toronto</button>
+    <button class="ch" data-ch="2" role="tab">arizona</button>
+  </div>
+  <div class="ch-cap" id="chCap">where I live now. ships code, chases fog.</div>
+
+  <div class="globe-wrap">
+    <div class="globe" id="globe" role="button" tabindex="0" aria-label="snow globe, tap for a gentle swirl">
+      <canvas id="scene"></canvas>
+      <canvas id="snow"></canvas>
+      <div class="glass"></div>
+    </div>
+    <div class="base"><div class="plaque">est. 1998</div></div>
+  </div>
+
+  <div class="controls">
+    <button class="btn swirl" id="swirlBtn">gentle swirl</button>
+    <button class="btn shake" id="shakeBtn">shake it</button>
+  </div>
+
+  <div class="slider-row">
+    <label><span>snowfall</span><span id="snowVal">cozy</span></label>
+    <input type="range" id="snowRange" min="40" max="400" value="170" step="10" aria-label="snow amount">
+  </div>
+
+  <p class="motion-note" id="motionNote">
+    Tip: on your phone you can shake the actual phone too.
+    <button id="motionBtn">enable motion shake</button>
+  </p>
+
+  <footer><a href="../">all 40 ways to say hi</a></footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var globe = document.getElementById("globe"),
+      sceneC = document.getElementById("scene"),
+      snowC = document.getElementById("snow"),
+      sctx = sceneC.getContext("2d"),
+      nctx = snowC.getContext("2d"),
+      shakeBtn = document.getElementById("shakeBtn"),
+      swirlBtn = document.getElementById("swirlBtn"),
+      snowRange = document.getElementById("snowRange"),
+      snowVal = document.getElementById("snowVal"),
+      chCap = document.getElementById("chCap"),
+      motionBtn = document.getElementById("motionBtn"),
+      motionNote = document.getElementById("motionNote");
+
+  var SIZE = 640;
+  sceneC.width = sceneC.height = snowC.width = snowC.height = SIZE;
+
+  /* ---- chapter scenes, drawn once each on an offscreen canvas ---- */
+  function drawGround(c, y){
+    c.fillStyle = "#e8eef7";
+    c.beginPath(); c.ellipse(SIZE/2, SIZE + 40, SIZE*0.75, 220, 0, 0, Math.PI*2); c.fill();
+  }
+  function window_(c, x, y, w, h, lit){
+    c.fillStyle = lit ? "#ffca7a" : "#2a3c5e";
+    c.fillRect(x, y, w, h);
+    if (lit){ c.fillStyle = "rgba(255,202,122,.25)"; c.fillRect(x-4, y-4, w+8, h+8); }
+  }
+  function pine(c, x, y, s){
+    c.fillStyle = "#1d4a33";
+    for (var i = 0; i < 3; i++){
+      var w = s * (1 - i * 0.24), yy = y - i * s * 0.5;
+      c.beginPath(); c.moveTo(x, yy - s*0.62); c.lineTo(x - w/2, yy); c.lineTo(x + w/2, yy); c.closePath(); c.fill();
+    }
+    c.fillStyle = "#e8eef7";
+    c.beginPath(); c.moveTo(x, y - s*1.7); c.lineTo(x - s*0.18, y - s*1.45); c.lineTo(x + s*0.18, y - s*1.45); c.closePath(); c.fill();
+    c.fillStyle = "#5a3a22"; c.fillRect(x - s*0.07, y - s*0.05, s*0.14, s*0.22);
+  }
+  function moon(c){
+    c.fillStyle = "#f4ead0";
+    c.beginPath(); c.arc(SIZE*0.78, SIZE*0.2, 44, 0, Math.PI*2); c.fill();
+    c.fillStyle = "rgba(244,234,208,.18)";
+    c.beginPath(); c.arc(SIZE*0.78, SIZE*0.2, 70, 0, Math.PI*2); c.fill();
+  }
+  function stars(c){
+    c.fillStyle = "#fff";
+    for (var i = 0; i < 46; i++){
+      var x = Math.random()*SIZE, y = Math.random()*SIZE*0.55;
+      c.globalAlpha = 0.25 + Math.random()*0.6;
+      c.fillRect(x, y, 2.4, 2.4);
+    }
+    c.globalAlpha = 1;
+  }
+
+  var CHAPTERS = [
+    { cap: "where I live now. ships code, chases fog.",
+      draw: function(c){
+        stars(c); moon(c); drawGround(c);
+        /* cozy house with warm windows */
+        c.fillStyle = "#3a2c22";
+        c.fillRect(SIZE*0.3, SIZE*0.52, 150, 110);
+        c.beginPath(); c.moveTo(SIZE*0.28, SIZE*0.52); c.lineTo(SIZE*0.3+75, SIZE*0.42); c.lineTo(SIZE*0.3+160, SIZE*0.52); c.closePath();
+        c.fillStyle = "#2c2119"; c.fill();
+        c.fillStyle = "#e8eef7";
+        c.beginPath(); c.moveTo(SIZE*0.28, SIZE*0.52); c.lineTo(SIZE*0.3+75, SIZE*0.42); c.lineTo(SIZE*0.3+160, SIZE*0.52);
+        c.lineTo(SIZE*0.3+150, SIZE*0.52); c.lineTo(SIZE*0.3+75, SIZE*0.45); c.lineTo(SIZE*0.3+10, SIZE*0.52); c.closePath(); c.fill();
+        window_(c, SIZE*0.3+22, SIZE*0.52+26, 30, 34, true);
+        window_(c, SIZE*0.3+62, SIZE*0.52+26, 30, 34, true);
+        window_(c, SIZE*0.3+102, SIZE*0.52+26, 30, 34, false);
+        c.fillStyle = "#241b14"; c.fillRect(SIZE*0.3+62, SIZE*0.52+70, 28, 40);
+        pine(c, SIZE*0.16, SIZE*0.78, 90); pine(c, SIZE*0.84, SIZE*0.8, 110); pine(c, SIZE*0.72, SIZE*0.72, 62);
+      } },
+    { cap: "university years. learned to code, learned to layer up.",
+      draw: function(c){
+        stars(c); moon(c); drawGround(c);
+        /* skyline silhouette with lit windows */
+        var base = SIZE*0.78, x = SIZE*0.12;
+        var towers = [[70,150],[95,220],[80,180],[110,250],[75,170],[90,200]];
+        towers.forEach(function(t, i){
+          var w = t[0], h = t[1];
+          c.fillStyle = "#1c2c4a";
+          c.fillRect(x, base - h, w, h);
+          for (var wy = base - h + 16; wy < base - 16; wy += 26){
+            for (var wx = x + 10; wx < x + w - 12; wx += 22){
+              window_(c, wx, wy, 10, 12, (wx + wy + i * 37) % 3 === 0);
+            }
+          }
+          x += w + 12;
+        });
+        /* one tall tower with a red beacon */
+        c.fillStyle = "#243a5e"; c.fillRect(SIZE*0.47, SIZE*0.3, 26, SIZE*0.48);
+        c.fillStyle = "#e4574f"; c.beginPath(); c.arc(SIZE*0.47+13, SIZE*0.29, 7, 0, Math.PI*2); c.fill();
+        c.fillStyle = "rgba(228,87,79,.3)"; c.beginPath(); c.arc(SIZE*0.47+13, SIZE*0.29, 15, 0, Math.PI*2); c.fill();
+      } },
+    { cap: "growing up. snow in the desert is a choice, and I chose it.",
+      draw: function(c){
+        stars(c); moon(c); drawGround(c);
+        /* saguaro cacti wearing snow caps */
+        function saguaro(x, s){
+          c.fillStyle = "#2a6b46";
+          c.beginPath();
+          c.moveTo(x - s*0.16, SIZE*0.86); c.lineTo(x - s*0.16, SIZE*0.86 - s);
+          c.quadraticCurveTo(x - s*0.16, SIZE*0.86 - s*1.25, x, SIZE*0.86 - s*1.25);
+          c.quadraticCurveTo(x + s*0.16, SIZE*0.86 - s*1.25, x + s*0.16, SIZE*0.86 - s);
+          c.lineTo(x + s*0.16, SIZE*0.86); c.closePath(); c.fill();
+          c.fillStyle = "#e8eef7";
+          c.beginPath(); c.ellipse(x, SIZE*0.86 - s*1.25, s*0.2, s*0.09, 0, 0, Math.PI*2); c.fill();
+          /* arm */
+          c.fillStyle = "#2a6b46";
+          c.fillRect(x + s*0.16, SIZE*0.86 - s*0.8, s*0.42, s*0.18);
+          c.beginPath(); c.arc(x + s*0.58, SIZE*0.86 - s*0.8, s*0.09, 0, Math.PI*2); c.fill();
+          c.fillRect(x + s*0.49, SIZE*0.86 - s*1.02, s*0.18, s*0.32);
+          c.fillStyle = "#e8eef7";
+          c.beginPath(); c.ellipse(x + s*0.58, SIZE*0.86 - s*1.02, s*0.13, s*0.07, 0, 0, Math.PI*2); c.fill();
+        }
+        saguaro(SIZE*0.3, 150); saguaro(SIZE*0.68, 200); saguaro(SIZE*0.85, 110);
+        /* low sun-bleached rocks poking through snow */
+        c.fillStyle = "#b98a5e";
+        [[0.2,0.9],[0.55,0.92],[0.78,0.88]].forEach(function(p){
+          c.beginPath(); c.ellipse(SIZE*p[0], SIZE*p[1], 46, 18, 0, 0, Math.PI*2); c.fill();
+          c.fillStyle = "#e8eef7";
+          c.beginPath(); c.ellipse(SIZE*p[0], SIZE*p[1]-8, 46, 14, 0, Math.PI, Math.PI*2); c.fill();
+          c.fillStyle = "#b98a5e";
+        });
+      } }
+  ];
+
+  var chapter = 0;
+  function renderScene(){
+    sctx.clearRect(0, 0, SIZE, SIZE);
+    sctx.save();
+    sctx.beginPath(); sctx.arc(SIZE/2, SIZE/2, SIZE/2, 0, Math.PI*2); sctx.clip();
+    CHAPTERS[chapter].draw(sctx);
+    sctx.restore();
+  }
+
+  /* ---- snow particles: real physics, cute surface ----
+     Each flake integrates gravity against air drag (relaxation toward the local
+     air velocity plus its own fall speed), advected by a divergence-free
+     pseudo-curl turbulence field from a stream function
+     psi = sin(px)*sin(py), v = (dpsi/dy, -dpsi/dx). Flakes that reach the
+     drift with low energy settle and accumulate; a shake re-suspends them. */
+  var flakes = [], energy = 0, targetCount = 170;
+  var turb = { x: 0, y: 0 };
+  function sampleTurb(x, y, t){
+    var px = x * 0.008 + t * 0.6, py = y * 0.009 - t * 0.45;
+    turb.x = Math.sin(px) * Math.cos(py) * 34;
+    turb.y = -Math.cos(px) * Math.sin(py) * 34;
+  }
+  function groundY(x){
+    var gx = (x - SIZE / 2) / (SIZE * 0.75);
+    return SIZE + 40 - 220 * Math.sqrt(Math.max(0, 1 - gx * gx));
+  }
+  function Flake(){
+    this.x = Math.random() * SIZE; this.y = Math.random() * SIZE;
+    this.r = 1.5 + Math.random() * 3.2;
+    this.vx = 0; this.vy = 0;
+    this.fall = 12 + this.r * 6;             /* bigger flakes fall faster */
+    this.dk = 1.4 + Math.random() * 0.8;     /* per-flake drag coefficient */
+    this.a = 0.55 + Math.random() * 0.45;
+  }
+  function syncFlakes(){
+    while (flakes.length < targetCount) flakes.push(new Flake());
+    flakes.length = targetCount;
+  }
+  var lastSnowT = 0;
+  function stepSnow(now){
+    requestAnimationFrame(stepSnow);
+    if (!lastSnowT) lastSnowT = now;
+    var dt = Math.min((now - lastSnowT) / 1000, 0.05); lastSnowT = now;
+    var t = now / 1000;
+    nctx.clearRect(0, 0, SIZE, SIZE);
+    nctx.save();
+    nctx.beginPath(); nctx.arc(SIZE/2, SIZE/2, SIZE/2 - 4, 0, Math.PI*2); nctx.clip();
+    var airAmp = 0.4 + energy * 1.7; /* shaking stirs the air */
+    for (var i = 0; i < flakes.length; i++){
+      var f = flakes[i];
+      sampleTurb(f.x, f.y, t);
+      var k = 1 - Math.exp(-f.dk * dt);
+      f.vx += (turb.x * airAmp - f.vx) * k + (Math.random() - 0.5) * energy * 260 * dt;
+      f.vy += 34 * dt;                                            /* gravity */
+      f.vy += (turb.y * airAmp + f.fall - f.vy) * k;               /* drag */
+      f.x += f.vx * dt; f.y += f.vy * dt;
+      /* bounce off the glass */
+      var dx = f.x - SIZE/2, dy = f.y - SIZE/2, d = Math.sqrt(dx*dx + dy*dy), max = SIZE/2 - f.r - 6;
+      if (d > max){
+        var nx = dx / d, ny = dy / d;
+        f.x = SIZE/2 + nx * max; f.y = SIZE/2 + ny * max;
+        var vn = f.vx * nx + f.vy * ny;
+        if (vn > 0){ f.vx -= 1.4 * vn * nx; f.vy -= 1.4 * vn * ny; }
+      }
+      /* settle onto the drift when calm; soft bounce when lively */
+      var gy = groundY(f.x);
+      if (f.y + f.r > gy && f.vy > -4){
+        f.y = gy - f.r;
+        if (energy < 0.15 && Math.abs(f.vx) < 30){
+          f.vy = 0; f.vx *= (1 - Math.min(1, 6 * dt));
+        } else {
+          f.vy *= -0.25; f.vx *= 0.7;
+        }
+      }
+      nctx.globalAlpha = f.a;
+      nctx.fillStyle = "#ffffff";
+      nctx.beginPath(); nctx.arc(f.x, f.y, f.r, 0, Math.PI*2); nctx.fill();
+    }
+    nctx.restore();
+    energy *= Math.pow(0.05, dt);
+  }
+
+  /* INTERACTION 1: shake (button + device motion). Never depends on motion alone. */
+  function doShake(power){
+    energy = Math.min(energy + power, 3.2);
+    globe.classList.remove("shake-flash");
+    void globe.offsetWidth;
+    globe.classList.add("shake-flash");
+  }
+  shakeBtn.addEventListener("click", function(){ doShake(2.4); });
+
+  /* device shake: works where devicemotion exists; button always works regardless */
+  var lastShake = 0, lastAcc = null;
+  function onMotion(e){
+    var a = e.accelerationIncludingGravity;
+    if (!a || a.x === null) return;
+    if (lastAcc){
+      var dx = a.x - lastAcc.x, dy = a.y - lastAcc.y, dz = a.z - lastAcc.z;
+      var mag = Math.sqrt(dx*dx + dy*dy + dz*dz);
+      var now = Date.now();
+      if (mag > 22 && now - lastShake > 900){ lastShake = now; doShake(2.0); }
+    }
+    lastAcc = { x: a.x, y: a.y, z: a.z };
+  }
+  function enableMotion(){
+    function listen(){ window.addEventListener("devicemotion", onMotion); motionNote.style.display = "none"; }
+    try{
+      if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function"){
+        DeviceMotionEvent.requestPermission().then(function(res){
+          if (res === "granted") listen();
+          else motionNote.firstChild.textContent = "Motion denied. The shake button works great though. ";
+        }).catch(function(){ motionNote.firstChild.textContent = "Motion unavailable here. The shake button works great though. "; });
+      } else if ("DeviceMotionEvent" in window){
+        listen();
+      } else {
+        motionNote.firstChild.textContent = "No motion sensor on this device. The shake button works great though. ";
+      }
+    }catch(err){
+      motionNote.firstChild.textContent = "Motion unavailable here. The shake button works great though. ";
+    }
+  }
+  motionBtn.addEventListener("click", enableMotion);
+
+  /* INTERACTION 2: tap the globe for a gentle swirl */
+  function swirl(){
+    energy = Math.min(energy + 0.55, 1.4);
+    flakes.forEach(function(f){ f.vx += (Math.random() - 0.5) * 2.2; });
+  }
+  globe.addEventListener("click", swirl);
+  swirlBtn.addEventListener("click", swirl);
+  globe.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " ") { e.preventDefault(); swirl(); } });
+
+  /* INTERACTION 3: chapter dots switch scenes */
+  document.querySelectorAll(".ch").forEach(function(b){
+    b.addEventListener("click", function(){
+      document.querySelectorAll(".ch").forEach(function(o){ o.classList.remove("on"); });
+      b.classList.add("on");
+      chapter = parseInt(b.dataset.ch, 10);
+      chCap.textContent = CHAPTERS[chapter].cap;
+      renderScene();
+      doShake(1.1);
+    });
+  });
+
+  /* INTERACTION 4: snow amount slider */
+  var labels = [[40,"dusting"],[140,"cozy"],[260,"blizzard"],[401,"whiteout"]];
+  snowRange.addEventListener("input", function(){
+    targetCount = parseInt(snowRange.value, 10);
+    syncFlakes();
+    var v = targetCount, name = labels[0][1];
+    labels.forEach(function(l){ if (v >= l[0]) name = l[1]; });
+    snowVal.textContent = name;
+  });
+
+  renderScene();
+  syncFlakes();
+  requestAnimationFrame(stepSnow);
+})();
+</script>
+</body>
+</html>

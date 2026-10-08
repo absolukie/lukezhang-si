@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vinyl Crate | Luke Zhang</title>
+<style>
+  :root{
+    --bg:#241a12; --ink:#f3e9d7; --mut:#a68f6d;
+    --wood:#6b4a2f; --wood-d:#4a3120; --amber:#ffb000;
+    --paper:#f7f0df;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    background:radial-gradient(1200px 600px at 50% -10%, #3a2818, var(--bg));
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    min-height:100vh; display:flex; justify-content:center;
+    padding:28px 14px 64px; -webkit-font-smoothing:antialiased;
+  }
+  button,a{touch-action:manipulation;}
+  .wrap{width:100%; max-width:420px;}
+  header{text-align:center; margin-bottom:12px;}
+  .kicker{font-size:11px; letter-spacing:.24em; text-transform:uppercase; color:var(--mut); margin-bottom:10px;}
+  h1{font-size:34px; font-weight:800; letter-spacing:-0.02em; margin-bottom:8px;}
+  h1 .dot{color:var(--amber);}
+  .sub{color:var(--mut); font-size:14px; line-height:1.6; max-width:30em; margin:0 auto;}
+  .sub b{color:var(--ink);}
+
+  .eras{display:flex; gap:8px; justify-content:center; margin:16px 0 6px; flex-wrap:wrap;}
+  .era{
+    border:1px solid #5a452e; background:#2e2115; color:var(--mut);
+    font-size:12px; font-weight:700; letter-spacing:.06em;
+    border-radius:999px; padding:10px 16px; min-height:44px; cursor:pointer;
+  }
+  .era.on{background:var(--amber); border-color:var(--amber); color:#241a12;}
+
+  /* ---------- crate ---------- */
+  .crate{
+    margin-top:10px; border-radius:18px; padding:18px 0 20px;
+    background:linear-gradient(180deg, var(--wood), var(--wood-d));
+    box-shadow:0 18px 40px rgba(0,0,0,.5), inset 0 2px 0 rgba(255,255,255,.15);
+    position:relative;
+  }
+  .crate .brand{
+    text-align:center; font-size:11px; font-weight:800; letter-spacing:.3em;
+    color:#d9c49a; text-transform:uppercase; margin-bottom:14px;
+  }
+  #viewport{overflow:hidden; touch-action:none; user-select:none; -webkit-user-select:none; cursor:grab;}
+  #viewport:active{cursor:grabbing;}
+  #strip{
+    display:flex; gap:18px; padding:6px calc(50% - 100px) 10px;
+    will-change:transform; transition:transform .35s cubic-bezier(.2,.9,.25,1.05);
+  }
+  #strip.dragging{transition:none;}
+  .rec{width:200px; flex:none; text-align:center; cursor:pointer;}
+  .sleeve{
+    width:200px; height:200px; border-radius:8px; position:relative;
+    box-shadow:0 10px 22px rgba(0,0,0,.45);
+    transition:transform .3s ease, box-shadow .3s ease;
+    transform:translateY(14px) scale(.94); overflow:hidden;
+  }
+  .rec.on .sleeve{transform:translateY(0) scale(1); box-shadow:0 16px 34px rgba(0,0,0,.55), 0 0 0 3px var(--amber);}
+  .sleeve .art{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding:34px 18px 18px; text-align:center;}
+  .sleeve .art .yr{font-size:10px; font-weight:800; letter-spacing:.26em; opacity:.75; margin-bottom:8px;}
+  .sleeve .art .ttl{font-size:21px; font-weight:800; letter-spacing:-0.01em; line-height:1.15;}
+  .sleeve .art .gen{font-size:11px; font-weight:600; opacity:.8; margin-top:8px; letter-spacing:.08em; text-transform:uppercase;}
+  .sleeve .hole{
+    position:absolute; top:50%; left:50%; width:22px; height:22px; margin:-11px 0 0 -11px;
+    border-radius:50%; background:var(--bg); box-shadow:inset 0 1px 3px rgba(0,0,0,.6);
+  }
+  .rec .cap{margin-top:10px; font-size:12px; font-weight:700; color:#d9c49a; min-height:18px;}
+  .rec .hintline{font-size:10px; color:#8a6f4d; margin-top:2px; min-height:14px;}
+
+  .drag-hint{text-align:center; color:#8a6f4d; font-size:11px; font-weight:600; margin-top:4px;}
+
+  /* ---------- detail / liner notes ---------- */
+  #detail{
+    display:none; margin-top:16px; background:var(--paper); color:#2e2a26;
+    border-radius:16px; padding:22px 20px; box-shadow:0 14px 34px rgba(0,0,0,.45);
+    animation:pop .3s cubic-bezier(.2,1.3,.4,1);
+  }
+  #detail.show{display:block;}
+  @keyframes pop{0%{transform:translateY(14px) scale(.97); opacity:0}100%{transform:none; opacity:1}}
+  #detail .side{font-size:10px; font-weight:800; letter-spacing:.24em; color:#a68f6d; text-transform:uppercase; margin-bottom:6px;}
+  #detail h2{font-size:23px; font-weight:800; letter-spacing:-0.01em; margin-bottom:8px;}
+  #detail .liner{font-size:14px; line-height:1.65; color:#5d5348; margin-bottom:14px;}
+  #detail ol{list-style:none; margin-bottom:16px;}
+  #detail ol li{
+    display:flex; gap:12px; align-items:baseline; padding:9px 0;
+    border-top:1px dashed #d8cdb4; font-size:14px;
+  }
+  #detail ol li:last-child{border-bottom:1px dashed #d8cdb4;}
+  #detail ol .tn{font-size:11px; font-weight:800; color:#a68f6d; width:26px; flex:none;}
+  #detail .back{display:none;}
+  #detail.flipped .front{display:none;}
+  #detail.flipped .back{display:block;}
+  #detail .back .liner{font-style:italic;}
+  .btnrow{display:flex; gap:10px; justify-content:center; flex-wrap:wrap;}
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center;
+    min-height:48px; padding:0 20px; border-radius:12px; border:none; cursor:pointer;
+    font-size:15px; font-weight:700; text-decoration:none;
+  }
+  .btn.primary{background:#241a12; color:var(--paper);}
+  .btn.primary:active{transform:translateY(2px);}
+  .btn.ghost{background:#e7dcc2; color:#2e2a26;}
+  .btn.ghost:active{transform:translateY(2px);}
+
+  /* ---------- turntable ---------- */
+  .deck{
+    margin-top:18px; display:flex; align-items:center; gap:16px;
+    background:#171008; border-radius:16px; padding:16px;
+    border:1px solid #3a2c1c; box-shadow:inset 0 2px 8px rgba(0,0,0,.6);
+  }
+  .platter{position:relative; width:118px; height:118px; flex:none;}
+  .vinyl{
+    position:absolute; inset:0; border-radius:50%;
+    background:repeating-radial-gradient(circle at 50% 50%, #161616 0 2px, #232323 2px 4px);
+    box-shadow:0 6px 14px rgba(0,0,0,.6);
+    animation:spin 2.8s linear infinite; animation-play-state:paused;
+  }
+  .vinyl.playing{animation-play-state:running;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .vinyl .label{
+    position:absolute; top:50%; left:50%; width:44px; height:44px; margin:-22px 0 0 -22px;
+    border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:8px; font-weight:800; letter-spacing:.06em; color:#241a12; text-align:center; line-height:1.2;
+    padding:4px;
+  }
+  .vinyl .spindle{position:absolute; top:50%; left:50%; width:8px; height:8px; margin:-4px 0 0 -4px; border-radius:50%; background:#c9c9c9;}
+  #tonearm{
+    width:64px; height:64px; border-radius:50%; border:none; cursor:pointer; flex:none;
+    background:radial-gradient(circle at 35% 30%, #e8e2d4, #b9b2a2 70%);
+    box-shadow:0 4px 10px rgba(0,0,0,.5);
+    display:flex; align-items:center; justify-content:center;
+    touch-action:manipulation;
+  }
+  #tonearm:active{transform:scale(.93);}
+  #tonearm svg{width:34px; height:34px;}
+  .deck .meta{flex:1; min-width:0;}
+  .deck .meta .now{font-size:10px; font-weight:800; letter-spacing:.22em; color:var(--mut); text-transform:uppercase; margin-bottom:4px;}
+  .deck .meta .song{font-size:15px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .deck .meta .st{font-size:12px; color:var(--mut); margin-top:2px;}
+
+  footer{text-align:center; margin-top:34px; font-size:13px; color:var(--mut);}
+  footer a{color:var(--amber); font-weight:700;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">Luke Zhang</div>
+    <h1>Vinyl Crate<span class="dot">.</span></h1>
+    <p class="sub">Every era of building, pressed to wax. <b>Drag through the crate,</b> tap a record to drop the needle, flip the sleeve for the credits nobody reads.</p>
+  </header>
+
+  <div class="eras" id="eras"></div>
+
+  <div class="crate">
+    <div class="brand">Luke's Record Crate</div>
+    <div id="viewport" aria-label="Flip through the records">
+      <div id="strip"></div>
+    </div>
+    <div class="drag-hint">drag sideways, it snaps. tap the centered record.</div>
+  </div>
+
+  <div id="detail">
+    <div class="front">
+      <div class="side">Side A, liner notes</div>
+      <h2 id="dTitle"></h2>
+      <p class="liner" id="dLiner"></p>
+      <ol id="dTracks"></ol>
+      <div class="btnrow">
+        <a class="btn primary" id="dLink" href="https://lukezhang.si/" target="_blank" rel="noopener">take a look</a>
+        <button class="btn ghost" id="dFlip">flip sleeve</button>
+      </div>
+    </div>
+    <div class="back">
+      <div class="side">Side B, credits</div>
+      <h2>Credits</h2>
+      <p class="liner" id="dCredits"></p>
+      <div class="btnrow">
+        <button class="btn ghost" id="dFlipBack">flip back</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="deck">
+    <div class="platter">
+      <div class="vinyl" id="vinyl">
+        <div class="label" id="vinylLabel">NO<br>RECORD</div>
+        <div class="spindle"></div>
+      </div>
+    </div>
+    <button id="tonearm" aria-label="Lift or drop the needle">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#4a4238" stroke-width="2" stroke-linecap="round">
+        <path d="M7 3 L17 15"/><circle cx="17" cy="17" r="3.2" fill="#4a4238" stroke="none"/><path d="M7 3 L7 8"/>
+      </svg>
+    </button>
+    <div class="meta">
+      <div class="now">Now spinning</div>
+      <div class="song" id="nowSong">nothing yet</div>
+      <div class="st" id="nowState">tap a record to drop the needle</div>
+    </div>
+  </div>
+
+  <footer><a href="../">back to all 40 ways to say hi</a></footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var RECORDS = [
+    {era:"First Pressings", year:"2024", title:"Wikimari", genre:"nerd sport",
+     color:"#81b29a", ink:"#1d2b25",
+     liner:"Wikipedia racing with a ball that will not stay still. The first thing I built that strangers played without being asked.",
+     tracks:["Downhill wiki racing, fact collecting","Seeded daily runs","Ghost balls of your past selves"],
+     credits:"Recorded in a studio apartment. Mastered at 2am. No wikis were harmed.",
+     url:"https://projects.lukezhang.si/wikimari/"},
+    {era:"First Pressings", year:"2025", title:"Fifty Tracks", genre:"a year of music",
+     color:"#f2cc8f", ink:"#3a2c14",
+     liner:"Fifty songs, one per week, shipped like software with version numbers. Proof that deadlines make art better.",
+     tracks:["52 weeks, 50 tracks, zero skips policy","Each track has release notes","Side B is just voice memos"],
+     credits:"All instruments: me, badly. All mixing: me, eventually. Parental advisory: off-key.",
+     url:"https://projects.lukezhang.si/fifty-tracks/"},
+    {era:"Game Night", year:"2025", title:"Liverpool Rummy", genre:"card night",
+     color:"#e07a5f", ink:"#33150f",
+     liner:"Built so my wife and I always have a game ready. Real rooms, real rules, and a scoreboard that remembers everything.",
+     tracks:["Online rooms with live scoring","House rules engine","The excuse generator (cut)"],
+     credits:"Dedicated to game nights that ran too long. Playtested by the toughest critic: my wife.",
+     url:"https://projects.lukezhang.si/liverpool-rummy/"},
+    {era:"Game Night", year:"2026", title:"Draw & Guess", genre:"party game",
+     color:"#a8d8f0", ink:"#16283a",
+     liner:"Draw badly, guess in plain pinyin, no tone marks required. The party game for people learning Chinese.",
+     tracks:["Real-time drawing rooms","Pinyin matching, diacritics optional","Speed round: 30 seconds of panic"],
+     credits:"Illustrations by everyone who ever played. Apologies to art teachers everywhere.",
+     url:"https://projects.lukezhang.si/draw-guess/"},
+    {era:"Shipping Soon", year:"2026", title:"Get Clocked", genre:"respect your evening",
+     color:"#f4a7c3", ink:"#3a1626",
+     liner:"Time tracking for people who hate time tracking. It clocks you out so you can have a life.",
+     tracks:["One-tap clock in and out","Weekly report your accountant will like","Gentle nudge, never a guilt trip"],
+     credits:"Still in the studio. The evening shift thanks you for your patience.",
+     url:"https://lukezhang.si/"},
+    {era:"Shipping Soon", year:"2026", title:"Curbside", genre:"food truck anthem",
+     color:"#b8e6b0", ink:"#1d3319",
+     liner:"Order from food trucks without the line. Built for the trucks I already eat at every week.",
+     tracks:["Truck menus, live and accurate","Order ahead, skip the line","NTFTA treasurer approved (pending)"],
+     credits:"Field recordings at seven food trucks. Lunch was a business expense.",
+     url:"https://lukezhang.si/"}
+  ];
+  var ERAS = ["First Pressings","Game Night","Shipping Soon"];
+
+  /* tiny synth */
+  var AC=null;
+  function blip(f,d,t,v){ try{ if(!AC) AC=new (window.AudioContext||window.webkitAudioContext)(); if(AC.state==="suspended")AC.resume();
+    var o=AC.createOscillator(),g=AC.createGain(); o.type=t||"sine"; o.frequency.value=f;
+    g.gain.setValueAtTime(v||.08,AC.currentTime); g.gain.exponentialRampToValueAtTime(.0001,AC.currentTime+(d||.1));
+    o.connect(g); g.connect(AC.destination); o.start(); o.stop(AC.currentTime+(d||.1)+.02);}catch(e){} }
+  function needleDrop(){ blip(180,.06,"square",.1); setTimeout(function(){blip(90,.12,"sine",.14);},70); }
+  function flipSnd(){ blip(520,.07,"triangle",.08); }
+
+  var strip = document.getElementById("strip");
+  var viewport = document.getElementById("viewport");
+  var STEP = 218, idx = 0, dragging = false, startX = 0, baseX = 0, dxTotal = 0, pid = null;
+  var selected = -1, needleDown = false;
+
+  /* build records */
+  RECORDS.forEach(function(r, i){
+    var d = document.createElement("div");
+    d.className = "rec"; d.dataset.i = i;
+    d.innerHTML =
+      '<div class="sleeve" style="background:linear-gradient(150deg,'+r.color+','+r.color+' 60%,'+shade(r.color,-18)+')">' +
+        '<div class="art" style="color:'+r.ink+'"><div class="yr">'+r.year+'</div><div class="ttl">'+r.title+'</div><div class="gen">'+r.genre+'</div></div>' +
+        '<div class="hole"></div></div>' +
+      '<div class="cap">'+r.era+'</div><div class="hintline">tap to drop the needle</div>';
+    d.addEventListener("pointerdown", function(e){ tapDown(e, i); });
+    d.addEventListener("pointerup", function(e){ tapUp(e, i); });
+    strip.appendChild(d);
+  });
+  function shade(hex, amt){
+    var n = parseInt(hex.slice(1),16), r=(n>>16)+amt, g=((n>>8)&255)+amt, b=(n&255)+amt;
+    r=Math.max(0,Math.min(255,r)); g=Math.max(0,Math.min(255,g)); b=Math.max(0,Math.min(255,b));
+    return "#"+((r<<16)|(g<<8)|b).toString(16).padStart(6,"0");
+  }
+
+  /* era chips */
+  var erasEl = document.getElementById("eras");
+  ERAS.forEach(function(name){
+    var b = document.createElement("button");
+    b.className = "era"; b.textContent = name;
+    b.addEventListener("click", function(){
+      for (var i=0;i<RECORDS.length;i++) if (RECORDS[i].era===name){ goTo(i); break; }
+      flipSnd();
+    });
+    erasEl.appendChild(b);
+  });
+  function markEra(){
+    var btns = erasEl.children;
+    for (var k=0;k<btns.length;k++) btns[k].classList.toggle("on", ERAS[k]===RECORDS[idx].era);
+  }
+
+  function render(){
+    strip.style.transform = "translateX(" + (-idx*STEP) + "px)";
+    var recs = strip.children;
+    for (var i=0;i<recs.length;i++) recs[i].classList.toggle("on", i===idx);
+    markEra();
+  }
+  function goTo(i){
+    idx = Math.max(0, Math.min(RECORDS.length-1, i));
+    render();
+  }
+
+  /* drag to flip through, with snap.
+     No setPointerCapture here: the records need their own pointerup for
+     tap detection, and capture would steal it. window-level up/cancel
+     ends the drag instead. */
+  viewport.addEventListener("pointerdown", function(e){
+    dragging = true; startX = e.clientX; baseX = -idx*STEP; dxTotal = 0; pid = e.pointerId;
+    strip.classList.add("dragging");
+  });
+  viewport.addEventListener("pointermove", function(e){
+    if (!dragging || e.pointerId!==pid) return;
+    var dx = e.clientX - startX; dxTotal = Math.max(dxTotal, Math.abs(dx));
+    strip.style.transform = "translateX(" + (baseX + dx) + "px)";
+  });
+  function endDrag(e){
+    if (!dragging || (e && e.pointerId!==pid)) return;
+    dragging = false; pid = null;
+    strip.classList.remove("dragging");
+    var m = /translateX\((-?\d+\.?\d*)px\)/.exec(strip.style.transform);
+    var cur = m ? parseFloat(m[1]) : -idx*STEP;
+    var target = Math.round(-cur/STEP);
+    goTo(target);
+  }
+  window.addEventListener("pointerup", endDrag);
+  window.addEventListener("pointercancel", endDrag);
+
+  /* tap record: if centered, drop needle; else go to it */
+  var tapMoved = 0, tapIdx = -1;
+  function tapDown(e, i){ tapMoved = 0; tapIdx = i; }
+  function tapUp(e, i){
+    if (i!==tapIdx) return;
+    if (dxTotal > 12) return; /* it was a drag, not a tap */
+    if (i===idx){ dropNeedle(i); }
+    else { goTo(i); flipSnd(); }
+  }
+  /* note: viewport pointerup (endDrag) fires right after via bubbling and
+     snaps the strip back; harmless on a clean tap since it re-targets idx */
+
+  /* drop the needle */
+  var detail = document.getElementById("detail");
+  var vinyl = document.getElementById("vinyl");
+  var vinylLabel = document.getElementById("vinylLabel");
+  var nowSong = document.getElementById("nowSong");
+  var nowState = document.getElementById("nowState");
+
+  function dropNeedle(i){
+    selected = i; needleDown = true;
+    var r = RECORDS[i];
+    needleDrop();
+    document.getElementById("dTitle").textContent = r.title;
+    document.getElementById("dLiner").textContent = r.liner;
+    document.getElementById("dCredits").textContent = r.credits;
+    var ol = document.getElementById("dTracks"); ol.innerHTML = "";
+    r.tracks.forEach(function(t, n){
+      var li = document.createElement("li");
+      li.innerHTML = '<span class="tn">A'+(n+1)+'</span><span>'+t+'</span>';
+      ol.appendChild(li);
+    });
+    var link = document.getElementById("dLink"); link.href = r.url;
+    detail.classList.remove("show","flipped"); void detail.offsetWidth; detail.classList.add("show");
+    vinyl.classList.add("playing");
+    vinylLabel.style.background = r.color; vinylLabel.style.color = r.ink;
+    vinylLabel.innerHTML = r.title.replace(/ /g,"<br>");
+    nowSong.textContent = r.title + " (" + r.year + ")";
+    nowState.textContent = "needle down. side A.";
+    detail.scrollIntoView({behavior:"smooth", block:"nearest"});
+  }
+
+  /* tonearm: lift / drop */
+  document.getElementById("tonearm").addEventListener("click", function(){
+    if (selected < 0){ blip(220,.15,"sawtooth",.07); nowState.textContent = "nothing on the platter."; return; }
+    needleDown = !needleDown;
+    vinyl.classList.toggle("playing", needleDown);
+    nowState.textContent = needleDown ? "needle down. side A." : "needle up. paused.";
+    flipSnd();
+  });
+
+  /* flip sleeve */
+  document.getElementById("dFlip").addEventListener("click", function(){ detail.classList.add("flipped"); flipSnd(); });
+  document.getElementById("dFlipBack").addEventListener("click", function(){ detail.classList.remove("flipped"); flipSnd(); });
+
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>bento - luke</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Avenir Next", "Hiragino Sans", "Hiragino Kaku Gothic ProN", -apple-system, "Segoe UI", sans-serif;
+    background: #2a1d12;
+    background-image:
+      radial-gradient(ellipse 120% 60% at 50% -10%, rgba(214,164,110,.18), transparent),
+      repeating-linear-gradient(93deg, rgba(0,0,0,.14) 0 2px, transparent 2px 26px),
+      linear-gradient(180deg, #33241a 0%, #241610 100%);
+    color: #f3e8d6;
+    min-height: 100dvh;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 18px 14px 28px;
+  }
+  .wrap { width: 100%; max-width: 400px; }
+  header { text-align: center; margin-bottom: 14px; }
+  header h1 { font-size: 26px; margin: 0; letter-spacing: 2px; font-weight: 700; }
+  header h1 .jp { color: #d4553a; font-size: 15px; letter-spacing: 6px; display: block; margin-top: 2px; font-weight: 600;}
+  header p { margin: 8px 0 0; font-size: 14.5px; color: #d9c3a3; line-height: 1.5; }
+  header .hint { color: #a98f6f; font-size: 13px; }
+  #box {
+    background: linear-gradient(160deg, #0f0d0c, #1c1512 60%, #0f0d0c);
+    border-radius: 18px;
+    padding: 14px;
+    box-shadow: 0 18px 40px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.08);
+    border: 1px solid #3a2b1e;
+    position: relative;
+  }
+  #box::before {
+    content: ""; position: absolute; inset: 6px; border-radius: 12px;
+    border: 1px solid rgba(212,85,58,.35); pointer-events: none;
+  }
+  #grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; position: relative; }
+  .cell { position: relative; aspect-ratio: 1 / 1; border-radius: 10px; overflow: hidden; background: #120d0a; }
+  .dish {
+    position: absolute; inset: 0; border-radius: 10px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; padding: 10px; text-align: center;
+    background: radial-gradient(circle at 50% 30%, #241a12, #171008);
+    touch-action: manipulation; cursor: pointer;
+  }
+  .dish svg { width: 44px; height: 44px; }
+  .dish .cap { font-size: 12.5px; letter-spacing: 1.5px; text-transform: uppercase; color: #e8d3ae; font-weight: 600; }
+  .dish .seal { font-size: 11px; color: #8a715a; }
+  .lid {
+    position: absolute; inset: 0; border-radius: 10px;
+    background:
+      radial-gradient(circle at 30% 20%, rgba(255,255,255,.14), transparent 45%),
+      linear-gradient(145deg, #232323, #0c0b0b 70%);
+    border: 1px solid #000;
+    box-shadow: 0 4px 14px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.12);
+    touch-action: none; cursor: grab;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 3;
+  }
+  .lid:active { cursor: grabbing; }
+  .lid .stripe { width: 100%; height: 6px; background: linear-gradient(90deg, transparent, #d4553a, transparent); opacity: .9; }
+  .lid .knob {
+    position: absolute; width: 26px; height: 26px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #e0684e, #8f2c1c);
+    box-shadow: 0 2px 6px rgba(0,0,0,.5);
+  }
+  .lid.opened { box-shadow: 0 10px 22px rgba(0,0,0,.6); }
+  .cell .opened-tag {
+    position: absolute; right: 8px; top: 6px; z-index: 2;
+    font-size: 10px; color: #d4553a; letter-spacing: 1px; opacity: 0; transition: opacity .3s;
+  }
+  .cell.revealed .opened-tag { opacity: 1; }
+  #tools { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
+  #rest {
+    width: 120px; height: 56px; touch-action: none; cursor: grab;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #rest.wiggle { animation: wig .5s ease; }
+  @keyframes wig {
+    0% { transform: rotate(0); } 20% { transform: rotate(-9deg); }
+    45% { transform: rotate(7deg); } 70% { transform: rotate(-4deg); }
+    100% { transform: rotate(0); }
+  }
+  #reset {
+    min-height: 44px; padding: 10px 18px; border-radius: 999px;
+    background: transparent; color: #e8d3ae; border: 1px solid #6b4a2f;
+    font-size: 15px; font-family: inherit; touch-action: manipulation; cursor: pointer;
+  }
+  #reset:active { background: #3a2b1e; }
+  .count { font-size: 13px; color: #a98f6f; }
+  /* taste sheet */
+  #scrim { position: fixed; inset: 0; background: rgba(10,6,4,.6); opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 20; }
+  #scrim.show { opacity: 1; pointer-events: auto; }
+  #sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 21;
+    background: #f7efe0; color: #2a1d12; border-radius: 18px 18px 0 0;
+    padding: 18px 20px calc(22px + env(safe-area-inset-bottom));
+    transform: translateY(110%); transition: transform .32s cubic-bezier(.2,.9,.25,1.1);
+    max-width: 480px; margin: 0 auto;
+  }
+  #sheet.show { transform: translateY(0); }
+  #sheet h2 { margin: 0 0 4px; font-size: 20px; }
+  #sheet .flavor { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: #a4522f; font-weight: 700; }
+  #sheet p { font-size: 16px; line-height: 1.6; margin: 10px 0 14px; }
+  #sheet .row { display: flex; gap: 10px; }
+  #sheet button, #sheet a.btn {
+    flex: 1; min-height: 48px; border-radius: 12px; font-size: 16px; font-family: inherit;
+    touch-action: manipulation; cursor: pointer; text-decoration: none; text-align: center;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  #sheet .close { background: #2a1d12; color: #f7efe0; border: none; }
+  #sheet .go { background: transparent; color: #2a1d12; border: 1.5px solid #2a1d12; }
+  .links { margin-top: 18px; text-align: center; font-size: 14px; color: #d9c3a3; }
+  .links a { color: #f0b48f; }
+  footer { margin-top: 22px; text-align: center; font-size: 14px; }
+  footer a { color: #d9c3a3; text-decoration: none; border-bottom: 1px solid #6b4a2f; padding-bottom: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>bento<span class="jp">luke, compartment by compartment</span></h1>
+    <p>Drag each lid open. Every compartment holds a chapter.<br>
+    <span class="hint">Tap an open dish to taste it. Drag the chopstick rest, it does not mind.</span></p>
+  </header>
+
+  <div id="box">
+    <div id="grid"></div>
+    <div id="tools">
+      <div id="rest" aria-label="chopstick rest">
+        <svg width="104" height="44" viewBox="0 0 104 44">
+          <rect x="6" y="16" width="92" height="9" rx="4.5" fill="#b98d5e"/>
+          <rect x="6" y="16" width="92" height="4" rx="2" fill="#d9b384"/>
+          <rect x="30" y="8" width="10" height="9" rx="4" fill="#d4553a"/>
+          <rect x="64" y="8" width="10" height="9" rx="4" fill="#d4553a"/>
+          <circle cx="35" cy="12" r="2" fill="#f0b48f"/>
+          <circle cx="69" cy="12" r="2" fill="#f0b48f"/>
+        </svg>
+      </div>
+      <div class="count"><span id="openedCount">0</span> of 6 opened</div>
+      <button id="reset">reseal all</button>
+    </div>
+  </div>
+
+  <p class="links">home base: <a href="https://lukezhang.si/">lukezhang.si</a> &middot; all the projects: <a href="https://projects.lukezhang.si/">projects.lukezhang.si</a></p>
+  <footer><a href="../">all 40 ways to say hi</a></footer>
+</div>
+
+<div id="scrim"></div>
+<div id="sheet" role="dialog" aria-modal="true">
+  <div class="flavor" id="sheetFlavor"></div>
+  <h2 id="sheetTitle"></h2>
+  <p id="sheetBody"></p>
+  <div class="row">
+    <button class="close" id="sheetClose">back to the box</button>
+    <a class="btn go" id="sheetGo" href="https://projects.lukezhang.si/">see the projects</a>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var CHAPTERS = [
+    { key: "cat", title: "the cat", icon: catSvg(), flavor: "rich, unbothered",
+      body: "Head of household. Reviews every decision by sitting on it. Compensation: sunbeams and chin scratches." },
+    { key: "wife", title: "my wife", icon: heartSvg(), flavor: "the best part",
+      body: "My favorite co-op partner. Carries the team in every game we play, date night planner, chief taste tester." },
+    { key: "faith", title: "faith", icon: crossSvg(), flavor: "steady, weekly",
+      body: "Church on Sunday, grace before dumplings. The quiet chapter everything else sits on." },
+    { key: "build", title: "building", icon: hammerSvg(), flavor: "shipping, always",
+      body: "Builds at Robinhood by day, weirder stuff by night. Ten apps and counting, all handmade, all shipped." },
+    { key: "food", title: "food", icon: dumplingSvg(), flavor: "savory, rigorous",
+      body: "Professional dumpling enjoyer. Keeps a mental leaderboard of every taco truck in a twenty mile radius. It is rigorous." },
+    { key: "games", title: "games", icon: diceSvg(), flavor: "competitive, mostly friendly",
+      body: "Board games, card games, video games. Liverpool rummy champion of the household. Losing gracefully is still losing." }
+  ];
+  /* open directions: alternate so the box feels handmade */
+  var DIRS = [[0,-1],[-1,0],[0,-1],[1,0],[0,-1],[-1,0]];
+
+  function catSvg() {
+    return '<svg viewBox="0 0 48 48" fill="none" stroke="#e8d3ae" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">'
+      + '<path d="M10 18 L8 8 L18 12 Z M38 18 L40 8 L30 12 Z" fill="#e8d3ae" stroke="none"/>'
+      + '<circle cx="24" cy="27" r="13" fill="#e8d3ae" stroke="none"/>'
+      + '<path d="M10 18 L8 8 L18 12 Z M38 18 L40 8 L30 12 Z" fill="#2a1d12" stroke="none" opacity=".0"/>'
+      + '<circle cx="19" cy="25" r="2" fill="#2a1d12" stroke="none"/><circle cx="29" cy="25" r="2" fill="#2a1d12" stroke="none"/>'
+      + '<path d="M22 30 q2 2 4 0 M24 28 v-3 M18 33 q-3 1 -6 0 M30 33 q3 1 6 0" stroke="#2a1d12"/>'
+      + '</svg>';
+  }
+  function heartSvg() {
+    return '<svg viewBox="0 0 48 48" fill="#d4553a"><path d="M24 42 C10 30 6 20 10 13 C13 8 20 8 24 14 C28 8 35 8 38 13 C42 20 38 30 24 42 Z"/></svg>';
+  }
+  function crossSvg() {
+    return '<svg viewBox="0 0 48 48" stroke="#e8d3ae" stroke-width="4" stroke-linecap="round"><path d="M24 8 v32 M14 18 h20"/></svg>';
+  }
+  function hammerSvg() {
+    return '<svg viewBox="0 0 48 48" fill="none" stroke="#e8d3ae" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">'
+      + '<rect x="8" y="10" width="18" height="10" rx="2" fill="#e8d3ae" stroke="none"/>'
+      + '<path d="M17 20 L36 40" /><path d="M31 35 l7 7" /></svg>';
+  }
+  function dumplingSvg() {
+    return '<svg viewBox="0 0 48 48" fill="none" stroke="#e8d3ae" stroke-width="2.4" stroke-linecap="round">'
+      + '<path d="M8 30 C8 18 16 10 24 10 C32 10 40 18 40 30 Z" fill="#e8d3ae" stroke="none" opacity=".9"/>'
+      + '<path d="M14 16 q2 3 0 6 M22 12 q2 3 0 6 M30 12 q2 3 0 6" stroke="#2a1d12"/></svg>';
+  }
+  function diceSvg() {
+    return '<svg viewBox="0 0 48 48"><rect x="8" y="8" width="32" height="32" rx="7" fill="#e8d3ae"/>'
+      + '<circle cx="18" cy="18" r="3" fill="#2a1d12"/><circle cx="30" cy="18" r="3" fill="#2a1d12"/>'
+      + '<circle cx="24" cy="24" r="3" fill="#2a1d12"/>'
+      + '<circle cx="18" cy="30" r="3" fill="#2a1d12"/><circle cx="30" cy="30" r="3" fill="#2a1d12"/></svg>';
+  }
+
+  var grid = document.getElementById("grid");
+  var openedCount = 0;
+  var countEl = document.getElementById("openedCount");
+  var lids = [];
+
+  CHAPTERS.forEach(function (ch, i) {
+    var cell = document.createElement("div");
+    cell.className = "cell";
+    var dish = document.createElement("div");
+    dish.className = "dish";
+    dish.setAttribute("role", "button");
+    dish.setAttribute("tabindex", "0");
+    dish.innerHTML = ch.icon + '<div class="cap">' + ch.title + '</div><div class="seal">tap to taste</div>';
+    dish.addEventListener("click", function () { taste(ch); });
+    dish.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); taste(ch); } });
+    var lid = document.createElement("div");
+    lid.className = "lid";
+    lid.innerHTML = '<div class="stripe"></div><div class="knob"></div>';
+    lid.setAttribute("aria-label", "lid " + (i + 1));
+    var tag = document.createElement("div");
+    tag.className = "opened-tag"; tag.textContent = "open";
+    cell.appendChild(dish); cell.appendChild(lid); cell.appendChild(tag);
+    grid.appendChild(cell);
+    lids.push(makeLid(lid, cell, i));
+  });
+
+  /* Lids ride a real damped spring on release: semi-implicit Euler, stiffness 190,
+     damping 17. Fling it and it overshoots a hair before settling, like lacquer should. */
+  function makeLid(lid, cell, i) {
+    var dir = DIRS[i], open = false, dragging = false;
+    var sx = 0, sy = 0, t = 0, max = 0, moved = 0;
+    var springId = 0, lastT = 0, lastMoveT = 0, releaseV = 0;
+    function cellSize() { return cell.getBoundingClientRect().width; }
+    function render() { lid.style.transform = "translate(" + (dir[0] * t) + "px," + (dir[1] * t) + "px)"; }
+    function springTo(target, v0) {
+      cancelAnimationFrame(springId);
+      var x = t, v = v0 || 0, prev = performance.now();
+      function step(now) {
+        var dt = Math.min(0.032, (now - prev) / 1000); prev = now;
+        v += (-190 * (x - target) - 17 * v) * dt;
+        x += v * dt;
+        t = x; render();
+        if (Math.abs(x - target) < 0.6 && Math.abs(v) < 8) { t = target; render(); return; }
+        springId = requestAnimationFrame(step);
+      }
+      springId = requestAnimationFrame(step);
+    }
+    function setOpen(v, v0) {
+      open = v;
+      cell.classList.toggle("revealed", v);
+      lid.classList.toggle("opened", v);
+      if (!max) max = cellSize();
+      springTo(v ? max : 0, v0);
+      updateCount();
+    }
+    function updateCount() {
+      var n = 0;
+      lids.forEach(function (L) { if (L.isOpen()) n++; });
+      if (n !== openedCount) { openedCount = n; countEl.textContent = n; }
+    }
+    lid.addEventListener("pointerdown", function (e) {
+      dragging = true; moved = 0;
+      cancelAnimationFrame(springId);
+      sx = e.clientX; sy = e.clientY; max = cellSize();
+      lastT = t; lastMoveT = performance.now(); releaseV = 0;
+      lid.setPointerCapture(e.pointerId);
+    });
+    lid.addEventListener("pointermove", function (e) {
+      if (!dragging) return;
+      var dx = e.clientX - sx, dy = e.clientY - sy;
+      moved = Math.max(moved, Math.abs(dx) + Math.abs(dy));
+      var proj = dx * dir[0] + dy * dir[1];
+      if (proj < 0) proj = proj * 0.15;             /* resistance the wrong way */
+      if (proj > max) proj = max + (proj - max) * 0.15; /* resistance past the end */
+      var now = performance.now();
+      if (now > lastMoveT) { releaseV = 0.75 * releaseV + 0.25 * ((proj - lastT) / ((now - lastMoveT) / 1000)); lastT = proj; lastMoveT = now; }
+      t = proj; render();
+    });
+    function end(e) {
+      if (!dragging) return;
+      dragging = false;
+      try { lid.releasePointerCapture(e.pointerId); } catch (err) {}
+      if (moved < 8) { setOpen(!open, 0); return; }    /* treat as tap: toggle */
+      var v = Math.max(-1400, Math.min(1400, releaseV));
+      setOpen(v > 500 ? true : (v < -500 ? false : t > max * 0.45), v);
+    }
+    lid.addEventListener("pointerup", end);
+    lid.addEventListener("pointercancel", end);
+    return {
+      isOpen: function () { return open; },
+      close: function () { setOpen(false); },
+      toggle: function () { setOpen(!open); }
+    };
+  }
+
+  document.getElementById("reset").addEventListener("click", function () {
+    lids.forEach(function (L) { L.close(); });
+  });
+
+  /* taste sheet */
+  var scrim = document.getElementById("scrim"), sheet = document.getElementById("sheet");
+  function taste(ch) {
+    document.getElementById("sheetFlavor").textContent = "tasting notes: " + ch.flavor;
+    document.getElementById("sheetTitle").textContent = ch.title;
+    document.getElementById("sheetBody").textContent = ch.body;
+    scrim.classList.add("show"); sheet.classList.add("show");
+  }
+  function hideSheet() { scrim.classList.remove("show"); sheet.classList.remove("show"); }
+  document.getElementById("sheetClose").addEventListener("click", hideSheet);
+  scrim.addEventListener("click", hideSheet);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") hideSheet(); });
+
+  /* chopstick rest: tap to wiggle, drag to shove */
+  var rest = document.getElementById("rest");
+  var rx = 0, ry = 0, rdx = false, rmx = 0, rsx = 0, rsy = 0;
+  rest.addEventListener("pointerdown", function (e) {
+    rdx = true; rmx = 0; rsx = e.clientX - rx; rsy = e.clientY - ry;
+    rest.setPointerCapture(e.pointerId);
+  });
+  rest.addEventListener("pointermove", function (e) {
+    if (!rdx) return;
+    var nx = e.clientX - rsx, ny = e.clientY - rsy;
+    rmx = Math.max(rmx, Math.abs(nx - rx) + Math.abs(ny - ry));
+    rx = nx; ry = ny;
+    rest.style.transform = "translate(" + rx + "px," + ry + "px)";
+  });
+  function restEnd(e) {
+    if (!rdx) return; rdx = false;
+    try { rest.releasePointerCapture(e.pointerId); } catch (err) {}
+    wiggle();
+    if (rmx > 40) { /* flung: spring home */
+      rest.style.transition = "transform .5s cubic-bezier(.2,1.4,.4,1)";
+      rx = 0; ry = 0; rest.style.transform = "";
+      setTimeout(function () { rest.style.transition = ""; }, 520);
+    }
+  }
+  rest.addEventListener("pointerup", restEnd);
+  rest.addEventListener("pointercancel", restEnd);
+  function wiggle() {
+    rest.classList.remove("wiggle");
+    void rest.offsetWidth;
+    rest.classList.add("wiggle");
+  }
+})();
+</script>
+</body>
+</html>

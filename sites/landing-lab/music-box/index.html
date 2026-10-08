@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Music Box | Luke Zhang</title>
+<style>
+  :root{
+    --bg:#201812; --ink:#f5ead6; --mut:#a68f6d;
+    --walnut:#5a3a24; --walnut-d:#3a2415; --gold:#e8b93c; --gold-d:#b07d10;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    background:radial-gradient(1000px 520px at 50% -10%, #33261a, var(--bg));
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    min-height:100vh; display:flex; justify-content:center;
+    padding:28px 14px 64px; -webkit-font-smoothing:antialiased;
+  }
+  button,a{touch-action:manipulation;}
+  .wrap{width:100%; max-width:420px;}
+  header{text-align:center; margin-bottom:14px;}
+  .kicker{font-size:11px; letter-spacing:.24em; text-transform:uppercase; color:var(--mut); margin-bottom:10px;}
+  h1{font-size:34px; font-weight:800; letter-spacing:-0.02em; margin-bottom:8px;}
+  h1 .dot{color:var(--gold);}
+  .sub{color:var(--mut); font-size:14px; line-height:1.6; max-width:30em; margin:0 auto;}
+  .sub b{color:var(--ink);}
+  .rules{display:flex; gap:8px; justify-content:center; margin:14px 0 4px; flex-wrap:wrap;}
+  .rule{font-size:11px; font-weight:700; color:var(--mut); background:#2e2318; border-radius:999px; padding:7px 12px;}
+  .rule b{color:var(--ink);}
+
+  /* ---------- box ---------- */
+  .stage-wrap{margin-top:18px; position:relative;}
+  .box{
+    background:linear-gradient(180deg, var(--walnut), var(--walnut-d));
+    border-radius:18px; padding:0 0 18px;
+    box-shadow:0 22px 48px rgba(0,0,0,.55), inset 0 2px 0 rgba(255,255,255,.14);
+    position:relative;
+  }
+  .lid{
+    height:64px; border-radius:18px 18px 0 0; position:relative;
+    background:linear-gradient(180deg,#6b4a2f,#4a2f1c);
+    border-bottom:3px solid var(--gold-d);
+    transform-origin:top center; transition:transform .6s cubic-bezier(.3,1.2,.4,1);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:inset 0 2px 0 rgba(255,255,255,.12);
+  }
+  .box.open .lid{transform:perspective(700px) rotateX(-72deg);}
+  .lid .inlay{
+    font-size:11px; font-weight:800; letter-spacing:.3em; color:var(--gold);
+    text-transform:uppercase;
+  }
+  .cavity{
+    margin:0 18px; background:#160f08; border-radius:0 0 12px 12px;
+    min-height:250px; position:relative; overflow:hidden;
+    box-shadow:inset 0 6px 18px rgba(0,0,0,.8);
+    cursor:pointer; touch-action:manipulation;
+  }
+  .cavity .scene{position:absolute; inset:0; display:flex; align-items:center; justify-content:center;}
+  .cavity .scene svg{width:220px; height:180px;}
+  .dancer{
+    position:absolute; bottom:26px; left:50%; width:54px; height:84px; margin-left:-27px;
+    transform-origin:50% 90%;
+  }
+  .box.playing .dancer{animation:twirl 1.6s linear infinite;}
+  @keyframes twirl{0%{transform:rotateY(0)}100%{transform:rotateY(360deg)}}
+  .pause-veil{
+    position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+    background:rgba(10,6,3,.55); color:var(--ink); font-size:13px; font-weight:700;
+    letter-spacing:.06em; text-align:center; padding:0 30px; line-height:1.6;
+  }
+  .box.paused .pause-veil{display:flex;}
+  .cavity .tune-tag{
+    position:absolute; top:12px; left:0; right:0; text-align:center;
+    font-size:11px; font-weight:800; letter-spacing:.22em; color:var(--gold); text-transform:uppercase;
+  }
+  .now-line{text-align:center; font-size:12px; color:var(--mut); margin-top:10px; min-height:20px;}
+  .now-line b{color:var(--ink);}
+
+  /* key + spring */
+  .key-row{display:flex; align-items:center; justify-content:center; gap:18px; margin-top:16px;}
+  #key{
+    width:104px; height:104px; border-radius:50%; position:relative; cursor:grab;
+    background:radial-gradient(circle at 35% 30%, #ffe9a8, var(--gold) 55%, var(--gold-d));
+    box-shadow:0 6px 0 #7a5510, inset 0 2px 4px rgba(255,255,255,.6);
+    touch-action:none; user-select:none; -webkit-user-select:none; flex:none;
+  }
+  #key:active{cursor:grabbing;}
+  #key .arm{position:absolute; top:50%; left:50%; width:76px; height:16px; margin:-8px 0 0 -38px;}
+  #key .arm::before, #key .arm::after{
+    content:""; position:absolute; top:0; width:16px; height:16px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #ffe9a8, var(--gold) 60%, var(--gold-d));
+    box-shadow:0 2px 4px rgba(0,0,0,.3);
+  }
+  #key .arm::before{left:0;} #key .arm::after{right:0;}
+  #key .hub{position:absolute; top:50%; left:50%; width:24px; height:24px; margin:-12px 0 0 -12px; border-radius:50%; background:#7a5510; box-shadow:inset 0 2px 4px rgba(0,0,0,.5);}
+  .key-label{font-size:12px; color:var(--mut); font-weight:600; line-height:1.6; max-width:150px;}
+  .key-label b{display:block; color:var(--ink); font-size:13px;}
+
+  .spring-wrap{margin-top:16px; background:rgba(0,0,0,.3); border-radius:14px; padding:14px 16px;}
+  .spring-wrap .sl{display:flex; justify-content:space-between; font-size:11px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:var(--mut); margin-bottom:10px;}
+  .spring-wrap .sl span:last-child{color:var(--gold);}
+  .spring-track{height:14px; border-radius:7px; background:#160f08; overflow:hidden; box-shadow:inset 0 2px 5px rgba(0,0,0,.7);}
+  #springFill{height:100%; width:0%; border-radius:7px; background:linear-gradient(90deg,var(--gold-d),var(--gold)); transition:width .12s linear;}
+  .tempo-line{font-size:11px; color:var(--mut); margin-top:8px; text-align:center;}
+  .tempo-line b{color:var(--gold);}
+
+  /* tunes */
+  .tunes{display:flex; gap:10px; justify-content:center; margin-top:18px;}
+  .tune{
+    flex:1; border:1px solid #4a3a26; background:#2a2013; color:var(--mut);
+    border-radius:14px; padding:14px 8px; min-height:64px; cursor:pointer;
+    font-size:12.5px; font-weight:800; line-height:1.4; font-family:inherit;
+  }
+  .tune small{display:block; font-weight:600; font-size:10.5px; margin-top:4px; color:#7a6a52;}
+  .tune.on{background:var(--gold); border-color:var(--gold); color:#241a12;}
+  .tune.on small{color:#5d4426;}
+  .tune:active{transform:scale(.96);}
+
+  .belong{margin-top:16px; text-align:center; font-size:13px; color:var(--mut); line-height:1.6;}
+  .belong a{color:var(--gold); font-weight:700;}
+
+  footer{text-align:center; margin-top:34px; font-size:13px; color:var(--mut);}
+  footer a{color:var(--gold); font-weight:700;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">Luke Zhang</div>
+    <h1>Music Box<span class="dot">.</span></h1>
+    <p class="sub">A walnut box with three tiny songs inside. <b>Wind the key in circles</b> and the lid pops, the dancer spins, the band plays. Wind faster and the band plays faster. It runs on spring physics, like the real thing.</p>
+  </header>
+  <div class="rules">
+    <span class="rule"><b>drag</b> the key in circles</span>
+    <span class="rule"><b>tap</b> the scene to pause</span>
+    <span class="rule"><b>pick</b> a tune</span>
+  </div>
+
+  <div class="stage-wrap">
+    <div class="box" id="box">
+      <div class="lid"><span class="inlay">Luke &amp; Co.</span></div>
+      <div class="cavity" id="cavity" aria-label="Tap the scene to pause or resume">
+        <div class="tune-tag" id="tuneTag">Morning Build</div>
+        <div class="scene" id="scene"></div>
+        <svg class="dancer" id="dancer" viewBox="0 0 54 84">
+          <ellipse cx="27" cy="78" rx="14" ry="5" fill="#8a6f3f"/>
+          <path d="M27 20 L27 62 M27 30 L12 44 M27 30 L42 44 M27 62 L16 78 M27 62 L38 78" stroke="#e8b93c" stroke-width="5" stroke-linecap="round" fill="none"/>
+          <circle cx="27" cy="12" r="9" fill="#f0d9a0"/>
+          <path d="M18 8 Q27 -2 36 8 L36 4 Q27 -6 18 4 Z" fill="#5a3a24"/>
+        </svg>
+        <div class="pause-veil">paused.<br>tap to let the dancer finish.</div>
+      </div>
+    </div>
+    <div class="now-line" id="nowLine">the box is shy. it only sings while wound.</div>
+
+    <div class="key-row">
+      <div id="key" aria-label="Wind the key by dragging in circles"><div class="arm"></div><div class="hub"></div></div>
+      <div class="key-label"><b>Wind me</b>drag around in circles, like a real key. It gets harder near full, like a real spring.</div>
+    </div>
+
+    <div class="spring-wrap">
+      <div class="sl"><span>Spring tension</span><span id="springPct">0%</span></div>
+      <div class="spring-track"><div id="springFill"></div></div>
+      <div class="tempo-line">tempo right now: <b id="tempoVal">resting</b></div>
+    </div>
+
+    <div class="tunes" id="tunes"></div>
+    <p class="belong" id="belong"></p>
+  </div>
+
+  <footer><a href="../">back to all 40 ways to say hi</a></footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ================================================================
+     THE MUSIC: three tiny tunes, actually composed.
+     - Equal temperament: f = 440 * 2^((m-69)/12), m = MIDI note.
+     - Two voices: melody up top, bass walking underneath with
+       stepwise motion and real cadences (V-I to close each tune).
+       Contrary motion at the final cadence, the way the textbooks
+       like it: melody steps down while the bass leaps up a fourth.
+     - Music-box timbre: steel comb teeth ring with inharmonic
+       partials, roughly f, 3.98f, 9.24f, decaying fast. That is
+       what makes it tinkle instead of beep.
+     ================================================================ */
+  function freq(m){ return 440 * Math.pow(2, (m-69)/12); }
+
+  var TUNES = [
+    {name:"Morning Build", sub:"C major, bright",
+     belong:'This tune belongs to <a href="https://lukezhang.si/" target="_blank" rel="noopener">Get Clocked</a>, the song the morning shift hums.',
+     melody:[[64,1],[67,1],[72,1],[67,1],[69,1],[67,1],[64,1],[62,1],[64,1],[67,1],[69,1],[72,1],[71,1],[67,1],[72,2]],
+     bass:[[48,2],[43,2],[45,2],[43,2],[41,2],[45,2],[43,2],[48,2]],
+     /* C  G | Am G | F Am | G C. Bass walks down G F, then V-I. */
+     scene:"sun"},
+    {name:"Card Night", sub:"A minor waltz",
+     belong:'This tune belongs to <a href="https://projects.lukezhang.si/liverpool-rummy/" target="_blank" rel="noopener">Liverpool Rummy</a>, best played after midnight.',
+     melody:[[69,1],[72,1],[71,1],[69,1],[67,1],[64,1],[65,1],[69,1],[72,1],[71,3],[69,1],[72,1],[71,1],[69,1],[67,1],[65,1],[64,1],[62,1],[64,1],[69,3]],
+     bass:[[45,3],[40,3],[41,3],[40,3],[45,3],[38,3],[40,3],[45,3]],
+     /* Am E F E | Am Dm E Am. Waltz bass, one root per bar. */
+     scene:"moon"},
+    {name:"Fifty Tiny Notes", sub:"G pentatonic lullaby",
+     belong:'This tune belongs to <a href="https://projects.lukezhang.si/fifty-tracks/" target="_blank" rel="noopener">Fifty Tracks</a>, obviously. It is track zero.',
+     melody:[[71,1],[74,1],[76,1],[74,1],[71,2],[69,2],[71,1],[74,1],[79,1],[76,1],[74,2],[67,2]],
+     bass:[[55,4],[48,4],[50,4],[50,2],[55,2]],
+     /* G C D | D G. Only black keys plus friends: the pentatonic
+        scale cannot hit a wrong note, which is the whole point. */
+     scene:"notes"}
+  ];
+
+  var SCENES = {
+    sun:'<svg viewBox="0 0 220 180"><circle cx="110" cy="70" r="26" fill="#e8b93c"/><path d="M110 30 v-14 M110 110 v14 M70 70 h-14 M150 70 h14 M82 42 l-10 -10 M138 42 l10 -10 M82 98 l-10 10 M138 98 l10 10" stroke="#e8b93c" stroke-width="5" stroke-linecap="round"/><rect x="70" y="120" width="80" height="12" rx="4" fill="#5a3a24"/><rect x="80" y="132" width="10" height="26" fill="#3a2415"/><rect x="130" y="132" width="10" height="26" fill="#3a2415"/><rect x="92" y="96" width="36" height="26" rx="4" fill="#f0d9a0"/><circle cx="104" cy="109" r="5" fill="#e8b93c"/><circle cx="116" cy="109" r="5" fill="#b07d10"/></svg>',
+    moon:'<svg viewBox="0 0 220 180"><path d="M140 40 a30 30 0 1 0 18 54 a24 24 0 1 1 -18 -54" fill="#f0e6d0"/><circle cx="60" cy="50" r="3" fill="#f0e6d0"/><circle cx="90" cy="30" r="2" fill="#f0e6d0"/><circle cx="40" cy="90" r="2.5" fill="#f0e6d0"/><g transform="rotate(-12 110 130)"><rect x="80" y="105" width="34" height="48" rx="5" fill="#f7f0df" stroke="#b9ae97" stroke-width="2"/><text x="97" y="134" text-anchor="middle" font-size="22" fill="#b03a2e" font-weight="800">A</text><rect x="106" y="112" width="34" height="48" rx="5" fill="#f7f0df" stroke="#b9ae97" stroke-width="2"/><text x="123" y="141" text-anchor="middle" font-size="22" fill="#2e2a26" font-weight="800">K</text></g></svg>',
+    notes:'<svg viewBox="0 0 220 180"><ellipse cx="70" cy="140" rx="12" ry="9" fill="#e8b93c"/><rect x="79" y="88" width="5" height="54" fill="#e8b93c"/><ellipse cx="140" cy="120" rx="12" ry="9" fill="#f0d9a0"/><rect x="149" y="68" width="5" height="54" fill="#f0d9a0"/><path d="M84 88 q30 -18 65 -18" stroke="#e8b93c" stroke-width="5" fill="none"/><circle cx="110" cy="60" r="4" fill="#b07d10"/><circle cx="60" cy="70" r="3" fill="#f0d9a0" opacity=".7"/></svg>'
+  };
+
+  /* ---------------- audio ---------------- */
+  var AC=null;
+  function ac(){
+    if(!AC) AC = new (window.AudioContext||window.webkitAudioContext)();
+    if(AC.state==="suspended") AC.resume();
+    return AC;
+  }
+  /* One comb tooth: fundamental + inharmonic partials, fast decay. */
+  function tooth(midi, when, vol){
+    var c = ac(), f = freq(midi);
+    var partials = [[1, 1.0, 1.4],[3.98, 0.28, 0.7],[9.24, 0.10, 0.35]];
+    partials.forEach(function(p){
+      var o = c.createOscillator(), g = c.createGain();
+      o.type = "sine"; o.frequency.value = f * p[0];
+      g.gain.setValueAtTime(0.0001, when);
+      g.gain.linearRampToValueAtTime(vol * p[1], when + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + p[2]);
+      o.connect(g); g.connect(c.destination);
+      o.start(when); o.stop(when + p[2] + 0.05);
+    });
+  }
+
+  /* ================================================================
+     SPRING MODEL: the honest physics under the cute.
+     E in [0,1] is stored energy. Winding adds dE proportional to the
+     angle turned, with (1-E) falloff, so the last turns fight back
+     like a real mainspring. Playing drains E at a rate proportional
+     to tempo, and tempo itself is a function of E plus a decaying
+     boost from how fast you are winding right now. The governor
+     clamps it so the box never chipmunks.
+     ================================================================ */
+  var E_MAX = 1, energy = 0, windBoost = 0, lastWindT = 0;
+  var BASE_TEMPO = 2.0; /* beats per second at full wind, no boost */
+  function tempoNow(){
+    if (paused || energy <= 0.001) return 0;
+    var t = BASE_TEMPO * (0.55 + 0.75*energy + 0.5*windBoost);
+    return Math.min(t, BASE_TEMPO * 1.8);
+  }
+
+  /* ---------------- playback state ---------------- */
+  var tuneIdx = 0, paused = false;
+  var events = [], tuneLen = 0;   /* merged melody+bass, sorted by beat */
+  var musT = 0, evIdx = 0, loops = 0, lastFrame = 0;
+
+  function buildTune(i){
+    tuneIdx = i;
+    var T = TUNES[i], t = 0, b = 0, k;
+    events = [];
+    for (k=0;k<T.melody.length;k++){ events.push({at:t, midi:T.melody[k][0], vol:0.16}); t += T.melody[k][1]; }
+    for (k=0;k<T.bass.length;k++){ events.push({at:b, midi:T.bass[k][0], vol:0.09}); b += T.bass[k][1]; }
+    events.sort(function(a,b2){ return a.at-b2.at; });
+    tuneLen = Math.max(t, b);
+    musT = 0; evIdx = 0; loops = 0;
+    document.getElementById("tuneTag").textContent = T.name;
+    document.getElementById("scene").innerHTML = SCENES[T.scene];
+    document.getElementById("belong").innerHTML = T.belong;
+    var btns = document.getElementById("tunes").children;
+    for (var j=0;j<btns.length;j++) btns[j].classList.toggle("on", j===i);
+  }
+
+  function frame(now){
+    if (!lastFrame) lastFrame = now;
+    var dt = Math.min(0.1, (now - lastFrame)/1000); lastFrame = now;
+    windBoost *= Math.exp(-dt*2.2); /* winding enthusiasm fades fast */
+    var tempo = tempoNow();
+    if (tempo > 0){
+      var c = ac();
+      /* Absolute beat positions keep the loop seamless: event k of loop n
+         lives at n*tuneLen + ev.at, so wrapping never drops a note. */
+      var newMus = musT + tempo*dt;
+      var horizon = newMus + 0.18*tempo;
+      for (;;){
+        var ev = events[evIdx];
+        var abs = loops*tuneLen + ev.at;
+        if (abs > horizon) break;
+        if (abs >= musT - 0.001){
+          tooth(ev.midi, c.currentTime + Math.max(0, (abs - musT)/tempo), ev.vol);
+        }
+        evIdx++;
+        if (evIdx >= events.length){ evIdx = 0; loops++; }
+      }
+      musT = newMus;
+      energy = Math.max(0, energy - tempo * dt * 0.022);
+    }
+    paint(dt, tempo);
+    requestAnimationFrame(frame);
+  }
+
+  /* ---------------- paint ---------------- */
+  var box = document.getElementById("box");
+  var springFill = document.getElementById("springFill");
+  var springPct = document.getElementById("springPct");
+  var tempoVal = document.getElementById("tempoVal");
+  var nowLine = document.getElementById("nowLine");
+  var T = TUNES[0];
+
+  function paint(dt, tempo){
+    var open = energy > 0.12 && !paused;
+    box.classList.toggle("open", energy > 0.12);
+    box.classList.toggle("playing", tempo > 0);
+    box.classList.toggle("paused", paused && energy > 0.12);
+    springFill.style.width = (energy*100).toFixed(1) + "%";
+    springPct.textContent = Math.round(energy*100) + "%";
+    if (tempo > 0){
+      var bpm = Math.round(tempo*60);
+      tempoVal.textContent = bpm + " bpm, " + (windBoost > 0.25 ? "you are winding like you mean it" : windBoost > 0.05 ? "steady winding" : "running on spring alone");
+      nowLine.innerHTML = "now playing: <b>" + TUNES[tuneIdx].name + "</b>";
+    } else if (paused && energy > 0.12){
+      tempoVal.textContent = "holding...";
+      nowLine.innerHTML = "paused. the dancer is catching her breath.";
+    } else if (energy > 0.12){
+      tempoVal.textContent = "about to start...";
+      nowLine.innerHTML = "the lid is opening...";
+    } else {
+      tempoVal.textContent = "resting";
+      nowLine.innerHTML = energy > 0.001 ? "almost out of spring. wind it." : "the box is shy. it only sings while wound.";
+    }
+  }
+
+  /* ---------------- wind the key: drag in circles ---------------- */
+  var key = document.getElementById("key");
+  var keyAngle = 0, winding = false, lastA = 0;
+  function angleOf(e){
+    var r = key.getBoundingClientRect();
+    return Math.atan2(e.clientY - (r.top + r.height/2), e.clientX - (r.left + r.width/2));
+  }
+  key.addEventListener("pointerdown", function(e){
+    ac(); winding = true; lastA = angleOf(e); lastWindT = performance.now();
+    try{ key.setPointerCapture(e.pointerId); }catch(err){}
+    e.preventDefault();
+  });
+  key.addEventListener("pointermove", function(e){
+    if (!winding) return;
+    var a = angleOf(e), d = a - lastA;
+    if (d > Math.PI) d -= Math.PI*2;
+    if (d < -Math.PI) d += Math.PI*2;
+    lastA = a;
+    if (Math.abs(d) > 0.5) return;
+    var now = performance.now(), dt = Math.max(16, now - lastWindT)/1000; lastWindT = now;
+    var omega = Math.abs(d)/dt; /* rad/s of your hand */
+    windBoost = Math.min(1, windBoost + omega/14);
+    /* mainspring falloff: dE = k * |dAngle| * (1 - E) */
+    energy = Math.min(E_MAX, energy + Math.abs(d) * 0.055 * (1 - energy*0.92));
+    keyAngle += d;
+    key.style.transform = "rotate(" + (keyAngle*180/Math.PI) + "deg)";
+    if (paused && energy > 0.12){ paused = false; }
+  });
+  function endWind(){ winding = false; }
+  key.addEventListener("pointerup", endWind);
+  key.addEventListener("pointercancel", endWind);
+
+  /* ---------------- tap scene to pause ---------------- */
+  document.getElementById("cavity").addEventListener("click", function(){
+    if (energy <= 0.12) return;
+    ac();
+    paused = !paused;
+    tooth(paused ? 72 : 84, ac().currentTime, 0.1);
+  });
+
+  /* ---------------- tune selector ---------------- */
+  var tunesEl = document.getElementById("tunes");
+  TUNES.forEach(function(tn, i){
+    var b = document.createElement("button");
+    b.className = "tune" + (i===0 ? " on" : "");
+    b.innerHTML = tn.name + "<small>" + tn.sub + "</small>";
+    b.setAttribute("aria-label", "Play " + tn.name);
+    b.addEventListener("click", function(){
+      ac(); buildTune(i); paused = false;
+      tooth(84, ac().currentTime, 0.1);
+    });
+    tunesEl.appendChild(b);
+  });
+
+  buildTune(0);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

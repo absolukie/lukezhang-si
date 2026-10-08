@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fortune Cookie | Luke Zhang</title>
+<style>
+  :root{
+    --kraft:#e8d5b5; --kraft-d:#d9c09a; --paper:#f7f0e1; --red:#c0392b; --red-d:#96271d;
+    --ink:#4a3423; --ink-soft:#7a5f45; --gold:#d4a017;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    background:var(--kraft);
+    background-image:radial-gradient(rgba(122,95,69,.10) 1px, transparent 1px);
+    background-size:18px 18px;
+    color:var(--ink);
+    font-family:Georgia,"Times New Roman",serif;
+    min-height:100vh; display:flex; justify-content:center;
+    padding:18px 14px 64px; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{width:100%; max-width:430px;}
+  header{text-align:center; margin:10px 0 18px;}
+  .kicker{
+    font-size:12px; letter-spacing:.24em; text-transform:uppercase; color:var(--red);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-weight:700; margin-bottom:8px;
+  }
+  h1{font-size:34px; font-weight:700; letter-spacing:-.01em; margin-bottom:6px;}
+  .sub{font-size:15px; color:var(--ink-soft); font-style:italic; line-height:1.5;}
+  /* ---- cookie stage ---- */
+  .stage{
+    background:var(--paper); border:2px solid var(--kraft-d); border-radius:18px;
+    min-height:330px; position:relative; overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 10px 28px rgba(74,52,35,.16), inset 0 2px 0 rgba(255,255,255,.6);
+    touch-action:manipulation;
+  }
+  .stage .hint{
+    position:absolute; top:12px; left:0; right:0; text-align:center;
+    font-size:12px; color:var(--ink-soft); font-style:italic; pointer-events:none;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  .crumb{position:absolute; width:7px; height:7px; border-radius:50%; background:#b98a4e; pointer-events:none; z-index:5;}
+  .cookie{width:150px; height:150px; position:relative; cursor:pointer; touch-action:manipulation;}
+  .half{
+    position:absolute; top:0; width:75px; height:150px; overflow:hidden;
+    transition:transform .55s cubic-bezier(.2,1.4,.4,1);
+  }
+  .half .biscuit{
+    position:absolute; top:0; width:150px; height:150px; border-radius:50%;
+    background:
+      radial-gradient(circle at 38% 30%, rgba(255,255,255,.35), transparent 45%),
+      radial-gradient(circle at 60% 70%, #b57e3c, #d8a856 70%, #c08c42);
+    box-shadow:inset 0 -6px 12px rgba(120,70,20,.35), inset 0 5px 10px rgba(255,255,255,.35);
+  }
+  .half.left{left:0;}
+  .half.left .biscuit{left:0; clip-path:inset(0 50% 0 0);}
+  .half.right{right:0;}
+  .half.right .biscuit{right:0; clip-path:inset(0 0 0 50%);}
+  .half.left .biscuit{clip-path:none;}
+  .half.right .biscuit{clip-path:none;}
+  .stage.cracked .half.left{transform:translate(-34px,8px) rotate(-24deg);}
+  .stage.cracked .half.right{transform:translate(34px,-6px) rotate(22deg);}
+  .cookie-facets{position:absolute; inset:0; border-radius:50%; pointer-events:none;
+    background:radial-gradient(circle at 30% 25%, rgba(255,255,255,.28), transparent 40%);}
+  .slip{
+    position:absolute; width:230px; min-height:86px; background:#fffdf6;
+    border:1px solid var(--kraft-d); border-radius:4px;
+    box-shadow:0 6px 16px rgba(74,52,35,.25);
+    display:flex; align-items:center; justify-content:center; text-align:center;
+    padding:14px 16px; cursor:pointer; opacity:0; transform:scale(.7) translateY(10px);
+    transition:opacity .35s ease .25s, transform .35s ease .25s;
+    touch-action:manipulation; perspective:400px; z-index:6;
+    pointer-events:none;
+  }
+  .stage.cracked .slip{opacity:1; transform:scale(1) translateY(0); pointer-events:auto;}
+  .slip-inner{position:relative; width:100%; transform-style:preserve-3d; transition:transform .5s ease;}
+  .slip.flipped .slip-inner{transform:rotateY(180deg);}
+  .face{backface-visibility:hidden; -webkit-backface-visibility:hidden;}
+  .face.back{position:absolute; inset:0; transform:rotateY(180deg); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;}
+  .face.front p{font-size:16px; line-height:1.45; font-style:italic; color:var(--ink);}
+  .face .tapnote{font-size:11px; color:var(--red); font-style:normal; margin-top:8px; display:block;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .face.back .lucky{font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--red); font-weight:700;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .face.back .nums{font-size:20px; font-weight:700; color:var(--ink);}
+  .face.back .nums small{font-size:12px; font-weight:400; color:var(--ink-soft); display:block; margin-top:2px;}
+  /* ---- jar ---- */
+  .jar-row{display:flex; align-items:center; justify-content:space-between; margin:20px 2px 10px;}
+  .jar-label{font-size:13px; color:var(--ink-soft); font-style:italic;}
+  .jar{display:flex; gap:8px; align-items:flex-end; min-height:54px; padding:6px 10px;
+    background:rgba(255,255,255,.35); border:1px dashed var(--kraft-d); border-radius:12px; flex:1; margin-right:10px;}
+  .jar .mini{
+    width:34px; height:34px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #e5bd7c, #c08c42);
+    box-shadow:inset 0 -3px 6px rgba(120,70,20,.4); flex:none;
+    transition:transform .25s ease, opacity .25s ease;
+  }
+  .jar .mini.spent{transform:scale(.2); opacity:0;}
+  .controls{display:flex; gap:10px; margin-top:14px;}
+  .btn{
+    flex:1; border:none; border-radius:12px; cursor:pointer;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:15px; font-weight:700; padding:15px 10px; min-height:54px;
+    touch-action:manipulation;
+  }
+  .btn.primary{background:var(--red); color:#fff; box-shadow:0 4px 0 var(--red-d);}
+  .btn.primary:active{transform:translateY(3px); box-shadow:0 1px 0 var(--red-d);}
+  .btn.ghost{background:transparent; color:var(--red); border:2px solid var(--red);}
+  .btn.ghost:active{transform:scale(.97);}
+  .btn:disabled{opacity:.45; cursor:default; transform:none;}
+  .lucky-strip{
+    margin-top:16px; background:var(--red); color:#fff; border-radius:12px;
+    padding:12px 16px; font-size:13px; line-height:1.55;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  .lucky-strip b{letter-spacing:.06em;}
+  footer{text-align:center; margin-top:26px; font-size:13px;}
+  footer a{color:var(--red); font-weight:700;}
+  .visually-hidden{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">luke zhang</div>
+    <h1>The Fortune Cookie</h1>
+    <p class="sub">Crack one open. Every fortune is something I actually built. No vague prophecies, only shipped code.</p>
+  </header>
+
+  <div class="stage" id="stage" aria-label="cookie stage">
+    <div class="hint" id="hint">tap the cookie to crack it</div>
+    <div class="cookie" id="cookie" role="button" tabindex="0" aria-label="crack the fortune cookie">
+      <div class="half left"><div class="biscuit"></div></div>
+      <div class="half right"><div class="biscuit"></div></div>
+      <div class="cookie-facets"></div>
+    </div>
+    <div class="slip" id="slip" role="button" tabindex="0" aria-label="flip the fortune slip">
+      <div class="slip-inner">
+        <div class="face front">
+          <p id="fortuneText"></p>
+          <span class="tapnote">tap the slip to flip for lucky numbers</span>
+        </div>
+        <div class="face back">
+          <div class="lucky">lucky numbers</div>
+          <div class="nums"><span id="luckyNums"></span><small id="luckyCap"></small></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="jar-row">
+    <div class="jar" id="jar" aria-label="cookie jar"></div>
+    <div class="jar-label" id="jarLabel">3 cookies left</div>
+  </div>
+
+  <div class="controls">
+    <button class="btn ghost" id="refillBtn">refill jar</button>
+    <button class="btn primary" id="newBtn">new cookie</button>
+  </div>
+
+  <div class="lucky-strip" id="luckyStrip" hidden>
+    <b>Your lucky stats this visit:</b> <span id="statLine"></span>
+  </div>
+
+  <footer><a href="../">all 40 ways to say hi</a></footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var stage = document.getElementById("stage"),
+      cookie = document.getElementById("cookie"),
+      slip = document.getElementById("slip"),
+      hint = document.getElementById("hint"),
+      fortuneText = document.getElementById("fortuneText"),
+      luckyNums = document.getElementById("luckyNums"),
+      luckyCap = document.getElementById("luckyCap"),
+      jar = document.getElementById("jar"),
+      jarLabel = document.getElementById("jarLabel"),
+      refillBtn = document.getElementById("refillBtn"),
+      newBtn = document.getElementById("newBtn"),
+      luckyStrip = document.getElementById("luckyStrip"),
+      statLine = document.getElementById("statLine");
+
+  /* Fortune data: each is a real project or trait, in fortune-cookie voice. */
+  var fortunes = [
+    { text: "You will ship before lunch. Then you will ship again after lunch.", nums: "20, 5, 2", cap: "landing concepts, built in one night" },
+    { text: "A cat in a tiny hat will approve your roadmap.", nums: "1, 4, 13", cap: "cat ceo, unpaid intern: you" },
+    { text: "Beware the blank terminal. It is not empty, it is waiting.", nums: "87, 3, 16", cap: "sites live on the hub" },
+    { text: "Your rummy hand will be strong. Your opponents will not know what hit them.", nums: "13, 7, 21", cap: "cards in a rummy hand, basically" },
+    { text: "Someone will tap your wheel and win. The house always ships.", nums: "10, 8, 14", cap: "saas apps, 14-day trials, no card needed" },
+    { text: "The skill tree branches where you least expect it. Take the weird one.", nums: "49, 4, 12", cap: "marketing skills installed this week" },
+    { text: "A sticker placed today becomes a portfolio piece tomorrow.", nums: "3, 2, 1", cap: "taps to place, zero excuses" },
+    { text: "Your LLM visualizer will make a hard idea feel obvious. That is the whole trick.", nums: "56, 32, 10", cap: "models in the atlas and counting" },
+    { text: "Great fortune favors the builder who reads the docs twice.", nums: "2, 5, 8", cap: "passes every app got overnight" }
+  ];
+
+  var JAR = 3, remaining = JAR, staged = true, order = [], cracked = false, crackAudio = null, opened = 0;
+
+  /* ---- WebAudio: synthesized crack + paper sounds, no files ---- */
+  function ac(){
+    if (!crackAudio) crackAudio = new (window.AudioContext || window.webkitAudioContext)();
+    if (crackAudio.state === "suspended") crackAudio.resume();
+    return crackAudio;
+  }
+  function noiseBurst(dur, freq, gain){
+    try{
+      var c = ac(), t = c.currentTime;
+      var buf = c.createBuffer(1, c.sampleRate * dur, c.sampleRate);
+      var d = buf.getChannelData(0);
+      for (var i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+      var src = c.createBufferSource(); src.buffer = buf;
+      var f = c.createBiquadFilter(); f.type = "bandpass"; f.frequency.value = freq; f.Q.value = 0.8;
+      var g = c.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      src.connect(f); f.connect(g); g.connect(c.destination); src.start();
+    }catch(e){}
+  }
+  function crackSound(){ noiseBurst(0.28, 2400, 0.9); setTimeout(function(){ noiseBurst(0.18, 3600, 0.5); }, 90); }
+  function paperSound(){ noiseBurst(0.15, 5200, 0.25); }
+  function popSound(){
+    try{
+      var c = ac(), t = c.currentTime, o = c.createOscillator(), g = c.createGain();
+      o.type = "sine"; o.frequency.setValueAtTime(420, t); o.frequency.exponentialRampToValueAtTime(880, t + 0.09);
+      g.gain.setValueAtTime(0.35, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+      o.connect(g); g.connect(c.destination); o.start(); o.stop(t + 0.18);
+    }catch(e){}
+  }
+
+  /* ---- jar: jar shows cookies left AFTER the one on stage ---- */
+  function jarCount(){ return remaining - (staged ? 1 : 0); }
+  function renderJar(){
+    jar.innerHTML = "";
+    var n = jarCount();
+    for (var i = 0; i < JAR - 1; i++){
+      var m = document.createElement("div");
+      m.className = "mini" + (i >= n ? " spent" : "");
+      jar.appendChild(m);
+    }
+    jarLabel.textContent = (n === 0 && cracked) ? "jar empty. refill, obviously." :
+      n + (n === 1 ? " cookie left" : " cookies left") + " in the jar";
+    newBtn.disabled = !(staged && cracked && remaining > 1);
+    refillBtn.disabled = remaining === JAR;
+  }
+
+  function shuffle(a){ for (var i = a.length - 1; i > 0; i--){ var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+
+  /* Crumbs fly on real ballistic trajectories: initial velocity, gravity,
+     air drag, one bounce off the stage floor, then they fade. */
+  var crumbAnims = [];
+  function scatterCrumbs(){
+    for (var i = 0; i < 16; i++){
+      var c = document.createElement("div");
+      c.className = "crumb";
+      c.style.left = "50%"; c.style.top = "52%";
+      stage.appendChild(c);
+      var a = Math.random() * Math.PI * 2, sp = 90 + Math.random() * 190;
+      crumbAnims.push({ el: c, x: 0, y: 0,
+        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 160,
+        vr: (Math.random() - 0.5) * 900, rot: 0, life: 0 });
+    }
+    if (scatterCrumbs.running) return;
+    scatterCrumbs.running = true;
+    var last = performance.now();
+    (function fr(now){
+      var dt = Math.min((now - last) / 1000, 0.04); last = now;
+      for (var j = crumbAnims.length - 1; j >= 0; j--){
+        var p = crumbAnims[j];
+        p.life += dt;
+        p.vy += 900 * dt;
+        p.vx *= (1 - 0.6 * dt);
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        p.rot += p.vr * dt;
+        var floor = stage.clientHeight * 0.5 - 46;
+        if (p.y > floor && p.vy > 0){ p.y = floor; p.vy *= -0.42; p.vx *= 0.7; p.vr *= 0.6; }
+        p.el.style.transform = "translate(" + p.x.toFixed(1) + "px," + p.y.toFixed(1) + "px) rotate(" + p.rot.toFixed(0) + "deg)";
+        p.el.style.opacity = p.life > 1.6 ? String(Math.max(0, 1 - (p.life - 1.6) / 0.8)) : "1";
+        if (p.life > 2.6){ p.el.remove(); crumbAnims.splice(j, 1); }
+      }
+      if (crumbAnims.length) requestAnimationFrame(fr);
+      else scatterCrumbs.running = false;
+    })(last);
+  }
+
+  /* ---- INTERACTION 1: tap cookie to crack ---- */
+  function crack(){
+    if (cracked) return;
+    cracked = true;
+    crackSound();
+    stage.classList.add("cracked");
+    slip.classList.remove("flipped");
+    var f = order[opened % order.length];
+    fortuneText.textContent = f.text;
+    luckyNums.textContent = f.nums;
+    luckyCap.textContent = f.cap;
+    hint.textContent = "nice crack. tap the slip to flip it";
+    scatterCrumbs();
+    renderJar();
+    if (opened === 0){
+      luckyStrip.hidden = false;
+      statLine.textContent = "9 fortunes cracked 0 times (so far), 3 cookies in the jar, 1 warm bakery smell.";
+    }
+  }
+  cookie.addEventListener("click", crack);
+  cookie.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " ") { e.preventDefault(); crack(); } });
+
+  /* ---- INTERACTION 2: tap slip to flip for lucky numbers ---- */
+  slip.addEventListener("click", function(){
+    if (!cracked) return;
+    slip.classList.toggle("flipped");
+    paperSound();
+    hint.textContent = slip.classList.contains("flipped") ? "your numbers. play them responsibly." : "the fortune again. still true.";
+  });
+  slip.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " ") { e.preventDefault(); slip.click(); } });
+
+  /* ---- INTERACTION 3: new cookie / refill jar ---- */
+  function newCookie(){
+    if (!(staged && cracked && remaining > 1)) return;
+    popSound();
+    remaining--; opened++;
+    staged = true; cracked = false;
+    stage.classList.remove("cracked");
+    slip.classList.remove("flipped");
+    hint.textContent = remaining === 0 ? "last crumb. refill when ready." : "fresh cookie. crack it.";
+    cookie.style.transform = "scale(.6)"; cookie.style.opacity = "0";
+    requestAnimationFrame(function(){
+      cookie.style.transition = "transform .4s cubic-bezier(.2,1.5,.4,1), opacity .3s ease";
+      requestAnimationFrame(function(){ cookie.style.transform = "scale(1)"; cookie.style.opacity = "1"; });
+    });
+    setTimeout(function(){ cookie.style.transition = ""; }, 500);
+    renderJar();
+  }
+  newBtn.addEventListener("click", newCookie);
+  refillBtn.addEventListener("click", function(){
+    remaining = JAR; popSound(); renderJar();
+    hint.textContent = "jar refilled. the bakery never closes.";
+  });
+
+  order = shuffle(fortunes.map(function(_, i){ return i; }));
+  renderJar();
+})();
+</script>
+</body>
+</html>

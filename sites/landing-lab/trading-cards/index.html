@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trading Cards | Luke Zhang</title>
+<style>
+  :root{
+    --bg:#14161f; --ink:#f2ede3; --ink-soft:#9a93a8; --gold:#f5c542; --red:#e4574f;
+    --card-w:min(300px, 78vw);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    background:var(--bg);
+    background-image:radial-gradient(ellipse 80% 50% at 50% -10%, rgba(245,197,66,.10), transparent);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    min-height:100vh; display:flex; justify-content:center;
+    padding:18px 14px 60px; -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  }
+  .wrap{width:100%; max-width:430px; display:flex; flex-direction:column; align-items:center;}
+  header{text-align:center; margin:10px 0 4px;}
+  .kicker{
+    font-size:12px; letter-spacing:.24em; text-transform:uppercase; color:var(--gold);
+    font-weight:700; margin-bottom:8px;
+  }
+  h1{font-size:32px; font-weight:800; letter-spacing:-.02em; margin-bottom:6px;}
+  .sub{font-size:14px; color:var(--ink-soft); line-height:1.55; max-width:30em;}
+  /* deck progress */
+  .dots{display:flex; gap:4px; margin:16px 0 4px;}
+  .dot{
+    width:44px; height:40px; border:none; padding:0; background:transparent;
+    cursor:pointer; touch-action:manipulation; position:relative;
+  }
+  .dot::after{
+    content:""; position:absolute; left:5px; right:5px; top:15px; height:10px; border-radius:999px;
+    background:#2a2e3d; transition:background .2s ease;
+  }
+  .dot.seen::after{background:#4a5168;}
+  .dot.on::after{background:var(--gold); box-shadow:0 0 10px rgba(245,197,66,.6);}
+  .count{font-size:12px; color:var(--ink-soft); margin-bottom:6px; letter-spacing:.08em;}
+  /* stage */
+  .stage{position:relative; width:var(--card-w); height:440px; margin-top:8px; touch-action:none; perspective:1200px;}
+  .card3d{
+    position:absolute; inset:0; perspective:1200px; touch-action:none; cursor:grab;
+    transition:transform .45s cubic-bezier(.2,1.3,.4,1), opacity .3s ease;
+  }
+  .card3d:active{cursor:grabbing;}
+  .card3d .inner{
+    position:absolute; inset:0; transform-style:preserve-3d; transition:transform .55s cubic-bezier(.3,1.4,.4,1);
+  }
+  .card3d.flipped .inner{transform:rotateY(180deg);}
+  .face{
+    position:absolute; inset:0; border-radius:20px; overflow:hidden;
+    backface-visibility:hidden; -webkit-backface-visibility:hidden;
+    border:1px solid rgba(245,197,66,.35);
+    box-shadow:0 18px 44px rgba(0,0,0,.55);
+  }
+  .face.front{background:linear-gradient(165deg, #232840, #1a1e30 70%);}
+  .face.back{background:linear-gradient(165deg, #2b2135, #1c1626); transform:rotateY(180deg);
+    padding:24px 22px; display:flex; flex-direction:column;}
+  .art{
+    height:190px; display:flex; align-items:center; justify-content:center; position:relative;
+    border-bottom:1px solid rgba(245,197,66,.25);
+  }
+  .art svg{width:120px; height:120px; filter:drop-shadow(0 8px 18px rgba(0,0,0,.5));}
+  .rarity{
+    position:absolute; top:12px; right:12px; font-size:10px; font-weight:800; letter-spacing:.14em;
+    padding:5px 10px; border-radius:999px; background:rgba(0,0,0,.45); color:var(--gold);
+    border:1px solid rgba(245,197,66,.5); text-transform:uppercase;
+  }
+  .cname{padding:14px 18px 4px; font-size:21px; font-weight:800; letter-spacing:-.01em;}
+  .ctype{padding:0 18px 10px; font-size:12px; color:var(--gold); font-weight:700; letter-spacing:.1em; text-transform:uppercase;}
+  .stats{padding:4px 18px 0; display:grid; gap:8px;}
+  .stat{display:grid; grid-template-columns:92px 1fr 30px; align-items:center; gap:10px; font-size:12px; font-weight:700;}
+  .stat .bar{height:10px; border-radius:99px; background:#2a2e3d; overflow:hidden;}
+  .stat .bar i{display:block; height:100%; border-radius:99px; background:linear-gradient(90deg, var(--gold), #ffdf8a);}
+  .stat .v{text-align:right; color:var(--ink-soft);}
+  .tapflip{
+    margin:12px 18px 0; font-size:12px; color:var(--ink-soft); text-align:center;
+    border-top:1px dashed rgba(245,197,66,.3); padding-top:10px;
+  }
+  .face.back h3{font-size:18px; font-weight:800; margin-bottom:10px; color:var(--gold);}
+  .face.back p{font-size:14px; line-height:1.65; color:var(--ink);}
+  .face.back .quote{
+    margin-top:auto; font-size:13px; font-style:italic; color:var(--ink-soft);
+    border-left:3px solid var(--gold); padding-left:12px; line-height:1.6;
+  }
+  /* holographic foil on the rare card */
+  .shiny .face.front::after{
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background:linear-gradient(115deg, transparent 20%, rgba(255,0,128,.18) 35%, rgba(0,255,255,.18) 50%, rgba(255,255,0,.18) 65%, transparent 80%);
+    background-size:250% 250%;
+    animation:foil 3.2s ease-in-out infinite;
+    mix-blend-mode:screen;
+  }
+  @keyframes foil{0%,100%{background-position:0% 40%;}50%{background-position:100% 60%;}}
+  .shiny .rarity{background:linear-gradient(90deg,#f5c542,#ff8a5c,#f5c542); color:#14161f; border:none;}
+  .edge-hint{
+    position:absolute; top:50%; font-size:11px; color:var(--ink-soft); letter-spacing:.2em;
+    text-transform:uppercase; pointer-events:none; opacity:.7;
+  }
+  .edge-hint.l{left:-4px; transform:translate(-100%,-50%) rotate(-90deg);}
+  .edge-hint.r{right:-4px; transform:translate(100%,-50%) rotate(90deg);}
+  .controls{display:flex; gap:10px; margin-top:18px; width:100%; max-width:340px;}
+  .btn{
+    flex:1; border-radius:14px; cursor:pointer; font-size:15px; font-weight:800;
+    padding:15px 10px; min-height:56px; touch-action:manipulation; border:none;
+  }
+  .btn.flip{background:var(--gold); color:#14161f; box-shadow:0 4px 0 #a8842a;}
+  .btn.flip:active{transform:translateY(3px); box-shadow:0 1px 0 #a8842a;}
+  .btn.shuffle{background:transparent; color:var(--gold); border:2px solid var(--gold);}
+  .btn.shuffle:active{transform:scale(.96);}
+  .deck-note{margin-top:12px; font-size:12px; color:var(--ink-soft); text-align:center; line-height:1.6;}
+  footer{text-align:center; margin-top:24px; font-size:13px;}
+  footer a{color:var(--gold); font-weight:700;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">luke zhang</div>
+    <h1>The Trading Cards</h1>
+    <p class="sub">My projects as a card deck. Swipe through, tap a card to flip it for the back story. One of them is shiny.</p>
+  </header>
+
+  <div class="dots" id="dots" aria-label="deck progress"></div>
+  <div class="count" id="count">1 / 6</div>
+
+  <div class="stage" id="stage" aria-label="card deck, swipe to browse">
+    <div class="edge-hint l">swipe</div>
+    <div class="edge-hint r">swipe</div>
+  </div>
+
+  <div class="controls">
+    <button class="btn shuffle" id="shuffleBtn">shuffle</button>
+    <button class="btn flip" id="flipBtn">flip card</button>
+  </div>
+  <p class="deck-note">Drag a card around and let go. It tilts in 3D, then snaps home on a spring. Physics included, at no extra charge.</p>
+
+  <footer><a href="../">all 40 ways to say hi</a></footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var stage = document.getElementById("stage"),
+      dotsEl = document.getElementById("dots"),
+      countEl = document.getElementById("count"),
+      shuffleBtn = document.getElementById("shuffleBtn"),
+      flipBtn = document.getElementById("flipBtn");
+
+  function icon(body, bg1, bg2){
+    return '<svg viewBox="0 0 120 120" aria-hidden="true"><defs><linearGradient id="g' + body.length + '" x1="0" y1="0" x2="1" y2="1">' +
+      '<stop offset="0" stop-color="' + bg1 + '"/><stop offset="1" stop-color="' + bg2 + '"/></linearGradient></defs>' +
+      '<circle cx="60" cy="60" r="52" fill="url(#g' + body.length + ')"/>' + body + "</svg>";
+  }
+
+  var CARDS = [
+    { name:"Liverpool Rummy", type:"flagship game", shiny:false,
+      stats:[["ship speed",92],["ambition",88],["polish",95]],
+      back:"Started as a card night with friends, ended as a full online multiplayer game with rooms, bots, and a legal audit. The 13+ age gate was the least fun feature to build and the most important.",
+      quote:"Nobody has ever said 'just one more hand' about a spreadsheet.",
+      icon: icon('<rect x="45" y="30" width="30" height="60" rx="6" fill="#fff"/><text x="60" y="72" text-anchor="middle" font-size="28" font-weight="800" fill="#14161f">A</text>', "#e4574f", "#a52a20") },
+    { name:"Get Clocked", type:"productivity game", shiny:false,
+      stats:[["ship speed",85],["ambition",80],["polish",90]],
+      back:"Time tracking is boring, so I made it a game. Punch in, keep streaks, feel something. Currently in line for the App Store with haptics and offline mode.",
+      quote:"The todo list never stood a chance.",
+      icon: icon('<circle cx="60" cy="60" r="30" fill="#fff"/><path d="M60 42v18l13 9" stroke="#14161f" stroke-width="7" stroke-linecap="round" fill="none"/>', "#58a6ff", "#2b4f9e") },
+    { name:"Draw & Guess", type:"couples game", shiny:false,
+      stats:[["ship speed",78],["ambition",72],["polish",92]],
+      back:"Built so my wife and I could play drawing games from the couch. Guesses match on plain pinyin, no tone marks, because I am still learning Chinese and the game should not judge me.",
+      quote:"My drawings are bad. The game is good. Separate the art from the artist.",
+      icon: icon('<path d="M74 26l20 20-44 44-24 4 4-24z" fill="#fff"/><path d="M70 34l12 12" stroke="#14161f" stroke-width="4"/>', "#7c5cff", "#4a2f9e") },
+    { name:"How an LLM Works", type:"visual essay", shiny:false,
+      stats:[["ship speed",70],["ambition",97],["polish",93]],
+      back:"An interactive explainer that takes transformers from 'magic' to 'oh, obviously'. 56 models in the atlas, every claim cited, zero em dashes.",
+      quote:"The best documentation is a toy you can poke.",
+      icon: icon('<circle cx="60" cy="60" r="28" fill="#fff"/><circle cx="60" cy="60" r="11" fill="#14161f"/><circle cx="60" cy="60" r="20" fill="none" stroke="#14161f" stroke-width="4" stroke-dasharray="8 6"/>', "#22b07d", "#14663f") },
+    { name:"Curbside", type:"first customer hunt", shiny:false,
+      stats:[["ship speed",88],["ambition",94],["polish",82]],
+      back:"Food truck finder, and the app I am taking to real food truck owners first. Lead: a treasurer of the local food truck association. Yes, I did my homework.",
+      quote:"Lunch is a market. I am just making the menu legible.",
+      icon: icon('<path d="M28 40h14l9 30h30l9-22H40" stroke="#fff" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="48" cy="84" r="7" fill="#fff"/><circle cx="76" cy="84" r="7" fill="#fff"/>', "#f5a623", "#9e6414") },
+    { name:"The 20th Concept", type:"holographic rare", shiny:true,
+      stats:[["ship speed",100],["ambition",100],["polish",100]],
+      back:"This card. You found the shiny. It represents the landing page you are looking at right now, which is also one of 20 ways I say hi. Meta, mint condition, slightly smug.",
+      quote:"Pull rate: 1 in 6. Value: priceless, obviously.",
+      icon: icon('<path d="M60 24l8 16 18 2-13 13 3 18-16-9-16 9 3-18-13-13 18-2z" fill="#fff"/>', "#f5c542", "#ff8a5c") }
+  ];
+
+  var idx = 0, seen = {}, els = [];
+
+  function buildDeck(){
+    stage.querySelectorAll(".card3d").forEach(function(e){ e.remove(); });
+    els = [];
+    CARDS.forEach(function(c, i){
+      var d = document.createElement("div");
+      d.className = "card3d" + (c.shiny ? " shiny" : "");
+      d.innerHTML =
+        '<div class="inner">' +
+          '<div class="face front">' +
+            '<div class="art">' + c.icon + '<div class="rarity">' + (c.shiny ? "holo rare" : c.type) + "</div></div>" +
+            '<div class="cname">' + c.name + "</div>" +
+            '<div class="ctype">' + c.type + "</div>" +
+            '<div class="stats">' + c.stats.map(function(s){
+              return '<div class="stat"><span>' + s[0] + '</span><div class="bar"><i style="width:' + s[1] + '%"></i></div><span class="v">' + s[1] + "</span></div>";
+            }).join("") + "</div>" +
+            '<div class="tapflip">tap the card to flip it</div>' +
+          "</div>" +
+          '<div class="face back"><h3>' + c.name + "</h3><p>" + c.back + '</p><div class="quote">' + c.quote + "</div></div>" +
+        "</div>";
+      stage.appendChild(d);
+      els.push(d);
+      attachCard(d, i);
+    });
+    render();
+  }
+
+  /* ---- real 3D tilt tracking the drag vector, spring-damped snap ----
+     Tilt is rotateY/rotateX proportional to the drag vector under the stage's
+     perspective; release runs a semi-implicit Euler spring (k=190, c=14,
+     slightly underdamped) instead of a CSS ease, so the card overshoots and
+     settles like paper. */
+  function setTilt(el, x, y){
+    el.style.transform = "translate3d(" + x.toFixed(1) + "px," + y.toFixed(1) + "px,0)" +
+      " rotateY(" + (x * 0.09).toFixed(2) + "deg)" +
+      " rotateX(" + (-y * 0.09).toFixed(2) + "deg)";
+  }
+  function springTo(el, tx, ty, done){
+    cancelAnimationFrame(el._spring);
+    var p = el._pos || { x: 0, y: 0, vx: 0, vy: 0 };
+    var last = performance.now(), K = 190, C = 14;
+    el.style.transition = "none";
+    function fr(now){
+      var dt = Math.min((now - last) / 1000, 0.033); last = now;
+      [["x","vx",tx],["y","vy",ty]].forEach(function(ax){
+        var F = -K * (p[ax[0]] - ax[2]) - C * p[ax[1]];
+        p[ax[1]] += F * dt; p[ax[0]] += p[ax[1]] * dt;
+      });
+      setTilt(el, p.x, p.y);
+      el._pos = p;
+      if (Math.abs(p.x - tx) < 0.6 && Math.abs(p.y - ty) < 0.6 && Math.abs(p.vx) < 10 && Math.abs(p.vy) < 10){
+        setTilt(el, tx, ty);
+        el._pos = { x: tx, y: ty, vx: 0, vy: 0 };
+        el.style.transition = "";
+        if (done) done();
+      } else {
+        el._spring = requestAnimationFrame(fr);
+      }
+    }
+    el._spring = requestAnimationFrame(fr);
+  }
+
+  /* ---- INTERACTION 1: swipe through deck with snap physics ---- */
+  function attachCard(el, i){
+    var drag = null, flipped = false;
+    el.addEventListener("pointerdown", function(e){
+      if (i !== idx) return;
+      e.preventDefault();
+      cancelAnimationFrame(el._spring);
+      el.setPointerCapture(e.pointerId);
+      drag = { x0: e.clientX, y0: e.clientY, x: 0, y: 0, vx: 0, vy: 0,
+               id: e.pointerId, t: performance.now(), moved: false };
+      el.style.transition = "none";
+      el.style.opacity = "";
+    });
+    el.addEventListener("pointermove", function(e){
+      if (!drag || e.pointerId !== drag.id) return;
+      var nx = e.clientX - drag.x0, ny = (e.clientY - drag.y0) * 0.55;
+      var now = performance.now(), dt = Math.max((now - drag.t) / 1000, 0.008);
+      drag.vx = 0.7 * drag.vx + 0.3 * ((nx - drag.x) / dt);
+      drag.vy = 0.7 * drag.vy + 0.3 * ((ny - drag.y) / dt);
+      drag.x = nx; drag.y = ny; drag.t = now;
+      if (Math.abs(nx) + Math.abs(ny) > 10) drag.moved = true;
+      setTilt(el, nx, ny);
+      el._pos = { x: nx, y: ny, vx: drag.vx, vy: drag.vy };
+      el.style.opacity = 1 - Math.min(Math.abs(nx) / 700, 0.4);
+    });
+    function release(e){
+      if (!drag || e.pointerId !== drag.id) return;
+      var d = drag; drag = null;
+      if (!d.moved){
+        /* INTERACTION 2: tap card to flip */
+        flipped = !flipped;
+        el.classList.toggle("flipped", flipped);
+        el.style.transition = "";
+        setTilt(el, 0, 0);
+        el._pos = { x: 0, y: 0, vx: 0, vy: 0 };
+        return;
+      }
+      var speed = Math.sqrt(d.vx * d.vx + d.vy * d.vy);
+      if (Math.abs(d.x) > 90 || speed > 550){
+        /* fling off, advance or retreat, carrying the flick */
+        var dir = d.x !== 0 ? (d.x > 0 ? 1 : -1) : (d.vx > 0 ? 1 : -1);
+        el.style.transition = "transform .22s cubic-bezier(.3,.7,.4,1), opacity .22s ease";
+        el.style.transform = "translate3d(" + (dir * 460) + "px," + (d.y * 2).toFixed(0) + "px,0) rotateY(" + (dir * 38) + "deg)";
+        el.style.opacity = "0";
+        setTimeout(function(){ step(dir); }, 200);
+      } else {
+        springTo(el, 0, 0, function(){ el.style.opacity = ""; });
+      }
+    }
+    el.addEventListener("pointerup", release);
+    el.addEventListener("pointercancel", function(){
+      drag = null; cancelAnimationFrame(el._spring);
+      el.style.transition = ""; setTilt(el, 0, 0); el.style.opacity = "";
+      el._pos = { x: 0, y: 0, vx: 0, vy: 0 };
+    });
+  }
+
+  function springIn(dir){
+    /* the new top card springs in from the fan, carrying flick velocity */
+    var top = els[idx];
+    cancelAnimationFrame(top._spring);
+    top.style.transition = "none";
+    top.style.opacity = "";
+    setTilt(top, -dir * 70, 14);
+    top._pos = { x: -dir * 70, y: 14, vx: dir * 500, vy: 0 };
+    springTo(top, 0, 0);
+  }
+
+  function step(dir){
+    idx = (idx + dir + CARDS.length) % CARDS.length;
+    seen[idx] = true;
+    els.forEach(function(el){ el.classList.remove("flipped"); });
+    render();
+    springIn(dir);
+  }
+
+  function render(){
+    els.forEach(function(el, i){
+      var off = i - idx;
+      if (off < 0) off += CARDS.length;
+      if (off === 0){
+        el.style.zIndex = 10;
+        el.style.opacity = "";
+        el.style.pointerEvents = "auto";
+        /* transform is driven by the drag/spring; leave it alone */
+      } else {
+        /* deck fan laid out on a true arc behind the top card */
+        var s = Math.min(off, 3);
+        var th = s * 0.08, R = 70;
+        var tx = Math.sin(th) * R;
+        var ty = s * 13 + (1 - Math.cos(th)) * R;
+        el.style.zIndex = 10 - s;
+        el.style.transition = "";
+        el.style.transform = "translate(" + tx.toFixed(1) + "px," + ty.toFixed(1) + "px)" +
+          " rotate(" + (s * 2.2).toFixed(1) + "deg)" +
+          " scale(" + (1 - s * 0.045).toFixed(3) + ")";
+        el.style.opacity = off > 3 ? "0" : (1 - s * 0.18).toFixed(2);
+        el.style.pointerEvents = "none";
+      }
+    });
+    countEl.textContent = (idx + 1) + " / " + CARDS.length;
+    dotsEl.innerHTML = "";
+    CARDS.forEach(function(c, i){
+      var b = document.createElement("button");
+      b.className = "dot" + (i === idx ? " on" : "") + (seen[i] ? " seen" : "");
+      b.setAttribute("aria-label", "go to " + c.name);
+      /* INTERACTION 3: tap progress dots to jump */
+      b.addEventListener("click", function(){
+        if (i === idx) return;
+        var dir = i > idx ? 1 : -1;
+        idx = i; seen[i] = true;
+        els.forEach(function(el){ el.classList.remove("flipped"); });
+        render();
+        springIn(dir);
+      });
+      dotsEl.appendChild(b);
+    });
+  }
+
+  /* INTERACTION 4: flip + shuffle buttons */
+  flipBtn.addEventListener("click", function(){
+    var el = els[idx];
+    el.classList.toggle("flipped");
+  });
+  shuffleBtn.addEventListener("click", function(){
+    for (var i = CARDS.length - 1; i > 0; i--){
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = CARDS[i]; CARDS[i] = CARDS[j]; CARDS[j] = t;
+    }
+    /* rebuild elements to match new order */
+    buildDeck();
+    idx = 0; seen = { 0: true };
+    render();
+  });
+
+  seen[0] = true;
+  buildDeck();
+})();
+</script>
+</body>
+</html>

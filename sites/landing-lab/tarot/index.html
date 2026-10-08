@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>the reading - luke</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Avenir Next", -apple-system, "Segoe UI", serif;
+    background: #101828;
+    background-image:
+      radial-gradient(ellipse 110% 45% at 50% 0%, #1d2a4a 0%, transparent 60%),
+      radial-gradient(circle at 85% 90%, rgba(201,162,58,.08), transparent 40%);
+    color: #ece3cc;
+    min-height: 100dvh;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 18px 14px 30px;
+  }
+  .wrap { width: 100%; max-width: 420px; display: flex; flex-direction: column; align-items: center; }
+  header { text-align: center; margin-bottom: 8px; }
+  header h1 { font-size: 24px; margin: 0; letter-spacing: 4px; color: #d8b45c; font-weight: 600; }
+  header .sub { font-size: 12px; letter-spacing: 3px; color: #8b93ad; margin-top: 4px; text-transform: uppercase; }
+  header p { margin: 10px 0 0; font-size: 14px; color: #b9c0d4; line-height: 1.55; max-width: 330px; }
+  #spread {
+    display: flex; gap: 10px; justify-content: center; margin: 16px 0 6px; min-height: 218px; width: 100%;
+  }
+  .slot {
+    flex: 1; max-width: 122px; aspect-ratio: 5 / 8.6; border-radius: 10px;
+    border: 1.5px dashed rgba(216,180,92,.35);
+    display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 6px;
+    color: rgba(216,180,92,.5); font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+  }
+  .slot .num { font-size: 22px; color: rgba(216,180,92,.35); }
+  .card {
+    width: 100%; height: 100%; border-radius: 10px; position: relative;
+    transform-style: preserve-3d; transition: transform .6s cubic-bezier(.3,1.2,.4,1);
+    touch-action: manipulation; cursor: pointer;
+  }
+  .card.flipped { transform: rotateY(180deg); }
+  .face {
+    position: absolute; inset: 0; border-radius: 10px; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 8px; text-align: center;
+  }
+  .face.back {
+    background:
+      radial-gradient(circle at 50% 42%, rgba(216,180,92,.35), transparent 55%),
+      repeating-linear-gradient(45deg, rgba(216,180,92,.12) 0 2px, transparent 2px 9px),
+      linear-gradient(160deg, #1a2340, #0e1428);
+    border: 1px solid #d8b45c;
+  }
+  .face.back .sigil {
+    width: 44px; height: 44px; border: 1.5px solid #d8b45c; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; color: #d8b45c;
+  }
+  .face.back .tiny { font-size: 9px; letter-spacing: 3px; color: rgba(216,180,92,.7); margin-top: 8px; text-transform: uppercase; }
+  .face.front {
+    transform: rotateY(180deg);
+    background: linear-gradient(170deg, #f4ecd8, #e4d3ac);
+    color: #2a2415; border: 1px solid #d8b45c;
+    box-shadow: 0 8px 22px rgba(0,0,0,.45);
+  }
+  .face.front .art { font-size: 30px; line-height: 1; }
+  .face.front h3 { margin: 6px 0 2px; font-size: 13.5px; letter-spacing: .5px; }
+  .face.front .short { font-size: 10.5px; line-height: 1.45; color: #5a4d2e; }
+  .face.front .tapmore { font-size: 9px; letter-spacing: 1.5px; color: #8a6f3f; margin-top: 6px; text-transform: uppercase; }
+  #fanwrap { position: relative; width: 100%; height: 235px; margin-top: 8px; }
+  #fan { position: absolute; inset: 0; }
+  .fancard {
+    position: absolute; left: 0; top: 60px; width: 104px; height: 158px;
+    border-radius: 10px;
+    background:
+      radial-gradient(circle at 50% 42%, rgba(216,180,92,.35), transparent 55%),
+      repeating-linear-gradient(45deg, rgba(216,180,92,.12) 0 2px, transparent 2px 9px),
+      linear-gradient(160deg, #1a2340, #0e1428);
+    border: 1px solid #d8b45c;
+    display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 6px;
+    touch-action: none; cursor: grab;
+    box-shadow: 0 6px 16px rgba(0,0,0,.5);
+    transition: transform .45s cubic-bezier(.3,1.3,.4,1), opacity .3s;
+  }
+  .fancard .sigil {
+    width: 38px; height: 38px; border: 1.5px solid #d8b45c; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; color: #d8b45c; font-size: 17px;
+  }
+  .fancard.drawn { opacity: 0; pointer-events: none; }
+  #fanmsg { text-align: center; font-size: 13px; color: #8b93ad; margin-top: 2px; min-height: 20px; }
+  #actions { display: flex; gap: 10px; margin-top: 10px; width: 100%; }
+  #shuffle {
+    flex: 1; min-height: 50px; border-radius: 12px; border: 1.5px solid #d8b45c;
+    background: transparent; color: #d8b45c; font-size: 16px; font-family: inherit; font-weight: 600;
+    touch-action: manipulation; cursor: pointer;
+  }
+  #shuffle:active { background: rgba(216,180,92,.12); }
+  #shuffle:disabled { opacity: .35; }
+  .links { margin-top: 16px; text-align: center; font-size: 14px; color: #b9c0d4; }
+  .links a { color: #d8b45c; }
+  footer { margin-top: 20px; text-align: center; font-size: 14px; }
+  footer a { color: #b9c0d4; text-decoration: none; border-bottom: 1px solid #4a5578; padding-bottom: 2px; }
+  #scrim { position: fixed; inset: 0; background: rgba(8,12,24,.7); opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 20; }
+  #scrim.show { opacity: 1; pointer-events: auto; }
+  #sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 21;
+    background: #f4ecd8; color: #2a2415; border-radius: 18px 18px 0 0;
+    padding: 20px 22px calc(24px + env(safe-area-inset-bottom));
+    transform: translateY(110%); transition: transform .32s cubic-bezier(.2,.9,.25,1.1);
+    max-width: 480px; margin: 0 auto; border-top: 3px solid #d8b45c;
+  }
+  #sheet.show { transform: translateY(0); }
+  #sheet .pos { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: #8a6f3f; font-weight: 700; }
+  #sheet h2 { margin: 4px 0 8px; font-size: 22px; }
+  #sheet p { font-size: 16px; line-height: 1.65; margin: 0 0 16px; }
+  #sheetClose { width: 100%; min-height: 50px; border-radius: 12px; border: none; background: #101828; color: #ece3cc; font-size: 16px; font-family: inherit; touch-action: manipulation; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>the reading</h1>
+    <div class="sub">past &middot; present &middot; future</div>
+    <p>Draw three cards from the deck. Each one is a true thing about the guy who built this page. No refunds on fortunes.</p>
+  </header>
+
+  <div id="spread">
+    <div class="slot" data-pos="0"><span class="num">I</span>past</div>
+    <div class="slot" data-pos="1"><span class="num">II</span>present</div>
+    <div class="slot" data-pos="2"><span class="num">III</span>future</div>
+  </div>
+
+  <div id="fanwrap"><div id="fan"></div></div>
+  <div id="fanmsg">drag the top card up into a slot</div>
+
+  <div id="actions">
+    <button id="shuffle">reshuffle the deck</button>
+  </div>
+
+  <p class="links">home base: <a href="https://lukezhang.si/">lukezhang.si</a> &middot; all the projects: <a href="https://projects.lukezhang.si/">projects.lukezhang.si</a></p>
+  <footer><a href="../">all 40 ways to say hi</a></footer>
+</div>
+
+<div id="scrim"></div>
+<div id="sheet" role="dialog" aria-modal="true">
+  <div class="pos" id="sheetPos"></div>
+  <h2 id="sheetTitle"></h2>
+  <p id="sheetBody"></p>
+  <button id="sheetClose">back to the spread</button>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var CARDS = [
+    { n: "the builder", s: "B", short: "ships before it is perfect.", long: "The Builder does not wait for permission or perfect. He puts the thing on the internet and fixes it in public. Ten apps, one blog, zero unshipped drafts. The motto is not move fast. It is just move." },
+    { n: "the cat dad", s: "C", short: "ruled by a small furry king.", long: "The Cat Dad's schedule is a suggestion the cat has not approved. Every photo has a cat in it. Every lap is occupied. He would not have it any other way, and the cat knows it." },
+    { n: "the feast", s: "F", short: "dumplings are a food group.", long: "The Feast appears wherever dumplings are folded or tacos are ranked. He keeps a mental leaderboard of every taco truck in a twenty mile radius. It is rigorous. It is also correct." },
+    { n: "high agency", s: "A", short: "the jail cell has a phone.", long: "High Agency means there is always a move. No adults are coming to fix it, physics is the only real constraint, and the phone call gets made. He read the essay and then lived it." },
+    { n: "the shipwright", s: "S", short: "ten hulls in the water.", long: "The Shipwright builds boats and launches them: card games, chess clocks, food truck finders, survey tools, visual explainers. Each one handmade. Each one actually floats." },
+    { n: "the co-op partner", s: "P", short: "player two, forever.", long: "The Co-op Partner plays every game with his wife, plans every date night, and loses at rummy with grace. Mostly. Some nights the grace is aspirational." },
+    { n: "the pilgrim", s: "R", short: "sunday rhythm, weekday grace.", long: "The Pilgrim keeps the quiet chapter underneath everything else. Church on Sunday, gratitude before dumplings. The foundation the whole spread stands on." },
+    { n: "the grinder", s: "G", short: "robinhood by day, weirder by night.", long: "The Grinder does the day job well and then builds stranger things after dinner. Rest is scheduled. Shipping is not optional. Sleep is negotiated with the cat." },
+    { n: "the student", s: "T", short: "pinyin, no tone marks, no fear.", long: "The Student is learning Chinese one plain-letter pinyin at a time. Tone marks are a future problem. Showing up daily is the whole method, and it works." },
+    { n: "the taste tester", s: "M", short: "simple but clever, or it dies.", long: "The Taste Tester kills darlings for a living. If it is not simple and it is not clever, it does not ship. Memeable is a compliment. Clownish gets vetoed." },
+    { n: "the archivist", s: "K", short: "everything gets a decision doc.", long: "The Archivist writes it down: the choice, the reason, the date. Future him will forget, so present him leaves notes. This page is one of the notes." },
+    { n: "the night owl", s: "N", short: "best ideas after 11pm.", long: "The Night Owl does his best building when the house is quiet and the cat is asleep on the keyboard. Commits at 1am. Regrets nothing. Tests in the morning." }
+  ];
+  var POSITIONS = ["the past", "the present", "the future"];
+  var POS_LINE = [
+    "where it started.",
+    "where it is.",
+    "where it is going. probably."
+  ];
+
+  var fan = document.getElementById("fan");
+  var fanmsg = document.getElementById("fanmsg");
+  var slots = Array.prototype.slice.call(document.querySelectorAll(".slot"));
+  var shuffleBtn = document.getElementById("shuffle");
+  var deck = [], drawn = [null, null, null], fanCards = [];
+
+  function shuffled() {
+    var a = CARDS.slice(), out = [];
+    while (a.length) out.push(a.splice(Math.floor(Math.random() * a.length), 1)[0]);
+    return out;
+  }
+
+  /* The fan is a real circular arc: each card sits on a circle of radius R
+     centered below the wrap, rotated tangent to the arc. Dragging the top
+     card draws it; the draw is an honest pop() off a Fisher-Yates deck. */
+  var FAN_R = 340, FAN_CY = 400, FAN_SPREAD = 0.12, FAN_SHOW = 7;
+  function fanPos(i, n) {
+    var wrapW = document.getElementById("fanwrap").clientWidth || 390;
+    var a = (i - (n - 1) / 2) * FAN_SPREAD;
+    return {
+      x: wrapW / 2 + FAN_R * Math.sin(a) - 52,
+      y: FAN_CY - FAN_R * Math.cos(a),
+      rot: a * 180 / Math.PI
+    };
+  }
+  function layFan(animate) {
+    var n = fanCards.length;
+    fanCards.forEach(function (c, i) {
+      var fp = fanPos(i, n);
+      c.dataset.i = i;
+      c.dataset.rot = fp.rot;
+      if (animate === false) c.style.transition = "none";
+      else c.style.transition = "left .45s cubic-bezier(.3,1.3,.4,1), top .45s cubic-bezier(.3,1.3,.4,1), transform .45s cubic-bezier(.3,1.3,.4,1)";
+      c.style.left = fp.x + "px";
+      c.style.top = fp.y + "px";
+      c.style.transform = "rotate(" + fp.rot + "deg)";
+      c.style.zIndex = i;
+    });
+  }
+
+  function deal() {
+    fan.innerHTML = "";
+    fanCards = [];
+    deck = shuffled();
+    drawn = [null, null, null];
+    slots.forEach(function (sl, i) {
+      sl.innerHTML = '<span class="num">' + ["I", "II", "III"][i] + "</span>" + ["past", "present", "future"][i];
+    });
+    /* visible fan = top of the deck; the last rendered card is the top card */
+    var vis = deck.slice(-FAN_SHOW);
+    vis.forEach(function (card, i) {
+      var c = document.createElement("div");
+      c.className = "fancard";
+      c.innerHTML = '<div class="sigil">' + card.s + '</div><div style="font-size:9px;letter-spacing:3px;color:rgba(216,180,92,.7)">LUKE</div>';
+      fan.appendChild(c);
+      fanCards.push(c);
+    });
+    layFan(false);
+    attachDrag(fanCards[fanCards.length - 1]);
+    fanmsg.textContent = deck.length + " cards in the deck. drag the top card up into a slot.";
+    shuffleBtn.disabled = false;
+  }
+
+  function attachDrag(c) {
+    if (!c || c.dataset.bound) return;
+    c.dataset.bound = "1";
+    var sx = 0, sy = 0, active = false, dx = 0, dy = 0, bx = 0, by = 0, brot = 0;
+    c.addEventListener("pointerdown", function (e) {
+      active = true; sx = e.clientX; sy = e.clientY; dx = 0; dy = 0;
+      bx = parseFloat(c.style.left); by = parseFloat(c.style.top);
+      brot = parseFloat(c.dataset.rot || "0");
+      c.setPointerCapture(e.pointerId);
+      c.style.transition = "none";
+      c.style.zIndex = 50;
+    });
+    c.addEventListener("pointermove", function (e) {
+      if (!active) return;
+      dx = e.clientX - sx; dy = e.clientY - sy;
+      c.style.left = (bx + dx) + "px";
+      c.style.top = (by + dy) + "px";
+      c.style.transform = "rotate(" + (brot + dx * 0.05) + "deg)";
+    });
+    function up(e) {
+      if (!active) return;
+      active = false;
+      try { c.releasePointerCapture(e.pointerId); } catch (err) {}
+      var r = c.getBoundingClientRect();
+      var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      var best = -1, bd = 1e9;
+      slots.forEach(function (sl, i) {
+        if (drawn[i]) return;
+        var sr = sl.getBoundingClientRect();
+        var d = Math.hypot(sr.left + sr.width / 2 - cx, sr.top + sr.height / 2 - cy);
+        if (d < bd) { bd = d; best = i; }
+      });
+      if (best >= 0 && bd < 220 && dy < -30) {
+        placeCard(best);
+      } else {
+        var fp = fanPos(parseInt(c.dataset.i, 10), fanCards.length);
+        c.dataset.rot = fp.rot;
+        c.style.transition = "";
+        c.style.left = fp.x + "px";
+        c.style.top = fp.y + "px";
+        c.style.transform = "rotate(" + fp.rot + "deg)";
+        c.style.zIndex = c.dataset.i;
+      }
+    }
+    c.addEventListener("pointerup", up);
+    c.addEventListener("pointercancel", up);
+  }
+
+  function placeCard(pos) {
+    var card = deck.pop(); /* the visible top card, honestly */
+    drawn[pos] = card;
+    var sl = slots[pos];
+    sl.innerHTML = "";
+    var el = document.createElement("div");
+    el.className = "card";
+    el.innerHTML = '<div class="face back"><div class="sigil">' + card.s + '</div><div class="tiny">tap to reveal</div></div>'
+      + '<div class="face front"><div class="art">' + card.s + '</div><h3>' + card.n + '</h3>'
+      + '<div class="short">' + card.short + '</div><div class="tapmore">tap for the full reading</div></div>';
+    sl.appendChild(el);
+    el.style.transform = "scale(.6)";
+    el.style.transition = "none";
+    requestAnimationFrame(function () {
+      el.style.transition = "transform .45s cubic-bezier(.3,1.3,.4,1)";
+      el.style.transform = "";
+      setTimeout(function () { el.style.transition = ""; }, 500);
+    });
+    el.addEventListener("click", function () {
+      if (!el.classList.contains("flipped")) { el.classList.add("flipped"); return; }
+      openSheet(pos, card);
+    });
+    var top = fanCards.pop();
+    if (top) { top.classList.add("drawn"); setTimeout(function () { top.remove(); }, 350); }
+    layFan(true);
+    var next = fanCards[fanCards.length - 1];
+    if (next && deck.length > 0) {
+      next.querySelector(".sigil").textContent = deck[deck.length - 1].s;
+      var fp = fanPos(fanCards.length - 1, fanCards.length);
+      next.dataset.rot = fp.rot;
+      attachDrag(next);
+    }
+    var left = 3 - drawn.filter(Boolean).length;
+    fanmsg.textContent = left === 0
+      ? "the spread is complete. tap a card to flip it, tap again for the full reading."
+      : left + (left === 1 ? " card" : " cards") + " left to draw.";
+  }
+
+  shuffleBtn.addEventListener("click", function () {
+    /* fan animation: cards scatter then redeal */
+    fanCards.forEach(function (c, i) {
+      c.style.transition = "transform .3s ease";
+      c.style.transform = "rotate(" + (Math.random() * 40 - 20) + "deg) translate(" + (Math.random() * 120 - 60) + "px," + (Math.random() * 60 - 30) + "px)";
+    });
+    setTimeout(deal, 320);
+  });
+
+  /* long reading sheet */
+  var scrim = document.getElementById("scrim"), sheet = document.getElementById("sheet");
+  function openSheet(pos, card) {
+    document.getElementById("sheetPos").textContent = POSITIONS[pos] + ", " + POS_LINE[pos];
+    document.getElementById("sheetTitle").textContent = card.n;
+    document.getElementById("sheetBody").textContent = card.long;
+    scrim.classList.add("show"); sheet.classList.add("show");
+  }
+  function hideSheet() { scrim.classList.remove("show"); sheet.classList.remove("show"); }
+  document.getElementById("sheetClose").addEventListener("click", hideSheet);
+  scrim.addEventListener("click", hideSheet);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") hideSheet(); });
+
+  deal();
+})();
+</script>
+</body>
+</html>

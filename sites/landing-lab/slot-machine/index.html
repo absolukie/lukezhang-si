@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>lucky luke - slot machine</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Avenir Next", -apple-system, "Segoe UI", sans-serif;
+    background: #171310;
+    background-image: radial-gradient(ellipse 130% 70% at 50% -20%, #3a2c1e 0%, #171310 60%);
+    color: #f4ead6;
+    min-height: 100dvh;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 18px 14px 30px;
+  }
+  .wrap { width: 100%; max-width: 400px; display: flex; flex-direction: column; align-items: center; }
+  header { text-align: center; margin-bottom: 12px; }
+  header h1 { font-size: 24px; margin: 0; letter-spacing: 3px; text-transform: uppercase; color: #e8c96a; }
+  header p { margin: 8px 0 0; font-size: 14px; color: #c9b490; line-height: 1.5; }
+  header .hint { color: #8f7a5c; font-size: 12.5px; }
+  #machine {
+    width: 100%;
+    background: linear-gradient(165deg, #4a3826, #2b2013 55%, #3a2c1e);
+    border-radius: 22px;
+    border: 1px solid #6b532f;
+    box-shadow: 0 20px 44px rgba(0,0,0,.6), inset 0 1px 0 rgba(232,201,106,.25);
+    padding: 18px 16px 14px;
+    position: relative;
+  }
+  #marquee {
+    text-align: center; font-size: 13px; letter-spacing: 4px; color: #e8c96a;
+    border: 1px solid #6b532f; border-radius: 10px; padding: 8px 6px; margin-bottom: 14px;
+    background: rgba(0,0,0,.25);
+  }
+  #marquee .win { color: #fff; letter-spacing: 1px; font-size: 14px; min-height: 20px; display: block; }
+  #reels { display: flex; gap: 10px; justify-content: center; }
+  .reel {
+    flex: 1; height: 168px; border-radius: 12px; overflow: hidden; position: relative;
+    background: #fbf6ea; color: #2b2013;
+    box-shadow: inset 0 6px 12px rgba(0,0,0,.28), inset 0 -6px 12px rgba(0,0,0,.28);
+    border: 2px solid #8a6f3f;
+    touch-action: manipulation; cursor: pointer;
+  }
+  .strip { position: absolute; top: 0; left: 0; right: 0; }
+  .sym {
+    height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px; font-weight: 700; font-size: 13.5px; letter-spacing: 1px;
+    border-bottom: 1px dashed rgba(43,32,19,.15);
+  }
+  .sym svg { width: 26px; height: 26px; }
+  .reel::after {
+    content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 56px; margin-top: -28px;
+    border-top: 2px solid #d4553a; border-bottom: 2px solid #d4553a;
+    pointer-events: none; background: rgba(212,85,58,.06);
+  }
+  #nudgeHint { text-align: center; font-size: 12px; color: #8f7a5c; margin: 8px 0 0; }
+  #paytable {
+    display: flex; flex-wrap: wrap; gap: 4px 10px; justify-content: center;
+    margin: 8px 4px 0; font-size: 11px; letter-spacing: 1px; color: #c9b490;
+  }
+  #paytable span b { color: #e8c96a; font-weight: 700; }
+  #par { text-align: center; font-size: 10.5px; color: #8f7a5c; margin: 6px 0 0; letter-spacing: .5px; }
+  #controls { display: flex; gap: 10px; margin-top: 14px; align-items: stretch; }
+  #stats { flex: 1; display: flex; gap: 8px; }
+  .stat {
+    flex: 1; background: rgba(0,0,0,.3); border: 1px solid #6b532f; border-radius: 10px;
+    padding: 8px 4px; text-align: center;
+  }
+  .stat .k { font-size: 10px; letter-spacing: 2px; color: #8f7a5c; text-transform: uppercase; }
+  .stat .v { font-size: 20px; font-weight: 700; color: #e8c96a; }
+  #bets { display: flex; gap: 8px; margin-top: 10px; }
+  .bet {
+    flex: 1; min-height: 48px; border-radius: 12px; border: 1.5px solid #6b532f;
+    background: transparent; color: #f4ead6; font-size: 15px; font-family: inherit; font-weight: 600;
+    touch-action: manipulation; cursor: pointer;
+  }
+  .bet.on { background: #e8c96a; color: #2b2013; border-color: #e8c96a; }
+  #leverZone {
+    position: absolute; right: -6px; top: 60px; width: 64px; height: 230px;
+    touch-action: none; cursor: grab;
+  }
+  #track { position: absolute; left: 26px; top: 0; bottom: 0; width: 12px; border-radius: 6px; background: rgba(0,0,0,.4); border: 1px solid #6b532f; }
+  #knob {
+    position: absolute; left: 12px; top: 6px; width: 40px; height: 40px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #f0d68a, #b98d2e 70%, #7a5a1a);
+    box-shadow: 0 4px 10px rgba(0,0,0,.5);
+  }
+  #rod { position: absolute; left: 30px; top: 40px; width: 4px; background: linear-gradient(180deg,#b98d2e,#7a5a1a); }
+  #tray {
+    margin-top: 14px; width: 100%; min-height: 64px; border-radius: 12px;
+    background: linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.15));
+    border: 1px dashed #6b532f; display: flex; align-items: center; justify-content: center;
+    gap: 8px; color: #8f7a5c; font-size: 14px; touch-action: manipulation; cursor: pointer;
+    position: relative; overflow: hidden;
+  }
+  #tray.full { color: #e8c96a; border-style: solid; }
+  .coin {
+    position: absolute; width: 22px; height: 22px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #f6dd8e, #c99f3a 75%);
+    box-shadow: 0 2px 5px rgba(0,0,0,.5);
+    animation: clink .7s ease forwards;
+  }
+  @keyframes clink {
+    0% { transform: translateY(-70px) rotate(0); opacity: 0; }
+    20% { opacity: 1; }
+    70% { transform: translateY(4px) rotate(300deg); }
+    100% { transform: translateY(0) rotate(360deg); opacity: 1; }
+  }
+  .links { margin-top: 16px; text-align: center; font-size: 14px; color: #c9b490; }
+  .links a { color: #e8c96a; }
+  footer { margin-top: 20px; text-align: center; font-size: 14px; }
+  footer a { color: #c9b490; text-decoration: none; border-bottom: 1px solid #6b532f; padding-bottom: 2px; }
+  #result { min-height: 44px; text-align: center; margin-top: 10px; font-size: 15px; color: #f4ead6; line-height: 1.5; padding: 0 6px; }
+  #result strong { color: #e8c96a; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>lucky luke</h1>
+    <p>Pull the lever. Three reels of him. Every combo pays out in personality.<br>
+    <span class="hint">Drag the brass knob down, or tap a reel to nudge it. Sound on for the clinks.</span></p>
+  </header>
+
+  <div id="machine">
+    <div id="marquee">LUKE &middot; EST. SHIPPED <span class="win" id="marqueeLine"></span></div>
+    <div id="reels">
+      <div class="reel" id="reel0"><div class="strip"></div></div>
+      <div class="reel" id="reel1"><div class="strip"></div></div>
+      <div class="reel" id="reel2"><div class="strip"></div></div>
+    </div>
+    <p id="nudgeHint">tap a reel to nudge it one step, costs 1 coin</p>
+    <div id="paytable">
+      <span>SHIP <b>30</b></span><span>BUILD <b>24</b></span><span>CAT <b>21</b></span><span>EAT <b>18</b></span><span>PRAY <b>15</b></span><span>PLAY <b>11</b></span>
+    </div>
+    <div id="par">par 96.8% &middot; every symbol equally likely &middot; pair gets your bet back</div>
+
+    <div id="controls">
+      <div id="stats">
+        <div class="stat"><div class="k">coins</div><div class="v" id="coins">25</div></div>
+        <div class="stat"><div class="k">bet</div><div class="v" id="betV">1</div></div>
+      </div>
+    </div>
+    <div id="bets">
+      <button class="bet on" data-b="1">bet 1</button>
+      <button class="bet" data-b="5">bet 5</button>
+      <button class="bet" data-b="10">max</button>
+    </div>
+    <div id="result"></div>
+    <div id="tray">coin tray: empty. winnings land here.</div>
+
+    <div id="leverZone" aria-label="pull lever">
+      <div id="track"></div>
+      <div id="rod"></div>
+      <div id="knob"></div>
+    </div>
+  </div>
+
+  <p class="links">home base: <a href="https://lukezhang.si/">lukezhang.si</a> &middot; all the projects: <a href="https://projects.lukezhang.si/">projects.lukezhang.si</a></p>
+  <footer><a href="../">all 40 ways to say hi</a></footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  /* ---------- symbols ---------- */
+  function icon(paths) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="#8a6f3f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + paths + "</svg>";
+  }
+  var SYMS = [
+    { w: "SHIP",  pay: 30, i: icon("<path d='M3 17 l18 0 M12 17 v-8 M12 9 l-6 -4 M12 9 l6 -4 M5 20 c2 2 4 2 6 0 c2 -2 4 -2 6 0'/><circle cx='12' cy='13' r='1.4' fill='#8a6f3f'/>") },
+    { w: "BUILD", pay: 24,  i: icon("<rect x='4' y='8' width='9' height='6' rx='1'/><path d='M8 14 L17 22 M14 19 l3 3'/>") },
+    { w: "CAT",   pay: 21,  i: icon("<path d='M5 10 L4 4 L10 6 M19 10 L20 4 L14 6'/><circle cx='12' cy='14' r='7'/>") },
+    { w: "EAT",   pay: 18,  i: icon("<path d='M4 15 C4 10 8 6 12 6 C16 6 20 10 20 15 Z'/><path d='M9 9 l1 2 M13 8 l1 2 M17 9 l1 2'/>") },
+    { w: "PRAY",  pay: 15,  i: icon("<path d='M12 4 v16 M7 9 h10'/>") },
+    { w: "PLAY",  pay: 11,  i: icon("<rect x='5' y='5' width='14' height='14' rx='3'/><circle cx='9.5' cy='9.5' r='1' fill='#8a6f3f'/><circle cx='14.5' cy='14.5' r='1' fill='#8a6f3f'/><circle cx='14.5' cy='9.5' r='1' fill='#8a6f3f'/><circle cx='9.5' cy='14.5' r='1' fill='#8a6f3f'/>") }
+  ];
+  var N = SYMS.length, SYM_H = 56;
+
+  var PAYOFF = {
+    "SHIP": "ships. it is not finished, it is shipped, there is a difference and he knows it.",
+    "BUILD": "builds ten things before breakfast. nine of them are apps.",
+    "CAT": "cat dad. the cat approves this combo by sitting on the machine.",
+    "EAT": "dumplings first, questions later. the taco truck leaderboard updates itself.",
+    "PRAY": "sunday rhythm, weekday grace. the steady reel.",
+    "PLAY": "game night is sacred. losing gracefully is still losing."
+  };
+
+  /* ---------- audio: all synthesized ---------- */
+  var AC = null;
+  function ac() {
+    if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { AC = null; } }
+    if (AC && AC.state === "suspended") AC.resume();
+    return AC;
+  }
+  function tone(freq, dur, type, gain, when) {
+    var c = ac(); if (!c) return;
+    var t = c.currentTime + (when || 0);
+    var o = c.createOscillator(), g = c.createGain();
+    o.type = type || "sine"; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain || 0.12, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(c.destination);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+  function clickSnd() { tone(1900, 0.05, "square", 0.05); }
+  function tickSnd() { tone(700 + Math.random() * 200, 0.04, "square", 0.035); }
+  function clinkSnd() { tone(3400, 0.09, "sine", 0.08); tone(5200, 0.12, "sine", 0.06, 0.05); }
+  function winSnd(big) {
+    var seq = big ? [523, 659, 784, 1046, 1318] : [523, 659, 784];
+    seq.forEach(function (f, i) { tone(f, 0.16, "triangle", 0.12, i * 0.09); });
+  }
+  function leverSnd() { tone(220, 0.18, "sawtooth", 0.05); tone(140, 0.22, "sawtooth", 0.05, 0.08); }
+
+  /* ---------- state ---------- */
+  var coins = 25, bet = 1, spinning = false;
+  var reels = [];
+  var coinsEl = document.getElementById("coins");
+  var betEl = document.getElementById("betV");
+  var resultEl = document.getElementById("result");
+  var marqueeEl = document.getElementById("marqueeLine");
+  var tray = document.getElementById("tray");
+
+  function renderStats() { coinsEl.textContent = coins; betEl.textContent = bet; }
+
+  /* build strips: repeat symbols 4x for spin length */
+  for (var r = 0; r < 3; r++) {
+    (function (r) {
+      var el = document.getElementById("reel" + r);
+      var strip = el.querySelector(".strip");
+      var html = "";
+      for (var k = 0; k < 4; k++) {
+        SYMS.forEach(function (s) { html += '<div class="sym">' + s.i + "<span>" + s.w + "</span></div>"; });
+      }
+      strip.innerHTML = html;
+      var pos = r * 2; /* starting offset */
+      function render() { strip.style.transform = "translateY(" + (-pos * SYM_H) + "px)"; }
+      render();
+      reels.push({
+        pos: pos, render: render,
+        el: el, strip: strip,
+        value: function () { return SYMS[((Math.round(pos) % N) + N) % N]; }
+      });
+      /* tap to nudge: interaction 2 */
+      el.addEventListener("click", function () {
+        if (spinning) return;
+        if (coins < 1) { say("not enough coins for a nudge. pull the lever, fortune favors the bold."); return; }
+        coins--; renderStats(); clickSnd();
+        reels[r].pos = (reels[r].pos + 1) % (N * 4);
+        strip.style.transition = "transform .18s ease";
+        render();
+        setTimeout(function () { strip.style.transition = ""; }, 200);
+        marqueeEl.textContent = "nudged: " + reels[r].value().w;
+      });
+    })(r);
+  }
+
+  function say(html) { resultEl.innerHTML = html; }
+
+  function spin() {
+    if (spinning) return;
+    if (coins < bet) { say("out of coins. the house extends infinite credit: <strong>coins refilled</strong>."); coins = 25; renderStats(); return; }
+    coins -= bet; renderStats(); spinning = true;
+    say("spinning...");
+    leverSnd();
+    marqueeEl.textContent = "";
+    var order = [0, 1, 2];
+    var finalIdx = order.map(function () { return Math.floor(Math.random() * N); });
+    /* PAR SHEET, honest math, no rigging:
+       6 symbols, uniform random stops: P(symbol) = 1/6 per reel.
+       P(3 of a kind of symbol i) = (1/6)^3 = 1/216 each.
+       P(exactly one pair) = 6 * 3*(1/6)^2*(5/6) = 90/216.
+       EV per coin bet = (30+24+21+18+15+11)/216 + (90/216)*1 = 209/216 = 0.9676.
+       Par: 96.8%. Every spin is an independent uniform draw. */
+    order.forEach(function (r, k) {
+      var reel = reels[r];
+      var stopTime = 1100 + k * 650;
+      var start = performance.now();
+      var dist = 6 * N + ((finalIdx[r] - (Math.round(reel.pos) % N) + N) % N);
+      var tick = 0;
+      function frame2(now) {
+        var p = Math.min(1, (now - start) / stopTime);
+        var eased = 1 - Math.pow(1 - p, 3);
+        var cur = Math.floor(eased * dist);
+        if (cur > tick) { tick = cur; if (p < 0.9) tickSnd(); }
+        reel.strip.style.transform = "translateY(" + (-(reel.pos * SYM_H) - eased * dist * SYM_H) + "px)";
+        if (p < 1) { requestAnimationFrame(frame2); return; }
+        reel.pos = (reel.pos + dist) % (N * 4);
+        reel.render();
+        clickSnd();
+        if (k === 2) finish();
+      }
+      requestAnimationFrame(frame2);
+    });
+  }
+
+  function finish() {
+    spinning = false;
+    var v = reels.map(function (r) { return r.value(); });
+    var names = v.map(function (s) { return s.w; });
+    marqueeEl.textContent = names.join(" · ");
+    var win = 0, line = "";
+    if (names[0] === names[1] && names[1] === names[2]) {
+      win = bet * v[0].pay;
+      line = "<strong>JACKPOT. " + names[0] + " x3 pays " + win + " coins.</strong> " + PAYOFF[names[0]];
+      winSnd(true);
+    } else if (names[0] === names[1] || names[1] === names[2] || names[0] === names[2]) {
+      win = bet;
+      line = "<strong>pair. your " + bet + " coin" + (bet > 1 ? "s" : "") + " back.</strong> no harm done.";
+      winSnd(false);
+    } else {
+      line = "no match. the reels read: " + names.join(", ").toLowerCase() + ". a perfectly fine human.";
+    }
+    say(line);
+    if (win > 0) { coins += win; dropCoins(Math.min(8, 2 + Math.floor(win / 4))); }
+    renderStats();
+  }
+
+  function dropCoins(n) {
+    tray.classList.add("full");
+    tray.innerHTML = "coin tray: <strong>+" + n + " coins</strong>, tap to collect";
+    for (var i = 0; i < n; i++) {
+      (function (i) {
+        setTimeout(function () {
+          var c = document.createElement("div");
+          c.className = "coin";
+          c.style.left = (8 + Math.random() * 80) + "%";
+          c.style.top = (18 + Math.random() * 30) + "%";
+          tray.appendChild(c);
+          clinkSnd();
+        }, i * 90);
+      })(i);
+    }
+  }
+  tray.addEventListener("click", function () {
+    var cs = tray.querySelectorAll(".coin");
+    if (!cs.length) { say("tray is empty. the lever awaits."); return; }
+    cs.forEach(function (c) { c.remove(); });
+    tray.classList.remove("full");
+    tray.textContent = "coin tray: empty. winnings land here.";
+    clinkSnd();
+    say("collected. balance: <strong>" + coins + "</strong> coins.");
+  });
+
+  /* bets: interaction 3 */
+  var betBtns = document.querySelectorAll(".bet");
+  betBtns.forEach(function (b) {
+    b.addEventListener("click", function () {
+      betBtns.forEach(function (x) { x.classList.remove("on"); });
+      b.classList.add("on");
+      bet = parseInt(b.getAttribute("data-b"), 10);
+      renderStats(); clickSnd();
+    });
+  });
+
+  /* lever: interaction 1, drag down with spring */
+  var zone = document.getElementById("leverZone");
+  var knob = document.getElementById("knob");
+  var rod = document.getElementById("rod");
+  var TRAVEL = 150, pulling = false, py = 0, sy0 = 0, fired = false;
+  function leverRender(t) {
+    knob.style.top = (6 + t) + "px";
+    rod.style.top = (40 + t) + "px";
+    rod.style.height = t + "px";
+  }
+  zone.addEventListener("pointerdown", function (e) {
+    if (spinning) return;
+    pulling = true; fired = false; sy0 = e.clientY; py = 0;
+    zone.setPointerCapture(e.pointerId);
+    knob.style.transition = "";
+  });
+  zone.addEventListener("pointermove", function (e) {
+    if (!pulling) return;
+    var t = e.clientY - sy0;
+    if (t < 0) t = t * 0.2;                    /* resistance upward */
+    if (t > TRAVEL) t = TRAVEL + (t - TRAVEL) * 0.2; /* resistance past bottom */
+    py = t; leverRender(py);
+  });
+  function leverUp(e) {
+    if (!pulling) return;
+    pulling = false;
+    try { zone.releasePointerCapture(e.pointerId); } catch (err) {}
+    knob.style.transition = "top .45s cubic-bezier(.2,1.6,.4,1)";
+    rod.style.transition = "top .45s cubic-bezier(.2,1.6,.4,1), height .45s cubic-bezier(.2,1.6,.4,1)";
+    leverRender(0);
+    setTimeout(function () { knob.style.transition = ""; rod.style.transition = ""; }, 480);
+    if (py > TRAVEL * 0.6 && !fired) { fired = true; setTimeout(spin, 180); }
+  }
+  zone.addEventListener("pointerup", leverUp);
+  zone.addEventListener("pointercancel", leverUp);
+
+  renderStats();
+})();
+</script>
+</body>
+</html>

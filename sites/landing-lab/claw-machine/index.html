@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>claw machine | Luke Zhang</title>
+<style>
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;
+    background:linear-gradient(180deg,#f7eef4 0%,#f3e4ef 55%,#ead7ea 100%);
+    color:#4a3b52; min-height:100dvh; display:flex; flex-direction:column; align-items:center;
+    padding:18px 12px 40px; -webkit-font-smoothing:antialiased;
+  }
+  button{touch-action:manipulation;}
+  .wrap{width:100%; max-width:430px;}
+  .kicker{font-size:11px; letter-spacing:.32em; text-transform:uppercase; color:#a58bb0; text-align:center; margin-bottom:6px;}
+  h1{font-size:26px; font-weight:700; text-align:center; letter-spacing:-.02em; margin-bottom:2px;}
+  .sub{text-align:center; font-size:14px; color:#a58bb0; margin-bottom:12px;}
+  .machine{
+    background:#fff; border-radius:24px; padding:14px;
+    box-shadow:0 18px 44px rgba(150,110,170,.22), inset 0 2px 0 #fff;
+    border:1px solid #ecdcef;
+  }
+  .marquee{
+    text-align:center; font-weight:800; letter-spacing:.18em; font-size:13px; color:#b76fa0;
+    background:linear-gradient(90deg,#fdf3f8,#fbe7f3,#fdf3f8); border-radius:12px; padding:10px; margin-bottom:10px;
+    border:1px solid #f2d5e8;
+  }
+  .case{
+    position:relative; height:300px; border-radius:16px; overflow:hidden;
+    background:linear-gradient(180deg,#fdf7fb 0%,#f7e9f3 70%,#f3dded 100%);
+    border:1px solid #ecdcef;
+  }
+  .case::before{
+    content:""; position:absolute; inset:0; z-index:6; pointer-events:none;
+    background:linear-gradient(115deg, rgba(255,255,255,.35) 0%, rgba(255,255,255,.05) 22%, transparent 40%);
+  }
+  .light{position:absolute; top:0; left:0; right:0; height:44px;
+    background:radial-gradient(ellipse at 50% -10px, rgba(255,240,200,.9), transparent 70%); z-index:1;}
+  .rail{position:absolute; top:14px; left:6%; right:6%; height:10px; background:#d9bcd8; border-radius:6px; z-index:2;
+    box-shadow:inset 0 2px 3px rgba(120,70,120,.3);}
+  .clawwrap{position:absolute; top:14px; z-index:3; width:64px; margin-left:-32px; will-change:left,transform; transform-origin:50% 0;}
+  .cable{width:4px; height:60px; background:#9c7ba3; margin:0 auto; border-radius:2px;}
+  .claw{position:relative; width:64px; height:56px; margin-top:-2px; transform-origin:50% 0;}
+  .claw .arm{position:absolute; top:0; width:10px; height:34px; background:linear-gradient(180deg,#c99ac0,#a5769f); border-radius:6px;}
+  .claw .arm.l{left:8px; transform:rotate(14deg); transform-origin:top center;}
+  .claw .arm.r{right:8px; transform:rotate(-14deg); transform-origin:top center;}
+  .claw .arm.m{left:27px;}
+  .claw.open .arm.l{transform:rotate(34deg);}
+  .claw.open .arm.r{transform:rotate(-34deg);}
+  .claw .arm{transition:transform .35s ease;}
+
+  .plushie{
+    position:absolute; bottom:14px; width:50px; height:50px; z-index:2; cursor:pointer;
+    transition:transform .2s ease; touch-action:manipulation;
+  }
+  .plushie .body{position:absolute; inset:6px 5px 0; border-radius:46% 46% 44% 44%;}
+  .plushie .ear{position:absolute; top:0; width:14px; height:14px; border-radius:50%;}
+  .plushie .ear.l{left:9px;} .plushie .ear.r{right:9px;}
+  .plushie .face{position:absolute; left:0; right:0; top:23px; text-align:center;}
+  .plushie .eye{display:inline-block; width:6px; height:8px; background:#3a2b40; border-radius:50%; margin:0 4px;}
+  .plushie .mouth{display:block; width:10px; height:5px; border:2px solid #3a2b40; border-top:none; border-radius:0 0 10px 10px; margin:2px auto 0;}
+  .plushie .tag{position:absolute; bottom:-8px; left:50%; transform:translateX(-50%) rotate(-4deg);
+    background:#fff; border:1px solid #e5cfe3; font-size:7.5px; font-weight:700; padding:2px 5px; border-radius:6px; white-space:nowrap;}
+  .plushie.grabbed{z-index:5;}
+  .chute{
+    position:absolute; bottom:0; right:10px; width:76px; height:64px; z-index:2;
+    background:linear-gradient(180deg,#5b4a63,#3d3145); border-radius:12px 12px 0 0;
+    display:flex; align-items:center; justify-content:center; color:#f7eef4; font-size:10px; font-weight:700; letter-spacing:.1em;
+  }
+  .controls{display:flex; gap:12px; align-items:center; margin-top:12px;}
+  .joypad{
+    width:128px; height:128px; border-radius:50%; background:radial-gradient(circle at 50% 35%, #fdf3f8, #f0d9ea);
+    border:1px solid #e5cfe3; position:relative; touch-action:none; user-select:none; -webkit-user-select:none;
+    box-shadow:inset 0 3px 10px rgba(150,110,170,.18), 0 4px 10px rgba(150,110,170,.12); flex:none;
+  }
+  .nub{
+    position:absolute; left:50%; top:50%; width:56px; height:56px; margin:-28px 0 0 -28px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #e8a9cf, #c9719f 70%, #b25c8b);
+    box-shadow:0 4px 10px rgba(150,80,130,.4), inset 0 2px 3px rgba(255,255,255,.5);
+  }
+  .joy-label{position:absolute; bottom:-20px; left:0; right:0; text-align:center; font-size:10px; letter-spacing:.2em; color:#a58bb0;}
+  #dropBtn{
+    flex:1; min-height:64px; border:none; border-radius:18px; cursor:pointer;
+    background:linear-gradient(180deg,#e58bbd,#c9719f); color:#fff;
+    font-size:18px; font-weight:800; letter-spacing:.12em;
+    box-shadow:0 6px 0 #a24e7e, 0 10px 20px rgba(180,90,140,.35);
+  }
+  #dropBtn:active{transform:translateY(4px); box-shadow:0 2px 0 #a24e7e;}
+  #dropBtn:disabled{opacity:.5;}
+  .status{min-height:44px; text-align:center; font-size:14px; margin-top:10px; color:#7c6488; line-height:1.5;}
+  .shelf{margin-top:14px; background:#fff; border:1px solid #ecdcef; border-radius:16px; padding:12px 14px;}
+  .shelf h2{font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:#a58bb0; margin-bottom:8px;}
+  .shelf-row{display:flex; gap:10px; flex-wrap:wrap; min-height:52px; align-items:center;}
+  .shelf-empty{font-size:13px; color:#c4a9c9;}
+  .prize{
+    width:52px; height:52px; border-radius:14px; border:1px solid #e5cfe3; cursor:pointer; position:relative;
+    display:flex; align-items:center; justify-content:center; font-size:22px; touch-action:manipulation;
+  }
+  .prize svg{width:30px; height:30px;}
+  .card{
+    position:fixed; inset:0; z-index:40; display:none; align-items:center; justify-content:center; padding:20px;
+    background:rgba(60,40,65,.45); backdrop-filter:blur(3px);
+  }
+  .card.show{display:flex;}
+  .card-inner{background:#fff; border-radius:20px; padding:22px; max-width:330px; text-align:center; box-shadow:0 24px 60px rgba(0,0,0,.3);}
+  .card-inner h3{font-size:20px; margin-bottom:6px;}
+  .card-inner p{font-size:14px; line-height:1.55; color:#6d5a76; margin-bottom:14px;}
+  .card-inner a{display:inline-block; background:#c9719f; color:#fff; text-decoration:none; font-weight:700; font-size:15px;
+    padding:13px 26px; border-radius:12px; min-height:48px;}
+  .card-inner .close{display:block; margin:12px auto 0; background:none; border:none; color:#a58bb0; font-size:14px; padding:10px; min-height:44px; cursor:pointer;}
+  .foot{margin-top:22px; text-align:center; font-size:13px; color:#a58bb0;}
+  .foot a{color:#4a3b52; font-weight:600; text-decoration:none; border-bottom:1px solid #d9a9c8; padding:10px 4px; display:inline-block;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">Luke Zhang</div>
+  <h1>the project claw</h1>
+  <p class="sub">drag the claw, drop it, win my work. the claw is honest about its grip.</p>
+  <div class="machine">
+    <div class="marquee">LUKE'S PRIZE COUNTER</div>
+    <div class="case" id="case">
+      <div class="light"></div>
+      <div class="rail"></div>
+      <div class="clawwrap" id="clawWrap" style="left:50%">
+        <div class="cable" id="cable"></div>
+        <div class="claw open" id="claw">
+          <div class="arm l"></div><div class="arm m"></div><div class="arm r"></div>
+        </div>
+      </div>
+      <div class="chute">PRIZE<br>CHUTE</div>
+    </div>
+    <div class="controls">
+      <div>
+        <div class="joypad" id="joypad"><div class="nub" id="nub"></div></div>
+        <div class="joy-label">DRAG ME</div>
+      </div>
+      <button id="dropBtn">DROP</button>
+    </div>
+    <div class="status" id="status">pick your target. the claw believes in you, conditionally.</div>
+    <div class="shelf">
+      <h2>prize shelf</h2>
+      <div class="shelf-row" id="shelfRow"><span class="shelf-empty">nothing yet. the shelf is judging you.</span></div>
+    </div>
+  </div>
+  <div class="foot"><a href="../">all 40 ways to say hi</a></div>
+</div>
+<div class="card" id="card"><div class="card-inner">
+  <h3 id="cardTitle"></h3><p id="cardText"></p>
+  <a id="cardLink" href="https://projects.lukezhang.si/">see it live</a>
+  <button class="close" id="cardClose">put it back on the shelf</button>
+</div></div>
+
+<script>
+(function(){
+  "use strict";
+  var PROJECTS = [
+    {id:"rummy", short:"Rummy", name:"Liverpool Rummy", color:"#7fb069", dark:"#5a8a48", icon:"cards",
+     text:"The card game, rebuilt for phones. Real online rooms, zero setup. Shipping to both app stores.",
+     link:"https://projects.lukezhang.si/"},
+    {id:"clocked", short:"Clocked", name:"Get Clocked", color:"#e8a9cf", dark:"#b25c8b", icon:"clock",
+     text:"A time-tracking game that makes logging hours feel like play. Also headed to both app stores.",
+     link:"https://projects.lukezhang.si/"},
+    {id:"draw", short:"Draw", name:"Draw and Guess", color:"#8fb8de", dark:"#5d84ad", icon:"pencil",
+     text:"Built so my wife and I always have a game night ready. Pinyin guesses welcome, tone marks not required.",
+     link:"https://projects.lukezhang.si/"},
+    {id:"curbside", short:"Curbside", name:"Curbside", color:"#f2b134", dark:"#c07f1a", icon:"truck",
+     text:"Ordering for food trucks, minus the line chaos. First customer target: a real truck, real tacos.",
+     link:"https://projects.lukezhang.si/"},
+    {id:"peggie", short:"Peggie", name:"Peggie", color:"#b79ce0", dark:"#8663b8", icon:"peg",
+     text:"Surveys that feel like a game show. Tappable boards, instant results, zero boredom.",
+     link:"https://projects.lukezhang.si/"},
+    {id:"llm", short:"LLM", name:"How an LLM Works", color:"#6fc2b4", dark:"#478a7f", icon:"brain",
+     text:"An interactive explainer that teaches transformers like a storybook. Every post is a visualizer.",
+     link:"https://projects.lukezhang.si/"}
+  ];
+  var ICONS = {
+    cards:'<svg viewBox="0 0 24 24" fill="none" stroke="#3a2b40" stroke-width="2"><rect x="7" y="4" width="10" height="14" rx="2" fill="#fff"/><path d="M12 8l1.2 2.4L12 13l-1.2-2.6z" fill="#3a2b40"/></svg>',
+    clock:'<svg viewBox="0 0 24 24" fill="none" stroke="#3a2b40" stroke-width="2"><circle cx="12" cy="12" r="8" fill="#fff"/><path d="M12 8v4l3 2" stroke-linecap="round"/></svg>',
+    pencil:'<svg viewBox="0 0 24 24" fill="none" stroke="#3a2b40" stroke-width="2"><path d="M4 20l1-4L16 5l3 3L8 19z" fill="#fff" stroke-linejoin="round"/></svg>',
+    truck:'<svg viewBox="0 0 24 24" fill="none" stroke="#3a2b40" stroke-width="2"><rect x="3" y="7" width="11" height="8" rx="1" fill="#fff"/><path d="M14 10h4l3 3v2h-7z" fill="#fff"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg>',
+    peg:'<svg viewBox="0 0 24 24" fill="none" stroke="#3a2b40" stroke-width="2"><circle cx="12" cy="7" r="4" fill="#fff"/><path d="M12 11v9" stroke-linecap="round"/></svg>',
+    brain:'<svg viewBox="0 0 24 24" fill="none" stroke="#3a2b40" stroke-width="2"><path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-2 3 3 3 0 0 0 2 5 3 3 0 0 0 3 3c2 0 3-1 3-3a3 3 0 0 0 3-3 3 3 0 0 0-2-5 3 3 0 0 0-3-3c-1 0-2 1-2 1s-1-1-2-1z" fill="#fff" stroke-linejoin="round"/></svg>'
+  };
+  var caseEl = document.getElementById("case");
+  var clawWrap = document.getElementById("clawWrap");
+  var claw = document.getElementById("claw");
+  var cable = document.getElementById("cable");
+  var joypad = document.getElementById("joypad");
+  var nub = document.getElementById("nub");
+  var dropBtn = document.getElementById("dropBtn");
+  var status = document.getElementById("status");
+  var shelfRow = document.getElementById("shelfRow");
+  var card = document.getElementById("card");
+  var clawX = 50, busy = false, plushies = [];
+  /* Real pendulum: the claw hangs from the rail and swings when the pivot
+     accelerates. theta'' = -(g/L) sin(theta) - (a/L) cos(theta) - c*theta'.
+     L in px, g in px/s^2, so the period T = 2*pi*sqrt(L/g) is honest. */
+  var PEND = {th:0, om:0, L:120, g:2200, damp:0.9, px:0, pv:0, lastT:0, running:false};
+  function pivotPx(){ return caseEl.clientWidth * clawX / 100; }
+  function pendStart(){
+    if(PEND.running) return;
+    PEND.running = true; PEND.px = pivotPx(); PEND.pv = 0;
+    PEND.lastT = performance.now();
+    requestAnimationFrame(pendStep);
+  }
+  function pendStep(t){
+    if(!PEND.running) return;
+    var dt = Math.min(0.05, (t - PEND.lastT) / 1000); PEND.lastT = t;
+    var px = pivotPx();
+    var v = (px - PEND.px) / Math.max(dt, 1e-4);
+    var a = (v - PEND.pv) / Math.max(dt, 1e-4);
+    a = Math.max(-6000, Math.min(6000, a));
+    PEND.px = px; PEND.pv = v;
+    var acc = -(PEND.g / PEND.L) * Math.sin(PEND.th) - (a / PEND.L) * Math.cos(PEND.th) - PEND.damp * PEND.om;
+    PEND.om += acc * dt; PEND.th += PEND.om * dt;
+    clawWrap.style.transform = "rotate(" + (PEND.th * 180 / Math.PI) + "deg)";
+    requestAnimationFrame(pendStep);
+  }
+  function pendStop(){ PEND.running = false; PEND.th = 0; PEND.om = 0; clawWrap.style.transform = "rotate(0deg)"; }
+  function pendKick(v){ PEND.om += v; }
+  function tipXPx(){ return pivotPx() + PEND.L * Math.sin(PEND.th); }
+  var WON_KEY = "clawmachine_wins_v1";
+  var won = [];
+  try{ won = JSON.parse(localStorage.getItem(WON_KEY) || "[]"); }catch(e){ won = []; }
+
+  function say(t){ status.textContent = t; }
+  function makePlushie(p, x){
+    var d = document.createElement("div");
+    d.className = "plushie";
+    d.style.left = x + "%";
+    d.style.marginLeft = "-25px";
+    d.dataset.id = p.id;
+    d.innerHTML =
+      '<div class="ear l" style="background:'+p.dark+'"></div>' +
+      '<div class="ear r" style="background:'+p.dark+'"></div>' +
+      '<div class="body" style="background:linear-gradient(180deg,'+p.color+','+p.dark+')"></div>' +
+      '<div class="face"><span class="eye"></span><span class="eye"></span><span class="mouth"></span></div>' +
+      '<div class="tag">'+p.short+'</div>';
+    d.addEventListener("click", function(){
+      if(busy) return;
+      d.style.transform = "translateY(-8px) rotate(6deg)";
+      setTimeout(function(){ d.style.transform=""; }, 300);
+      say(p.name + ": " + p.text.split(".")[0] + ". win it to read the rest.");
+    });
+    caseEl.appendChild(d);
+    return {el:d, proj:p, x:x, taken:false};
+  }
+  PROJECTS.forEach(function(p, i){
+    plushies.push(makePlushie(p, 5 + i*11));
+  });
+  function renderShelf(){
+    shelfRow.innerHTML = "";
+    if(!won.length){
+      shelfRow.innerHTML = '<span class="shelf-empty">nothing yet. the shelf is judging you.</span>';
+      return;
+    }
+    won.forEach(function(id){
+      var p = PROJECTS.filter(function(q){return q.id===id;})[0];
+      if(!p) return;
+      var b = document.createElement("button");
+      b.className = "prize"; b.style.background = p.color + "33";
+      b.setAttribute("aria-label", p.name);
+      b.innerHTML = ICONS[p.icon];
+      b.addEventListener("click", function(){
+        document.getElementById("cardTitle").textContent = p.name;
+        document.getElementById("cardText").textContent = p.text;
+        document.getElementById("cardLink").href = p.link;
+        card.classList.add("show");
+      });
+      shelfRow.appendChild(b);
+    });
+  }
+  renderShelf();
+  document.getElementById("cardClose").addEventListener("click", function(){ card.classList.remove("show"); });
+  card.addEventListener("click", function(e){ if(e.target===card) card.classList.remove("show"); });
+
+  var dragging = false;
+  function joyMove(e){
+    var r = joypad.getBoundingClientRect();
+    var dx = e.clientX - (r.left + r.width/2);
+    var dy = e.clientY - (r.top + r.height/2);
+    var max = r.width/2 - 28;
+    var len = Math.hypot(dx,dy);
+    if(len > max){ dx = dx/len*max; dy = dy/len*max; }
+    nub.style.transform = "translate("+dx+"px,"+dy+"px)";
+    clawX = Math.min(94, Math.max(6, 50 + dx/max*44));
+    clawWrap.style.left = clawX + "%";
+  }
+  joypad.addEventListener("pointerdown", function(e){
+    if(busy) return;
+    dragging = true; joypad.setPointerCapture(e.pointerId); joyMove(e);
+  });
+  joypad.addEventListener("pointermove", function(e){ if(dragging) joyMove(e); });
+  joypad.addEventListener("pointerup", function(){ dragging=false; nub.style.transform=""; });
+  joypad.addEventListener("pointercancel", function(){ dragging=false; nub.style.transform=""; });
+
+  function animateDrop(target, strength, done){
+    clawWrap.style.transition = "top .9s cubic-bezier(.5,0,.6,1)";
+    clawWrap.style.top = "150px";
+    pendKick((Math.random() < 0.5 ? -1 : 1) * (0.9 + Math.random() * 0.6));
+    setTimeout(function(){
+      claw.classList.remove("open");
+      pendKick((Math.random() < 0.5 ? -1 : 1) * 0.5);
+      setTimeout(function(){
+        /* Honest grab: the claw tip is wherever the pendulum put it.
+           p = strength * exp(-(err/sigma)^2), err in % of case width. */
+        var tipErr = 1e9, p = 0;
+        if(target){
+          var caseW = caseEl.clientWidth;
+          tipErr = Math.abs(tipXPx() - caseW * target.x / 100) / caseW * 100;
+          p = strength * Math.exp(-Math.pow(tipErr / 5, 2));
+        }
+        var success = target && tipErr < 14 && Math.random() < p;
+        done(success, tipErr, p);
+      }, 900);
+    }, 950);
+  }
+  function animateLift(carrying, done){
+    if(carrying){
+      var pe = carrying.el;
+      pe.classList.add("grabbed");
+    }
+    clawWrap.style.top = "14px";
+    if(carrying){
+      var wr = clawWrap.getBoundingClientRect(), cr = caseEl.getBoundingClientRect();
+      var startTop = 14 + 64 + 56;
+      var liftMs = 900;
+      var t0 = performance.now();
+      (function step(t){
+        var k = Math.min(1,(t-t0)/liftMs);
+        var wob = Math.sin(k*Math.PI*5) * 8 * (1-k);
+        pe.style.bottom = (14 + (cr.height-120) * k) + "px";
+        pe.style.transform = "translateX(" + wob + "px) rotate(" + wob*0.6 + "deg)";
+        if(k<1) requestAnimationFrame(step); else done();
+      })(t0);
+    } else {
+      setTimeout(done, 950);
+    }
+  }
+  function animateToChute(pe, done){
+    var t0 = performance.now(), fromX = clawX;
+    (function step(t){
+      var k = Math.min(1,(t-t0)/800);
+      var x = fromX + (88 - fromX)*k;
+      clawWrap.style.left = x + "%";
+      clawX = x;
+      if(pe){
+        var wr = clawWrap.getBoundingClientRect(), cr = caseEl.getBoundingClientRect();
+        pe.el.style.left = (wr.left - cr.left + 32) + "px";
+        pe.el.style.marginLeft = "-25px";
+      }
+      if(k<1) requestAnimationFrame(step); else done();
+    })(t0);
+  }
+  dropBtn.addEventListener("click", function(){
+    if(busy) return;
+    busy = true; dropBtn.disabled = true;
+    pendStart();
+    say("claw descending. no takebacks.");
+    var target = null, best = 1e9;
+    plushies.forEach(function(pl){
+      if(pl.taken) return;
+      var d = Math.abs(pl.x - clawX);
+      if(d < best){ best = d; target = pl; }
+    });
+    var strength = 0.35 + Math.random()*0.4;
+    animateDrop(target, strength, function(success, tipErr, p){
+      if(success){
+        say("got one. do not celebrate yet, the claw is a known flake.");
+      } else if(!target || best >= 14){
+        say("whiffed. the plushies saw nothing. aim closer next time.");
+      } else {
+        say("it slipped. grip was " + Math.round(strength*100) + " percent and the swing did not help. the claw apologizes.");
+      }
+      animateLift(success ? target : null, function(){
+        animateToChute(success ? target : null, function(){
+          claw.classList.add("open");
+          if(success){
+            pendKick(1.4);
+            var pe = target.el;
+            pe.style.transition = "all .5s ease";
+            pe.style.bottom = "0px";
+            pe.style.opacity = "0";
+            setTimeout(function(){
+              pe.remove();
+              target.taken = true;
+              if(won.indexOf(target.proj.id) < 0){
+                won.push(target.proj.id);
+                try{ localStorage.setItem(WON_KEY, JSON.stringify(won)); }catch(e){}
+              }
+              renderShelf();
+              say("won: " + target.proj.name + ". tap it on the shelf for the full story.");
+              resetClaw();
+            }, 550);
+          } else {
+            say("so close. the claw suggests dragging the nub this time.");
+            resetClaw();
+          }
+        });
+      });
+    });
+  });
+  function resetClaw(){
+    clawWrap.style.transition = "";
+    clawWrap.style.top = "14px";
+    clawWrap.style.left = "50%"; clawX = 50;
+    setTimeout(pendStop, 1200);
+    busy = false; dropBtn.disabled = false;
+  }
+})();
+</script>
+</body>
+</html>

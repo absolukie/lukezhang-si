@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prize Wheel | Luke Zhang</title>
+<style>
+  :root{
+    --cream:#fbf3e4; --cream-d:#f1e4cb; --red:#d63d2f; --red-d:#a52a20;
+    --ink:#3d2b22; --ink-soft:#8a7362; --gold:#e9a13b; --green:#3e8e5a;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    background:var(--cream);
+    background-image:radial-gradient(rgba(214,61,47,.08) 1.5px, transparent 1.5px);
+    background-size:26px 26px;
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    min-height:100vh; display:flex; justify-content:center;
+    padding:18px 14px 60px; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{width:100%; max-width:430px;}
+  header{text-align:center; margin:10px 0 6px;}
+  .kicker{
+    font-size:12px; letter-spacing:.24em; text-transform:uppercase; color:var(--red);
+    font-weight:700; margin-bottom:8px;
+  }
+  h1{font-size:32px; font-weight:800; letter-spacing:-.02em; margin-bottom:6px;}
+  .sub{font-size:14px; color:var(--ink-soft); line-height:1.55;}
+  /* marquee of recent wins */
+  .marquee-shell{
+    margin:14px 0 4px; overflow:hidden; border-radius:10px;
+    background:var(--ink); color:var(--cream); padding:10px 0;
+  }
+  .marquee{display:inline-block; white-space:nowrap; animation:scrollx 26s linear infinite; font-size:13px;}
+  .marquee span{margin:0 18px;}
+  .marquee b{color:var(--gold);}
+  @keyframes scrollx{from{transform:translateX(0);}to{transform:translateX(-50%);}}
+  /* wheel */
+  .wheel-zone{position:relative; margin:10px auto 0; width:340px; max-width:92vw;}
+  .pointer{
+    position:absolute; top:-8px; left:50%; transform:translateX(-50%); z-index:5;
+    width:0; height:0; border-left:16px solid transparent; border-right:16px solid transparent;
+    border-top:26px solid var(--red); filter:drop-shadow(0 3px 3px rgba(0,0,0,.25));
+  }
+  canvas#wheel{
+    display:block; width:100%; height:auto; border-radius:50%;
+    touch-action:none; cursor:grab;
+    filter:drop-shadow(0 14px 24px rgba(61,43,34,.25));
+  }
+  canvas#wheel:active{cursor:grabbing;}
+  .hub{
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:74px; height:74px; border-radius:50%; background:var(--red); color:#fff;
+    display:flex; align-items:center; justify-content:center; text-align:center;
+    font-size:11px; font-weight:800; line-height:1.25; padding:8px;
+    box-shadow:0 4px 10px rgba(0,0,0,.3), inset 0 2px 0 rgba(255,255,255,.35);
+    pointer-events:none; letter-spacing:.04em;
+  }
+  .speedo{
+    text-align:center; font-size:12px; color:var(--ink-soft); margin-top:10px; min-height:18px; font-weight:600;
+  }
+  /* result card */
+  .result{
+    margin:12px 0 0; background:#fff; border:2px solid var(--cream-d); border-radius:16px;
+    padding:16px; text-align:center; box-shadow:0 8px 20px rgba(61,43,34,.10);
+    transform:scale(.9); opacity:0; pointer-events:none;
+    transition:transform .35s cubic-bezier(.2,1.5,.4,1), opacity .3s ease;
+  }
+  .result.show{transform:scale(1); opacity:1; pointer-events:auto;}
+  .result .won{font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:var(--red); font-weight:800; margin-bottom:6px;}
+  .result h2{font-size:22px; font-weight:800; margin-bottom:6px;}
+  .result p{font-size:14px; color:var(--ink-soft); line-height:1.55; margin-bottom:12px;}
+  .result a{
+    display:inline-block; background:var(--red); color:#fff; text-decoration:none; font-weight:700;
+    border-radius:999px; padding:12px 24px; min-height:48px; line-height:24px; touch-action:manipulation;
+  }
+  /* controls */
+  .controls{display:flex; gap:10px; margin-top:16px;}
+  .btn{
+    flex:1; border:none; border-radius:14px; cursor:pointer;
+    font-size:15px; font-weight:800; padding:16px 10px; min-height:58px; touch-action:manipulation;
+  }
+  .btn.spin{background:var(--red); color:#fff; box-shadow:0 4px 0 var(--red-d);}
+  .btn.spin:active{transform:translateY(3px); box-shadow:0 1px 0 var(--red-d);}
+  .btn.stop{background:transparent; color:var(--red); border:2px dashed var(--red);}
+  .btn.stop:active{transform:scale(.96);}
+  .btn:disabled{opacity:.4; cursor:default; transform:none; box-shadow:none;}
+  .fineprint{text-align:center; font-size:12px; color:var(--ink-soft); margin-top:12px; line-height:1.6;}
+  footer{text-align:center; margin-top:24px; font-size:13px;}
+  footer a{color:var(--red); font-weight:700;}
+  .confetti{position:fixed; width:9px; height:14px; top:-20px; z-index:60; pointer-events:none; border-radius:2px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">luke zhang</div>
+    <h1>The Prize Wheel</h1>
+    <p class="sub">Flick the wheel. Whatever it lands on, that is a real thing I built. No losers on this wheel, only projects.</p>
+  </header>
+
+  <div class="marquee-shell" aria-label="recent wins">
+    <div class="marquee" id="marquee"></div>
+  </div>
+
+  <div class="wheel-zone">
+    <div class="pointer" aria-hidden="true"></div>
+    <canvas id="wheel" width="680" height="680" role="img" aria-label="prize wheel, flick to spin"></canvas>
+    <div class="hub">EVERY<br>SPIN<br>WINS</div>
+  </div>
+  <div class="speedo" id="speedo">flick it like you mean it</div>
+
+  <div class="result" id="result" aria-live="polite">
+    <div class="won">you won</div>
+    <h2 id="rTitle"></h2>
+    <p id="rDesc"></p>
+    <a id="rLink" href="https://projects.lukezhang.si/">see it live</a>
+  </div>
+
+  <div class="controls">
+    <button class="btn stop" id="stopBtn" disabled>stop it<br><small style="font-weight:600;font-size:12px;">(impatient)</small></button>
+    <button class="btn spin" id="spinBtn">spin again</button>
+  </div>
+  <p class="fineprint">No bets, no house edge, no fine print. The wheel is rigged so everyone wins. My kind of casino.</p>
+
+  <footer><a href="../">all 40 ways to say hi</a></footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var canvas = document.getElementById("wheel"),
+      ctx = canvas.getContext("2d"),
+      spinBtn = document.getElementById("spinBtn"),
+      stopBtn = document.getElementById("stopBtn"),
+      speedo = document.getElementById("speedo"),
+      result = document.getElementById("result"),
+      rTitle = document.getElementById("rTitle"),
+      rDesc = document.getElementById("rDesc"),
+      rLink = document.getElementById("rLink"),
+      marquee = document.getElementById("marquee");
+
+  var SEGS = [
+    { name:"Liverpool Rummy", desc:"The card game, rebuilt for phones. Real online rooms, zero sketchiness.", link:"https://projects.lukezhang.si/", color:"#d63d2f", tc:"#fff" },
+    { name:"Get Clocked", desc:"A time-tracking game you will actually open. Punch in, level up.", link:"https://projects.lukezhang.si/", color:"#fbf3e4", tc:"#3d2b22" },
+    { name:"Curbside", desc:"Food truck finder for the hungry and decisive. My first customer hunt starts here.", link:"https://projects.lukezhang.si/", color:"#e9a13b", tc:"#3d2b22" },
+    { name:"Draw & Guess", desc:"Pictionary night, but my wife and I can play from the couch. Pinyin-friendly.", link:"https://projects.lukezhang.si/", color:"#3e8e5a", tc:"#fff" },
+    { name:"How an LLM Works", desc:"An interactive visualizer that makes transformers feel obvious. 56 models in the atlas.", link:"https://projects.lukezhang.si/", color:"#4a6fa5", tc:"#fff" },
+    { name:"Skill Tree App", desc:"My skills, painted in ink. Won the design round against 3 other styles.", link:"https://lukezhang.si/blog/skill-tree-app-design/", color:"#8e5aa8", tc:"#fff" },
+    { name:"Peggie", desc:"The survey flow so good it became a whole interaction pattern. Goated.", link:"https://projects.lukezhang.si/", color:"#d63d2f", tc:"#fff" },
+    { name:"Poteto Tracker", desc:"A usage tracker built because a viral profile went private. The internet, archived.", link:"https://projects.lukezhang.si/poteto-tracker/", color:"#fbf3e4", tc:"#3d2b22" }
+  ];
+  var N = SEGS.length, TAU = Math.PI * 2, ARC = TAU / N;
+
+  var angle = 0, vel = 0, spinning = false, raf = null, lastT = 0, audio = null;
+
+  /* Honest spin-down: Coulomb (dry) friction gives constant angular deceleration,
+     plus a whisper of viscous bearing drag. No rigging: the resting angle alone
+     decides the winner via winnerIndex(). */
+  var MU = 2.4, VISCOUS = 0.05;
+
+  function drawWheel(){
+    var R = 340, cx = 340, cy = 340;
+    ctx.clearRect(0, 0, 680, 680);
+    for (var i = 0; i < N; i++){
+      var a0 = angle + i * ARC, a1 = a0 + ARC;
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R - 6, a0, a1); ctx.closePath();
+      ctx.fillStyle = SEGS[i].color; ctx.fill();
+      ctx.strokeStyle = "rgba(61,43,34,.25)"; ctx.lineWidth = 3; ctx.stroke();
+      /* label */
+      ctx.save();
+      ctx.translate(cx, cy); ctx.rotate(a0 + ARC / 2);
+      ctx.textAlign = "right"; ctx.fillStyle = SEGS[i].tc;
+      ctx.font = "700 30px -apple-system, 'Segoe UI', Roboto, sans-serif";
+      ctx.fillText(SEGS[i].name, R - 44, 10);
+      ctx.restore();
+      /* peg dot between segments */
+      ctx.beginPath();
+      ctx.arc(cx + Math.cos(a0) * (R - 6), cy + Math.sin(a0) * (R - 6), 7, 0, TAU);
+      ctx.fillStyle = "#e9a13b"; ctx.fill();
+      ctx.strokeStyle = "#a52a20"; ctx.lineWidth = 2; ctx.stroke();
+    }
+    /* rim */
+    ctx.beginPath(); ctx.arc(cx, cy, R - 3, 0, TAU);
+    ctx.strokeStyle = "#a52a20"; ctx.lineWidth = 10; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, 66, 0, TAU);
+    ctx.fillStyle = "#d63d2f"; ctx.fill();
+  }
+
+  /* ---- WebAudio: tick + fanfare, synthesized ---- */
+  function ac(){
+    if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === "suspended") audio.resume();
+    return audio;
+  }
+  function tick(){
+    try{
+      var c = ac(), t = c.currentTime, o = c.createOscillator(), g = c.createGain();
+      o.type = "square"; o.frequency.value = 1400;
+      g.gain.setValueAtTime(0.06, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+      o.connect(g); g.connect(c.destination); o.start(); o.stop(t + 0.04);
+    }catch(e){}
+  }
+  function fanfare(){
+    try{
+      var c = ac(), notes = [523.25, 659.25, 783.99, 1046.5];
+      notes.forEach(function(f, i){
+        var t = c.currentTime + i * 0.11, o = c.createOscillator(), g = c.createGain();
+        o.type = "triangle"; o.frequency.value = f;
+        g.gain.setValueAtTime(0.22, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+        o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + 0.32);
+      });
+    }catch(e){}
+  }
+
+  function winnerIndex(){
+    /* pointer is at top (-PI/2). Find segment under it. */
+    var p = ((-Math.PI / 2 - angle) % TAU + TAU) % TAU;
+    return Math.floor(p / ARC) % N;
+  }
+
+  var lastTickSeg = -1;
+  function loop(t){
+    if (!spinning) return;
+    var dt = Math.min((t - lastT) / 1000, 0.05); lastT = t;
+    angle += vel * dt;
+    var dv = MU * dt;
+    if (Math.abs(vel) <= dv) vel = 0;
+    else vel -= Math.sign(vel) * dv;
+    vel *= Math.max(0, 1 - VISCOUS * dt);
+    var w = winnerIndex();
+    if (w !== lastTickSeg){ lastTickSeg = w; if (Math.abs(vel) > 0.6) tick(); }
+    var rpm = Math.abs(vel) * 60 / TAU;
+    speedo.textContent = rpm > 1 ? Math.round(rpm) + " rpm. she is cooking." : "settling...";
+    drawWheel();
+    if (vel === 0){
+      spinning = false;
+      land();
+    } else {
+      raf = requestAnimationFrame(loop);
+    }
+  }
+
+  function startSpin(v){
+    result.classList.remove("show");
+    vel = v;
+    spinning = true;
+    lastT = performance.now();
+    lastTickSeg = winnerIndex();
+    spinBtn.disabled = true;
+    stopBtn.disabled = false;
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(loop);
+  }
+
+  /* INTERACTION 1: flick the wheel with momentum */
+  var drag = null;
+  function angOf(e){
+    var r = canvas.getBoundingClientRect();
+    var x = e.clientX - (r.left + r.width / 2), y = e.clientY - (r.top + r.height / 2);
+    return Math.atan2(y, x);
+  }
+  canvas.addEventListener("pointerdown", function(e){
+    e.preventDefault();
+    canvas.setPointerCapture(e.pointerId);
+    spinning = false; cancelAnimationFrame(raf);
+    drag = { a: angOf(e), t: performance.now(), va: 0, id: e.pointerId, moved: false };
+    result.classList.remove("show");
+  });
+  canvas.addEventListener("pointermove", function(e){
+    if (!drag || e.pointerId !== drag.id) return;
+    var a = angOf(e), now = performance.now();
+    var d = a - drag.a;
+    if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU;
+    if (Math.abs(d) > 0.002) drag.moved = true;
+    var dt = Math.max((now - drag.t) / 1000, 0.008);
+    drag.va = 0.75 * drag.va + 0.25 * (d / dt);
+    drag.a = a; drag.t = now;
+    angle += d;
+    drawWheel();
+  });
+  function endDrag(e){
+    if (!drag || e.pointerId !== drag.id) return;
+    var v = drag.va; drag = null;
+    if (Math.abs(v) > 0.7) startSpin(Math.max(-22, Math.min(22, v)));
+    else { /* INTERACTION 2 variant: plain tap gives a nudge spin */
+      startSpin(6 + Math.random() * 4);
+      speedo.textContent = "a gentle tap spin. classy.";
+    }
+  }
+  canvas.addEventListener("pointerup", endDrag);
+  canvas.addEventListener("pointercancel", function(e){ drag = null; });
+
+  /* INTERACTION 2: impatient button stops it early */
+  stopBtn.addEventListener("click", function(){
+    if (!spinning) return;
+    vel *= 0.12;
+    speedo.textContent = "ok ok, stopping. impatient.";
+  });
+
+  /* INTERACTION 3: spin again (random full spin) */
+  spinBtn.addEventListener("click", function(){
+    startSpin((Math.random() < 0.5 ? -1 : 1) * (9 + Math.random() * 7));
+  });
+
+  var wins = ["Liverpool Rummy", "Draw & Guess", "Curbside"];
+  function land(){
+    var s = SEGS[winnerIndex()];
+    fanfare();
+    confetti();
+    rTitle.textContent = s.name;
+    rDesc.textContent = s.desc;
+    rLink.href = s.link;
+    result.classList.add("show");
+    spinBtn.disabled = false;
+    stopBtn.disabled = true;
+    speedo.textContent = "landed. nice.";
+    /* INTERACTION 4: results marquee */
+    wins.unshift(s.name); wins = wins.slice(0, 6);
+    renderMarquee();
+  }
+
+  function confetti(){
+    var colors = ["#d63d2f", "#e9a13b", "#3e8e5a", "#4a6fa5", "#8e5aa8", "#fbf3e4"];
+    for (var i = 0; i < 60; i++){
+      var c = document.createElement("div");
+      c.className = "confetti";
+      c.style.left = (10 + Math.random() * 80) + "vw";
+      c.style.background = colors[i % colors.length];
+      document.body.appendChild(c);
+      var dur = 1.6 + Math.random() * 1.4, dx = (Math.random() - 0.5) * 160;
+      c.animate([
+        { transform: "translate(0,0) rotate(0deg)", opacity: 1 },
+        { transform: "translate(" + dx + "px," + (window.innerHeight + 60) + "px) rotate(" + (Math.random() * 720) + "deg)", opacity: 0.9 }
+      ], { duration: dur * 1000, easing: "cubic-bezier(.2,.6,.4,1)" });
+      (function(el){ setTimeout(function(){ el.remove(); }, dur * 1000 + 100); })(c);
+    }
+  }
+
+  function renderMarquee(){
+    var items = wins.map(function(w){ return "<span>WINNER: <b>" + w + "</b></span>"; }).join("<span>|</span>");
+    marquee.innerHTML = items + items; /* doubled for seamless loop */
+  }
+
+  drawWheel();
+  renderMarquee();
+})();
+</script>
+</body>
+</html>

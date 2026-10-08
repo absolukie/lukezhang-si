@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>pop the wrap | Luke Zhang</title>
+<style>
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;
+    background:#f4f1ea; color:#2b2620;
+    min-height:100dvh; display:flex; flex-direction:column; align-items:center;
+    padding:18px 14px 40px; -webkit-font-smoothing:antialiased;
+  }
+  button{touch-action:manipulation;}
+  .wrap{width:100%; max-width:430px;}
+  .kicker{font-size:11px; letter-spacing:.32em; text-transform:uppercase; color:#8a8177; text-align:center; margin-bottom:6px;}
+  h1{font-size:26px; font-weight:700; text-align:center; letter-spacing:-.02em; margin-bottom:2px;}
+  .sub{text-align:center; font-size:14px; color:#8a8177; margin-bottom:12px;}
+  .hud{display:flex; gap:8px; align-items:stretch; margin-bottom:12px;}
+  .stat{flex:1; background:#fff; border:1px solid #e2dccf; border-radius:14px; padding:8px 6px; text-align:center;
+    box-shadow:0 2px 8px rgba(60,50,30,.06);}
+  .stat b{display:block; font-size:20px; font-variant-numeric:tabular-nums;}
+  .stat span{font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:#8a8177;}
+  #combo b{color:#b8860b;}
+  .ticker{
+    min-height:64px; background:#2b2620; color:#f4f1ea; border-radius:14px;
+    display:flex; align-items:center; justify-content:center; text-align:center;
+    font-size:15px; line-height:1.45; padding:12px 16px; margin-bottom:14px;
+    box-shadow:0 4px 14px rgba(43,38,32,.25); transition:transform .12s ease;
+  }
+  .ticker.bump{transform:scale(1.02);}
+  .ticker .fact-label{font-size:10px; letter-spacing:.22em; color:#c9b98f; display:block; margin-bottom:3px; text-transform:uppercase;}
+  .sheet-card{
+    background:#fff; border:1px solid #e2dccf; border-radius:20px; padding:18px 14px 20px;
+    box-shadow:0 10px 30px rgba(60,50,30,.10), inset 0 1px 0 #fff;
+  }
+  .sheet-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding:0 4px;}
+  .sheet-head .lbl{font-size:11px; letter-spacing:.24em; text-transform:uppercase; color:#8a8177;}
+  #newSheet{
+    background:#2b2620; color:#f4f1ea; border:none; border-radius:999px; font-size:14px; font-weight:600;
+    padding:12px 18px; min-height:44px; cursor:pointer; display:flex; align-items:center; gap:8px;
+  }
+  #newSheet:active{transform:scale(.96);}
+  #newSheet svg{width:16px; height:16px;}
+  .grid{
+    display:grid; grid-template-columns:repeat(5,1fr); gap:10px; padding:4px 2px;
+    touch-action:pan-y; user-select:none; -webkit-user-select:none;
+  }
+  .bubble{
+    aspect-ratio:1; border-radius:50%; cursor:pointer; position:relative;
+    background:radial-gradient(circle at 32% 28%, rgba(255,255,255,.95), rgba(255,255,255,.25) 38%, rgba(190,200,215,.35) 70%, rgba(150,165,185,.55));
+    border:1px solid rgba(150,165,185,.5);
+    box-shadow:inset -3px -5px 10px rgba(120,140,165,.35), inset 3px 5px 8px rgba(255,255,255,.7), 0 3px 6px rgba(60,50,30,.08);
+    transition:transform .07s ease; touch-action:manipulation;
+  }
+  .bubble::after{
+    content:""; position:absolute; left:22%; top:16%; width:26%; height:18%;
+    border-radius:50%; background:rgba(255,255,255,.85); filter:blur(1px);
+    transform:rotate(-24deg);
+  }
+  .bubble.popped{
+    background:radial-gradient(circle at 50% 50%, rgba(120,135,155,.25), rgba(120,135,155,.1));
+    box-shadow:inset 0 2px 6px rgba(60,50,30,.18); border-color:rgba(150,165,185,.3);
+    animation:popflash .25s ease; cursor:default;
+  }
+  .bubble.popped::after{display:none;}
+  @keyframes popflash{
+    0%{transform:scale(1.25);}
+    40%{transform:scale(.92);}
+    100%{transform:scale(1);}
+  }
+  .bubble.golden{
+    background:radial-gradient(circle at 32% 28%, #fff8e1, #ffe9a8 38%, #f5c542 70%, #d99a1f);
+    border-color:#c88f1a;
+    box-shadow:inset -3px -5px 10px rgba(160,110,10,.4), inset 3px 5px 8px rgba(255,255,255,.6), 0 3px 8px rgba(180,130,20,.35);
+  }
+  .bubble.golden.popped{background:radial-gradient(circle at 50% 50%, rgba(200,160,60,.25), rgba(200,160,60,.08)); box-shadow:inset 0 2px 6px rgba(120,90,20,.25); border-color:rgba(200,160,60,.3);}
+  .hint{text-align:center; font-size:13px; color:#8a8177; margin-top:12px; line-height:1.5;}
+  .foot{margin-top:26px; text-align:center; font-size:13px; color:#8a8177;}
+  .foot a{color:#2b2620; font-weight:600; text-decoration:none; border-bottom:1px solid #c9b98f; padding:10px 4px; display:inline-block;}
+  #goldFlash{
+    position:fixed; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center;
+    opacity:0; transition:opacity .3s ease; z-index:50;
+  }
+  #goldFlash.show{opacity:1;}
+  #goldFlash .card{
+    background:#2b2620; color:#ffe9a8; border:2px solid #f5c542; border-radius:18px;
+    padding:22px 26px; max-width:82%; text-align:center; font-size:16px; line-height:1.5;
+    box-shadow:0 20px 60px rgba(0,0,0,.4);
+  }
+  #goldFlash .card b{display:block; font-size:11px; letter-spacing:.28em; text-transform:uppercase; color:#f5c542; margin-bottom:8px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">Luke Zhang</div>
+  <h1>stress-tested packaging</h1>
+  <p class="sub">every pop is a fact about me. pop responsibly.</p>
+  <div class="hud">
+    <div class="stat"><b id="popCount">0</b><span>popped</span></div>
+    <div class="stat" id="combo"><b id="comboCount">0</b><span>combo</span></div>
+    <div class="stat"><b id="sheetCount">1</b><span>sheet</span></div>
+  </div>
+  <div class="ticker" id="ticker"><div><span class="fact-label">unclaimed fact</span>tap a bubble. any bubble. you know you want to.</div></div>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <span class="lbl" id="sheetLabel">sheet no. 1</span>
+      <button id="newSheet" aria-label="Get a new sheet of bubble wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
+        new sheet
+      </button>
+    </div>
+    <div class="grid" id="grid" aria-label="Bubble wrap sheet"></div>
+    <p class="hint">tip: drag across the sheet for a streak. one of these bubbles is golden. it holds longer.</p>
+  </div>
+  <div class="foot"><a href="../">all 40 ways to say hi</a></div>
+</div>
+<div id="goldFlash"><div class="card"><b>golden bubble</b><span id="goldText"></span></div></div>
+
+<script>
+(function(){
+  "use strict";
+  var FACTS = [
+    "I build software at Robinhood by day and games by night.",
+    "I am a cat dad. The cat runs the house. I just pay rent.",
+    "I built Draw and Guess so my wife and I always have a game night ready.",
+    "I went to the University of Toronto. Winters there build character.",
+    "I have lived in Arizona and California. Dry heat, then fog.",
+    "I am learning Chinese. Pinyin only, no tone marks, we are not animals.",
+    "My studio is called Bonsoir. Tagline: Yours, truly.",
+    "I ship Liverpool Rummy and Get Clocked to both app stores.",
+    "High agency is my operating system. Jail-cell phone-call test and all.",
+    "I type everything on a phone. If it does not work on mobile, it does not work.",
+    "My taste rule: simple but clever. Never showy.",
+    "I read design docs like novels. Then I build the board version.",
+    "My games need one-tap entry. Nobody should hunt for the fun.",
+    "I test on the real thing, never the screenshot.",
+    "Debounce the typing, never the tapping.",
+    "I prefer plain words. Jargon gets a one-breath glossary or it gets cut.",
+    "No em dashes in my writing. Ever. Commas do the job.",
+    "Side-by-side comparisons are elite. Show, do not tell.",
+    "I keep a kill list of bad ideas with the reasons. Dead ideas stay dead.",
+    "Real data or nothing. Demo-ware does not ship.",
+    "Every blog post is a visualizer. Text alone is a draft.",
+    "Iced coffee is a food group.",
+    "My commute is Antioch to the office. Audiobooks do the heavy lifting.",
+    "I review options on tappable boards, never in docs.",
+    "First ten customers pay full price. Discounts are earned, not given.",
+    "I do not zoom on rapid taps. 16px inputs or the page is wrong.",
+    "Sunday is for church and small group. The week orbits that.",
+    "My wife is my favorite playtester. She finds every bug in five minutes."
+  ];
+  var GOLD_FACT = "The big one: I am building a tiny studio called Bonsoir where every app is a well-made toy. Ten apps live, billing rolling out, first customer target: a food truck. Yours, truly.";
+  var COLS = 5, ROWS = 6, TOTAL = COLS * ROWS;
+  var grid = document.getElementById("grid");
+  var ticker = document.getElementById("ticker");
+  var popCountEl = document.getElementById("popCount");
+  var comboEl = document.getElementById("comboCount");
+  var sheetEl = document.getElementById("sheetCount");
+  var sheetLabel = document.getElementById("sheetLabel");
+  var goldFlash = document.getElementById("goldFlash");
+  var goldText = document.getElementById("goldText");
+  var pops = 0, combo = 0, sheetNo = 1, lastPopAt = 0, goldenIdx = -1;
+  var holdTimer = null, holding = false;
+
+  var AC = null;
+  function audio(){ if(!AC){ AC = new (window.AudioContext||window.webkitAudioContext)(); } if(AC.state==="suspended"){AC.resume();} return AC; }
+  function popSound(big){
+    try{
+      var ac = audio(), t = ac.currentTime;
+      var dur = big ? 0.28 : 0.12;
+      var buf = ac.createBuffer(1, ac.sampleRate*dur, ac.sampleRate);
+      var d = buf.getChannelData(0);
+      for(var i=0;i<d.length;i++){ d[i] = (Math.random()*2-1) * Math.pow(1-i/d.length, 2.2); }
+      var src = ac.createBufferSource(); src.buffer = buf;
+      var bp = ac.createBiquadFilter(); bp.type="bandpass";
+      bp.frequency.value = big ? 900+Math.random()*400 : 2200+Math.random()*1600;
+      bp.Q.value = big ? 0.8 : 1.4;
+      var g = ac.createGain(); g.gain.setValueAtTime(big?0.9:0.55, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t+dur);
+      src.connect(bp); bp.connect(g); g.connect(ac.destination); src.start(t);
+      var osc = ac.createOscillator(); osc.type="sine";
+      osc.frequency.setValueAtTime(big?220:420+Math.random()*80, t);
+      osc.frequency.exponentialRampToValueAtTime(big?70:120, t+(big?0.25:0.09));
+      var g2 = ac.createGain(); g2.gain.setValueAtTime(big?0.5:0.25, t);
+      g2.gain.exponentialRampToValueAtTime(0.001, t+(big?0.25:0.09));
+      osc.connect(g2); g2.connect(ac.destination); osc.start(t); osc.stop(t+(big?0.3:0.12));
+    }catch(e){}
+  }
+  function showFact(text, golden){
+    ticker.innerHTML = '<div><span class="fact-label">' + (golden ? "golden fact" : "micro-fact no. " + pops) + "</span>" + text + "</div>";
+    ticker.classList.remove("bump"); void ticker.offsetWidth; ticker.classList.add("bump");
+  }
+  function bumpCombo(){
+    var now = Date.now();
+    combo = (now - lastPopAt < 1500) ? combo + 1 : 1;
+    lastPopAt = now;
+    comboEl.textContent = combo;
+    if(combo >= 10) showFact("combo x" + combo + ". your fingers have main-character energy.", false);
+    else if(combo === 5) showFact("combo x5. the wrap industry fears you.", false);
+  }
+  function popBubble(el, i){
+    if(el.classList.contains("popped")) return;
+    var golden = (i === goldenIdx);
+    el.classList.add("popped");
+    pops++; popCountEl.textContent = pops;
+    bumpCombo();
+    popSound(golden);
+    if(golden){
+      goldText.textContent = GOLD_FACT;
+      goldFlash.classList.add("show");
+      showFact(GOLD_FACT, true);
+      setTimeout(function(){ goldFlash.classList.remove("show"); }, 2600);
+      /* golden chain reaction: the 8 neighbors pop in a staggered ring */
+      for(var di=-1; di<=1; di++) for(var dj=-1; dj<=1; dj++){
+        (function(ni){
+          if(ni < 0 || ni >= TOTAL || ni === i) return;
+          setTimeout(function(){
+            var el = grid.children[ni];
+            if(el && !el.classList.contains("popped")) popBubble(el, ni);
+          }, 130 + Math.random()*260);
+        })(i + di*COLS + dj);
+      }
+    } else {
+      showFact(FACTS[(pops + sheetNo*7) % FACTS.length], false);
+    }
+  }
+  function buildSheet(){
+    grid.innerHTML = "";
+    goldenIdx = Math.floor(Math.random()*TOTAL);
+    for(var i=0;i<TOTAL;i++){
+      (function(i){
+        var b = document.createElement("div");
+        b.className = "bubble" + (i===goldenIdx ? " golden" : "");
+        b.setAttribute("role","button");
+        b.setAttribute("aria-label", i===goldenIdx ? "Golden bubble, hold to pop" : "Bubble");
+        grid.appendChild(b);
+        b.addEventListener("pointerdown", function(e){
+          e.preventDefault();
+          if(i===goldenIdx && !b.classList.contains("popped")){
+            holding = true;
+            b.style.transform = "scale(1.15)";
+            holdTimer = setTimeout(function(){ b.style.transform=""; holding=false; popBubble(b,i); }, 450);
+          } else {
+            popBubble(b, i);
+          }
+        });
+        b.addEventListener("pointerup", function(){
+          if(holding){ clearTimeout(holdTimer); holding=false; b.style.transform=""; }
+        });
+        b.addEventListener("pointerleave", function(){
+          if(holding){ clearTimeout(holdTimer); holding=false; b.style.transform=""; }
+        });
+        b.addEventListener("pointerenter", function(e){
+          if(e.buttons>0 && !(i===goldenIdx && !b.classList.contains("popped"))) popBubble(b,i);
+        });
+      })(i);
+    }
+    sheetLabel.textContent = "sheet no. " + sheetNo;
+  }
+  document.getElementById("newSheet").addEventListener("click", function(){
+    sheetNo++; sheetEl.textContent = sheetNo;
+    popSound(true);
+    buildSheet();
+    showFact("fresh sheet, fresh facts. the golden one moved. obviously.", false);
+  });
+  goldFlash.addEventListener("click", function(){ goldFlash.classList.remove("show"); });
+  buildSheet();
+})();
+</script>
+</body>
+</html>

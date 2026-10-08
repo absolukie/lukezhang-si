@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>tea house - luke</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Avenir Next", -apple-system, "Segoe UI", sans-serif;
+    background: #3a2c22;
+    background-image:
+      radial-gradient(ellipse 120% 55% at 50% 0%, #57402f 0%, transparent 65%),
+      repeating-linear-gradient(90deg, rgba(0,0,0,.1) 0 2px, transparent 2px 30px);
+    color: #f0e4cf;
+    min-height: 100dvh;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 18px 14px 30px;
+  }
+  .wrap { width: 100%; max-width: 400px; display: flex; flex-direction: column; align-items: center; }
+  header { text-align: center; margin-bottom: 8px; }
+  header h1 { font-size: 24px; margin: 0; letter-spacing: 3px; color: #e6c88f; }
+  header .jp { font-size: 13px; color: #a8855c; letter-spacing: 8px; margin-top: 2px; }
+  header p { margin: 10px 0 0; font-size: 14px; color: #cdb691; line-height: 1.55; }
+  header .hint { color: #8f7554; font-size: 12.5px; }
+  #teas { display: flex; gap: 10px; width: 100%; margin: 12px 0; }
+  .tea {
+    flex: 1; min-height: 64px; border-radius: 14px; border: 1.5px solid #6b5335;
+    background: rgba(0,0,0,.2); color: #f0e4cf; font-family: inherit;
+    touch-action: manipulation; cursor: pointer; padding: 8px 4px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  }
+  .tea .dot { width: 22px; height: 22px; border-radius: 50%; }
+  .tea .tn { font-size: 13px; font-weight: 600; }
+  .tea .td { font-size: 10.5px; color: #a8855c; }
+  .tea.on { border-color: #e6c88f; background: rgba(230,200,143,.12); }
+  #stage {
+    width: 100%; background: rgba(0,0,0,.25); border: 1px solid #6b5335; border-radius: 20px;
+    padding: 18px 12px 14px; position: relative; overflow: hidden;
+  }
+  #potrow { display: flex; justify-content: center; margin-bottom: 6px; }
+  #teapot { width: 150px; height: 104px; }
+  #cupzone { display: flex; justify-content: center; padding: 8px 0 4px; }
+  #cup {
+    width: 150px; height: 118px; position: relative; touch-action: none; cursor: grab;
+  }
+  #cupbody {
+    position: absolute; inset: 0; border-radius: 12px 12px 60px 60px / 12px 12px 46px 46px;
+    background: linear-gradient(160deg, #d9c6a4, #b99c72 70%, #a5875e);
+    box-shadow: inset 0 -10px 18px rgba(90,60,30,.35), 0 10px 22px rgba(0,0,0,.4);
+    overflow: hidden;
+  }
+  #cupinner {
+    position: absolute; left: 10px; right: 10px; top: 8px; height: 92px;
+    border-radius: 8px 8px 50px 50px / 8px 8px 40px 40px;
+    background: #6b5136; overflow: hidden;
+  }
+  #teaFill {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 0%;
+    background: linear-gradient(180deg, #8a5a24, #5e3a12);
+    transition: height .12s linear;
+  }
+  #teaFill .sheen {
+    position: absolute; top: 0; left: 8%; right: 8%; height: 5px; border-radius: 3px;
+    background: rgba(255,220,160,.45);
+  }
+  #steambar { margin-top: 12px; }
+  #steambar .lbl { display: flex; justify-content: space-between; font-size: 12.5px; color: #a8855c; margin-bottom: 6px; }
+  #steambar .lbl #steepPct { color: #e6c88f; font-weight: 600; }
+  #steeptrack { height: 10px; border-radius: 5px; background: rgba(0,0,0,.35); overflow: hidden; border: 1px solid #6b5335; }
+  #steepfill { height: 100%; width: 0%; background: linear-gradient(90deg, #a8855c, #e6c88f); transition: width .15s linear; }
+  #pourBtn {
+    width: 100%; min-height: 60px; margin-top: 14px; border-radius: 14px; border: none;
+    background: linear-gradient(180deg, #e6c88f, #c9a05e); color: #3a2c22;
+    font-size: 17px; font-weight: 700; font-family: inherit; letter-spacing: 1px;
+    touch-action: none; cursor: pointer; user-select: none; -webkit-user-select: none;
+  }
+  #pourBtn.holding { background: linear-gradient(180deg, #c9a05e, #a8855c); }
+  #pourHint { text-align: center; font-size: 12.5px; color: #8f7554; margin: 8px 0 0; }
+  #cups { display: flex; gap: 8px; margin-top: 12px; align-items: center; justify-content: center; }
+  #cups .ccount { font-size: 13px; color: #a8855c; }
+  #cups .cdot { width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid #6b5335; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #6b5335; }
+  #cups .cdot.full { background: #8a5a24; border-color: #e6c88f; color: #f0e4cf; }
+  #story {
+    width: 100%; margin-top: 14px; background: #f0e4cf; color: #3a2c22; border-radius: 16px;
+    padding: 16px 18px; display: none;
+  }
+  #story.show { display: block; animation: rise .45s ease; }
+  @keyframes rise { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+  #story .kicker { font-size: 11px; letter-spacing: 2.5px; text-transform: uppercase; color: #8a5a24; font-weight: 700; }
+  #story h2 { margin: 4px 0 8px; font-size: 19px; }
+  #story p { margin: 0; font-size: 15.5px; line-height: 1.65; }
+  #spill {
+    position: absolute; inset: 0; pointer-events: none; display: none;
+    align-items: center; justify-content: center; z-index: 5;
+  }
+  #spill.show { display: flex; }
+  #spill .msg {
+    background: rgba(20,12,6,.85); color: #f0e4cf; padding: 14px 20px; border-radius: 14px;
+    font-size: 15px; text-align: center; border: 1px solid #a8855c; max-width: 260px;
+  }
+  .links { margin-top: 16px; text-align: center; font-size: 14px; color: #cdb691; }
+  .links a { color: #e6c88f; }
+  footer { margin-top: 20px; text-align: center; font-size: 14px; }
+  footer a { color: #cdb691; text-decoration: none; border-bottom: 1px solid #6b5335; padding-bottom: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>tea house</h1>
+    <div class="jp">slow down</div>
+    <p>Pick a tea. Press and hold to pour. Every finished cup comes with a story.<br>
+    <span class="hint">Swirl the cup with your finger to steep faster. Do not overfill. The table is nice.</span></p>
+  </header>
+
+  <div id="teas">
+    <button class="tea on" data-tea="0"><span class="dot" style="background:#a8a15a"></span><span class="tn">genmaicha</span><span class="td">toasty rice</span></button>
+    <button class="tea" data-tea="1"><span class="dot" style="background:#7a4a22"></span><span class="tn">hojicha</span><span class="td">roasted, mellow</span></button>
+    <button class="tea" data-tea="2"><span class="dot" style="background:#5f7a3a"></span><span class="tn">sencha</span><span class="td">grassy, bright</span></button>
+  </div>
+
+  <div id="stage">
+    <div id="potrow">
+      <svg id="teapot" viewBox="0 0 150 104">
+        <ellipse cx="75" cy="96" rx="52" ry="6" fill="rgba(0,0,0,.3)"/>
+        <path d="M45 40 h60 a6 6 0 0 1 6 6 v34 a14 14 0 0 1 -14 14 h-44 a14 14 0 0 1 -14 -14 v-34 a6 6 0 0 1 6 -6 Z" fill="#8a6a48"/>
+        <path d="M45 40 h60 a6 6 0 0 1 6 6 v10 h-72 v-10 a6 6 0 0 1 6 -6 Z" fill="#a5855e"/>
+        <rect x="66" y="26" width="18" height="12" rx="4" fill="#6b5136"/>
+        <ellipse cx="75" cy="26" rx="12" ry="4" fill="#a5855e"/>
+        <path d="M45 52 C30 52 24 62 22 74 C34 72 40 64 45 60 Z" fill="#8a6a48"/>
+        <path d="M105 52 C120 52 126 62 128 74 C116 72 110 64 105 60 Z" fill="#8a6a48"/>
+        <path d="M60 78 q15 8 30 0" stroke="#6b5136" stroke-width="3" fill="none" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div id="cupzone">
+      <div id="cup" aria-label="teacup">
+        <div id="cupbody">
+          <div id="cupinner"><div id="teaFill"><div class="sheen"></div></div></div>
+        </div>
+      </div>
+    </div>
+    <div id="steambar">
+      <div class="lbl"><span>steep</span><span id="steepPct">0%</span></div>
+      <div id="steeptrack"><div id="steepfill"></div></div>
+    </div>
+    <button id="pourBtn">press and hold to pour</button>
+    <p id="pourHint">hold to fill the cup. release to stop. swirl the cup to steep faster.</p>
+    <div id="spill"><div class="msg">spilled it. the table forgives you. the cup does not.<br><br><span style="font-size:13px">tap the cup to wipe it clean</span></div></div>
+  </div>
+
+  <div id="cups">
+    <span class="ccount">cups brewed:</span>
+    <div class="cdot" id="cdot0">1</div>
+    <div class="cdot" id="cdot1">2</div>
+    <div class="cdot" id="cdot2">3</div>
+    <div class="cdot" id="cdot3">4</div>
+  </div>
+
+  <div id="story">
+    <div class="kicker" id="storyKicker"></div>
+    <h2 id="storyTitle"></h2>
+    <p id="storyBody"></p>
+  </div>
+
+  <p class="links">home base: <a href="https://lukezhang.si/">lukezhang.si</a> &middot; all the projects: <a href="https://projects.lukezhang.si/">projects.lukezhang.si</a></p>
+  <footer><a href="../">all 40 ways to say hi</a></footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var TEAS = [
+    { name: "genmaicha", color: "#8a7a34" },
+    { name: "hojicha", color: "#5e3a12" },
+    { name: "sencha", color: "#4f6a2a" }
+  ];
+  var STORIES = [
+    { k: "cup one", t: "why i build", b: "Every app started as an itch. A card game that needed a better table. A commute that needed a chess clock. I build the thing I want to exist, then I put it on the internet. The itch is the roadmap." },
+    { k: "cup two", t: "the dumpling rule", b: "If a decision takes longer than folding dumplings, it is the wrong decision. Most choices are reversible. Fold, taste, adjust. This rule has never failed me, and dumplings have never failed anyone." },
+    { k: "cup three", t: "high agency, explained simply", b: "There is always a move. The jail cell has a phone, physics is the only real limit, and nobody is coming to do it for you. So you make the call. It sounds intense. Mostly it means: just start." },
+    { k: "cup four", t: "game night", b: "Every week, the table clears, the cards come out, and my wife beats me at rummy. I have built entire apps and I cannot win at my own card game. Some mysteries are not meant to be solved." }
+  ];
+
+  var teaIdx = 0, fill = 0, steep = 0, cups = 0, holding = false, spilled = false;
+  /* honest tea physics: the pour follows head pressure (a full pot pours fast,
+     Torricelli-style rate ~ sqrt(pot remaining)), and steeping follows first-order
+     extraction kinetics: steep chases 100% asymptotically, never linearly. */
+  var pot = 100;
+  var teaFill = document.getElementById("teaFill");
+  var steepFill = document.getElementById("steepfill");
+  var steepPct = document.getElementById("steepPct");
+  var pourBtn = document.getElementById("pourBtn");
+  var story = document.getElementById("story");
+  var spill = document.getElementById("spill");
+  var cup = document.getElementById("cup");
+
+  /* tea select: interaction 1 */
+  var teaBtns = document.querySelectorAll(".tea");
+  teaBtns.forEach(function (b) {
+    b.addEventListener("click", function () {
+      teaBtns.forEach(function (x) { x.classList.remove("on"); });
+      b.classList.add("on");
+      teaIdx = parseInt(b.getAttribute("data-tea"), 10);
+      teaFill.style.background = "linear-gradient(180deg," + TEAS[teaIdx].color + ", #3a2410)";
+      pourBtn.textContent = "press and hold to pour " + TEAS[teaIdx].name;
+    });
+  });
+
+  /* audio: soft pour + chime, synthesized */
+  var AC = null;
+  function ac() {
+    if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { AC = null; } }
+    if (AC && AC.state === "suspended") AC.resume();
+    return AC;
+  }
+  function pourNoise() {
+    var c = ac(); if (!c) return null;
+    var len = c.sampleRate * 0.4;
+    var buf = c.createBuffer(1, len, c.sampleRate);
+    var d = buf.getChannelData(0);
+    for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * 0.5;
+    var src = c.createBufferSource(); src.buffer = buf;
+    var f = c.createBiquadFilter(); f.type = "bandpass"; f.frequency.value = 2400; f.Q.value = 1.2;
+    var g = c.createGain(); g.gain.value = 0.05;
+    src.connect(f); f.connect(g); g.connect(c.destination);
+    src.start(); src.stop(c.currentTime + 0.4);
+    return { src: src, g: g };
+  }
+  function chime() {
+    var c = ac(); if (!c) return;
+    [523, 784].forEach(function (fr, i) {
+      var t = c.currentTime + i * 0.14;
+      var o = c.createOscillator(), g = c.createGain();
+      o.type = "sine"; o.frequency.value = fr;
+      g.gain.setValueAtTime(0.09, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+      o.connect(g); g.connect(c.destination);
+      o.start(t); o.stop(t + 0.45);
+    });
+  }
+
+  function render() {
+    teaFill.style.height = Math.min(100, fill) + "%";
+    steepFill.style.width = Math.min(100, steep) + "%";
+    steepPct.textContent = Math.floor(Math.min(100, steep)) + "%";
+  }
+
+  /* pour: interaction 2, press and hold */
+  var noiseNodes = null, pourTick = null;
+  function startPour(e) {
+    if (e) e.preventDefault();
+    if (spilled) return;
+    holding = true;
+    pourBtn.classList.add("holding");
+    pourBtn.textContent = "pouring " + TEAS[teaIdx].name + "... release to stop";
+    noiseNodes = pourNoise();
+    pourTick = setInterval(function () {
+      var rate = 3.6 * Math.sqrt(Math.max(0, pot) / 100);
+      pot = Math.max(0, pot - rate);
+      fill += rate;
+      steep += (100 - steep) * 0.030;
+      if (fill >= 100) {
+        fill = 100; doSpill();
+      } else if (pot <= 0) {
+        stopPour();
+        pourBtn.textContent = "pot's empty. swirl it or let it sit.";
+      }
+      render();
+    }, 90);
+  }
+  function stopPour() {
+    if (!holding) return;
+    holding = false;
+    pourBtn.classList.remove("holding");
+    if (noiseNodes) { try { noiseNodes.src.stop(); } catch (e2) {} noiseNodes = null; }
+    if (pourTick) { clearInterval(pourTick); pourTick = null; }
+    if (!spilled) {
+      pourBtn.textContent = "press and hold to pour " + TEAS[teaIdx].name;
+      checkBrew();
+    }
+  }
+  pourBtn.addEventListener("pointerdown", startPour);
+  pourBtn.addEventListener("pointerup", stopPour);
+  pourBtn.addEventListener("pointercancel", stopPour);
+  pourBtn.addEventListener("pointerleave", stopPour);
+  pourBtn.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+
+  function doSpill() {
+    stopPour();
+    spilled = true;
+    spill.classList.add("show");
+    pourBtn.textContent = "cup spilled. tap the cup to wipe it.";
+  }
+  cup.addEventListener("click", function () {
+    if (spilled) {
+      spilled = false; fill = 0; steep = 0; pot = 100;
+      spill.classList.remove("show");
+      story.classList.remove("show");
+      pourBtn.textContent = "press and hold to pour " + TEAS[teaIdx].name;
+      render();
+    }
+  });
+
+  /* swirl: interaction 3, drag around the cup to steep faster */
+  var swx = 0, swy = 0, swActive = false, swMoved = 0;
+  cup.addEventListener("pointerdown", function (e) {
+    swActive = true; swMoved = 0; swx = e.clientX; swy = e.clientY;
+    try { cup.setPointerCapture(e.pointerId); } catch (e2) {}
+  });
+  cup.addEventListener("pointermove", function (e) {
+    if (!swActive || spilled) return;
+    var dx = e.clientX - swx, dy = e.clientY - swy;
+    var d = Math.abs(dx) + Math.abs(dy);
+    swMoved += d;
+    swx = e.clientX; swy = e.clientY;
+    if (fill > 5 && d > 0) {
+      steep += (100 - steep) * Math.min(0.25, d * 0.004); /* agitation speeds extraction */
+      cup.style.transform = "rotate(" + Math.max(-6, Math.min(6, dx * 0.4)) + "deg)";
+      render();
+    }
+  });
+  function swUp(e) {
+    if (!swActive) return;
+    swActive = false;
+    try { cup.releasePointerCapture(e.pointerId); } catch (e2) {}
+    cup.style.transform = "";
+    if (swMoved < 10 && !spilled) {
+      /* it was a tap: nothing extra, click handler deals with spill */
+    }
+  }
+  cup.addEventListener("pointerup", swUp);
+  cup.addEventListener("pointercancel", swUp);
+
+  /* idle steeping: warmth does the work slowly */
+  setInterval(function () {
+    if (!spilled && !holding && fill > 5 && steep < 100) {
+      steep += (100 - steep) * 0.006; /* warm rest: slow asymptotic climb */
+      render();
+    }
+  }, 1000);
+
+  /* brew complete: interaction 4, refill counter + story */
+  function checkBrew() {
+    if (fill >= 55 && steep >= 80) {
+      var s = STORIES[cups % STORIES.length];
+      document.getElementById("storyKicker").textContent = s.k + ", " + TEAS[teaIdx].name;
+      document.getElementById("storyTitle").textContent = s.t;
+      document.getElementById("storyBody").textContent = s.b;
+      story.classList.remove("show");
+      void story.offsetWidth;
+      story.classList.add("show");
+      chime();
+      cups++;
+      updateDots();
+      /* refill: empty the cup for the next brew */
+      setTimeout(function () {
+        fill = 0; steep = 0; pot = 100; render();
+        pourBtn.textContent = "cup " + (cups + 1) + ": press and hold to pour " + TEAS[teaIdx].name;
+      }, 400);
+      updateDots();
+    } else if (fill >= 55 && steep < 80) {
+      pourBtn.textContent = "not steeped yet. swirl the cup or wait a little.";
+    }
+  }
+  function updateDots() {
+    for (var i = 0; i < 4; i++) {
+      document.getElementById("cdot" + i).classList.toggle("full", i < Math.min(4, cups));
+    }
+  }
+  render();
+})();
+</script>
+</body>
+</html>

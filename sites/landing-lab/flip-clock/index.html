@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>departures | Luke Zhang</title>
+<style>
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  body{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:#232120; color:#efe9dc; min-height:100dvh;
+    display:flex; flex-direction:column; align-items:center;
+    padding:20px 14px 40px; -webkit-font-smoothing:antialiased;
+  }
+  button{touch-action:manipulation;}
+  .wrap{width:100%; max-width:430px;}
+  .kicker{font-size:11px; letter-spacing:.32em; text-transform:uppercase; color:#8d8577; text-align:center; margin-bottom:6px;}
+  h1{font-size:26px; font-weight:700; text-align:center; letter-spacing:-.02em; margin-bottom:2px; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Helvetica,Arial,sans-serif;}
+  .sub{text-align:center; font-size:14px; color:#8d8577; margin-bottom:14px; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Helvetica,Arial,sans-serif;}
+  .board{
+    background:#191715; border-radius:18px; padding:18px 14px 16px;
+    box-shadow:0 20px 50px rgba(0,0,0,.5), inset 0 2px 0 rgba(255,255,255,.06);
+    border:1px solid #35322d;
+  }
+  .board-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;}
+  .board-head .lbl{font-size:11px; letter-spacing:.26em; color:#b7ab90;}
+  .auto-btn{
+    background:#35322d; color:#efe9dc; border:1px solid #4a463e; border-radius:999px;
+    font-family:inherit; font-size:12px; font-weight:700; letter-spacing:.08em;
+    padding:11px 16px; min-height:44px; cursor:pointer; display:flex; align-items:center; gap:8px;
+  }
+  .auto-btn.on{background:#d9a441; border-color:#d9a441; color:#232120;}
+  .auto-btn .dot{width:8px; height:8px; border-radius:50%; background:currentColor;}
+  .auto-btn.on .dot{animation:blink 1s steps(1) infinite;}
+  @keyframes blink{50%{opacity:.2;}}
+  .flaps{display:flex; gap:8px; justify-content:center; perspective:600px; touch-action:pan-y; user-select:none; -webkit-user-select:none;}
+  .flap{width:64px; height:96px; position:relative;}
+  .half{
+    position:absolute; left:0; right:0; height:48px; overflow:hidden;
+    background:linear-gradient(180deg,#f7f1e3,#ece4d0);
+    color:#2b2620; font-size:56px; font-weight:700; line-height:96px; text-align:center;
+    backface-visibility:hidden; -webkit-backface-visibility:hidden;
+  }
+  .half.top{top:0; border-radius:8px 8px 0 0; border-bottom:1px solid #b7ab90;}
+  .half.bottom{bottom:0; border-radius:0 0 8px 8px; line-height:0; }
+  .half.bottom span{position:relative; top:0; line-height:96px;}
+  .half.bottom .inner{position:absolute; top:-48px; left:0; right:0; height:96px; line-height:96px;}
+  .flap .flip{
+    position:absolute; left:0; right:0; top:0; height:48px; overflow:hidden; z-index:3;
+    background:linear-gradient(180deg,#f7f1e3,#ece4d0); border-radius:8px 8px 0 0;
+    transform-origin:bottom center; transform:rotateX(0);
+    font-size:56px; font-weight:700; line-height:96px; text-align:center; color:#2b2620;
+  }
+  .flap .flip.go{animation:flipdown .45s ease-in forwards;}
+  @keyframes flipdown{from{transform:rotateX(0);}to{transform:rotateX(-180deg);}}
+  .hinge{position:absolute; top:47px; left:0; right:0; height:2px; background:#191715; z-index:4;}
+  .nav{display:flex; gap:10px; margin-top:14px;}
+  .nav button{
+    flex:1; min-height:52px; border-radius:12px; cursor:pointer;
+    background:#35322d; color:#efe9dc; border:1px solid #4a463e;
+    font-family:inherit; font-size:15px; font-weight:700; letter-spacing:.06em;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .nav button:active{background:#4a463e;}
+  .nav svg{width:16px; height:16px;}
+  .story{
+    margin-top:14px; background:#f7f1e3; color:#2b2620; border-radius:14px; padding:16px;
+    min-height:150px; cursor:pointer; touch-action:manipulation; position:relative; overflow:hidden;
+  }
+  .story .yr{font-size:11px; letter-spacing:.24em; color:#8d8577; margin-bottom:4px;}
+  .story h2{font-size:19px; margin-bottom:6px; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Helvetica,Arial,sans-serif;}
+  .story p{font-size:14px; line-height:1.55; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Helvetica,Arial,sans-serif;}
+  .story .more{font-size:13px; color:#8d8577; margin-top:8px; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Helvetica,Arial,sans-serif;}
+  .story .detail{display:none; margin-top:10px; padding-top:10px; border-top:1px dashed #c9bfa8;}
+  .story.open .detail{display:block; animation:fadein .3s ease;}
+  .story.open .more{display:none;}
+  @keyframes fadein{from{opacity:0;}to{opacity:1;}}
+  .nowboarding{
+    margin-top:14px; border:1px dashed #d9a441; border-radius:14px; padding:14px 16px;
+    background:rgba(217,164,65,.08);
+  }
+  .nowboarding .lbl{font-size:11px; letter-spacing:.26em; color:#d9a441; margin-bottom:6px;}
+  .nowboarding p{font-size:14px; line-height:1.55; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Helvetica,Arial,sans-serif;}
+  .dots{display:flex; gap:6px; justify-content:center; margin-top:12px;}
+  .dots i{width:8px; height:8px; border-radius:50%; background:#4a463e;}
+  .dots i.on{background:#d9a441;}
+  .foot{margin-top:24px; text-align:center; font-size:13px; color:#8d8577; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Helvetica,Arial,sans-serif;}
+  .foot a{color:#efe9dc; font-weight:600; text-decoration:none; border-bottom:1px solid #d9a441; padding:10px 4px; display:inline-block;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">Luke Zhang</div>
+  <h1>departures</h1>
+  <p class="sub">one life, flipped one year at a time. mind the gap.</p>
+  <div class="board">
+    <div class="board-head">
+      <span class="lbl">PLATFORM LUKE</span>
+      <button class="auto-btn" id="autoBtn" aria-pressed="false"><span class="dot"></span>AUTO-PLAY</button>
+    </div>
+    <div class="flaps" id="flaps" aria-label="Year display. Swipe or use arrows to change year."></div>
+    <div class="nav">
+      <button id="prevBtn" aria-label="Previous year"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>PREV</button>
+      <button id="nextBtn" aria-label="Next year">NEXT<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+    </div>
+    <div class="story" id="story" role="button" tabindex="0" aria-label="Tap for the full story">
+      <div class="yr" id="storyYr"></div>
+      <h2 id="storyTitle"></h2>
+      <p id="storyText"></p>
+      <div class="more">tap for the full story</div>
+      <div class="detail"><p id="storyDetail"></p></div>
+    </div>
+    <div class="dots" id="dots"></div>
+  </div>
+  <div class="nowboarding">
+    <div class="lbl">NOW BOARDING</div>
+    <p>Bonsoir, the tiny studio. Ten apps, billing rolling out, first customer target: a food truck. Tagline: Yours, truly. All aboard.</p>
+  </div>
+  <div class="foot"><a href="../">all 40 ways to say hi</a></div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var YEARS = [
+    {y:"2019", title:"Toronto, degree in progress", text:"Engineering at the University of Toronto. Winters that build character and code that mostly compiled.",
+     detail:"Learned the two skills that still pay rent: break the problem down, and test the real thing. Also learned to dress for minus 20."},
+    {y:"2020", title:"Graduated into the chaos", text:"Finished school as the world went remote. Built things from a desk that doubled as a dining table.",
+     detail:"Remote everything. Turns out shipping from a small apartment is the same as shipping from an office, minus the commute and the snacks."},
+    {y:"2021", title:"Westward", text:"Arizona, then California. Traded snow for dry heat, then for fog. No regrets, one sunburn.",
+     detail:"The move that made everything else possible. New coast, new job market, and a commute measured in audiobooks."},
+    {y:"2022", title:"Robinhood", text:"Joined as an engineer. Day job: software people trust with money. Night job: games people trust with their evenings.",
+     detail:"Building at scale by day. The discipline of real production systems leaks into every side project, in a good way."},
+    {y:"2023", title:"Married my best friend", text:"The best deploy of my life. Zero rollbacks so far. My wife is also my favorite playtester.",
+     detail:"She finds every bug in five minutes flat. Every game I build gets the wife test before it gets a name."},
+    {y:"2024", title:"Cat dad era", text:"Adopted the actual boss of the house. Draw and Guess gets built for game nights at home.",
+     detail:"The cat runs the house, I just pay rent. Draw and Guess started as a way to make weeknights feel like an event."},
+    {y:"2025", title:"The app store push", text:"Liverpool Rummy and Get Clocked head for both app stores. Native wrappers, legal audits, the works.",
+     detail:"Learned more about privacy policies and age gates than any human should. Shipped anyway."},
+    {y:"2026", title:"Bonsoir", text:"The studio gets a name and a tagline: Yours, truly. Ten apps live, billing rolling out.",
+     detail:"Simple but clever, well-made toys, every post a visualizer. Currently boarding: the first paying customer."}
+  ];
+  var flapsEl = document.getElementById("flaps");
+  var storyEl = document.getElementById("story");
+  var dotsEl = document.getElementById("dots");
+  var autoBtn = document.getElementById("autoBtn");
+  var idx = 0, auto = false, autoTimer = null, busy = false;
+
+  function buildFlaps(yearStr){
+    flapsEl.innerHTML = "";
+    yearStr.split("").forEach(function(ch){
+      var f = document.createElement("div");
+      f.className = "flap";
+      f.innerHTML =
+        '<div class="half top">'+ch+'</div>' +
+        '<div class="half bottom"><div class="inner">'+ch+'</div></div>' +
+        '<div class="hinge"></div>';
+      flapsEl.appendChild(f);
+    });
+  }
+  function setYear(i, animate){
+    if(busy) return;
+    i = (i + YEARS.length) % YEARS.length;
+    var oldStr = YEARS[idx].y, newStr = YEARS[i].y;
+    idx = i;
+    if(animate && oldStr !== newStr){
+      busy = true;
+      var flaps = flapsEl.children;
+      var done = 0;
+      for(var k=0;k<flaps.length;k++){
+        (function(k){
+          var f = flaps[k];
+          var flip = document.createElement("div");
+          flip.className = "flip";
+          flip.textContent = oldStr[k];
+          f.appendChild(flip);
+          f.querySelector(".half.top").textContent = newStr[k];
+          f.querySelector(".half.bottom .inner").textContent = newStr[k];
+          requestAnimationFrame(function(){ flip.classList.add("go"); });
+          setTimeout(function(){
+            flip.remove();
+            if(++done === flaps.length){ busy = false; }
+          }, 480);
+        })(k);
+      }
+    } else {
+      buildFlaps(newStr);
+    }
+    renderStory(); renderDots();
+  }
+  function renderStory(){
+    var e = YEARS[idx];
+    document.getElementById("storyYr").textContent = "EST. " + e.y;
+    document.getElementById("storyTitle").textContent = e.title;
+    document.getElementById("storyText").textContent = e.text;
+    document.getElementById("storyDetail").textContent = e.detail;
+    storyEl.classList.remove("open");
+  }
+  function renderDots(){
+    dotsEl.innerHTML = "";
+    YEARS.forEach(function(_, i){
+      var d = document.createElement("i");
+      if(i===idx) d.className = "on";
+      dotsEl.appendChild(d);
+    });
+  }
+  document.getElementById("nextBtn").addEventListener("click", function(){ setYear(idx+1, true); poke(); });
+  document.getElementById("prevBtn").addEventListener("click", function(){ setYear(idx-1, true); poke(); });
+  function toggleStory(){ storyEl.classList.toggle("open"); }
+  storyEl.addEventListener("click", toggleStory);
+  storyEl.addEventListener("keydown", function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); toggleStory(); } });
+  var sx = 0;
+  flapsEl.addEventListener("touchstart", function(e){ sx = e.touches[0].clientX; }, {passive:true});
+  flapsEl.addEventListener("touchend", function(e){
+    var dx = e.changedTouches[0].clientX - sx;
+    if(Math.abs(dx) > 40){ setYear(idx + (dx<0?1:-1), true); poke(); }
+  }, {passive:true});
+  var px = 0, pdown = false;
+  flapsEl.addEventListener("pointerdown", function(e){ pdown = true; px = e.clientX; });
+  flapsEl.addEventListener("pointerup", function(e){
+    if(!pdown) return; pdown = false;
+    var dx = e.clientX - px;
+    if(Math.abs(dx) > 40){ setYear(idx + (dx<0?1:-1), true); poke(); }
+  });
+  function startAuto(){
+    stopAuto();
+    autoTimer = setInterval(function(){ setYear(idx+1, true); }, 2600);
+  }
+  function stopAuto(){ if(autoTimer){ clearInterval(autoTimer); autoTimer = null; } }
+  function poke(){ if(auto) startAuto(); }
+  autoBtn.addEventListener("click", function(){
+    auto = !auto;
+    autoBtn.classList.toggle("on", auto);
+    autoBtn.setAttribute("aria-pressed", auto ? "true" : "false");
+    if(auto){ startAuto(); } else { stopAuto(); }
+  });
+  buildFlaps(YEARS[0].y); renderStory(); renderDots();
+})();
+</script>
+</body>
+</html>

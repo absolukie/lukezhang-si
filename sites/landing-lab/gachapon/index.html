@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gachapon | Luke Zhang</title>
+<style>
+  :root{
+    --bg:#f7f1e6; --ink:#3a2e2a; --mut:#8a7a6e;
+    --red:#d94343; --red-d:#a92f2f; --gold:#f5b942;
+    --cream:#fffdf7;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    min-height:100vh; display:flex; justify-content:center;
+    padding:28px 14px 64px; -webkit-font-smoothing:antialiased;
+  }
+  button,a{touch-action:manipulation;}
+  .wrap{width:100%; max-width:420px;}
+  header{text-align:center; margin-bottom:18px;}
+  .kicker{font-size:11px; letter-spacing:.24em; text-transform:uppercase; color:var(--mut); margin-bottom:10px;}
+  h1{font-size:34px; font-weight:800; letter-spacing:-0.02em; margin-bottom:8px;}
+  h1 .dot{color:var(--red);}
+  .sub{color:var(--mut); font-size:14px; line-height:1.6; max-width:30em; margin:0 auto;}
+  .sub b{color:var(--ink);}
+
+  /* ---------- machine ---------- */
+  .machine{
+    background:var(--red); border-radius:26px; padding:20px 18px 24px;
+    box-shadow:0 18px 40px rgba(169,47,47,.35), inset 0 2px 0 rgba(255,255,255,.25);
+    position:relative; margin-top:22px;
+  }
+  .machine.shake{animation:shake .4s ease;}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px) rotate(-.6deg)}50%{transform:translateX(6px)}75%{transform:translateX(-4px) rotate(.6deg)}}
+  .coinslot-row{display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:12px;}
+  .coin-purse{
+    display:flex; align-items:center; gap:8px; background:rgba(0,0,0,.18);
+    border-radius:999px; padding:8px 14px; color:#fff; font-size:13px; font-weight:700;
+  }
+  .coin-purse svg{width:20px; height:20px;}
+  #coinSlot{
+    width:76px; height:64px; border-radius:14px; border:none; cursor:pointer;
+    background:linear-gradient(180deg,#3b3b3f,#232326); color:#ffd76a;
+    font-size:11px; font-weight:800; letter-spacing:.08em;
+    box-shadow:inset 0 2px 6px rgba(0,0,0,.6), 0 2px 0 rgba(255,255,255,.15);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+    min-height:64px; position:relative; overflow:visible;
+  }
+  #coinSlot .slot{width:34px; height:7px; border-radius:4px; background:#0c0c0e; box-shadow:inset 0 1px 3px #000;}
+  #coinSlot .fly-coin{
+    position:absolute; top:-34px; left:50%; margin-left:-13px; width:26px; height:26px;
+    border-radius:50%; background:radial-gradient(circle at 35% 30%, #ffe9a8, var(--gold) 60%, #c78a1e);
+    box-shadow:0 2px 5px rgba(0,0,0,.35); animation:coinIn .45s ease-in forwards; pointer-events:none;
+  }
+  @keyframes coinIn{0%{transform:translateY(-6px) scale(1); opacity:1}70%{opacity:1}100%{transform:translateY(44px) scale(.6); opacity:0}}
+  .hintline{text-align:center; color:#ffd9d9; font-size:12px; min-height:20px; margin-bottom:8px; font-weight:600;}
+
+  .globe{
+    background:linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.18));
+    border:6px solid rgba(0,0,0,.22); border-radius:22px;
+    height:230px; position:relative; overflow:hidden;
+    box-shadow:inset 0 0 30px rgba(255,255,255,.4);
+  }
+  .globe .shine{
+    position:absolute; top:8px; left:14px; width:60px; height:120px; border-radius:40px;
+    background:linear-gradient(180deg, rgba(255,255,255,.65), rgba(255,255,255,0));
+    transform:rotate(8deg); pointer-events:none; z-index:5;
+  }
+  .cap{
+    position:absolute; width:52px; height:52px; border-radius:50%;
+    box-shadow:inset -6px -8px 0 rgba(0,0,0,.14), 0 4px 8px rgba(0,0,0,.18);
+    animation:bob 3.4s ease-in-out infinite;
+  }
+  .cap::after{
+    content:""; position:absolute; left:6px; right:6px; top:50%; height:3px; margin-top:-1.5px;
+    background:rgba(0,0,0,.16); border-radius:2px;
+  }
+  @keyframes bob{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-9px) rotate(5deg)}}
+
+  .crank-zone{display:flex; align-items:center; justify-content:center; gap:16px; margin-top:16px;}
+  #crank{
+    width:112px; height:112px; border-radius:50%; position:relative; cursor:grab;
+    background:radial-gradient(circle at 35% 30%, #fdfdfd, #d9d4c8 70%, #b9b2a2);
+    box-shadow:0 6px 0 rgba(0,0,0,.22), inset 0 2px 4px rgba(255,255,255,.8);
+    touch-action:none; user-select:none; -webkit-user-select:none;
+  }
+  #crank:active{cursor:grabbing;}
+  #crank .knob{
+    position:absolute; top:8px; left:50%; width:30px; height:30px; margin-left:-15px;
+    border-radius:50%; background:radial-gradient(circle at 35% 30%, #ff8f8f, var(--red) 65%, var(--red-d));
+    box-shadow:0 3px 6px rgba(0,0,0,.3);
+  }
+  #crank .hub{
+    position:absolute; top:50%; left:50%; width:26px; height:26px; margin:-13px 0 0 -13px;
+    border-radius:50%; background:#3b3b3f; box-shadow:inset 0 2px 4px rgba(0,0,0,.6);
+  }
+  .crank-label{font-size:12px; color:#ffe3e3; font-weight:700; text-align:center; line-height:1.5; max-width:130px;}
+  .crank-label b{display:block; font-size:13px; color:#fff;}
+  .progress-ring{position:absolute; inset:-9px; pointer-events:none;}
+
+  .chute{
+    margin:16px auto 0; width:170px; height:66px; border-radius:14px;
+    background:#2a2a2e; box-shadow:inset 0 4px 10px rgba(0,0,0,.7);
+    position:relative; display:flex; align-items:center; justify-content:center;
+    color:#6f6f76; font-size:11px; font-weight:700; letter-spacing:.12em;
+  }
+  .chute .door{
+    position:absolute; inset:0; border-radius:14px; background:linear-gradient(180deg,#4a4a50,#333338);
+    transform-origin:top; transition:transform .25s ease; display:flex; align-items:center; justify-content:center;
+    color:#a9a9b0; font-size:11px; font-weight:700; letter-spacing:.12em;
+  }
+  .chute.open .door{transform:perspective(400px) rotateX(-64deg);}
+  #dropped{
+    width:64px; height:64px; border-radius:50%; border:none; cursor:pointer;
+    display:none; position:relative; z-index:2;
+    box-shadow:inset -8px -10px 0 rgba(0,0,0,.14), 0 8px 16px rgba(0,0,0,.3);
+    animation:dropIn .5s cubic-bezier(.2,1.6,.4,1);
+    touch-action:manipulation; min-width:64px; min-height:64px;
+  }
+  #dropped.show{display:block;}
+  #dropped::after{
+    content:""; position:absolute; left:8px; right:8px; top:50%; height:4px; margin-top:-2px;
+    background:rgba(0,0,0,.16); border-radius:2px;
+  }
+  @keyframes dropIn{0%{transform:translateY(-120px) scale(.7);}60%{transform:translateY(6px) scale(1.04);}100%{transform:translateY(0) scale(1);}}
+
+  /* ---------- crack-open card ---------- */
+  .reveal{
+    display:none; margin-top:18px; background:var(--cream); border-radius:18px;
+    padding:20px 18px; box-shadow:0 10px 26px rgba(58,46,42,.14);
+    border:1px solid #e9ddc9; text-align:center;
+    animation:pop .35s cubic-bezier(.2,1.5,.4,1);
+  }
+  .reveal.show{display:block;}
+  @keyframes pop{0%{transform:scale(.85); opacity:0}100%{transform:scale(1); opacity:1}}
+  .reveal .tag{
+    display:inline-block; font-size:10px; font-weight:800; letter-spacing:.2em;
+    color:var(--red); text-transform:uppercase; margin-bottom:8px;
+  }
+  .reveal .tag.rare{color:#b07d10;}
+  .reveal h2{font-size:22px; font-weight:800; letter-spacing:-0.01em; margin-bottom:8px;}
+  .reveal p{font-size:14px; color:var(--mut); line-height:1.6; margin-bottom:14px;}
+  .reveal .row{display:flex; gap:10px; justify-content:center;}
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center;
+    min-height:48px; padding:0 22px; border-radius:12px; border:none; cursor:pointer;
+    font-size:15px; font-weight:700; text-decoration:none;
+  }
+  .btn.primary{background:var(--red); color:#fff; box-shadow:0 4px 0 var(--red-d);}
+  .btn.primary:active{transform:translateY(3px); box-shadow:0 1px 0 var(--red-d);}
+  .btn.ghost{background:#efe7d6; color:var(--ink);}
+  .btn.ghost:active{transform:translateY(2px);}
+
+  /* ---------- shelf ---------- */
+  .shelf-wrap{margin-top:26px;}
+  .shelf-wrap h3{font-size:13px; letter-spacing:.2em; text-transform:uppercase; color:var(--mut); text-align:center; margin-bottom:4px;}
+  .shelf-wrap .count{text-align:center; font-size:12px; color:var(--mut); margin-bottom:12px;}
+  #shelf{
+    display:flex; flex-wrap:wrap; gap:12px; justify-content:center;
+    background:#e8dcc3; border-radius:16px; padding:18px 14px;
+    box-shadow:inset 0 3px 8px rgba(58,46,42,.15); min-height:96px;
+  }
+  .shelf-cap{
+    width:52px; height:52px; border-radius:50%; border:none; cursor:pointer; position:relative;
+    box-shadow:inset -6px -8px 0 rgba(0,0,0,.14), 0 4px 8px rgba(0,0,0,.2);
+    touch-action:manipulation;
+    transition:transform .15s ease;
+  }
+  .shelf-cap:active{transform:scale(.9);}
+  .shelf-cap.gold::before{
+    content:""; position:absolute; inset:-5px; border-radius:50%;
+    border:3px solid var(--gold); animation:ringpulse 1.6s ease-in-out infinite;
+  }
+  .shelf-cap.rare::before{
+    content:""; position:absolute; inset:-5px; border-radius:50%;
+    border:2px solid #b9c4d6;
+  }
+  @keyframes ringpulse{0%,100%{transform:scale(1); opacity:.9}50%{transform:scale(1.12); opacity:.4}}
+  .shelf-empty{color:var(--mut); font-size:13px; text-align:center; width:100%; padding:10px 0;}
+
+  .odds{
+    margin-top:18px; background:#fffdf7; border:1px dashed #d8c9a8; border-radius:14px;
+    padding:14px 16px; font-size:12.5px; line-height:1.7; color:var(--mut); text-align:center;
+  }
+  .odds b{color:var(--ink);}
+  .odds .bars{display:flex; height:10px; border-radius:5px; overflow:hidden; margin:10px 0 6px;}
+  .odds .bars i{display:block; height:100%;}
+
+  footer{text-align:center; margin-top:34px; font-size:13px; color:var(--mut);}
+  footer a{color:var(--red); font-weight:700;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">Luke Zhang</div>
+    <h1>Gachapon<span class="dot">.</span></h1>
+    <p class="sub">A capsule toy machine full of my projects. <b>Insert a coin, crank it, crack the capsule.</b> First two coins are on the house. Gold capsules are rare, like my free time.</p>
+  </header>
+
+  <div class="machine" id="machine">
+    <div class="coinslot-row">
+      <div class="coin-purse">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#f5b942"/><circle cx="12" cy="12" r="6.5" fill="none" stroke="#b07d10" stroke-width="2"/><text x="12" y="16" text-anchor="middle" font-size="10" font-weight="800" fill="#b07d10">1</text></svg>
+        <span id="coinCount">2 coins</span>
+      </div>
+      <button id="coinSlot" aria-label="Insert a coin">
+        <span class="slot"></span>
+        <span>INSERT<br>COIN</span>
+      </button>
+    </div>
+    <div class="hintline" id="hint">tap the slot to add a coin</div>
+
+    <div class="globe" id="globe">
+      <div class="shine"></div>
+    </div>
+
+    <div class="crank-zone">
+      <div id="crank" aria-label="Turn the crank in a circle">
+        <svg class="progress-ring" viewBox="0 0 130 130">
+          <circle cx="65" cy="65" r="58" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="6"/>
+          <circle id="crankProg" cx="65" cy="65" r="58" fill="none" stroke="#ffd76a" stroke-width="6"
+                  stroke-linecap="round" stroke-dasharray="364.4" stroke-dashoffset="364.4"
+                  transform="rotate(-90 65 65)"/>
+        </svg>
+        <div class="knob"></div>
+        <div class="hub"></div>
+      </div>
+      <div class="crank-label"><b>Turn me</b>drag the crank in a full circle</div>
+    </div>
+
+    <div class="chute" id="chute">
+      <span id="chuteLabel">PRIZE CHUTE</span>
+      <div class="door" id="chuteDoor">PUSH</div>
+      <button id="dropped" aria-label="Tap to crack open the capsule"></button>
+    </div>
+  </div>
+
+  <div class="reveal" id="reveal">
+    <div class="tag" id="revealTag">you got</div>
+    <h2 id="revealName"></h2>
+    <p id="revealDesc"></p>
+    <div class="row">
+      <a class="btn primary" id="revealLink" href="https://lukezhang.si/" target="_blank" rel="noopener">take a look</a>
+      <button class="btn ghost" id="revealAgain">crank again</button>
+    </div>
+  </div>
+
+  <div class="shelf-wrap">
+    <h3>Your collection</h3>
+    <div class="count" id="shelfCount">nothing yet. the machine is judging you.</div>
+    <div id="shelf"></div>
+  </div>
+
+  <div class="odds">
+    <b>Odds, printed on the machine like the law requires.</b>
+    <div class="bars" aria-hidden="true">
+      <i style="width:70%; background:#a8d8f0;"></i><i style="width:22%; background:#b9c4d6;"></i><i style="width:8%; background:#f5b942;"></i>
+    </div>
+    Common 70% &middot; Rare 22% &middot; Gold 8%. Every crank is independent, the machine keeps no memory of your luck, because it has none.
+  </div>
+
+  <footer><a href="../">back to all 40 ways to say hi</a></footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- project data ---------------- */
+  var PROJECTS = [
+    {name:"Liverpool Rummy", desc:"A card game I built so my wife and I always have something to play. Real rooms, real trash talk.", url:"https://projects.lukezhang.si/liverpool-rummy/", color:"#7fb069", tier:"common"},
+    {name:"Draw & Guess", desc:"Party drawing game. Guess in plain pinyin, no tone marks, no judgment. Built for game night.", url:"https://projects.lukezhang.si/draw-guess/", color:"#e07a5f", tier:"common"},
+    {name:"Fifty Tracks", desc:"Fifty songs, one per week, shipped like software. A year of music with version numbers.", url:"https://projects.lukezhang.si/fifty-tracks/", color:"#f2cc8f", tier:"common"},
+    {name:"Wikimari", desc:"Wikipedia racing, but the ball rolls downhill and collects facts. Nerd sport.", url:"https://projects.lukezhang.si/wikimari/", color:"#81b29a", tier:"common"},
+    {name:"Landing Lab", desc:"Twenty tiny landing pages, one per idea. You are inside the sequel.", url:"https://projects.lukezhang.si/landing-lab/", color:"#a8dadc", tier:"common"},
+    {name:"Poteto Tracker", desc:"A usage tracker for a legendary engineer's 1.5 trillion token month. Then the profile went private.", url:"https://projects.lukezhang.si/poteto-tracker/", color:"#f4f1de", tier:"rare"},
+    {name:"Skill Tree, in Ink", desc:"My skills painted in Chinese ink wash style. The blog post people actually finished.", url:"https://lukezhang.si/blog/skill-tree-app-design/", color:"#e8e8e8", tier:"rare"},
+    {name:"Get Clocked", desc:"Time tracking for people who hate time tracking. GOLD PULL. Tell no one.", url:"https://lukezhang.si/", color:"#f5b942", tier:"gold"}
+  ];
+  /* Honest odds, printed on the machine like the law requires.
+     Every crank draws independently from these weights. The machine
+     keeps no memory of your luck, because it has none. */
+  var ODDS = [
+    {tier:"gold", p:0.08},
+    {tier:"rare", p:0.22},
+    {tier:"common", p:0.70}
+  ];
+  var GLOBE_COLORS = ["#f4a7c3","#a8d8f0","#f9dc7a","#b8e6b0","#d9b8f0","#ffb08a","#9fe3d0"];
+
+  /* ---------------- tiny synth ---------------- */
+  var AC = null;
+  function ac(){ if(!AC){ AC = new (window.AudioContext||window.webkitAudioContext)(); } if(AC.state==="suspended"){AC.resume();} return AC; }
+  function blip(freq, dur, type, vol){
+    try{
+      var c = ac(), o = c.createOscillator(), g = c.createGain();
+      o.type = type || "sine"; o.frequency.value = freq;
+      g.gain.setValueAtTime(vol || 0.12, c.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + (dur || 0.12));
+      o.connect(g); g.connect(c.destination);
+      o.start(); o.stop(c.currentTime + (dur || 0.12) + 0.02);
+    }catch(e){}
+  }
+  function clink(){ blip(2400, .09, "triangle", .1); setTimeout(function(){ blip(3200, .08, "triangle", .08); }, 60); }
+  function ratchet(){ blip(420 + Math.random()*120, .05, "square", .05); }
+  function clunk(){ blip(140, .22, "sine", .22); setTimeout(function(){ blip(90, .3, "sine", .18); }, 40); }
+  function fanfare(){ [523,659,784,1047].forEach(function(f,i){ setTimeout(function(){ blip(f,.16,"triangle",.12); }, i*90); }); }
+
+  /* ---------------- state ---------------- */
+  var coins = 2, winding = 0, dispensing = false, lastRatchet = 0;
+  var coinCount = document.getElementById("coinCount");
+  var hint = document.getElementById("hint");
+  var machine = document.getElementById("machine");
+  var chute = document.getElementById("chute");
+  var chuteDoor = document.getElementById("chuteDoor");
+  var dropped = document.getElementById("dropped");
+  var reveal = document.getElementById("reveal");
+  var globe = document.getElementById("globe");
+
+  function setHint(t){ hint.textContent = t; }
+  function setCoins(n){ coins = n; coinCount.textContent = coins + (coins===1 ? " coin" : " coins"); }
+
+  /* ---------------- globe capsules (decor) ---------------- */
+  var globeCaps = [];
+  for (var i=0;i<9;i++){
+    var c = document.createElement("div");
+    c.className = "cap";
+    var col = GLOBE_COLORS[i % GLOBE_COLORS.length];
+    c.style.background = "radial-gradient(circle at 35% 30%, #ffffff88, " + col + " 55%, " + col + ")";
+    c.style.left = (4 + (i*37) % 78) + "%";
+    c.style.top = (8 + (i*53) % 62) + "%";
+    c.style.animationDelay = (i * 0.37) + "s";
+    globe.appendChild(c);
+    globeCaps.push(c);
+  }
+
+  /* ---------------- coin slot: tap to insert ---------------- */
+  document.getElementById("coinSlot").addEventListener("click", function(){
+    ac(); clink();
+    var coin = document.createElement("span");
+    coin.className = "fly-coin";
+    this.appendChild(coin);
+    setTimeout(function(){ coin.remove(); }, 500);
+    setCoins(coins + 1);
+    setHint("nice. now crank it.");
+  });
+
+  /* ---------------- crank: drag in a circle ---------------- */
+  var crank = document.getElementById("crank");
+  var crankProg = document.getElementById("crankProg");
+  var CIRC = 364.4, NEED = Math.PI * 2; /* one full turn */
+  var cranking = false, lastAngle = 0, rot = 0;
+
+  function angleOf(e){
+    var r = crank.getBoundingClientRect();
+    var x = e.clientX - (r.left + r.width/2), y = e.clientY - (r.top + r.height/2);
+    return Math.atan2(y, x);
+  }
+  function renderCrank(){
+    crank.style.transform = "rotate(" + (rot * 180/Math.PI) + "deg)";
+    crankProg.style.strokeDashoffset = String(CIRC * (1 - Math.min(1, winding / NEED)));
+  }
+  crank.addEventListener("pointerdown", function(e){
+    if (dispensing) return;
+    ac();
+    cranking = true; lastAngle = angleOf(e);
+    crank.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  crank.addEventListener("pointermove", function(e){
+    if (!cranking) return;
+    var a = angleOf(e), d = a - lastAngle;
+    if (d > Math.PI) d -= Math.PI*2;
+    if (d < -Math.PI) d += Math.PI*2;
+    lastAngle = a;
+    if (Math.abs(d) < 0.6){
+      rot += d; winding += Math.abs(d);
+      var now = Date.now();
+      if (now - lastRatchet > 90){ lastRatchet = now; ratchet(); }
+      renderCrank();
+      if (winding >= NEED && !dispensing){ dispense(); }
+    }
+  });
+  function endCrank(){ cranking = false; }
+  crank.addEventListener("pointerup", endCrank);
+  crank.addEventListener("pointercancel", endCrank);
+
+  /* ---------------- dispense ---------------- */
+  /* ---------------- dispense: honest weighted draw ---------------- */
+  function poolOf(tier){
+    var out = [];
+    for (var i=0;i<PROJECTS.length;i++) if (PROJECTS[i].tier===tier) out.push(PROJECTS[i]);
+    return out;
+  }
+  var POOLS = {common:poolOf("common"), rare:poolOf("rare"), gold:poolOf("gold")};
+  function pickProject(){
+    var r = Math.random(), acc = 0, tier = "common";
+    for (var i=0;i<ODDS.length;i++){ acc += ODDS[i].p; if (r < acc){ tier = ODDS[i].tier; break; } }
+    var pool = POOLS[tier];
+    return pool[Math.floor(Math.random()*pool.length)];
+  }
+  function dispense(){
+    if (coins <= 0){
+      setHint("no coins. the slot is right there.");
+      machine.classList.remove("shake"); void machine.offsetWidth; machine.classList.add("shake");
+      winding = 0; renderCrank(); blip(180,.2,"sawtooth",.08);
+      return;
+    }
+    dispensing = true; setCoins(coins - 1);
+    setHint("dispensing...");
+    setTimeout(function(){
+      var p = pickProject();
+      dropped.dataset.proj = p.name;
+      dropped.style.background = "radial-gradient(circle at 35% 30%, #ffffff88, " + p.color + " 55%, " + p.color + ")";
+      dropped.classList.add("show");
+      chute.classList.add("open");
+      document.getElementById("chuteLabel").textContent = "TAP IT";
+      clunk();
+      setHint("it is in the chute. tap the capsule to crack it.");
+      winding = 0; renderCrank();
+      dispensing = false;
+    }, 450);
+  }
+
+  /* ---------------- crack it open ---------------- */
+  function findProj(name){
+    for (var i=0;i<PROJECTS.length;i++) if (PROJECTS[i].name===name) return PROJECTS[i];
+    return PROJECTS[0];
+  }
+  dropped.addEventListener("click", function(){
+    var p = findProj(this.dataset.proj);
+    clunk();
+    this.style.transform = "scale(1.25)";
+    this.style.opacity = "0";
+    setTimeout(function(){
+      dropped.classList.remove("show");
+      dropped.style.transform = ""; dropped.style.opacity = "";
+      chute.classList.remove("open");
+      document.getElementById("chuteLabel").textContent = "PRIZE CHUTE";
+      setHint(coins > 0 ? "crank it again." : "tap the slot to add a coin");
+      showReveal(p);
+    }, 220);
+  });
+
+  var revealTag = document.getElementById("revealTag");
+  var TIER_LABEL = {common:"you got", rare:"RARE PULL", gold:"GOLD PULL"};
+  function showReveal(p){
+    document.getElementById("revealName").textContent = p.name;
+    document.getElementById("revealDesc").textContent = p.desc;
+    var link = document.getElementById("revealLink");
+    link.href = p.url; link.textContent = p.tier==="gold" ? "sneak a peek" : "take a look";
+    revealTag.textContent = TIER_LABEL[p.tier] || "you got";
+    revealTag.className = "tag" + (p.tier==="gold" ? " rare" : "");
+    reveal.classList.remove("show"); void reveal.offsetWidth; reveal.classList.add("show");
+    if (p.tier==="gold") fanfare(); else if (p.tier==="rare") blip(880,.14,"triangle",.12); else blip(660,.12,"triangle",.1);
+    addToShelf(p);
+    reveal.scrollIntoView({behavior:"smooth", block:"nearest"});
+  }
+  document.getElementById("revealAgain").addEventListener("click", function(){
+    reveal.classList.remove("show");
+    setHint(coins > 0 ? "crank it." : "tap the slot to add a coin");
+    window.scrollTo({top:0, behavior:"smooth"});
+  });
+
+  /* ---------------- shelf (localStorage) ---------------- */
+  var SHELF_KEY = "gacha-shelf-v1";
+  var shelfEl = document.getElementById("shelf");
+  var shelfCount = document.getElementById("shelfCount");
+  function loadShelf(){ try{ return JSON.parse(localStorage.getItem(SHELF_KEY)) || []; }catch(e){ return []; } }
+  function saveShelf(s){ try{ localStorage.setItem(SHELF_KEY, JSON.stringify(s)); }catch(e){} }
+  function renderShelf(){
+    var s = loadShelf();
+    shelfEl.innerHTML = "";
+    if (!s.length){
+      var d = document.createElement("div");
+      d.className = "shelf-empty"; d.textContent = "nothing yet. the machine is judging you.";
+      shelfEl.appendChild(d);
+      shelfCount.textContent = "0 of " + PROJECTS.length + " collected";
+      return;
+    }
+    shelfCount.textContent = s.length + " capsule" + (s.length===1?"":"s") + " collected" + (s.length>=PROJECTS.length ? ", full set, show off" : "");
+    s.forEach(function(name){
+      var p = findProj(name);
+      var b = document.createElement("button");
+      b.className = "shelf-cap" + (p.tier==="gold" ? " gold" : p.tier==="rare" ? " rare" : "");
+      b.style.background = "radial-gradient(circle at 35% 30%, #ffffff88, " + p.color + " 55%, " + p.color + ")";
+      b.title = p.name + " (" + p.tier + ")"; b.setAttribute("aria-label", "View " + p.name + ", " + p.tier + " pull");
+      b.addEventListener("click", function(){ showReveal(p); });
+      shelfEl.appendChild(b);
+    });
+  }
+  function addToShelf(p){
+    var s = loadShelf();
+    if (s.indexOf(p.name) === -1){ s.push(p.name); saveShelf(s); }
+    renderShelf();
+  }
+  renderShelf();
+})();
+</script>
+</body>
+</html>

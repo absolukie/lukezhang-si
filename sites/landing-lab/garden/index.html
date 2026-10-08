@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>the garden - luke</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Avenir Next", -apple-system, "Segoe UI", sans-serif;
+    background: #dce8d2;
+    background-image:
+      radial-gradient(ellipse 120% 50% at 50% 0%, #f2f7ea 0%, transparent 60%),
+      repeating-linear-gradient(0deg, rgba(120,140,100,.06) 0 3px, transparent 3px 22px);
+    color: #2e3a26;
+    min-height: 100dvh;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 18px 14px 30px;
+  }
+  .wrap { width: 100%; max-width: 420px; }
+  header { text-align: center; margin-bottom: 10px; }
+  header h1 { font-size: 24px; margin: 0; letter-spacing: 2px; color: #3c4f30; }
+  header p { margin: 8px 0 0; font-size: 14px; color: #5c6b4e; line-height: 1.5; }
+  header .hint { font-size: 12.5px; color: #8a9578; }
+  #sunbar {
+    display: flex; align-items: center; gap: 10px; margin: 12px 0;
+    background: rgba(255,255,255,.55); border-radius: 14px; padding: 10px 14px;
+    border: 1px solid #c3cdb2;
+  }
+  #sunbar svg { width: 30px; height: 30px; flex: none; }
+  #sun { flex: 1; height: 40px; touch-action: manipulation; font-size: 16px; accent-color: #d99a3a; }
+  #sunval { font-size: 13px; color: #5c6b4e; min-width: 52px; text-align: right; }
+  #bed {
+    position: relative; min-height: 430px;
+    background: rgba(255,255,255,.35); border-radius: 18px; border: 1px solid #c3cdb2;
+    padding: 12px;
+  }
+  .pot {
+    position: absolute; width: 112px; height: 196px;
+    touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none;
+  }
+  .pot.ghost { opacity: .55; z-index: 9; }
+  .plantbox { width: 112px; height: 120px; display: flex; align-items: flex-end; justify-content: center; }
+  .plantbox svg { width: 96px; height: 116px; overflow: visible; }
+  .claypot { width: 112px; height: 66px; position: relative; }
+  .claypot .waterbar {
+    position: absolute; left: 22px; right: 22px; top: -8px; height: 6px; border-radius: 3px;
+    background: rgba(60,79,48,.18); overflow: hidden;
+  }
+  .claypot .waterbar i { display: block; height: 100%; width: 0%; background: #4d9fd6; border-radius: 3px; transition: width .3s; }
+  .plabel { font-size: 11px; text-align: center; color: #3c4f30; font-weight: 600; margin-top: 2px; line-height: 1.25; }
+  .plabel .stage { display: block; font-weight: 400; color: #8a9578; font-size: 10.5px; }
+  .drop {
+    position: absolute; width: 10px; height: 14px; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    background: #4d9fd6; pointer-events: none; z-index: 8;
+    animation: fall .55s ease-in forwards;
+  }
+  @keyframes fall { 0% { transform: translateY(-26px); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(26px); opacity: 0; } }
+  .bee {
+    position: absolute; width: 26px; height: 20px; pointer-events: none; z-index: 10;
+  }
+  .bee svg { width: 100%; height: 100%; }
+  .can {
+    display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 12px;
+  }
+  #waterBtn {
+    min-height: 52px; padding: 12px 22px; border-radius: 999px; border: none;
+    background: #3c4f30; color: #f2f7ea; font-size: 16px; font-family: inherit; font-weight: 600;
+    touch-action: manipulation; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  #waterBtn:active { background: #2e3a26; }
+  #waterBtn svg { width: 22px; height: 22px; }
+  #journal {
+    margin-top: 14px; background: rgba(255,255,255,.55); border: 1px solid #c3cdb2;
+    border-radius: 14px; padding: 12px 14px; font-size: 13.5px; color: #5c6b4e; line-height: 1.55;
+    min-height: 66px;
+  }
+  #journal strong { color: #3c4f30; }
+  .links { margin-top: 16px; text-align: center; font-size: 14px; color: #5c6b4e; }
+  .links a { color: #3c4f30; font-weight: 600; }
+  footer { margin-top: 20px; text-align: center; font-size: 14px; }
+  footer a { color: #5c6b4e; text-decoration: none; border-bottom: 1px solid #8a9578; padding-bottom: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>the garden</h1>
+    <p>His projects, planted. Tap a pot to water it, watch it grow from seed to bloom.<br>
+    <span class="hint">Drag pots to rearrange the bed. Slide the sun to speed things up. Bees visit blooms.</span></p>
+  </header>
+
+  <div id="sunbar">
+    <svg viewBox="0 0 32 32" fill="none" stroke="#d99a3a" stroke-width="2.2" stroke-linecap="round">
+      <circle cx="16" cy="16" r="6" fill="#f2c14e" stroke="#d99a3a"/>
+      <path d="M16 2 v4 M16 26 v4 M2 16 h4 M26 16 h4 M6 6 l2.8 2.8 M23.2 23.2 L26 26 M26 6 l-2.8 2.8 M8.8 23.2 L6 26"/>
+    </svg>
+    <input type="range" id="sun" min="0" max="100" value="45" aria-label="sunlight">
+    <div id="sunval">sun 45%</div>
+  </div>
+
+  <div id="bed"></div>
+
+  <div class="can">
+    <button id="waterBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#f2f7ea" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10 h9 l7 -4 v12 l-7 -4"/><path d="M4 10 v9 a2 2 0 0 0 2 2 h5"/><path d="M8 21 v-4"/></svg>
+      water everything
+    </button>
+  </div>
+
+  <div id="journal"><strong>garden journal:</strong> <span id="jtext">nothing planted yet. tap a pot to water it.</span></div>
+
+  <p class="links">home base: <a href="https://lukezhang.si/">lukezhang.si</a> &middot; all the projects: <a href="https://projects.lukezhang.si/">projects.lukezhang.si</a></p>
+  <footer><a href="../">all 40 ways to say hi</a></footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var PROJECTS = [
+    { name: "liverpool rummy", hue: 150, note: "the card game. the household championship never ends." },
+    { name: "get clocked", hue: 200, note: "the chess clock for everything else. meetings fear it." },
+    { name: "curbside", hue: 35, note: "food trucks, found. the taco leaderboard, but an app." },
+    { name: "draw and guess", hue: 280, note: "built for two players and one very patient wife." },
+    { name: "peggie", hue: 10, note: "the survey tool that made decision boards goated." },
+    { name: "llm visualizer", hue: 220, note: "how an llm works, drawn so anyone can get it." }
+  ];
+  var STAGES = ["seed", "sprout", "leafy", "budding", "bloom"];
+  var STAGE_NEED = [0, 25, 60, 105, 160]; /* growth points */
+
+  var bed = document.getElementById("bed");
+  var jtext = document.getElementById("jtext");
+  var sunInput = document.getElementById("sun");
+  var sunVal = document.getElementById("sunval");
+  var sun = 45;
+  sunInput.addEventListener("input", function () {
+    sun = parseInt(sunInput.value, 10);
+    sunVal.textContent = "sun " + sun + "%";
+  });
+
+  /* --- audio: soft droplet --- */
+  var AC = null;
+  function ac() {
+    if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { AC = null; } }
+    if (AC && AC.state === "suspended") AC.resume();
+    return AC;
+  }
+  function droplet() {
+    var c = ac(); if (!c) return;
+    var t = c.currentTime;
+    var o = c.createOscillator(), g = c.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(900, t);
+    o.frequency.exponentialRampToValueAtTime(300, t + 0.12);
+    g.gain.setValueAtTime(0.1, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+    o.connect(g); g.connect(c.destination);
+    o.start(t); o.stop(t + 0.2);
+  }
+  function chime() {
+    var c = ac(); if (!c) return;
+    [660, 880].forEach(function (f, i) {
+      var t = c.currentTime + i * 0.12;
+      var o = c.createOscillator(), g = c.createGain();
+      o.type = "triangle"; o.frequency.value = f;
+      g.gain.setValueAtTime(0.08, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+      o.connect(g); g.connect(c.destination);
+      o.start(t); o.stop(t + 0.3);
+    });
+  }
+
+  /* --- plants grown by a real Lindenmayer system ---
+     axiom "X", productions X -> F+[[X]-X]-F[-FX]+X (mirrored on odd beds),
+     F -> FF. Stage = iteration count. A turtle walks the string and the
+     stems, leaves, buds and blooms are drawn from the walk. Nothing is
+     hand-placed: branch angle varies per bed, step length rescales per
+     iteration so every plant fits the pot. */
+  function lsysString(stage, mirror) {
+    var s = "X";
+    var ruleX = mirror ? "F[-X]F[+X]-X" : "F[+X]F[-X]+X";
+    for (var i = 0; i < stage; i++) {
+      var out = "";
+      for (var k = 0; k < s.length; k++) {
+        var c = s.charAt(k);
+        if (c === "X") out += ruleX;
+        else if (c === "F") out += "FF";
+        else out += c;
+      }
+      s = out;
+      if (s.length > 4000) break;
+    }
+    return s;
+  }
+  function plantSvg(stage, hue, bedIdx) {
+    var leaf = "hsl(" + hue + ",38%,38%)", stem = "hsl(" + (hue + 20) + ",30%,32%)";
+    var soil = '<ellipse cx="48" cy="106" rx="14" ry="4" fill="#8a6b4a"/>';
+    if (stage === 0) {
+      return '<svg viewBox="0 0 96 116">' + soil + '<circle cx="48" cy="100" r="5" fill="#6b4a2f"/></svg>';
+    }
+    var str = lsysString(stage, bedIdx % 2 === 1);
+    var delta = (25 + (bedIdx % 3) * 3) * Math.PI / 180;
+    var step = 56 / Math.pow(2, stage);
+    var x = 48, y = 106, a = -Math.PI / 2;
+    var stack = [], segs = [], buds = [];
+    for (var k = 0; k < str.length; k++) {
+      var c = str.charAt(k);
+      if (c === "F") {
+        var nx = x + step * Math.cos(a), ny = y + step * Math.sin(a);
+        segs.push([x, y, nx, ny]);
+        x = nx; y = ny;
+      } else if (c === "X") {
+        buds.push([x, y, a]); /* unexpanded growing tip: where leaves and blooms go */
+      } else if (c === "+") { a += delta; }
+      else if (c === "-") { a -= delta; }
+      else if (c === "[") { stack.push([x, y, a]); }
+      else if (c === "]") {
+        var st = stack.pop();
+        x = st[0]; y = st[1]; a = st[2];
+      }
+    }
+    var s = '<svg viewBox="0 0 96 116">' + soil;
+    s += '<path d="' + segs.map(function (g) {
+      return "M" + g[0].toFixed(1) + " " + g[1].toFixed(1) + "L" + g[2].toFixed(1) + " " + g[3].toFixed(1);
+    }).join(" ") + '" stroke="' + stem + '" stroke-width="3" fill="none" stroke-linecap="round"/>';
+    var tips = buds.filter(function (pt) { return pt[1] < 102; });
+    var top = tips.slice().sort(function (p, q) { return p[1] - q[1]; }).slice(0, 6);
+    var topSet = {};
+    top.forEach(function (pt) { topSet[pt[0].toFixed(1) + "," + pt[1].toFixed(1)] = 1; });
+    var leafCount = 0, leafMax = stage >= 3 ? 34 : 14;
+    tips.forEach(function (pt) {
+      var key = pt[0].toFixed(1) + "," + pt[1].toFixed(1);
+      var isTop = topSet[key];
+      var deg = (pt[2] * 180 / Math.PI).toFixed(0);
+      var cx = pt[0].toFixed(1), cy = pt[1].toFixed(1);
+      if (stage === 4 && isTop) {
+        var pc = "hsl(" + hue + ",60%,62%)";
+        for (var q = 0; q < 5; q++) {
+          var ang = q * 72 * Math.PI / 180;
+          var px = (+cx + 6.5 * Math.cos(ang)).toFixed(1), py = (+cy + 6.5 * Math.sin(ang)).toFixed(1);
+          s += '<ellipse cx="' + px + '" cy="' + py + '" rx="5" ry="3.4" fill="' + pc + '" transform="rotate(' + (q * 72) + " " + px + " " + py + ')"/>';
+        }
+        s += '<circle cx="' + cx + '" cy="' + cy + '" r="3.6" fill="#e8b93c"/>';
+        return;
+      }
+      if (stage === 3 && isTop) {
+        s += '<circle cx="' + cx + '" cy="' + cy + '" r="4.5" fill="hsl(' + hue + ',45%,72%)"/>';
+        return;
+      }
+      if (leafCount >= leafMax) return;
+      leafCount++;
+      s += '<ellipse cx="' + cx + '" cy="' + cy + '" rx="5.5" ry="2.8" fill="' + leaf + '" transform="rotate(' + deg + " " + cx + " " + cy + ')"/>';
+    });
+    return s + "</svg>";
+  }
+  function potSvg() {
+    return '<svg viewBox="0 0 112 66" width="112" height="66">'
+      + '<path d="M18 10 h76 l-8 44 a8 8 0 0 1 -8 7 h-44 a8 8 0 0 1 -8 -7 Z" fill="#b56a42"/>'
+      + '<path d="M18 10 h76 l-2 12 h-72 Z" fill="#c97f52"/>'
+      + '<rect x="12" y="2" width="88" height="12" rx="6" fill="#a55f3a"/>'
+      + '<rect x="12" y="2" width="88" height="5" rx="2.5" fill="#c97f52"/>'
+      + "</svg>";
+  }
+  function beeSvg() {
+    return '<svg viewBox="0 0 26 20"><ellipse cx="13" cy="12" rx="7" ry="5" fill="#e8b93c"/>'
+      + '<path d="M10 8 a6 4 0 0 1 6 0 M13 8 a6 4 0 0 1 6 0" stroke="#3c4f30" stroke-width="2" fill="none"/>'
+      + '<ellipse cx="9" cy="4" rx="5" ry="3.4" fill="rgba(255,255,255,.75)"/><ellipse cx="17" cy="4" rx="5" ry="3.4" fill="rgba(255,255,255,.75)"/></svg>';
+  }
+
+  /* --- layout: 3 cols x 2 rows inside bed --- */
+  var plants = [];
+  function layout() {
+    var W = bed.clientWidth - 24;
+    var cw = W / 3;
+    plants.forEach(function (pl, i) {
+      if (pl.dragging) return;
+      pl.x = (i % 3) * cw + (cw - 112) / 2;
+      pl.y = Math.floor(i / 3) * 208 + 6;
+      pl.el.style.transform = "translate(" + pl.x + "px," + pl.y + "px)";
+    });
+  }
+
+  PROJECTS.forEach(function (pr, i) {
+    var el = document.createElement("div");
+    el.className = "pot";
+    el.innerHTML = '<div class="plantbox"></div><div class="claypot">' + potSvg()
+      + '<div class="waterbar"><i></i></div></div>'
+      + '<div class="plabel">' + pr.name + '<span class="stage">seed</span></div>';
+    bed.appendChild(el);
+    var pl = {
+      i: i, el: el, x: 0, y: 0, growth: 0, water: 20, stage: 0,
+      hue: pr.hue, note: pr.note, name: pr.name,
+      box: el.querySelector(".plantbox"),
+      stageEl: el.querySelector(".stage"),
+      waterEl: el.querySelector(".waterbar i"),
+      bee: null, dragging: false
+    };
+    renderPlant(pl);
+    plants.push(pl);
+    attachPot(pl);
+  });
+
+  function stageOf(g) {
+    var s = 0;
+    for (var k = 0; k < STAGE_NEED.length; k++) { if (g >= STAGE_NEED[k]) s = k; }
+    return s;
+  }
+  function renderPlant(pl) {
+    var ns = stageOf(pl.growth);
+    if (ns !== pl.stage) {
+      pl.stage = ns;
+      pl.box.innerHTML = plantSvg(ns, pl.hue, pl.i);
+      pl.stageEl.textContent = STAGES[ns];
+      if (ns === 4 && !pl.bee) addBee(pl);
+      if (ns > 0) {
+        jtext.innerHTML = "<strong>" + pl.name + "</strong> hit " + STAGES[ns] + ". " + (ns === 4 ? pl.note + " The bees approve." : pl.note);
+        if (ns === 4) chime();
+      }
+    }
+    pl.waterEl.style.width = Math.min(100, pl.water) + "%";
+  }
+
+  /* watering: tap a pot */
+  function water(pl, big) {
+    pl.water = Math.min(120, pl.water + (big ? 45 : 30));
+    droplet();
+    for (var d = 0; d < 3; d++) {
+      (function (d) {
+        setTimeout(function () {
+          var dr = document.createElement("div");
+          dr.className = "drop";
+          dr.style.left = (pl.x + 40 + Math.random() * 32) + "px";
+          dr.style.top = (pl.y + 30) + "px";
+          bed.appendChild(dr);
+          setTimeout(function () { dr.remove(); }, 600);
+        }, d * 120);
+      })(d);
+    }
+    renderPlant(pl);
+  }
+  document.getElementById("waterBtn").addEventListener("click", function () {
+    plants.forEach(function (pl) { water(pl, true); });
+    jtext.textContent = "everything got a drink. the garden approves.";
+  });
+
+  /* drag to rearrange */
+  function attachPot(pl) {
+    var el = pl.el, sx = 0, sy = 0, ox = 0, oy = 0, moved = 0, active = false;
+    el.addEventListener("pointerdown", function (e) {
+      active = true; moved = 0; pl.dragging = true;
+      sx = e.clientX; sy = e.clientY; ox = pl.x; oy = pl.y;
+      el.setPointerCapture(e.pointerId);
+      el.classList.add("ghost");
+    });
+    el.addEventListener("pointermove", function (e) {
+      if (!active) return;
+      var nx = ox + (e.clientX - sx), ny = oy + (e.clientY - sy);
+      moved = Math.max(moved, Math.abs(nx - ox) + Math.abs(ny - oy));
+      pl.x = nx; pl.y = ny;
+      el.style.transform = "translate(" + nx + "px," + ny + "px)";
+    });
+    function up(e) {
+      if (!active) return;
+      active = false;
+      try { el.releasePointerCapture(e.pointerId); } catch (err) {}
+      el.classList.remove("ghost");
+      if (moved < 10) { pl.dragging = false; layout(); water(pl, false); return; } /* tap = water */
+      /* drop: swap with nearest pot */
+      var best = null, bd = 1e9;
+      plants.forEach(function (q) {
+        if (q === pl) return;
+        var d = Math.hypot(q.x - pl.x, q.y - pl.y);
+        if (d < bd) { bd = d; best = q; }
+      });
+      if (best && bd < 130) {
+        var pi = plants.indexOf(pl), qi = plants.indexOf(best);
+        plants[pi] = best; plants[qi] = pl;
+        jtext.innerHTML = "<strong>" + pl.name + "</strong> swapped beds with <strong>" + best.name + "</strong>. new neighbors, new gossip.";
+      }
+      pl.dragging = false;
+      layout();
+    }
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
+  }
+
+  /* bees visit blooms */
+  function addBee(pl) {
+    var b = document.createElement("div");
+    b.className = "bee";
+    b.innerHTML = beeSvg();
+    bed.appendChild(b);
+    pl.bee = b;
+    var t = Math.random() * 1000;
+    (function loop() {
+      t += 0.06;
+      var cx = pl.x + 56 + Math.cos(t * 1.7) * 46;
+      var cy = pl.y + 30 + Math.sin(t * 2.3) * 30;
+      b.style.transform = "translate(" + cx + "px," + cy + "px) scaleX(" + (Math.cos(t * 1.7) > 0 ? 1 : -1) + ")";
+      if (pl.stage === 4) requestAnimationFrame(loop);
+      else { b.remove(); pl.bee = null; }
+    })();
+  }
+
+  /* growth loop */
+  setInterval(function () {
+    plants.forEach(function (pl) {
+      if (pl.water > 0) {
+        pl.growth += pl.water * 0.045 * (0.4 + sun / 70);
+        pl.water = Math.max(0, pl.water - 1.6);
+      } else {
+        pl.growth += sun * 0.012;
+      }
+      renderPlant(pl);
+    });
+  }, 1500);
+
+  window.addEventListener("resize", layout);
+  setTimeout(layout, 60);
+  setTimeout(layout, 400);
+})();
+</script>
+</body>
+</html>

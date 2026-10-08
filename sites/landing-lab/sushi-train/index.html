@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sushi Train | Luke Zhang</title>
+<style>
+  :root{
+    --bg:#faf7f0; --ink:#2e2a26; --mut:#97887a;
+    --wood:#d9b98c; --wood-d:#b98f5e; --belt:#3a3f45; --wasabi:#7fb069;
+    --cream:#fffdf8; --red:#c0392b;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    min-height:100vh; display:flex; justify-content:center;
+    padding:28px 14px 64px; -webkit-font-smoothing:antialiased;
+  }
+  button,a{touch-action:manipulation;}
+  .wrap{width:100%; max-width:420px;}
+  header{text-align:center; margin-bottom:14px;}
+  .kicker{font-size:11px; letter-spacing:.24em; text-transform:uppercase; color:var(--mut); margin-bottom:10px;}
+  h1{font-size:34px; font-weight:800; letter-spacing:-0.02em; margin-bottom:8px;}
+  h1 .dot{color:var(--red);}
+  .sub{color:var(--mut); font-size:14px; line-height:1.6; max-width:30em; margin:0 auto;}
+  .sub b{color:var(--ink);}
+  .rules{
+    display:flex; gap:8px; justify-content:center; margin:14px 0 4px; flex-wrap:wrap;
+  }
+  .rule{
+    font-size:11px; font-weight:700; color:var(--mut); background:#f0e9d9;
+    border-radius:999px; padding:7px 12px; letter-spacing:.02em;
+  }
+  .rule b{color:var(--ink);}
+
+  /* ---------- belt ---------- */
+  .counter{
+    margin-top:14px; border-radius:18px; overflow:hidden;
+    box-shadow:0 14px 30px rgba(46,42,38,.14);
+  }
+  .wood-top{
+    background:linear-gradient(180deg, var(--wood), var(--wood-d));
+    padding:12px 14px 10px; display:flex; align-items:center; justify-content:space-between;
+  }
+  .wood-top .sign{
+    font-size:13px; font-weight:800; letter-spacing:.14em; color:#5d4426; text-transform:uppercase;
+  }
+  .wood-top .speed{font-size:11px; color:#6d5130; font-weight:600;}
+  .chef{
+    font-size:11px; font-weight:800; color:#5d4426; background:#fff7e0;
+    border-radius:999px; padding:6px 12px; letter-spacing:.03em;
+    border:1px solid #e0c98f; white-space:nowrap;
+  }
+  .chef.plating{animation:platePulse 1s ease-in-out infinite; background:#ffe9b8;}
+  @keyframes platePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+  #belt{
+    position:relative; height:230px; background:var(--belt); overflow:hidden;
+    touch-action:none; user-select:none; -webkit-user-select:none; cursor:grab;
+  }
+  #belt:active{cursor:grabbing;}
+  #belt .rail{
+    position:absolute; left:0; right:0; top:50%; height:26px; margin-top:-13px;
+    background:repeating-linear-gradient(90deg,#2c3138 0 46px,#343a41 46px 92px);
+    border-top:2px solid #22262b; border-bottom:2px solid #22262b;
+  }
+  .plate{
+    position:absolute; top:50%; width:104px; margin-top:-74px; text-align:center;
+    cursor:pointer; touch-action:none; will-change:transform;
+  }
+  .plate .dish{position:relative; width:96px; height:74px; margin:0 auto; transition:transform .25s ease; transform-style:preserve-3d;}
+  .plate .saucer{
+    width:96px; height:30px; border-radius:50%;
+    background:radial-gradient(ellipse at 50% 35%, #ffffff, #dfe3e6 70%, #b9c0c6);
+    box-shadow:0 8px 14px rgba(0,0,0,.35); position:absolute; bottom:6px; left:0;
+    border:3px solid #b03a2e;
+  }
+  .plate.special .saucer{border-color:#d4a017; box-shadow:0 8px 14px rgba(0,0,0,.35), 0 0 14px rgba(212,160,23,.7);}
+  .plate .sushi{position:absolute; bottom:22px; left:50%; transform:translateX(-50%); width:64px; height:44px;}
+  .plate .ticket{
+    display:inline-block; margin-top:2px; background:var(--cream); color:var(--ink);
+    font-size:10px; font-weight:800; letter-spacing:.04em; padding:5px 9px; border-radius:6px;
+    box-shadow:0 3px 6px rgba(0,0,0,.3); max-width:104px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .plate .under{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    background:#fffbe9; border-radius:12px; border:2px dashed var(--wood-d);
+    font-size:10.5px; line-height:1.45; color:#5d4426; padding:8px;
+    transform:rotateX(180deg); backface-visibility:hidden; -webkit-backface-visibility:hidden;
+  }
+  .plate .dish .front{position:absolute; inset:0; backface-visibility:hidden; -webkit-backface-visibility:hidden;}
+  .plate.peeking .dish{transform:rotateX(180deg) translateY(-26px) scale(1.12);}
+  .plate.peeking .ticket{opacity:0;}
+  .plate.lift{transition:transform .18s ease;}
+  .grab-hint{
+    position:absolute; bottom:8px; left:0; right:0; text-align:center;
+    color:#8b939c; font-size:11px; font-weight:600; pointer-events:none;
+  }
+
+  /* ---------- table ---------- */
+  .table-wrap{margin-top:18px;}
+  .table-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
+  .table-head h2{font-size:15px; font-weight:800; letter-spacing:.02em;}
+  .table-head .n{font-size:12px; color:var(--mut); font-weight:600;}
+  .table-row{display:flex; gap:12px; align-items:stretch;}
+  #table{
+    flex:1; min-height:120px; background:linear-gradient(180deg,#e6c896,#d9b98c);
+    border-radius:16px; box-shadow:inset 0 3px 10px rgba(93,68,38,.3);
+    display:flex; flex-wrap:wrap; gap:10px; align-content:flex-start; padding:14px;
+  }
+  .table-empty{color:#7a6547; font-size:13px; width:100%; text-align:center; padding:22px 0; line-height:1.6;}
+  .mini{
+    width:64px; height:64px; border-radius:50%; border:3px solid #b03a2e; cursor:pointer;
+    background:radial-gradient(ellipse at 50% 35%, #ffffff, #dfe3e6 70%, #b9c0c6);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 4px 8px rgba(0,0,0,.25); touch-action:manipulation;
+    transition:transform .15s ease; padding:0;
+  }
+  .mini:active{transform:scale(.88);}
+  .mini svg{width:40px; height:30px;}
+  .mini.special{border-color:#d4a017;}
+  /* wasabi meter */
+  .wasabi-box{width:64px; display:flex; flex-direction:column; align-items:center; gap:6px;}
+  .wasabi-tube{
+    width:34px; height:120px; border-radius:17px; background:#e8e2d4;
+    border:2px solid #cfc4ab; position:relative; overflow:hidden;
+    box-shadow:inset 0 2px 6px rgba(0,0,0,.12);
+  }
+  .wasabi-fill{
+    position:absolute; bottom:0; left:0; right:0; height:0%;
+    background:linear-gradient(180deg,#a5cc82,var(--wasabi));
+    transition:height .5s cubic-bezier(.2,1.2,.4,1);
+  }
+  .wasabi-label{font-size:10px; font-weight:800; letter-spacing:.1em; color:var(--mut); text-transform:uppercase; text-align:center; line-height:1.4;}
+
+  /* ---------- modal ---------- */
+  .modal-bg{
+    display:none; position:fixed; inset:0; background:rgba(30,25,20,.55);
+    align-items:flex-end; justify-content:center; z-index:50; padding:18px;
+  }
+  .modal-bg.show{display:flex;}
+  .modal{
+    background:var(--cream); border-radius:20px; padding:24px 20px; width:100%; max-width:400px;
+    animation:slideUp .3s cubic-bezier(.2,1.2,.4,1); text-align:center;
+    box-shadow:0 24px 60px rgba(0,0,0,.35);
+  }
+  @keyframes slideUp{0%{transform:translateY(60px); opacity:0}100%{transform:translateY(0); opacity:1}}
+  .modal .mtag{font-size:10px; font-weight:800; letter-spacing:.22em; color:var(--red); text-transform:uppercase; margin-bottom:8px;}
+  .modal h2{font-size:22px; font-weight:800; margin-bottom:8px;}
+  .modal p{font-size:14px; color:var(--mut); line-height:1.65; margin-bottom:16px;}
+  .modal .row{display:flex; gap:10px; justify-content:center;}
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center;
+    min-height:48px; padding:0 22px; border-radius:12px; border:none; cursor:pointer;
+    font-size:15px; font-weight:700; text-decoration:none;
+  }
+  .btn.primary{background:var(--red); color:#fff; box-shadow:0 4px 0 #8e2a20;}
+  .btn.primary:active{transform:translateY(3px); box-shadow:0 1px 0 #8e2a20;}
+  .btn.ghost{background:#efe7d6; color:var(--ink);}
+  .btn.ghost:active{transform:translateY(2px);}
+
+  footer{text-align:center; margin-top:34px; font-size:13px; color:var(--mut);}
+  footer a{color:var(--red); font-weight:700;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">Luke Zhang</div>
+    <h1>Sushi Train<span class="dot">.</span></h1>
+    <p class="sub">My projects, served omakase style. <b>Tap a plate to take it.</b> Drag one upward to peek at the description hiding underneath. The chef has opinions and a timer.</p>
+  </header>
+  <div class="rules">
+    <span class="rule"><b>tap</b> plate to take it</span>
+    <span class="rule"><b>drag up</b> to peek under</span>
+    <span class="rule"><b>pull belt</b> to scrub</span>
+  </div>
+
+  <div class="counter">
+    <div class="wood-top">
+      <span class="sign">Luke's Omakase</span>
+      <span class="chef" id="chef">chef's special in 30s</span>
+    </div>
+    <div id="belt" aria-label="Conveyor belt of projects">
+      <div class="rail"></div>
+      <div class="grab-hint">drag the belt sideways to scrub it</div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-head">
+      <h2>Your table</h2>
+      <span class="n" id="tableCount">0 plates</span>
+    </div>
+    <div class="table-row">
+      <div id="table" aria-live="polite"></div>
+      <div class="wasabi-box">
+        <div class="wasabi-tube"><div class="wasabi-fill" id="wasabiFill"></div></div>
+        <div class="wasabi-label">wasabi<br>meter</div>
+      </div>
+    </div>
+  </div>
+
+  <footer><a href="../">back to all 40 ways to say hi</a></footer>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="mtag" id="mTag">from your table</div>
+    <h2 id="mName"></h2>
+    <p id="mDesc"></p>
+    <div class="row">
+      <a class="btn primary" id="mLink" href="https://lukezhang.si/" target="_blank" rel="noopener">take a look</a>
+      <button class="btn ghost" id="mClose">back to eating</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var PROJECTS = [
+    {name:"Liverpool Rummy", desc:"The card game I built to play with my wife. Real rooms, real rules, real excuses when I lose.", url:"https://projects.lukezhang.si/liverpool-rummy/", fish:"salmon"},
+    {name:"Draw & Guess", desc:"Party drawing game with plain-letter pinyin guesses. No tone marks, no mercy.", url:"https://projects.lukezhang.si/draw-guess/", fish:"tuna"},
+    {name:"Fifty Tracks", desc:"Fifty songs shipped like software releases. A whole year of music, versioned.", url:"https://projects.lukezhang.si/fifty-tracks/", fish:"tamago"},
+    {name:"Get Clocked", desc:"Time tracking for people who hate time tracking. It respects your evening.", url:"https://lukezhang.si/", fish:"shrimp"},
+    {name:"Curbside", desc:"Food truck ordering without the line. Built for the trucks I actually eat at.", url:"https://lukezhang.si/", fish:"salmon"},
+    {name:"Poteto Tracker", desc:"Tracked a legendary engineer's 1.5 trillion token month. Then the profile went private. Suspicious.", url:"https://projects.lukezhang.si/poteto-tracker/", fish:"tuna"},
+    {name:"Skill Tree, in Ink", desc:"My skills, painted in Chinese ink wash. The rare blog post people finished.", url:"https://lukezhang.si/blog/skill-tree-app-design/", fish:"tamago"},
+    {name:"Wikimari", desc:"Wikipedia racing with a rolling ball. Speedrun your curiosity.", url:"https://projects.lukezhang.si/wikimari/", fish:"shrimp"}
+  ];
+  var SPECIAL = {name:"Landing Lab", desc:"The chef's special. Twenty tiny landing pages, made tonight, served only here.", url:"https://projects.lukezhang.si/landing-lab/", fish:"uni", special:true};
+
+  function sushiSVG(fish){
+    var top = {salmon:"#f4905a", tuna:"#c0392b", tamago:"#f2cc8f", shrimp:"#f5a8a8", uni:"#e8b93c"}[fish] || "#f4905a";
+    var detail = "";
+    if (fish==="salmon") detail = '<path d="M8 10 Q20 4 32 8 Q44 4 56 10" stroke="#fff" stroke-width="3" fill="none" opacity=".7"/>';
+    if (fish==="tuna") detail = '<ellipse cx="32" cy="12" rx="18" ry="5" fill="#96281b" opacity=".6"/>';
+    if (fish==="tamago") detail = '<rect x="10" y="6" width="44" height="5" rx="2.5" fill="#d9a441"/>';
+    if (fish==="shrimp") detail = '<path d="M12 14 Q32 2 52 14" stroke="#e07070" stroke-width="4" fill="none"/>';
+    if (fish==="uni") detail = '<circle cx="22" cy="12" r="5" fill="#b07d10"/><circle cx="34" cy="10" r="6" fill="#c78a1e"/><circle cx="44" cy="13" r="5" fill="#b07d10"/>';
+    return '<svg viewBox="0 0 64 44">' +
+      '<ellipse cx="32" cy="32" rx="26" ry="10" fill="#f7f3ea" stroke="#ddd5c2" stroke-width="2"/>' +
+      '<path d="M6 22 Q6 8 32 8 Q58 8 58 22 L54 26 Q32 18 10 26 Z" fill="'+top+'"/>' +
+      detail +
+      '<rect x="20" y="18" width="24" height="12" rx="2" fill="#2e2a26" opacity=".85"/>' +
+      '</svg>';
+  }
+
+  /* tiny synth */
+  var AC=null;
+  function blip(f,d,t,v){ try{ if(!AC) AC=new (window.AudioContext||window.webkitAudioContext)(); if(AC.state==="suspended")AC.resume();
+    var o=AC.createOscillator(),g=AC.createGain(); o.type=t||"sine"; o.frequency.value=f;
+    g.gain.setValueAtTime(v||.08,AC.currentTime); g.gain.exponentialRampToValueAtTime(.0001,AC.currentTime+(d||.1));
+    o.connect(g); g.connect(AC.destination); o.start(); o.stop(AC.currentTime+(d||.1)+.02);}catch(e){} }
+  function pop(){ blip(700,.08,"triangle",.09); }
+  function ding(){ blip(880,.2,"sine",.09); setTimeout(function(){blip(1320,.25,"sine",.07);},90); }
+
+  var belt = document.getElementById("belt");
+  var chefEl = document.getElementById("chef");
+  var table = document.getElementById("table");
+  var tableCount = document.getElementById("tableCount");
+  var wasabiFill = document.getElementById("wasabiFill");
+  var modalBg = document.getElementById("modalBg");
+
+  var plates = [], taken = 0, nextIdx = 0;
+  var beltW = 0, speed = 55, scrubbing = false, lastT = 0;
+  /* Queueing model: fixed spatial headway. Plates ride 150px apart at 55px/s,
+     so one passes every ~2.7s, forever, like a real kaiten line. Scrubbing
+     borrows the belt briefly; the spacing restores itself on recycle. */
+  var HEADWAY = 150;
+  /* The chef works on a true wall-clock timer, and you can watch it coming. */
+  var CHEF_PERIOD = 30000, nextSpecialAt = 0, lastChefSec = -1;
+
+  function measure(){ beltW = belt.clientWidth; }
+  measure(); window.addEventListener("resize", measure);
+
+  function makePlate(proj, startX){
+    var el = document.createElement("div");
+    el.className = "plate" + (proj.special ? " special" : "");
+    el.innerHTML =
+      '<div class="dish"><div class="front"><div class="saucer"></div><div class="sushi">' + sushiSVG(proj.fish) + '</div></div>' +
+      '<div class="under">' + proj.desc + '</div></div>' +
+      '<span class="ticket">' + (proj.special ? "chef\u2019s special" : proj.name) + '</span>';
+    belt.appendChild(el);
+    var p = {el:el, proj:proj, x:startX, w:104, peeking:false, downX:0, downY:0, moved:0, pid:null};
+    wirePlate(p);
+    plates.push(p);
+    return p;
+  }
+
+  function layout(){
+    for (var i=0;i<plates.length;i++){
+      var p = plates[i];
+      p.el.style.transform = "translateX(" + p.x + "px)";
+    }
+  }
+
+  function spawnInitial(){
+    /* Fill the visible belt on load: plates from just off the left edge,
+       one HEADWAY apart, so nobody stares at an empty belt. */
+    var n = Math.ceil((beltW + 170) / HEADWAY);
+    for (var i=0;i<n;i++){
+      makePlate(PROJECTS[i % PROJECTS.length], -130 + i*HEADWAY);
+    }
+    nextIdx = n % PROJECTS.length;
+  }
+
+  function dropSpecial(){
+    var maxX = -1e9;
+    for (var i=0;i<plates.length;i++) if (plates[i].x>maxX) maxX = plates[i].x;
+    makePlate(SPECIAL, Math.max(beltW + 40, maxX + HEADWAY));
+    layout();
+  }
+
+  function tick(t){
+    if (!lastT) lastT = t;
+    var dt = Math.min(0.05, (t - lastT)/1000); lastT = t;
+    /* chef countdown: honest wall-clock, visible anticipation */
+    var remain = Math.max(0, nextSpecialAt - t);
+    var sec = Math.ceil(remain/1000);
+    if (sec !== lastChefSec){
+      lastChefSec = sec;
+      if (sec <= 0){
+        dropSpecial(); ding();
+        nextSpecialAt = t + CHEF_PERIOD; lastChefSec = -1;
+        chefEl.classList.remove("plating");
+        chefEl.textContent = "chef's special in " + Math.round(CHEF_PERIOD/1000) + "s";
+      } else if (sec <= 5){
+        chefEl.classList.add("plating");
+        chefEl.textContent = "the chef is plating something...";
+      } else {
+        chefEl.classList.remove("plating");
+        chefEl.textContent = "chef's special in " + sec + "s";
+      }
+    }
+    if (!scrubbing){
+      for (var i=plates.length-1;i>=0;i--){
+        var p = plates[i];
+        p.x -= speed * dt;
+        if (p.x < -p.w - 20){
+          /* recycle to the right end with the next project */
+          p.proj = PROJECTS[nextIdx % PROJECTS.length]; nextIdx++;
+          p.el.querySelector(".ticket").textContent = p.proj.name;
+          p.el.classList.remove("special");
+          p.el.querySelector(".sushi").innerHTML = sushiSVG(p.proj.fish);
+          p.el.querySelector(".under").textContent = p.proj.desc;
+          var maxX = -1e9;
+          for (var j=0;j<plates.length;j++) if (plates[j]!==p && plates[j].x>maxX) maxX = plates[j].x;
+          p.x = Math.max(beltW + 40, maxX + HEADWAY);
+        }
+      }
+      layout();
+    }
+    requestAnimationFrame(tick);
+  }
+
+  /* ---- plate gestures: tap to take, drag up to peek ---- */
+  function wirePlate(p){
+    var el = p.el;
+    el.addEventListener("pointerdown", function(e){
+      p.downX = e.clientX; p.downY = e.clientY; p.moved = 0; p.peeking = false;
+      p.pid = e.pointerId;
+      try{ el.setPointerCapture(e.pointerId); }catch(err){}
+      e.preventDefault(); e.stopPropagation();
+    });
+    el.addEventListener("pointermove", function(e){
+      if (p.pid !== e.pointerId) return;
+      var dx = e.clientX - p.downX, dy = e.clientY - p.downY;
+      p.moved = Math.max(p.moved, Math.abs(dx), Math.abs(dy));
+      if (dy < -26 && !p.peeking){
+        p.peeking = true; el.classList.add("peeking"); pop();
+      }
+    });
+    function up(e){
+      if (p.pid !== e.pointerId) return;
+      p.pid = null;
+      el.classList.remove("peeking");
+      if (p.peeking){ p.peeking = false; return; }      /* was a peek, not a take */
+      if (p.moved < 14){ takePlate(p); }
+    }
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", function(e){ p.pid=null; el.classList.remove("peeking"); p.peeking=false; });
+  }
+
+  function takePlate(p){
+    var idx = plates.indexOf(p);
+    if (idx===-1) return;
+    plates.splice(idx,1);
+    p.el.remove();
+    taken++;
+    ding();
+    var b = document.createElement("button");
+    b.className = "mini" + (p.proj.special ? " special" : "");
+    b.innerHTML = sushiSVG(p.proj.fish);
+    b.setAttribute("aria-label", "View " + p.proj.name);
+    b.addEventListener("click", function(){ openModal(p.proj); });
+    var empty = table.querySelector(".table-empty");
+    if (empty) empty.remove();
+    table.appendChild(b);
+    tableCount.textContent = taken + (taken===1 ? " plate" : " plates");
+    wasabiFill.style.height = Math.min(100, taken / 8 * 100) + "%";
+  }
+
+  /* ---- scrub the belt by dragging its background ---- */
+  var scrubX = 0;
+  belt.addEventListener("pointerdown", function(e){
+    scrubbing = true; scrubX = e.clientX;
+    try{ belt.setPointerCapture(e.pointerId); }catch(err){}
+  });
+  belt.addEventListener("pointermove", function(e){
+    if (!scrubbing) return;
+    var dx = e.clientX - scrubX; scrubX = e.clientX;
+    for (var i=0;i<plates.length;i++){
+      plates[i].x += dx;
+      if (plates[i].x < -plates[i].w - 20) plates[i].x = beltW + 40;
+      if (plates[i].x > beltW + 200) plates[i].x = -plates[i].w - 10;
+    }
+    layout();
+  });
+  function endScrub(){ scrubbing = false; }
+  belt.addEventListener("pointerup", endScrub);
+  belt.addEventListener("pointercancel", endScrub);
+
+  /* ---- modal ---- */
+  function openModal(proj){
+    document.getElementById("mTag").textContent = proj.special ? "chef\u2019s special" : "from your table";
+    document.getElementById("mName").textContent = proj.name;
+    document.getElementById("mDesc").textContent = proj.desc;
+    var l = document.getElementById("mLink"); l.href = proj.url;
+    modalBg.classList.add("show");
+    pop();
+  }
+  document.getElementById("mClose").addEventListener("click", function(){ modalBg.classList.remove("show"); });
+  modalBg.addEventListener("click", function(e){ if (e.target===modalBg) modalBg.classList.remove("show"); });
+
+  /* ---- init ---- */
+  var empty = document.createElement("div");
+  empty.className = "table-empty";
+  empty.textContent = "empty table. grab a plate, they are all me.";
+  table.appendChild(empty);
+  spawnInitial();
+  nextSpecialAt = performance.now() + CHEF_PERIOD;
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

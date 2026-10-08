@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teaching AI hands: luke's blog</title>
+<meta name="description" content="How AI agents learn to use computers (screenshot in, click out) and to do household chores (vision-language-action models, teleoperation demos, sim-to-real). Interactive toys: a fake desktop agent loop, a two-link robot arm that clones an expert.">
+<!-- tags: ai, engineering -->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    min-height: 100%;
+    background: #f6f1e3;
+    color: #2b2b2b;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.7;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 56px 22px 80px; }
+  nav.top { margin-bottom: 40px; font-size: 14px; }
+  nav.top a { color: rgba(43,43,43,0.55); text-decoration: none; }
+  nav.top a:hover { color: #b3352b; }
+  h1 { font-size: 32px; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 8px; }
+  .meta { color: rgba(43,43,43,0.5); font-size: 14px; margin-bottom: 24px; }
+  .verdict { font-size: 17px; color: #2b2b2b; border-left: 3px solid #b3352b;
+    padding: 4px 0 4px 18px; margin: 0 0 28px; line-height: 1.65; }
+  p { margin-bottom: 16px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  p strong, li strong { color: #2b2b2b; }
+  h2 { font-size: 23px; color: #2b2b2b; margin: 44px 0 10px; letter-spacing: -0.01em; }
+  ul { margin: 0 0 16px 20px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  li { margin-bottom: 8px; }
+  a { color: #b3352b; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px;
+    background: rgba(43,43,43,0.07); padding: 1px 6px; border-radius: 5px; }
+  footer { margin-top: 60px; font-size: 13px; color: rgba(43,43,43,0.35); }
+  footer a { color: rgba(43,43,43,0.6); }
+  .kicker-close { font-size: 19px; font-weight: 700; color: #2b2b2b;
+    border-top: 1px solid rgba(43,43,43,0.15); padding-top: 28px; margin-top: 48px; }
+
+  /* visualizer cards */
+  .viz { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 16px; padding: 20px; margin: 24px 0; }
+  .viz h3 { font-size: 17px; margin-bottom: 4px; color: #2b2b2b; }
+  .viz .sub { font-size: 14px; color: rgba(43,43,43,0.62); margin-bottom: 12px; line-height: 1.55; }
+  .viz label { font-size: 15px; font-weight: 600; display: block; margin: 14px 0 2px; color: #2b2b2b; }
+  /* slim slider: 16px visible knob, 50px grab hit box */
+  .viz input[type=range] { width: 100%; height: 34px; background: transparent;
+    cursor: pointer; touch-action: pan-y; margin: 4px 0 2px;
+    -webkit-appearance: none; appearance: none; }
+  .viz input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px;
+    background: rgba(43,43,43,0.18); }
+  .viz input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none;
+    width: 50px; height: 50px; border-radius: 50%; border: none;
+    background: radial-gradient(circle, #b3352b 0 6px, #2b2b2b 6px 8px, rgba(0,0,0,0) 9px);
+    margin-top: -23px; box-shadow: none; filter: drop-shadow(0 1px 4px rgba(0,0,0,0.35)); }
+  .viz input[type=range]::-moz-range-track { height: 4px; border-radius: 2px;
+    background: rgba(43,43,43,0.18); }
+  .viz input[type=range]::-moz-range-thumb { width: 50px; height: 50px; border-radius: 50%;
+    border: none;
+    background: radial-gradient(circle, #b3352b 0 6px, #2b2b2b 6px 8px, rgba(0,0,0,0) 9px);
+    box-shadow: none; filter: drop-shadow(0 1px 4px rgba(0,0,0,0.35)); }
+  .viz input[type=text] { width: 100%; font-size: 16px; padding: 12px 14px;
+    border: 1px solid rgba(43,43,43,0.25); border-radius: 10px; background: #fff;
+    font-family: inherit; color: #2b2b2b; }
+
+  .btn { touch-action: manipulation; border: none; background: #b3352b; color: #f6f1e3;
+    border-radius: 10px; padding: 12px 22px; font-size: 15px; font-weight: 700;
+    cursor: pointer; font-family: inherit; margin: 6px 8px 6px 0; }
+  .btn:active { transform: scale(0.97); }
+  .btn.ghost { background: transparent; color: #2b2b2b; border: 2px solid rgba(43,43,43,0.25); }
+  .btn:disabled { opacity: 0.4; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  .chip { touch-action: manipulation; border: 2px solid rgba(43,43,43,0.2); background: transparent;
+    border-radius: 999px; padding: 8px 16px; font-size: 14px; font-weight: 600;
+    cursor: pointer; color: #2b2b2b; font-family: inherit; }
+  .chip.on { border-color: #b3352b; color: #b3352b; background: rgba(179,53,43,0.07); }
+  .chip:active { transform: scale(0.96); }
+  .cap { font-size: 13.5px; color: rgba(43,43,43,0.6); margin-top: 10px; line-height: 1.55; }
+  .readout { display: flex; justify-content: space-between; align-items: baseline; margin: 8px 0; gap: 10px; }
+  .big { font-size: 30px; font-weight: 800; color: #b3352b; font-variant-numeric: tabular-nums; }
+
+  /* keep-exploring link cards */
+  .xlinks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0 8px; }
+  @media (max-width: 520px) { .xlinks { grid-template-columns: 1fr; } }
+  .xlink { display: block; background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 14px; padding: 16px; text-decoration: none; color: #2b2b2b;
+    touch-action: manipulation; }
+  .xlink:active { transform: scale(0.98); }
+  .xlink b { display: block; font-size: 15px; margin-bottom: 4px; color: #b3352b; }
+  .xlink b .ext { margin-left: 6px; vertical-align: -1px; opacity: 0.6; }
+  .xlink span { font-size: 13.5px; color: rgba(43,43,43,0.62); line-height: 1.5; }
+
+  /* ---- toy 1: fake desktop ---- */
+  .fakedesk { position: relative; height: 320px; border-radius: 12px; overflow: hidden;
+    border: 1px solid rgba(43,43,43,0.2);
+    background: linear-gradient(135deg, #7fa8c9 0%, #a8c4de 55%, #c9d9e8 100%); }
+  .ficon { position: absolute; width: 64px; text-align: center; font-size: 11px; color: #2b2b2b;
+    cursor: default; user-select: none; }
+  .ficon svg { display: block; margin: 0 auto 3px; }
+  .ficon .fname { background: rgba(255,255,255,0.75); border-radius: 4px; padding: 0 4px;
+    display: inline-block; line-height: 1.5; }
+  .ficon.selected .fname { background: #b3352b; color: #fff; }
+  .ficon.selected svg { filter: drop-shadow(0 0 6px rgba(179,53,43,0.8)); }
+  .fwindow { position: absolute; left: 24%; top: 16%; width: 56%; height: 62%;
+    background: #fffdf6; border-radius: 10px; border: 1px solid rgba(43,43,43,0.3);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25); overflow: hidden; }
+  .fbar { background: rgba(43,43,43,0.1); padding: 5px 10px; font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; gap: 6px; color: #2b2b2b; }
+  .fbar i { width: 9px; height: 9px; border-radius: 50%; background: rgba(43,43,43,0.25); display: inline-block; }
+  .ftext { padding: 12px; font-size: 16px; min-height: 60px; color: #2b2b2b; }
+  .cursor { position: absolute; left: 50%; top: 60%; width: 24px; height: 24px; z-index: 5;
+    transition: left 0.55s ease, top 0.55s ease; pointer-events: none; }
+  .cursor.clicking { animation: cpulse 0.35s ease; }
+  @keyframes cpulse { 0% { transform: scale(1); } 40% { transform: scale(0.8); } 100% { transform: scale(1); } }
+  .flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 6; }
+  .flash.go { animation: cflash 0.3s ease; }
+  @keyframes cflash { 0% { opacity: 0.55; } 100% { opacity: 0; } }
+  .thought { background: rgba(179,53,43,0.07); border: 1px solid rgba(179,53,43,0.3);
+    border-radius: 12px; padding: 12px 14px; margin: 12px 0 4px; font-size: 14.5px;
+    color: #2b2b2b; min-height: 3.4em; line-height: 1.55; }
+  .thought .tlab { display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: #b3352b; font-weight: 800; margin-bottom: 2px; }
+  .actionrow { display: flex; align-items: center; gap: 10px; margin: 8px 0; flex-wrap: wrap; }
+  .alabel { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: rgba(43,43,43,0.55); font-weight: 800; }
+  .actionchip { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px;
+    background: #2b2b2b; color: #f6f1e3; padding: 6px 12px; border-radius: 8px; }
+  .rewardline { min-height: 1.8em; font-size: 14.5px; font-weight: 700; color: #2b2b2b; margin: 4px 0; }
+  .rewardline.good { color: #2e7d32; }
+  .rewardline.bad { color: #b3352b; }
+
+  /* ---- toy 2: trajectories + RL ---- */
+  .traj { display: grid; gap: 10px; margin: 10px 0; }
+  .triple { display: grid; grid-template-columns: 92px 1fr; gap: 10px; align-items: stretch;
+    background: rgba(43,43,43,0.04); border: 1px solid rgba(43,43,43,0.12);
+    border-radius: 12px; padding: 10px; }
+  .tshot { border-radius: 8px; background: #dfe9f2; border: 1px solid rgba(43,43,43,0.15);
+    min-height: 64px; position: relative; overflow: hidden; }
+  .tshot i { position: absolute; border-radius: 3px; }
+  .tbody { font-size: 13.5px; line-height: 1.5; color: rgba(43,43,43,0.85); }
+  .tbody .tq { font-style: italic; color: rgba(43,43,43,0.6); display: block; margin-bottom: 4px; }
+  .tbody code { font-size: 12.5px; }
+  .attempts { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; min-height: 44px; }
+  .att { width: 44px; height: 44px; border-radius: 12px; border: 2px solid rgba(43,43,43,0.2);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800; color: rgba(43,43,43,0.4); background: transparent; }
+  .att.done { border-color: #2e7d32; color: #2e7d32; background: rgba(46,125,50,0.1); }
+  .att.fail { border-color: #b3352b; color: #b3352b; background: rgba(179,53,43,0.08); }
+  .att small { display: block; font-size: 9px; font-weight: 600; }
+
+  /* ---- toy 3: robot arm ---- */
+  .armsvg { width: 100%; height: auto; display: block; border-radius: 12px;
+    background: #f3ecda; border: 1px solid rgba(43,43,43,0.15); touch-action: pan-y; }
+  .armstatus { font-size: 14.5px; min-height: 1.8em; margin: 8px 0 2px; color: #2b2b2b; }
+
+  /* ---- toy 4: scale bars ---- */
+  .srow { margin: 14px 0; }
+  .srow .slab { display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 14px; margin-bottom: 6px; gap: 8px; }
+  .srow .slab b { font-variant-numeric: tabular-nums; color: #b3352b; white-space: nowrap; }
+  .sbar { height: 22px; background: rgba(43,43,43,0.1); border-radius: 7px; overflow: hidden; }
+  .sfill { height: 100%; border-radius: 7px;
+    background: linear-gradient(90deg, #8f2a22, #b3352b); }
+  .sfill.dim { background: linear-gradient(90deg, rgba(43,43,43,0.35), rgba(43,43,43,0.55)); }
+
+  /* ---- io reference row ---- */
+  .ioref { display: grid; gap: 10px; margin: 6px 0; }
+  .iorow { display: flex; gap: 12px; align-items: center; background: rgba(43,43,43,0.04);
+    border: 1px solid rgba(43,43,43,0.12); border-radius: 12px; padding: 10px 14px; flex-wrap: wrap; }
+  .iolab { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 800;
+    color: #b3352b; min-width: 44px; }
+  .iochips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .iochips code { font-size: 13px; }
+
+  /* ---- grounding toy ---- */
+  .gdialog { background: #fffdf6; border: 1px solid rgba(43,43,43,0.3); border-radius: 12px;
+    overflow: hidden; margin: 12px 0; max-width: 420px; }
+  .gtitle { font-size: 15px; font-weight: 700; padding: 12px 16px 0; color: #2b2b2b; }
+  .gbody { font-size: 14px; color: rgba(43,43,43,0.7); padding: 4px 16px 12px; }
+  .gbtns { display: flex; gap: 10px; justify-content: flex-end; padding: 0 16px 16px; }
+  .gbtn { touch-action: manipulation; font-family: inherit; font-size: 14px; font-weight: 600;
+    padding: 9px 18px; border-radius: 9px; border: 1px solid rgba(43,43,43,0.3);
+    background: #f0ece0; color: #2b2b2b; cursor: default; transition: box-shadow 0.25s; }
+  .gbtn.primary { background: #2f6fdb; border-color: #2f6fdb; color: #fff; }
+  .gbtn.danger { background: #b3352b; border-color: #b3352b; color: #fff; }
+  .gbtn.aimed { box-shadow: 0 0 0 3px rgba(179,53,43,0.55), 0 0 18px rgba(179,53,43,0.5); }
+
+  /* ---- tappable flip cards ---- */
+  .flipgrid { display: grid; gap: 10px; margin: 10px 0; }
+  .flipcard { touch-action: manipulation; text-align: left; font-family: inherit;
+    background: rgba(43,43,43,0.04); border: 1px solid rgba(43,43,43,0.16);
+    border-radius: 12px; padding: 14px 16px; cursor: pointer; color: #2b2b2b; font-size: 14px; }
+  .flipcard:active { transform: scale(0.99); }
+  .flipcard b { display: block; font-size: 15px; margin-bottom: 4px; color: #2b2b2b; }
+  .flipcard .fc-short { font-size: 14px; color: rgba(43,43,43,0.7); }
+  .flipcard .fc-long { display: block; font-size: 14px; color: rgba(43,43,43,0.85);
+    margin-top: 8px; line-height: 1.6; }
+  .flipcard[aria-expanded="true"] { border-color: #b3352b; background: rgba(179,53,43,0.06); }
+  .fsteps { margin: 8px 0 0 20px; font-size: 14px; }
+  .fsteps li { margin-bottom: 4px; }
+</style>
+<link rel="stylesheet" href="katex/katex.min.css">
+</head>
+<body>
+<div class="wrap">
+<nav class="top"><a href="https://projects.lukezhang.si/">projects</a> / agent-training-draft</nav>
+
+<h1>Teaching AI hands</h1>
+<div class="meta">A draft · tags: ai, engineering</div>
+<p class="verdict">Chat models learned by reading. Agents learn by doing: clicking buttons inside fake computers and grabbing cups with fake arms, until the doing works.</p>
+
+<h2>Part 1: Teaching it to use a computer</h2>
+<p>A computer-use agent lives in a loop: <strong>screenshot in, action out</strong>. It looks at the screen the way you do, then clicks and types the way you do. Under the hood it is still next-token prediction, except the tokens are <code>click(512, 300)</code> and <code>type("hello")</code>.</p>
+<p><strong>What it sees.</strong> Mostly screenshots. Some setups also hand it the accessibility tree, which is the operating system's own list of buttons and text fields. Screenshots are honest but dumb: the model has to find everything by looking.</p>
+<p><strong>What it can do.</strong> A small vocabulary: <code>click(x, y)</code>, <code>type(text)</code>, <code>scroll(direction)</code>, <code>hotkey(keys)</code>. Everything the agent ever does is one of these, repeated.</p>
+
+<div class="viz" id="toy-io">
+  <h3>The whole interface, on one card</h3>
+  <p class="sub">Everything a computer-use agent ever sees and does. That is the entire API.</p>
+  <div class="ioref">
+    <div class="iorow"><span class="iolab">Sees</span><span class="iochips"><code>screenshot</code><code>accessibility tree</code></span></div>
+    <div class="iorow"><span class="iolab">Does</span><span class="iochips"><code>click(x, y)</code><code>type(text)</code><code>scroll(dir)</code><code>hotkey(keys)</code></span></div>
+  </div>
+  <p class="cap">No secret APIs, no backdoors. If you cannot do it with a mouse and keyboard, neither can it.</p>
+</div>
+<p><strong>The hard part has a name: grounding.</strong> "Click Submit" is easy to say and hard to do. The model must turn words into exact coordinates on a screen it has never seen, where the Submit button might be blue, gray, or hiding inside a menu. Get the coordinates wrong and it clicks an ad instead.</p>
+
+<div class="viz" id="toy-desk">
+  <h3>Watch it work</h3>
+  <p class="sub">A fake desktop. Pick a task, then step the loop: look, think, act. Coordinates are 0 to 1000, like the real models use.</p>
+  <div class="chips" id="desk-tasks">
+    <button class="chip on" data-task="notes">Open Notes, type hello</button>
+    <button class="chip" data-task="rename">Rename file.txt</button>
+  </div>
+  <div class="fakedesk" id="fakedesk">
+    <div class="ficon" id="fi-notes" style="left:6%;top:8%">
+      <svg width="34" height="34" viewBox="0 0 34 34"><rect x="4" y="2" width="26" height="30" rx="5" fill="#f6c945"/><line x1="10" y1="11" x2="24" y2="11" stroke="#8a6d1f" stroke-width="2"/><line x1="10" y1="17" x2="24" y2="17" stroke="#8a6d1f" stroke-width="2"/><line x1="10" y1="23" x2="19" y2="23" stroke="#8a6d1f" stroke-width="2"/></svg>
+      <span class="fname">Notes</span>
+    </div>
+    <div class="ficon" id="fi-file" style="left:76%;top:10%">
+      <svg width="30" height="36" viewBox="0 0 30 36"><path d="M4 2h14l8 8v24H4z" fill="#fdfdf8" stroke="#9a9a92" stroke-width="2"/><path d="M18 2v8h8" fill="none" stroke="#9a9a92" stroke-width="2"/><line x1="9" y1="18" x2="21" y2="18" stroke="#b9b9b0" stroke-width="2"/><line x1="9" y1="23" x2="21" y2="23" stroke="#b9b9b0" stroke-width="2"/></svg>
+      <span class="fname" id="fi-file-name">file.txt</span>
+    </div>
+    <div class="fwindow" id="fw-notes" hidden>
+      <div class="fbar"><i></i><i></i><i></i><b>Notes</b></div>
+      <div class="ftext" id="fw-text"></div>
+    </div>
+    <div class="cursor" id="fcur">
+      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M5 3l14 7-6.2 1.8L9.5 18z" fill="#2b2b2b" stroke="#f6f1e3" stroke-width="1.6"/></svg>
+    </div>
+    <div class="flash" id="fflash"></div>
+  </div>
+  <div class="thought" id="fthought"><span class="tlab">thought</span><span id="fthought-text">Press Step to start the loop.</span></div>
+  <div class="actionrow"><span class="alabel">action</span><code class="actionchip" id="faction">--</code></div>
+  <div class="rewardline" id="freward"></div>
+  <div>
+    <button class="btn" id="fstep">Step</button>
+    <button class="btn ghost" id="fauto">Auto-play</button>
+    <button class="btn ghost" id="freset">Reset</button>
+  </div>
+  <p class="cap">Toy model. Real agents run the same loop, just with messier screens and much longer task lists.</p>
+</div>
+
+<div class="viz" id="toy-ground">
+  <h3>From words to coordinates</h3>
+  <p class="sub">Grounding: the model gets words, it must output pixels. Tap an instruction and watch the model point.</p>
+  <div class="chips" id="ground-tasks">
+    <button class="chip on" data-g="submit">"the blue Submit button"</button>
+    <button class="chip" data-g="cancel">"the Cancel button"</button>
+    <button class="chip" data-g="delete">"the red Delete button"</button>
+  </div>
+  <div class="gdialog" id="gdialog">
+    <div class="gtitle">Save changes?</div>
+    <div class="gbody">You have unsaved edits in this document.</div>
+    <div class="gbtns">
+      <button class="gbtn" id="g-cancel">Cancel</button>
+      <button class="gbtn danger" id="g-delete">Delete</button>
+      <button class="gbtn primary" id="g-submit">Submit</button>
+    </div>
+  </div>
+  <div class="actionrow"><span class="alabel">grounded to</span><code class="actionchip" id="gaction">click(712, 486)</code></div>
+  <p class="cap">No button IDs, no DOM handles. Just a screenshot and a guess. Miss by a little and it clicks the ad instead.</p>
+</div>
+
+<p><strong>How it learns, in three stages.</strong> First, pretraining on UI grounding data: millions of screenshots labeled with what is clickable and where, so "Submit" starts meaning a region of pixels. Second, supervised fine-tuning on human demos: people record themselves doing tasks, and every step becomes an observe, think, act triple the model imitates. Third, reinforcement learning: the agent practices inside a sandboxed virtual machine and gets a reward of $R = 1$ when the task is done, $0$ when it is not. Benchmarks with names like <strong>OSWorld</strong> and <strong>WebArena</strong> score it on hundreds of real desktop and web tasks.</p>
+<p><strong>The sandbox is not optional.</strong> You do not train an agent on your real desktop, because lesson one of reinforcement learning is that the agent will try everything, including the delete key. A virtual machine can be reset. Your files cannot.</p>
+
+<div class="viz" id="toy-learn">
+  <h3>How it learned</h3>
+  <p class="sub">First it imitates human demos. Then it practices for reward.</p>
+  <div class="traj">
+    <div class="triple">
+      <div class="tshot"><i style="left:8%;top:14%;width:84%;height:16%;background:rgba(43,43,43,0.15)"></i><i style="left:8%;top:42%;width:50%;height:10%;background:rgba(179,53,43,0.25)"></i><i style="left:60%;top:70%;width:30%;height:12%;background:rgba(43,43,43,0.2)"></i></div>
+      <div class="tbody"><span class="tq">"The cursor is over the search box. I will click it."</span><code>click(540, 120)</code></div>
+    </div>
+    <div class="triple">
+      <div class="tshot"><i style="left:8%;top:14%;width:84%;height:12%;background:rgba(43,43,43,0.15)"></i><i style="left:8%;top:36%;width:84%;height:8%;background:rgba(43,43,43,0.12)"></i><i style="left:8%;top:52%;width:84%;height:8%;background:rgba(43,43,43,0.12)"></i><i style="left:70%;top:70%;width:22%;height:14%;background:rgba(179,53,43,0.3)"></i></div>
+      <div class="tbody"><span class="tq">"Results loaded. The login link is top right."</span><code>click(880, 90)</code></div>
+    </div>
+    <div class="triple">
+      <div class="tshot"><i style="left:12%;top:20%;width:76%;height:18%;background:#fff;border:1px solid rgba(43,43,43,0.3)"></i><i style="left:12%;top:52%;width:76%;height:18%;background:#fff;border:1px solid rgba(43,43,43,0.3)"></i></div>
+      <div class="tbody"><span class="tq">"The form is empty. I will fill the email field."</span><code>type("me@example.com")</code></div>
+    </div>
+  </div>
+  <label>Then reinforcement learning: practice until the reward lands</label>
+  <div class="attempts" id="rl-attempts"></div>
+  <div class="readout"><span>Total reward so far</span><span class="big" id="rl-total">0</span></div>
+  <div><button class="btn" id="rl-run">Run 6 practice attempts</button></div>
+  <p class="cap">Toy numbers. Demos teach the moves. RL teaches persistence: keep trying until the reward lands.</p>
+</div>
+
+<div class="viz" id="toy-two-ways">
+  <h3>Two ways to learn</h3>
+  <p class="sub">Tap each card. Demos teach the moves. Reward teaches persistence.</p>
+  <div class="flipgrid">
+    <button class="flipcard" aria-expanded="false">
+      <b>Learn from demos</b>
+      <span class="fc-short">Watch a human do it, then imitate.</span>
+      <span class="fc-long" hidden>People record themselves doing tasks. Every step becomes an observe, think, act triple the model copies. Fast to start, but it copies the human's mistakes too, and every new task needs more human hours.</span>
+    </button>
+    <button class="flipcard" aria-expanded="false">
+      <b>Learn for reward</b>
+      <span class="fc-short">Practice in a fake computer until it works.</span>
+      <span class="fc-long" hidden>The agent tries things inside a sandboxed virtual machine: reward 1 when the task is done, 0 when it is not. Slow, and it will find weird shortcuts you never imagined, but it keeps improving after the humans go home. The sandbox can be reset. Your files cannot.</span>
+    </button>
+  </div>
+  <p class="cap">In practice: demos first to learn the moves, RL after to stop needing the human.</p>
+</div>
+
+<h2>Part 2: Teaching it to do chores</h2>
+<p>A robot model is called a <strong>VLA</strong>: vision, language, action. Camera images go in, joint commands come out. Same transformer shape as a chatbot, different body. The breed has names: <strong>RT-2</strong>, <strong>OpenVLA</strong>, <strong>pi-zero</strong>.</p>
+<p><strong>The token trick.</strong> Robot arms move smoothly, but transformers speak in discrete tokens. So engineers chop each motion into bins: instead of "move 3.2 cm left," the model outputs token 412, which means "a little left." Same machinery as words, now steering motors.</p>
+
+<div class="viz" id="toy-tokens">
+  <h3>The token trick</h3>
+  <p class="sub">Tap the card. Transformers speak tokens, so engineers made motions speak tokens too.</p>
+  <button class="flipcard" aria-expanded="false">
+    <b>Token 412 = "a little left"</b>
+    <span class="fc-short">Smooth motion, chopped into bins.</span>
+    <span class="fc-long" hidden>Robot arms move smoothly, but transformers only output discrete tokens. So each motion is chopped into bins: instead of "move 3.2 cm left," the model outputs token 412, which the arm reads as "a little left." Same machinery as words, now steering motors. Finer bins mean smoother motion and a bigger vocabulary to learn.</span>
+  </button>
+  <p class="cap">Toy model. Real VLAs use hundreds of motion bins per joint.</p>
+</div>
+<p><strong>Where the data comes from.</strong> Chat models trained on the internet. Robots have no internet. Their data is human teleoperation: a person drives the arm with a controller while cameras record, thousands of times. Projects like <strong>Open X-Embodiment</strong> pool demos across many different robots. And sim-to-real: practice a million times in simulation, then deploy on the real arm and hope physics agreed.</p>
+
+<div class="viz" id="toy-data">
+  <h3>Where robot data comes from</h3>
+  <p class="sub">Chat models trained on the internet. Robots have no internet, so they get these instead. Tap each.</p>
+  <div class="flipgrid">
+    <button class="flipcard" aria-expanded="false">
+      <b>Teleoperation</b>
+      <span class="fc-short">A human drives the arm, cameras roll.</span>
+      <span class="fc-long" hidden>A person steers the robot with a controller, thousands of times, while cameras record every joint. Slow, expensive, and the closest thing robots have to "the internet": real humans doing real tasks.</span>
+    </button>
+    <button class="flipcard" aria-expanded="false">
+      <b>Open X-Embodiment</b>
+      <span class="fc-short">Many robots, one shared dataset.</span>
+      <span class="fc-long" hidden>Dozens of labs pool their teleoperation demos across many different robot bodies into one giant dataset. Different arms, different grippers, same idea: more demos beat cleverer models.</span>
+    </button>
+    <button class="flipcard" aria-expanded="false">
+      <b>Sim-to-real</b>
+      <span class="fc-short">A million practice runs, zero broken cups.</span>
+      <span class="fc-long" hidden>Practice in simulation a million times, then deploy on the real arm and hope physics agreed with the simulator. Cheap practice, risky transfer: sim never quite matches the stickiness of a real kitchen counter.</span>
+    </button>
+  </div>
+  <p class="cap">Toy summary. Real pipelines mix all three.</p>
+</div>
+
+<div class="viz" id="toy-arm">
+  <h3>The arm learns</h3>
+  <p class="sub">A two-link arm, a cup, a sink, a shelf. Watch the expert, then watch a clone of the expert.</p>
+  <div class="chips" id="arm-chores">
+    <button class="chip on" data-chore="sink">Cup to sink</button>
+    <button class="chip" data-chore="shelf">Cup to shelf</button>
+  </div>
+  <svg class="armsvg" id="armsvg" viewBox="0 0 360 280" role="img" aria-label="Two-link robot arm moving a cup">
+    <rect x="0" y="0" width="360" height="280" fill="#f3ecda" rx="12"/>
+    <line x1="0" y1="262" x2="360" y2="262" stroke="rgba(43,43,43,0.35)" stroke-width="3"/>
+    <rect id="arm-table" x="140" y="192" width="60" height="70" fill="#c9a86a" stroke="rgba(43,43,43,0.3)"/>
+    <rect id="arm-sink" x="232" y="196" width="44" height="66" fill="#9fb6c3" stroke="rgba(43,43,43,0.3)"/>
+    <rect x="190" y="108" width="56" height="8" fill="#c9a86a" stroke="rgba(43,43,43,0.3)"/>
+    <rect x="74" y="240" width="12" height="22" fill="#6a6a6a"/>
+    <text x="146" y="286" font-size="11" fill="rgba(43,43,43,0.55)">table</text>
+    <text x="240" y="286" font-size="11" fill="rgba(43,43,43,0.55)">sink</text>
+    <text x="192" y="102" font-size="11" fill="rgba(43,43,43,0.55)">shelf</text>
+    <g id="arm-trail"></g>
+    <g id="arm-links">
+      <line id="arm-l1" x1="0" y1="0" x2="0" y2="0" stroke="#2b2b2b" stroke-width="9" stroke-linecap="round"/>
+      <line id="arm-l2" x1="0" y1="0" x2="0" y2="0" stroke="#4a4a4a" stroke-width="7" stroke-linecap="round"/>
+      <circle id="arm-base" cx="0" cy="0" r="10" fill="#2b2b2b"/>
+      <circle id="arm-elbow" cx="0" cy="0" r="6" fill="#f6f1e3" stroke="#2b2b2b" stroke-width="3"/>
+      <circle id="arm-grip" cx="0" cy="0" r="7" fill="#b3352b"/>
+    </g>
+    <circle id="arm-cup" cx="170" cy="182" r="10" fill="#b3352b"/>
+  </svg>
+  <div class="armstatus" id="arm-status">Pick a chore, then watch the expert.</div>
+  <label>More demos: <span id="arm-demolab">40</span></label>
+  <input type="range" id="arm-demos" min="10" max="1000" step="10" value="40" aria-label="Number of expert demos the clone trained on">
+  <div class="readout"><span>Grab wobble</span><span class="big" id="arm-wobble">--</span></div>
+  <div>
+    <button class="btn" id="arm-expert">Watch expert</button>
+    <button class="btn ghost" id="arm-clone">Clone the expert</button>
+  </div>
+  <p class="cap">Toy model. Cloning copies the expert, wobble included. More demos shrink the wobble, but the clone never beats the teacher. This is why demos alone do not make a butler.</p>
+</div>
+
+<p><strong>Long chores need managers.</strong> "Clean the kitchen" is not one skill, it is fifty. So policies go hierarchical: a planner breaks the chore into skills (pick up cup, open dishwasher, place cup), and each skill is its own little policy. The planner thinks in words. The skills think in motions.</p>
+
+<div class="viz" id="toy-chores">
+  <h3>One chore is fifty skills</h3>
+  <p class="sub">"Clean the kitchen" is not a skill. Tap a chore to see the skills hiding inside it.</p>
+  <div class="flipgrid">
+    <button class="flipcard" aria-expanded="false">
+      <b>Make coffee</b>
+      <span class="fc-short">6 skills</span>
+      <span class="fc-long" hidden><ol class="fsteps"><li>Pick up the cup</li><li>Place it under the machine</li><li>Press the brew button</li><li>Wait for the pour</li><li>Carry the cup to the table</li><li>Put it down without spilling</li></ol></span>
+    </button>
+    <button class="flipcard" aria-expanded="false">
+      <b>Load the dishwasher</b>
+      <span class="fc-short">5 skills</span>
+      <span class="fc-long" hidden><ol class="fsteps"><li>Pick up a plate</li><li>Scrape it over the bin</li><li>Slide it into the rack</li><li>Repeat without stacking wrong</li><li>Close the door and press start</li></ol></span>
+    </button>
+    <button class="flipcard" aria-expanded="false">
+      <b>Tidy the living room</b>
+      <span class="fc-short">5 skills</span>
+      <span class="fc-long" hidden><ol class="fsteps"><li>Spot what is out of place</li><li>Pick up the cushions</li><li>Fold the blanket</li><li>Carry mugs to the sink</li><li>Fluff, step back, admire</li></ol></span>
+    </button>
+  </div>
+  <p class="cap">A planner thinks in words and picks the skills. Each skill is its own little policy that thinks in motions.</p>
+</div>
+
+<div class="viz" id="toy-scale">
+  <h3>Why robots lag chat</h3>
+  <p class="sub">Same transformer shape. Wildly different diets. Log scale, approximate figures.</p>
+  <div class="srow">
+    <div class="slab"><span>Text tokens training a chat model</span><b>~10 trillion</b></div>
+    <div class="sbar"><div class="sfill" style="width:93%"></div></div>
+  </div>
+  <div class="srow">
+    <div class="slab"><span>Robot episodes in Open X-Embodiment</span><b>~1 million</b></div>
+    <div class="sbar"><div class="sfill dim" style="width:43%"></div></div>
+  </div>
+  <p class="cap">Log scale, toy comparison, figures approximate. Robots are not dumber. They are data-starved: every chat model read the internet, and no robot has.</p>
+</div>
+
+<p class="kicker-close">Reading made chatbots smart. Doing will make robots useful. It is just slower, because every lesson costs a real arm, a real cup, and a real kitchen.</p>
+
+<h2>Keep exploring</h2>
+<div class="xlinks">
+  <a class="xlink" href="https://projects.lukezhang.si/llm-training-draft/"><b>How an LLM learns, step by step <svg class="ext" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 9L9 3M4.5 3H9v4.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></b><span>Token prediction, cross-entropy, and gradient descent inside a full training pipeline.</span></a>
+  <a class="xlink" href="https://projects.lukezhang.si/ml-functions-draft/"><b>The functions that run the machine <svg class="ext" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 9L9 3M4.5 3H9v4.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></b><span>Softmax, ReLU, LayerNorm: the math inside every model, as toys.</span></a>
+  <a class="xlink" href="https://projects.lukezhang.si/math-curiosity-draft/"><b>The math you called useless is running your life <svg class="ext" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 9L9 3M4.5 3H9v4.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></b><span>Prime numbers, imaginary numbers, and curiosity that compounds.</span></a>
+  <a class="xlink" href="https://projects.lukezhang.si/model-atlas/"><b>Model Atlas <svg class="ext" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 9L9 3M4.5 3H9v4.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></b><span>A visual map of 56 models: what kind each one is, who made it, what it costs.</span></a>
+</div>
+
+<footer>Draft. Interactive visualizers run entirely in your browser.</footer>
+</div>
+
+<script>
+/* ================= toy 1: fake desktop agent loop ================= */
+(function(){
+  var desk = document.getElementById("fakedesk");
+  if(!desk) return;
+  var cur = document.getElementById("fcur");
+  var flash = document.getElementById("fflash");
+  var thoughtText = document.getElementById("fthought-text");
+  var actionChip = document.getElementById("faction");
+  var rewardLine = document.getElementById("freward");
+  var notesWin = document.getElementById("fw-notes");
+  var notesText = document.getElementById("fw-text");
+  var fileIcon = document.getElementById("fi-file");
+  var fileName = document.getElementById("fi-file-name");
+  var stepBtn = document.getElementById("fstep");
+  var autoBtn = document.getElementById("fauto");
+  var resetBtn = document.getElementById("freset");
+  var ICONS = { notes: [12, 20], file: [82, 22] };
+  function moveCursor(mx, my, done){
+    cur.style.left = (mx/10) + "%";
+    cur.style.top = (my/10) + "%";
+    setTimeout(done || function(){}, 600);
+  }
+  function clickPulse(done){
+    cur.classList.remove("clicking");
+    void cur.offsetWidth;
+    cur.classList.add("clicking");
+    setTimeout(done || function(){}, 380);
+  }
+  function screenshot(){
+    flash.classList.remove("go");
+    void flash.offsetWidth;
+    flash.classList.add("go");
+  }
+  function typeInto(el, text, done){
+    var i = 0;
+    el.textContent = "";
+    (function tick(){
+      if(i <= text.length){
+        el.textContent = text.slice(0, i);
+        i++;
+        setTimeout(tick, 90);
+      } else if(done) done();
+    })();
+  }
+  function setStep(thought, action){
+    thoughtText.textContent = thought;
+    actionChip.textContent = action;
+  }
+  var TASKS = {
+    notes: [
+      { t: "Goal: open Notes and type hello. Scanning the desktop. There is the Notes icon, top left.",
+        a: "click(120, 200)",
+        run: function(next){
+          moveCursor(120, 200, function(){
+            clickPulse(function(){
+              notesWin.hidden = false;
+              next();
+            });
+          });
+        } },
+      { t: "Notes is open and focused. Now I type the message.",
+        a: 'type("hello")',
+        run: function(next){ typeInto(notesText, "hello", next); } },
+      { t: "The text is on screen. Task complete.",
+        a: "done()",
+        run: function(next){
+          rewardLine.textContent = "reward: 1, task complete";
+          rewardLine.className = "rewardline good";
+          next();
+        } }
+    ],
+    rename: [
+      { t: "Goal: rename file.txt to report.txt. I see file.txt on the right side of the desktop.",
+        a: "click(820, 220)",
+        run: function(next){
+          moveCursor(820, 220, function(){
+            clickPulse(function(){
+              fileIcon.classList.add("selected");
+              next();
+            });
+          });
+        } },
+      { t: "File selected. F2 starts a rename on most systems.",
+        a: 'hotkey("F2")',
+        run: function(next){
+          fileName.style.background = "#fff";
+          fileName.style.outline = "2px solid #b3352b";
+          setTimeout(next, 500);
+        } },
+      { t: "Now I type the new name and press Enter.",
+        a: 'type("report.txt") + key("Enter")',
+        run: function(next){
+          typeInto(fileName, "report.txt", function(){
+            setTimeout(function(){
+              fileName.style.background = "";
+              fileName.style.outline = "";
+              fileIcon.classList.remove("selected");
+              next();
+            }, 400);
+          });
+        } },
+      { t: "The name changed on screen. Task complete.",
+        a: "done()",
+        run: function(next){
+          rewardLine.textContent = "reward: 1, task complete";
+          rewardLine.className = "rewardline good";
+          next();
+        } }
+    ]
+  };
+  var curTask = "notes", idx = 0, busy = false, autoTimer = null;
+  function reset(){
+    idx = 0; busy = false;
+    clearTimeout(autoTimer); autoTimer = null;
+    autoBtn.textContent = "Auto-play";
+    notesWin.hidden = true; notesText.textContent = "";
+    fileIcon.classList.remove("selected");
+    fileName.textContent = "file.txt";
+    fileName.style.background = ""; fileName.style.outline = "";
+    cur.style.left = "50%"; cur.style.top = "60%";
+    thoughtText.textContent = "Press Step to start the loop.";
+    actionChip.textContent = "--";
+    rewardLine.textContent = "";
+    rewardLine.className = "rewardline";
+    stepBtn.style.display = "";
+  }
+  function doStep(){
+    if(busy) return;
+    var steps = TASKS[curTask];
+    if(idx >= steps.length){ return; }
+    busy = true;
+    screenshot();
+    var s = steps[idx];
+    setStep(s.t, s.a);
+    s.run(function(){
+      idx++;
+      busy = false;
+      if(idx >= steps.length) stepBtn.style.display = "none";
+    });
+  }
+  stepBtn.addEventListener("click", doStep);
+  autoBtn.addEventListener("click", function(){
+    if(autoTimer){
+      clearTimeout(autoTimer); autoTimer = null;
+      autoBtn.textContent = "Auto-play";
+      return;
+    }
+    autoBtn.textContent = "Stop";
+    (function tick(){
+      var steps = TASKS[curTask];
+      if(idx >= steps.length || busy){
+        if(idx >= steps.length){ clearTimeout(autoTimer); autoTimer = null; autoBtn.textContent = "Auto-play"; }
+        else autoTimer = setTimeout(tick, 400);
+        return;
+      }
+      doStep();
+      autoTimer = setTimeout(tick, 2600);
+    })();
+  });
+  resetBtn.addEventListener("click", reset);
+  document.getElementById("desk-tasks").addEventListener("click", function(e){
+    var c = e.target.closest(".chip");
+    if(!c) return;
+    document.querySelectorAll("#desk-tasks .chip").forEach(function(x){ x.classList.remove("on"); });
+    c.classList.add("on");
+    curTask = c.getAttribute("data-task");
+    reset();
+  });
+  reset();
+})();
+
+/* ================= toy 2: RL practice attempts ================= */
+(function(){
+  var box = document.getElementById("rl-attempts");
+  if(!box) return;
+  var total = document.getElementById("rl-total");
+  var runBtn = document.getElementById("rl-run");
+  var sum = 0, timer = null;
+  function render(n, results){
+    box.innerHTML = "";
+    for(var i = 0; i < 6; i++){
+      var d = document.createElement("div");
+      d.className = "att";
+      if(i < n){
+        var ok = results[i];
+        d.classList.add(ok ? "done" : "fail");
+        d.innerHTML = (ok ? "done" : "fail") + "<small>" + (ok ? "+1" : "+0") + "</small>";
+      } else {
+        d.textContent = "·";
+      }
+      box.appendChild(d);
+    }
+  }
+  runBtn.addEventListener("click", function(){
+    if(timer) return;
+    runBtn.disabled = true;
+    var results = [], i = 0;
+    render(0, []);
+    timer = setInterval(function(){
+      var ok = Math.random() < 0.5;
+      results.push(ok);
+      if(ok) sum++;
+      total.textContent = sum;
+      render(i + 1, results);
+      i++;
+      if(i >= 6){ clearInterval(timer); timer = null; runBtn.disabled = false; }
+    }, 600);
+  });
+  render(0, []);
+})();
+
+</script>
+<script>
+/* ================= grounding toy: words -> coordinates ================= */
+(function(){
+  var root = document.getElementById("toy-ground");
+  if(!root) return;
+  var action = document.getElementById("gaction");
+  var map = {
+    submit: ["g-submit", "click(712, 486)"],
+    cancel: ["g-cancel", "click(288, 486)"],
+    "delete": ["g-delete", "click(500, 486)"]
+  };
+  function aim(key){
+    ["g-submit", "g-cancel", "g-delete"].forEach(function(id){
+      document.getElementById(id).classList.remove("aimed");
+    });
+    var m = map[key];
+    if(!m) return;
+    document.getElementById(m[0]).classList.add("aimed");
+    action.textContent = m[1];
+  }
+  document.getElementById("ground-tasks").addEventListener("click", function(e){
+    var c = e.target.closest(".chip");
+    if(!c) return;
+    root.querySelectorAll("#ground-tasks .chip").forEach(function(x){ x.classList.remove("on"); });
+    c.classList.add("on");
+    aim(c.getAttribute("data-g"));
+  });
+  aim("submit");
+})();
+
+/* ================= tappable flip cards ================= */
+(function(){
+  var cards = document.querySelectorAll(".flipcard");
+  if(!cards.length) return;
+  cards.forEach(function(card){
+    card.addEventListener("click", function(){
+      var open = card.getAttribute("aria-expanded") === "true";
+      card.setAttribute("aria-expanded", String(!open));
+      var body = card.querySelector(".fc-long");
+      if(body) body.hidden = open;
+    });
+  });
+})();
+
+/* ================= toy 3: two-link arm ================= */
+(function(){
+  var svg = document.getElementById("armsvg");
+  if(!svg) return;
+  var NS = "http://www.w3.org/2000/svg";
+  var SH = 280;
+  var BX = 80, BY = 40, L1 = 120, L2 = 100;
+  var CUP_HOME = [170, 98], SINK = [254, 96], SHELF = [218, 184];
+  function M(x, y){ return [x, SH - y]; } // math -> svg
+  function ik(x, y){
+    var dx = x - BX, dy = y - BY;
+    var D = (dx*dx + dy*dy - L1*L1 - L2*L2) / (2*L1*L2);
+    D = Math.max(-1, Math.min(1, D));
+    var a2 = Math.atan2(-Math.sqrt(Math.max(0, 1 - D*D)), D);
+    var a1 = Math.atan2(dy, dx) - Math.atan2(L2*Math.sin(a2), L1 + L2*Math.cos(a2));
+    return [a1, a2];
+  }
+  function fk(a1, a2){
+    var ex = BX + L1*Math.cos(a1), ey = BY + L1*Math.sin(a1);
+    var gx = ex + L2*Math.cos(a1 + a2), gy = ey + L2*Math.sin(a1 + a2);
+    return { e: [ex, ey], g: [gx, gy] };
+  }
+  function gauss(){
+    var u = 0, v = 0;
+    while(u === 0) u = Math.random();
+    while(v === 0) v = Math.random();
+    return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+  }
+  var l1 = document.getElementById("arm-l1"), l2 = document.getElementById("arm-l2");
+  var base = document.getElementById("arm-base"), elbow = document.getElementById("arm-elbow");
+  var grip = document.getElementById("arm-grip"), cup = document.getElementById("arm-cup");
+  var trail = document.getElementById("arm-trail");
+  var statusEl = document.getElementById("arm-status");
+  var demosEl = document.getElementById("arm-demos"), demoLab = document.getElementById("arm-demolab");
+  var wobEl = document.getElementById("arm-wobble");
+  var expertBtn = document.getElementById("arm-expert"), cloneBtn = document.getElementById("arm-clone");
+  function drawArm(a1, a2){
+    var p = fk(a1, a2);
+    var b = M(BX, BY), e = M(p.e[0], p.e[1]), g = M(p.g[0], p.g[1]);
+    base.setAttribute("cx", b[0]); base.setAttribute("cy", b[1]);
+    l1.setAttribute("x1", b[0]); l1.setAttribute("y1", b[1]);
+    l1.setAttribute("x2", e[0]); l1.setAttribute("y2", e[1]);
+    l2.setAttribute("x1", e[0]); l2.setAttribute("y1", e[1]);
+    l2.setAttribute("x2", g[0]); l2.setAttribute("y2", g[1]);
+    elbow.setAttribute("cx", e[0]); elbow.setAttribute("cy", e[1]);
+    grip.setAttribute("cx", g[0]); grip.setAttribute("cy", g[1]);
+    return { svg: [b, e, g], math: p.g };
+  }
+  function drawCupAtMath(x, y){
+    var s = M(x, y);
+    cup.setAttribute("cx", s[0]); cup.setAttribute("cy", s[1]);
+  }
+  function addTrailDot(svgPt, color){
+    var c = document.createElementNS(NS, "circle");
+    c.setAttribute("cx", svgPt[0]); c.setAttribute("cy", svgPt[1]);
+    c.setAttribute("r", "3"); c.setAttribute("fill", color || "rgba(179,53,43,0.45)");
+    trail.appendChild(c);
+    while(trail.childNodes.length > 120) trail.removeChild(trail.firstChild);
+  }
+  function waypoints(chore){
+    var target = chore === "shelf" ? SHELF : SINK;
+    var pre = chore === "shelf" ? [218, 205] : [254, 140];
+    return [
+      { p: [120, 140], label: "starting pose" },
+      { p: [170, 140], label: "reaching for the cup" },
+      { p: [170, 104], label: "grasping", grasp: true },
+      { p: [170, 150], label: "lifting the cup", carry: true },
+      { p: pre,        label: chore === "shelf" ? "carrying to the shelf" : "carrying to the sink", carry: true },
+      { p: target,     label: "placing it down", carry: true, place: true },
+      { p: pre,        label: "backing away" },
+      { p: [120, 140], label: "done" }
+    ];
+  }
+  var chore = "sink", running = false;
+  function wobble(){
+    var d = parseInt(demosEl.value, 10);
+    return 0.38 / Math.sqrt(d);
+  }
+  function refreshWobble(){
+    demoLab.textContent = demosEl.value;
+    wobEl.textContent = (wobble() * 220).toFixed(0) + " px";
+  }
+  demosEl.addEventListener("input", refreshWobble);
+  refreshWobble();
+  function ease(t){ return t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t + 2, 2)/2; }
+  function run(mode){
+    if(running) return;
+    running = true;
+    expertBtn.disabled = true; cloneBtn.disabled = true;
+    trail.innerHTML = "";
+    drawCupAtMath(CUP_HOME[0], CUP_HOME[1]);
+    var wps = waypoints(chore);
+    var angs = wps.map(function(w){ return ik(w.p[0], w.p[1]); });
+    var attached = false, missed = false, placed = false;
+    var wob = mode === "clone" ? wobble() : 0;
+    var SEG_MS = 850;
+    var seg = 0, segStart = null, fcount = 0;
+    var target = chore === "shelf" ? SHELF : SINK;
+    statusEl.textContent = mode === "clone" ? "Cloned policy running." : "Expert demo running.";
+    function frame(now){
+      if(seg >= wps.length - 1){
+        running = false;
+        expertBtn.disabled = false; cloneBtn.disabled = false;
+        statusEl.innerHTML = missed
+          ? "<strong>Missed the cup.</strong> reward: 0, task failed."
+          : "<strong>Cup delivered.</strong> reward: 1, task complete.";
+        return;
+      }
+      if(segStart === null) segStart = now;
+      var t = Math.min(1, (now - segStart) / SEG_MS);
+      var e = ease(t);
+      var a = angs[seg], b = angs[seg + 1];
+      var a1 = a[0] + (b[0] - a[0]) * e + (wob ? gauss() * wob : 0);
+      var a2 = a[1] + (b[1] - a[1]) * e + (wob ? gauss() * wob : 0);
+      var d = drawArm(a1, a2);
+      fcount++;
+      if(fcount % 4 === 0) addTrailDot(d.svg[2]);
+      if(attached) drawCupAtMath(d.math[0], d.math[1] - 14);
+      statusEl.textContent = (mode === "clone" ? "Cloned policy: " : "Expert: ") + wps[seg + 1].label + ".";
+      if(t >= 1){
+        var w = wps[seg + 1];
+        if(w.grasp && !attached && !missed){
+          var gp = fk(a1, a2).g;
+          var dist = Math.hypot(gp[0] - CUP_HOME[0], gp[1] - CUP_HOME[1]);
+          if(dist < 16) attached = true; else missed = true;
+        }
+        if(w.place && attached && !placed){
+          placed = true; attached = false;
+          drawCupAtMath(target[0], target[1]);
+        }
+        seg++; segStart = null;
+      }
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+  expertBtn.addEventListener("click", function(){ run("expert"); });
+  cloneBtn.addEventListener("click", function(){ run("clone"); });
+  document.getElementById("arm-chores").addEventListener("click", function(e){
+    var c = e.target.closest(".chip");
+    if(!c || running) return;
+    document.querySelectorAll("#arm-chores .chip").forEach(function(x){ x.classList.remove("on"); });
+    c.classList.add("on");
+    chore = c.getAttribute("data-chore");
+    trail.innerHTML = "";
+    drawCupAtMath(CUP_HOME[0], CUP_HOME[1]);
+    var h = drawArm.apply(null, ik(120, 140));
+    statusEl.textContent = "Pick a chore, then watch the expert.";
+  });
+  drawArm.apply(null, ik(120, 140));
+  drawCupAtMath(CUP_HOME[0], CUP_HOME[1]);
+})();
+
+/* ================= toy 4: data scale (static bars, no JS needed) ================= */
+</script>
+<script src="katex/katex.min.js"></script>
+<script src="katex/contrib/auto-render.min.js"></script>
+<script>
+renderMathInElement(document.body, {
+  delimiters: [
+    {left: "$$", right: "$$", display: true},
+    {left: "$", right: "$", display: false}
+  ],
+  throwOnError: false,
+  ignoredClasses: ["nokatex"]
+});
+</script>
+</body>
+</html>

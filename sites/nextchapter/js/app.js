@@ -271,6 +271,7 @@ function itemPhoto(it){
 /* ---------- views ---------- */
 const view = $("#view"), tabbar = $("#tabbar"), topbarActions = $("#topbar-actions");
 let digestShowSample = false;
+let summaryShowSample = false;
 let printReceiptId = null;
 
 function recordButtons(move, it){
@@ -283,7 +284,7 @@ function digestSections(move, interactive){
   const items = hidden ? [] : move.items;
   const needs = items.filter(i => i.disposition === "ask" && i.familyStatus === "pending");
   const decided = items.filter(i => !(i.disposition === "ask" && i.familyStatus === "pending"));
-  const hiddenText = '<p class="card">Sample data is hidden. Turn the toggle on to preview it.</p>';
+  const hiddenText = '<p class="card">Sample data is hidden in this file.'+(interactive?' Turn the toggle on to preview it.':'')+'</p>';
   const needsHTML = needs.map(it => {
     const photo = safePhoto(itemPhoto(it));
     return '<article class="card digest-card">'+(photo?'<img class="digest-photo" src="'+esc(photo)+'" alt="'+esc(it.name)+'">':'') +
@@ -292,9 +293,11 @@ function digestSections(move, interactive){
       (interactive?recordButtons(move,it):'') + '<span class="digest-check print-only" aria-label="Decision checkbox"></span></article>';
   }).join("");
   const decidedHTML = decided.map(it => {
+    const photo = safePhoto(itemPhoto(it));
     const disp = DISP[it.disposition] || DISP.ask, fam = FAM[it.familyStatus] || FAM.pending;
     const comment = (it.comments || []).reduce((latest,c) => !latest || (Number(c.ts)||0) >= (Number(latest.ts)||0) ? c : latest, null);
-    return '<article class="card digest-card"><h3>'+esc(it.name)+'</h3><div class="digest-pills"><span class="disp '+disp.cls+'">'+esc(disp.label)+'</span> '+
+    return '<article class="card digest-card">'+(photo?'<img class="digest-photo" src="'+esc(photo)+'" alt="'+esc(it.name)+'">':'') +
+      '<h3>'+esc(it.name)+'</h3><div class="digest-pills"><span class="disp '+disp.cls+'">'+esc(disp.label)+'</span> '+
       '<span class="disp '+fam.cls+'">'+esc(fam.label)+'</span></div>' +
       (comment?'<p><strong>'+esc(comment.by)+':</strong> '+esc(comment.text)+'</p>':'')+'</article>';
   }).join("");
@@ -336,8 +339,8 @@ function shareText(move){
   const needs = move.items.filter(i => i.disposition === "ask" && i.familyStatus === "pending");
   const names = needs.slice(0,3).map(it => it.name).join(", ")+(needs.length>3?" and "+(needs.length-3)+" more":"");
   return "Hi! Here is the latest on "+move.clientName+"'s move: "+(needs.length ?
-    needs.length+" decision"+(needs.length===1?"":"s")+" waiting ("+names+"). I attached the family digest. It opens on any phone. Nothing is final until the family agrees." :
-    "all family decisions are settled. I attached the family digest. It opens on any phone.");
+    needs.length+" decision"+(needs.length===1?"":"s")+" waiting ("+names+"). I'll send the family digest file right after this message. It opens on any phone. Nothing is final until the family agrees." :
+    "all family decisions are settled. I'll send the family digest file right after this message. It opens on any phone.");
 }
 function sheetShare(move){
   const text = shareText(move), encoded = encodeURIComponent(text), attrs = ' data-id="'+esc(move.id)+'"';
@@ -436,11 +439,29 @@ function vDashboard(){
     '<button class="btn btn-soft" data-action="export-data">'+icon("download","ic-sm")+' Export backup</button>' +
     '<button class="btn btn-ghost" data-action="import-data">Import backup</button></div><input type="file" id="import-file" accept="application/json,.json" hidden></div>' +
     '<div id="syncAnchor"></div>' +
-    '<footer class="app-foot no-print">Move data lives on this device. <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a></footer>';
+    '<footer class="app-foot no-print">Your data lives on this device, backed up to the sync prototype. <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a></footer>';
   if (window.__nextchapterSyncUI){ try{ window.__nextchapterSyncUI(); }catch(e){} }
 }
 
 /* ----- move hub ----- */
+function summaryPrintHTML(move){
+  if(move.sample && !summaryShowSample)
+    return '<p><strong>Sample data is hidden in this summary.</strong></p><p>Turn on "Include sample data" to show it before printing.</p>';
+  return (move.sample?'<p><strong>Sample move, for demonstration only. Not real client data.</strong></p>':'')+'<h2>Move summary: '+esc(move.clientName)+'</h2>' +
+    '<div class="kv"><span class="k">Move type</span><span class="v">'+esc(move.moveType)+'</span></div>' +
+    (move.targetDate?'<div class="kv"><span class="k">Target date</span><span class="v">'+esc(fmtDate(move.targetDate))+'</span></div>':'') +
+    '<h3>Inventory by disposition</h3>' +
+    Object.keys(DISP).map(k => {
+      const list = move.items.filter(i=>i.disposition===k);
+      return '<h4>'+esc(DISP[k].label)+' ('+list.length+')</h4>' +
+        (list.length ? '<p>'+list.map(i=>esc(i.name)+' <span class="faint">('+esc(i.room)+')</span>').join('<br>')+'</p>' : '<p class="faint">None yet</p>');
+    }).join("") +
+    '<h3>Vendors</h3>' +
+    (move.vendors.length ? move.vendors.map(v=>'<div class="kv"><span class="k">'+esc(v.name)+' ('+esc(v.kind)+')</span><span class="v">'+esc((VENDOR_STATUS[v.status]||{}).label||"")+'</span></div>').join("") : '<p class="faint">None yet</p>') +
+    '<h3>Donations</h3>' +
+    (move.donations.length ? move.donations.map(d=>'<div class="kv"><span class="k">'+esc(d.org)+' · '+esc(fmtDate(d.date))+'</span><span class="v">'+money(d.value)+'</span></div>').join("") : '<p class="faint">None yet</p>') +
+    '<p class="small faint">Prepared '+new Date().toLocaleDateString()+' by the move team.</p>';
+}
 function vMoveHub(move){
   document.body.classList.remove("family-mode");
   setTabs(moveTabs(move), null);
@@ -478,23 +499,11 @@ function vMoveHub(move){
       '<a class="list-row" href="#/move/'+esc(move.id)+'/digest"><span class="grow"><h4>Family digest</h4><div class="sub">A printable update for the whole family</div></span><span class="chev">'+icon("back")+'</span></a>' +
       '<a class="list-row" href="#/family/'+esc(move.id)+'"><span class="grow"><h4>Family portal</h4><div class="sub">'+(pend?pend+' decisions waiting':'nothing waiting')+'</div></span><span class="chev">'+icon("back")+'</span></a>' +
       '<button class="list-row" data-action="print-summary" style="width:100%;background:none;border-top:0;border-left:0;border-right:0;text-align:left;font-size:16px"><span class="grow"><h4>Print move summary</h4><div class="sub">Inventory, vendors, donations, for the client file</div></span><span class="chev">'+icon("print")+'</span></button>' +
+      (move.sample?'<button class="list-row" data-action="summary-toggle-sample" data-id="'+esc(move.id)+'" aria-pressed="'+summaryShowSample+'" style="width:100%;background:none;border-top:0;border-left:0;border-right:0;text-align:left;font-size:16px"><span class="grow"><h4>Include sample data</h4><div class="sub">'+(summaryShowSample?'Sample data will appear in the printed summary.':'Sample data is hidden from the printed summary.')+'</div></span><span class="chev">'+icon("back")+'</span></button>':'') +
     '</div>' +
     '<div class="no-print" style="margin-top:16px"><button class="btn btn-ghost btn-block btn-sm" data-action="archive-move" data-id="'+esc(move.id)+'">'+(move.archived?"Unarchive this move":"Archive this move")+'</button></div>' +
-    /* printable client summary */
-    '<div class="print-only move-summary">'+(move.sample?'<p><strong>Sample move, for demonstration only. Not real client data.</strong></p>':'')+'<h2>Move summary: '+esc(move.clientName)+'</h2>' +
-      '<div class="kv"><span class="k">Move type</span><span class="v">'+esc(move.moveType)+'</span></div>' +
-      (move.targetDate?'<div class="kv"><span class="k">Target date</span><span class="v">'+esc(fmtDate(move.targetDate))+'</span></div>':'') +
-      '<h3>Inventory by disposition</h3>' +
-      Object.keys(DISP).map(k => {
-        const list = move.items.filter(i=>i.disposition===k);
-        return '<h4>'+esc(DISP[k].label)+' ('+list.length+')</h4>' +
-          (list.length ? '<p>'+list.map(i=>esc(i.name)+' <span class="faint">('+esc(i.room)+')</span>').join('<br>')+'</p>' : '<p class="faint">None yet</p>');
-      }).join("") +
-      '<h3>Vendors</h3>' +
-      (move.vendors.length ? move.vendors.map(v=>'<div class="kv"><span class="k">'+esc(v.name)+' ('+esc(v.kind)+')</span><span class="v">'+esc((VENDOR_STATUS[v.status]||{}).label||"")+'</span></div>').join("") : '<p class="faint">None yet</p>') +
-      '<h3>Donations</h3>' +
-      (move.donations.length ? move.donations.map(d=>'<div class="kv"><span class="k">'+esc(d.org)+' · '+esc(fmtDate(d.date))+'</span><span class="v">'+money(d.value)+'</span></div>').join("") : '<p class="faint">None yet</p>') +
-      '<p class="small faint">Prepared '+new Date().toLocaleDateString()+' by the move team.</p></div>';
+    /* printable client summary: sample data excluded by default, opt-in toggle above */
+    '<div class="print-only move-summary">'+summaryPrintHTML(move)+'</div>';
 }
 
 /* ----- inventory ----- */
@@ -643,6 +652,7 @@ function vGiving(move){
     '<div class="row-between"><h2 style="margin:0">Donation records</h2>' +
     '<button class="btn btn-sm no-print" data-action="add-donation" data-id="'+esc(move.id)+'">'+icon("plus","ic-sm")+' Add</button></div>' +
     '<p class="muted small">Every donation, with its estimated value. Organized records to share with the family or an accountant.</p>' +
+    '<p class="muted small">Values are estimates, not appraisals. These records are an organizer&#39;s worksheet, not tax advice.</p>' +
     '<div class="card print-only donation-summary"><h3>Donation summary: '+esc(move.clientName)+'</h3>' +
       '<div class="kv"><span class="k">Total estimated value</span><span class="v">'+money(total)+'</span></div>' +
       '<div class="kv"><span class="k">Donations</span><span class="v">'+move.donations.length+'</span></div>' +
@@ -999,6 +1009,11 @@ const Actions = {
   },
   "print-donations": () => window.print(),
   "print-summary": () => window.print(),
+  "summary-toggle-sample": el => {
+    const m = getMove(el.getAttribute("data-id")); if(!m) return;
+    summaryShowSample = !summaryShowSample;
+    vMoveHub(m);
+  },
   "archive-move": el => {
     const m = getMove(el.getAttribute("data-id")); if(!m) return;
     m.archived = !m.archived;
@@ -1092,7 +1107,7 @@ function route(rerender){
     else if(sub === "plan") vPlan(m);
     else if(sub === "giving") vGiving(m);
     else if(sub === "digest") vDigest(m);
-    else vMoveHub(m);
+    else { summaryShowSample = false; vMoveHub(m); }
     return;
   }
   vDashboard();

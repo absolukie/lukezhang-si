@@ -298,10 +298,13 @@ async function pull(){
 
 
 function onSave(){
+  /* Always report honestly, even when no device key exists yet (backend
+   * unreachable at boot): the work is still unacknowledged. Only schedule
+   * the push when we have a key to push with. */
+  updatePill();
   if (applyingRemote || !deviceKey) return;
   clearTimeout(pushTimer);
   pushTimer = setTimeout(pushDirty, PUSH_DEBOUNCE_MS);
-  updatePill(); // show the pending work now, not after the debounce fires
 }
 
 

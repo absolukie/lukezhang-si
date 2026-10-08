@@ -559,7 +559,7 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") closeModals(
 function caseSummaryText() {
   const c = computeCase(); if (!c) return "";
   const car = db.car;
-  const lines = c.inWin.map(r => `${fmtDate(r.dateIn)}${r.dateOut ? " to " + fmtDate(r.dateOut) : " (in shop)"} — ${r.problem} (${daysOut(r, c.biz, c.windowStart, c.windowEnd)}${c.biz ? " business" : ""}d)${r.dealer ? " @ " + r.dealer : ""}${r.safety ? " [SAFETY]" : ""}`);
+  const lines = c.inWin.map(r => `${fmtDate(r.dateIn)}${r.dateOut ? " to " + fmtDate(r.dateOut) : " (in shop)"} — ${r.problem} (${daysOut(r, c.biz, c.windowStart, c.windowEnd)}${c.biz ? " business days" : " days"})${r.dealer ? " @ " + r.dealer : ""}${r.safety ? " [SAFETY]" : ""}`);
   return { c, car, lines };
 }
 function openIntake() {

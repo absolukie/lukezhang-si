@@ -16,6 +16,12 @@ var APP = "roadwrench";
 var LS_DEVICE = "roadwrench.device_key";
 var LS_META = "roadwrench.syncmeta.v1";
 var LS_LAST = "roadwrench.lastsync.v1";
+var LS_BASE = "roadwrench.syncbase.v1";
+var LS_BIG = "roadwrench.oversized.v1";
+/* Matches the server's /v1/sync/push cap. The server rejects the WHOLE batch
+ * when any record exceeds this, so oversized records must be filtered
+ * client-side and surfaced in the UI instead of being marked acknowledged. */
+var MAX_RECORD_BYTES = 100000;
 var PUSH_DEBOUNCE_MS = 2500;
 var PULL_INTERVAL_MS = 60000;
 
@@ -178,27 +184,82 @@ if (!window.__roadwrench) return; // app.js must load first
 
 var deviceKey = null;
 var meta = {};
-var lastPushed = {};   // "collection:key" -> hash, in-memory baseline
+var lastPushed = {};   // "collection:key" -> hash; baseline of server-acknowledged state, PERSISTED
 var lastSync = 0;
 var applyingRemote = false;
 var pushTimer = null;
-var status = "starting";
+var inflight = 0;      // pushes/pulls currently in flight
+var status = "starting"; // starting|syncing|offline|pending|synced (see updatePill)
 
 try { meta = JSON.parse(localStorage.getItem(LS_META) || "{}") || {}; } catch(e){ meta = {}; }
 try { lastSync = +localStorage.getItem(LS_LAST) || 0; } catch(e){}
+/* Outbox durability: the acknowledged baseline survives reloads. Never snapshot
+ * the live state as acknowledged here — anything differing from the baseline is
+ * unpushed work that must stay visible in the pill and go up on the next push. */
+try { lastPushed = JSON.parse(localStorage.getItem(LS_BASE) || "{}") || {}; } catch(e){ lastPushed = {}; }
 function saveMeta(){ try{ localStorage.setItem(LS_META, JSON.stringify(meta)); }catch(e){} }
 function saveLastSync(){ try{ localStorage.setItem(LS_LAST, String(lastSync)); }catch(e){} }
+function saveBaseline(){ try{ localStorage.setItem(LS_BASE, JSON.stringify(lastPushed)); }catch(e){} }
 
-function setStatus(s){
+
+/* Oversized records: the server rejects any record over MAX_RECORD_BYTES, so
+ * they are filtered out of pushes here and surfaced in the UI as device-only
+ * instead of being marked acknowledged. Map: "collection:key" -> {bytes, at}. */
+var oversized = {};
+try { oversized = JSON.parse(localStorage.getItem(LS_BIG) || "{}") || {}; } catch(e){ oversized = {}; }
+function saveOversized(){ try{ localStorage.setItem(LS_BIG, JSON.stringify(oversized)); }catch(e){} }
+function recordBytes(value){
+  try { return JSON.stringify(value === undefined ? null : value).length; }
+  catch(e){ return 0; }
+}
+function escHtml(s){
+  return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+  });
+}
+
+/* The one honest status function. Four states, derived from real conditions:
+ * "Synced" only when nothing is pending and nothing is in flight;
+ * "Syncing..." while a push/pull is in flight;
+ * "Offline" when the network is down;
+ * "Not synced — N changes pending" whenever work is unacknowledged. */
+/* Lists oversized (device-only) records inside the settings panel. */
+function renderBigWarn(){
+  var host = document.querySelector("#syncBigWarn");
+  if (!host) return;
+  var keys = Object.keys(oversized);
+  if (!keys.length){ host.innerHTML = ""; return; }
+  host.innerHTML =
+    '<div class="syncbig"><strong>Too large to back up (' + keys.length + '):</strong>' +
+    '<ul>' + keys.map(function(mk){
+      var kb = Math.round((oversized[mk].bytes || 0) / 1024);
+      return '<li>' + escHtml(mk) + ' \u2014 ' + kb +
+        ' KB (100 KB cap). Saved on this device only.</li>';
+    }).join("") + '</ul></div>';
+}
+
+/* The one honest status function. Five states, derived from real conditions:
+ * "Synced" only when nothing is pending, nothing oversized, and nothing in flight;
+ * "Syncing..." while a push/pull is in flight;
+ * "Offline" when the network is down;
+ * "Not synced — N changes pending" whenever sendable work is unacknowledged;
+ * "Sync limited" when everything sendable is synced but oversized records are
+ * device-only (they are surfaced, never marked acknowledged). */
+function updatePill(){
+  var n, s, label, cls, big;
+  try { n = diffOut().length; } catch(e){ n = 0; }
+  try { big = Object.keys(oversized).length; } catch(e){ big = 0; }
+  if (inflight > 0){ s = "syncing"; label = "Syncing..."; cls = "warn"; }
+  else if (typeof navigator !== "undefined" && navigator.onLine === false){ s = "offline"; label = "Offline"; cls = ""; }
+  else if (n > 0){ s = "pending"; label = "Not synced \u2014 " + n + " change" + (n === 1 ? "" : "s") + " pending"; cls = "crit"; }
+  else if (big > 0){ s = "limited"; label = "Sync limited \u2014 " + big + " too large"; cls = "warn"; }
+  else { s = "synced"; label = "Synced"; cls = "ok"; }
   status = s;
   var el = document.querySelector("#syncStatus");
-  if (el){
-    var label = { synced: "Synced", syncing: "Syncing…", offline: "Offline",
-      error: "Sync error", starting: "Starting…" }[s] || s;
-    el.textContent = label;
-    el.className = "sync-pill " + (s === "synced" ? "ok" : s === "offline" ? "" : s === "error" ? "crit" : "warn");
-  }
+  if (el){ el.textContent = label; el.className = "sync-pill" + (cls ? " " + cls : ""); }
 }
+
+
 
 async function api(path, opts){
   opts = opts || {};
@@ -230,8 +291,12 @@ function snapshot(records){
 
 /* Push locally-changed records. Diffed against lastPushed; deletions become
  * tombstones automatically. Idempotent by key; safe to retry. */
-async function pushDirty(){
-  if (!deviceKey || applyingRemote) return;
+/* Records that differ from the last acknowledged push (the outbox). */
+/* Records that differ from the last acknowledged push (the outbox).
+ * Records over MAX_RECORD_BYTES are filtered out of the push batch (the server
+ * rejects the whole batch when any record is oversized) and tracked in the
+ * oversized map instead of being marked acknowledged. */
+function diffOut(){
   var S = window.__roadwrench.getS();
   var records = stateToRecords(S);
   var now = Date.now();
@@ -251,8 +316,44 @@ async function pushDirty(){
         value: null, updated_at: now, deleted: true });
     }
   });
-  if (!out.length) return;
-  setStatus("syncing");
+  var sendable = [];
+  var bigDirty = false;
+  out.forEach(function(r){
+    var mk = r.collection + ":" + r.key;
+    if (r.deleted){
+      if (oversized[mk]){ delete oversized[mk]; bigDirty = true; }
+      sendable.push(r);
+      return;
+    }
+    var b = recordBytes(r.value);
+    if (b > MAX_RECORD_BYTES){
+      if (!oversized[mk] || oversized[mk].bytes !== b){
+        oversized[mk] = { bytes: b, at: Date.now() };
+        bigDirty = true;
+      }
+    } else {
+      if (oversized[mk]){ delete oversized[mk]; bigDirty = true; }
+      sendable.push(r);
+    }
+  });
+  /* Prune map entries for records that no longer exist locally. */
+  Object.keys(oversized).forEach(function(mk){
+    if (!(mk in cur)){ delete oversized[mk]; bigDirty = true; }
+  });
+  if (bigDirty){ saveOversized(); renderBigWarn(); }
+  return sendable;
+}
+
+
+/* Push locally-changed records. Diffed against the persisted lastPushed
+ * baseline; deletions become tombstones automatically. Idempotent by key;
+ * safe to retry. The baseline only advances on success — a failed push keeps
+ * the work visible in the pill instead of claiming "Synced". */
+async function pushDirty(){
+  if (!deviceKey || applyingRemote){ updatePill(); return; }
+  var out = diffOut();
+  if (!out.length){ updatePill(); return; } // honest no-op: recompute, don't claim
+  inflight++; updatePill();
   try {
     await api("/v1/sync/push", { method: "POST", body: { records: out } });
     out.forEach(function(r){
@@ -262,40 +363,60 @@ async function pushDirty(){
       else lastPushed[mk] = hashRecord(r);
     });
     saveMeta();
-    setStatus("synced");
-  } catch(e){ setStatus(navigator.onLine === false ? "offline" : "error"); }
+    saveBaseline();
+  } catch(e){ /* pill below reports the unacknowledged work honestly */ }
+  inflight--;
+  updatePill();
 }
 
+
 /* Pull remote changes since lastSync; apply newer-wins; re-render. */
+/* Pull remote changes since lastSync; apply newer-wins; re-render.
+ * Applied records merge into the persisted baseline WITHOUT snapshotting the
+ * whole state — local-only work stays unacknowledged and keeps its pill. */
 async function pull(){
   if (!deviceKey || applyingRemote) return;
-  setStatus("syncing");
+  inflight++; updatePill();
   try {
     var data = await api("/v1/sync/pull?app=" + APP + "&since=" + lastSync);
     var S = window.__roadwrench.getS();
+    var applied = {};
+    (data.records || []).forEach(function(r){
+      var mk = r.collection + ":" + r.key;
+      if (r.updated_at > (meta[mk] || 0)) applied[mk] = !!r.deleted;
+    });
     applyingRemote = true;
     var changed = applyRecords(S, data.records || [], meta);
     if (changed){
       saveMeta();
       window.__roadwrench.saveLocal(); // persist without triggering a push
       window.__roadwrench.refresh();
-      lastPushed = snapshot(stateToRecords(S));
+      var cur = snapshot(stateToRecords(S));
+      Object.keys(applied).forEach(function(mk){
+        if (applied[mk]) delete lastPushed[mk];
+        else if (cur[mk] !== undefined) lastPushed[mk] = cur[mk];
+      });
+      saveBaseline();
     }
-    applyingRemote = false;
     lastSync = data.server_time || Date.now();
     saveLastSync();
-    setStatus("synced");
-  } catch(e){
-    applyingRemote = false;
-    setStatus(navigator.onLine === false ? "offline" : "error");
-  }
+  } catch(e){ /* honest pill below */ }
+  applyingRemote = false;
+  inflight--;
+  updatePill();
 }
 
+
 function onSave(){
+  /* Always report honestly, even when no device key exists yet (backend
+   * unreachable at boot): the work is still unacknowledged. Only schedule
+   * the push when we have a key to push with. */
+  updatePill();
   if (applyingRemote || !deviceKey) return;
   clearTimeout(pushTimer);
   pushTimer = setTimeout(pushDirty, PUSH_DEBOUNCE_MS);
 }
+
 
 /* Settings UI (injected by app.js hook into #syncSettings on the settings tab). */
 function renderSettingsUI(){
@@ -306,6 +427,8 @@ function renderSettingsUI(){
   box.className = "card";
   box.innerHTML =
     '<h2>Device sync <span class="muted" style="font-weight:normal;font-size:12px">(prototype)</span> <span id="syncStatus" class="sync-pill">…</span></h2>' +
+    '<p style="font-size:12px;color:#64748b;margin:8px 0 0;line-height:1.5">Prototype backup cap: each record may be up to 100 KB. Larger records stay on this device only and are listed below.</p>' +
+    '<div id="syncBigWarn"></div>' +
     '<div class="muted" style="margin-bottom:10px;font-size:13px">Same key on two devices = same jobs on both. ' +
     'Full-size photos stay on the device that took them; thumbnails sync. ' +
     'Anyone with the key can read your records.</div>' +
@@ -314,14 +437,15 @@ function renderSettingsUI(){
     '<input id="syncPaste" type="text" placeholder="64-char key" maxlength="64" style="font-size:12px"></div>' +
     '<button class="btn secondary block" id="syncUse" style="margin-top:6px">Use this key</button>';
   host.appendChild(box);
-  setStatus(status);
+  updatePill();
+  renderBigWarn();
   var cp = box.querySelector("#syncCopy");
   cp.onclick = function(){
     var done = function(){ cp.textContent = "Copied!"; setTimeout(function(){ cp.textContent = "Copy device key"; }, 1500); };
     if (navigator.clipboard) navigator.clipboard.writeText(deviceKey || "").then(done, function(){ prompt("Copy device key:", deviceKey); });
     else prompt("Copy device key:", deviceKey);
   };
-  box.querySelector("#syncUse").onclick = function(){
+  box.querySelector("#syncUse").onclick = async function(){
     var v = box.querySelector("#syncPaste").value.trim().toLowerCase();
     if (!/^[0-9a-f]{64}$/.test(v)){ alert("That doesn't look like a device key."); return; }
     deviceKey = v;
@@ -329,13 +453,18 @@ function renderSettingsUI(){
       localStorage.setItem(LS_DEVICE, v);
       localStorage.removeItem(LS_META); localStorage.removeItem(LS_LAST);
     } catch(e){}
-    meta = {}; lastSync = 0;
-    lastPushed = snapshot(stateToRecords(window.__roadwrench.getS()));
-    pull();
+    try { localStorage.removeItem(LS_BASE); } catch(e){}
+    meta = {}; lastSync = 0; lastPushed = {};
+    saveBaseline();
+    /* New key = new device identity: pull its remote state first, then push
+     * only local-only changes (pull merges applied records into the baseline). */
+    try { await pull(); } catch(e){}
+    try { await pushDirty(); } catch(e){}
   };
 }
 
 async function boot(){
+  try{ if (typeof renderSettingsUI === "function") renderSettingsUI(); }catch(e){}
   deviceKey = null;
   try { deviceKey = localStorage.getItem(LS_DEVICE) || null; } catch(e){}
   var fresh = !deviceKey;
@@ -343,19 +472,21 @@ async function boot(){
     try {
       deviceKey = await register();
       localStorage.setItem(LS_DEVICE, deviceKey);
-    } catch(e){ /* offline: render the settings UI so the pill shows Offline */ }
+    } catch(e){ updatePill(); return; } // offline: pill reports honestly, no false "Synced"
   }
 
   try { if (window.__authBoot) await window.__authBoot({ repull: function(){ meta = {}; lastSync = 0; } }); } catch(e){}
-  try{ renderSettingsUI(); }catch(e){}
-  if (!deviceKey){ setStatus("offline"); return; }
-  // Fresh device: push existing local data up. Existing device: pull first.
-  lastPushed = snapshot(stateToRecords(window.__roadwrench.getS()));
-  if (fresh){ await pushDirty(); }
+  /* Never snapshot the live state as acknowledged here. lastPushed was loaded
+   * from localStorage; anything differing from it is unpushed work (including a
+   * fresh device's first upload) that must go up. */
+  if (fresh){ lastPushed = {}; saveBaseline(); await pushDirty(); }
   else { await pull(); }
   setInterval(pull, PULL_INTERVAL_MS);
   window.addEventListener("online", pull);
+  window.addEventListener("offline", updatePill);
+  updatePill();
 }
+
 
 /* hooks consumed by app.js */
 window.__roadwrenchSync = { onSave: onSave };
@@ -369,6 +500,7 @@ if (document.readyState === "loading")
 else boot();
 
 })();
+
 
 /* Client error reporter (v1).
  * Reports window errors and unhandled promise rejections to the sync backend

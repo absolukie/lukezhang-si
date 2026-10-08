@@ -16,12 +16,14 @@ function daysUntil(k){ if(!k) return null; return Math.round((parseKey(k)-new Da
 function addDaysKey(k,n){ const d=parseKey(k); d.setDate(d.getDate()+n); return fmtKey(d); }
 const CYCLE_DAYS = {annual:365, biennial:730, '3yr':1095, '5yr':1825, onetime:0};
 const CYCLE_LABEL = {annual:'Renews yearly', biennial:'Renews every 2 yrs', '3yr':'Renews every 3 yrs', '5yr':'Renews every 5 yrs', onetime:'One-time'};
-/* Estimated fees (est:true on the def) render with ~ and an "est." tag plus a
+/* Fee honesty: est:true fees are unverified estimates and render with ~ plus a
  * provenance line naming the agency. fee:0 + est:true means the fee is unknown,
- * not free. */
-const feeLabel = d => d.fee>0 ? ((d.est?'~':'')+money(d.fee)) : (d.est?'Fee TBD':'Free');
+ * never free. feeNote overrides the fee pill for line items that carry no fee
+ * of their own (e.g. commissary agreements — the agreement is free, the rent
+ * is tracked in the Commissary tab). */
+const feeLabel = d => d.feeNote ? d.feeNote : d.fee>0 ? ((d.est?'~':'')+money(d.fee)) : (d.est?'Fee TBD':'Free');
 const estTag = d => d.est ? ' <span class="est">est.</span>' : '';
-const estLine = d => d.est ? '<div class="est-line">Unverified estimate — confirm with '+esc(d.agency)+'</div>' : '';
+const estLine = d => d.est ? '<div class="est-line">Unverified estimate . Confirm with '+esc(d.agency)+'</div>' : '';
 /* Estimated countdowns: expiry dates the app guessed (not user-entered) render with ~. */
 const approxDays = sp => sp.expiresEst ? '~' : '';
 
@@ -48,18 +50,22 @@ Object.keys(I).forEach(k => { I[k] = I[k].replace('<svg ', '<svg width="1em" hei
 
 /* ---------- permit data (researched 2026-10-07; fees typical, verify with agency) ---------- */
 /* applies: full = onboard cooking, limited = reheat/assembly, prepack = sealed only */
+/* ID rule: every permit id is unique across ALL cities (checked at boot below).
+ * Atlanta uses the ga- prefix; Austin keeps at-. */
 const TRUCK_TYPES = {
-  full:{name:'Full kitchen', desc:'Cooking on board — grill, fryer, full prep'},
+  full:{name:'Full kitchen', desc:'Cooking on board: grill, fryer, full prep'},
   limited:{name:'Limited prep', desc:'Reheating, assembly, coffee, smoothies'},
   prepack:{name:'Prepackaged only', desc:'Sealed items, no cooking or handling'}
 };
 const CITIES = {
   la:{name:'Los Angeles, CA', sub:'LA County Public Health', permits:[
     {id:'la-mff', name:'Mobile Food Facility permit (MFF-C)', agency:'LA County Public Health', fee:620, cycle:'annual', applies:['full'], note:'Full cooking. MFF-B (~$440) if limited prep, MFF-A (~$280) if prepack only.'},
+    {id:'la-mffb', est:true, name:'Mobile Food Facility permit (MFF-B)', agency:'LA County Public Health', fee:440, cycle:'annual', applies:['limited'], note:'Limited prep. MFF-C ($620) for full cooking, MFF-A (~$280) for prepack only.'},
+    {id:'la-mffa', est:true, name:'Mobile Food Facility permit (MFF-A)', agency:'LA County Public Health', fee:280, cycle:'annual', applies:['prepack'], note:'Prepackaged only. MFF-C ($620) for full cooking, MFF-B (~$440) for limited prep.'},
     {id:'la-btrc', name:'Business Tax Registration Certificate', agency:'City of LA Office of Finance', fee:60, cycle:'annual', applies:['full','limited','prepack'], note:'City business tax registration.'},
     {id:'la-seller', name:"Seller's Permit", agency:'CA Dept. of Tax & Fee Admin', fee:0, cycle:'onetime', applies:['full','limited','prepack'], note:'Free. Required before your first sale.'},
-    {id:'la-fire', name:'Fire inspection + Class K extinguisher', agency:'LA Fire Dept.', fee:150, cycle:'annual', applies:['full','limited'], note:'Required with open flame or fryers.'},
-    {id:'la-comm', name:'Commissary agreement', agency:'LA County-approved commissary', fee:0, cycle:'annual', applies:['full','limited','prepack'], note:'Required before health permit issues. Track cost in Commissary tab.'},
+    {id:'la-fire', est:true, name:'Fire inspection + Class K extinguisher', agency:'LA Fire Dept.', fee:150, cycle:'annual', applies:['full','limited'], note:'Required with open flame or fryers.'},
+    {id:'la-comm', name:'Commissary agreement', agency:'LA County-approved commissary', fee:0, feeNote:'Free agreement', cycle:'annual', applies:['full','limited','prepack'], note:'Required before health permit issues. Track the monthly cost in the Commissary tab.'},
     {id:'la-ins', name:'General liability insurance', agency:'Your carrier', fee:2400, cycle:'annual', applies:['full','limited','prepack'], note:'Typically $1M/$2M. Venues and events ask for proof.'}
   ]},
   austin:{name:'Austin, TX', sub:'TX statewide license (2026)', permits:[
@@ -67,102 +73,169 @@ const CITIES = {
     {id:'at-dshs2', name:'TX DSHS Type II mobile food license', agency:'TX Dept. of State Health Services', fee:618, cycle:'annual', applies:['limited'], note:'Limited prep. +$400 pre-licensing inspection.'},
     {id:'at-dshs1', name:'TX DSHS Type I mobile food license', agency:'TX Dept. of State Health Services', fee:309, cycle:'annual', applies:['prepack'], note:'Prepackaged only. Lowest tier.'},
     {id:'at-fire', name:'Fire inspection', agency:'Austin Fire Dept.', fee:222, cycle:'annual', applies:['full','limited'], note:'If cooking equipment on board.'},
-    {id:'at-cfm', name:'Certified Food Manager certificate', agency:'ANSI-accredited provider', fee:150, cycle:'5yr', applies:['full','limited'], note:'One CFM must be assigned to the unit.'},
-    {id:'at-comm', name:'Commissary agreement', agency:'Licensed commissary', fee:0, cycle:'annual', applies:['full','limited','prepack'], note:'Written agreement required with application.'}
+    {id:'at-cfm', est:true, name:'Certified Food Manager certificate', agency:'ANSI-accredited provider', fee:150, cycle:'5yr', applies:['full','limited'], note:'One CFM must be assigned to the unit.'},
+    {id:'at-comm', name:'Commissary agreement', agency:'Licensed commissary', fee:0, feeNote:'Free agreement', cycle:'annual', applies:['full','limited','prepack'], note:'Written agreement required with application. Track the monthly cost in the Commissary tab.'}
   ]},
   portland:{name:'Portland, OR', sub:'Multnomah County Health', permits:[
     {id:'pd-mfu', name:'Mobile Food Unit license (Class III/IV)', agency:'Multnomah County Health Dept.', fee:500, cycle:'annual', applies:['full'], note:'Class I/II (~$300) for limited or prepack. Classed by menu complexity.'},
     {id:'pd-mfu12', name:'Mobile Food Unit license (Class I/II)', agency:'Multnomah County Health Dept.', fee:300, cycle:'annual', applies:['limited','prepack'], note:'Limited prep or prepackaged.'},
     {id:'pd-fhc', name:'Oregon Food Handler Card', agency:'Multnomah County / OR Health Authority', fee:10, cycle:'3yr', applies:['full','limited','prepack'], note:'$10, every handler on the truck needs one.'},
-    {id:'pd-fire', name:'Propane / fire safety permit', agency:'Portland Fire & Rescue', fee:150, cycle:'annual', applies:['full','limited'], note:'Annual inspection for gas cooking equipment.'},
+    {id:'pd-fire', est:true, name:'Propane / fire safety permit', agency:'Portland Fire & Rescue', fee:150, cycle:'annual', applies:['full','limited'], note:'Annual inspection for gas cooking equipment.'},
     {id:'pd-biz', name:'Portland business license', agency:'City of Portland', fee:100, cycle:'annual', applies:['full','limited','prepack'], note:'Standard city business registration.'},
-    {id:'pd-comm', name:'Commissary agreement', agency:'Approved commissary', fee:0, cycle:'annual', applies:['full','limited','prepack'], note:'Proof of approved prep/storage facility.'}
+    {id:'pd-comm', name:'Commissary agreement', agency:'Approved commissary', fee:0, feeNote:'Free agreement', cycle:'annual', applies:['full','limited','prepack'], note:'Proof of approved prep/storage facility. Track the monthly cost in the Commissary tab.'}
   ]},
   denver:{name:'Denver, CO', sub:'State + City of Denver', permits:[
-    {id:'dv-state', name:'CO retail food license — full mobile unit', agency:'CDPHE / Denver County', fee:481, cycle:'annual', applies:['full'], note:'2026 statutory fee. Prepackaged-only units pay ~$338.'},
-    {id:'dv-statep', name:'CO retail food license — prepackaged', agency:'CDPHE / Denver County', fee:338, cycle:'annual', applies:['limited','prepack'], note:'No cooking on board.'},
+    {id:'dv-state', name:'CO retail food license (full mobile unit)', agency:'CDPHE / Denver County', fee:481, cycle:'annual', applies:['full'], note:'2026 statutory fee. Prepackaged-only units pay ~$338.'},
+    {id:'dv-statep', name:'CO retail food license (prepackaged)', agency:'CDPHE / Denver County', fee:338, cycle:'annual', applies:['limited','prepack'], note:'No cooking on board.'},
     {id:'dv-city', name:'Denver mobile food vending license', agency:'Denver Business Licensing', fee:300, cycle:'annual', applies:['full','limited','prepack'], note:'City vending license, renewed yearly.'},
     {id:'dv-tax', name:'CO sales tax license', agency:'CO Dept. of Revenue', fee:16, cycle:'onetime', applies:['full','limited','prepack'], note:'$16 one-time, online.'},
-    {id:'dv-fire', name:'Denver Fire propane permit', agency:'Denver Fire Dept.', fee:150, cycle:'annual', applies:['full','limited'], note:'Required with propane on board.'},
-    {id:'dv-comm', name:'Commissary affidavit', agency:'Licensed commissary', fee:0, cycle:'annual', applies:['full','limited','prepack'], note:'Signed affidavit of commissary servicing.'}
+    {id:'dv-fire', est:true, name:'Denver Fire propane permit', agency:'Denver Fire Dept.', fee:150, cycle:'annual', applies:['full','limited'], note:'Required with propane on board.'},
+    {id:'dv-comm', name:'Commissary affidavit', agency:'Licensed commissary', fee:0, feeNote:'Free agreement', cycle:'annual', applies:['full','limited','prepack'], note:'Signed affidavit of commissary servicing.'}
   ]},
   chicago:{name:'Chicago, IL', sub:'City of Chicago BACP', permits:[
     {id:'ch-mfp', name:'Mobile Food Preparer license', agency:'Chicago BACP', fee:1000, cycle:'biennial', applies:['full'], note:'$1,000 for a 2-year term. Cooking on board.'},
     {id:'ch-mfd', name:'Mobile Food Dispenser license', agency:'Chicago BACP', fee:700, cycle:'biennial', applies:['limited','prepack'], note:'$700 for a 2-year term. No onboard cooking.'},
-    {id:'ch-fire', name:'Fire safety permit', agency:'Chicago Fire Dept.', fee:100, cycle:'annual', applies:['full','limited'], note:'Propane / cooking equipment.'},
+    {id:'ch-fire', est:true, name:'Fire safety permit', agency:'Chicago Fire Dept.', fee:100, cycle:'annual', applies:['full','limited'], note:'Propane / cooking equipment.'},
     {id:'ch-fsr', name:'Fire suppression system review', agency:'Chicago Fire Dept.', fee:150, cycle:'onetime', applies:['full'], note:'One-time plan review for hood suppression.'},
-    {id:'ch-san', name:'Food sanitation manager certificate', agency:'City of Chicago', fee:150, cycle:'5yr', applies:['full','limited'], note:'Certified manager for the unit.'},
-    {id:'ch-comm', name:'Commissary / shared kitchen agreement', agency:'Licensed commissary', fee:0, cycle:'annual', applies:['full','limited','prepack'], note:'All prep at licensed kitchen; +$330/2yr shared-kitchen user license.'}
+    {id:'ch-san', est:true, name:'Food sanitation manager certificate', agency:'City of Chicago', fee:150, cycle:'5yr', applies:['full','limited'], note:'Certified manager for the unit.'},
+    {id:'ch-comm', name:'Commissary / shared kitchen agreement', agency:'Licensed commissary', fee:0, feeNote:'Free agreement', cycle:'annual', applies:['full','limited','prepack'], note:'All prep at licensed kitchen; +$330/2yr shared-kitchen user license.'}
   ]},
   miami:{name:'Miami, FL', sub:'FL DBPR statewide', permits:[
     {id:'mi-mfdv', name:'Mobile Food Dispensing Vehicle license', agency:'FL DBPR', fee:347, cycle:'annual', applies:['full','limited','prepack'], note:'Statewide license, valid in every FL city. +$150 plan review for new units.'},
     {id:'mi-plan', name:'Plan review', agency:'FL DBPR', fee:150, cycle:'onetime', applies:['full','limited','prepack'], note:'One-time for new vehicles.'},
     {id:'mi-cobtr', name:'County Business Tax Receipt', agency:'Miami-Dade Tax Collector', fee:100, cycle:'annual', applies:['full','limited','prepack'], note:'Required for county operation.'},
     {id:'mi-citybtr', name:'City of Miami Business Tax Receipt', agency:'City of Miami Finance', fee:100, cycle:'annual', applies:['full','limited','prepack'], note:'Only if vending inside City of Miami limits.'},
-    {id:'mi-fire', name:'Fire suppression + Class K cert', agency:'Fire inspector / installer', fee:400, cycle:'onetime', applies:['full'], note:'One-time install + cert for open flame / fryers.'},
-    {id:'mi-comm', name:'Commissary agreement', agency:'DBPR-licensed commissary', fee:0, cycle:'annual', applies:['full','limited','prepack'], note:'DBPR requires it before processing your application.'}
+    {id:'mi-fire', est:true, name:'Fire suppression + Class K cert', agency:'Fire inspector / installer', fee:400, cycle:'onetime', applies:['full'], note:'One-time install + cert for open flame / fryers.'},
+    {id:'mi-comm', name:'Commissary agreement', agency:'DBPR-licensed commissary', fee:0, feeNote:'Free agreement', cycle:'annual', applies:['full','limited','prepack'], note:'DBPR requires it before processing your application.'}
   ]},
   nyc:{name:'New York, NY', sub:'NYC DOHMH (capped permits)', permits:[
     {id:'nyc-license', name:'Mobile Food Vendor License (photo ID)', agency:'NYC DOHMH', fee:50, cycle:'biennial', applies:['full','limited','prepack'], note:'$50/2yr per operator. +$53 food protection course, must pass. No waitlist for the license itself.'},
-    {id:'nyc-permit', name:'Mobile Food Vending Unit Permit', agency:'NYC DOHMH', fee:200, cycle:'biennial', applies:['full','limited','prepack'], note:'The truck decal. CAPPED: 5,100 unit permits with multi-year waitlists. Local Law 18 adds 445/yr through 2032. Private-property permits skip the waitlist.'},
+    {id:'nyc-permit', est:true, name:'Mobile Food Vending Unit Permit', agency:'NYC DOHMH', fee:200, cycle:'biennial', applies:['full','limited','prepack'], note:'The truck decal. CAPPED: 5,100 unit permits with multi-year waitlists. Local Law 18 adds 445/yr through 2032. Private-property permits skip the waitlist.'},
     {id:'nyc-sales', name:'NYS Certificate of Authority', agency:'NYS Tax Dept.', fee:0, cycle:'onetime', applies:['full','limited','prepack'], note:'Free. Collect sales tax.'},
-    {id:'nyc-comm', name:'Commissary / servicing agreement', agency:'Approved servicing area', fee:0, cycle:'annual', applies:['full','limited','prepack'], note:'Required: daily servicing, waste disposal, restocking.'}
+    {id:'nyc-comm', name:'Commissary / servicing agreement', agency:'Approved servicing area', fee:0, feeNote:'Free agreement', cycle:'annual', applies:['full','limited','prepack'], note:'Required: daily servicing, waste disposal, restocking.'}
   ]},
   sf:{name:'San Francisco, CA', sub:'SFDPH + Treasurer', permits:[
     {id:'sf-mff', est:true, name:'Mobile Food Facility permit (cooking)', agency:'SFDPH', fee:1150, cycle:'annual', applies:['full'], note:'~$900-$1,400/yr for cooking classes. +$376-$879 one-time plan check. 6-10 weeks.'},
     {id:'sf-mfflow', name:'Mobile Food Facility permit (low-risk)', agency:'SFDPH', fee:500, cycle:'annual', applies:['limited','prepack'], note:'Lower-risk classes pay less. Commissary must hold its own SFDPH MFF permit.'},
     {id:'sf-biz', name:'Business Registration Certificate', agency:'SF Treasurer', fee:91, cycle:'annual', applies:['full','limited','prepack'], note:'Income-based, starts at $91/yr.'},
     {id:'sf-seller', name:"Seller's Permit", agency:'CA CDTFA', fee:0, cycle:'onetime', applies:['full','limited','prepack'], note:'Free, online same day.'},
-    {id:'sf-cfpm', name:'Food Protection Manager certification', agency:'ANSI-accredited provider', fee:150, cycle:'5yr', applies:['full','limited'], note:'Required in CA. $15-$150 by provider.'},
+    {id:'sf-cfpm', est:true, name:'Food Protection Manager certification', agency:'ANSI-accredited provider', fee:150, cycle:'5yr', applies:['full','limited'], note:'Required in CA. $15-$150 by provider.'},
     {id:'sf-row', name:'Street vending permit (public ROW)', agency:'SF MTA / Public Works', fee:350, cycle:'annual', applies:['full','limited','prepack'], note:'Only to vend on public property. Competitive, waitlists common.'},
-    {id:'sf-comm', name:'Commissary agreement', agency:'SFDPH-permitted commissary', fee:0, cycle:'annual', applies:['full','limited','prepack'], note:'Required before SFDPH application. Commissary must hold its own SFDPH MFF permit.'}
+    {id:'sf-comm', name:'Commissary agreement', agency:'SFDPH-permitted commissary', fee:0, feeNote:'Free agreement', cycle:'annual', applies:['full','limited','prepack'], note:'Required before SFDPH application. Commissary must hold its own SFDPH MFF permit.'}
   ]},
   seattle:{name:'Seattle, WA', sub:'King County Public Health', permits:[
     {id:'se-mfu', est:true, name:'Mobile Food Unit Permit', agency:'King County Public Health', fee:600, cycle:'annual', applies:['full','limited','prepack'], note:'~$450-$750/yr by complexity. Plan review first, ~2 weeks.'},
     {id:'se-li', est:true, name:'Conversion Vendor Insignia', agency:'WA Labor & Industries', fee:0, cycle:'onetime', applies:['full'], note:'Plan review required for trucks/trailers. 4-6 weeks. Verify fee with L&I.'},
     {id:'se-biz', est:true, name:'Seattle Business License Tax Certificate', agency:'City of Seattle', fee:110, cycle:'annual', applies:['full','limited','prepack'], note:'~$55-$300/yr by gross revenue.'},
     {id:'se-tax', name:'WA Sales Tax License (UBI)', agency:'WA Dept. of Revenue', fee:0, cycle:'onetime', applies:['full','limited','prepack'], note:'Free. Register to collect sales tax.'},
-    {id:'se-comm', name:'Commissary Use Agreement', agency:'King County-permitted commissary', fee:0, cycle:'annual', applies:['full','limited','prepack'], note:'Required. Commissary must be King County-permitted.'}
+    {id:'se-comm', name:'Commissary Use Agreement', agency:'King County-permitted commissary', fee:0, feeNote:'Free agreement', cycle:'annual', applies:['full','limited','prepack'], note:'Required. Commissary must be King County-permitted.'}
   ]},
   houston:{name:'Houston, TX', sub:'TX statewide license (2026)', permits:[
     {id:'ho-dshs3', name:'TX DSHS Type III mobile food license', agency:'TX Dept. of State Health Services', fee:876, cycle:'annual', applies:['full'], note:'Statewide since July 2026 (HB 2844). +$500 pre-licensing inspection.'},
     {id:'ho-dshs2', name:'TX DSHS Type II mobile food license', agency:'TX Dept. of State Health Services', fee:618, cycle:'annual', applies:['limited'], note:'Limited prep. +$400 pre-licensing inspection.'},
     {id:'ho-dshs1', name:'TX DSHS Type I mobile food license', agency:'TX Dept. of State Health Services', fee:309, cycle:'annual', applies:['prepack'], note:'Prepackaged only. Lowest tier.'},
     {id:'ho-fire', est:true, name:'Propane / LP-Gas permit', agency:'Houston Fire Marshal', fee:0, cycle:'annual', applies:['full','limited'], note:'Required if cooking with propane. Verify fee: 832-394-8811.'},
-    {id:'ho-cfm', name:'Certified Food Manager certificate', agency:'ANSI-accredited provider', fee:150, cycle:'5yr', applies:['full','limited'], note:'Required per unit.'},
-    {id:'ho-comm', name:'Commissary agreement', agency:'Licensed commissary', fee:0, cycle:'annual', applies:['full','limited','prepack'], note:'Written agreement required with application.'}
+    {id:'ho-cfm', est:true, name:'Certified Food Manager certificate', agency:'ANSI-accredited provider', fee:150, cycle:'5yr', applies:['full','limited'], note:'Required per unit.'},
+    {id:'ho-comm', name:'Commissary agreement', agency:'Licensed commissary', fee:0, feeNote:'Free agreement', cycle:'annual', applies:['full','limited','prepack'], note:'Written agreement required with application.'}
   ]},
   atlanta:{name:'Atlanta, GA', sub:'GA DPH + City Street Eats', permits:[
-    {id:'at-ga', est:true, name:'Mobile Food Service Permit', agency:'Fulton County Board of Health', fee:250, cycle:'annual', applies:['full','limited','prepack'], note:'$100-$400/yr scaled to gross sales. Plan review + health and fire inspections first.'},
-    {id:'at-street', name:'Street Eats public vending permit', agency:'City of Atlanta (ATLBIZ)', fee:495, cycle:'annual', applies:['full','limited','prepack'], note:'$75 permit + $50 background + $20 fingerprinting + $350/yr reservation. Only for public right-of-way.'},
-    {id:'at-biz', name:'Business Occupation Tax Certificate', agency:'City of Atlanta', fee:0, cycle:'annual', applies:['full','limited','prepack'], note:'Income-based. Apply via ATLBIZ.'},
-    {id:'at-tax', name:'GA Sales & Use Tax Number', agency:'GA Dept. of Revenue', fee:0, cycle:'onetime', applies:['full','limited','prepack'], note:'Free, online.'},
-    {id:'at-fire', est:true, name:'Fire Marshal inspection + hood suppression', agency:'Atlanta Fire Rescue', fee:0, cycle:'annual', applies:['full','limited'], note:'Required. Verify inspection fee.'},
-    {id:'at-comm', name:'Commissary / base of operations', agency:'GA DPH-approved facility', fee:0, cycle:'annual', applies:['full','limited','prepack'], note:'Required for wastewater dumping, cleaning, restocking.'}
+    {id:'ga-health', est:true, name:'Mobile Food Service Permit', agency:'Fulton County Board of Health', fee:250, cycle:'annual', applies:['full','limited','prepack'], note:'$100-$400/yr scaled to gross sales. Plan review + health and fire inspections first.'},
+    {id:'ga-street', name:'Street Eats public vending permit', agency:'City of Atlanta (ATLBIZ)', fee:495, cycle:'annual', applies:['full','limited','prepack'], note:'$75 permit + $50 background + $20 fingerprinting + $350/yr reservation. Only for public right-of-way.'},
+    {id:'ga-biz', est:true, name:'Business Occupation Tax Certificate', agency:'City of Atlanta', fee:0, cycle:'annual', applies:['full','limited','prepack'], note:'Income-based. Apply via ATLBIZ.'},
+    {id:'ga-tax', name:'GA Sales & Use Tax Number', agency:'GA Dept. of Revenue', fee:0, cycle:'onetime', applies:['full','limited','prepack'], note:'Free, online.'},
+    {id:'ga-fire', est:true, name:'Fire Marshal inspection + hood suppression', agency:'Atlanta Fire Rescue', fee:0, cycle:'annual', applies:['full','limited'], note:'Required. Verify inspection fee.'},
+    {id:'ga-comm', name:'Commissary / base of operations', agency:'GA DPH-approved facility', fee:0, feeNote:'Free agreement', cycle:'annual', applies:['full','limited','prepack'], note:'Required for wastewater dumping, cleaning, restocking.'}
   ]},
   nashville:{name:'Nashville, TN', sub:'Metro Public Health', permits:[
     {id:'na-health', est:true, name:'Metro Public Health mobile food permit', agency:'Nashville-Davidson Health Dept.', fee:225, cycle:'annual', applies:['full','limited','prepack'], note:'Reported $150-$300/yr. Health inspection required. Verify current fee.'},
     {id:'na-vend', est:true, name:'Mobile vending authorization', agency:'Metro Nashville', fee:500, cycle:'annual', applies:['full','limited','prepack'], note:'Reported $200-$800/yr by type. Verify with Metro before budgeting.'},
     {id:'na-handler', name:'TN Food Handler certification', agency:'TN Dept. of Agriculture', fee:50, cycle:'3yr', applies:['full','limited','prepack'], note:'$50 for 3 years.'},
     {id:'na-biz', est:true, name:'Davidson County business license', agency:'Metro Clerk', fee:0, cycle:'annual', applies:['full','limited','prepack'], note:'TN business tax applies. Verify minimum with county clerk.'},
-    {id:'na-comm', name:'Commissary agreement', agency:'Licensed commissary', fee:0, cycle:'annual', applies:['full','limited','prepack'], note:'Required by state law where applicable.'}
+    {id:'na-comm', name:'Commissary agreement', agency:'Licensed commissary', fee:0, feeNote:'Free agreement', cycle:'annual', applies:['full','limited','prepack'], note:'Required by state law where applicable.'}
   ]}
 };
+/* Boot-time regression check: permit IDs must be unique across all cities.
+ * A collision (like the old Atlanta/Austin at-fire pair) silently resolves
+ * records to the wrong agency and fee, so it fails loudly here. */
+(function checkPermitIds(){
+  const seen={};
+  const dupes=[];
+  Object.keys(CITIES).forEach(ck=>{
+    CITIES[ck].permits.forEach(p=>{
+      if(seen[p.id]) dupes.push(p.id+' (in '+seen[p.id]+' and '+ck+')');
+      else seen[p.id]=ck;
+    });
+  });
+  if(dupes.length){
+    const msg='Curbside: duplicate permit IDs: '+dupes.join('; ');
+    try{ console.error(msg); }catch(e){}
+    try{ document.addEventListener('DOMContentLoaded', ()=>{ document.body.insertAdjacentHTML('afterbegin','<div style="background:#B73220;color:#fff;padding:12px;font:14px sans-serif">'+esc(msg)+'</div>'); }); }catch(e){}
+  }
+})();
 const EV_STATUSES = [['lead','Lead'],['booked','Booked'],['done','Done']];
+/* Atlanta used at-* IDs before 2026-10-08 (colliding with Austin). Existing
+ * records are remapped by the city they belong to on load. */
+const ATLANTA_ID_MAP = {'at-ga':'ga-health','at-street':'ga-street','at-biz':'ga-biz','at-tax':'ga-tax','at-fire':'ga-fire','at-comm':'ga-comm'};
 
 /* ---------- state ---------- */
 const LS_KEY = 'curbside.v1';
 let S = null;
-function defaultState(){ return {v:1, truckName:'My Truck', city:null, truckType:null, permits:[], customDefs:[], locations:{}, commissary:{name:'',cost:'',renews:'',days:[],notes:''}, events:[], revenue:[], onboarded:false}; }
+function defaultState(){ return {v:1, truckName:'My Truck', city:null, truckType:null, permits:[], customDefs:[], extraCities:[], locations:{}, commissary:{name:'',cost:'',renews:'',days:[],notes:''}, events:[], revenue:[], onboarded:false}; }
 function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(e){} try{ if(window.__curbsideSync) window.__curbsideSync.onSave(); }catch(e){} }
-function load(){ try{ const r=localStorage.getItem(LS_KEY); if(r){ S=JSON.parse(r); if(!S.customDefs) S.customDefs=[]; return; } }catch(e){} S=defaultState(); }
-function cityPermits(){ const c=CITIES[S.city]; if(!c) return []; return c.permits.filter(p=>p.applies.includes(S.truckType)); }
+function load(){
+  try{
+    const r=localStorage.getItem(LS_KEY);
+    if(r){
+      S=JSON.parse(r);
+      if(!S.customDefs) S.customDefs=[];
+      if(!S.extraCities){ S.extraCities=[]; }
+      // backfill + Atlanta ID migration (records carry their own city).
+      // Persisted immediately so the stored state never keeps stale IDs.
+      let dirty=false;
+      (S.permits||[]).forEach(sp=>{
+        if(!sp.city){ sp.city=S.city; dirty=true; }
+        if(sp.city==='atlanta' && ATLANTA_ID_MAP[sp.id]){ sp.id=ATLANTA_ID_MAP[sp.id]; dirty=true; }
+      });
+      if(dirty) save();
+      return;
+    }
+  }catch(e){}
+  S=defaultState();
+}
+function cityPermits(cityKey, typeKey){
+  const c=CITIES[cityKey]; if(!c) return [];
+  return c.permits.filter(p=>p.applies.includes(typeKey));
+}
 
-/* ---------- sheets ---------- */
-function openSheet(html){ const w=$('#sheetWrap'); $('#sheet').innerHTML=html; w.classList.remove('hidden'); const s=$('#sheet'); const f=s.querySelector('input,textarea,select,button'); if(f) f.focus({preventScroll:true}); }
-function closeSheet(){ $('#sheetWrap').classList.add('hidden'); $('#sheet').innerHTML=''; }
+/* ---------- sheets (modal) ---------- */
+let lastFocus=null;
+function openSheet(html, label){
+  lastFocus=document.activeElement;
+  const w=$('#sheetWrap'); const sh=$('#sheet');
+  sh.innerHTML=html;
+  const h=sh.querySelector('h3');
+  sh.setAttribute('aria-label', label || (h?h.textContent.trim():'Dialog'));
+  w.classList.remove('hidden');
+  const f=sh.querySelector('input,textarea,select,button'); if(f) f.focus({preventScroll:true});
+}
+function closeSheet(){
+  $('#sheetWrap').classList.add('hidden'); $('#sheet').innerHTML='';
+  if(lastFocus && lastFocus.focus){ try{ lastFocus.focus({preventScroll:true}); }catch(e){} }
+  lastFocus=null;
+}
 $('#sheetWrap').addEventListener('click', e=>{ if(e.target.id==='sheetWrap') closeSheet(); });
-document.addEventListener('keydown', e=>{ if(e.key==='Escape' && !$('#sheetWrap').classList.contains('hidden')) closeSheet(); });
+document.addEventListener('keydown', e=>{
+  if($('#sheetWrap').classList.contains('hidden')) return;
+  if(e.key==='Escape'){ closeSheet(); return; }
+  if(e.key==='Tab'){ // focus trap: keep keyboard focus inside the sheet
+    const els=Array.from($('#sheet').querySelectorAll('button,input,textarea,select,a[href]'))
+      .filter(el=>!el.disabled && el.offsetParent!==null);
+    if(!els.length) return;
+    const first=els[0], last=els[els.length-1];
+    if(e.shiftKey && document.activeElement===first){ e.preventDefault(); last.focus(); }
+    else if(!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
+  }
+});
 
 /* ---------- onboarding ---------- */
 let obCity=null, obType=null;
@@ -198,9 +271,9 @@ function renderObSteps(){
   }
   if(show3){
     $('#obCityName').textContent=CITIES[obCity].name;
-    const list=CITIES[obCity].permits.filter(p=>p.applies.includes(obType));
+    const list=cityPermits(obCity, obType);
     $('#obPermitPreview').innerHTML=list.map(p=>
-      '<div class="pp-row"><strong>'+esc(p.name)+'</strong><span>'+(p.fee?feeLabel(p)+'/'+(p.cycle==='onetime'?'one-time':p.cycle==='annual'?'yr':p.cycle):feeLabel(p))+(p.est?'<em class="est"> est.</em>':'')+'</span></div>'
+      '<div class="pp-row"><strong>'+esc(p.name)+'</strong><span>'+(p.feeNote?feeLabel(p):(p.fee?feeLabel(p)+'/'+(p.cycle==='onetime'?'one-time':p.cycle==='annual'?'yr':p.cycle):feeLabel(p)))+(p.est?'<em class="est"> est.</em>':'')+'</span></div>'
     ).join('');
     const obEst=list.some(p=>p.est);
     $('#obTotal').textContent=(obEst?'~':'')+money(list.reduce((a,p)=>a+p.fee,0))+(obEst?' (est.)':'');
@@ -210,7 +283,8 @@ $('#obBack').onclick=()=>{ obCity=null; renderObSteps(); renderOnboard(); };
 $('#obBack2').onclick=()=>{ obType=null; renderObSteps(); };
 $('#obGo').onclick=()=>{
   S.city=obCity; S.truckType=obType;
-  S.permits=cityPermits().map(p=>({id:p.id, status:'needed', expires:null, cost:p.fee}));
+  S.permits=cityPermits(obCity,obType).map(p=>({id:p.id, city:obCity, status:'needed', expires:null, cost:p.fee, expiresEst:false}));
+  S.extraCities=[];
   S.onboarded=true; save(); enterMain();
 };
 
@@ -221,7 +295,7 @@ function enterMain(){
   $('#settingsBtn').innerHTML=I.gear;
   $('#truckName').textContent=S.truckName;
   $('#cityLabel').textContent=CITIES[S.city]?CITIES[S.city].name+' · '+TRUCK_TYPES[S.truckType].name:'';
-  $('#permitCitySub').textContent=CITIES[S.city]?('Requirements for '+CITIES[S.city].name+' · '+TRUCK_TYPES[S.truckType].name+'. Fees are typical — verify with the agency.'):'';
+  $('#permitCitySub').textContent=CITIES[S.city]?('Requirements for '+CITIES[S.city].name+' · '+TRUCK_TYPES[S.truckType].name+'. Fees are typical. Verify with the agency.'):'';
   $('#weekPrev').innerHTML=I.chevL; $('#weekNext').innerHTML=I.chevR;
   $$('#tabbar .ti')[0].innerHTML=I.home; $$('#tabbar .ti')[1].innerHTML=I.shield;
   $$('#tabbar .ti')[2].innerHTML=I.pin; $$('#tabbar .ti')[3].innerHTML=I.warehouse;
@@ -250,53 +324,66 @@ function permitState(sp){
   if(d<=90) return {level:'warn', days:d};
   return {level:'ok', days:d};
 }
-function allPermits(){ return S.permits.map(sp=>({def:permitDef(sp.id), sp})).filter(x=>x.def); }
+function allPermits(){
+  return S.permits.map(sp=>({def:permitDef(sp.id), sp, cityKey:sp.city||S.city})).filter(x=>x.def);
+}
 function permitDef(id){
   const custom=(S.customDefs||[]).find(p=>p.id===id); if(custom) return custom;
   for(const k of Object.keys(CITIES)) { const f=CITIES[k].permits.find(p=>p.id===id); if(f) return f; }
   return null;
 }
+function cityNameOf(sp){
+  const c=CITIES[sp.city||S.city]; return c?c.name:'';
+}
+const ALERT_RANK={expired:0,crit:1,warn:2,needed:3};
 function renderAlerts(){
   const box=$('#alerts'); const items=[];
   allPermits().forEach(({def,sp})=>{
     const st=permitState(sp);
-    if(sp.status!=='active') items.push({level:'warn', text:'Missing: '+def.name, tab:'permits'});
-    else if(st.level==='expired') items.push({level:'crit', text:def.name+' EXPIRED '+approxDays(sp)+Math.abs(st.days)+' days ago — renew now', tab:'permits'});
-    else if(st.level==='crit') items.push({level:'crit', text:def.name+' renews in '+approxDays(sp)+st.days+' days', tab:'permits'});
-    else if(st.level==='warn') items.push({level:'warn', text:def.name+' renews in '+approxDays(sp)+st.days+' days', tab:'permits'});
+    const cityBit=(sp.city&&sp.city!==S.city)?' ('+cityNameOf(sp)+')':'';
+    if(sp.status!=='active') items.push({level:'needed', text:'Missing: '+def.name+cityBit, tab:'permits'});
+    else if(st.level==='expired') items.push({level:'expired', text:def.name+cityBit+' EXPIRED '+approxDays(sp)+Math.abs(st.days)+' days ago. Renew now', tab:'permits'});
+    else if(st.level==='crit') items.push({level:'crit', text:def.name+cityBit+' renews in '+approxDays(sp)+st.days+' days', tab:'permits'});
+    else if(st.level==='warn') items.push({level:'warn', text:def.name+cityBit+' renews in '+approxDays(sp)+st.days+' days', tab:'permits'});
   });
   if(S.commissary.renews){ const d=daysUntil(S.commissary.renews);
     if(d!==null&&d<=60) items.push({level:d<=14?'crit':'warn', text:'Commissary agreement renews in '+d+' days', tab:'commissary'});
   }
-  box.innerHTML=items.slice(0,4).map((a,i)=>
-    '<div class="alert '+a.level+'">'+I.warn+'<span>'+esc(a.text)+'</span><button data-a="'+i+'">Fix</button></div>'
+  items.sort((a,b)=>ALERT_RANK[a.level]-ALERT_RANK[b.level]);
+  box.innerHTML=items.map((a,i)=>
+    '<div class="alert '+(a.level==='needed'?'warn':a.level)+'">'+I.warn+'<span>'+esc(a.text)+'</span><button data-a="'+i+'">Fix</button></div>'
   ).join('');
   box.querySelectorAll('button').forEach(b=>{ b.onclick=()=>switchTab(items[+b.dataset.a].tab); });
 }
 function complianceScore(){
-  const ps=allPermits(); if(!ps.length) return 0;
+  const ps=allPermits(); if(!ps.length) return {good:0,total:0};
   let good=0;
   ps.forEach(({sp})=>{ const st=permitState(sp); if(sp.status==='active'&&(st.level==='ok'||st.level==='warn')) good++; });
-  return Math.round(good/ps.length*100);
+  return {good,total:ps.length};
 }
 
 /* ---------- home ---------- */
 function weekKeys(offset){ const d=new Date(); const day=(d.getDay()+6)%7; d.setDate(d.getDate()-day+offset*7); const out=[]; for(let i=0;i<7;i++){ const x=new Date(d); x.setDate(d.getDate()+i); out.push(fmtKey(x)); } return out; }
 function renderHome(){
   renderAlerts();
-  const score=complianceScore();
-  $('#scoreNum').textContent=score;
-  $('#scoreRing').style.setProperty('--p',(score*3.6)+'deg');
-  const need=S.permits.filter(p=>p.status!=='active').length;
-  $('#scoreLabel').textContent = score===100?'Fully compliant':score>=70?'Almost there':need>0?need+' permit'+(need>1?'s':'')+' still needed':'Check renewals';
-  const act=allPermits().filter(({sp})=>sp.status==='active'&&permitState(sp).days!==null).sort((a,b)=>permitState(a.sp).days-permitState(b.sp).days);
-  $('#scoreDetail').textContent = act.length?('Next renewal: '+act[0].def.name):'Add your permits to track renewals';
+  const {good,total}=complianceScore();
+  const pct=total?Math.round(good/total*100):0;
+  $('#scoreNum').textContent=pct;
+  $('#scoreRing').style.setProperty('--p',(pct*3.6)+'deg');
+  $('#scoreLabel').textContent = total? good+' of '+total+' tracked items OK' : 'Getting set up';
+  const act=allPermits().filter(({sp})=>sp.status==='active'&&permitState(sp).days!==null)
+    .sort((a,b)=>permitState(a.sp).days-permitState(b.sp).days);
+  const unv=act.filter(({sp})=>sp.expiresEst); // nearest unverified item named honestly
+  $('#scoreDetail').textContent =
+    unv.length ? 'Nearest unverified: '+unv[0].def.name+(unv[0].sp.expires?' (~'+permitState(unv[0].sp).days+'d, estimated date)':'')
+    : act.length ? 'Next renewal: '+act[0].def.name+' ('+permitState(act[0].sp).days+'d'+(act[0].sp.expiresEst?', estimated date':'')+')'
+    : 'Add your permits to track renewals';
   // today card
   const tK=todayKey(); const spots=S.locations[tK]||[];
   const logged=S.revenue.some(r=>r.date===tK);
   $('#todayCard').innerHTML='<div class="card today-card"><div class="t-row"><div><strong>'+new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})+'</strong>'+
     '<div class="muted">'+(spots.length?spots.map(s=>esc(s.spot)+(s.hours?' · '+esc(s.hours):'')).join('<br>'):'No spot scheduled today')+'</div></div>'+
-    '<button class="btn primary small" id="quickRev">'+(logged?'Update today':'Log today')+'</button></div></div>';
+    '<button class="btn primary small" id="quickRev">'+(logged?'Log another shift':'Log today')+'</button></div></div>';
   $('#quickRev').onclick=()=>revenueSheet(tK);
   // week strip
   const wk=weekKeys(0);
@@ -309,7 +396,7 @@ function renderHome(){
   const wset=new Set(wk);
   const rw=S.revenue.filter(r=>wset.has(r.date)).reduce((a,r)=>a+ +r.amount,0);
   $('#revWeek').textContent=money(rw);
-  $('#revWeekSub').textContent=S.revenue.filter(r=>wset.has(r.date)).length+' selling days logged';
+  $('#revWeekSub').textContent=S.revenue.filter(r=>wset.has(r.date)).length+' selling shifts logged';
   // next renewal card
   if(act.length){ const st=permitState(act[0].sp);
     $('#nextRenewal').textContent=st.days<0?'OVERDUE':approxDays(act[0].sp)+st.days+' days';
@@ -323,6 +410,7 @@ function renderHome(){
 }
 
 /* ---------- permits ---------- */
+let permFilter='all'; // 'all' | 'verify'
 function renderTimeline(){
   const ps=allPermits().filter(({sp})=>sp.status==='active'&&sp.expires);
   const head='<div class="tl-head"><h4>12-month renewal timeline</h4><button class="link-btn" id="snapBtn">Copy compliance snapshot</button></div>';
@@ -342,46 +430,88 @@ function renderTimeline(){
   return '<div class="card">'+head+(rows||'<span class="muted">No renewals due in the next 12 months.</span>')+'</div>';
 }
 function copySnapshot(){
-  const ps=allPermits();
-  const lines=ps.map(({def,sp})=>{
-    const st=permitState(sp);
-    const s=sp.status!=='active'?'NOT OBTAINED':st.days===null?'active':st.days<0?'EXPIRED '+approxDays(sp)+Math.abs(st.days)+'d ago':'expires '+(sp.expiresEst?'~':'')+sp.expires+' ('+approxDays(sp)+st.days+'d)';
-    return '- '+def.name+' ('+def.agency+'): '+s;
+  const groups=[S.city].concat(S.extraCities||[]).filter(k=>CITIES[k]);
+  const lines=[];
+  groups.forEach(g=>{
+    const ps=allPermits().filter(x=>x.cityKey===g);
+    if(!ps.length) return;
+    lines.push('== '+CITIES[g].name+' ==');
+    ps.forEach(({def,sp})=>{
+      const st=permitState(sp);
+      const s=sp.status!=='active'?'NOT OBTAINED':st.days===null?'active':st.days<0?'EXPIRED '+approxDays(sp)+Math.abs(st.days)+'d ago':'expires '+(sp.expiresEst?'~':'')+sp.expires+' ('+approxDays(sp)+st.days+'d'+(sp.expiresEst?', estimated':', verified')+')';
+      lines.push('- '+def.name+' ('+def.agency+'): '+s);
+    });
   });
-  const txt=S.truckName+' — '+CITIES[S.city].name+'\nCompliance snapshot '+todayKey()+'\n'+lines.join('\n');
+  const txt=S.truckName+' - '+cityNameOf({city:S.city})+'\nCompliance snapshot '+todayKey()+'\n'+lines.join('\n');
   (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(
     ()=>{ $('#snapBtn').textContent='Copied!'; setTimeout(()=>{ const b=$('#snapBtn'); if(b) b.textContent='Copy compliance snapshot'; },2000); },
     ()=>{ prompt('Copy your compliance snapshot:', txt); });
+}
+function permitPill(def, sp){
+  const st=permitState(sp); const done=sp.status==='active';
+  if(!done) return '<span class="pill">Not obtained</span>';
+  if(st.level==='expired') return '<span class="pill crit">Expired '+approxDays(sp)+Math.abs(st.days)+'d ago</span>';
+  if(st.level==='crit') return '<span class="pill crit">'+approxDays(sp)+st.days+' days left</span>';
+  if(st.level==='warn') return '<span class="pill warn">'+approxDays(sp)+st.days+' days left</span>';
+  if(st.days===null) return '<span class="pill ok">Done</span>';
+  return '<span class="pill ok">'+approxDays(sp)+st.days+' days left</span>';
 }
 function renderPermits(){
   renderAlerts();
   $('#permitTimeline').innerHTML=renderTimeline();
   const sb=$('#snapBtn'); if(sb) sb.onclick=copySnapshot;
-  const box=$('#permitList'); const ps=allPermits();
+  const box=$('#permitList');
   const order={expired:0,crit:1,warn:2,needed:3,ok:4};
-  ps.sort((a,b)=>{ const sa=a.sp.status==='active'?permitState(a.sp).level:'needed'; const sb=b.sp.status==='active'?permitState(b.sp).level:'needed'; return order[sa]-order[sb]; });
-  box.innerHTML=ps.map(({def,sp})=>{
-    const st=permitState(sp); const done=sp.status==='active';
-    let pill;
-    if(!done) pill='<span class="pill">Not obtained</span>';
-    else if(st.level==='expired') pill='<span class="pill crit">Expired '+approxDays(sp)+Math.abs(st.days)+'d ago</span>';
-    else if(st.level==='crit') pill='<span class="pill crit">'+approxDays(sp)+st.days+' days left</span>';
-    else if(st.level==='warn') pill='<span class="pill warn">'+approxDays(sp)+st.days+' days left</span>';
-    else if(st.days===null) pill='<span class="pill ok">Done</span>';
-    else pill='<span class="pill ok">'+approxDays(sp)+st.days+' days left</span>';
-    return '<div class="permit'+(done?' done':'')+'"><div class="p-top">'+
-      '<button class="p-check" data-p="'+sp.id+'" aria-label="Toggle obtained">'+(done?I.check:'')+'</button>'+
-      '<div class="p-body"><strong>'+esc(def.name)+'</strong><span class="muted">'+esc(def.agency)+'</span>'+
-      '<div class="p-meta">'+pill+'<span class="pill cost">'+feeLabel(def)+estTag(def)+'</span><span class="pill">'+CYCLE_LABEL[def.cycle]+'</span></div>'+
-      (done&&sp.expires?'<div class="muted" style="margin-top:6px">Expires '+(sp.expiresEst?'~':'')+fmtDate(sp.expires)+(sp.expiresEst?' <span class="est">(estimated date)</span>':'')+'</div>':'')+
-      '<div class="muted" style="margin-top:6px">'+esc(def.note||'')+'</div>'+estLine(def)+
-      '<div class="p-actions"><button class="link-btn" data-e="'+sp.id+'">'+(done?'Update expiry':'Set expiry & mark obtained')+'</button>'+
-      (sp.custom?'<button class="link-btn" data-d="'+sp.id+'" style="color:var(--mut)">Remove</button>':'')+'</div>'+
-      '</div></div></div>';
-  }).join('') || '<div class="empty">No permits yet.</div>';
+  const levelOf=x=>x.sp.status==='active'?permitState(x.sp).level:'needed';
+  const groups=[S.city].concat(S.extraCities||[]).filter(k=>CITIES[k]);
+  const needVerify=allPermits().filter(({sp})=>sp.status==='active'&&sp.expires&&sp.expiresEst).length;
+  let html='<div class="chip-row" role="group" aria-label="Permit filter">'+
+    '<button class="chip'+(permFilter==='all'?' on':'')+'" data-f="all">All ('+allPermits().length+')</button>'+
+    '<button class="chip'+(permFilter==='verify'?' on':'')+'" data-f="verify">Needs verification ('+needVerify+')</button></div>';
+  groups.forEach((g,gi)=>{
+    let ps=allPermits().filter(x=>x.cityKey===g);
+    if(permFilter==='verify') ps=ps.filter(({sp})=>sp.status==='active'&&sp.expires&&sp.expiresEst);
+    ps.sort((a,b)=>order[levelOf(a)]-order[levelOf(b)]);
+    html+='<div class="city-head"><h3>'+esc(CITIES[g].name)+'</h3>'+
+      (gi>0?'<button class="link-btn" data-rmcity="'+g+'">Remove city</button>':'')+'</div>';
+    html+=ps.map(({def,sp})=>{
+      const done=sp.status==='active';
+      return '<div class="permit'+(done?' done':'')+'"><div class="p-top">'+
+        '<button class="p-check" data-p="'+sp.id+'" aria-label="Toggle obtained: '+esc(def.name)+'" aria-pressed="'+done+'">'+(done?I.check:'')+'</button>'+
+        '<div class="p-body"><strong>'+esc(def.name)+'</strong><span class="muted">'+esc(def.agency)+'</span>'+
+        '<div class="p-meta">'+permitPill(def,sp)+'<span class="pill cost">'+feeLabel(def)+estTag(def)+'</span><span class="pill">'+CYCLE_LABEL[def.cycle]+'</span></div>'+
+        (done&&sp.expires?'<div class="muted" style="margin-top:6px">Expires '+(sp.expiresEst?'~':'')+fmtDate(sp.expires)+(sp.expiresEst?' <span class="est">(estimated date; tap below to enter the real one)</span>':' <span class="est ok-t">(from your document)</span>')+'</div>':'')+
+        '<div class="muted" style="margin-top:6px">'+esc(def.note||'')+'</div>'+estLine(def)+
+        '<div class="p-actions"><button class="link-btn" data-e="'+sp.id+'">'+(done?'Update expiry':'Set expiry & mark obtained')+'</button>'+
+        (sp.custom?'<button class="link-btn" data-d="'+sp.id+'" style="color:var(--mut)">Remove</button>':'')+'</div>'+
+        '</div></div></div>';
+    }).join('') || '<div class="empty">No permits tracked here yet.</div>';
+  });
+  html+='<button class="btn ghost" id="addCityBtn" style="margin-top:4px">+ Track another city</button>';
+  box.innerHTML=html;
+  box.querySelectorAll('.chip').forEach(b=>{ b.onclick=()=>{ permFilter=b.dataset.f; renderPermits(); }; });
   box.querySelectorAll('.p-check').forEach(b=>{ b.onclick=()=>togglePermit(b.dataset.p); });
   box.querySelectorAll('[data-e]').forEach(b=>{ b.onclick=()=>permitDateSheet(b.dataset.e); });
   box.querySelectorAll('[data-d]').forEach(b=>{ b.onclick=()=>{ const id=b.dataset.d; S.permits=S.permits.filter(p=>p.id!==id); S.customDefs=(S.customDefs||[]).filter(d=>d.id!==id); save(); renderPermits(); renderAlerts(); }; });
+  box.querySelectorAll('[data-rmcity]').forEach(b=>{ b.onclick=()=>{ const g=b.dataset.rmcity; if(!confirm('Stop tracking '+CITIES[g].name+' permits?')) return; S.extraCities=S.extraCities.filter(k=>k!==g); S.permits=S.permits.filter(p=>p.city!==g); save(); renderPermits(); renderAlerts(); }; });
+  $('#addCityBtn').onclick=attachCitySheet;
+}
+function attachCitySheet(){
+  const attached=[S.city].concat(S.extraCities||[]);
+  const rest=Object.keys(CITIES).filter(k=>!attached.includes(k));
+  openSheet('<h3>Track another city</h3><p class="muted">For trucks that vend in more than one city. Their permits load as extra tracked requirements under their own heading.</p>'+
+    (rest.length?rest.map(k=>'<button class="btn ghost city-add" data-c="'+k+'">'+esc(CITIES[k].name)+'<span class="muted" style="margin-left:8px">'+esc(CITIES[k].sub)+'</span></button>').join(''):'<div class="empty">Every city is already tracked.</div>')+
+    '<button class="btn ghost" id="acCancel">Cancel</button>', 'Track another city');
+  $('#acCancel').onclick=closeSheet;
+  $$('#sheet .city-add').forEach(b=>{ b.onclick=()=>{ attachCity(b.dataset.c); }; });
+}
+function attachCity(key){
+  if(!S.extraCities.includes(key)) S.extraCities.push(key);
+  cityPermits(key,S.truckType).forEach(p=>{
+    if(!S.permits.find(sp=>sp.id===p.id))
+      S.permits.push({id:p.id, city:key, status:'needed', expires:null, cost:p.fee, expiresEst:false});
+  });
+  save(); closeSheet(); renderPermits(); renderAlerts();
 }
 function togglePermit(id){
   const sp=S.permits.find(p=>p.id===id); const def=permitDef(id);
@@ -396,10 +526,18 @@ function permitDateSheet(id){
   const days=CYCLE_DAYS[def.cycle];
   openSheet('<h3>'+esc(def.name)+'</h3><p class="muted">'+esc(def.agency)+' · '+feeLabel(def)+(def.est?' (est.)':'')+' · '+CYCLE_LABEL[def.cycle]+'</p>'+
     '<label>Expiry date<input type="date" id="pdDate" value="'+(sp.expires||(days?addDaysKey(todayKey(),days):''))+'"></label>'+
-    '<p class="muted">Leave blank for one-time permits with no renewal.</p>'+
-    '<button class="btn primary big" id="pdSave">Mark obtained</button><button class="btn ghost" id="pdCancel">Cancel</button>');
+    '<fieldset class="radio-group"><legend>How did you get this date?</legend>'+
+    '<label class="radio"><input type="radio" name="pdv" value="verified" checked> <span>This is the date on my permit document</span></label>'+
+    '<label class="radio"><input type="radio" name="pdv" value="estimate"'+(sp.expiresEst?' checked':'')+'> <span>This is an estimate</span></label></fieldset>'+
+    '<p class="muted">Leave the date blank for one-time permits with no renewal. Estimated dates show with a ~ until you enter the real one.</p>'+
+    '<button class="btn primary big" id="pdSave">Mark obtained</button><button class="btn ghost" id="pdCancel">Cancel</button>', 'Set permit expiry date');
   $('#pdCancel').onclick=closeSheet;
-  $('#pdSave').onclick=()=>{ sp.status='active'; sp.expires=$('#pdDate').value||null; sp.expiresEst=false; save(); closeSheet(); renderPermits(); };
+  $('#pdSave').onclick=()=>{
+    sp.status='active';
+    sp.expires=$('#pdDate').value||null;
+    sp.expiresEst=$('#sheet input[name="pdv"]:checked').value==='estimate';
+    save(); closeSheet(); renderPermits();
+  };
 }
 $('#addPermitBtn').onclick=()=>{
   openSheet('<h3>Add a permit</h3><p class="muted">For city-specific extras not in the list.</p>'+
@@ -408,15 +546,15 @@ $('#addPermitBtn').onclick=()=>{
     '<div class="row2"><label>Fee ($)<input type="number" id="apFee" min="0" placeholder="0"></label>'+
     '<label>Renews<select id="apCycle"><option value="annual">Yearly</option><option value="biennial">Every 2 yrs</option><option value="3yr">Every 3 yrs</option><option value="5yr">Every 5 yrs</option><option value="onetime">One-time</option></select></label></div>'+
     '<label>Expiry date<input type="date" id="apExp"></label>'+
-    '<button class="btn primary big" id="apSave">Add permit</button><button class="btn ghost" id="apCancel">Cancel</button>');
+    '<button class="btn primary big" id="apSave">Add permit</button><button class="btn ghost" id="apCancel">Cancel</button>', 'Add a permit');
   $('#apCancel').onclick=closeSheet;
   $('#apSave').onclick=()=>{
     const name=$('#apName').value.trim(); if(!name) return;
     const id='custom-'+uid();
     // register custom def in persisted state (CITIES is static and would not survive reload)
-    const def={id, name, agency:$('#apAgency').value.trim()||'—', fee:+$('#apFee').value||0, cycle:$('#apCycle').value, applies:[S.truckType], note:'Added by you.', custom:true};
+    const def={id, name, agency:$('#apAgency').value.trim()||'Unknown agency', fee:+$('#apFee').value||0, cycle:$('#apCycle').value, applies:[S.truckType], note:'Added by you.', custom:true};
     S.customDefs.push(def);
-    S.permits.push({id, status:$('#apExp').value?'active':'needed', expires:$('#apExp').value||null, cost:+$('#apFee').value||0, custom:true});
+    S.permits.push({id, city:S.city, status:$('#apExp').value?'active':'needed', expires:$('#apExp').value||null, expiresEst:false, cost:+$('#apFee').value||0, custom:true});
     save(); closeSheet(); renderPermits();
   };
 };
@@ -432,7 +570,7 @@ function renderLocations(){
     const d=parseKey(k); const spots=S.locations[k]||[];
     return '<div class="day-block"><div class="d-head"><strong>'+d.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})+(k===tK?' · today':'')+'</strong>'+
       '<button class="btn small" data-add="'+k+'">+ Spot</button></div>'+
-      (spots.length?spots.map((s,i)=>'<div class="spot-row"><div class="s-info"><strong>'+esc(s.spot)+'</strong><span>'+esc(s.addr||'')+(s.hours?' · '+esc(s.hours):'')+'</span></div><button class="del" data-del="'+k+'|'+i+'" aria-label="Remove">×</button></div>').join('')
+      (spots.length?spots.map((s,i)=>'<div class="spot-row"><div class="s-info"><strong>'+esc(s.spot)+'</strong><span>'+esc(s.addr||'')+(s.hours?' · '+esc(s.hours):'')+'</span></div><button class="del" data-del="'+k+'|'+i+'" aria-label="Remove spot">×</button></div>').join('')
       :'<div class="muted" style="font-size:13px">No spot scheduled.</div>')+'</div>';
   }).join('');
   $('#weekGrid').querySelectorAll('[data-add]').forEach(b=>{ b.onclick=()=>spotSheet(b.dataset.add); });
@@ -445,7 +583,7 @@ function spotSheet(k){
     '<label>Spot name<input type="text" id="spName" placeholder="e.g. Brewery X lot, 5th & Main" maxlength="80"></label>'+
     '<label>Address<input type="text" id="spAddr" placeholder="Optional" maxlength="120"></label>'+
     '<label>Hours<input type="text" id="spHours" placeholder="e.g. 11a–2p, 5–9p" maxlength="40"></label>'+
-    '<button class="btn primary big" id="spSave">Add to schedule</button><button class="btn ghost" id="spCancel">Cancel</button>');
+    '<button class="btn primary big" id="spSave">Add to schedule</button><button class="btn ghost" id="spCancel">Cancel</button>', 'Schedule spot');
   $('#spCancel').onclick=closeSheet;
   $('#spSave').onclick=()=>{
     const name=$('#spName').value.trim(); if(!name) return;
@@ -505,11 +643,11 @@ function renderEvents(){
 }
 $('#addEventBtn').onclick=()=>{
   openSheet('<h3>Add booking</h3>'+
-    '<label>Event name<input type="text" id="evName" placeholder="e.g. Wedding — Garcia" maxlength="80"></label>'+
-    '<div class="row2"><label>Date<input type="date" id="evDate" value="'+todayKey()+'"></label><label>Fee ($) — optional<input type="number" id="evFee" min="0" placeholder="500"></label></div>'+
+    '<label>Event name<input type="text" id="evName" placeholder="e.g. Garcia wedding" maxlength="80"></label>'+
+    '<div class="row2"><label>Date<input type="date" id="evDate" value="'+todayKey()+'"></label><label>Fee ($) (optional)<input type="number" id="evFee" min="0" placeholder="500"></label></div>'+
     '<label>Contact<input type="text" id="evContact" placeholder="Name / phone" maxlength="80"></label>'+
     '<label>Status<select id="evStatus"><option value="lead">Lead</option><option value="booked">Booked</option><option value="done">Done</option></select></label>'+
-    '<button class="btn primary big" id="evSave">Add booking</button><button class="btn ghost" id="evCancel">Cancel</button>');
+    '<button class="btn primary big" id="evSave">Add booking</button><button class="btn ghost" id="evCancel">Cancel</button>', 'Add booking');
   $('#evCancel').onclick=closeSheet;
   $('#evSave').onclick=()=>{
     const name=$('#evName').value.trim(); if(!name||!$('#evDate').value) return;
@@ -518,7 +656,7 @@ $('#addEventBtn').onclick=()=>{
   };
 };
 
-/* ---------- revenue ---------- */
+/* ---------- revenue (multiple shifts per day allowed) ---------- */
 function renderRevenue(){
   const tK=todayKey();
   const wkStart=addDaysKey(tK,-6);
@@ -529,7 +667,7 @@ function renderRevenue(){
   $('#revM').textContent=money(inM.reduce((a,r)=>a+ +r.amount,0));
   const best=S.revenue.slice().sort((a,b)=>b.amount-a.amount)[0];
   $('#revBest').textContent=best?money(best.amount):'—';
-  // chart: last 7 days
+  // chart: last 7 days, summed per date
   const days=[]; for(let i=6;i>=0;i--) days.push(addDaysKey(tK,-i));
   const max=Math.max(1,...days.map(k=>S.revenue.filter(r=>r.date===k).reduce((a,r)=>a+ +r.amount,0)));
   $('#revChart').innerHTML=days.map(k=>{
@@ -540,47 +678,110 @@ function renderRevenue(){
   const lbl=document.createElement('div'); lbl.className='chart-labels';
   lbl.innerHTML=days.map(k=>'<span>'+parseKey(k).toLocaleDateString('en-US',{weekday:'narrow'})+'</span>').join('');
   $('#revChart').after(lbl);
-  const list=S.revenue.slice().sort((a,b)=>a.date<b.date?1:-1).slice(0,30);
+  const list=S.revenue.slice().sort((a,b)=>a.date<b.date?1:-1).slice(0,60);
   $('#revList').innerHTML=list.length?list.map(r=>
-    '<div class="rev-row"><div><strong>'+money(r.amount)+'</strong><div class="muted" style="font-size:12px">'+fmtDate(r.date)+(r.spot?' · '+esc(r.spot):'')+'</div></div><button class="del" data-r="'+r.id+'" aria-label="Remove">×</button></div>'
-  ).join(''):'<div class="empty">No revenue logged yet. Log each selling day.</div>';
+    '<div class="rev-row"><div><strong>'+money(r.amount)+'</strong><div class="muted" style="font-size:12px">'+fmtDate(r.date)+(r.spot?' · '+esc(r.spot):'')+'</div></div><button class="del" data-r="'+r.id+'" aria-label="Remove revenue entry">×</button></div>'
+  ).join(''):'<div class="empty">No revenue logged yet. Log each selling shift.</div>';
   $('#revList').querySelectorAll('[data-r]').forEach(b=>{ b.onclick=()=>{ S.revenue=S.revenue.filter(r=>r.id!==b.dataset.r); save(); renderRevenue(); }; });
 }
 function revenueSheet(presetDate){
-  openSheet('<h3>Log a selling day</h3>'+
+  openSheet('<h3>Log a selling shift</h3><p class="muted">Lunch and dinner count separately. Log each shift and the day totals up.</p>'+
     '<div class="row2"><label>Date<input type="date" id="rvDate" value="'+(presetDate||todayKey())+'"></label><label>Revenue ($)<input type="number" id="rvAmt" inputmode="decimal" min="0" placeholder="850"></label></div>'+
     '<label>Spot<input type="text" id="rvSpot" placeholder="Where did you sell?" maxlength="80"></label>'+
-    '<button class="btn primary big" id="rvSave">Log it</button><button class="btn ghost" id="rvCancel">Cancel</button>');
+    '<button class="btn primary big" id="rvSave">Log it</button><button class="btn ghost" id="rvCancel">Cancel</button>', 'Log a selling shift');
   $('#rvCancel').onclick=closeSheet;
   $('#rvSave').onclick=()=>{
     const amt=+$('#rvAmt').value; if(!amt||!$('#rvDate').value) return;
-    const d=$('#rvDate').value;
-    const ex=S.revenue.find(r=>r.date===d);
-    if(ex){ ex.amount=amt; ex.spot=$('#rvSpot').value.trim()||ex.spot; }
-    else S.revenue.push({id:uid(), date:d, amount:amt, spot:$('#rvSpot').value.trim()});
+    S.revenue.push({id:uid(), date:$('#rvDate').value, amount:amt, spot:$('#rvSpot').value.trim()});
     save(); closeSheet(); renderRevenue(); renderHome();
   };
 }
 $('#addRevBtn').onclick=()=>revenueSheet();
+$('#csvRevBtn').onclick=()=>csvSheet();
+function csvSheet(){
+  const dates=S.revenue.map(r=>r.date).sort();
+  const d0=dates[0]||todayKey();
+  openSheet('<h3>Export revenue CSV</h3><p class="muted">For your bookkeeper: date, amount, spot.</p>'+
+    '<div class="row2"><label>From<input type="date" id="csvFrom" value="'+d0+'"></label><label>To<input type="date" id="csvTo" value="'+todayKey()+'"></label></div>'+
+    '<button class="btn primary big" id="csvGo">Download CSV</button><button class="btn ghost" id="csvCancel">Cancel</button>', 'Export revenue CSV');
+  $('#csvCancel').onclick=closeSheet;
+  $('#csvGo').onclick=()=>{
+    const from=$('#csvFrom').value, to=$('#csvTo').value;
+    const rows=S.revenue.filter(r=>r.date>=from&&r.date<=to).sort((a,b)=>a.date<b.date?-1:1);
+    const q=s=>'"'+String(s||'').replace(/"/g,'""')+'"';
+    const csv='date,amount,spot\n'+rows.map(r=>r.date+','+r.amount+','+q(r.spot)).join('\n')+'\n';
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+    a.download='curbside-revenue-'+from+'-to-'+to+'.csv';
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000);
+    closeSheet();
+  };
+}
 
 /* ---------- settings ---------- */
 $('#settingsBtn').onclick=()=>{
   openSheet('<h3>Settings</h3>'+
     '<label>Truck name<input type="text" id="stName" value="'+esc(S.truckName)+'" maxlength="60"></label>'+
-    '<div class="set-row"><span>City</span><span class="muted">'+esc(CITIES[S.city]?CITIES[S.city].name:'—')+'</span></div>'+
-    '<div class="set-row"><span>Operation</span><span class="muted">'+esc(TRUCK_TYPES[S.truckType]?TRUCK_TYPES[S.truckType].name:'—')+'</span></div>'+
+    '<div class="set-row"><span>City</span><span class="muted">'+esc(CITIES[S.city]?CITIES[S.city].name:'Not set')+'</span></div>'+
+    '<div class="set-row"><span>Operation</span><span class="muted">'+esc(TRUCK_TYPES[S.truckType]?TRUCK_TYPES[S.truckType].name:'Not set')+'</span></div>'+
     '<button class="btn primary big" id="stSave">Save</button>'+
+    '<div class="card" style="margin-top:12px"><h4>Backup</h4>'+
+    '<p class="muted" style="font-size:13px">Download everything as a JSON file, or restore from one. Your backup never leaves your device unless you move the file.</p>'+
+    '<div class="backup-row"><button class="btn small" id="bkExport">Export backup</button>'+
+    '<label class="btn small" style="margin:0">Import backup<input type="file" id="bkImport" accept="application/json,.json" style="display:none"></label></div></div>'+
+    '<div class="card" style="margin-top:12px"><h4>Revenue export</h4>'+
+    '<button class="btn small" id="stCsv">Export revenue CSV</button></div>'+
     '<button class="danger" id="stReset">Erase all data and start over</button>'+
-    '<button class="btn ghost" id="stCancel">Close</button>');
+    '<button class="btn ghost" id="stCancel">Close</button>', 'Settings');
   $('#stCancel').onclick=closeSheet;
   $('#stSave').onclick=()=>{ S.truckName=$('#stName').value.trim()||'My Truck'; $('#truckName').textContent=S.truckName; save(); closeSheet(); };
+  $('#bkExport').onclick=exportBackup;
+  $('#bkImport').onchange=e=>{ if(e.target.files[0]) importBackup(e.target.files[0]); };
+  $('#stCsv').onclick=()=>{ closeSheet(); setTimeout(csvSheet,50); };
   try{ if(window.__curbsideSyncUI) window.__curbsideSyncUI(); }catch(e){}
-  $('#stReset').onclick=()=>{ if(confirm('Erase everything and restart setup?')){ ['curbside.v1','curbside.device_key','curbside.syncmeta.v1','curbside.lastsync.v1'].forEach(k=>{ try{localStorage.removeItem(k);}catch(e){} }); location.reload(); } };
+  $('#stReset').onclick=()=>{ if(confirm('Erase everything and restart setup?')){ ['curbside.v1','curbside.device_key','curbside.syncmeta.v1','curbside.lastsync.v1','curbside.syncbase.v1','curbside.oversized.v1'].forEach(k=>{ try{localStorage.removeItem(k);}catch(e){} }); location.reload(); } };
 };
+function exportBackup(){
+  const payload={v:1, app:'curbside', exported:todayKey(), state:S};
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(payload)],{type:'application/json'}));
+  a.download='curbside-backup-'+todayKey()+'.json';
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000);
+}
+function importBackup(file){
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const o=JSON.parse(r.result);
+      if(!o||o.v!==1||!o.state) throw new Error('bad');
+      const st=o.state;
+      if(!Array.isArray(st.permits)||!Array.isArray(st.events)||!Array.isArray(st.revenue)) throw new Error('bad');
+      S=st;
+      if(!S.customDefs) S.customDefs=[];
+      if(!S.extraCities) S.extraCities=[];
+      if(!S.locations) S.locations={};
+      if(!S.commissary) S.commissary={name:'',cost:'',renews:'',days:[],notes:''};
+      save(); closeSheet();
+      if(S.onboarded&&S.city) enterMain(); else renderOnboard();
+    }catch(e){ alert('That file is not a valid Curbside backup.'); }
+  };
+  r.readAsText(file);
+}
 
 /* ---------- init ---------- */
 load();
 if(S.onboarded && S.city){ enterMain(); } else { renderOnboard(); }
+/* Recompute date-dependent UI when the app returns to the foreground and on
+ * date rollover, not only after a sync pull. */
+let lastSeenDay=todayKey();
+function rolloverCheck(){
+  const k=todayKey();
+  if(k!==lastSeenDay){ lastSeenDay=k; refreshUI(); }
+}
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden){ rolloverCheck(); refreshUI(); } });
+setInterval(rolloverCheck, 60000);
 
 /* ---------- sync hooks (prototype backend; see sync.js) ---------- */
 function refreshUI(){
@@ -595,4 +796,3 @@ window.__curbside = {
   refresh: refreshUI
 };
 })();
-

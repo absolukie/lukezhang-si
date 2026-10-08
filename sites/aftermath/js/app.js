@@ -52,6 +52,11 @@ function phaseCounts(jobId){
   return counts;
 }
 
+/* Any sample photo anywhere in the job flags it as a demonstration file. */
+function jobHasSamplePhoto(jobId){
+  return state.photos.some(function(p){ return p.jobId===jobId && p.sample; });
+}
+
 /* Work-log totals with job-level discount. */
 function worklogTotals(jobId){
   var items = jobItems(jobId);
@@ -385,8 +390,8 @@ function handlePhotoFiles(files){
         });
         if(save()){ done++; hideSaveBanner(); }
         else { failed++; showSaveBanner("photo ("+(f.name||"upload")+")"); }
-        if(currentJobId===jobId){ renderPhotos(); renderDossierTab(); }
         logEvent(jobId, "Photo added ("+(f.name||"upload")+")" + (rapid ? " ["+rapid.room+", "+rapid.phase+"]" : ""));
+        if(currentJobId===jobId){ renderPhotos(); renderDossierTab(); }
         if(done+failed===images.length && images.length && failed===0){
           toast(images.length + (images.length===1?" photo":" photos") + " added" +
             (rapid ? " ("+rapid.room+", "+rapid.phase+")" : ""));
@@ -540,9 +545,10 @@ function renderChecklist(){
       var c = state.checklist.find(function(x){return x.id===el.getAttribute("data-id");});
       if(!c) return;
       c.done = !c.done; c.doneAt = c.done ? Date.now() : null;
-      save(); renderChecklist(); renderDossierTab();
+      save();
       if(c.done) logEvent(currentJobId, "Checklist: " + c.label);
       else logEvent(currentJobId, "Checklist step reopened: " + c.label);
+      renderChecklist(); renderDossierTab();
     });
   });
   list.querySelectorAll("[data-note]").forEach(function(b){
@@ -589,8 +595,9 @@ function renderWorklog(){
       var id = b.getAttribute("data-del");
       var it = state.lineItems.find(function(x){return x.id===id;});
       state.lineItems = state.lineItems.filter(function(x){return x.id!==id;});
-      save(); renderWorklog(); renderDossierTab();
+      save();
       if(it) logEvent(currentJobId, "Work log: removed '" + it.desc + "'");
+      renderWorklog(); renderDossierTab();
       toast("Line item removed");
     });
   });
@@ -786,7 +793,7 @@ function buildDossierHTML(){
     evs.map(function(e){ return '<tr><td style="white-space:nowrap;">'+esc(fmtTime(e.ts))+'</td><td>'+esc(e.text)+'</td></tr>'; }).join("") +
     '</table>' : '<p>No custody events recorded.</p>';
 
-  return (j.demo ? '<div class="dz-demo-banner">DEMONSTRATION DOSSIER: this file uses sample photos and is not a real claim file.</div>' : '') +
+  return ((j.demo || jobHasSamplePhoto(currentJobId)) ? '<div class="dz-demo-banner">DEMONSTRATION DOSSIER: this file uses sample photos and is not a real claim file.</div>' : '') +
     '<div class="dz-cover"><h1>REMEDIATION DOSSIER</h1>' +
     '<div class="dz-cover-sub">Prepared by '+esc(j.company||"Cleanup contractor")+' · Generated '+esc(fmtTime(Date.now()))+' via Aftermath</div>' +
     '<div class="dz-meta">' +
@@ -952,6 +959,7 @@ document.addEventListener("DOMContentLoaded", function(){
     j.status = $("job-status").value;
     saveChecked("status change", "Status: " + statusLabel(j.status));
     logEvent(currentJobId, "Status changed to " + statusLabel(j.status));
+    renderDossierTab();
   });
 
   document.querySelectorAll("#job-tabs .tab").forEach(function(t){
@@ -967,8 +975,9 @@ document.addEventListener("DOMContentLoaded", function(){
       id:uid(), jobId:currentJobId, dataUrl:s.dataUrl, thumb:s.thumb, takenAt:Date.now(),
       room:s.room, damageType:"", severity:"", notes:"", pins:[], phase:"", sample:true
     });
-    saveChecked("sample photo", "Sample photo added"); renderPhotos(); renderDossierTab();
+    saveChecked("sample photo", "Sample photo added");
     logEvent(currentJobId, "Sample photo added ("+s.room+")");
+    renderPhotos(); renderDossierTab();
   });
 
   /* rapid capture */
@@ -1042,8 +1051,8 @@ document.addEventListener("DOMContentLoaded", function(){
     p.pins = pinDraft.map(function(pin){ return {x:pin.x, y:pin.y, label:(pin.label||"").trim()}; });
     p.phase = taggingPhase;
     saveChecked("photo tags", "Photo tagged"); closeModals();
-    renderPhotos(); renderDossierTab();
     logEvent(currentJobId, "Photo tagged ("+[p.room,p.damageType].filter(Boolean).join(", ")+")");
+    renderPhotos(); renderDossierTab();
   });
 
   /* checklist step notes */
@@ -1063,8 +1072,9 @@ document.addEventListener("DOMContentLoaded", function(){
   $("btn-photo-delete").addEventListener("click", function(){
     askConfirm("Delete this photo?", "It will be removed from the dossier.", "Delete photo", true, function(){
       state.photos = state.photos.filter(function(x){return x.id!==taggingPhotoId;});
-      saveChecked("photo deletion", "Photo deleted"); closeModals(); renderPhotos(); renderDossierTab();
+      saveChecked("photo deletion", "Photo deleted"); closeModals();
       logEvent(currentJobId, "Photo deleted");
+      renderPhotos(); renderDossierTab();
     });
   });
 

@@ -54,6 +54,24 @@
     background: rgba(43,43,43,0.18); }
   .viz input[type=range]::-moz-range-thumb { width: 36px; height: 36px; border-radius: 50%;
     background: #b3352b; border: 3px solid #2b2b2b; }
+  /* taylor toy: new small-knob / big-grab slider pattern (26px visible, 50px hit box) */
+  #toy-taylor input[type=range] { height: 40px; }
+  #toy-taylor input[type=range]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px;
+    background: rgba(43,43,43,0.18); }
+  #toy-taylor input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none;
+    width: 50px; height: 50px; border-radius: 50%; border: none;
+    background: radial-gradient(circle, #b3352b 0 8px, #2b2b2b 8px 10px, rgba(0,0,0,0) 11px);
+    margin-top: -22px; box-shadow: none; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35)); }
+  #toy-taylor input[type=range]::-moz-range-track { height: 6px; border-radius: 3px;
+    background: rgba(43,43,43,0.18); }
+  #toy-taylor input[type=range]::-moz-range-thumb { width: 50px; height: 50px; border-radius: 50%;
+    border: none;
+    background: radial-gradient(circle, #b3352b 0 8px, #2b2b2b 8px 10px, rgba(0,0,0,0) 11px);
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35)); }
+  .ts-legend { display: flex; gap: 16px; font-size: 13px; color: rgba(43,43,43,0.65); margin: 2px 0 4px; }
+  .ts-legend i { display: inline-block; width: 14px; height: 4px; border-radius: 2px;
+    margin-right: 6px; vertical-align: middle; }
+  .ts-formula { text-align: center; font-size: 17px; margin: 8px 0 2px; min-height: 44px; color: #2b2b2b; }
   .viz input[type=text], .viz textarea { width: 100%; font-size: 16px; padding: 12px 14px;
     border: 1px solid rgba(43,43,43,0.25); border-radius: 10px; background: #fff;
     font-family: inherit; color: #2b2b2b; }
@@ -242,6 +260,27 @@
     </div>
     <div class="insight" id="ty-insight"></div>
     <p class="cap">$e^x$ is the one function that equals its own derivative and equals 1 at x = 0. Force a power series to obey that, term by term, and every coefficient gets pinned to $1/n!$. The series is not a trick. It is what "derivative equals itself" demands. The compound-interest limit $(1 + 1/n)^n$ also reaches e from first principles, but it crawls. Computers use the series.</p>
+  </div>
+
+  <div class="viz" id="toy-taylor">
+    <h3>Taylor series: fake the function</h3>
+    <p class="sub">Pick a function. Drag the terms. The polynomial hugs the curve near zero and wanders off far away.</p>
+    <div class="chips" id="ts-chips">
+      <button class="chip on" data-f="sin" aria-pressed="true">sin x</button>
+      <button class="chip" data-f="cos" aria-pressed="false">cos x</button>
+      <button class="chip" data-f="exp" aria-pressed="false">$e^x$</button>
+    </div>
+    <div class="ts-formula" id="ts-formula"></div>
+    <div class="ts-legend"><span><i style="background:#2b2b2b;"></i>true curve</span><span><i style="background:#b3352b;"></i>taylor polynomial</span></div>
+    <svg class="curve" id="ts-plot" viewBox="0 0 360 220" role="img" aria-label="True function versus its Taylor polynomial"></svg>
+    <label for="ts-n">Terms <span id="ts-n-v" style="font-weight:400;">6</span></label>
+    <input type="range" id="ts-n" min="1" max="12" step="1" value="6" aria-label="Number of Taylor terms">
+    <div class="stat-grid">
+      <div class="stat-cell"><div class="n" id="ts-near" style="font-size:20px;">~0</div><div class="l">worst miss near center (|x| &lt; 1)</div></div>
+      <div class="stat-cell"><div class="n" id="ts-far" style="font-size:20px;">0</div><div class="l">worst miss far away (|x| &gt; 4)</div></div>
+    </div>
+    <div class="insight" id="ts-insight"></div>
+    <p class="cap">A Taylor series matches the function's value, slope, curvature, and onward at one point. Near that point the polynomial cannot help but hug the curve, and more terms widen the hug. Far away, all bets are off: it is still just a polynomial, so it flies off on its own. This is the machine behind "Build e, term by term" above: $e^x$ about 0 gives $1/n!$. And it is why $e^{i\theta}$ splits into cos and sin: feed $i\theta$ into the $e^x$ series, sort the pile with $i$ from the pile without, and the two piles are exactly the sin and cos series.</p>
   </div>
 
   <p><strong>The money demo: why log-softmax, not probabilities.</strong> A language model writes one token at a time, and the probability of a whole sentence is every token's probability multiplied together. Each one is small. Multiply enough small numbers and the computer surrenders: the product rounds to exactly zero, and training dies on the spot. Logs fix it, because adding logs is the same as multiplying the originals, and addition never underflows. Slide N up and watch the left column die while the right column cruises.</p>
@@ -679,6 +718,96 @@ $("ld-rungs").addEventListener("click", function(e){
   if (b) ldRender(+b.getAttribute("data-r"));
 });
 ldRender(0);
+
+/* ---------- 0e2. taylor series: fake the function ---------- */
+var tsF = "sin", tsN = 6;
+var TS_F = {
+  sin: { name: "sin x",
+    formula: "$\\sin x = x - \\frac{x^3}{3!} + \\frac{x^5}{5!} - \\cdots$",
+    y0: -1.4, y1: 1.4,
+    f: function(x){ return Math.sin(x); },
+    p: function(x, n){ var s = 0, t = x; for (var k = 0; k < n; k++){ s += t; t = -t * x * x / ((2*k+2)*(2*k+3)); } return s; } },
+  cos: { name: "cos x",
+    formula: "$\\cos x = 1 - \\frac{x^2}{2!} + \\frac{x^4}{4!} - \\cdots$",
+    y0: -1.4, y1: 1.4,
+    f: function(x){ return Math.cos(x); },
+    p: function(x, n){ var s = 0, t = 1; for (var k = 0; k < n; k++){ s += t; t = -t * x * x / ((2*k+1)*(2*k+2)); } return s; } },
+  exp: { name: "e^x",
+    formula: "$e^x = 1 + x + \\frac{x^2}{2!} + \\frac{x^3}{3!} + \\cdots$",
+    y0: -3, y1: 15,
+    f: function(x){ return Math.exp(x); },
+    p: function(x, n){ var s = 0, t = 1; for (var k = 0; k < n; k++){ s += t; t = t * x / (k+1); } return s; } }
+};
+var TS_W = 360, TS_H = 220, TS_PX0 = 16, TS_PX1 = 344, TS_PY0 = 12, TS_PY1 = 206;
+function tsPx(x){ return TS_PX0 + (x + 6) / 12 * (TS_PX1 - TS_PX0); }
+function tsPy(y, y0, y1){ return TS_PY1 - (y - y0) / (y1 - y0) * (TS_PY1 - TS_PY0); }
+function tsPath(fn, y0, y1){
+  var d = "", N = 160, x, y;
+  for (var i = 0; i <= N; i++){
+    x = -6 + 12 * i / N; y = fn(x);
+    d += (i === 0 ? "M" : "L") + tsPx(x).toFixed(1) + " " + tsPy(y, y0, y1).toFixed(1);
+  }
+  return d;
+}
+function tsMaxErr(F, n, xa, xb){
+  var m = 0, N = 60, x, e;
+  for (var i = 0; i <= N; i++){
+    x = xa + (xb - xa) * i / N;
+    e = Math.abs(F.p(x, n) - F.f(x));
+    if (e > m) m = e;
+  }
+  return m;
+}
+function tsFmt(e){
+  if (!(e >= 0)) return "?";
+  if (e < 5e-10) return "~0";
+  if (e >= 10000) return e.toExponential(1);
+  if (e >= 100) return String(Math.round(e));
+  if (e >= 1) return e.toFixed(1);
+  return e.toPrecision(2);
+}
+function tsFormula(){
+  var el = $("ts-formula");
+  el.innerHTML = TS_F[tsF].formula;
+  if (window.renderMathInElement){
+    try { renderMathInElement(el, { delimiters: [{left:"$$",right:"$$",display:true},{left:"$",right:"$",display:false}], throwOnError:false, ignoredClasses:["nokatex"] }); } catch(e){}
+  }
+}
+function tsRender(){
+  var F = TS_F[tsF], y0 = F.y0, y1 = F.y1, s = "", i, x;
+  s += '<defs><clipPath id="ts-clip"><rect x="' + TS_PX0 + '" y="' + TS_PY0 + '" width="' + (TS_PX1-TS_PX0) + '" height="' + (TS_PY1-TS_PY0) + '"/></clipPath></defs>';
+  if (y0 < 0 && y1 > 0)
+    s += '<line x1="' + TS_PX0 + '" y1="' + tsPy(0,y0,y1).toFixed(1) + '" x2="' + TS_PX1 + '" y2="' + tsPy(0,y0,y1).toFixed(1) + '" stroke="rgba(43,43,43,0.25)" stroke-width="1"/>';
+  s += '<line x1="' + tsPx(0).toFixed(1) + '" y1="' + TS_PY0 + '" x2="' + tsPx(0).toFixed(1) + '" y2="' + TS_PY1 + '" stroke="rgba(43,43,43,0.25)" stroke-width="1"/>';
+  for (i = 0; i < 3; i++){
+    x = [-6, 0, 6][i];
+    s += '<text x="' + tsPx(x).toFixed(1) + '" y="' + (TS_H - 4) + '" font-size="10" text-anchor="middle" fill="rgba(43,43,43,0.5)">' + x + '</text>';
+  }
+  s += '<g clip-path="url(#ts-clip)">';
+  s += '<path d="' + tsPath(F.f, y0, y1) + '" fill="none" stroke="#2b2b2b" stroke-width="2.5"/>';
+  s += '<path d="' + tsPath(function(xx){ return F.p(xx, tsN); }, y0, y1) + '" fill="none" stroke="#b3352b" stroke-width="2.5"/>';
+  s += '</g>';
+  $("ts-plot").innerHTML = s;
+  var near = tsMaxErr(F, tsN, -1, 1);
+  var far = Math.max(tsMaxErr(F, tsN, 4, 6), tsMaxErr(F, tsN, -6, -4));
+  $("ts-near").textContent = tsFmt(near);
+  $("ts-far").textContent = tsFmt(far);
+  $("ts-n-v").textContent = tsN;
+  $("ts-insight").textContent = "With " + tsN + " term" + (tsN === 1 ? "" : "s") + ", the fake's worst miss on " + F.name + " is " + tsFmt(near) + " near the center, but " + tsFmt(far) + " out past |x| = 4.";
+}
+$("ts-chips").addEventListener("click", function(e){
+  var b = e.target.closest(".chip");
+  if (!b) return;
+  tsF = b.getAttribute("data-f");
+  $("ts-chips").querySelectorAll(".chip").forEach(function(c){
+    var on = c === b;
+    c.classList.toggle("on", on);
+    c.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  tsFormula(); tsRender();
+});
+$("ts-n").addEventListener("input", function(){ tsN = +$("ts-n").value; tsRender(); });
+tsFormula(); tsRender();
 })();
 </script>
 

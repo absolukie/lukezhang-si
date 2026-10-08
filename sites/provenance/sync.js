@@ -1,4 +1,4 @@
-/* Curbside sync — PROTOTYPE.
+/* Curbside sync, PROTOTYPE.
  * Local-first sync to sprint-backend-proto (https://sync-proto.lukezhang.si).
  * Additive: the app works fully offline; sync never blocks the UI.
  * Prototype-grade auth: a random per-device key stored in localStorage.
@@ -37,7 +37,7 @@ function hashRecord(r){
 /* Map app state -> flat record list. Mirrors the backend's generic model:
  * records(owner_device, app_slug, collection, rec_key, value_json, updated_at) */
 /* Map app state -> flat record list. One `artworks` record per artwork.
- * Photo dataUrls are stripped — full-res condition photos stay local-only
+ * Photo dataUrls are stripped: full-res condition photos stay local-only
  * (they would blow the 100KB/record prototype cap). Metadata, pins,
  * custody chain, and climate logs all sync. node-testable: no DOM. */
 function stateToRecords(S){
@@ -87,7 +87,7 @@ function upsertIntoState(S, collection, key, value){
   for (i = 0; i < S.artworks.length; i++)
     if (S.artworks[i] && S.artworks[i].id === key){ ex = S.artworks[i]; break; }
   if (ex){
-    // preserve local full-res photo dataUrls — they never travel over sync
+    // preserve local full-res photo dataUrls; they never travel over sync
     var localPhotos = {};
     (ex.photos || []).forEach(function(p){ if (p && p.dataUrl) localPhotos[p.id] = p.dataUrl; });
     for (var k in value) ex[k] = value[k];
@@ -131,7 +131,7 @@ var status = "starting"; // starting|syncing|offline|pending|synced (see updateP
 try { meta = JSON.parse(localStorage.getItem(LS_META) || "{}") || {}; } catch(e){ meta = {}; }
 try { lastSync = +localStorage.getItem(LS_LAST) || 0; } catch(e){}
 /* Outbox durability: the acknowledged baseline survives reloads. Never snapshot
- * the live state as acknowledged here — anything differing from the baseline is
+ * the live state as acknowledged here; anything differing from the baseline is
  * unpushed work that must stay visible in the pill and go up on the next push. */
 try { lastPushed = JSON.parse(localStorage.getItem(LS_BASE) || "{}") || {}; } catch(e){ lastPushed = {}; }
 function saveMeta(){ try{ localStorage.setItem(LS_META, JSON.stringify(meta)); }catch(e){} }
@@ -159,7 +159,7 @@ function escHtml(s){
  * "Synced" only when nothing is pending and nothing is in flight;
  * "Syncing..." while a push/pull is in flight;
  * "Offline" when the network is down;
- * "Not synced — N changes pending" whenever work is unacknowledged. */
+ * "Not synced: N changes pending" whenever work is unacknowledged. */
 /* Lists oversized (device-only) records inside the settings panel. */
 function renderBigWarn(){
   var host = document.querySelector("#syncBigWarn");
@@ -170,7 +170,7 @@ function renderBigWarn(){
     '<div class="syncbig"><strong>Too large to back up (' + keys.length + '):</strong>' +
     '<ul>' + keys.map(function(mk){
       var kb = Math.round((oversized[mk].bytes || 0) / 1024);
-      return '<li>' + escHtml(mk) + ' \u2014 ' + kb +
+      return '<li>' + escHtml(mk) + ', ' + kb +
         ' KB (100 KB cap). Saved on this device only.</li>';
     }).join("") + '</ul></div>';
 }
@@ -179,7 +179,7 @@ function renderBigWarn(){
  * "Synced" only when nothing is pending, nothing oversized, and nothing in flight;
  * "Syncing..." while a push/pull is in flight;
  * "Offline" when the network is down;
- * "Not synced — N changes pending" whenever sendable work is unacknowledged;
+ * "Not synced: N changes pending" whenever sendable work is unacknowledged;
  * "Sync limited" when everything sendable is synced but oversized records are
  * device-only (they are surfaced, never marked acknowledged). */
 function updatePill(){
@@ -188,8 +188,8 @@ function updatePill(){
   try { big = Object.keys(oversized).length; } catch(e){ big = 0; }
   if (inflight > 0){ s = "syncing"; label = "Syncing..."; cls = "warn"; }
   else if (typeof navigator !== "undefined" && navigator.onLine === false){ s = "offline"; label = "Offline"; cls = ""; }
-  else if (n > 0){ s = "pending"; label = "Not synced \u2014 " + n + " change" + (n === 1 ? "" : "s") + " pending"; cls = "crit"; }
-  else if (big > 0){ s = "limited"; label = "Sync limited \u2014 " + big + " too large"; cls = "warn"; }
+  else if (n > 0){ s = "pending"; label = "Not synced: " + n + " change" + (n === 1 ? "" : "s") + " pending"; cls = "crit"; }
+  else if (big > 0){ s = "limited"; label = "Sync limited: " + big + " too large"; cls = "warn"; }
   else { s = "synced"; label = "Synced"; cls = "ok"; }
   status = s;
   var el = document.querySelector("#syncStatus");
@@ -292,7 +292,7 @@ function diffOut(){
 
 /* Push locally-changed records. Diffed against the persisted lastPushed
  * baseline; deletions become tombstones automatically. Idempotent by key;
- * safe to retry. The baseline only advances on success — a failed push keeps
+ * safe to retry. The baseline only advances on success; a failed push keeps
  * the work visible in the pill instead of claiming "Synced". */
 async function pushDirty(){
   if (!deviceKey || applyingRemote){ updatePill(); return; }
@@ -318,7 +318,7 @@ async function pushDirty(){
 /* Pull remote changes since lastSync; apply newer-wins; re-render. */
 /* Pull remote changes since lastSync; apply newer-wins; re-render.
  * Applied records merge into the persisted baseline WITHOUT snapshotting the
- * whole state — local-only work stays unacknowledged and keeps its pill. */
+ * whole state; local-only work stays unacknowledged and keeps its pill. */
 async function pull(){
   if (!deviceKey || applyingRemote) return;
   inflight++; updatePill();
@@ -376,7 +376,7 @@ function renderSettingsUI(){
     '<div class="set-row"><span>Status</span><span id="syncStatus" class="pill">…</span></div>' +
     '<p style="font-size:12px;color:#64748b;margin:8px 0 0;line-height:1.5">Prototype backup cap: each record may be up to 100 KB. Larger records stay on this device only and are listed below.</p>' +
     '<div id="syncBigWarn"></div>' +
-    '<p class="muted" style="font-size:12px">Same key on two devices = same data. ' +
+    '<p class="muted" style="font-size:12px">Same key on two devices = same records. Photo originals stay on the capturing device. ' +
     'Anyone with the key can read your records.</p>' +
     '<div class="set-row"><span>Device key</span><button class="link-btn" id="syncCopy">Copy</button></div>' +
     '<label>Use a key from another device<input id="syncPaste" type="text" placeholder="paste 64-char key" maxlength="64" style="font-size:12px"></label>' +

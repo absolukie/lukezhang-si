@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>ABATE — Asbestos Abatement Compliance Dossier</title>
-<meta name="description" content="Compliance-dossier software for asbestos abatement contractors. Daily logs, air monitoring, waste manifests, clearance certificates — assembled into one audit-proof file.">
+<title>ABATE: Asbestos Abatement Compliance Dossier</title>
+<meta name="description" content="Compliance-dossier software for asbestos abatement contractors. Daily logs, air monitoring, waste manifests, clearance certificates, assembled into one audit-proof file.">
 <style>
 :root{
   --bg:#141414; --bg2:#1d1d1d; --bg3:#262626; --line:#333;
@@ -154,9 +154,16 @@ footer.app{padding:18px 14px 110px; color:var(--dim); font-size:12px; text-align
   .print-only{display:block !important;}
   body{background:#fff; color:#000; font-size:12px;}
   #app{max-width:100%;}
-  main{padding:0;}
+  main{padding:44px 0 0;}
   .card,.proj{background:#fff; border:1px solid #999; color:#000; break-inside:avoid;}
   .muted,.dim,.kv .k{color:#444;}
+  .print-head{position:fixed; top:0; left:0; right:0; background:#fff; border-bottom:2px solid #000;
+    padding:8px 12px; font-size:11px;}
+  .print-section{break-before:page;}
+  table.ptab{width:100%; border-collapse:collapse; margin-top:8px;}
+  table.ptab th,table.ptab td{border:1px solid #999; padding:6px 8px; font-size:12px; text-align:left;}
+  .pthumbs{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:8px;}
+  .pthumbs img{width:100%; border:1px solid #999; display:block;}
 }
 </style>
 </head>
@@ -180,7 +187,7 @@ footer.app{padding:18px 14px 110px; color:var(--dim); font-size:12px; text-align
   <div class="hazard"></div>
   <main id="main"></main>
   <footer class="app">
-    <div class="stencil" style="color:var(--orange); font-size:13px; margin-bottom:6px;">Retain exposure &amp; medical records 30 years — OSHA 29 CFR 1926.1101</div>
+    <div class="stencil" style="color:var(--orange); font-size:13px; margin-bottom:6px;">Retain exposure &amp; medical records 30 years: OSHA 29 CFR 1926.1101</div>
     <div>ABATE prototype. Not legal or compliance advice. Verify all requirements with your accredited program.</div>
   </footer>
 </div>
@@ -193,13 +200,18 @@ const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO=()=>new Date().toISOString().slice(0,10);
-const fmtD=iso=>{ if(!iso) return "—"; const d=new Date(iso+"T12:00:00"); return d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}); };
+const fmtD=iso=>{ if(!iso) return "–"; const d=new Date(iso+"T12:00:00"); return d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}); };
 const fmtDT=ts=>new Date(ts).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
 const daysBetween=(a,b)=>Math.round((new Date(b+"T12:00:00")-new Date(a+"T12:00:00"))/864e5);
 const store={
+  loadRaw(){ try{ return localStorage.getItem("abate.v1"); }catch(e){ return null; } },
   load(){ try{ return JSON.parse(localStorage.getItem("abate.v1"))||null; }catch(e){ return null; } },
-  save(d){ localStorage.setItem("abate.v1", JSON.stringify(d)); }
+  /* Returns false instead of throwing when the device is out of space. */
+  save(d){ try{ localStorage.setItem("abate.v1", JSON.stringify(d)); return true; }catch(e){ return false; } }
 };
+/* Quota-safe save state: once a save fails, the app keeps rendering but no
+ * further save is attempted until the user taps Retry on the visible banner. */
+let saveFailed=false;
 </script>
 <script>
 "use strict";
@@ -220,7 +232,7 @@ function seedPhoto(label, hue){
 function seed(){
   const t=Date.now();
   const demo={
-    id:"demo1", name:"Jefferson Elementary — Gym Ceiling Tile Removal",
+    id:"demo1", synthetic:true, name:"Jefferson Elementary: Gym Ceiling Tile Removal",
     address:"4120 W Jefferson St, Phoenix, AZ 85009", owner:"Roosevelt School District",
     ownerPhone:"(602) 555-0148", contractNo:"RSD-2026-118",
     neshapNotified:true, neshapDate:"2026-09-28",
@@ -238,7 +250,7 @@ function seed(){
        negAir:"-0.028", notes:"Chemical mastic remover applied per spec. Final HEPA pass on deck.", createdAt:t-2*864e5}
     ],
     airSamples:[
-      {id:uid(), date:"2026-10-02", location:"Inside containment — gym center", type:"area",
+      {id:uid(), date:"2026-10-02", location:"Inside containment, gym center", type:"area",
        result:0.042, basis:"8hr", pump:"SKC-03", pass:true, createdAt:t-5*864e5},
       {id:uid(), date:"2026-10-02", location:"D. Okafor breathing zone", type:"personal",
        result:0.018, basis:"8hr", pump:"SKC-07", pass:true, createdAt:t-5*864e5},
@@ -255,7 +267,7 @@ function seed(){
     ],
     photos:(()=>{ const sp=(l,h)=>{ const u=seedPhoto(l,h); return {id:uid(),dataUrl:u,thumb:u}; };
       return [
-      Object.assign(sp("CONTAINMENT",28),{caption:"Containment entry — double flap", category:"Containment", takenAt:new Date("2026-10-01T08:12:00").getTime()}),
+      Object.assign(sp("CONTAINMENT",28),{caption:"Containment entry, double flap", category:"Containment", takenAt:new Date("2026-10-01T08:12:00").getTime()}),
       Object.assign(sp("NEG AIR",210),{caption:"Neg-air unit gauge -0.024 in w.g.", category:"Containment", takenAt:new Date("2026-10-01T08:15:00").getTime()}),
       Object.assign(sp("REMOVAL",120),{caption:"Tile removal in progress, wet methods", category:"Removal", takenAt:new Date("2026-10-02T10:40:00").getTime()}),
       Object.assign(sp("WASTE",0),{caption:"Double-bagged labeled waste staged", category:"Waste", takenAt:new Date("2026-10-02T14:05:00").getTime()})
@@ -267,9 +279,56 @@ function seed(){
   return { projects:[demo], archived:[] };
 }
 /* ============ state ============ */
-let DB = store.load() || seed();
+/* Seed hygiene: the demo is labeled synthetic at creation. Seeding happens only
+ * on a device that has never had a database (raw key absent). Corrupt data is
+ * never overwritten with a fresh seed; it loads as an empty dossier instead.
+ * Existing installs get the synthetic flag via migration on demo1. */
+function loadDb(){
+  const raw=store.loadRaw();
+  if(raw===null){ const db=seed(); store.save(db); return db; }
+  try{ const db=JSON.parse(raw);
+    if(db&&Array.isArray(db.projects)){
+      let dirty=false;
+      db.projects.forEach(p=>{ if(p.id==="demo1"&&!p.synthetic){ p.synthetic=true; dirty=true; } });
+      if(dirty) store.save(db);
+      return db;
+    }
+  }catch(e){}
+  return {projects:[],archived:[]};
+}
+let DB = loadDb();
 let view = { name:"dash", projectId:null, tab:"overview" };
-function persist(){ store.save(DB); try{ if(window.__abateSync) window.__abateSync.onSave(); }catch(e){} }
+function persist(){
+  if(saveFailed) return; /* blocked behind the visible retry banner */
+  const ok=store.save(DB);
+  if(!ok&&!saveFailed){ saveFailed=true; toast("Storage full: records are NOT saving."); }
+  try{ if(window.__abateSync) window.__abateSync.onSave(); }catch(e){}
+}
+/* Records that are soft-deleted stay in the store as tombstones; this is the
+ * only filter the list renderers and the scoring use. */
+const live=a=>(a||[]).filter(x=>!x.deleted);
+/* Crew roster: name + credential pairs remembered per project, kept in their
+ * own localStorage key (not synced records), used to pre-fill daily logs. */
+const rosterStore={
+  load(){ try{ return JSON.parse(localStorage.getItem("abate.roster.v1"))||{}; }catch(e){ return {}; } },
+  save(r){ try{ localStorage.setItem("abate.roster.v1", JSON.stringify(r)); }catch(e){} }
+};
+function getRoster(pid){ return rosterStore.load()[pid]||[]; }
+function addToRoster(pid, crew){
+  const r=rosterStore.load(), cur=r[pid]||[];
+  (crew||[]).forEach(c=>{ if(!c||!c.name) return;
+    const i=cur.findIndex(x=>x.name.toLowerCase()===c.name.toLowerCase());
+    if(i>=0){ if(c.cred) cur[i].cred=c.cred; } else cur.push({name:c.name, cred:c.cred||""});
+  });
+  r[pid]=cur; rosterStore.save(r);
+}
+function telHref(phone){ const d=String(phone||"").replace(/\D/g,""); return d?"tel:"+d:""; }
+/* Append-only record-event log on the project. kind: signoff|revocation|
+ * correction|deletion|manifest|info. The Dossier tab renders these in order. */
+function logEvent(p, kind, cls, what){
+  p.events=p.events||[];
+  p.events.push({t:Date.now(), kind:kind, cls:cls||"", what:what});
+}
 
 /* Sync bridge (sync.js). Local-first: app works fully offline; sync is debounced and never blocks UI. */
 window.__abate = {
@@ -286,13 +345,14 @@ function completeness(p){
   const parts=[];
   const setup = (p.neshapNotified?0.5:0) + (p.competentPerson?0.5:0);
   parts.push({label:"Regulatory setup (NESHAP notice + competent person)", pct:setup*15, max:15});
-  parts.push({label:"Daily logs ("+p.dailyLogs.length+")", pct:Math.min(p.dailyLogs.length,3)/3*10, max:10});
-  const hasArea=p.airSamples.some(s=>s.type!=="clearance"), hasClear=p.airSamples.some(s=>s.type==="clearance");
+  const logs=live(p.dailyLogs), samples=live(p.airSamples), manis=live(p.manifests), photos=live(p.photos);
+  parts.push({label:"Daily logs ("+logs.length+")", pct:Math.min(logs.length,3)/3*10, max:10});
+  const hasArea=samples.some(s=>s.type!=="clearance"), hasClear=samples.some(s=>s.type==="clearance");
   parts.push({label:"Air monitoring (work-area + clearance samples)", pct:((hasArea?0.6:0)+(hasClear?0.4:0))*15, max:15});
-  const m=p.manifests, allSigned=m.length>0&&m.every(x=>x.signedCopyReceived);
+  const m=manis, allSigned=m.length>0&&m.every(x=>x.signedCopyReceived);
   parts.push({label:"Waste manifests ("+m.length+", "+(allSigned?"all signed":"awaiting signatures")+")",
     pct:(m.length?0.5:0)*20 + (allSigned?0.5:0)*20, max:20});
-  parts.push({label:"Photo documentation ("+p.photos.length+")", pct:Math.min(p.photos.length,6)/6*10, max:10});
+  parts.push({label:"Photo documentation ("+photos.length+")", pct:Math.min(photos.length,6)/6*10, max:10});
   const cl=p.clearance, keys=["visual","airClear","wasteShipped","manifestsBack","neshapFiled","areaReleased"];
   const done=keys.filter(k=>cl[k]).length;
   parts.push({label:"Clearance certificate ("+done+"/6)", pct:done/6*30, max:30});
@@ -301,15 +361,16 @@ function completeness(p){
 }
 function missingItems(p){
   const out=[];
+  const logs=live(p.dailyLogs), samples=live(p.airSamples), manis=live(p.manifests), photos=live(p.photos);
   if(!p.neshapNotified) out.push("File the NESHAP notification (Regulatory setup tab)");
   if(!p.competentPerson) out.push("Name the OSHA competent person for this job");
-  if(p.dailyLogs.length<3) out.push("Log "+(3-p.dailyLogs.length)+" more daily shift"+(3-p.dailyLogs.length===1?"":"s")+" (Daily Log tab)");
-  if(!p.airSamples.some(s=>s.type!=="clearance")) out.push("Log at least one work-area or personal air sample");
-  if(!p.airSamples.some(s=>s.type==="clearance")) out.push("Log the aggressive clearance sample (≤ 0.01 f/cc)");
-  const pend=p.manifests.filter(m=>!m.signedCopyReceived);
-  if(!p.manifests.length) out.push("Record each waste shipment as it leaves the site");
+  if(logs.length<3) out.push("Log "+(3-logs.length)+" more daily shift"+(3-logs.length===1?"":"s")+" (Daily Log tab)");
+  if(!samples.some(s=>s.type!=="clearance")) out.push("Log at least one work-area or personal air sample");
+  if(!samples.some(s=>s.type==="clearance")) out.push("Log the aggressive clearance sample (0.01 f/cc or below)");
+  const pend=manis.filter(m=>!m.signedCopyReceived);
+  if(!manis.length) out.push("Record each waste shipment as it leaves the site");
   else if(pend.length) out.push("Chase "+pend.length+" signed manifest cop"+(pend.length===1?"y":"ies")+" back from the disposal site");
-  if(p.photos.length<6) out.push("Add "+(6-p.photos.length)+" more timestamped site photos");
+  if(photos.length<6) out.push("Add "+(6-photos.length)+" more timestamped site photos");
   const cl=p.clearance, keys=[["visual","Visual inspection sign-off"],["airClear","Clearance air sampling sign-off"],["wasteShipped","Waste shipped sign-off"],["manifestsBack","Manifests-back sign-off"],["neshapFiled","Notifications filed sign-off"],["areaReleased","Area released sign-off"]];
   keys.forEach(k=>{ if(!cl[k[0]]) out.push(k[1]+" (Clearance tab)"); });
   return out;
@@ -321,12 +382,12 @@ function dossierVerdict(total){
 }
 function overdueManifests(p){
   const t=todayISO();
-  return p.manifests.filter(m=>!m.signedCopyReceived && daysBetween(m.dateShipped,t)>35);
+  return live(p.manifests).filter(m=>!m.signedCopyReceived && daysBetween(m.dateShipped,t)>35);
 }
 function manifestCountdown(m){
   const t=todayISO(), left=35-daysBetween(m.dateShipped,t);
   if(m.signedCopyReceived) return {cls:"", txt:"Signed copy received "+fmtD(m.signedDate)};
-  if(left<0) return {cls:"over", txt:Math.abs(left)+" days OVERDUE — contact transporter/disposal site (NESHAP 35-day rule)"};
+  if(left<0) return {cls:"over", txt:Math.abs(left)+" days OVERDUE. Contact the transporter/disposal site (NESHAP 35-day rule)"};
   if(left<=7) return {cls:"soon", txt:left+" days left to receive signed copy"};
   return {cls:"", txt:left+" days left to receive signed copy"};
 }
@@ -356,24 +417,55 @@ function ring(pct,size){
 }
 function render(){
   const main=$("#main"), fab=$("#fab"), back=$("#backBtn");
-  if(view.name==="dash"){ back.style.display="none"; fab.style.display="flex"; $("#headRight").textContent=DB.projects.length+" projects"; renderDash(main); }
-  else{ back.style.display="inline-flex"; fab.style.display="flex"; const p=proj(); $("#headRight").textContent=p?completeness(p).total+"% dossier":""; renderProject(main,p); }
+  /* Quota banner: persistent while saves are blocked, with a visible retry. */
+  const qb=saveFailed?'<div class="alert" id="quotaBanner" style="border-color:var(--amber); background:#2a1e05; color:#ffe1ae">'+
+    '<b style="color:var(--amber)">Storage full.</b> Records are NOT saving right now. Free up device space, then retry. Export your data first so nothing is lost.'+
+    '<div class="row" style="margin-top:10px"><button class="btn sm" id="quotaRetry">Retry save</button>'+
+    '<button class="btn dark sm" id="quotaExport">Export raw data</button></div></div>':"";
+  if(view.name==="dash"){ back.style.display="none"; fab.style.display="flex"; $("#headRight").innerHTML=DB.projects.length+" projects"; renderDash(main); }
+  else{ back.style.display="inline-flex"; fab.style.display="flex"; const p=proj(); $("#headRight").innerHTML=p?('<span>'+completeness(p).total+'% dossier</span> <span class="sync-pill" id="headSync">…</span>'):""; renderProject(main,p); }
+  try{ if(window.__abateSyncPill) window.__abateSyncPill(); }catch(e){}
+  if(qb){ main.insertAdjacentHTML("afterbegin",qb);
+    const rt=$("#quotaRetry"), ex=$("#quotaExport");
+    if(rt) rt.onclick=()=>{ if(store.save(DB)){ saveFailed=false; save(); toast("Saving again"); } else toast("Still full. Free space or export, then retry."); };
+    if(ex) ex.onclick=()=>{ download("abate-raw-backup-"+todayISO()+".json", JSON.stringify(DB,null,2)); };
+  }
   window.scrollTo(0,0);
 }
 function renderDash(main){
   let alerts="";
   DB.projects.forEach(p=>{
     const od=overdueManifests(p);
-    if(od.length) alerts+='<div class="alert"><b>'+od.length+' overdue manifest'+(od.length>1?"s":"")+'</b> — '+esc(p.name)+': signed copies past the 35-day NESHAP window.</div>';
+    if(od.length) alerts+='<div class="alert"><b>'+od.length+' overdue manifest'+(od.length>1?"s":"")+'</b> in '+esc(p.name)+': signed copies past the 35-day NESHAP window.</div>';
   });
+  /* Chase list: unsigned manifests across all open projects, most urgent first. */
+  const t=todayISO();
+  const chase=[];
+  DB.projects.filter(p=>p.status!=="closed").forEach(p=>{
+    live(p.manifests).filter(m=>!m.signedCopyReceived).forEach(m=>{
+      chase.push({p:p, m:m, left:35-daysBetween(m.dateShipped,t)});
+    });
+  });
+  chase.sort((a,b)=>a.left-b.left);
+  const chaseCard=chase.length?'<div class="card"><h3 class="stencil" style="color:var(--orange)">Manifest chase list</h3>'+
+    '<div class="small dim" style="margin-bottom:8px">Unsigned manifests, most urgent first. Tap a number to call.</div>'+
+    chase.map(c=>{
+      const state=c.left<0?'<span class="countdown over">'+Math.abs(c.left)+' days OVERDUE</span>':c.left<=7?'<span class="countdown soon">'+c.left+' days left</span>':'<span class="countdown">'+c.left+' days left</span>';
+      const t1=telHref(c.m.transporterPhone), t2=telHref(c.m.disposalPhone);
+      return '<div class="kv"><div class="k"><b class="mono">'+esc(c.m.manifestNo)+'</b><br><span class="small">'+esc(c.p.name)+'</span><br>'+state+'</div>'+
+        '<div style="text-align:right; font-size:13px">'+
+        (t1?'<div><a href="'+t1+'" style="color:var(--orange)">'+esc(c.m.transporterPhone)+'</a><div class="dim small">'+esc(c.m.transporter)+'</div></div>':"")+
+        (t2?'<div style="margin-top:6px"><a href="'+t2+'" style="color:var(--orange)">'+esc(c.m.disposalPhone)+'</a><div class="dim small">'+esc(c.m.disposalSite)+'</div></div>':"")+
+        '</div></div>';
+    }).join("")+'</div>':"";
   main.innerHTML=
     '<div class="disclaimer"><strong>Prototype.</strong> Abate helps assemble abatement records. It is not legal or compliance advice. Confirm every requirement with your accredited AHERA / OSHA program.</div>'+
-    alerts+
+    alerts+chaseCard+
     '<h2 class="stencil" style="font-size:15px; color:var(--muted); margin:4px 0 12px;">Active dossiers</h2>'+
     '<input id="dashSearch" placeholder="Search projects or addresses…" value="'+esc(view.q||"")+'" style="margin-bottom:12px" autocomplete="off">'+
     '<div id="projList"></div>'+
     '<div class="card" style="margin-top:16px"><h3 class="stencil" style="color:var(--orange)">Why this exists</h3>'+
-    '<div class="small muted">Asbestos jobs live or die on paper. OSHA keeps your air-monitoring and medical records for <b>30 years</b>. NESHAP wants every waste shipment tracked with a signed copy back inside <b>35 days</b>. One missing manifest can stall a property sale or trigger an audit. Abate assembles the whole file as the work happens — so the dossier is never the thing you scramble to rebuild.</div></div>';
+    '<div class="small muted">Asbestos jobs live or die on paper. OSHA keeps your air-monitoring and medical records for <b>30 years</b>. NESHAP wants every waste shipment tracked with a signed copy back inside <b>35 days</b>. One missing manifest can stall a property sale or trigger an audit. Abate assembles the whole file as the work happens, so the dossier is never the thing you scramble to rebuild.</div></div>';
   const paint=()=>{
     const q=(view.q||"").toLowerCase();
     const list=DB.projects.filter(p=>(p.name+" "+(p.address||"")).toLowerCase().includes(q));
@@ -381,13 +473,20 @@ function renderDash(main){
       const c=completeness(p);
       const st=p.status==="closed"?'<span class="pill closed">Closed</span>':p.status==="clearance"?'<span class="pill clear">Clearance</span>':'<span class="pill active">Active</span>';
       return '<div class="proj" data-open="'+p.id+'">'+
+        (p.synthetic?'<div class="row" style="margin-bottom:10px"><span class="badge pend">Synthetic demo data</span><div class="grow"></div><button class="btn danger sm" data-del-demo="'+p.id+'">Delete demo project</button></div>':"")+
         '<div class="row"><div class="grow"><p class="t">'+esc(p.name)+'</p><div class="a">'+esc(p.address)+'</div></div>'+st+'</div>'+
         '<div class="row" style="margin-top:6px"><div class="meter grow '+(c.total>=90?"green":c.total<40?"red":"")+'"><i style="width:'+c.total+'%"></i></div>'+
         '<div class="small mono" style="min-width:44px; text-align:right">'+c.total+'%</div></div>'+
-        '<div class="small dim" style="margin-top:6px">Dossier completeness · '+p.dailyLogs.length+' daily logs · '+p.airSamples.length+' air samples · '+p.manifests.length+' manifests</div>'+
+        '<div class="small dim" style="margin-top:6px">Dossier completeness · '+live(p.dailyLogs).length+' daily logs · '+live(p.airSamples).length+' air samples · '+live(p.manifests).length+' manifests</div>'+
       '</div>';
     }).join("")||'<div class="empty">No projects match.</div>';
     main.querySelectorAll("[data-open]").forEach(el=>el.onclick=()=>{ view={name:"project",projectId:el.dataset.open,tab:"overview"}; save(); });
+    main.querySelectorAll("[data-del-demo]").forEach(b=>b.onclick=async e=>{
+      e.stopPropagation();
+      if(await openConfirm("Delete demo project?","This removes the synthetic Jefferson Elementary demo and all of its sample records. Your real projects are untouched.","Delete demo",true)){
+        DB.projects=DB.projects.filter(x=>x.id!==b.dataset.delDemo); save(); toast("Demo project deleted");
+      }
+    });
   };
   paint();
   $("#dashSearch").oninput=e=>{ view.q=e.target.value; paint(); };
@@ -405,7 +504,8 @@ function renderProject(main,p){
   else if(view.tab==="photos") body=vPhotos(p);
   else if(view.tab==="clearance") body=vClearance(p);
   else body=vDossier(p,c);
-  main.innerHTML='<div class="card"><div class="row"><div class="grow"><h3 class="stencil" style="font-size:17px">'+esc(p.name)+'</h3>'+
+  main.innerHTML='<div class="card"><div class="row"><div class="grow"><h3 class="stencil" style="font-size:17px">'+esc(p.name)+
+    (p.synthetic?' <span class="badge pend">Synthetic demo data</span>':"")+'</h3>'+
     '<div class="small muted">'+esc(p.address)+'</div></div><div class="ringwrap">'+ring(c.total,64)+
     '<div><div class="ringtxt">'+c.total+'<span class="small">%</span></div><div class="small dim">dossier</div></div></div></div></div>'+
     '<div class="tabs">'+tabs+'</div><div style="height:12px"></div>'+body;
@@ -415,35 +515,63 @@ function renderProject(main,p){
   if(rn){ const target=c.total; let n=0; const step=Math.max(1,Math.round(target/30));
     const tick=()=>{ n=Math.min(target,n+step); rn.textContent=n; if(n<target) requestAnimationFrame(tick); };
     requestAnimationFrame(tick); }
-  maybeCoach(p);
+  showCoach("abate.coach1", COACH_STEPS);
+  if(view.tab==="air") showCoach("abate.coachAir", COACH_AIR);
+  if(view.tab==="waste") showCoach("abate.coachWaste", COACH_WASTE);
+  /* The Audit Moment: first time the dossier hits 100%, celebrate it, then
+   * offer the one-tap print of the assembled file. */
+  if(view.tab==="dossier" && c.total>=100 && !p.auditReadySeen){
+    p.auditReadySeen=true; persist();
+    setTimeout(()=>auditMoment(p), 500);
+  }
 }
 const COACH_STEPS=[
   ["Your dossier score","This ring is the whole product. Every log, sample, manifest, and photo moves it. Auditors read the file this ring represents."],
   ["Log from the field","Daily Log, Air, Waste, Photos: each tab is one clipboard the crew already fills out. The foreman can do a shift log in under a minute."],
   ["Close with clearance","The Clearance tab is the legal finish line. Nothing closes until every sign-off is named and dated."]
 ];
-function maybeCoach(p){
-  if(!p || localStorage.getItem("abate.coach1")) return;
+const COACH_AIR=[
+  ["Pass or fail is computed","The limit follows the sample type and basis. The app decides the badge. Nobody can override it by hand."],
+  ["Corrections leave a trail","Fix a wrong reading with a correction, not an edit. The original stays in the record, with who changed it, when, and why."]
+];
+const COACH_WASTE=[
+  ["The 35-day clock","NESHAP gives you 35 days from shipment to get the signed copy back from the disposal site. The countdown on each manifest is the rule."],
+  ["One tap to chase","The dashboard chase list has every unsigned manifest with the transporter and disposal site numbers attached."]
+];
+function showCoach(key, steps){
+  if(!steps || !steps.length || localStorage.getItem(key)) return;
   let i=0;
   const paint=()=>{
     let el=document.getElementById("coach");
     if(!el){ el=document.createElement("div"); el.id="coach"; el.className="coach"; document.body.appendChild(el); }
-    el.innerHTML='<div class="dots">'+COACH_STEPS.map((_,k)=>'<i class="'+(k===i?"on":"")+'"></i>').join("")+'</div>'+
-      '<h3>'+esc(COACH_STEPS[i][0])+'</h3><p>'+esc(COACH_STEPS[i][1])+'</p>'+
-      '<div class="row"><button class="btn grow" id="coachNext">'+(i<COACH_STEPS.length-1?"Next":"Got it")+'</button>'+
+    el.innerHTML='<div class="dots">'+steps.map((_,k)=>'<i class="'+(k===i?"on":"")+'"></i>').join("")+'</div>'+
+      '<h3>'+esc(steps[i][0])+'</h3><p>'+esc(steps[i][1])+'</p>'+
+      '<div class="row"><button class="btn grow" id="coachNext">'+(i<steps.length-1?"Next":"Got it")+'</button>'+
       '<button class="btn dark" id="coachSkip">Skip</button></div>';
-    document.getElementById("coachNext").onclick=()=>{ i++; if(i>=COACH_STEPS.length){ done(); } else paint(); };
+    document.getElementById("coachNext").onclick=()=>{ i++; if(i>=steps.length){ done(); } else paint(); };
     document.getElementById("coachSkip").onclick=done;
   };
-  const done=()=>{ const el=document.getElementById("coach"); if(el) el.remove(); localStorage.setItem("abate.coach1","1"); };
+  const done=()=>{ const el=document.getElementById("coach"); if(el) el.remove(); try{ localStorage.setItem(key,"1"); }catch(e){} };
   setTimeout(paint,600);
+}
+/* The Audit Moment overlay: ring at 100%, verdict flipped, one tap to print. */
+function auditMoment(p){
+  openSheet('<div style="text-align:center; padding:14px 4px">'+
+    '<svg width="72" height="72" viewBox="0 0 72 72" style="margin-bottom:10px"><circle cx="36" cy="36" r="32" fill="none" stroke="var(--green)" stroke-width="5"/><path d="M22 37l10 10 18-20" fill="none" stroke="var(--green)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>'+
+    '<h2 class="stencil" style="color:var(--green); margin:0 0 6px">Audit-ready</h2>'+
+    '<p class="muted" style="margin:0 0 4px">The dossier is complete. Every log, sample, manifest, photo, and sign-off is in the file, in order.</p>'+
+    '<p class="small dim" style="margin:0 0 16px">'+esc(p.name)+'</p>'+
+    '<button class="btn block" id="amPrint">Print the dossier</button>'+
+    '<button class="btn dark block" id="amClose" style="margin-top:8px">Keep working</button></div>');
+  document.getElementById("amPrint").onclick=()=>{ closeSheet(); window.print(); };
+  document.getElementById("amClose").onclick=closeSheet;
 }
 function vOverview(p,c){
   const od=overdueManifests(p);
-  return (od.length?'<div class="alert"><b>'+od.length+' manifest'+(od.length>1?"s":"")+' overdue</b> — signed copies not received within 35 days of shipment. Contact the transporter and disposal site now.</div>':"")+
+  return (od.length?'<div class="alert"><b>'+od.length+' manifest'+(od.length>1?"s":"")+' overdue</b>: signed copies not received within 35 days of shipment. Contact the transporter and disposal site now.</div>':"")+
   '<div class="card"><h3 class="stencil" style="color:var(--orange)">Regulatory setup</h3>'+
-    kv("Building owner",esc(p.owner||"—"))+kv("Owner phone",esc(p.ownerPhone||"—"))+kv("Contract #",esc(p.contractNo||"—"))+
-    kv("NESHAP notified",p.neshapNotified?("Yes — "+fmtD(p.neshapDate)):'<span style="color:var(--red)">Not recorded</span>')+
+    kv("Building owner",esc(p.owner||"–"))+kv("Owner phone",esc(p.ownerPhone||"–"))+kv("Contract #",esc(p.contractNo||"–"))+
+    kv("NESHAP notified",p.neshapNotified?("Yes, "+fmtD(p.neshapDate)):'<span style="color:var(--red)">Not recorded</span>')+
     kv("Competent person",p.competentPerson?esc(p.competentPerson)+(p.competentLicense?" · "+esc(p.competentLicense):""):'<span style="color:var(--red)">Not recorded</span>')+
     kv("Work window",fmtD(p.startDate)+" → "+fmtD(p.estEndDate))+
     '<div style="margin-top:12px"><button class="btn dark sm" data-act="edit-project">Edit project details</button></div></div>'+
@@ -454,7 +582,7 @@ function vOverview(p,c){
 }
 function kv(k,v){ return '<div class="kv"><div class="k">'+esc(k)+'</div><div style="text-align:right">'+v+'</div></div>'; }
 function vDaily(p){
-  const items=[...p.dailyLogs].sort((a,b)=>b.date.localeCompare(a.date)).map(l=>
+  const items=live(p.dailyLogs).sort((a,b)=>b.date.localeCompare(a.date)).map(l=>
     '<div class="card"><div class="row"><div class="grow"><b>'+fmtD(l.date)+'</b> <span class="dim small">'+esc(l.start||"")+'–'+esc(l.end||"")+'</span></div>'+
     '<button class="btn dark sm" data-act="edit-log" data-id="'+l.id+'">Edit</button> '+
     '<button class="btn danger sm" data-act="del-log" data-id="'+l.id+'">Delete</button></div>'+
@@ -466,7 +594,7 @@ function vDaily(p){
     (items||'<div class="empty">No daily logs yet.<br>Foremen: log each shift from the site.</div>');
 }
 function vAir(p){
-  const ss=[...p.airSamples].sort((a,b)=>a.date.localeCompare(b.date)||a.createdAt-b.createdAt);  let spark="";
+  const ss=live(p.airSamples).sort((a,b)=>a.date.localeCompare(b.date)||a.createdAt-b.createdAt);  let spark="";
   if(ss.length>=2){
     const W=340,H=90,pad=8;
     const maxV=Math.max(0.12,...ss.map(s=>s.result));
@@ -481,21 +609,24 @@ function vAir(p){
       ss.map((s,i)=>{ const q=xy(i,s.result); return '<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="4" fill="'+(s.pass?"var(--green)":"var(--red)")+'"><title>'+esc(s.location)+': '+s.result+' f/cc</title></circle>'; }).join("")+
       '</svg><div class="small dim">Fiber concentration over time. Dashed line is the OSHA PEL. Green dots pass, red exceed.</div></div>';
   }
-  const items=[...p.airSamples].sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt-a.createdAt).map(s=>
+  const items=live(p.airSamples).sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt-a.createdAt).map(s=>
     '<div class="card"><div class="row"><div class="grow"><b>'+fmtD(s.date)+'</b><div class="small muted">'+esc(s.location)+'</div></div>'+
-    (s.pass?'<span class="badge pass">Pass</span>':'<span class="badge fail">Exceeds</span>')+'</div>'+
+    (s.pass?'<span class="badge pass">Pass</span>':'<span class="badge fail">Exceeds</span>')+
+    ((s.corrections&&s.corrections.length)?' <span class="badge info">Corrected</span>':"")+'</div>'+
     '<div class="kv"><div class="k">Result</div><div><b class="mono" style="font-size:18px">'+s.result+' f/cc</b></div></div>'+
     kv("Sample type",s.type==="personal"?"Personal (breathing zone)":s.type==="clearance"?"Clearance":"Work-area")+
     kv("Basis",(s.basis==="8hr"?"8-hr TWA (PEL 0.1 f/cc)":s.basis==="exc"?"30-min excursion (1.0 f/cc)":"Clearance (0.01 f/cc)"))+
-    kv("Pump",esc(s.pump||"—"))+
-    '<div class="row" style="margin-top:8px"><button class="btn dark sm" data-act="edit-air" data-id="'+s.id+'">Edit</button>'+
+    kv("Pump",esc(s.pump||"–"))+
+    ((s.corrections&&s.corrections.length)?'<div class="small" style="margin-top:8px; border-top:1px solid var(--line); padding-top:8px"><b style="color:var(--blue)">Correction history: original preserved</b>'+
+      s.corrections.map(c=>'<div class="small muted" style="margin-top:6px">'+esc(c.before.result)+' → <b>'+esc(c.after.result)+'</b> f/cc · '+esc(c.by)+' · '+fmtDT(c.at)+'<br>Reason: '+esc(c.reason)+'</div>').join("")+'</div>':"")+
+    '<div class="row" style="margin-top:8px"><button class="btn dark sm" data-act="edit-air" data-id="'+s.id+'">Correct</button>'+
     '<button class="btn danger sm" data-act="del-air" data-id="'+s.id+'">Delete</button></div></div>').join("");
-  return '<div class="disclaimer"><strong>Limits encoded:</strong> OSHA PEL 0.1 f/cc (8-hr TWA) · excursion 1.0 f/cc (30-min) · AHERA-style clearance 0.01 f/cc. Pass/fail is computed automatically — it cannot be overridden by hand.</div>'+
+  return '<div class="disclaimer"><strong>Limits encoded:</strong> OSHA PEL 0.1 f/cc (8-hr TWA) · excursion 1.0 f/cc (30-min) · AHERA-style clearance 0.01 f/cc. Pass/fail is computed automatically. It cannot be overridden by hand.</div>'+
     '<h2 class="stencil" style="font-size:15px; color:var(--muted); margin:4px 0 12px;">Air monitoring log</h2>'+spark+
     (items||'<div class="empty">No air samples logged yet.</div>');
 }
 function vWaste(p){
-  const items=p.manifests.map(m=>{ const cd=manifestCountdown(m);
+  const items=live(p.manifests).map(m=>{ const cd=manifestCountdown(m);
     return '<div class="card"><div class="row"><div class="grow"><b class="mono">'+esc(m.manifestNo)+'</b>'+
     '<div class="small muted">'+esc(m.qtyYd3)+' yd³ · shipped '+fmtD(m.dateShipped)+'</div></div>'+
     (m.signedCopyReceived?'<span class="badge pass">Signed</span>':'<span class="badge pend">Pending</span>')+'</div>'+
@@ -512,7 +643,7 @@ function vWaste(p){
 function vPhotos(p){
   const cats=["All","Containment","Removal","Waste","Decon","Clearance","Other"];
   const f=view.photoCat||"All";
-  const list=p.photos.filter(x=>f==="All"||x.category===f).sort((a,b)=>b.takenAt-a.takenAt);
+  const list=live(p.photos).filter(x=>f==="All"||x.category===f).sort((a,b)=>b.takenAt-a.takenAt);
   const chips=cats.map(c=>'<button class="tab'+(f===c?" on":"")+'" data-pcat="'+c+'">'+c+'</button>').join("");
   const grid=list.map(x=>'<div class="photo" data-photo="'+x.id+'"><img src="'+x.dataUrl+'" alt="'+esc(x.caption||"site photo")+'" loading="lazy">'+
     '<div class="ts">'+fmtDT(x.takenAt)+'</div><div class="cap">'+esc(x.caption||x.category)+'</div></div>').join("");
@@ -523,12 +654,15 @@ function vPhotos(p){
 }
 function vClearance(p){
   const cl=p.clearance;
-  const item=(key,label,sub)=>'<div class="card"><label class="check" style="margin:0; font-size:15px; text-transform:none; letter-spacing:0; color:var(--ink)">'+
+  const item=(key,label,sub)=>{
+    const hist=(cl[key+"History"]||[]).map(h=>'<div class="small dim" style="margin-top:4px">'+(h.action==="revoked"?"Revoked":"Signed")+': '+esc(h.by)+' · '+fmtD(h.date)+'</div>').join("");
+    return '<div class="card"><label class="check" style="margin:0; font-size:15px; text-transform:none; letter-spacing:0; color:var(--ink)">'+
     '<input type="checkbox" data-clear="'+key+'" '+(cl[key]?"checked":"")+' style="width:22px;height:22px"> <span><b>'+label+'</b><br><span class="small muted">'+sub+'</span></span></label>'+
-    (cl[key]&&cl[key+"By"]?'<div class="small dim" style="margin-top:6px">Signed: '+esc(cl[key+"By"])+' · '+fmtD(cl[key+"Date"])+'</div>':"")+'</div>';
+    (cl[key]&&cl[key+"By"]?'<div class="small dim" style="margin-top:6px">Signed: '+esc(cl[key+"By"])+' · '+fmtD(cl[key+"Date"])+'</div>':"")+hist+'</div>';
+  };
   return '<h2 class="stencil" style="font-size:15px; color:var(--muted); margin:4px 0 12px;">Clearance certificate checklist</h2>'+
     '<div class="small dim" style="margin-bottom:10px">The job cannot legally close until every item is evidenced. Each sign-off is stamped with who and when.</div>'+
-    item("visual","Visual inspection passed","No visible residue, dust, or debris in the work area — competent person walkthrough.")+
+    item("visual","Visual inspection passed","No visible residue, dust, or debris in the work area. Competent person walkthrough.")+
     item("airClear","Clearance air sampling passed","Aggressive sampling ≤ 0.01 f/cc. Log the samples under the Air tab.")+
     item("wasteShipped","All waste shipped off-site","Every load has a manifest number recorded.")+
     item("manifestsBack","All signed manifests received","35-day NESHAP loop closed on every shipment.")+
@@ -539,27 +673,46 @@ function vClearance(p){
 function vDossier(p,c){
   const miss=missingItems(p);
   const ev=[];
-  p.dailyLogs.forEach(l=>ev.push({t:new Date(l.date+"T12:00:00").getTime(), cls:"", when:fmtD(l.date), what:"Daily log — "+l.crew.length+" crew, "+l.activities.slice(0,3).join(", ")}));
-  p.airSamples.forEach(s=>ev.push({t:new Date(s.date+"T12:00:00").getTime()+1, cls:s.pass?"good":"warn", when:fmtD(s.date), what:"Air sample — "+s.location+": "+s.result+" f/cc ("+(s.pass?"PASS":"EXCEEDS")+")"}));
-  p.manifests.forEach(m=>ev.push({t:new Date(m.dateShipped+"T12:00:00").getTime()+2, cls:m.signedCopyReceived?"good":"warn", when:fmtD(m.dateShipped), what:"Waste manifest "+m.manifestNo+" — "+m.qtyYd3+" yd³ → "+m.disposalSite+(m.signedCopyReceived?" (signed copy back)":" (signature PENDING)")}));
-  p.photos.forEach(x=>ev.push({t:x.takenAt, cls:"", when:fmtDT(x.takenAt), what:"Photo — "+(x.caption||x.category)}));
+  live(p.dailyLogs).forEach(l=>ev.push({t:new Date(l.date+"T12:00:00").getTime(), cls:"", when:fmtD(l.date), what:"Daily log, "+l.crew.length+" crew, "+l.activities.slice(0,3).join(", ")}));
+  live(p.airSamples).forEach(s=>ev.push({t:new Date(s.date+"T12:00:00").getTime()+1, cls:s.pass?"good":"warn", when:fmtD(s.date), what:"Air sample, "+s.location+": "+s.result+" f/cc ("+(s.pass?"PASS":"EXCEEDS")+")"+((s.corrections&&s.corrections.length)?" [corrected]":"")}));
+  live(p.manifests).forEach(m=>ev.push({t:new Date(m.dateShipped+"T12:00:00").getTime()+2, cls:m.signedCopyReceived?"good":"warn", when:fmtD(m.dateShipped), what:"Waste manifest "+m.manifestNo+": "+m.qtyYd3+" yd³ → "+m.disposalSite+(m.signedCopyReceived?" (signed copy back)":" (signature PENDING)")}));
+  live(p.photos).forEach(x=>ev.push({t:x.takenAt, cls:"", when:fmtDT(x.takenAt), what:"Photo: "+(x.caption||x.category)}));
   (p.events||[]).forEach(e=>ev.push({t:e.t, cls:e.cls||"", when:fmtDT(e.t), what:e.what}));
   ev.sort((a,b)=>a.t-b.t);
-  const retainUntil=new Date(Math.max(...ev.map(e=>e.t),Date.now())+30*365.25*864e5).getFullYear();
-  const printHead='<div class="print-only"><h1 style="font-size:20px;margin:0 0 4px">ABATE — Abatement Compliance Dossier</h1>'+
-    '<div><b>'+esc(p.name)+'</b><br>'+esc(p.address)+'<br>Owner: '+esc(p.owner||"—")+' · Contract '+esc(p.contractNo||"—")+
+  const retainUntil=new Date(Math.max.apply(null,ev.map(e=>e.t).concat([Date.now()]))+30*365.25*864e5).getFullYear();
+  /* Record events: every correction, deletion, and sign-off change, in order. */
+  const recEv=(p.events||[]).filter(e=>["correction","deletion","revocation","signoff","manifest"].indexOf(e.kind)>=0).sort((a,b)=>a.t-b.t);
+  const recEvHtml=recEv.length?'<div class="tl">'+recEv.map(e=>'<div class="ev '+e.cls+'"><div class="when">'+esc(fmtDT(e.t))+'</div><div class="what">'+esc(e.what)+'</div></div>').join("")+'</div>'
+    :'<div class="empty">No corrections, deletions, or sign-off changes recorded.</div>';
+  const cl=p.clearance;
+  const signRows=[["visual","Visual inspection"],["airClear","Clearance air sampling"],["wasteShipped","Waste shipped"],["manifestsBack","Signed manifests received"],["neshapFiled","Notifications filed"],["areaReleased","Area released"]];
+  const printHead='<div class="print-only"><div class="print-head"><b>ABATE dossier</b> · '+esc(p.name)+' · Owner: '+esc(p.owner||"–")+' · Contract '+esc(p.contractNo||"–")+' · Generated '+new Date().toLocaleString("en-US")+'</div>'+
+    '<h1 style="font-size:20px;margin:0 0 4px">Abatement Compliance Dossier</h1>'+
+    '<div style="font-size:12px"><b>'+esc(p.name)+'</b><br>'+esc(p.address)+'<br>Owner: '+esc(p.owner||"–")+' · Contract '+esc(p.contractNo||"–")+
     '<br>Generated '+new Date().toLocaleString("en-US")+' · Dossier completeness '+c.total+'%'+
-    '<br>Retain this file until '+retainUntil+' (30-yr OSHA retention, 29 CFR 1926.1101)'+
-    '<br><i>Prototype record — not legal or compliance advice.</i></div><hr></div>';
+    '<br>Keep this file until '+retainUntil+' (30-year retention, OSHA 29 CFR 1926.1101). This printed copy came from a device; keep the exported archive for long-term storage.'+
+    '<br><i>Prototype record. Not legal or compliance advice.</i></div><hr></div>'+
+    '<div class="print-only print-section"><h2 style="font-size:15px">Sign-off stamps</h2>'+
+    '<table class="ptab"><tr><th>Item</th><th>Status</th><th>Signed by</th><th>Date</th></tr>'+
+    signRows.map(r=>'<tr><td>'+r[1]+'</td><td>'+(cl[r[0]]?"SIGNED":"open")+'</td><td>'+esc(cl[r[0]+"By"]||"–")+'</td><td>'+(cl[r[0]+"Date"]?fmtD(cl[r[0]+"Date"]):"–")+'</td></tr>').join("")+
+    '</table></div>'+
+    '<div class="print-only print-section"><h2 style="font-size:15px">Photo evidence ('+live(p.photos).length+')</h2>'+
+    (live(p.photos).length?'<div class="pthumbs">'+live(p.photos).map(x=>'<div><img src="'+x.thumb+'" alt="'+esc(x.caption||"site photo")+'"><div style="font-size:10px">'+esc(x.caption||x.category)+'<br>'+fmtDT(x.takenAt)+'</div></div>').join("")+'</div>'
+      :'<div style="font-size:12px">No photos on file.</div>')+'</div>'+
+    '<div class="print-only print-section"><h2 style="font-size:15px">Record events</h2>'+
+    (recEv.length?recEv.map(e=>'<div style="font-size:11px; margin-bottom:6px"><b>'+esc(fmtDT(e.t))+'</b>: '+esc(e.what)+'</div>').join("")
+      :'<div style="font-size:12px">No corrections, deletions, or sign-off changes recorded.</div>')+'</div>';
   return printHead+'<div class="card" id="dossierHero"><div class="ringwrap">'+ring(c.total,84)+
     '<div><div class="ringtxt" style="font-size:34px"><span id="ringNum">0</span><span class="small">%</span></div>'+
     '<div class="small muted">dossier complete</div>'+dossierVerdict(c.total)+
-    '<div class="small dim" style="margin-top:6px">Retain this file until <b style="color:var(--orange)">'+retainUntil+'</b> (30-yr OSHA retention)</div></div></div>'+
-    (miss.length?'<h3 class="stencil" style="color:var(--amber); font-size:14px; margin:14px 0 2px;">To reach 100% — '+miss.length+' item'+(miss.length===1?"":"s")+'</h3><ul class="misslist">'+miss.map(m=>'<li>'+esc(m)+'</li>').join("")+'</ul>'
+    '<div class="small dim" style="margin-top:6px">Keep this file until <b style="color:var(--orange)">'+retainUntil+'</b> (30-year retention, OSHA 29 CFR 1926.1101). This copy lives on your device. Export the archive for long-term storage.</div></div></div>'+
+    (miss.length?'<h3 class="stencil" style="color:var(--amber); font-size:14px; margin:14px 0 2px;">To reach 100%: '+miss.length+' item'+(miss.length===1?"":"s")+'</h3><ul class="misslist">'+miss.map(mi=>'<li>'+esc(mi)+'</li>').join("")+'</ul>'
       :'<div class="alert" style="background:#0e2b1a; border-color:var(--green); color:#c9f5da; margin:14px 0 0"><b style="color:var(--green)">Dossier sealed.</b> Every required record is present. This file is ready for the auditor, the insurer, or the property buyer.</div>')+
     '<div class="row" style="margin-top:12px"><button class="btn ghost sm grow" data-act="print">'+IC.print+' Print dossier</button>'+
     '<button class="btn ghost sm grow" data-act="export">'+IC.down+' Export archive</button></div></div>'+
-    '<h2 class="stencil" style="font-size:15px; color:var(--muted); margin:4px 0 4px;">Assembled timeline</h2>'+
+    '<h2 class="stencil" style="font-size:15px; color:var(--muted); margin:4px 0 4px;">Record events</h2>'+
+    '<div class="small dim" style="margin-bottom:8px">Corrections, deletions, and sign-off changes, in order. The dossier remembers what happened.</div>'+recEvHtml+
+    '<h2 class="stencil" style="font-size:15px; color:var(--muted); margin:14px 0 4px;">Assembled timeline</h2>'+
     '<div class="small dim" style="margin-bottom:8px">Everything logged, in order. This is the file an auditor, insurer, or buyer reads.</div>'+
     (ev.length?'<div class="tl">'+ev.map(e=>'<div class="ev '+e.cls+'"><div class="when">'+esc(e.when)+'</div><div class="what">'+esc(e.what)+'</div></div>').join("")+'</div>'
     :'<div class="empty">Nothing logged yet. The timeline assembles itself as the crew works.</div>');
@@ -581,6 +734,32 @@ function openConfirm(title,body,okLabel,danger){
     $("#cfOk").onclick=()=>{ closeSheet(); res(true); };
     $("#cfNo").onclick=()=>{ closeSheet(); res(false); };
   });
+}
+/* Soft delete: the record leaves every list but stays in the store with a
+ * tombstone, and the deletion is logged with who, when, and why. */
+function openDeleteReason(title, whatLine){
+  return new Promise(res=>{
+    openSheet('<h2 class="stencil">'+esc(title)+'</h2>'+
+      '<div class="small muted" style="margin-bottom:12px">'+esc(whatLine)+'<br><br>The record leaves the lists but stays in the file as a tombstone, and this deletion is logged for the auditor.</div>'+
+      '<form id="delForm"><label>Your name *</label><input name="who" required autocomplete="off" placeholder="Who is deleting this?">'+
+      '<label>Reason *</label><textarea name="reason" rows="2" required placeholder="Why is this record being removed?"></textarea>'+
+      '<div style="height:14px"></div><div class="row"><button class="btn danger grow" type="submit">Delete record</button>'+
+      '<button class="btn dark" type="button" id="delNo">Cancel</button></div></form>');
+    $("#delNo").onclick=()=>{ closeSheet(); res(null); };
+    $("#delForm").onsubmit=e=>{ e.preventDefault(); const d=collect(e.target);
+      const who=String(d.who||"").trim(), reason=String(d.reason||"").trim();
+      if(!who||!reason){ toast("Name and reason are required."); return; }
+      closeSheet(); res({who:who, reason:reason});
+    };
+  });
+}
+async function softDelete(p, arr, id, label, whatLine){
+  const r=await openDeleteReason("Delete "+label+"?", whatLine);
+  if(!r) return false;
+  const rec=arr.find(x=>x.id===id); if(!rec) return false;
+  rec.deleted=true; rec.deletedAt=Date.now(); rec.deletedBy=r.who; rec.deletedReason=r.reason;
+  logEvent(p,"deletion","warn", label+" deleted by "+r.who+" ("+whatLine+"). Reason: "+r.reason);
+  return true;
 }
 function openSignoff(title,sub,defName){
   return new Promise(res=>{
@@ -628,12 +807,15 @@ function fProject(p){
     field("Building owner","owner",p.owner)+
     field("Owner phone","ownerPhone",p.ownerPhone,"tel")+
     field("Contract #","contractNo",p.contractNo)+
-    '<label>NESHAP notification filed? *</label><select name="neshapNotified"><option value="1"'+(p.neshapNotified?" selected":"")+'>Yes — agency notified</option><option value="0"'+(!p.neshapNotified?" selected":"")+'>Not yet</option></select>'+
+    '<label>NESHAP notification filed? *</label><select name="neshapNotified"><option value="1"'+(p.neshapNotified?" selected":"")+'>Yes, agency notified</option><option value="0"'+(!p.neshapNotified?" selected":"")+'>Not yet</option></select>'+
     field("NESHAP notice date","neshapDate",p.neshapDate,"date")+
     field("Competent person (OSHA 1926.1101) *","competentPerson",p.competentPerson,"text","required")+
     field("Competent person license #","competentLicense",p.competentLicense)+
     field("Start date","startDate",p.startDate||todayISO(),"date")+
-    field("Est. end date","estEndDate",p.estEndDate,"date"),
+    field("Est. end date","estEndDate",p.estEndDate,"date")+
+    (!p.id&&DB.projects.length?'<label>Start from a template (optional)</label><select name="templateId"><option value="">Blank dossier</option>'+
+      DB.projects.map(q=>'<option value="'+q.id+'">'+esc(q.name)+'</option>').join("")+'</select>'+
+      '<div class="small dim" style="margin-top:4px">Copies the setup and crew roster, never the logs, samples, manifests, or photos.</div>':""),
     p.id?"Save changes":"Create dossier"));
   $("#sheetCancel").onclick=closeSheet;
   $("#sheetForm").onsubmit=e=>{ e.preventDefault(); const d=collect(e.target);
@@ -642,25 +824,64 @@ function fProject(p){
     Object.assign(rec,{name:d.name,address:d.address,owner:d.owner,ownerPhone:d.ownerPhone,contractNo:d.contractNo,
       neshapNotified:d.neshapNotified==="1",neshapDate:d.neshapDate,competentPerson:d.competentPerson,
       competentLicense:d.competentLicense,startDate:d.startDate,estEndDate:d.estEndDate});
-    if(!p.id){ DB.projects.unshift(rec); view={name:"project",projectId:rec.id,tab:"overview"}; }
+    if(!p.id){
+      const tpl=DB.projects.find(q=>q.id===d.templateId);
+      if(tpl){
+        rec.owner=tpl.owner; rec.ownerPhone=tpl.ownerPhone;
+        rec.competentPerson=tpl.competentPerson; rec.competentLicense=tpl.competentLicense;
+        const rr=rosterStore.load();
+        rr[rec.id]=(rr[tpl.id]||[]).map(c=>({name:c.name,cred:c.cred}));
+        rosterStore.save(rr);
+        rec.events.push({t:Date.now(),kind:"info",cls:"",what:"Project created from template \u2018"+tpl.name+"\u2019 (setup and roster copied)"});
+      }
+      DB.projects.unshift(rec); view={name:"project",projectId:rec.id,tab:"overview"};
+    }
     closeSheet(); save();
   };
 }
 function fDaily(p, existing){
   const L=existing||{};
-  const crewTxt=(L.crew||[]).map(c=>c.name+(c.cred?", "+c.cred:"")).join("\n");
+  const ros=getRoster(p.id);
+  const rosTxt=ros.map(c=>c.name+(c.cred?", "+c.cred:"")).join("\n");
+  const crewTxt=(L.crew||[]).map(c=>c.name+(c.cred?", "+c.cred:"")).join("\n")||(!existing?rosTxt:"");
   const has=a=>(L.activities||[]).includes(a);
-  openSheet(formShell(existing?"Edit daily log — "+fmtD(L.date):"Daily field log — "+fmtD(todayISO()),
+  openSheet(formShell(existing?"Edit daily log: "+fmtD(L.date):"Daily field log: "+fmtD(todayISO()),
     field("Date *","date",L.date||todayISO(),"date","required")+
-    '<label>Crew (one per line: name, accreditation #)</label><textarea name="crew" rows="3" placeholder="Marcus Webb, AZ-ABT-4471 (supervisor)&#10;D. Okafor, AZ-ABT-5120">'+esc(crewTxt)+'</textarea>'+
+    '<label>Crew (one per line: name, accreditation #)</label>'+
+    (!existing&&ros.length?'<div class="small dim" style="margin-bottom:6px">Roster: tap to add:</div><div class="row" style="flex-wrap:wrap; gap:6px; margin-bottom:8px">'+
+      ros.map((c,i)=>'<button type="button" class="btn dark sm" data-ros="'+i+'">'+esc(c.name)+(c.cred?' <span class="dim">'+esc(c.cred)+'</span>':"")+'</button>').join("")+'</div>':"")+
+    '<textarea id="crewTa" name="crew" rows="3" placeholder="Marcus Webb, AZ-ABT-4471 (supervisor)&#10;D. Okafor, AZ-ABT-5120">'+esc(crewTxt)+'</textarea>'+
+    '<div id="credHint"></div>'+
     '<div class="row"><div class="grow">'+field("Shift start","start",L.start||"06:30","time")+'</div><div class="grow">'+field("Shift end","end",L.end||"15:00","time")+'</div></div>'+
     '<label>Activities performed</label><div class="checks">'+ACTIVITIES.map(a=>'<label class="check"><input type="checkbox" name="activities" value="'+esc(a)+'"'+(has(a)?" checked":"")+'> '+esc(a)+'</label>').join("")+'</div>'+
     field("Neg-air differential (in w.g., e.g. -0.024)","negAir",L.negAir||"")+
     '<label>Notes</label><textarea name="notes" rows="3" placeholder="Containment intact, decon shower operational…">'+esc(L.notes||"")+'</textarea>',
     existing?"Save changes":"Log shift"));
   $("#sheetCancel").onclick=closeSheet;
+  /* Roster chips: tap to append "name, cred" as a new line. */
+  const ta=$("#crewTa");
+  document.querySelectorAll("#sheet [data-ros]").forEach(b=>b.onclick=()=>{
+    const c=ros[+b.dataset.ros]; if(!c) return;
+    const line=c.name+(c.cred?", "+c.cred:"");
+    ta.value=(ta.value.replace(/\s+$/,"")?ta.value.replace(/\s+$/,"")+"\n":"")+line;
+    ta.dispatchEvent(new Event("input")); ta.focus();
+  });
+  /* Typing a roster name offers the saved credential. */
+  const hint=$("#credHint");
+  const paintHint=()=>{
+    hint.innerHTML="";
+    if(!ros.length) return;
+    const lines=ta.value.split("\n"), last=lines[lines.length-1].trim();
+    if(!last||/,/.test(last)) return;
+    const m=ros.find(c=>c.name.toLowerCase()===last.toLowerCase()&&c.cred);
+    if(!m) return;
+    hint.innerHTML='<button type="button" class="btn ghost sm" id="credAdd" style="margin-top:6px">Add credential: '+esc(m.cred)+'</button>';
+    $("#credAdd").onclick=()=>{ lines[lines.length-1]=m.name+", "+m.cred; ta.value=lines.join("\n"); paintHint(); ta.focus(); };
+  };
+  ta.addEventListener("input",paintHint); paintHint();
   $("#sheetForm").onsubmit=e=>{ e.preventDefault(); const d=collect(e.target);
     const crew=String(d.crew||"").split("\n").map(s=>s.trim()).filter(Boolean).map(s=>{ const m=s.match(/^(.*?),\s*(.*)$/); return {name:m?m[1]:s, cred:m?m[2]:""}; });
+    addToRoster(p.id, crew);
     let acts=d.activities||[]; if(!Array.isArray(acts)) acts=[acts];
     const rec={id:existing?existing.id:uid(),date:d.date,crew,start:d.start,end:d.end,activities:acts,negAir:d.negAir,notes:d.notes,createdAt:existing?existing.createdAt:Date.now()};
     if(existing){ const i=p.dailyLogs.findIndex(x=>x.id===existing.id); p.dailyLogs[i]=rec; }
@@ -670,23 +891,38 @@ function fDaily(p, existing){
 }
 function fAir(p, existing){
   const S=existing||{};
-  openSheet(formShell(existing?"Edit air sample":"Log air sample",
+  openSheet(formShell(existing?"Correct air sample":"Log air sample",
+    (existing?'<div class="disclaimer" style="margin-bottom:4px"><strong>Correction, not an edit.</strong> The original reading stays in the record. Your name, today\u2019s date, and a reason are logged with the change.</div>':"")+
     field("Date *","date",S.date||todayISO(),"date","required")+
-    field("Sample location *","location",S.location||"","text","required placeholder='Inside containment — north corner'")+
+    field("Sample location *","location",S.location||"","text","required placeholder='Inside containment, north corner'")+
     '<label>Sample type *</label><select name="type">'+
       [["area","Work-area"],["personal","Personal (breathing zone)"],["clearance","Clearance"]].map(o=>'<option value="'+o[0]+'"'+(S.type===o[0]?" selected":"")+'>'+o[1]+'</option>').join("")+'</select>'+
     field("Result (fibers/cc) *","result",S.result==null?"":S.result,"number","required step='0.001' min='0' placeholder='0.042'")+
     '<label>Limit basis *</label><select name="basis">'+
-      [["8hr","8-hr TWA — PEL 0.1 f/cc"],["exc","30-min excursion — 1.0 f/cc"],["clr","Clearance — 0.01 f/cc"]].map(o=>'<option value="'+o[0]+'"'+(S.basis===o[0]?" selected":"")+'>'+o[1]+'</option>').join("")+'</select>'+
-    field("Pump / cassette ID","pump",S.pump||"","text placeholder='SKC-03'"),
-    existing?"Save changes":"Log sample"));
+      [["8hr","8-hr TWA: PEL 0.1 f/cc"],["exc","30-min excursion: 1.0 f/cc"],["clr","Clearance: 0.01 f/cc"]].map(o=>'<option value="'+o[0]+'"'+(S.basis===o[0]?" selected":"")+'>'+o[1]+'</option>').join("")+'</select>'+
+    field("Pump / cassette ID","pump",S.pump||"","text placeholder='SKC-03'")+
+    (existing?field("Corrected by (your name) *","corrBy","","text","required placeholder='Who is making this correction'")+
+      '<label>Reason for correction *</label><textarea name="corrReason" rows="2" required placeholder="e.g. Transcribed 0.42 instead of 0.042 from the lab sheet"></textarea>':""),
+    existing?"Record correction":"Log sample"));
   $("#sheetCancel").onclick=closeSheet;
   $("#sheetForm").onsubmit=e=>{ e.preventDefault(); const d=collect(e.target);
     const r=parseFloat(d.result);
     const limit=d.type==="clearance"?0.01:(d.basis==="8hr"?0.1:d.basis==="exc"?1.0:0.01);
-    const rec={id:existing?existing.id:uid(),date:d.date,location:d.location,type:d.type,result:r,basis:d.basis,pump:d.pump,pass:r<=limit,createdAt:existing?existing.createdAt:Date.now()};
-    if(existing){ const i=p.airSamples.findIndex(x=>x.id===existing.id); p.airSamples[i]=rec; }
-    else p.airSamples.push(rec);
+    if(existing){
+      const by=String(d.corrBy||"").trim(), reason=String(d.corrReason||"").trim();
+      if(!by||!reason){ toast("Name and reason are required to record a correction."); return; }
+      const before={result:S.result,location:S.location,type:S.type,basis:S.basis,pump:S.pump};
+      const after={result:r,location:d.location,type:d.type,basis:d.basis,pump:d.pump};
+      if(JSON.stringify(before)===JSON.stringify(after)){ closeSheet(); toast("No changes."); return; }
+      S.corrections=S.corrections||[];
+      S.corrections.push({at:Date.now(),by:by,reason:reason,before:before,after:after});
+      S.result=r; S.location=d.location; S.type=d.type; S.basis=d.basis; S.pump=d.pump; S.pass=r<=limit;
+      logEvent(p,"correction","", "Air sample corrected by "+by+" ("+fmtD(S.date)+", "+S.location+"): "+before.result+" → "+r+" f/cc. Reason: "+reason);
+      closeSheet(); save(); toast("Correction recorded. Original preserved.");
+      return;
+    }
+    const rec={id:uid(),date:d.date,location:d.location,type:d.type,result:r,basis:d.basis,pump:d.pump,pass:r<=limit,createdAt:Date.now()};
+    p.airSamples.push(rec);
     closeSheet(); save();
   };
 }
@@ -733,7 +969,7 @@ function fPhoto(p){
       cv.getContext("2d").drawImage(img,0,0,cv.width,cv.height);
       const stamp=new Date().toLocaleString("en-US");
       const cx=cv.getContext("2d"); cx.fillStyle="rgba(0,0,0,.7)"; cx.fillRect(0,cv.height-30,cv.width,30);
-      cx.fillStyle="#ff6a00"; cx.font="16px monospace"; cx.fillText(stamp+" — ABATE",10,cv.height-9);
+      cx.fillStyle="#ff6a00"; cx.font="16px monospace"; cx.fillText(stamp+" - ABATE",10,cv.height-9);
       const full= cv.toDataURL("image/jpeg",0.72);
       const tc=document.createElement("canvas"); const tr=240/Math.max(cv.width,cv.height);
       tc.width=Math.round(cv.width*tr); tc.height=Math.round(cv.height*tr);
@@ -750,35 +986,83 @@ function bindActions(main,p){
     const act=b.dataset.act, id=b.dataset.id;
     if(act==="edit-project") b.onclick=()=>fProject(p);
     else if(act==="edit-log") b.onclick=()=>fDaily(p, p.dailyLogs.find(x=>x.id===id));
-    else if(act==="del-log") b.onclick=async()=>{ if(await openConfirm("Delete daily log?","This removes the shift record from the dossier. This cannot be undone.","Delete",true)){ p.dailyLogs=p.dailyLogs.filter(x=>x.id!==id); save(); toast("Daily log deleted"); } };
-    else if(act==="del-air") b.onclick=async()=>{ if(await openConfirm("Delete air sample?","This removes the sample and its pass/fail record from the dossier.","Delete",true)){ p.airSamples=p.airSamples.filter(x=>x.id!==id); save(); toast("Air sample deleted"); } };
+    else if(act==="del-log") b.onclick=async()=>{ const l=p.dailyLogs.find(x=>x.id===id);
+      if(await softDelete(p,p.dailyLogs,id,"daily log","Shift log "+fmtD(l?l.date:""))){ save(); toast("Daily log deleted. Tombstone kept."); } };
+    else if(act==="del-air") b.onclick=async()=>{ const s=p.airSamples.find(x=>x.id===id);
+      if(await softDelete(p,p.airSamples,id,"air sample","Sample "+fmtD(s?s.date:"")+", "+(s?s.location:""))){ save(); toast("Air sample deleted. Tombstone kept."); } };
     else if(act==="edit-air") b.onclick=()=>fAir(p, p.airSamples.find(x=>x.id===id));
     else if(act==="edit-manifest") b.onclick=()=>fManifest(p, p.manifests.find(x=>x.id===id));
-    else if(act==="del-manifest") b.onclick=async()=>{ if(await openConfirm("Delete manifest record?","This removes the waste shipment record. Keep paper copies per the 30-year retention rule.","Delete",true)){ p.manifests=p.manifests.filter(x=>x.id!==id); save(); toast("Manifest record deleted"); } };
+    else if(act==="del-manifest") b.onclick=async()=>{ const m=p.manifests.find(x=>x.id===id);
+      if(await softDelete(p,p.manifests,id,"manifest record","Manifest "+(m?m.manifestNo:""))){ save(); toast("Manifest record deleted. Tombstone kept."); } };
     else if(act==="sign-manifest") b.onclick=async()=>{ const m=p.manifests.find(x=>x.id===id);
       const d=await openDatePrompt("Signed copy received"); if(!d) return;
       const wasSigned=m.signedCopyReceived;
       m.signedCopyReceived=true; m.signedDate=d; m.signedRecordedAt=Date.now();
-      p.events=p.events||[];
-      p.events.push({t:Date.now(), cls:"good", what:"Signed copy recorded for manifest "+m.manifestNo+", dated "+fmtD(d)+(wasSigned?" (updated)":"")});
+      logEvent(p,"manifest","good","Signed copy recorded for manifest "+m.manifestNo+", dated "+fmtD(d)+(wasSigned?" (updated)":""));
       save(); toast("Manifest signed copy recorded"); };
     else if(act==="print") b.onclick=()=>window.print();
     else if(act==="export") b.onclick=()=>exportArchive(p);
     else if(act==="close-project") b.onclick=async()=>{ const c=completeness(p);
       if(c.total<100 && !(await openConfirm("Close with incomplete dossier?","Dossier is only "+c.total+"% complete. Closed projects keep every record for the 30-year retention file.","Close anyway",true))) return;
-      p.status="closed"; save(); toast("Project closed — records retained"); };
+      p.status="closed"; save(); toast("Project closed. Records retained."); };
   });
   main.querySelectorAll("[data-clear]").forEach(cb=>cb.onchange=async()=>{
     const k=cb.dataset.clear, cl=p.clearance;
-    if(cb.checked){ const who=await openSignoff("Sign off: "+cb.closest(".card").querySelector("b").textContent,
+    const label=cb.closest(".card").querySelector("b").textContent;
+    if(cb.checked){
+      /* Guard: visual inspection needs photo evidence in the Clearance
+       * category. Checked before asking for the name. */
+      if(k==="visual"&&!live(p.photos).some(x=>x.category==="Clearance")){
+        cb.checked=false;
+        openSheet('<h2 class="stencil">Clearance photo needed</h2>'+
+          '<div class="small muted" style="margin-bottom:14px">Add at least one photo in the <b>Clearance</b> category before the visual-inspection sign-off. The photo documents the area you walked through.</div>'+
+          '<div class="row"><button class="btn grow" id="vpGo">Go to Photos</button><button class="btn dark" id="vpBack">Back</button></div>');
+        $("#vpBack").onclick=closeSheet;
+        $("#vpGo").onclick=()=>{ closeSheet(); view.tab="photos"; save(); };
+        return;
+      }
+      /* Guard: manifests-back can only be checked when no manifest is pending.
+       * No "sign off anyway" escape hatch: each signed copy is recorded
+       * individually under the Waste tab. Checked before asking for the name. */
+      if(k==="manifestsBack"&&live(p.manifests).some(m=>!m.signedCopyReceived)){
+        const pend=live(p.manifests).filter(m=>!m.signedCopyReceived);
+        cb.checked=false;
+        openSheet('<h2 class="stencil">Signed copies still missing</h2>'+
+          '<div class="small muted" style="margin-bottom:12px">This sign-off can only be checked after <b>every</b> manifest has its own signed-copy date recorded. '+pend.length+' still pending:</div>'+
+          pend.map(m=>'<div class="kv"><div class="k mono">'+esc(m.manifestNo)+'</div><div><button class="btn ghost sm" data-mb-go="'+m.id+'">Record signed copy</button></div></div>').join("")+
+          '<div style="height:12px"></div><button class="btn dark block" id="mbBack">Back</button>');
+        $("#mbBack").onclick=closeSheet;
+        document.querySelectorAll("#sheet [data-mb-go]").forEach(b=>b.onclick=()=>{ closeSheet(); view.tab="waste"; save(); });
+        return;
+      }
+      const who=await openSignoff("Sign off: "+label,
         "Your name and today's date are stamped into the dossier.", p.competentPerson||"");
       if(!who){ cb.checked=false; return; }
+      /* Guard: clearance air needs a passing aggressive clearance sample. */
+      if(k==="airClear"&&!live(p.airSamples).some(s=>s.type==="clearance"&&s.pass)){
+        if(await openConfirm("No passing clearance sample","Clearance sign-off needs an aggressive air sample at or below 0.01 f/cc. Add one now?","Add sample")){ view.tab="air"; save(); fAir(p); return; }
+        cb.checked=false; return;
+      }
+      if(k==="manifestsBack"){
+        const names=live(p.manifests).map(m=>m.manifestNo).join(", ");
+        logEvent(p,"signoff","good","Manifests-back asserted by "+who+": signed copies received for "+(names||"no manifests on file"));
+      }
       cl[k]=true; cl[k+"By"]=who; cl[k+"Date"]=todayISO();
-      if(k==="airClear"&&!p.airSamples.some(s=>s.type==="clearance"&&s.pass)){ if(await openConfirm("No passing clearance sample","Clearance sign-off needs an aggressive air sample at or below 0.01 f/cc. Add one now?","Add sample")){ view.tab="air"; save(); fAir(p); return; } }
-      if(k==="manifestsBack"){ const pend=p.manifests.filter(m=>!m.signedCopyReceived);
-        if(pend.length && !(await openConfirm("Manifests still pending","There "+(pend.length===1?"is 1 manifest":"are "+pend.length+" manifests")+" without a signed copy recorded. This sign-off asserts every signed copy is back from the disposal site. Record each one under the Waste tab first, or sign off anyway.","Sign off anyway"))){ cb.checked=false; cl[k]=false; return; } }
+      cl[k+"History"]=cl[k+"History"]||[];
+      cl[k+"History"].push({action:"signed",by:who,date:todayISO(),at:Date.now()});
+      if(k!=="manifestsBack") logEvent(p,"signoff","good","Clearance item '"+label+"' signed by "+who+" on "+fmtD(todayISO()));
       toast("Signed off by "+who);
-    } else { cl[k]=false; }
+    } else {
+      /* Revocation: never silent. The event and the history stay on the item. */
+      const who=await openSignoff("Revoke: "+label,
+        "Revoking removes this sign-off. The revocation is stamped into the record with your name and today's date.", cl[k+"By"]||"");
+      if(!who){ cb.checked=true; return; }
+      cl[k]=false; cl[k+"By"]=""; cl[k+"Date"]="";
+      cl[k+"History"]=cl[k+"History"]||[];
+      cl[k+"History"].push({action:"revoked",by:who,date:todayISO(),at:Date.now()});
+      logEvent(p,"revocation","warn","Clearance item '"+label+"' revoked by "+who+" on "+fmtD(todayISO()));
+      toast("Sign-off revoked. Logged.");
+    }
     save();
   });
   main.querySelectorAll("[data-pcat]").forEach(ch=>ch.onclick=()=>{ view.photoCat=ch.dataset.pcat; save(); });
@@ -788,20 +1072,59 @@ function photoSheet(p,id){
   const x=p.photos.find(y=>y.id===id); if(!x) return;
   openSheet('<h2 class="stencil">Site photo</h2>'+
     '<img src="'+x.dataUrl+'" style="width:100%;border-radius:10px;margin:10px 0" alt="site photo">'+
-    kv("Captured",fmtDT(x.takenAt))+kv("Category",esc(x.category))+kv("Caption",esc(x.caption||"—"))+
+    kv("Captured",fmtDT(x.takenAt))+kv("Category",esc(x.category))+kv("Caption",esc(x.caption||"–"))+
     '<div style="height:12px"></div><div class="row"><button class="btn danger grow" id="phDel">'+IC.trash+' Delete photo</button>'+
     '<button class="btn dark" id="sheetCancel2">Close</button></div>');
   $("#sheetCancel2").onclick=closeSheet;
-  $("#phDel").onclick=()=>{ if(confirm("Delete this photo from the dossier?")){ p.photos=p.photos.filter(y=>y.id!==id); closeSheet(); save(); } };
+  $("#phDel").onclick=async()=>{
+    if(await softDelete(p,p.photos,id,"photo","Photo '"+(x.caption||x.category)+"' taken "+fmtDT(x.takenAt))){ closeSheet(); save(); toast("Photo deleted. Tombstone kept."); }
+  };
+}
+function download(name, text, type){
+  const blob=new Blob([text],{type:type||"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download=name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+/* Export archive: the full dossier plus every photo's full-res dataURL keyed
+ * by photo id, plus a photo-manifest of capture times and captions.
+ * Tombstoned records are included with their deletion log, never silently. */
+function buildArchive(p, withPhotos){
+  const c=completeness(p);
+  const evT=(p.events||[]).map(e=>e.t).concat(live(p.photos).map(x=>x.takenAt),[Date.now()]);
+  const retainUntil=new Date(Math.max.apply(null,evT)+30*365.25*864e5).getFullYear();
+  const photos={};
+  if(withPhotos) live(p.photos).forEach(x=>{ if(x.dataUrl) photos[x.id]=x.dataUrl; });
+  const strip=x=>({id:x.id,caption:x.caption,category:x.category,takenAt:x.takenAt,thumb:x.thumb,
+    deleted:!!x.deleted,deletedAt:x.deletedAt||0,deletedBy:x.deletedBy||"",deletedReason:x.deletedReason||""});
+  const project=Object.assign({},p,{photos:p.photos.map(strip)});
+  return { exportedAt:new Date().toISOString(), app:"ABATE prototype", completeness:c.total,
+    retention:"Keep this file until "+retainUntil+" (30-year retention, OSHA 29 CFR 1926.1101). This file was exported from a device copy; keep the archive for long-term storage.",
+    photoManifest:p.photos.map(x=>({id:x.id,caption:x.caption,category:x.category,takenAt:x.takenAt,deleted:!!x.deleted})),
+    photos:photos, project:project };
 }
 function exportArchive(p){
-  const c=completeness(p);
-  const archive={ exportedAt:new Date().toISOString(), app:"ABATE prototype",
-    retention:"Retain 30 years per OSHA 29 CFR 1926.1101", completeness:c.total, project:p };
-  const blob=new Blob([JSON.stringify(archive,null,2)],{type:"application/json"});
-  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
-  a.download="abate-dossier-"+p.id+"-"+todayISO()+".json"; a.click();
-  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  const full=buildArchive(p,true);
+  const size=JSON.stringify(full).length, MB=size/1048576;
+  const fname="abate-dossier-"+p.id+"-"+todayISO()+".json";
+  if(size>5*1048576){
+    openSheet('<h2 class="stencil">Large archive</h2>'+
+      '<div class="small muted" style="margin-bottom:14px">This archive is about <b>'+MB.toFixed(1)+' MB</b>, mostly photos. Export it whole, or split it into the record file plus a separate photos file.</div>'+
+      '<div class="row"><button class="btn grow" id="exFull">Full archive</button></div><div style="height:8px"></div>'+
+      '<div class="row"><button class="btn dark grow" id="exSplit">Split: records + photos</button></div><div style="height:8px"></div>'+
+      '<button class="btn dark block" id="exNo">Cancel</button>');
+    $("#exNo").onclick=closeSheet;
+    $("#exFull").onclick=()=>{ closeSheet(); download(fname, JSON.stringify(full,null,2)); toast("Archive exported ("+MB.toFixed(1)+" MB)"); };
+    $("#exSplit").onclick=()=>{ closeSheet();
+      download(fname, JSON.stringify(buildArchive(p,false),null,2));
+      download("abate-photos-"+p.id+"-"+todayISO()+".json",
+        JSON.stringify({exportedAt:full.exportedAt, project:p.name, photoManifest:full.photoManifest, photos:full.photos},null,2));
+      toast("Exported records file and photos file");
+    };
+    return;
+  }
+  download(fname, JSON.stringify(full,null,2));
+  toast("Archive exported");
 }
 /* ============ fab + init ============ */
 $("#fab").onclick=()=>{
@@ -812,7 +1135,7 @@ $("#fab").onclick=()=>{
   else if(view.tab==="air") fAir(p);
   else if(view.tab==="waste") fManifest(p);
   else if(view.tab==="photos") fPhoto(p);
-  else if(view.tab==="clearance"){ toast("Use the checklist above — each item needs a named sign-off."); }
+  else if(view.tab==="clearance"){ toast("Use the checklist above. Each item needs a named sign-off."); }
   else if(view.tab==="dossier") exportArchive(p);
 };
 $("#backBtn").onclick=()=>{ view={name:"dash"}; save(); };

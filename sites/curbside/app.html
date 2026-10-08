@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Curbside — Food Truck OS</title>
 <meta name="description" content="Permits, locations, commissary, events, and revenue for food truck owners.">
+<meta name="theme-color" content="#D9402B">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
 <!-- Turnstile site key for bot protection on trial signup. Empty = off.
      When Luke adds keys: Cloudflare dashboard -> Turnstile -> add site,
      paste the site key into content="". See billing/SECRETS.md. -->
@@ -154,7 +157,10 @@
       <div class="tab-page hidden" id="page-revenue">
         <div class="page-head">
           <h2>Revenue</h2>
-          <button class="btn small" id="addRevBtn">+ Log day</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn small" id="csvRevBtn">Export CSV</button>
+            <button class="btn small" id="addRevBtn">+ Log day</button>
+          </div>
         </div>
         <div class="card">
           <div class="rev-totals">
@@ -202,7 +208,7 @@
     { lookupKey: "price_curbside_solo", name: "Solo", price: "$50/mo",
       blurb: "1 truck: permits with real fees, weekly spots, commissary, events, revenue." },
     { lookupKey: "price_curbside_fleet", name: "Fleet", price: "$80/mo",
-      blurb: "2 to 3 trucks, one login: per-truck compliance plus combined revenue." }
+      blurb: "Coming soon: up to 3 trucks on one login. Today each login covers one truck." }
   ];
   function boot(){
     if (typeof initBilling !== "function") return;
@@ -220,6 +226,33 @@
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
+})();
+</script>
+<script>
+/* Offline app shell: cache-first service worker for the static files.
+ * Local data lives in localStorage and is never touched by the worker. */
+(function(){
+  if (!("serviceWorker" in navigator)) return;
+  if (!/^https?:$/.test(location.protocol)) return;
+  var refreshing = false;
+  function onUpdate(reg){
+    var nw = reg.installing;
+    if (!nw) return;
+    nw.addEventListener("statechange", function(){
+      if (nw.state === "installed" && navigator.serviceWorker.controller){
+        if (confirm("A new version of Curbside is ready. Reload to update?"))
+          nw.postMessage("SKIP_WAITING");
+      }
+    });
+  }
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("sw.js").then(function(reg){
+      reg.addEventListener("updatefound", function(){ onUpdate(reg); });
+    }).catch(function(){});
+    navigator.serviceWorker.addEventListener("controllerchange", function(){
+      if (!refreshing){ refreshing = true; location.reload(); }
+    });
+  });
 })();
 </script>
 </body>

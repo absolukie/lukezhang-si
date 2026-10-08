@@ -84,6 +84,11 @@
     border-radius: 12px; padding: 12px 16px; margin: 14px 0 4px; font-size: 14.5px;
     color: #2b2b2b; min-height: 3em; line-height: 1.6; }
   .formula { text-align: center; font-size: 17px; margin: 10px 0 4px; min-height: 40px; color: #2b2b2b; }
+  .nowplot { background: rgba(43,43,43,0.05); border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 10px; padding: 8px 12px; margin: 10px 0 4px; font-size: 15px;
+    color: #2b2b2b; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+  .nowplot .np-label { font-size: 12.5px; color: rgba(43,43,43,0.55); margin-right: 8px; }
+  .nowplot .katex { font-size: 1.04em; }
 
   /* keep-exploring link cards */
   .xlinks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0 8px; }
@@ -157,6 +162,7 @@
     <input type="range" id="sym-a" min="-1" max="1" step="0.01" value="0.5" aria-label="Coefficient of x squared">
     <label for="sym-b">Odd guest, b&middot;x&sup3;: <b id="sym-vb">0.00</b></label>
     <input type="range" id="sym-b" min="-1" max="1" step="0.01" value="0" aria-label="Coefficient of x cubed">
+    <div class="nowplot"><span class="np-label">now plotting:</span><span id="sym-now"></span></div>
     <button class="chip on" id="sym-mirror" aria-pressed="true">Mirror check</button>
     <div class="stat-grid">
       <div class="stat-cell"><div class="n" id="sym-status">BROKEN</div><div class="l">origin symmetry</div></div>
@@ -178,6 +184,7 @@
       <button class="chip" data-s="fsaw">Fourier sawtooth</button>
     </div>
     <svg class="wave" id="conv-svg" viewBox="0 0 350 190" role="img" aria-label="Partial sums converging on a target curve"></svg>
+    <div class="nowplot"><span class="np-label">now plotting:</span><span id="conv-now"></span></div>
     <div class="formula" id="conv-formula"></div>
     <button class="btn" id="conv-next">Next term</button>
     <button class="btn ghost" id="conv-auto">Auto-play</button>
@@ -559,6 +566,14 @@ function svgPoint(svg, ev){
     var a = +$("sym-a").value, b = +$("sym-b").value;
     $("sym-va").textContent = a.toFixed(2);
     $("sym-vb").textContent = b.toFixed(2);
+    (function(){
+      var elx = $("sym-now");
+      if (!elx || !window.katex) return;
+      var s = "\\sin(x)";
+      if (Math.abs(a) >= 0.005) s += (a < 0 ? " - " : " + ") + Math.abs(a).toFixed(2) + "x^2";
+      if (Math.abs(b) >= 0.005) s += (b < 0 ? " - " : " + ") + Math.abs(b).toFixed(2) + "x^3";
+      try { window.katex.render(s, elx, {throwOnError: false}); } catch(e){}
+    })();
     var pts = [], i, x;
     for (i = 0; i <= 200; i++){
       x = X0 + i / 200 * (X1 - X0);
@@ -600,6 +615,7 @@ function svgPoint(svg, ev){
     render();
   });
   render();
+  window.__symNow = render;
 })();
 
 /* ---------- 3b. watch them converge ---------- */
@@ -691,7 +707,45 @@ function svgPoint(svg, ev){
     }
     $("conv-terms").textContent = n;
     $("conv-err").textContent = fmtErr(err);
+    setNow();
     $("conv-next").disabled = (n >= def.max);
+  }
+  function nowTex(){
+    var parts = [], k, p, h, sgn, tx;
+    if (cur === "tsin"){
+      for (k = 1; k <= n; k++){ p = 2*k-1; sgn = (k % 2 === 1) ? 1 : -1;
+        tx = (p === 1) ? "x" : "\\frac{x^" + p + "}{" + p + "!}";
+        parts.push({sgn: sgn, tex: tx}); }
+    } else if (cur === "tcos"){
+      for (k = 1; k <= n; k++){ p = 2*(k-1); sgn = (k % 2 === 1) ? 1 : -1;
+        tx = (p === 0) ? "1" : "\\frac{x^" + p + "}{" + p + "!}";
+        parts.push({sgn: sgn, tex: tx}); }
+    } else if (cur === "texp"){
+      for (k = 1; k <= n; k++){ p = k-1;
+        tx = (p === 0) ? "1" : ((p === 1) ? "x" : "\\frac{x^" + p + "}{" + p + "!}");
+        parts.push({sgn: 1, tex: tx}); }
+    } else if (cur === "fsq"){
+      for (k = 1; k <= n; k++){ h = 2*k-1;
+        tx = (h === 1) ? "\\sin x" : "\\frac{\\sin " + h + "x}{" + h + "}";
+        parts.push({sgn: 1, tex: tx}); }
+    } else if (cur === "fsaw"){
+      for (k = 1; k <= n; k++){ sgn = (k % 2 === 1) ? 1 : -1;
+        tx = (k === 1) ? "\\sin x" : "\\frac{\\sin " + k + "x}{" + k + "}";
+        parts.push({sgn: sgn, tex: tx}); }
+    }
+    var s = "", i;
+    for (i = 0; i < parts.length; i++){
+      if (i === 0) s += (parts[i].sgn < 0 ? "-" : "") + parts[i].tex;
+      else s += (parts[i].sgn < 0 ? " - " : " + ") + parts[i].tex;
+    }
+    if (cur === "fsq") s = "\\frac{4}{\\pi}\\left(" + s + "\\right)";
+    else if (cur === "fsaw") s = "2\\left(" + s + "\\right)";
+    return s;
+  }
+  function setNow(){
+    var elx = $("conv-now");
+    if (!elx || !window.katex) return;
+    try { window.katex.render(nowTex(), elx, {throwOnError: false}); } catch(e){}
   }
   function setFormula(){
     var f = $("conv-formula");
@@ -723,6 +777,7 @@ function svgPoint(svg, ev){
   });
   setFormula();
   render();
+  window.__convNow = setNow;
 })();
 })();
 </script>
@@ -737,6 +792,8 @@ renderMathInElement(document.body, {
   throwOnError: false,
   ignoredClasses: ["nokatex"]
 });
+if (window.__convNow){ try { window.__convNow(); } catch(e){} }
+if (window.__symNow){ try { window.__symNow(); } catch(e){} }
 </script>
 </body>
 </html>

@@ -135,14 +135,21 @@ const RULES = [
  tip:"Confirm by phone that your preferred shop will actually work with this administrator."}
 ];
 
+const RULESET_V = (function(){
+  const source = JSON.stringify(RULES.map(function(r){ return [r.id, r.pats.join("|"), r.sev]; }));
+  let hash = 0x811c9dc5;
+  for(let i=0; i<source.length; i++) hash = Math.imul(hash ^ source.charCodeAt(i), 0x01000193);
+  return (hash >>> 0).toString(16).padStart(8, "0").slice(0,8);
+})();
+
 /* ---------- Sample contracts ---------- */
 const SAMPLES = {
-car: {name:"Apex Auto Shield — Vehicle Service Contract (sample)",
+car: {name:"Apex Auto Shield: Vehicle Service Contract (sample)",
 text:
-"APEX AUTO SHIELD\nVEHICLE SERVICE CONTRACT — PLATINUM COVERAGE\n\nThis Vehicle Service Contract (the \u201cContract\u201d) is between you, the Contract Holder, and Apex Auto Shield LLC (the \u201cAdministrator\u201d). Please read this entire Contract carefully. Coverage begins 30 days or 1,000 miles after the Contract purchase date, whichever occurs first (the \u201cWaiting Period\u201d). No claims will be honored during the Waiting Period.\n\nCOVERAGE: Subject to the terms herein, the Administrator agrees to pay for the repair or replacement of the following components due to mechanical breakdown: engine, transmission, drive axle, and turbocharger, up to an aggregate limit of $5,000 for the life of this Contract. In no event shall the Administrator\u2019s total liability exceed $5,000.\n\nEXCLUSIONS: This Contract does not cover: (a) any repair necessitated by normal wear and tear; (b) seals and gaskets; (c) pre-existing conditions known or unknown to the Contract Holder; (d) damage caused by overheating, regardless of cause; (e) consequential damage or resulting damage to non-covered parts; (f) any vehicle used for commercial use, including ridesharing, delivery, or for-hire service such as Uber or Lyft; (g) any vehicle with modifications, aftermarket parts, lift kits, or non-OEM components; (h) any vehicle with a salvage, rebuilt, or branded title, or with prior flood damage; (i) failures caused by rust or corrosion.\n\nMAINTENANCE REQUIREMENTS: The Contract Holder must maintain the vehicle in accordance with the manufacturer\u2019s recommendations and must provide maintenance records and proof of maintenance upon request. Engine oil and filter must be changed every 3,000 miles without exception. Failure to furnish complete service history shall be grounds for denial of any claim, as determined by the Administrator in its sole discretion.\n\nCLAIM PROCEDURE: The Contract Holder must obtain prior authorization before any repair work begins. Repairs performed without prior authorization will not be covered. All repairs must be performed at an authorized repair facility designated by the Administrator. Teardown and diagnostic charges are the responsibility of the Contract Holder and are not covered under any circumstances. The Administrator may, at its sole discretion, elect to use remanufactured or used parts. Betterment and depreciation charges may be deducted from approved claims.\n\nDEDUCTIBLE: A $100 deductible applies per visit.\n\nCANCELLATION: You may cancel within 30 days for a full refund. After 30 days, cancellation refunds are calculated on a pro-rata basis less claims paid and a $50 administrative cancellation fee. This Contract is non-transferable and may not be assigned.\n\nOTHER TERMS: Failure to pay any monthly installment within 10 days shall cause this Contract to lapse, and all coverage shall terminate. Any dispute arising under this Contract shall be resolved by binding arbitration, and the parties waive any right to participate in a class action. Coverage terminates when the vehicle exceeds 150,000 miles."},
-home: {name:"Homestead Home Warranty — Systems Plan (sample)",
+"APEX AUTO SHIELD\nVEHICLE SERVICE CONTRACT: PLATINUM COVERAGE\n\nThis Vehicle Service Contract (the \u201cContract\u201d) is between you, the Contract Holder, and Apex Auto Shield LLC (the \u201cAdministrator\u201d). Please read this entire Contract carefully. Coverage begins 30 days or 1,000 miles after the Contract purchase date, whichever occurs first (the \u201cWaiting Period\u201d). No claims will be honored during the Waiting Period.\n\nCOVERAGE: Subject to the terms herein, the Administrator agrees to pay for the repair or replacement of the following components due to mechanical breakdown: engine, transmission, drive axle, and turbocharger, up to an aggregate limit of $5,000 for the life of this Contract. In no event shall the Administrator\u2019s total liability exceed $5,000.\n\nEXCLUSIONS: This Contract does not cover: (a) any repair necessitated by normal wear and tear; (b) seals and gaskets; (c) pre-existing conditions known or unknown to the Contract Holder; (d) damage caused by overheating, regardless of cause; (e) consequential damage or resulting damage to non-covered parts; (f) any vehicle used for commercial use, including ridesharing, delivery, or for-hire service such as Uber or Lyft; (g) any vehicle with modifications, aftermarket parts, lift kits, or non-OEM components; (h) any vehicle with a salvage, rebuilt, or branded title, or with prior flood damage; (i) failures caused by rust or corrosion.\n\nMAINTENANCE REQUIREMENTS: The Contract Holder must maintain the vehicle in accordance with the manufacturer\u2019s recommendations and must provide maintenance records and proof of maintenance upon request. Engine oil and filter must be changed every 3,000 miles without exception. Failure to furnish complete service history shall be grounds for denial of any claim, as determined by the Administrator in its sole discretion.\n\nCLAIM PROCEDURE: The Contract Holder must obtain prior authorization before any repair work begins. Repairs performed without prior authorization will not be covered. All repairs must be performed at an authorized repair facility designated by the Administrator. Teardown and diagnostic charges are the responsibility of the Contract Holder and are not covered under any circumstances. The Administrator may, at its sole discretion, elect to use remanufactured or used parts. Betterment and depreciation charges may be deducted from approved claims.\n\nDEDUCTIBLE: A $100 deductible applies per visit.\n\nCANCELLATION: You may cancel within 30 days for a full refund. After 30 days, cancellation refunds are calculated on a pro-rata basis less claims paid and a $50 administrative cancellation fee. This Contract is non-transferable and may not be assigned.\n\nOTHER TERMS: Failure to pay any monthly installment within 10 days shall cause this Contract to lapse, and all coverage shall terminate. Any dispute arising under this Contract shall be resolved by binding arbitration, and the parties waive any right to participate in a class action. Coverage terminates when the vehicle exceeds 150,000 miles."},
+home: {name:"Homestead Home Warranty: Systems Plan (sample)",
 text:
-"HOMESTEAD HOME WARRANTY\nRESIDENTIAL SERVICE PLAN — SYSTEMS COVERAGE\n\nThis Service Plan (the \u201cPlan\u201d) is issued by Homestead Warranty Services Inc. (the \u201cCompany\u201d). Coverage begins 30 days after enrollment. There is a $75 trade call fee due for each service visit.\n\nCOVERED SYSTEMS: Heating, cooling, plumbing, and electrical systems, subject to an aggregate limit of $5,000 per term.\n\nEXCLUSIONS: The Plan does not cover: (a) pre-existing conditions; (b) rust or corrosion; (c) systems not installed to building code; (d) consequential damage to walls, floors, or finishes resulting from a covered failure.\n\nCLAIM PROCEDURE: Service may be performed by any licensed contractor of your choice, or by a Company-authorized contractor. For repairs over $500, the Plan Holder must obtain prior authorization before work is performed.\n\nMAINTENANCE: The Plan Holder is responsible for routine maintenance and must provide service records upon request.\n\nCANCELLATION: Cancellation within 30 days of enrollment entitles the Plan Holder to a full refund. Thereafter, refunds are pro-rata less a $25 cancellation fee. This Plan is transferable to a new homeowner for a $25 transfer fee.\n\nDISPUTES: Disputes shall first be submitted to non-binding mediation. If mediation fails, either party may pursue remedies in small claims court or through binding arbitration, at the Plan Holder\u2019s choice."}
+"HOMESTEAD HOME WARRANTY\nRESIDENTIAL SERVICE PLAN: SYSTEMS COVERAGE\n\nThis Service Plan (the \u201cPlan\u201d) is issued by Homestead Warranty Services Inc. (the \u201cCompany\u201d). Coverage begins 30 days after enrollment. There is a $75 trade call fee due for each service visit.\n\nCOVERED SYSTEMS: Heating, cooling, plumbing, and electrical systems, subject to an aggregate limit of $5,000 per term.\n\nEXCLUSIONS: The Plan does not cover: (a) pre-existing conditions; (b) rust or corrosion; (c) systems not installed to building code; (d) consequential damage to walls, floors, or finishes resulting from a covered failure.\n\nCLAIM PROCEDURE: Service may be performed by any licensed contractor of your choice, or by a Company-authorized contractor. For repairs over $500, the Plan Holder must obtain prior authorization before work is performed.\n\nMAINTENANCE: The Plan Holder is responsible for routine maintenance and must provide service records upon request.\n\nCANCELLATION: Cancellation within 30 days of enrollment entitles the Plan Holder to a full refund. Thereafter, refunds are pro-rata less a $25 cancellation fee. This Plan is transferable to a new homeowner for a $25 transfer fee.\n\nDISPUTES: Disputes shall first be submitted to non-binding mediation. If mediation fails, either party may pursue remedies in small claims court or through binding arbitration, at the Plan Holder\u2019s choice."}
 };
 
 /* ---------- Reputation checklist ---------- */
@@ -258,16 +265,190 @@ function toast(msg){
   clearTimeout(t._h); t._h = setTimeout(function(){t.classList.remove("show");}, 2600);
 }
 
+/* ---------- Pass 1 shared helpers ---------- */
+const SEV_ORDER = {high:0, med:1, low:2, pos:3};
+function rankedHits(hits){
+  return hits.filter(function(h){return !h.question;}).sort(function(a,b){return SEV_ORDER[a.rule.sev]-SEV_ORDER[b.rule.sev];});
+}
+let storageCooling = false;
+function storageWarning(message){
+  if(storageCooling) return;
+  storageCooling = true;
+  toast("Storage full: " + message);
+  setTimeout(function(){storageCooling = false;}, 3000);
+}
+function fallbackCopy(t){
+  const ta = document.createElement("textarea"), active = document.activeElement;
+  ta.value = t; ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta); ta.select();
+  let copied = false;
+  try{ copied = document.execCommand("copy"); }catch(e){}
+  ta.remove();
+  if(active) active.focus({preventScroll:true});
+  return copied;
+}
+async function copyText(text, message){
+  try{
+    if(!navigator.clipboard || !navigator.clipboard.writeText) throw new Error("Clipboard unavailable");
+    await navigator.clipboard.writeText(text);
+    toast(message);
+  }catch(e){ toast(fallbackCopy(text) ? message : "Could not copy. Please try again."); }
+}
+const FINANCE_QUESTIONS = {
+  "wear-tear":["Which parts are covered when they fail from wear and tear? Show me the coverage in writing.", "Ordinary aging could otherwise be used to deny a repair."],
+  "pre-existing":["What evidence would you use to call a failure pre-existing, and will you accept a dated inspection?", "An inspection can help establish the condition when coverage starts."],
+  "sole-discretion":["Who can review a denial made at your sole discretion, and where is that appeal process written?", "A defined appeal gives you a way to challenge the decision."],
+  "seals-gaskets":["If an excluded seal or gasket damages a covered part, will you pay for the whole repair?", "A cheap seal can cause an expensive failure."],
+  "overheat":["If a covered part causes overheating, which resulting repairs will you pay for?", "The overheating exclusion may remove coverage for the larger repair."],
+  "agg-cap":["What is the total payout cap, and how much remains after one major repair?", "A single claim could exhaust the contract's remaining value."],
+  "arbitration":["Can I opt out of binding arbitration, and what is the deadline and exact process?", "The clause limits how you can challenge a denied claim."],
+  "class-waiver":["Does this waive my right to join a class action, and can I opt out in writing?", "You may have to pursue a dispute on your own."],
+  "maint-records":["Exactly which maintenance receipts must I keep, and can one missing receipt cause a denial?", "Missing paperwork can become a reason to reject a claim."],
+  "dealer-only":["Which nearby repair shops can I use, and will my own mechanic be approved?", "Shop restrictions can delay repairs and limit your options."],
+  "prior-auth":["How long does repair authorization take, and who pays for a rental while I wait?", "Work started before approval may not be reimbursed."],
+  "betterment":["For a major repair on my vehicle, show me the payout after betterment and depreciation deductions.", "An approved claim can still leave a large bill for you."],
+  "waiting-period":["What exact date and mileage must I reach before coverage starts?", "Failures during the waiting period may be excluded."],
+  "cancel-fee":["If I cancel after six months with an $800 paid claim, what exact refund would I receive?", "Fees and prior claims can greatly reduce a refund."],
+  "commercial-use":["Will my delivery, rideshare, or other paid driving be covered? Put the answer in writing.", "Paid use can disqualify the vehicle from coverage."],
+  "per-term-cap":["What is the payout cap per term, and would it cover a full major system replacement?", "A low cap can cover only a fraction of a large repair."],
+  "trade-fee":["Is the service fee due on every visit, including repeat visits and denied claims?", "Repeated dispatch fees can add up for one problem."],
+  "lapse":["What grace period applies to a missed payment, and can coverage be reinstated?", "A payment lapse can leave repairs without coverage."],
+  "mileage-cap":["At what exact odometer reading does coverage end, even if time remains?", "Your driving rate may shorten the usable contract term."]
+};
+function financeQuestions(hits){
+  return rankedHits(hits).filter(function(h){return h.rule.sev === "high" || h.rule.sev === "med";}).slice(0,3).map(function(h){
+    const q = FINANCE_QUESTIONS[h.rule.id];
+    return {ask:q ? q[0] : 'Your contract flags "' + h.rule.title + '". Ask them to explain exactly what it means for a real claim, and get the answer in writing.', why:q ? q[1] : h.rule.explain};
+  });
+}
+function questionsHTML(questions){
+  return "<ol>" + questions.map(function(q){return '<li>“' + esc(q.ask) + '”<p>' + esc(q.why) + '</p></li>';}).join("") + "</ol>";
+}
+function buildPrintReport(a, hits){
+  const top = rankedHits(hits).slice(0,3), questions = financeQuestions(hits);
+  const checks = $("check-items").querySelectorAll("input");
+  $("print-report").innerHTML = '<h1>FinePrint one-pager</h1><header><strong>' + esc(a.name || "Pasted contract") + '</strong><p>' + esc(new Date(a.date).toLocaleDateString()) + '</p><p>Deal score: ' + a.score + '/100: ' + esc(verdictFor(a.score)[0]) + '</p><p>scored with rule set v' + RULESET_V + '</p></header>' +
+    '<h2>Top 3 traps</h2>' + (top.length ? '<ol>' + top.map(function(h){return '<li><strong>' + SEV_LABEL[h.rule.sev] + ':</strong> ' + esc(h.rule.title) + '</li>';}).join("") + '</ol>' : '<p>No traps detected.</p>') +
+    (questions.length ? '<h2>3 questions for the finance office</h2>' + questionsHTML(questions) : '') +
+    '<h2>Before you sign: the reputation check</h2><ul class="print-checklist">' + CHECKLIST.map(function(item,i){return '<li>' + (checks[i] && checks[i].checked ? '[x] ' : '[ ] ') + esc(item) + '</li>';}).join("") + '</ul><footer>Not legal advice. Pattern-based scan.</footer>';
+}
+
+// fp-share-v1
+async function shareScore(a, hits){
+  try{
+    const canvas = document.createElement("canvas");
+    canvas.width = 1800; canvas.height = 1200;
+    const ctx = canvas.getContext("2d");
+    if(!ctx) throw new Error("Canvas unavailable");
+    const ink = "#1c1a15", font = '-apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
+    const v = verdictFor(a.score);
+    ctx.fillStyle = "#faf7ef"; ctx.fillRect(0,0,1800,1200);
+    ctx.strokeStyle = ink; ctx.lineWidth = 12; ctx.strokeRect(6,6,1788,1188);
+    function text(value,x,y,size,color,weight){
+      ctx.font = (weight || 400) + " " + size + "px " + font;
+      ctx.fillStyle = color || ink; ctx.fillText(value,x,y);
+    }
+    function wrap(value,x,y,width,size,color,weight){
+      ctx.font = (weight || 400) + " " + size + "px " + font;
+      const words = value.split(/\s+/); let line = "";
+      words.forEach(function(word){
+        const next = line ? line + " " + word : word;
+        if(line && ctx.measureText(next).width > width){text(line,x,y,size,color,weight);y+=size*1.3;line=word;}
+        else line=next;
+      });
+      if(line) text(line,x,y,size,color,weight);
+      return y;
+    }
+    text("FinePrint",90,130,76,ink,900);
+    text("Warranty red-flag reader",94,184,30);
+    text(String(a.score),90,424,240,ink,900);
+    const scoreWidth = ctx.measureText(String(a.score)).width;
+    text("/100",105+scoreWidth,424,54,ink,700);
+    text(v[0].toUpperCase(),94,510,54,v[2],900);
+    wrap(v[1],94,566,1600,30);
+    text("Top traps",94,674,36,ink,800);
+    const colors = {high:"#c92a1e",med:"#b97e0c",low:"#1a5fa8",pos:"#1e7a34"};
+    const top = rankedHits(hits).slice(0,3);
+    top.forEach(function(h,i){
+      const y = 706+i*84;
+      ctx.fillStyle=colors[h.rule.sev];ctx.fillRect(94,y,264,52);
+      text(SEV_LABEL[h.rule.sev].toUpperCase(),110,y+35,27,"#fff",800);
+      wrap(h.rule.title,382,y+36,1310,32,ink,600);
+    });
+    if(!top.length) text("No traps detected.",94,754,32);
+    ctx.strokeStyle=ink;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(94,996);ctx.lineTo(1706,996);ctx.stroke();
+    text("projects.lukezhang.si/fineprint",94,1054,36,ink,800);
+    text("Paste your contract, get a deal score",94,1105,30);
+    text("Pattern-based scan. Not legal advice.",94,1150,24);
+    const blob = await new Promise(function(resolve,reject){canvas.toBlob(function(b){if(b) resolve(b);else reject(new Error("PNG unavailable"));},"image/png");});
+    const file = new File([blob],"fineprint-score.png",{type:"image/png"});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:"FinePrint score card",text:"Deal score: " + a.score + "/100. " + v[0] + "."});
+    }else if(navigator.clipboard && window.ClipboardItem){
+      await navigator.clipboard.write([new window.ClipboardItem({"image/png":blob})]);
+      toast("Score card copied as an image. Paste it anywhere.");
+    }else{
+      const url = URL.createObjectURL(blob), link = document.createElement("a");
+      link.href=url;link.download="fineprint-score.png";document.body.appendChild(link);link.click();link.remove();
+      setTimeout(function(){URL.revokeObjectURL(url);},1000);
+      toast("Score card downloaded.");
+    }
+  }catch(e){toast("Could not build the score card.");}
+}
+
+function feedbackData(){
+  const data = storeGet("fineprint_feedback", {});
+  return data && typeof data === "object" && !Array.isArray(data) ? data : {};
+}
+function feedbackVote(data,id){
+  const v = data[id] || {};
+  const mine = v.mine === "up" || v.mine === "down" ? v.mine : null;
+  return {up:Math.max(mine === "up" ? 1 : 0, Number.isSafeInteger(v.up) ? v.up : 0), down:Math.max(mine === "down" ? 1 : 0, Number.isSafeInteger(v.down) ? v.down : 0), mine:mine};
+}
+function feedbackRow(id){
+  const v = feedbackVote(feedbackData(),id);
+  function button(dir){
+    const path = dir === "up" ? 'M8 10l4-7c2 0 3 1 2 4l-1 3h5c2 0 3 1 2 3l-2 7H8zM3 10h5v10H3z' : 'M8 14l4 7c2 0 3-1 2-4l-1-3h5c2 0 3-1 2-3l-2-7H8zM3 4h5v10H3z';
+    return '<button class="btn btn-ghost btn-small" data-vote="' + dir + '" aria-label="' + (dir === "up" ? 'This flag was right' : 'This flag was not right') + '" aria-pressed="' + (v.mine === dir) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + path + '"/></svg><span>' + v[dir] + '</span></button>';
+  }
+  return '<div class="feedback" data-rule="' + id + '"><span>Was this flag right?</span>' + button("up") + button("down") + '<span class="feedback-counts" aria-live="polite">' + v.up + ' found this right · ' + v.down + ' did not, on this device</span></div>';
+}
+
+function compareContracts(){
+  const texts = [$("compare-a").value.trim(), $("compare-b").value.trim()];
+  if(texts.some(function(t){return t.length < 200;})){toast("Paste at least 200 characters into each contract to compare.");return;}
+  const results = texts.map(function(t){
+    const hits=analyze(t), flags=rankedHits(hits), score=scoreOf(hits), cats={};
+    hits.forEach(function(h){cats[h.rule.cat]=(cats[h.rule.cat]||0)+1;});
+    return {flags:flags,score:score,verdict:verdictFor(score)[0],cats:cats,high:flags.filter(function(h){return h.rule.sev==="high";}).length,med:flags.filter(function(h){return h.rule.sev==="med";}).length};
+  });
+  const diff = Math.abs(results[0].score-results[1].score);
+  const banner = diff < 5 ? "Too close to call" : "Contract " + (results[0].score > results[1].score ? "A" : "B") + " wins by " + diff + " points";
+  let report = "FinePrint comparison\n" + banner + "\n\n";
+  const cards = results.map(function(r,i){
+    const label = i ? "B" : "A";
+    const only = r.flags.filter(function(h){return !results[1-i].flags.some(function(other){return h.rule.id===other.rule.id;});});
+    const categories = Object.keys(r.cats).sort();
+    report += "Contract " + label + ": " + r.score + "/100, " + r.verdict + "\n" + r.high + (r.high===1?" dealbreaker, ":" dealbreakers, ") + r.med + (r.med===1?" caution":" cautions") + "\nOnly in " + label + ":\n" + (only.length ? only.map(function(h){return "- " + h.rule.title;}).join("\n") : "None") + "\nCategories: " + (categories.map(function(c){return c + ": " + r.cats[c];}).join(", ") || "None") + "\n\n";
+    return '<div class="compare-score"><h3>Contract ' + label + '</h3><strong>' + r.score + '/100</strong><p>' + esc(r.verdict) + '</p><p>' + r.high + (r.high===1?" dealbreaker · ":" dealbreakers · ") + r.med + (r.med===1?" caution":" cautions") + '</p><h4>Only in ' + label + '</h4>' + (only.length ? '<ul>' + only.map(function(h){return '<li>' + esc(h.rule.title) + '</li>';}).join("") + '</ul>' : '<p>None</p>') + '<div class="cat-break">' + categories.map(function(c){return '<span class="cat-pill">' + esc(c) + ': ' + r.cats[c] + '</span>';}).join("") + '</div></div>';
+  }).join("");
+  report += "Rule set v" + RULESET_V + ".\nPattern-based scan. Not legal advice.";
+  $("compare-results").innerHTML = '<h3>' + banner + '</h3><div class="compare-grid">' + cards + '</div><div class="input-actions"><button class="btn btn-ghost" id="copy-comparison">Copy comparison report</button></div>';
+  $("compare-results").hidden = false;
+  $("copy-comparison").onclick = function(){copyText(report,"Comparison report copied.");};
+}
+
 function renderResults(text, name, opts){
   opts = opts || {};
   const hits = analyze(text);
   const score = scoreOf(hits);
   const v = verdictFor(score);
   const id = opts.id || ("a" + Date.now().toString(36) + Math.floor(Math.random()*1e6).toString(36));
-  currentAnalysis = {id:id, text:text, name:name, score:score, hits:hits.map(function(h){
+  currentAnalysis = {id:id, text:text, name:name, score:score, rv:RULESET_V, hits:hits.map(function(h){
     return {title:h.rule.title, sev:h.rule.sev, count:h.matches.length};
   }), date:new Date().toISOString()};
 
+  $("score-version").textContent = "scored with rule set v" + RULESET_V;
   $("results").style.display = "block";
   var scoreNum = $("score-num");
   var stamp = $("stamp");
@@ -300,13 +481,13 @@ function renderResults(text, name, opts){
   const counts = {high:0, med:0, low:0, pos:0, q:0};
   hits.forEach(function(h){ if(h.question) counts.q += 1; else counts[h.rule.sev] += 1; });
   $("count-row").innerHTML =
-    pill(counts.high, "dealbreakers", "var(--hi-r)") +
-    pill(counts.med, "cautions", "var(--hi-y)") +
-    pill(counts.low, "notes", "var(--hi-b)") +
-    pill(counts.pos, "good signs", "var(--hi-g)") +
-    (counts.q ? pill(counts.q, "need your eyes", "var(--hi-b)") : "");
-  function pill(n, label, bg){
-    return '<span class="count-pill" style="background:'+bg+'">'+n+" "+label+"</span>";
+    pill(counts.high, "dealbreaker", "dealbreakers", "var(--hi-r)") +
+    pill(counts.med, "caution", "cautions", "var(--hi-y)") +
+    pill(counts.low, "note", "notes", "var(--hi-b)") +
+    pill(counts.pos, "good sign", "good signs", "var(--hi-g)") +
+    (counts.q ? pill(counts.q, "need your eyes", "need your eyes", "var(--hi-b)") : "");
+  function pill(n, one, many, bg){
+    return '<span class="count-pill" style="background:'+bg+'">'+n+" "+(n===1?one:many)+"</span>";
   }
 
   // category breakdown
@@ -316,38 +497,36 @@ function renderResults(text, name, opts){
     return '<span class="cat-pill">'+esc(c)+": "+cats[c]+"</span>";
   }).join("");
 
-  // top-3 traps summary (finance-office glance) — questions are not verdicts
-  const order3 = {high:0, med:1, low:2, pos:3};
-  const top3 = hits.filter(function(h){return !h.question;}).slice().sort(function(a,b){return order3[a.rule.sev]-order3[b.rule.sev];}).slice(0,3);
+  // top-3 traps summary (finance-office glance): questions are not verdicts
+  const top3 = rankedHits(hits).slice(0,3);
   $("top3").innerHTML = top3.length
     ? "<h4>Top traps at a glance</h4><ol>" + top3.map(function(h){
         return "<li><span class='t-sev' style='color:" +
           (h.rule.sev==="high"?"var(--red)":h.rule.sev==="med"?"var(--amber)":h.rule.sev==="pos"?"var(--green)":"var(--blue)") +
-          "'>"+SEV_LABEL[h.rule.sev]+"</span> — "+esc(h.rule.title)+"</li>";
+          "'>"+SEV_LABEL[h.rule.sev]+"</span>: "+esc(h.rule.title)+"</li>";
       }).join("") + "</ol>"
     : "";
 
+  const questions = financeQuestions(hits);
+  $("qa-card").hidden = !questions.length;
+  $("qa-card").innerHTML = questions.length ? '<h3>3 questions for the finance office</h3>' + questionsHTML(questions) : "";
+  $("share-score").onclick = function(){ shareScore(currentAnalysis, hits); };
+  $("print-onepager").onclick = function(){ buildPrintReport(currentAnalysis, hits); window.print(); };
+  window.onbeforeprint = function(){ buildPrintReport(currentAnalysis, hits); };
+
   $("copy-report").onclick = function(){
     const v = verdictFor(score);
-    let txt = "FinePrint report — " + name + "\nDeal score: " + score + "/100 — " + v[0] + "\n\n";
+    let txt = "FinePrint report: " + name + "\nDeal score: " + score + "/100: " + v[0] + "\n\n";
     const order = {high:0, med:1, low:2, pos:3};
     hits.slice().sort(function(a,b){return order[a.rule.sev]-order[b.rule.sev];}).forEach(function(h){
       txt += "[" + SEV_LABEL[h.rule.sev].toUpperCase() + "] " + h.rule.title +
         (h.matches.length>1 ? " (x"+h.matches.length+")" : "") + "\n" + h.rule.explain + "\n\n";
     });
-    txt += "Checklist before signing: google the company + complaints/scam/BBB, check your state AG, ask two mechanics if they accept it.\n— Pattern-based scan, not legal advice.";
-    const done = function(){ toast("Report copied. Text it to whoever needs it."); };
-    if(navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(txt).then(done, function(){ fallbackCopy(txt); done(); });
-    } else { fallbackCopy(txt); done(); }
+    txt += "Checklist before signing: google the company + complaints/scam/BBB, check your state AG, ask two mechanics if they accept it.\nPattern-based scan, not legal advice.";
+    if(questions.length) txt += "\n\n3 questions for the finance office\n" + questions.map(function(q){ return '"' + q.ask + '"\n' + q.why; }).join("\n\n");
+    txt += "\n\nRule set v" + RULESET_V + ".";
+    copyText(txt, "Report copied. Text it to whoever needs it.");
   };
-  function fallbackCopy(t){
-    const ta = document.createElement("textarea");
-    ta.value = t; ta.style.position = "fixed"; ta.style.opacity = "0";
-    document.body.appendChild(ta); ta.select();
-    try{ document.execCommand("copy"); }catch(e){}
-    document.body.removeChild(ta);
-  }
 
   renderDoc(text, hits);
   renderFlags(hits);
@@ -408,13 +587,13 @@ function renderFlags(hits){
     const quote = esc(h.matches[0].snippet.length > 140 ? h.matches[0].snippet.slice(0,140)+"…" : h.matches[0].snippet);
     if(h.question){
       return '<div class="flag" id="flag-'+hits.indexOf(h)+'">' +
-        '<div class="flag-head"><span class="sev sev-low">Question</span><h3>'+esc(r.title)+' — needs your eyes</h3></div>' +
+        '<div class="flag-head"><span class="sev sev-low">Question</span><h3>'+esc(r.title)+': needs your eyes</h3></div>' +
         '<div class="quote">"…'+quote+'…"</div>' +
         "<p><strong>This might be a false positive.</strong> The surrounding sentence says the opposite of the usual trap" +
         (h.questionWhy ? ' ("…'+esc(h.questionWhy.trim())+'…")' : "") +
         ". Read the clause yourself before deciding.</p>" +
         '<div class="tip"><strong>What to do</strong><br>'+esc(r.tip)+"</div>" +
-        '<p style="font-size:12.5px;color:var(--ink2)">Category: '+esc(r.cat)+'</p>' +
+        '<p style="font-size:12.5px;color:var(--ink2)">Category: '+esc(r.cat)+'</p>' + feedbackRow(r.id) +
         "</div>";
     }
     return '<div class="flag" id="flag-'+hits.indexOf(h)+'">' +
@@ -423,7 +602,7 @@ function renderFlags(hits){
       '<div class="quote">“…'+quote+'…”</div>' +
       "<p>"+esc(r.explain)+"</p>" +
       '<div class="tip"><strong>What to do</strong><br>'+esc(r.tip)+"</div>" +
-      '<p style="font-size:12.5px;color:var(--ink2)">Category: '+esc(r.cat)+'</p>' +
+      '<p style="font-size:12.5px;color:var(--ink2)">Category: '+esc(r.cat)+'</p>' + feedbackRow(r.id) +
       "</div>";
   }).join("");
 }
@@ -444,7 +623,7 @@ function renderChecklist(analysisId){
       let d = storeGet(ckey, []);
       if(cb.checked && d.indexOf(i) < 0) d.push(i);
       if(!cb.checked) d = d.filter(function(x){return x!==i;});
-      storeSet(ckey, d);
+      if(!storeSet(ckey, d)) storageWarning("checklist change not saved");
       label.classList.toggle("done", cb.checked);
     });
     const sp = document.createElement("span"); sp.className = "txt"; sp.textContent = item;
@@ -454,8 +633,11 @@ function renderChecklist(analysisId){
 
 function saveAnalysis(a){
   const all = storeGet("fineprint_analyses", []);
-  all.unshift({id:a.id, date:a.date, name:(a.name||"Pasted contract").slice(0,60), score:a.score, flags:a.hits.length, text:a.text});
-  storeSet("fineprint_analyses", all.slice(0,20));
+  all.unshift({id:a.id, date:a.date, name:(a.name||"Pasted contract").slice(0,60), score:a.score, rv:RULESET_V, flags:a.hits.length, text:a.text});
+  if(!storeSet("fineprint_analyses", all.slice(0,20))){
+    storageWarning("this analysis could not be saved.");
+    return;
+  }
   try{ if(window.__fineprintSync) window.__fineprintSync.onSave(); }catch(e){}
 }
 
@@ -515,6 +697,31 @@ function switchTab(which){
 }
 
 /* ---------- Wire up ---------- */
+$("compare-toggle").addEventListener("click",function(){
+  $("compare-sec").hidden = !$("compare-sec").hidden;
+  this.setAttribute("aria-expanded",String(!$("compare-sec").hidden));
+  if(!$("compare-sec").hidden) $("compare-a").focus();
+});
+$("compare-sample-a").addEventListener("click",function(){ $("compare-a").value=SAMPLES.car.text; $("compare-results").hidden=true; });
+$("compare-sample-b").addEventListener("click",function(){ $("compare-b").value=SAMPLES.home.text; $("compare-results").hidden=true; });
+["compare-a","compare-b"].forEach(function(id){$(id).addEventListener("input",function(){ $("compare-results").hidden=true; });});
+$("compare-run").addEventListener("click",compareContracts);
+$("flag-list").addEventListener("click",function(event){
+  const button = event.target.closest("button[data-vote]");
+  if(!button) return;
+  const row = button.closest(".feedback"), id = row.dataset.rule, dir = button.dataset.vote;
+  const data = feedbackData(), v = feedbackVote(data,id);
+  const next = v.mine === dir ? null : dir;
+  if(v.mine) v[v.mine] = Math.max(0,v[v.mine]-1);
+  if(next) v[next]++;
+  v.mine=next;data[id]=v;
+  if(!storeSet("fineprint_feedback",data)){storageWarning("this vote could not be saved.");return;}
+  row.outerHTML=feedbackRow(id);
+  const updated = $("flag-list").querySelector('.feedback[data-rule="'+id+'"]');
+  updated.querySelector('[data-vote="'+dir+'"]').focus({preventScroll:true});
+  toast("Thanks. Your vote helps tune the detector.");
+});
+
 $("tab-doc").addEventListener("click", function(){switchTab("doc");});
 $("tab-flags").addEventListener("click", function(){switchTab("flags");});
 

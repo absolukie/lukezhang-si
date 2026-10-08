@@ -1,4 +1,4 @@
-/* Curbside — Food Truck OS. Vanilla JS, localStorage. No third-party requests. */
+/* Curbside: Food Truck OS. Vanilla JS, localStorage. No third-party requests. */
 (function(){
 "use strict";
 
@@ -19,11 +19,11 @@ const CYCLE_LABEL = {annual:'Renews yearly', biennial:'Renews every 2 yrs', '3yr
 /* Fee honesty: est:true fees are unverified estimates and render with ~ plus a
  * provenance line naming the agency. fee:0 + est:true means the fee is unknown,
  * never free. feeNote overrides the fee pill for line items that carry no fee
- * of their own (e.g. commissary agreements — the agreement is free, the rent
+ * of their own (e.g. commissary agreements: the agreement is free, the rent
  * is tracked in the Commissary tab). */
 const feeLabel = d => d.feeNote ? d.feeNote : d.fee>0 ? ((d.est?'~':'')+money(d.fee)) : (d.est?'Fee TBD':'Free');
 const estTag = d => d.est ? ' <span class="est">est.</span>' : '';
-const estLine = d => d.est ? '<div class="est-line">Unverified estimate . Confirm with '+esc(d.agency)+'</div>' : '';
+const estLine = d => d.est ? '<div class="est-line">Unverified estimate. Confirm with '+esc(d.agency)+'</div>' : '';
 /* Estimated countdowns: expiry dates the app guessed (not user-entered) render with ~. */
 const approxDays = sp => sp.expiresEst ? '~' : '';
 
@@ -390,7 +390,7 @@ function renderHome(){
   $('#weekStrip').innerHTML=wk.map(k=>{
     const d=parseKey(k); const spots=(S.locations[k]||[]);
     return '<div class="day-chip'+(k===tK?' today':'')+'"><b>'+d.toLocaleDateString('en-US',{weekday:'short'})+' '+d.getDate()+'</b>'+
-      '<span class="spot">'+(spots.length?esc(spots[0].spot)+(spots.length>1?' +'+(spots.length-1):''):'—')+'</span></div>';
+      '<span class="spot">'+(spots.length?esc(spots[0].spot)+(spots.length>1?' +'+(spots.length-1):''):'·')+'</span></div>';
   }).join('');
   // revenue this week
   const wset=new Set(wk);
@@ -401,7 +401,7 @@ function renderHome(){
   if(act.length){ const st=permitState(act[0].sp);
     $('#nextRenewal').textContent=st.days<0?'OVERDUE':approxDays(act[0].sp)+st.days+' days';
     $('#nextRenewalSub').textContent=act[0].def.name+(act[0].sp.expiresEst?' (estimated date)':'');
-  } else { $('#nextRenewal').textContent='—'; $('#nextRenewalSub').textContent='No dated permits'; }
+  } else { $('#nextRenewal').textContent='·'; $('#nextRenewalSub').textContent='No dated permits'; }
   // upcoming events
   const up=S.events.filter(e=>e.status!=='done'&&e.date>=tK).sort((a,b)=>a.date<b.date?-1:1).slice(0,3);
   $('#homeEvents').innerHTML=up.length?up.map(e=>
@@ -518,7 +518,7 @@ function togglePermit(id){
   if(sp.status==='active'){ sp.status='needed'; sp.expires=null; sp.expiresEst=false; save(); renderPermits(); renderAlerts(); return; }
   const days=CYCLE_DAYS[def.cycle];
   sp.status='active'; sp.expires=days?addDaysKey(todayKey(),days):null;
-  sp.expiresEst=!!days; // guessed from the renewal cycle, not a real date — labeled as ~ everywhere
+  sp.expiresEst=!!days; // guessed from the renewal cycle, not a real date: labeled as ~ everywhere
   save(); renderPermits(); renderAlerts();
 }
 function permitDateSheet(id){
@@ -602,7 +602,8 @@ function renderCommissary(){
   DAYS.forEach(d=>{
     const b=document.createElement('button');
     b.type='button'; b.className='day-pill'+((c.days||[]).includes(d)?' on':''); b.textContent=d;
-    b.onclick=()=>{ const i=c.days.indexOf(d); if(i>=0) c.days.splice(i,1); else c.days.push(d); save(); renderCommissary(); };
+    b.onclick=()=>{ c.name=$('#comName').value; c.cost=$('#comCost').value; c.renews=$('#comRenews').value; c.notes=$('#comNotes').value;
+      c.days=c.days||[]; const i=c.days.indexOf(d); if(i>=0) c.days.splice(i,1); else c.days.push(d); save(); renderCommissary(); };
     dp.appendChild(b);
   });
   const cost=+c.cost||0;
@@ -666,7 +667,7 @@ function renderRevenue(){
   $('#revW').textContent=money(inW.reduce((a,r)=>a+ +r.amount,0));
   $('#revM').textContent=money(inM.reduce((a,r)=>a+ +r.amount,0));
   const best=S.revenue.slice().sort((a,b)=>b.amount-a.amount)[0];
-  $('#revBest').textContent=best?money(best.amount):'—';
+  $('#revBest').textContent=best?money(best.amount):'·';
   // chart: last 7 days, summed per date
   const days=[]; for(let i=6;i>=0;i--) days.push(addDaysKey(tK,-i));
   const max=Math.max(1,...days.map(k=>S.revenue.filter(r=>r.date===k).reduce((a,r)=>a+ +r.amount,0)));

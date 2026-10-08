@@ -32,6 +32,16 @@
       </button>
     </header>
     <div class="jobs-stats" id="jobs-stats"></div>
+    <div class="jobs-search-row">
+      <input type="search" id="job-search" placeholder="Search jobs, clients, claims..." aria-label="Search jobs" autocomplete="off">
+    </div>
+    <div class="filter-chips" id="job-filters">
+      <button type="button" class="chip-btn sel" data-filter="all">All</button>
+      <button type="button" class="chip-btn" data-filter="intake">Intake</button>
+      <button type="button" class="chip-btn" data-filter="active">Active</button>
+      <button type="button" class="chip-btn" data-filter="awaiting">Awaiting adjuster</button>
+      <button type="button" class="chip-btn" data-filter="closed">Closed</button>
+    </div>
     <div id="job-list" class="job-list"></div>
     <div class="jobs-foot">
       <button id="btn-demo" class="btn btn-ghost">Load demo job</button>
@@ -50,6 +60,9 @@
         <div class="job-title" id="job-title">Job</div>
         <div class="job-sub" id="job-sub"></div>
       </div>
+      <button type="button" id="btn-edit-job" class="btn btn-icon" aria-label="Edit job details">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3l5 5M3 21l5-1L21 7a2 2 0 0 0-5-5L3 15v6z"/></svg>
+      </button>
       <select id="job-status" class="status-select" aria-label="Job status">
         <option value="intake">Intake</option>
         <option value="active">Active</option>
@@ -79,13 +92,18 @@
 
     <div class="tab-panels">
       <div id="tab-photos" class="tab-panel active">
+        <div id="rapid-banner" hidden></div>
         <div class="photo-actions">
           <label class="btn btn-primary" for="photo-input">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
             Add photos
           </label>
-          <input type="file" id="photo-input" accept="image/*" multiple hidden>
+          <input type="file" id="photo-input" accept="image/*" capture="environment" multiple hidden>
+          <button id="btn-rapid" class="btn btn-secondary">Rapid capture</button>
           <button id="btn-sample-photo" class="btn btn-secondary">Sample photo</button>
+        </div>
+        <div class="photo-actions">
+          <button id="btn-manifest" class="btn btn-secondary btn-small">Photo manifest (CSV)</button>
         </div>
         <div id="photo-grid" class="photo-grid"></div>
         <p class="hint">Tap a photo to tag it: room, damage type, severity, and tap-to-place markers.</p>
@@ -99,12 +117,14 @@
 
       <div id="tab-worklog" class="tab-panel">
         <div class="worklog-total" id="worklog-total"></div>
+        <div id="worklog-invoice" class="muted worklog-invoice" hidden></div>
         <div id="worklog-list"></div>
         <div class="photo-actions">
           <button id="btn-csv" class="btn btn-secondary btn-small">Export CSV</button>
         </div>
         <form id="lineitem-form" class="card form-card">
           <div class="form-title">Add line item</div>
+          <div id="preset-row" class="preset-row"></div>
           <input type="text" id="li-desc" placeholder="Description (e.g. Biohazard remediation, crew of 2)" maxlength="120" required>
           <div class="form-row">
             <input type="number" id="li-qty" placeholder="Qty" min="0" step="0.5" value="1" required>
@@ -126,6 +146,14 @@
           </button>
         </div>
         <div class="card">
+          <div class="form-title">Send to adjuster</div>
+          <p class="muted">Record who received this dossier. This is a local log on this device, not an email send.</p>
+          <label>Adjuster name<input type="text" id="send-name" placeholder="Adjuster name" maxlength="80" autocomplete="off"></label>
+          <label>Adjuster email<input type="email" id="send-email" placeholder="name@insurer.com" maxlength="120" autocomplete="off"></label>
+          <button id="btn-mark-sent" class="btn btn-primary btn-block" type="button">Mark as sent</button>
+          <div id="send-log"></div>
+        </div>
+        <div class="card">
           <div class="form-title">Chain of custody</div>
           <div id="custody-list"></div>
         </div>
@@ -145,6 +173,7 @@
         Print / PDF
       </button>
     </header>
+    <div class="dz-running-head" id="dz-running-head"></div>
     <div id="dossier-doc" class="dossier-doc"></div>
   </section>
 </div>
@@ -154,7 +183,7 @@
   <div class="modal-card">
     <div class="modal-title">New job</div>
     <form id="job-form">
-      <label>Job name<input type="text" id="job-name" placeholder="e.g. Hoarding cleanup — Maple St" maxlength="80" required></label>
+      <label>Job name<input type="text" id="job-name" placeholder="e.g. Hoarding cleanup, Maple St" maxlength="80" required></label>
       <label>Client / policyholder<input type="text" id="job-client" placeholder="Client name" maxlength="80"></label>
       <label>Property address<input type="text" id="job-address" placeholder="Street, City, ST" maxlength="120"></label>
       <div class="form-row">
@@ -175,6 +204,41 @@
       <div class="modal-actions">
         <button type="button" class="btn btn-ghost" data-close>Cancel</button>
         <button type="submit" class="btn btn-primary">Create job</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ MODAL: EDIT JOB ============ -->
+<div id="modal-job-edit" class="modal">
+  <div class="modal-card">
+    <div class="modal-title">Edit job details</div>
+    <form id="job-edit-form">
+      <label>Job name<input type="text" id="edit-name" placeholder="e.g. Hoarding cleanup, Maple St" maxlength="80" required></label>
+      <label>Client / policyholder<input type="text" id="edit-client" placeholder="Client name" maxlength="80"></label>
+      <label>Property address<input type="text" id="edit-address" placeholder="Street, City, ST" maxlength="120"></label>
+      <div class="form-row">
+        <label>Claim #<input type="text" id="edit-claim" placeholder="Claim number" maxlength="40"></label>
+        <label>Insurer<input type="text" id="edit-insurer" placeholder="Insurance co." maxlength="60"></label>
+      </div>
+      <label>Job type
+        <select id="edit-type">
+          <option value="Hoarding cleanup">Hoarding cleanup</option>
+          <option value="Crime scene / trauma">Crime scene / trauma</option>
+          <option value="Biohazard remediation">Biohazard remediation</option>
+          <option value="Unattended death">Unattended death</option>
+          <option value="Sewage backup">Sewage backup</option>
+          <option value="Other">Other</option>
+        </select>
+      </label>
+      <label>Company<input type="text" id="edit-company" placeholder="Your company name" maxlength="80"></label>
+      <div class="form-row">
+        <label>Invoice #<input type="text" id="edit-invoice" maxlength="40"></label>
+        <label>Discount %<input type="number" id="edit-discountPct" min="0" max="100" step="1" placeholder="0"></label>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Save changes</button>
       </div>
     </form>
   </div>
@@ -239,6 +303,58 @@
         <button type="submit" class="btn btn-primary">Save tags</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- ============ MODAL: RAPID CAPTURE ============ -->
+<div id="modal-rapid" class="modal">
+  <div class="modal-card">
+    <div class="modal-title">Rapid capture</div>
+    <p class="muted" style="margin:0 0 12px;">Pick the room and phase once, then snap photo after photo. Each photo is tagged automatically.</p>
+    <label>Room / area
+      <select id="rapid-room">
+        <option value="">—</option>
+        <option>Kitchen</option><option>Bathroom</option><option>Bedroom</option>
+        <option>Living room</option><option>Basement</option><option>Attic</option>
+        <option>Garage</option><option>Hallway</option><option>Exterior</option><option>Other</option>
+      </select>
+    </label>
+    <label>Phase
+      <div class="phase-row" id="rapid-phase">
+        <button type="button" data-phase="before" class="phase-btn sel">Before</button>
+        <button type="button" data-phase="during" class="phase-btn">During</button>
+        <button type="button" data-phase="after" class="phase-btn">After</button>
+      </div>
+    </label>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+      <button type="button" class="btn btn-primary" id="btn-rapid-start">Start capturing</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: STEP NOTE ============ -->
+<div id="modal-step-note" class="modal">
+  <div class="modal-card">
+    <div class="modal-title" id="step-note-title">Step note</div>
+    <form id="step-note-form">
+      <label>Note<textarea id="step-note-text" rows="3" maxlength="300" placeholder="Note for this step (optional)"></textarea></label>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Save note</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ MODAL: STORAGE ============ -->
+<div id="modal-storage" class="modal">
+  <div class="modal-card">
+    <div class="modal-title">Storage on this device</div>
+    <div id="storage-body"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-primary" data-close>Done</button>
+    </div>
   </div>
 </div>
 

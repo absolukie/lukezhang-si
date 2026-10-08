@@ -238,16 +238,6 @@ async function serveLeanAsset(key, env) {
   headers.set("cache-control", "public, max-age=31536000, immutable");
   return new Response(obj.body, { headers });
 }
-// Temporary one-shot upload; the route is removed after the assets land.
-async function handleLeanUpload(url, request, env) {
-  const key = url.searchParams.get("key") || "";
-  if (!key.startsWith("lean-wasm-assets/") || key.includes("..")) {
-    return new Response("bad key", { status: 400 });
-  }
-  await env.LEAN_WASM.put(key, request.body);
-  return new Response("ok");
-}
-
 async function fetchAsset(request, env, path) {
   const url = new URL(request.url);
   let res = await env.ASSETS.fetch(new Request(new URL(path, url), request));
@@ -776,10 +766,6 @@ export default {
           headers.set("Cross-Origin-Opener-Policy", "same-origin");
           headers.set("Cross-Origin-Embedder-Policy", "require-corp");
           return new Response(res.body, { status: res.status, headers });
-        }
-        // One-shot R2 upload for the Lean assets (temporary; removed after upload).
-        if (url.pathname === "/__lean_up_7f3a9c" && request.method === "PUT") {
-          return handleLeanUpload(url, request, env);
         }
         // Main domain and every other host: today's behavior, untouched.
         return env.ASSETS.fetch(request);

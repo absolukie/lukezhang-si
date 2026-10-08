@@ -1,4 +1,4 @@
-/* Curbside sync — PROTOTYPE.
+/* Next Chapter sync: PROTOTYPE.
  * Local-first sync to sprint-backend-proto (https://sync-proto.lukezhang.si).
  * Additive: the app works fully offline; sync never blocks the UI.
  * Prototype-grade auth: a random per-device key stored in localStorage.
@@ -37,7 +37,7 @@ function hashRecord(r){
 /* Map app state -> flat record list. Mirrors the backend's generic model:
  * records(owner_device, app_slug, collection, rec_key, value_json, updated_at) */
 /* Map app state -> flat record list. Collections: `moves` (move core fields),
- * `inventory` (key "moveId:itemId", photo stripped — images stay local-only),
+ * `inventory` (key "moveId:itemId", photo stripped: images stay local-only),
  * `vendors` (key "moveId:vendorId"). node-testable: no DOM. */
 function stateToRecords(S){
   var R = [];
@@ -92,7 +92,7 @@ function upsertIntoState(S, collection, key, value){
     S.moves = S.moves || [];
     m = findMove(S, key);
     if (m){
-      // core fields only — items/vendors arrive as their own records
+      // core fields only: items/vendors arrive as their own records
       ["clientName","moveType","fromAddr","toAddr","targetDate","familyContact",
        "rooms","floorNotes","donations","activity","archived","createdAt"].forEach(function(f){
         if (value[f] !== undefined) m[f] = value[f];
@@ -168,7 +168,7 @@ var status = "starting"; // starting|syncing|offline|pending|synced (see updateP
 try { meta = JSON.parse(localStorage.getItem(LS_META) || "{}") || {}; } catch(e){ meta = {}; }
 try { lastSync = +localStorage.getItem(LS_LAST) || 0; } catch(e){}
 /* Outbox durability: the acknowledged baseline survives reloads. Never snapshot
- * the live state as acknowledged here — anything differing from the baseline is
+ * the live state as acknowledged here. Anything differing from the baseline is
  * unpushed work that must stay visible in the pill and go up on the next push. */
 try { lastPushed = JSON.parse(localStorage.getItem(LS_BASE) || "{}") || {}; } catch(e){ lastPushed = {}; }
 function saveMeta(){ try{ localStorage.setItem(LS_META, JSON.stringify(meta)); }catch(e){} }
@@ -196,7 +196,7 @@ function escHtml(s){
  * "Synced" only when nothing is pending and nothing is in flight;
  * "Syncing..." while a push/pull is in flight;
  * "Offline" when the network is down;
- * "Not synced — N changes pending" whenever work is unacknowledged. */
+ * "Not synced: N changes pending" whenever work is unacknowledged. */
 /* Lists oversized (device-only) records inside the settings panel. */
 function renderBigWarn(){
   var host = document.querySelector("#syncBigWarn");
@@ -207,7 +207,7 @@ function renderBigWarn(){
     '<div class="syncbig"><strong>Too large to back up (' + keys.length + '):</strong>' +
     '<ul>' + keys.map(function(mk){
       var kb = Math.round((oversized[mk].bytes || 0) / 1024);
-      return '<li>' + escHtml(mk) + ' \u2014 ' + kb +
+      return '<li>' + escHtml(mk) + ': ' + kb +
         ' KB (100 KB cap). Saved on this device only.</li>';
     }).join("") + '</ul></div>';
 }
@@ -216,7 +216,7 @@ function renderBigWarn(){
  * "Synced" only when nothing is pending, nothing oversized, and nothing in flight;
  * "Syncing..." while a push/pull is in flight;
  * "Offline" when the network is down;
- * "Not synced — N changes pending" whenever sendable work is unacknowledged;
+ * "Not synced: N changes pending" whenever sendable work is unacknowledged;
  * "Sync limited" when everything sendable is synced but oversized records are
  * device-only (they are surfaced, never marked acknowledged). */
 function updatePill(){
@@ -225,8 +225,8 @@ function updatePill(){
   try { big = Object.keys(oversized).length; } catch(e){ big = 0; }
   if (inflight > 0){ s = "syncing"; label = "Syncing..."; cls = "warn"; }
   else if (typeof navigator !== "undefined" && navigator.onLine === false){ s = "offline"; label = "Offline"; cls = ""; }
-  else if (n > 0){ s = "pending"; label = "Not synced \u2014 " + n + " change" + (n === 1 ? "" : "s") + " pending"; cls = "crit"; }
-  else if (big > 0){ s = "limited"; label = "Sync limited \u2014 " + big + " too large"; cls = "warn"; }
+  else if (n > 0){ s = "pending"; label = "Not synced: " + n + " change" + (n === 1 ? "" : "s") + " pending"; cls = "crit"; }
+  else if (big > 0){ s = "limited"; label = "Sync limited: " + big + " too large"; cls = "warn"; }
   else { s = "synced"; label = "Synced"; cls = "ok"; }
   status = s;
   var el = document.querySelector("#syncStatus");
@@ -329,7 +329,7 @@ function diffOut(){
 
 /* Push locally-changed records. Diffed against the persisted lastPushed
  * baseline; deletions become tombstones automatically. Idempotent by key;
- * safe to retry. The baseline only advances on success — a failed push keeps
+ * safe to retry. The baseline only advances on success. A failed push keeps
  * the work visible in the pill instead of claiming "Synced". */
 async function pushDirty(){
   if (!deviceKey || applyingRemote){ updatePill(); return; }
@@ -355,7 +355,7 @@ async function pushDirty(){
 /* Pull remote changes since lastSync; apply newer-wins; re-render. */
 /* Pull remote changes since lastSync; apply newer-wins; re-render.
  * Applied records merge into the persisted baseline WITHOUT snapshotting the
- * whole state — local-only work stays unacknowledged and keeps its pill. */
+ * whole state. Local-only work stays unacknowledged and keeps its pill. */
 async function pull(){
   if (!deviceKey || applyingRemote) return;
   inflight++; updatePill();
@@ -400,7 +400,7 @@ function onSave(){
 }
 
 
-/* Settings UI — rendered into #syncAnchor at the bottom of the dashboard.
+/* Settings UI, rendered into #syncAnchor at the bottom of the dashboard.
  * Re-renders each call because vDashboard rebuilds the view on every route. */
 function renderSettingsUI(){
   var anchor = document.getElementById("syncAnchor");

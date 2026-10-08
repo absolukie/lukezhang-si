@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Buyback — Build your lemon law case</title>
+<title>Buyback: Build your lemon law case</title>
 <meta name="description" content="Log your car's repair visits, track your state's lemon law thresholds, and know the moment you qualify for a buyback. Free consumer tool.">
 <link rel="stylesheet" href="styles.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23FFC531'/%3E%3Cpath d='M14 40l4-10a6 6 0 0 1 5-4h18a6 6 0 0 1 5 4l4 10' stroke='%231C1A15' stroke-width='4' fill='none' stroke-linecap='round'/%3E%3Crect x='12' y='38' width='40' height='10' rx='4' fill='%231C1A15'/%3E%3Ccircle cx='22' cy='50' r='4' fill='%231C1A15'/%3E%3Ccircle cx='42' cy='50' r='4' fill='%231C1A15'/%3E%3C/svg%3E">
@@ -39,6 +39,7 @@
       <a href="#states">States</a>
       <a href="#faq">FAQ</a>
       <a href="/lemon/">Lemon library</a>
+      <a href="/for-firms/">For firms</a>
     </nav>
     <a class="btn btn-small" href="#app">Start your case</a>
   </div>
@@ -57,7 +58,7 @@
         <p class="micro">Takes 2 minutes. Your data stays on your devices.</p>
       </div>
       <div class="hero-stats">
-        <div class="stat"><strong>5</strong><span>states with real<br>statute thresholds</span></div>
+        <div class="stat"><strong>15</strong><span>states with real<br>statute thresholds</span></div>
         <div class="stat"><strong>$10k+</strong><span>typical buyback<br>settlements</span></div>
         <div class="stat"><strong>0</strong><span>dollars. Lawyers work<br>on contingency</span></div>
       </div>
@@ -143,20 +144,21 @@
                   <button class="btn btn-small" id="addRepairBtn"><svg class="ic"><use href="#i-plus"/></svg> Log a repair</button>
                 </div>
                 <form id="repairForm" class="repair-form hidden" novalidate>
-                  <div class="field"><label for="rProblem">What broke? <span class="opt">use the same words each visit for the same problem</span></label><input id="rProblem" placeholder="e.g. Transmission shudder" autocomplete="off"></div>
+                  <div class="field"><label for="rProblem">What broke?</label><input id="rProblem" placeholder="e.g. Transmission shudder" autocomplete="off" list="problemHints"><datalist id="problemHints"></datalist><p class="micro" style="margin:4px 0 0">Pick from your past labels or type a new one. Same wording groups visits for the same problem.</p></div>
                   <div class="frow">
                     <div class="field"><label for="rIn">Date dropped off</label><input id="rIn" type="date"></div>
                     <div class="field"><label for="rOut">Date picked up <span class="opt">(blank if still in shop)</span></label><input id="rOut" type="date"></div>
+                    <div class="field"><label for="rMile">Mileage at drop-off <span class="opt">(optional)</span></label><input id="rMile" inputmode="numeric" placeholder="12,400" autocomplete="off"></div>
                   </div>
                   <div class="field"><label for="rDealer">Dealer / shop</label><input id="rDealer" placeholder="e.g. Downtown Ford" autocomplete="off"></div>
                   <div class="field"><label for="rDesc">What happened <span class="opt">(optional)</span></label><textarea id="rDesc" rows="2" placeholder="What you told them, what they did"></textarea></div>
                   <label class="check"><input type="checkbox" id="rSafety"> <span><strong>Safety issue.</strong> The defect could cause death or serious injury (brakes, steering, fire risk). Some states qualify faster on safety defects.</span></label>
-                  <div class="field"><label for="rPhoto">Repair order photo <span class="opt">(optional)</span></label><input id="rPhoto" type="file" accept="image/*"></div>
                   <p class="form-err" id="repairErr" role="alert"></p>
                   <div class="btn-row">
                     <button type="button" class="btn btn-ghost" id="cancelRepairBtn">Cancel</button>
-                    <button type="submit" class="btn">Save repair</button>
+                    <button type="submit" class="btn" id="saveRepairBtn">Save repair</button>
                   </div>
+                  <div class="field" style="margin-top:14px"><label for="rPhoto">Repair order photo <span class="opt">(optional)</span></label><input id="rPhoto" type="file" accept="image/*" capture="environment"><p class="micro" id="photoKeptNote" style="margin:4px 0 0"></p></div>
                 </form>
                 <div id="repairList" class="repair-list"></div>
               </div>
@@ -177,7 +179,11 @@
                 <div class="doc-actions">
                   <button class="btn btn-ghost btn-block" id="printSummaryBtn"><svg class="ic"><use href="#i-print"/></svg> Print case summary</button>
                   <button class="btn btn-ghost btn-block" id="demandLetterBtn"><svg class="ic"><use href="#i-doc"/></svg> Draft demand letter</button>
+                  <button class="btn btn-ghost btn-block" id="exportJsonBtn"><svg class="ic"><use href="#i-arrow"/></svg> Download case JSON</button>
+                  <button class="btn btn-ghost btn-block" id="importJsonBtn"><svg class="ic"><use href="#i-doc"/></svg> Import case JSON</button>
+                  <input type="file" id="importJsonFile" accept="application/json,.json" class="hidden">
                 </div>
+                <p class="form-err" id="importErr" role="alert" style="margin-top:8px"></p>
                 <p class="micro">Bring the printed summary to any lemon law attorney. Most take these cases on contingency, meaning no upfront cost to you.</p>
               </div>
               <div id="syncAnchor"></div>
@@ -209,7 +215,7 @@
         <details><summary>Do days in the shop have to be consecutive?</summary><p>No. In all fifteen states the day counts are cumulative across visits. Keep every repair order: the date-in and date-out on each invoice is what proves your total.</p></details>
         <details><summary>What if my car is used?</summary><p>Some states cover used cars still under the manufacturer's original warranty (California does, for example). Texas generally covers new vehicles only. The tool tracks the presumption windows; an attorney can tell you if your used car qualifies another way.</p></details>
         <details><summary>How is this free? How do you make money?</summary><p>Buyback is free for consumers, and it stays free. If you choose to get matched with a lemon law attorney through the case-review form, participating attorneys may pay us a referral fee. That never changes what you pay: lemon law attorneys work on contingency, so there is no upfront cost to you either way.</p></details>
-        <details><summary>Where does my data go?</summary><p>On your devices: everything you enter is stored in your browser's local storage, and device sync keeps copies on our server so your other devices can read them. There are no accounts and no tracking.</p></details>
+        <details><summary>Where does my data go?</summary><p>On your devices: everything you enter is stored in your browser's local storage, and device sync keeps copies on our server so your other devices can read them. Sign-in is optional: it just links your devices for sync, nothing else changes. There is no tracking.</p></details>
       </div>
     </div>
   </section>
@@ -219,7 +225,7 @@
 <footer class="site-footer">
   <div class="wrap">
     <p><strong>Disclaimer:</strong> Buyback is a prototype consumer-education tool, not a law firm, and nothing here is legal advice. Lemon law outcomes depend on your specific facts, your state's exact statute, and deadlines that can permanently end your claim if missed. Consult a licensed attorney before taking action.</p>
-    <p class="micro">Thresholds summarized from public statute sources for CA, TX, FL, NY, OH, IL, PA, NJ, GA, NC, WA, CO, AZ, MA, and VA. Statutes change; verify against current law. Built as a demo.</p>
+    <p class="micro">Thresholds summarized from public statute sources for CA, TX, FL, NY, OH, IL, PA, NJ, GA, NC, WA, CO, AZ, MA, and VA. Statutes change; verify against current law. Built as a demo. <a href="/for-firms/">Lemon law firm? See the case file product.</a></p>
   </div>
 </footer>
 
@@ -227,27 +233,53 @@
 <div class="modal hidden" id="intakeModal" role="dialog" aria-modal="true" aria-labelledby="intakeTitle">
   <div class="modal-card">
     <h3 id="intakeTitle">Get matched with a lemon law attorney</h3>
-    <p class="hint">Lemon law attorneys usually work on contingency: no upfront cost, they get paid from the settlement. Fill this in and a participating attorney will contact you for a free case review.</p>
+    <p class="hint">Lemon law attorneys usually work on contingency: no upfront cost, they get paid from the settlement. Your request and a snapshot of your case are saved on this device, and a participating attorney can review the file.</p>
     <form id="intakeForm" novalidate>
       <div class="frow">
         <div class="field"><label for="iName">Full name</label><input id="iName" autocomplete="name"></div>
         <div class="field"><label for="iPhone">Phone</label><input id="iPhone" type="tel" autocomplete="tel"></div>
       </div>
       <div class="field"><label for="iEmail">Email</label><input id="iEmail" type="email" autocomplete="email"></div>
-      <div class="field"><label for="iSummary">Case summary</label><textarea id="iSummary" rows="3"></textarea></div>
-      <label class="check"><input type="checkbox" id="iConsent"> <span>I agree that a lemon law attorney may contact me about my case. I understand this is not legal advice.</span></label>
-      <p class="micro">Buyback is free for consumers. Participating attorneys may pay us a referral fee; it never changes what you pay.</p>
+      <div class="field"><label for="iSummary">Case summary</label><p class="micro hidden" id="momentNote" style="margin:0 0 6px"></p><textarea id="iSummary" rows="3"></textarea></div>
+      <div class="share-box">
+        <h4>What you share</h4>
+        <ul>
+          <li>Your name, phone number, and email</li>
+          <li>Your case summary, state, and car details (year, make, model, mileage)</li>
+          <li>Your repair visits: dates, dealers, problems, and per-visit mileage</li>
+          <li>Your pre-computed threshold results against your state's statute</li>
+        </ul>
+        <p class="micro">Recipient: a participating lemon law attorney. Repair-order photos stay on this device until a firm is selected. Buyback is free for consumers. If you are matched, the participating lemon law attorney may pay us a referral fee; it never changes what you pay.</p>
+      </div>
+      <label class="check"><input type="checkbox" id="iConsent"> <span>I agree that a participating lemon law attorney may contact me about my case using the information listed above. I understand this is not legal advice and no attorney-client relationship is formed by this request.</span></label>
       <p class="form-err" id="intakeErr" role="alert"></p>
       <div class="btn-row">
         <button type="button" class="btn btn-ghost" data-close-modal>Cancel</button>
         <button type="submit" class="btn">Request free case review</button>
       </div>
     </form>
-    <div id="intakeDone" class="hidden center">
-      <svg class="ic big ok"><use href="#i-check"/></svg>
-      <h3>Request received</h3>
-      <p>A lemon law attorney will review your case summary and reach out within 1-2 business days. Keep logging repairs and hold on to every repair order.</p>
-      <button class="btn" data-close-modal>Done</button>
+    <div id="intakeDone" class="hidden">
+      <div class="center">
+        <svg class="ic big ok"><use href="#i-check"/></svg>
+        <h3>Request saved</h3>
+        <p>Saved. Your request and a snapshot of your case are stored on this device, and a participating attorney can review the file. Keep logging repairs and hold on to every repair order.</p>
+      </div>
+      <div class="share-box" style="margin-top:14px">
+        <h4>What a participating attorney receives</h4>
+        <div id="intakeReceipt"></div>
+      </div>
+      <div class="center" style="margin-top:14px"><button class="btn" data-close-modal>Done</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Threshold-crossing celebration modal -->
+<div class="modal hidden" id="momentModal" role="dialog" aria-modal="true" aria-labelledby="momentTitle">
+  <div class="modal-card wide moment-card">
+    <h3 id="momentTitle" class="sr-only">Qualification moment</h3>
+    <div id="momentBody"></div>
+    <div class="btn-row" style="margin-top:14px">
+      <button type="button" class="btn btn-ghost" data-close-modal>Close</button>
     </div>
   </div>
 </div>

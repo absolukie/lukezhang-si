@@ -56,7 +56,8 @@
   .stepper .step-body { font-size: 15px; color: rgba(43,43,43,0.85); margin-bottom: 12px; }
   .stepper .step-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 13.5px; background: #2b2b2b; color: #f6f1e3; border-radius: 8px;
-    padding: 10px 14px; display: inline-block; }
+    padding: 10px 14px; display: block; white-space: pre; overflow-x: auto;
+    max-width: 100%; -webkit-overflow-scrolling: touch; }
   .stepper .step-gloss { font-size: 14px; color: rgba(43,43,43,0.72); margin-top: 10px;
     line-height: 1.55; }
   .stepper .gloss-tag { font-weight: 700; color: #b3352b; font-size: 12px;
@@ -74,6 +75,9 @@
   .stepper .dots span { width: 8px; height: 8px; border-radius: 50%;
     background: rgba(43,43,43,0.18); }
   .stepper .dots span.on { background: #b3352b; }
+  @media (max-width: 480px) {
+    .stepper .step-code { font-size: 12px; padding: 10px 12px; }
+  }
 
   /* Lean-in-the-browser lab */
   .leanlab { border: 1px solid rgba(179,53,43,0.35); border-radius: 16px;
@@ -156,7 +160,7 @@
   <p>If the π result measures <em>how</em> irrational a number is, the √2 proof is where that road starts: the 2,500-year-old argument that some numbers simply are not fractions, now in a form a computer can check.</p>
 
   <h2>3. The proof, in six steps</h2>
-  <p>Tap through it. Each step is one move in the argument, with the Lean line that makes it real.</p>
+  <p>Tap through it. Each step is one move in the argument, with the real Lean code that makes it real.</p>
 
   <figure>
     <div class="stepper" id="stepper">
@@ -295,30 +299,71 @@ theorem sqrt_two_irrational&#x27; : Irrational&#x27; (Real.sqrt 2) := by
 <script>
 (function () {
   var steps = [
-    { title: "Assume √2 is a fraction",
-      body: "Suppose √2 = a/b for some integers a, b with b ≠ 0. Reduce to lowest terms: write it as p/q where p and q share no common factor.",
+    { title: "Assume \u221a2 is a fraction",
+      body: "The goal says: for any integers a and b, if b is not zero then \u221a2 is not a/b. To prove a \u201cnot\u201d, assume the opposite and break it. So suppose \u221a2 = a/b.",
       code: "intro a b hb h",
-      gloss: "Pull the pieces of the claim into the proof: the integers a and b, hb (the proof that b is not zero), and h (the equation we are about to break)." },
+      gloss: "Pull the pieces of the claim into the proof: the integers a and b, hb (the proof that b is not zero), and h (the equation \u221a2 = a/b we are about to break)." },
     { title: "Square both sides",
-      body: "If √2 = p/q, then squaring gives p² = 2q². The square root is gone; now it is pure arithmetic about whole numbers.",
-      code: "have hsq : p^2 = 2*q^2",
-      gloss: "have proves a new fact and gives it a name. The name is hsq, and the fact is p squared equals two times q squared." },
-    { title: "2 divides p², so 2 divides p",
-      body: "p² = 2q² means 2 divides p². Since 2 is prime, a prime dividing a square must divide the base. So p is even.",
-      code: "Nat.Prime.dvd_of_dvd_pow",
-      gloss: "A lemma from Mathlib's library: if a prime divides a power, it divides the base. Since 2 is prime and 2 divides p squared, 2 divides p." },
-    { title: "Substitute and simplify",
-      body: "Write p = 2k. Then (2k)² = 2q² becomes 4k² = 2q², which simplifies to q² = 2k². The same shape as step 2, with the roles shifted.",
-      code: "obtain ⟨k, hk⟩ := h2p",
-      gloss: "obtain unpacks a fact into its contents. \u201c2 divides p\u201d really means \u201cthere is some k with p = 2k\u201d, so this names that k and the equation hk." },
-    { title: "So 2 divides q as well",
-      body: "q² = 2k² means 2 divides q², and by the same prime argument, 2 divides q. Now both p and q are even.",
-      code: "exact Nat.Prime.dvd_of_dvd_pow Nat.prime_two hdiv",
-      gloss: "exact closes the goal in one move by handing Lean a proof that fits perfectly: the prime lemma, applied to the fact that 2 is prime and the fact that 2 divides q squared." },
-    { title: "Contradiction",
-      body: "p and q were in lowest terms, but 2 divides both. Impossible. The assumption was wrong: √2 is not a fraction. ∎",
-      code: "exact absurd hgcd (by decide)",
-      gloss: "absurd takes two facts that cannot both be true, hgcd (p and q are in lowest terms) and a computed proof that 2 divides them both, and from that contradiction the goal follows." }
+      body: "Square the assumed equation. The square of \u221a2 is 2, so (a/b)\u00b2 = 2. The square root is gone; everything from here is arithmetic.",
+      code: "have h2 : (Real.sqrt 2) ^ 2 = 2 := Real.sq_sqrt (by norm_num)\n"
+        + "have hsq : (a / b : \u211d) ^ 2 = 2 := by rw [\u2190 h]; exact h2\n"
+        + "have hbR : (b : \u211d) \u2260 0 := by exact_mod_cast hb",
+      gloss: "Name three facts. h2 is the library fact that squaring \u221a2 gives 2. hsq rewrites our assumption h with it, giving (a/b)\u00b2 = 2; rw rewrites with an equation, right to left here because of the arrow. hbR carries \u201cb is not zero\u201d into the reals." },
+    { title: "Clear denominators",
+      body: "Multiply out the fraction. (a/b)\u00b2 = 2 becomes a\u00b2 = 2b\u00b2, and the whole equation moves from the reals down to the integers, where divisibility makes sense.",
+      code: "have hZ : a ^ 2 = 2 * b ^ 2 := by\n"
+        + "  have hcast : ((a ^ 2 : \u2124) : \u211d) = ((2 * b ^ 2 : \u2124) : \u211d) := by\n"
+        + "    push_cast\n"
+        + "    rw [div_pow] at hsq\n"
+        + "    have hbb : (b : \u211d) ^ 2 \u2260 0 := pow_ne_zero 2 hbR\n"
+        + "    rw [div_eq_iff hbb] at hsq\n"
+        + "    linarith [hsq]\n"
+        + "  exact_mod_cast hcast",
+      gloss: "The inner block pushes the real-number equation down to integers: push_cast shoves casts outward, then it clears the denominator the same way you would on paper. exact_mod_cast matches the integer statement against the real one to finish." },
+    { title: "Forget the signs",
+      body: "Squares erase signs, so only the sizes of a and b matter. Take absolute values to move into the natural numbers, where induction lives.",
+      code: "have hN : a.natAbs ^ 2 = 2 * b.natAbs ^ 2 := by\n"
+        + "  have hA := congrArg Int.natAbs hZ\n"
+        + "  rwa [Int.natAbs_pow, Int.natAbs_mul, Int.natAbs_pow] at hA\n"
+        + "have hbN : b.natAbs \u2260 0 := by\n"
+        + "  rintro hz\n"
+        + "  exact hb (Int.natAbs_eq_zero.mp hz)",
+      gloss: "Apply natAbs (absolute value) to both sides of a\u00b2 = 2b\u00b2; the library lemmas say it passes through powers and products, and rwa rewrites then closes the goal. hbN checks the denominator stays nonzero." },
+    { title: "Every solution has a smaller one",
+      body: "The heart of the proof, inside the helper theorem no_sqrt2_nat (proved by induction on a bound). From a\u00b2 = 2b\u00b2: 2 divides a\u00b2, and 2 is prime, so 2 divides a; write a = 2c. Substituting gives b\u00b2 = 2c\u00b2, so 2 divides b too; write b = 2d. Then c\u00b2 = 2d\u00b2 with d smaller than b. A smaller solution always exists.",
+      code: "-- 2 \u2223 a\u00b2, and 2 is prime, so 2 \u2223 a.\n"
+        + "have h2a : 2 \u2223 a := by\n"
+        + "  have hdvd : 2 \u2223 a ^ 2 := \u27e8b ^ 2, h\u27e9\n"
+        + "  exact Nat.Prime.dvd_of_dvd_pow Nat.prime_two hdvd\n"
+        + "obtain \u27e8c, hc\u27e9 := h2a\n"
+        + "-- Substituting a = 2c gives b\u00b2 = 2c\u00b2, so 2 \u2223 b as well.\n"
+        + "have hbc : b ^ 2 = 2 * c ^ 2 := by\n"
+        + "  have e1 : (2 * c) ^ 2 = 2 * b ^ 2 := by rw [\u2190 hc]; exact h\n"
+        + "  have e2 : (2 * c) ^ 2 = 4 * c ^ 2 := by ring\n"
+        + "  omega\n"
+        + "have h2b : 2 \u2223 b := by\n"
+        + "  have hdvd : 2 \u2223 b ^ 2 := \u27e8c ^ 2, hbc\u27e9\n"
+        + "  exact Nat.Prime.dvd_of_dvd_pow Nat.prime_two hdvd\n"
+        + "obtain \u27e8d, hd\u27e9 := h2b\n"
+        + "-- (c, d) is a smaller solution: c\u00b2 = 2d\u00b2 with d < b.\n"
+        + "have hcd : c ^ 2 = 2 * d ^ 2 := by\n"
+        + "  have e1 : a ^ 2 = 4 * c ^ 2 := by rw [hc]; ring\n"
+        + "  have e2 : b ^ 2 = 4 * d ^ 2 := by rw [hd]; ring\n"
+        + "  omega",
+      gloss: "Each have names a fact: h2a says 2 divides a, via the Mathlib lemma that a prime dividing a power divides the base. obtain unpacks \u201c2 divides a\u201d into the witness c with a = 2c. The algebra blocks derive the smaller equation; ring handles ring arithmetic and omega closes linear arithmetic goals." },
+    { title: "Descent cannot go on forever",
+      body: "The smaller pair (c, d) is valid and strictly smaller, so the induction hypothesis says it cannot exist. Since every solution implies a smaller one, and natural numbers cannot shrink forever, no solution exists. The main theorem then closes in a single line.",
+      code: "have hd0 : d \u2260 0 := by\n"
+        + "  rintro rfl\n"
+        + "  simp at hd\n"
+        + "  exact hb hd\n"
+        + "have hdb : d \u2264 n := by omega\n"
+        + "-- Feed the smaller solution to the induction hypothesis.\n"
+        + "exact ih c d hdb hd0 hcd\n"
+        + "\n"
+        + "-- Main theorem, one line: no fraction a/b equals \u221a2.\n"
+        + "exact no_sqrt2_nat _ _ _ (le_refl _) hbN hN",
+      gloss: "hd0 and hdb verify the smaller pair is genuine, then exact hands it to the induction hypothesis ih, which rules out any solution that small. The last line applies the whole descent machine to the absolute values from step 4." }
   ];
   var i = 0;
   var kicker = document.getElementById('st-kicker');

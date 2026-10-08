@@ -329,6 +329,26 @@ function logEvent(p, kind, cls, what){
   p.events=p.events||[];
   p.events.push({t:Date.now(), kind:kind, cls:cls||"", what:what});
 }
+/* Tamper-evidence correction pattern: snapshot the fields a form can change,
+ * diff just the changed ones for the audit event, and keep a corrections[]
+ * entry on the record so the original is never lost. Used by the daily-log,
+ * waste-manifest, and project-setup correction forms (air samples have their
+ * own inline version of the same pattern). */
+function corrDiff(before,after){
+  const fmt=v=>Array.isArray(v)?v.map(x=>x&&x.name?x.name:x).join(", "):String(v==null?"":v);
+  return Object.keys(after).filter(k=>JSON.stringify(before[k])!==JSON.stringify(after[k]))
+    .map(k=>k+': "'+fmt(before[k])+'" → "'+fmt(after[k])+'"').join("; ");
+}
+function corrFields(){
+  return field("Corrected by (your name) *","corrBy","","text","required placeholder='Who is making this correction'");
+}
+const CORR_DISCLAIMER='<div class="disclaimer" style="margin-bottom:4px"><strong>Correction, not an edit.</strong> The original record stays in the file. Your name, today\u2019s date, and a reason are logged with the change.</div>';
+const CORR_REASON='<label>Reason for correction *</label><textarea name="corrReason" rows="2" required placeholder="What was wrong, and how you know the new value"></textarea>';
+function corrRequired(d){
+  const by=String(d.corrBy||"").trim(), reason=String(d.corrReason||"").trim();
+  if(!by||!reason){ toast("Name and reason are required to record a correction."); return null; }
+  return {by:by, reason:reason};
+}
 
 /* Sync bridge (sync.js). Local-first: app works fully offline; sync is debounced and never blocks UI. */
 window.__abate = {
@@ -574,6 +594,8 @@ function vOverview(p,c){
     kv("NESHAP notified",p.neshapNotified?("Yes, "+fmtD(p.neshapDate)):'<span style="color:var(--red)">Not recorded</span>')+
     kv("Competent person",p.competentPerson?esc(p.competentPerson)+(p.competentLicense?" · "+esc(p.competentLicense):""):'<span style="color:var(--red)">Not recorded</span>')+
     kv("Work window",fmtD(p.startDate)+" → "+fmtD(p.estEndDate))+
+    ((p.corrections&&p.corrections.length)?'<div class="small" style="margin-top:8px; border-top:1px solid var(--line); padding-top:8px"><b style="color:var(--blue)">Correction history: original preserved</b>'+
+      p.corrections.map(c=>'<div class="small muted" style="margin-top:6px">'+esc(corrDiff(c.before,c.after))+' · '+esc(c.by)+' · '+fmtDT(c.at)+'<br>Reason: '+esc(c.reason)+'</div>').join("")+'</div>':"")+
     '<div style="margin-top:12px"><button class="btn dark sm" data-act="edit-project">Edit project details</button></div></div>'+
   '<div class="card"><h3 class="stencil" style="color:var(--orange)">Dossier completeness</h3>'+
     c.parts.map(x=>'<div style="margin-bottom:10px"><div class="row"><div class="grow small">'+esc(x.label)+'</div><div class="small mono">'+Math.round(x.pct)+'/'+x.max+'</div></div>'+
@@ -583,13 +605,16 @@ function vOverview(p,c){
 function kv(k,v){ return '<div class="kv"><div class="k">'+esc(k)+'</div><div style="text-align:right">'+v+'</div></div>'; }
 function vDaily(p){
   const items=live(p.dailyLogs).sort((a,b)=>b.date.localeCompare(a.date)).map(l=>
-    '<div class="card"><div class="row"><div class="grow"><b>'+fmtD(l.date)+'</b> <span class="dim small">'+esc(l.start||"")+'–'+esc(l.end||"")+'</span></div>'+
-    '<button class="btn dark sm" data-act="edit-log" data-id="'+l.id+'">Edit</button> '+
+    '<div class="card"><div class="row"><div class="grow"><b>'+fmtD(l.date)+'</b> <span class="dim small">'+esc(l.start||"")+'–'+esc(l.end||"")+'</span>'+
+    ((l.corrections&&l.corrections.length)?' <span class="badge info">Corrected</span>':"")+'</div>'+
+    '<button class="btn dark sm" data-act="edit-log" data-id="'+l.id+'">Correct</button> '+
     '<button class="btn danger sm" data-act="del-log" data-id="'+l.id+'">Delete</button></div>'+
     '<div class="small muted" style="margin:6px 0">'+l.crew.map(c=>esc(c.name)+(c.cred?" ("+esc(c.cred)+")":"")).join(" · ")+'</div>'+
     '<div class="small">'+l.activities.map(a=>'<span class="badge info" style="margin:0 4px 4px 0">'+esc(a)+'</span>').join("")+'</div>'+
     (l.negAir?'<div class="small" style="margin-top:6px">Neg-air differential: <b class="mono">'+esc(l.negAir)+' in w.g.</b></div>':"")+
-    (l.notes?'<div class="small muted" style="margin-top:6px">'+esc(l.notes)+'</div>':"")+'</div>').join("");
+    (l.notes?'<div class="small muted" style="margin-top:6px">'+esc(l.notes)+'</div>':"")+
+    ((l.corrections&&l.corrections.length)?'<div class="small" style="margin-top:8px; border-top:1px solid var(--line); padding-top:8px"><b style="color:var(--blue)">Correction history: original preserved</b>'+
+      l.corrections.map(c=>'<div class="small muted" style="margin-top:6px">'+esc(corrDiff(c.before,c.after))+' · '+esc(c.by)+' · '+fmtDT(c.at)+'<br>Reason: '+esc(c.reason)+'</div>').join("")+'</div>':"")+'</div>').join("");
   return '<h2 class="stencil" style="font-size:15px; color:var(--muted); margin:4px 0 12px;">Daily field logs</h2>'+
     (items||'<div class="empty">No daily logs yet.<br>Foremen: log each shift from the site.</div>');
 }
@@ -629,11 +654,14 @@ function vWaste(p){
   const items=live(p.manifests).map(m=>{ const cd=manifestCountdown(m);
     return '<div class="card"><div class="row"><div class="grow"><b class="mono">'+esc(m.manifestNo)+'</b>'+
     '<div class="small muted">'+esc(m.qtyYd3)+' yd³ · shipped '+fmtD(m.dateShipped)+'</div></div>'+
-    (m.signedCopyReceived?'<span class="badge pass">Signed</span>':'<span class="badge pend">Pending</span>')+'</div>'+
+    (m.signedCopyReceived?'<span class="badge pass">Signed</span>':'<span class="badge pend">Pending</span>')+
+    ((m.corrections&&m.corrections.length)?' <span class="badge info">Corrected</span>':"")+'</div>'+
     kv("Transporter",esc(m.transporter)+(m.transporterPhone?'<br><span class="dim">'+esc(m.transporterPhone)+'</span>':""))+
     kv("Disposal site",esc(m.disposalSite)+(m.disposalPhone?'<br><span class="dim">'+esc(m.disposalPhone)+'</span>':""))+
     '<div class="small" style="margin:8px 0"><span class="countdown '+cd.cls+'">'+esc(cd.txt)+'</span></div>'+
-    '<div class="row"><button class="btn dark sm" data-act="edit-manifest" data-id="'+m.id+'">Edit</button>'+
+    ((m.corrections&&m.corrections.length)?'<div class="small" style="margin:8px 0; border-top:1px solid var(--line); padding-top:8px"><b style="color:var(--blue)">Correction history: original preserved</b>'+
+      m.corrections.map(c=>'<div class="small muted" style="margin-top:6px">'+esc(corrDiff(c.before,c.after))+' · '+esc(c.by)+' · '+fmtDT(c.at)+'<br>Reason: '+esc(c.reason)+'</div>').join("")+'</div>':"")+
+    '<div class="row"><button class="btn dark sm" data-act="edit-manifest" data-id="'+m.id+'">Correct</button>'+
     '<button class="btn ghost sm" data-act="sign-manifest" data-id="'+m.id+'">'+(m.signedCopyReceived?"Update signed copy":"Mark signed copy received")+'</button>'+
     '<button class="btn danger sm" data-act="del-manifest" data-id="'+m.id+'">Delete</button></div></div>'; }).join("");
   return '<div class="disclaimer"><strong>NESHAP 35-day rule:</strong> if the signed waste-shipment copy is not back from the disposal site within 35 days of shipment, you must contact the transporter and disposal site. Abate counts it down for you.</div>'+
@@ -673,9 +701,9 @@ function vClearance(p){
 function vDossier(p,c){
   const miss=missingItems(p);
   const ev=[];
-  live(p.dailyLogs).forEach(l=>ev.push({t:new Date(l.date+"T12:00:00").getTime(), cls:"", when:fmtD(l.date), what:"Daily log, "+l.crew.length+" crew, "+l.activities.slice(0,3).join(", ")}));
+  live(p.dailyLogs).forEach(l=>ev.push({t:new Date(l.date+"T12:00:00").getTime(), cls:"", when:fmtD(l.date), what:"Daily log, "+l.crew.length+" crew, "+l.activities.slice(0,3).join(", ")+((l.corrections&&l.corrections.length)?" [corrected]":"")}));
   live(p.airSamples).forEach(s=>ev.push({t:new Date(s.date+"T12:00:00").getTime()+1, cls:s.pass?"good":"warn", when:fmtD(s.date), what:"Air sample, "+s.location+": "+s.result+" f/cc ("+(s.pass?"PASS":"EXCEEDS")+")"+((s.corrections&&s.corrections.length)?" [corrected]":"")}));
-  live(p.manifests).forEach(m=>ev.push({t:new Date(m.dateShipped+"T12:00:00").getTime()+2, cls:m.signedCopyReceived?"good":"warn", when:fmtD(m.dateShipped), what:"Waste manifest "+m.manifestNo+": "+m.qtyYd3+" yd³ → "+m.disposalSite+(m.signedCopyReceived?" (signed copy back)":" (signature PENDING)")}));
+  live(p.manifests).forEach(m=>ev.push({t:new Date(m.dateShipped+"T12:00:00").getTime()+2, cls:m.signedCopyReceived?"good":"warn", when:fmtD(m.dateShipped), what:"Waste manifest "+m.manifestNo+": "+m.qtyYd3+" yd³ → "+m.disposalSite+(m.signedCopyReceived?" (signed copy back)":" (signature PENDING)")+((m.corrections&&m.corrections.length)?" [corrected]":"")}));
   live(p.photos).forEach(x=>ev.push({t:x.takenAt, cls:"", when:fmtDT(x.takenAt), what:"Photo: "+(x.caption||x.category)}));
   (p.events||[]).forEach(e=>ev.push({t:e.t, cls:e.cls||"", when:fmtDT(e.t), what:e.what}));
   ev.sort((a,b)=>a.t-b.t);
@@ -758,6 +786,10 @@ async function softDelete(p, arr, id, label, whatLine){
   if(!r) return false;
   const rec=arr.find(x=>x.id===id); if(!rec) return false;
   rec.deleted=true; rec.deletedAt=Date.now(); rec.deletedBy=r.who; rec.deletedReason=r.reason;
+  /* Quota hygiene: a tombstoned photo keeps its thumbnail for the record but
+   * drops the full-res dataUrl. The export already treats deleted photos this
+   * way (thumbnails kept, full-res excluded). */
+  if(rec.dataUrl) rec.dataUrl="";
   logEvent(p,"deletion","warn", label+" deleted by "+r.who+" ("+whatLine+"). Reason: "+r.reason);
   return true;
 }
@@ -801,7 +833,8 @@ function collect(form){
 const ACTIVITIES=["Containment setup","Negative-air units placed","Tile removal","Pipe insulation removal","Mastic removal","Wet methods","Bagging","HEPA vacuuming","Decon","Teardown","Air monitoring","Waste loadout"];
 function fProject(p){
   p=p||{};
-  openSheet(formShell(p.id?"Edit project":"New abatement project",
+  openSheet(formShell(p.id?"Correct project setup":"New abatement project",
+    (p.id?CORR_DISCLAIMER:"")+
     field("Project name *","name",p.name,"text","required")+
     field("Site address *","address",p.address,"text","required")+
     field("Building owner","owner",p.owner)+
@@ -813,29 +846,48 @@ function fProject(p){
     field("Competent person license #","competentLicense",p.competentLicense)+
     field("Start date","startDate",p.startDate||todayISO(),"date")+
     field("Est. end date","estEndDate",p.estEndDate,"date")+
+    (p.id?corrFields()+CORR_REASON:"")+
     (!p.id&&DB.projects.length?'<label>Start from a template (optional)</label><select name="templateId"><option value="">Blank dossier</option>'+
       DB.projects.map(q=>'<option value="'+q.id+'">'+esc(q.name)+'</option>').join("")+'</select>'+
       '<div class="small dim" style="margin-top:4px">Copies the setup and crew roster, never the logs, samples, manifests, or photos.</div>':""),
-    p.id?"Save changes":"Create dossier"));
+    p.id?"Record correction":"Create dossier"));
   $("#sheetCancel").onclick=closeSheet;
   $("#sheetForm").onsubmit=e=>{ e.preventDefault(); const d=collect(e.target);
-    const rec=p.id?p:Object.assign({id:uid(),status:"active",dailyLogs:[],airSamples:[],manifests:[],photos:[],events:[],
+    if(p.id){
+      /* Regulatory facts (competent person, NESHAP notice) are never edited
+       * silently: the correction names who changed what and why, and the
+       * original stays in p.corrections and the audit event. */
+      const cr=corrRequired(d); if(!cr) return;
+      const before={name:p.name,address:p.address,owner:p.owner,ownerPhone:p.ownerPhone,contractNo:p.contractNo,
+        neshapNotified:p.neshapNotified,neshapDate:p.neshapDate,competentPerson:p.competentPerson,
+        competentLicense:p.competentLicense,startDate:p.startDate,estEndDate:p.estEndDate};
+      const after={name:d.name,address:d.address,owner:d.owner,ownerPhone:d.ownerPhone,contractNo:d.contractNo,
+        neshapNotified:d.neshapNotified==="1",neshapDate:d.neshapDate,competentPerson:d.competentPerson,
+        competentLicense:d.competentLicense,startDate:d.startDate,estEndDate:d.estEndDate};
+      const diff=corrDiff(before,after);
+      if(!diff){ closeSheet(); toast("No changes."); return; }
+      Object.assign(p,after);
+      p.corrections=p.corrections||[];
+      p.corrections.push({at:Date.now(),by:cr.by,reason:cr.reason,before:before,after:after});
+      logEvent(p,"correction","","Project setup corrected by "+cr.by+": "+diff+". Reason: "+cr.reason);
+      closeSheet(); save(); toast("Correction recorded. Original preserved.");
+      return;
+    }
+    const rec=Object.assign({id:uid(),status:"active",dailyLogs:[],airSamples:[],manifests:[],photos:[],events:[],
       clearance:{visual:false,airClear:false,wasteShipped:false,manifestsBack:false,neshapFiled:false,areaReleased:false}},d);
     Object.assign(rec,{name:d.name,address:d.address,owner:d.owner,ownerPhone:d.ownerPhone,contractNo:d.contractNo,
       neshapNotified:d.neshapNotified==="1",neshapDate:d.neshapDate,competentPerson:d.competentPerson,
       competentLicense:d.competentLicense,startDate:d.startDate,estEndDate:d.estEndDate});
-    if(!p.id){
-      const tpl=DB.projects.find(q=>q.id===d.templateId);
-      if(tpl){
-        rec.owner=tpl.owner; rec.ownerPhone=tpl.ownerPhone;
-        rec.competentPerson=tpl.competentPerson; rec.competentLicense=tpl.competentLicense;
-        const rr=rosterStore.load();
-        rr[rec.id]=(rr[tpl.id]||[]).map(c=>({name:c.name,cred:c.cred}));
-        rosterStore.save(rr);
-        rec.events.push({t:Date.now(),kind:"info",cls:"",what:"Project created from template \u2018"+tpl.name+"\u2019 (setup and roster copied)"});
-      }
-      DB.projects.unshift(rec); view={name:"project",projectId:rec.id,tab:"overview"};
+    const tpl=DB.projects.find(q=>q.id===d.templateId);
+    if(tpl){
+      rec.owner=tpl.owner; rec.ownerPhone=tpl.ownerPhone;
+      rec.competentPerson=tpl.competentPerson; rec.competentLicense=tpl.competentLicense;
+      const rr=rosterStore.load();
+      rr[rec.id]=(rr[tpl.id]||[]).map(c=>({name:c.name,cred:c.cred}));
+      rosterStore.save(rr);
+      rec.events.push({t:Date.now(),kind:"info",cls:"",what:"Project created from template \u2018"+tpl.name+"\u2019 (setup and roster copied)"});
     }
+    DB.projects.unshift(rec); view={name:"project",projectId:rec.id,tab:"overview"};
     closeSheet(); save();
   };
 }
@@ -845,7 +897,8 @@ function fDaily(p, existing){
   const rosTxt=ros.map(c=>c.name+(c.cred?", "+c.cred:"")).join("\n");
   const crewTxt=(L.crew||[]).map(c=>c.name+(c.cred?", "+c.cred:"")).join("\n")||(!existing?rosTxt:"");
   const has=a=>(L.activities||[]).includes(a);
-  openSheet(formShell(existing?"Edit daily log: "+fmtD(L.date):"Daily field log: "+fmtD(todayISO()),
+  openSheet(formShell(existing?"Correct daily log: "+fmtD(L.date):"Daily field log: "+fmtD(todayISO()),
+    (existing?CORR_DISCLAIMER:"")+
     field("Date *","date",L.date||todayISO(),"date","required")+
     '<label>Crew (one per line: name, accreditation #)</label>'+
     (!existing&&ros.length?'<div class="small dim" style="margin-bottom:6px">Roster: tap to add:</div><div class="row" style="flex-wrap:wrap; gap:6px; margin-bottom:8px">'+
@@ -855,8 +908,9 @@ function fDaily(p, existing){
     '<div class="row"><div class="grow">'+field("Shift start","start",L.start||"06:30","time")+'</div><div class="grow">'+field("Shift end","end",L.end||"15:00","time")+'</div></div>'+
     '<label>Activities performed</label><div class="checks">'+ACTIVITIES.map(a=>'<label class="check"><input type="checkbox" name="activities" value="'+esc(a)+'"'+(has(a)?" checked":"")+'> '+esc(a)+'</label>').join("")+'</div>'+
     field("Neg-air differential (in w.g., e.g. -0.024)","negAir",L.negAir||"")+
-    '<label>Notes</label><textarea name="notes" rows="3" placeholder="Containment intact, decon shower operational…">'+esc(L.notes||"")+'</textarea>',
-    existing?"Save changes":"Log shift"));
+    '<label>Notes</label><textarea name="notes" rows="3" placeholder="Containment intact, decon shower operational…">'+esc(L.notes||"")+'</textarea>'+
+    (existing?corrFields()+CORR_REASON:""),
+    existing?"Record correction":"Log shift"));
   $("#sheetCancel").onclick=closeSheet;
   /* Roster chips: tap to append "name, cred" as a new line. */
   const ta=$("#crewTa");
@@ -883,9 +937,24 @@ function fDaily(p, existing){
     const crew=String(d.crew||"").split("\n").map(s=>s.trim()).filter(Boolean).map(s=>{ const m=s.match(/^(.*?),\s*(.*)$/); return {name:m?m[1]:s, cred:m?m[2]:""}; });
     addToRoster(p.id, crew);
     let acts=d.activities||[]; if(!Array.isArray(acts)) acts=[acts];
-    const rec={id:existing?existing.id:uid(),date:d.date,crew,start:d.start,end:d.end,activities:acts,negAir:d.negAir,notes:d.notes,createdAt:existing?existing.createdAt:Date.now()};
-    if(existing){ const i=p.dailyLogs.findIndex(x=>x.id===existing.id); p.dailyLogs[i]=rec; }
-    else p.dailyLogs.push(rec);
+    if(existing){
+      /* Daily logs are regulatory records: corrections name who changed what
+       * and why, and the original stays in existing.corrections and the
+       * audit event. The record is updated in place so history survives. */
+      const cr=corrRequired(d); if(!cr) return;
+      const before={date:existing.date,crew:existing.crew,start:existing.start,end:existing.end,activities:existing.activities,negAir:existing.negAir,notes:existing.notes};
+      const after={date:d.date,crew:crew,start:d.start,end:d.end,activities:acts,negAir:d.negAir,notes:d.notes};
+      const diff=corrDiff(before,after);
+      if(!diff){ closeSheet(); toast("No changes."); return; }
+      existing.corrections=existing.corrections||[];
+      existing.corrections.push({at:Date.now(),by:cr.by,reason:cr.reason,before:before,after:after});
+      Object.assign(existing,after);
+      logEvent(p,"correction","","Daily log corrected by "+cr.by+" ("+fmtD(d.date)+"): "+diff+". Reason: "+cr.reason);
+      closeSheet(); save(); toast("Correction recorded. Original preserved.");
+      return;
+    }
+    const rec={id:uid(),date:d.date,crew,start:d.start,end:d.end,activities:acts,negAir:d.negAir,notes:d.notes,createdAt:Date.now()};
+    p.dailyLogs.push(rec);
     closeSheet(); save();
   };
 }
@@ -911,12 +980,12 @@ function fAir(p, existing){
     if(existing){
       const by=String(d.corrBy||"").trim(), reason=String(d.corrReason||"").trim();
       if(!by||!reason){ toast("Name and reason are required to record a correction."); return; }
-      const before={result:S.result,location:S.location,type:S.type,basis:S.basis,pump:S.pump};
-      const after={result:r,location:d.location,type:d.type,basis:d.basis,pump:d.pump};
+      const before={date:S.date,result:S.result,location:S.location,type:S.type,basis:S.basis,pump:S.pump};
+      const after={date:d.date,result:r,location:d.location,type:d.type,basis:d.basis,pump:d.pump};
       if(JSON.stringify(before)===JSON.stringify(after)){ closeSheet(); toast("No changes."); return; }
       S.corrections=S.corrections||[];
       S.corrections.push({at:Date.now(),by:by,reason:reason,before:before,after:after});
-      S.result=r; S.location=d.location; S.type=d.type; S.basis=d.basis; S.pump=d.pump; S.pass=r<=limit;
+      S.date=d.date; S.result=r; S.location=d.location; S.type=d.type; S.basis=d.basis; S.pump=d.pump; S.pass=r<=limit;
       logEvent(p,"correction","", "Air sample corrected by "+by+" ("+fmtD(S.date)+", "+S.location+"): "+before.result+" → "+r+" f/cc. Reason: "+reason);
       closeSheet(); save(); toast("Correction recorded. Original preserved.");
       return;
@@ -928,7 +997,8 @@ function fAir(p, existing){
 }
 function fManifest(p, existing){
   const M=existing||{};
-  openSheet(formShell(existing?"Edit waste shipment":"Waste shipment record (NESHAP)",
+  openSheet(formShell(existing?"Correct waste shipment":"Waste shipment record (NESHAP)",
+    (existing?CORR_DISCLAIMER:"")+
     field("Manifest # *","manifestNo",M.manifestNo||"","text","required placeholder='AZ-2026-00000'")+
     field("Quantity (cubic yards) *","qtyYd3",M.qtyYd3||"","number","required min='0' step='0.5'")+
     field("Date shipped *","dateShipped",M.dateShipped||todayISO(),"date","required")+
@@ -936,18 +1006,34 @@ function fManifest(p, existing){
     field("Transporter phone","transporterPhone",M.transporterPhone||"","tel")+
     field("Disposal site *","disposalSite",M.disposalSite||"","text","required")+
     field("Disposal site phone","disposalPhone",M.disposalPhone||"","tel")+
-    '<label class="check" style="margin-top:12px"><input type="checkbox" name="certSigned"'+(M.certSigned===false?"":" checked")+'> Contents certified: properly described, packed, marked, and labeled for highway transport</label>',
-    existing?"Save changes":"Record shipment"));
+    '<label class="check" style="margin-top:12px"><input type="checkbox" name="certSigned"'+(M.certSigned===false?"":" checked")+'> Contents certified: properly described, packed, marked, and labeled for highway transport</label>'+
+    (existing?corrFields()+CORR_REASON:""),
+    existing?"Record correction":"Record shipment"));
   $("#sheetCancel").onclick=closeSheet;
   $("#sheetForm").onsubmit=e=>{ e.preventDefault(); const d=collect(e.target);
-    const rec={id:existing?existing.id:uid(),manifestNo:d.manifestNo,qtyYd3:d.qtyYd3,dateShipped:d.dateShipped,
+    if(existing){
+      /* The 35-day countdown anchors on dateShipped, so manifest changes are
+       * corrections, never silent edits: who changed what and why is named,
+       * and the original stays in existing.corrections and the audit event. */
+      const cr=corrRequired(d); if(!cr) return;
+      const before={manifestNo:existing.manifestNo,qtyYd3:existing.qtyYd3,dateShipped:existing.dateShipped,transporter:existing.transporter,transporterPhone:existing.transporterPhone,disposalSite:existing.disposalSite,disposalPhone:existing.disposalPhone,certSigned:existing.certSigned};
+      const after={manifestNo:d.manifestNo,qtyYd3:d.qtyYd3,dateShipped:d.dateShipped,transporter:d.transporter,transporterPhone:d.transporterPhone,disposalSite:d.disposalSite,disposalPhone:d.disposalPhone,certSigned:!!d.certSigned};
+      const diff=corrDiff(before,after);
+      if(!diff){ closeSheet(); toast("No changes."); return; }
+      existing.corrections=existing.corrections||[];
+      existing.corrections.push({at:Date.now(),by:cr.by,reason:cr.reason,before:before,after:after});
+      Object.assign(existing,after);
+      logEvent(p,"correction","","Waste manifest corrected by "+cr.by+" ("+d.manifestNo+"): "+diff+". Reason: "+cr.reason);
+      closeSheet(); save(); toast("Correction recorded. Original preserved.");
+      return;
+    }
+    const rec={id:uid(),manifestNo:d.manifestNo,qtyYd3:d.qtyYd3,dateShipped:d.dateShipped,
       transporter:d.transporter,transporterPhone:d.transporterPhone,disposalSite:d.disposalSite,disposalPhone:d.disposalPhone,
       certSigned:!!d.certSigned,
-      signedCopyReceived:existing?existing.signedCopyReceived:false,
-      signedDate:existing?existing.signedDate:"",
-      signedRecordedAt:existing?existing.signedRecordedAt:0,createdAt:existing?existing.createdAt:Date.now()};
-    if(existing){ const i=p.manifests.findIndex(x=>x.id===existing.id); p.manifests[i]=rec; }
-    else p.manifests.push(rec);
+      signedCopyReceived:false,
+      signedDate:"",
+      signedRecordedAt:0,createdAt:Date.now()};
+    p.manifests.push(rec);
     closeSheet(); save();
   };
 }
@@ -1004,7 +1090,7 @@ function bindActions(main,p){
     else if(act==="export") b.onclick=()=>exportArchive(p);
     else if(act==="close-project") b.onclick=async()=>{ const c=completeness(p);
       if(c.total<100 && !(await openConfirm("Close with incomplete dossier?","Dossier is only "+c.total+"% complete. Closed projects keep every record for the 30-year retention file.","Close anyway",true))) return;
-      p.status="closed"; save(); toast("Project closed. Records retained."); };
+      p.status="closed"; logEvent(p,"info","","Project closed on "+fmtD(todayISO())+". Records retained for the 30-year retention file."); save(); toast("Project closed. Records retained."); };
   });
   main.querySelectorAll("[data-clear]").forEach(cb=>cb.onchange=async()=>{
     const k=cb.dataset.clear, cl=p.clearance;
@@ -1035,14 +1121,16 @@ function bindActions(main,p){
         document.querySelectorAll("#sheet [data-mb-go]").forEach(b=>b.onclick=()=>{ closeSheet(); view.tab="waste"; save(); });
         return;
       }
+      /* Guard: clearance air needs a passing aggressive clearance sample.
+       * Checked before asking for the name. */
+      if(k==="airClear"&&!live(p.airSamples).some(s=>s.type==="clearance"&&s.pass)){
+        cb.checked=false;
+        if(await openConfirm("No passing clearance sample","Clearance sign-off needs an aggressive air sample at or below 0.01 f/cc. Add one now?","Add sample")){ view.tab="air"; save(); fAir(p); }
+        return;
+      }
       const who=await openSignoff("Sign off: "+label,
         "Your name and today's date are stamped into the dossier.", p.competentPerson||"");
       if(!who){ cb.checked=false; return; }
-      /* Guard: clearance air needs a passing aggressive clearance sample. */
-      if(k==="airClear"&&!live(p.airSamples).some(s=>s.type==="clearance"&&s.pass)){
-        if(await openConfirm("No passing clearance sample","Clearance sign-off needs an aggressive air sample at or below 0.01 f/cc. Add one now?","Add sample")){ view.tab="air"; save(); fAir(p); return; }
-        cb.checked=false; return;
-      }
       if(k==="manifestsBack"){
         const names=live(p.manifests).map(m=>m.manifestNo).join(", ");
         logEvent(p,"signoff","good","Manifests-back asserted by "+who+": signed copies received for "+(names||"no manifests on file"));

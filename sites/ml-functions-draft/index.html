@@ -80,6 +80,17 @@
     cursor: pointer; color: #2b2b2b; font-family: inherit; }
   .chip.on { border-color: #b3352b; color: #b3352b; background: rgba(179,53,43,0.07); }
   .chip:active { transform: scale(0.96); }
+  .ladder { display: grid; gap: 10px; margin: 12px 0 4px; }
+  .rung { touch-action: manipulation; display: flex; align-items: center; gap: 12px;
+    min-height: 60px; padding: 10px 16px; font-size: 17px; font-weight: 700; font-family: inherit;
+    color: #2b2b2b; background: transparent; border: 2px solid rgba(43,43,43,0.2);
+    border-radius: 14px; cursor: pointer; text-align: left; }
+  .rung .rs { display: inline-flex; align-items: center; justify-content: center;
+    width: 40px; height: 40px; border-radius: 50%; background: rgba(43,43,43,0.08);
+    font-size: 20px; font-weight: 800; flex: none; }
+  .rung.on { border-color: #b3352b; color: #b3352b; background: rgba(179,53,43,0.07); }
+  .rung.on .rs { background: #b3352b; color: #fff; }
+  .rung:active { transform: scale(0.98); }
   .readout { display: flex; justify-content: space-between; align-items: baseline; margin: 8px 0; gap: 10px; }
   .big { font-size: 30px; font-weight: 800; color: #b3352b; font-variant-numeric: tabular-nums; }
   .cap { font-size: 13.5px; color: rgba(43,43,43,0.6); margin-top: 10px; line-height: 1.55; }
@@ -209,6 +220,30 @@
     <div class="insight" id="eul-insight"></div>
   </div>
 
+  <div class="viz">
+    <h3>Build e, term by term</h3>
+    <p class="sub">Add one term at a time. Each new term is one over n factorial.</p>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Terms added</span>
+      <span>
+        <button class="chip" id="ty-minus" aria-label="Remove a term">&minus;</button>
+        <span class="big" id="ty-n" style="margin:0 10px; font-size:22px;">1</span>
+        <button class="chip" id="ty-plus" aria-label="Add a term">+</button>
+      </span>
+    </div>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Latest term</span>
+      <span class="big" id="ty-term" style="font-size:22px;"></span>
+    </div>
+    <div id="ty-chain" style="font-size:14px; color:rgba(43,43,43,0.65); margin:2px 0 6px; line-height:1.8;"></div>
+    <div class="stat-grid">
+      <div class="stat-cell"><div class="n" id="ty-total" style="font-size:20px;">1.0000000000</div><div class="l">running total</div></div>
+      <div class="stat-cell"><div class="n" id="ty-dec">0</div><div class="l">correct decimals</div></div>
+    </div>
+    <div class="insight" id="ty-insight"></div>
+    <p class="cap">$e^x$ is the one function that equals its own derivative and equals 1 at x = 0. Force a power series to obey that, term by term, and every coefficient gets pinned to $1/n!$. The series is not a trick. It is what "derivative equals itself" demands. The compound-interest limit $(1 + 1/n)^n$ also reaches e from first principles, but it crawls. Computers use the series.</p>
+  </div>
+
   <p><strong>The money demo: why log-softmax, not probabilities.</strong> A language model writes one token at a time, and the probability of a whole sentence is every token's probability multiplied together. Each one is small. Multiply enough small numbers and the computer surrenders: the product rounds to exactly zero, and training dies on the spot. Logs fix it, because adding logs is the same as multiplying the originals, and addition never underflows. Slide N up and watch the left column die while the right column cruises.</p>
 
   <div class="viz">
@@ -235,6 +270,27 @@
       <span class="big" style="font-size:22px;" id="ud-true">10<sup>-400</sup></span>
     </div>
     <div class="insight" id="ud-insight"></div>
+  </div>
+
+  <div class="viz">
+    <h3>The ladder</h3>
+    <p class="sub">Tap a rung. Every operation has a "how many deep" question, and the answer is always one rung down.</p>
+    <div class="ladder" id="ld-rungs">
+      <button class="rung on" data-r="0" aria-pressed="true"><span class="rs">+</span> addition</button>
+      <button class="rung" data-r="1" aria-pressed="false"><span class="rs">&times;</span> multiplication</button>
+      <button class="rung" data-r="2" aria-pressed="false"><span class="rs">^</span> exponentiation</button>
+      <button class="rung" data-r="3" aria-pressed="false"><span class="rs">&uarr;&uarr;</span> power towers</button>
+    </div>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Repeat it and you build</span>
+      <span class="big" id="ld-builds" style="font-size:18px;">multiplication</span>
+    </div>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">"How many deep?"</span>
+      <span class="big" id="ld-deep" style="font-size:18px;">division</span>
+    </div>
+    <div class="insight" id="ld-insight"></div>
+    <p class="cap">Division is log's analog for addition: "how many +b steps to reach x" is x / b, the same way "how many &times;b steps" is the log. Climb one rung and the log steps exponentiation down to multiplication too. At the top, power towers get the super-logarithm, which asks "how many exponentiations deep." The pattern never breaks.</p>
   </div>
 
   <p><strong>Now that logs make sense, here is why softmax wears a log coat.</strong></p>
@@ -548,6 +604,81 @@ function udRender(){
 $("ud-n").addEventListener("input", udRender);
 $("ud-p").addEventListener("input", udRender);
 udRender();
+
+/* ---------- 0d2. build e term by term (Taylor series) ---------- */
+var TY_MAX = 12, tyN = 0;
+function tyFact(n){ var f = 1; for (var i = 2; i <= n; i++) f *= i; return f; }
+function tyTotal(){
+  var s = 0;
+  for (var n = 0; n <= tyN; n++) s += 1 / tyFact(n);
+  return s;
+}
+function tyDecimals(total){
+  var a = total.toPrecision(17).replace(".", ""), b = String(Math.E).replace(".", ""), c = 0;
+  for (var i = 1; i < Math.min(a.length, b.length); i++) { if (a[i] === b[i]) c++; else break; }
+  return c;
+}
+function tyRenderTerm(){
+  var el = $("ty-term");
+  el.innerHTML = "$\\frac{1}{" + tyN + "!}$";
+  if (window.renderMathInElement) {
+    try {
+      renderMathInElement(el, { delimiters: [
+        {left: "$$", right: "$$", display: true},
+        {left: "$", right: "$", display: false}
+      ], throwOnError: false });
+    } catch (e) {}
+  }
+}
+function tyRender(){
+  var total = tyTotal(), dec = tyDecimals(total);
+  $("ty-n").textContent = tyN + 1;
+  tyRenderTerm();
+  var chain = [];
+  for (var n = 0; n <= tyN; n++) chain.push("1/" + n + "!");
+  $("ty-chain").textContent = chain.join(" + ");
+  $("ty-total").textContent = total.toFixed(10);
+  $("ty-dec").textContent = dec;
+  $("ty-insight").textContent = tyN === TY_MAX
+    ? "13 terms, " + dec + " correct decimals. Factorials crush the tail so fast that each new term barely matters. This is why computers compute e with the series."
+    : (dec === 0
+      ? "Only " + (tyN + 1) + " term" + (tyN === 0 ? "" : "s") + " in: " + total.toFixed(4) + ". Not close to e yet. Keep adding."
+      : (tyN + 1) + " terms and you already match e to " + dec + " decimal" + (dec === 1 ? "" : "s") + ". The factorials are doing the heavy lifting.");
+}
+$("ty-minus").addEventListener("click", function(){ if (tyN > 0) { tyN--; tyRender(); } });
+$("ty-plus").addEventListener("click", function(){ if (tyN < TY_MAX) { tyN++; tyRender(); } });
+tyRender();
+
+/* ---------- 0f. the ladder (how-many-deep, one rung down) ---------- */
+var LD = [
+  { builds: "multiplication", deep: "division",
+    q: "How many +b steps to reach x? That is x / b.",
+    note: "Division counts additions the way a log counts multiplications. It is log's analog for addition." },
+  { builds: "exponentiation", deep: "logarithm",
+    q: "How many \u00d7b steps to reach x? That is the log.",
+    note: "The log asks how many multiplications deep you are. Same question, one rung up." },
+  { builds: "power towers", deep: "super-logarithm",
+    q: "How many ^ steps to reach x? That is the super-log.",
+    note: "The log also steps exponentiation down to multiplication. One tool, two rungs." },
+  { builds: "pentation (rarely used)", deep: "no standard name",
+    q: "How many tower levels? Mathematicians mostly stop here.",
+    note: "The pattern would keep going one rung down, but nobody needs it. This is where the names run out." }
+];
+function ldRender(r){
+  $("ld-builds").textContent = LD[r].builds;
+  $("ld-deep").textContent = LD[r].deep;
+  $("ld-insight").textContent = LD[r].q + " " + LD[r].note;
+  $("ld-rungs").querySelectorAll(".rung").forEach(function(b){
+    var on = +b.getAttribute("data-r") === r;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+}
+$("ld-rungs").addEventListener("click", function(e){
+  var b = e.target.closest(".rung");
+  if (b) ldRender(+b.getAttribute("data-r"));
+});
+ldRender(0);
 })();
 </script>
 

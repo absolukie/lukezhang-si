@@ -317,6 +317,14 @@ BillingClient.prototype.buildOverlay = function(){
 
   var errBox = ov.querySelector(".bill-err");
   function showErr(m){ errBox.textContent = m; errBox.hidden = false; }
+  // Never show raw backend codes or internal references to users.
+  function friendlyErr(e){
+    var code = e && e.code;
+    if (code === "BILLING_NOT_CONFIGURED") return "Payments are not switched on yet. Please check back soon.";
+    var m = (e && e.message) || "";
+    if (/billing_|whsec|rk_test|rk_live|SECRETS\.md|Worker/i.test(m)) return "Something went wrong. Please try again.";
+    return m || "Something went wrong. Please try again.";
+  }
   ov.querySelectorAll(".bill-plan").forEach(function(b){
     b.addEventListener("click", function(){
       ov.querySelectorAll(".bill-plan").forEach(function(x){ x.classList.remove("sel"); });
@@ -333,7 +341,7 @@ BillingClient.prototype.buildOverlay = function(){
       if (!p) { showErr("No plans configured yet."); btn.disabled = false; return; }
       await self.startTrial(p.lookupKey);
     } catch(e) {
-      showErr((e && e.message) || "Something went wrong. Please try again.");
+      showErr(friendlyErr(e));
       btn.disabled = false;
     }
   });

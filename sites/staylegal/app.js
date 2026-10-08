@@ -236,14 +236,73 @@
     if (scroll !== false) resultSection.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  /* ---------- state-mismatch warning (P1-3) ---------- */
+  var STATE_NAMES = {
+    al: "Alabama", ak: "Alaska", az: "Arizona", ar: "Arkansas", ca: "California",
+    co: "Colorado", ct: "Connecticut", de: "Delaware", dc: "District of Columbia",
+    fl: "Florida", ga: "Georgia", hi: "Hawaii", id: "Idaho", il: "Illinois",
+    in: "Indiana", ia: "Iowa", ks: "Kansas", ky: "Kentucky", la: "Louisiana",
+    me: "Maine", md: "Maryland", ma: "Massachusetts", mi: "Michigan", mn: "Minnesota",
+    ms: "Mississippi", mo: "Missouri", mt: "Montana", ne: "Nebraska", nv: "Nevada",
+    nh: "New Hampshire", nj: "New Jersey", nm: "New Mexico", ny: "New York",
+    nc: "North Carolina", nd: "North Dakota", oh: "Ohio", ok: "Oklahoma", or: "Oregon",
+    pa: "Pennsylvania", ri: "Rhode Island", sc: "South Carolina", sd: "South Dakota",
+    tn: "Tennessee", tx: "Texas", ut: "Utah", vt: "Vermont", va: "Virginia",
+    wa: "Washington", wv: "West Virginia", wi: "Wisconsin", wy: "Wyoming"
+  };
+
+  // Look for a US state token in the tail of the address (last two comma
+  // segments), where the state normally sits. Warning only, never a block.
+  function stateTokenOf(address) {
+    var segs = (address || "").split(",").map(function (s) { return normalize(s); }).filter(Boolean);
+    var tail = segs.slice(Math.max(0, segs.length - 2));
+    var found = null;
+    tail.forEach(function (seg) {
+      if (found) return;
+      seg.split(" ").forEach(function (tok) {
+        if (found || !tok) return;
+        if (STATE_NAMES[tok]) found = { abbr: tok.toUpperCase(), name: STATE_NAMES[tok] };
+      });
+    });
+    if (!found) {
+      tail.forEach(function (seg) {
+        if (found) return;
+        Object.keys(STATE_NAMES).forEach(function (abbr) {
+          if (found) return;
+          if (seg.indexOf(STATE_NAMES[abbr].toLowerCase()) !== -1) {
+            found = { abbr: abbr.toUpperCase(), name: STATE_NAMES[abbr] };
+          }
+        });
+      });
+    }
+    return found;
+  }
+
+  function stateMismatch(address, city) {
+    if (!city) return null;
+    var st = stateTokenOf(address);
+    if (!st) return null;
+    var citySt = (city.state || "").trim().toUpperCase();
+    if (!citySt || st.abbr === citySt) return null;
+    return st;
+  }
+
   function renderCity(city, address, warning) {
     currentCity = city;
     currentAddress = address || "";
     document.getElementById("includeAddress").checked = false;
     document.getElementById("sharePopover").open = false;
+    var mismatch = stateMismatch(address, city);
     var banner = document.getElementById("linkWarning");
-    banner.textContent = warning || "";
-    banner.classList.toggle("hidden", !warning);
+    var note = warning || "";
+    if (mismatch) {
+      var msg = "State mismatch: this verdict is for " + city.city + ", " + city.state +
+        ", but the address mentions " + mismatch.name + " (" + mismatch.abbr + "). " +
+        "Double-check the property address before acting on this verdict.";
+      note = note ? note + " " + msg : msg;
+    }
+    banner.textContent = note;
+    banner.classList.toggle("hidden", !note);
 
     try {
       history.replaceState(null, "",
@@ -279,6 +338,19 @@
         saveJSON(key, d);
         renderSteps(city);
         renderSaved();
+        // P2-5: if the rename input had focus when the tick started, the
+        // re-render above rebuilt it. Restore focus (and any uncommitted
+        // value/caret) so the in-progress rename survives the tick.
+        if (tickPreserveRename) {
+          var snap = tickPreserveRename;
+          tickPreserveRename = null;
+          var ni = document.querySelector('.saved-name[data-check-id="' + snap.id + '"]');
+          if (ni) {
+            if (snap.dirty) ni.value = snap.value;
+            ni.focus();
+            try { ni.setSelectionRange(snap.start, snap.end); } catch (e2) {}
+          }
+        }
       });
       var body = document.createElement("div");
       var t = document.createElement("div"); t.className = "t"; t.textContent = (i + 1) + ". " + s.title;
@@ -491,7 +563,8 @@
     document.getElementById("coveredCount").textContent = DATA.cities.length;
     var guess = "";
     var parts = (address || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean);
-    if (parts.length) guess = parts[parts.length - 1];
+    if (parts.length >= 2) guess = parts[parts.length - 2];
+    else if (parts.length) guess = parts[parts.length - 1];
     document.getElementById("reqCity").value = guess;
     document.getElementById("reqOk").classList.add("hidden");
     var chips = document.getElementById("cityChips");
@@ -513,7 +586,24 @@
     unknownSection.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  /* ---------- saved checks ---------- */
+  // P2-5: snapshot a focused rename input at pointerdown (before the click
+  // moves focus), so a checklist tick can restore it after its re-render.
+  var tickPreserveRename = null;
+  document.addEventListener("pointerdown", function (e) {
+    tickPreserveRename = null;
+    var ae = document.activeElement;
+    var t = e.target;
+    if (ae && ae.classList && ae.classList.contains("saved-name") &&
+        t && t.closest && t.closest("#stepsList .check")) {
+      tickPreserveRename = {
+        id: ae.getAttribute("data-check-id"),
+        value: ae.value, start: 0, end: 0,
+        dirty: ae.value !== (ae.defaultValue || "")
+      };
+      try { tickPreserveRename.start = ae.selectionStart; tickPreserveRename.end = ae.selectionEnd; } catch (err) {}
+    }
+  }, true);
+
   function renderSaved() {
     var checks = savedChecks();
     var box = document.getElementById("savedList");
@@ -530,6 +620,7 @@
       var a = document.createElement("div"); a.className = "a";
       var name = document.createElement("input");
       name.type = "text"; name.className = "saved-name"; name.value = c.name || c.address;
+      name.setAttribute("data-check-id", c.id);
       name.setAttribute("aria-label", "Rename saved check for " + (c.address || c.cityLabel));
       name.addEventListener("change", function () {
         var all = savedChecks();
@@ -814,7 +905,18 @@
     var box = document.getElementById("hoaQuestions");
     if (!box) return;
     box.innerHTML = "";
-    var answers = hoaAnswers();
+    var key = hoaKey(currentCity);
+    var answers = loadJSON(key, null);
+    if (currentCity && (!answers || Object.keys(answers).length === 0)) {
+      // P1-1: answers given with no active check live under staylegal.hoa.general.
+      // Carry them onto the new property key so they do not vanish from view.
+      var general = loadJSON("staylegal.hoa.general", null);
+      if (general && Object.keys(general).length) {
+        answers = general;
+        if (saveJSON(key, general)) removeLocal("staylegal.hoa.general");
+      }
+    }
+    answers = answers || {};
     HOA_QUESTIONS.forEach(function (item) {
       var qd = document.createElement("div");
       qd.className = "hoa-q";

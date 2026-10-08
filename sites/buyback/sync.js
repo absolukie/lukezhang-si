@@ -119,7 +119,7 @@ try { skew = +localStorage.getItem(LS_SKEW) || 0; } catch(e){ skew = 0; }
 var applyingRemote = false;
 var pushTimer = null;
 var inflight = 0;      // pushes/pulls currently in flight
-var status = "starting"; // starting|syncing|offline|pending|synced (see updatePill)
+var status = "starting"; // starting|syncing|offline|pending|unavailable|synced (see updatePill)
 
 try { meta = JSON.parse(localStorage.getItem(LS_META) || "{}") || {}; } catch(e){ meta = {}; }
 try { lastSync = +localStorage.getItem(LS_LAST) || 0; } catch(e){}
@@ -181,6 +181,7 @@ function updatePill(){
   try { big = Object.keys(oversized).length; } catch(e){ big = 0; }
   if (inflight > 0){ s = "syncing"; label = "Syncing..."; cls = "warn"; }
   else if (typeof navigator !== "undefined" && navigator.onLine === false){ s = "offline"; label = "Offline"; cls = ""; }
+  else if (!deviceKey){ s = "unavailable"; label = "Sync unavailable"; cls = "warn"; }
   else if (n > 0){ s = "pending"; label = "Not synced \u2014 " + n + " change" + (n === 1 ? "" : "s") + " pending"; cls = "crit"; }
   else if (big > 0){ s = "limited"; label = "Sync limited \u2014 " + big + " too large"; cls = "warn"; }
   else { s = "synced"; label = "Synced"; cls = "ok"; }

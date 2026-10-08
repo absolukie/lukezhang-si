@@ -218,7 +218,7 @@ const STATE_ORDER = ["CA", "TX", "FL", "NY", "OH", "IL", "PA", "NJ", "GA", "NC",
 
 /* Data versions, recorded on every intake snapshot so a firm can see exactly
    which threshold dataset and consent text the submission was built from. */
-const THRESHOLD_DATA_VERSION = "2026-10-08";
+const THRESHOLD_DATA_VERSION = "2026-10-07";
 const CONSENT_VERSION = "consent-v1-2026-10-08";
 const CONSENT_TEXT = "I agree that a participating lemon law attorney may contact me about my case using the information listed above. I understand this is not legal advice and no attorney-client relationship is formed by this request.";
 
@@ -865,10 +865,10 @@ function renderIntakeReceipt(snap) {
       <li><strong>Car:</strong> ${car}</li>
       <li><strong>Repairs:</strong> ${snap.repairs.length} logged visit(s)${snap.windowStart ? `, presumption window ${fmtDate(snap.windowStart)} to ${fmtDate(snap.windowEnd)}` : ""}</li>
       ${snap.routes.map(r => `<li><strong>${esc(r.label)}:</strong> ${r.val} of ${esc(routeNeedText(r))} ${r.met ? '<span class="met-tag">MET</span>' : "(not yet)"}</li>`).join("")}
-      <li><strong>Photos:</strong> ${snap.photoCount} repair-order photo(s), kept on this device until a firm is selected</li>
-      <li><strong>Submitted:</strong> ${esc(fmtMoment(snap.submittedAt))}</li>
+      <li><strong>Photos:</strong> ${snap.photoCount} repair-order photo(s), kept on this device and never shared</li>
+      <li><strong>Submitted:</strong> ${esc(fmtMoment(snap.submittedAt))} <span class="micro">(UTC ${esc(snap.submittedAt)})</span></li>
       <li><strong>Threshold data:</strong> ${esc(snap.thresholdDataVersion)} &middot; <strong>Consent:</strong> ${esc(snap.consentVersion)}</li>
-      ${snap.momentRef ? `<li><strong>Attached moment:</strong> threshold crossed ${esc(fmtMoment(snap.momentRef))}</li>` : ""}
+      ${snap.momentRef ? `<li><strong>Attached moment:</strong> threshold crossed ${esc(fmtMoment(snap.momentRef))} <span class="micro">(UTC ${esc(snap.momentRef)})</span></li>` : ""}
     </ul>`;
 }
 $("#intakeForm").addEventListener("submit", e => {

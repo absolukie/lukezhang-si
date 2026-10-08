@@ -100,6 +100,33 @@
     max-height: 220px; overflow-y: auto; }
   .leanlab .ll-log.ll-empty { display: none; }
 
+/* iOS fallback: the full WASM runtime does not fit in a mobile Safari tab. */
+.ll-ios {
+  border: 1px solid #e3d9c8;
+  background: #fffdf8;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin: 12px 0;
+}
+.ll-ios p { margin: 0 0 10px; font-size: 15px; line-height: 1.5; }
+.ll-ios p:last-child { margin-bottom: 0; }
+.ll-playground {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #b3352b;
+  color: #f6f1e3;
+  font-weight: 600;
+  font-size: 16px;
+  padding: 12px 18px;
+  border-radius: 10px;
+  text-decoration: none;
+  touch-action: manipulation;
+  margin-bottom: 10px;
+}
+.ll-playground:active { transform: scale(0.98); }
+.ll-fine { font-size: 13px; color: #8a7f6a; }
+
 </style>
 </head>
 <body>
@@ -155,7 +182,7 @@
   <p>Somewhere in the openai/math repo, a machine proved something about π that no human had managed. My contribution is smaller: one ancient theorem, checked by a laptop, and a trailhead for anyone who wants to start climbing. Take notes, OpenAI.</p>
 
   <h2>6. Run it in this page</h2>
-<p>The proof above is the same one, adapted slightly for the browser: this page's Mathlib does not include Mathlib's <code>Irrational</code> predicate, so irrationality is stated directly ("never equal to a ratio of integers") and the lowest-terms argument runs by infinite descent instead of going through fractions. Same theorem, same heart. Press Run and the real Lean kernel checks every line, on your machine. Nothing is uploaded.</p>
+<p>The proof above is the same one, adapted slightly for the browser: this page's Mathlib does not include Mathlib's <code>Irrational</code> predicate, so irrationality is stated directly ("never equal to a ratio of integers") and the lowest-terms argument runs by infinite descent instead of going through fractions. Same theorem, same heart. Press Run and the real Lean kernel checks every line, on your machine. Nothing is uploaded. (On iPhone and iPad the checker hands off to the Lean web playground instead, since mobile Safari will not hold the full runtime in a tab.)</p>
 
 <figure>
   <div class="leanlab" id="leanlab">
@@ -254,7 +281,7 @@ theorem sqrt_two_irrational&#x27; : Irrational&#x27; (Real.sqrt 2) := by
     </div>
     <pre class="ll-log ll-empty" id="ll-log"></pre>
   </div>
-  <figcaption>Real Lean 4, compiled to WebAssembly. The first run downloads the runtime and the Mathlib pieces the proof needs (tens of megabytes); after that it is instant. "Break it" sneaks in a false theorem so you can watch the kernel complain. The full original file is in the repo.</figcaption>
+  <figcaption>Real Lean 4, compiled to WebAssembly. The first run downloads the runtime and the Mathlib pieces the proof needs (a few hundred megabytes); after that it is instant. "Break it" sneaks in a false theorem so you can watch the kernel complain. The full original file is in the repo.</figcaption>
 </figure>
 
 <footer>Built with Lean 4 and Mathlib. The practice repo is <a href="https://github.com/absolukie/lean-practice">absolukie/lean-practice</a>.</footer>
@@ -906,6 +933,48 @@ run_cmd do
   var starting = null;
   var busy = false;
 
+  function isIOS() {
+    var ua = navigator.userAgent || '';
+    if (/iPad|iPhone|iPod/.test(ua)) return true;
+    return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  }
+
+  if (isIOS()) {
+    /* Mobile Safari will not keep the full Lean+Mathlib runtime alive in a tab
+       (hundreds of MB installed), so hand off to the server-side Lean playground
+       with the same proof prefilled instead of crashing the page. */
+    runBtn.style.display = 'none';
+    breakBtn.style.display = 'none';
+    statusEl.textContent = 'The proof is loaded below. On this device, run it in the playground.';
+    var iosCard = document.createElement('div');
+    iosCard.className = 'll-ios';
+    var ip1 = document.createElement('p');
+    ip1.innerHTML = '<strong>On iPhone and iPad, use the playground.</strong> ' +
+      'The in-browser Lean kernel needs several hundred megabytes, which mobile Safari ' +
+      'will not hold in a tab, so the on-page checker is desktop-only.';
+    var iplay = document.createElement('a');
+    iplay.className = 'll-playground';
+    iplay.href = '#';
+    iplay.setAttribute('role', 'button');
+    iplay.innerHTML = 'Open this proof in the Lean playground ' +
+      '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" ' +
+      'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>' +
+      '<polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
+    iplay.addEventListener('click', function (e) {
+      e.preventDefault();
+      window.open('https://live.lean-lang.org/#code=' + encodeURIComponent(editor.value),
+        '_blank', 'noopener');
+    });
+    var ip2 = document.createElement('p');
+    ip2.className = 'll-fine';
+    ip2.textContent = 'Same proof, checked on Lean\u2019s servers with Mathlib installed. Nothing to download.';
+    iosCard.appendChild(ip1);
+    iosCard.appendChild(iplay);
+    iosCard.appendChild(ip2);
+    lab.insertBefore(iosCard, editor);
+  }
+
   function log(line) {
     logEl.classList.remove('ll-empty');
     logEl.textContent += (logEl.textContent ? '\n' : '') + line;
@@ -1001,7 +1070,7 @@ run_cmd do
     statusEl.textContent = 'Back to the real proof. Press Run.';
   });
 
-  if (!('SharedArrayBuffer' in window) || !self.crossOriginIsolated) {
+  if (!isIOS() && (!('SharedArrayBuffer' in window) || !self.crossOriginIsolated)) {
     statusEl.textContent = 'This page needs cross-origin isolation for Lean\u2019s shared memory. If Run fails, your browser may be blocking it.';
   }
 })();

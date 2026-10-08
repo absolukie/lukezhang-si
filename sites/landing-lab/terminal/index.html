@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>luke@landing:~$</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: #040704;
+    color: #33ff66;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 16px;
+    line-height: 1.5;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+  #term {
+    flex: 1;
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 16px 14px 0;
+    display: flex;
+    flex-direction: column;
+  }
+  #out { flex: 1; overflow-wrap: anywhere; padding-bottom: 8px; }
+  #out .ln { white-space: pre-wrap; margin: 0; }
+  #out .dim { color: #1f8a3d; }
+  #out .warn { color: #ffb000; }
+  #out a { color: #7dffa8; text-decoration: underline; }
+  .prompt { color: #33ff66; font-weight: bold; }
+  .typed { color: #e8ffe8; }
+  #inrow {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 0 calc(12px + env(safe-area-inset-bottom));
+    background: #040704;
+    border-top: 1px solid #12351c;
+  }
+  #in {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #e8ffe8;
+    font: inherit;
+    font-size: 16px;
+    caret-color: #33ff66;
+    padding: 4px 0;
+  }
+  .cursor {
+    display: inline-block;
+    width: 9px;
+    height: 18px;
+    background: #33ff66;
+    vertical-align: -3px;
+    animation: blink 1.06s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  footer {
+    text-align: center;
+    padding: 18px 12px 26px;
+    font-size: 13px;
+    color: #1f8a3d;
+  }
+  footer a { color: #1f8a3d; }
+  ::selection { background: #33ff66; color: #040704; }
+</style>
+</head>
+<body>
+<div id="term">
+  <div id="out" aria-live="polite"></div>
+  <div id="inrow">
+    <span class="prompt">luke@landing:~$</span>
+    <input id="in" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="type a command" autofocus>
+  </div>
+</div>
+<footer><a href="../">back to all 20</a></footer>
+
+<script>
+(function () {
+  "use strict";
+  var out = document.getElementById("out");
+  var input = document.getElementById("in");
+  var hist = [];
+  var hi = -1;
+
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function printLine(html, cls) {
+    var d = document.createElement("div");
+    d.className = "ln" + (cls ? " " + cls : "");
+    d.innerHTML = html;
+    out.appendChild(d);
+    window.scrollTo(0, document.body.scrollHeight);
+  }
+
+  function printUser(cmd) {
+    printLine('<span class="prompt">luke@landing:~$</span> <span class="typed">' + esc(cmd) + "</span>");
+  }
+
+  var jokes = [
+    "command not found. bold of you to assume i implemented that.",
+    "nope. try 'help' before you hurt yourself.",
+    "i searched my entire codebase. nothing. impressive.",
+    "that did nothing, which is more than most of my side projects.",
+    "'X' is not a command. it is, however, a great password. replacing X with what you typed."
+  ];
+
+  var CMDS = {
+    help: function () {
+      return [
+        "available commands:",
+        "  <b>help</b>       this list. thrilling.",
+        "  <b>whoami</b>     who is this guy",
+        "  <b>projects</b>   what he has shipped",
+        "  <b>skills</b>     what he can actually do",
+        "  <b>contact</b>    where to find him",
+        "  <b>clear</b>      wipe the screen, pretend this never happened"
+      ];
+    },
+    whoami: function () {
+      return [
+        "luke zhang",
+        "husband, cat dad, christian",
+        "works at robinhood, builds small useful things on the side",
+        "taste: simple but clever"
+      ];
+    },
+    projects: function () {
+      return [
+        "* <a href=\"https://lukezhang.si/blog/skill-tree-app-design/\">skill tree app</a> - duolingo for leveling up your life (blogged it)",
+        "* liverpool rummy - card game app",
+        "* get clocked - card game app",
+        "* draw and guess - a game built to play with my wife",
+        "* food truck app - concept, curbside ordering",
+        "* <a href=\"https://projects.lukezhang.si/high-agency-draft/\">llm explainer</a> - how language models actually work",
+        "more: <a href=\"https://projects.lukezhang.si/\">projects.lukezhang.si</a>"
+      ];
+    },
+    skills: function () {
+      return [
+        "* shipping side projects that people actually use",
+        "* card game design (rummy is the house favorite)",
+        "* explaining hard things simply (see: llm explainer)",
+        "* chinese, beginner level, plain pinyin, no tone marks",
+        "* finding the best taco truck in a 20 mile radius"
+      ];
+    },
+    contact: function () {
+      return [
+        "web:      <a href=\"https://lukezhang.si/\">lukezhang.si</a>",
+        "projects: <a href=\"https://projects.lukezhang.si/\">projects.lukezhang.si</a>"
+      ];
+    },
+    clear: function () { return null; }
+  };
+
+  function denySudo(raw) {
+    return [
+      '<span class="warn">[sudo]</span> nice try.',
+      "this incident will be reported to the cat."
+    ];
+  }
+
+  function run(raw) {
+    var cmd = raw.trim();
+    printUser(raw);
+    if (cmd === "") { return; }
+    var name = cmd.split(/\s+/)[0].toLowerCase();
+    if (name === "clear") { out.innerHTML = ""; return; }
+    if (name === "sudo" || name.indexOf("sudo ") === 0) {
+      denySudo().forEach(function (l) { printLine(l); });
+      return;
+    }
+    if (CMDS[name]) {
+      var lines = CMDS[name]();
+      if (lines) { lines.forEach(function (l) { printLine(l); }); }
+      return;
+    }
+    var joke = jokes[Math.floor(Math.random() * jokes.length)].replace("X", esc(cmd));
+    printLine(joke, "dim");
+  }
+
+  input.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") {
+      var v = input.value;
+      if (v.trim() !== "") { hist.push(v); }
+      hi = hist.length;
+      run(v);
+      input.value = "";
+    } else if (e.key === "ArrowUp") {
+      if (hist.length && hi > 0) { hi--; input.value = hist[hi]; }
+      e.preventDefault();
+    } else if (e.key === "ArrowDown") {
+      if (hist.length && hi < hist.length - 1) { hi++; input.value = hist[hi]; }
+      else { hi = hist.length; input.value = ""; }
+      e.preventDefault();
+    }
+  });
+
+  document.getElementById("term").addEventListener("click", function () { input.focus(); });
+
+  printLine("LUKE OS v3.2 (tty1)", "dim");
+  printLine("last login: never. this is a website, not a server.", "dim");
+  printLine("type \"help\" to see what i respond to. try \"sudo\" if you are feeling brave.", "dim");
+  printLine("&nbsp;");
+})();
+</script>
+</body>
+</html>

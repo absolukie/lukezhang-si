@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Luke Zhang: Character Sheet</title>
+<style>
+  :root{
+    --bg:#0d0a16; --panel:#171226; --gold:#e8b64c; --gold-dim:#8a6a2c;
+    --purple:#9b6bff; --purple-dim:#4a3670; --ink:#efe9dc; --muted:#9a90ad;
+    --line:#2c2340;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{
+    margin:0; background:radial-gradient(1200px 800px at 50% -10%, #1c1430 0%, var(--bg) 60%) fixed;
+    color:var(--ink); font-family:'Trebuchet MS', Verdana, Geneva, sans-serif;
+    min-height:100vh; display:flex; flex-direction:column; align-items:center;
+    padding:20px 14px 40px;
+  }
+  header{ text-align:center; max-width:560px; }
+  .kicker{ color:var(--gold); letter-spacing:.35em; font-size:11px; text-transform:uppercase; }
+  h1{ font-family:Georgia,'Times New Roman',serif; font-size:clamp(30px,8vw,46px); margin:8px 0 4px; color:var(--ink);
+      text-shadow:0 0 24px rgba(155,107,255,.35); }
+  .sub{ color:var(--muted); font-size:14px; line-height:1.55; margin:0 0 4px; }
+  .sub a{ color:var(--gold); }
+  .hud{
+    display:flex; gap:12px; align-items:stretch; justify-content:center; flex-wrap:wrap;
+    margin:18px 0 6px; width:100%; max-width:560px;
+  }
+  .points{
+    flex:1 1 200px; background:linear-gradient(180deg,#221a36,#141021);
+    border:1px solid var(--gold-dim); border-radius:12px; padding:10px 14px;
+    display:flex; align-items:center; gap:10px; box-shadow:0 0 18px rgba(232,182,76,.12) inset;
+  }
+  .points .num{ font-size:30px; font-weight:bold; color:var(--gold); min-width:52px; text-align:center; }
+  .points .lbl{ font-size:11px; letter-spacing:.2em; color:var(--muted); text-transform:uppercase; line-height:1.6; }
+  #respec{
+    border:1px solid var(--purple-dim); background:linear-gradient(180deg,#241b3d,#171226);
+    color:var(--purple); border-radius:12px; padding:10px 18px; font-size:14px; font-weight:bold;
+    letter-spacing:.08em; cursor:pointer; touch-action:manipulation; min-height:48px;
+  }
+  #respec:active{ transform:scale(.96); }
+  .tip{ color:var(--muted); font-size:12.5px; min-height:20px; text-align:center; margin:6px 0 0; max-width:560px;}
+  #tree{
+    position:relative; width:100%; max-width:560px; aspect-ratio:1/1.12;
+    background:linear-gradient(180deg, rgba(23,18,38,.6), rgba(13,10,22,.2));
+    border:1px solid var(--line); border-radius:16px; margin-top:10px; overflow:hidden;
+  }
+  #links{ position:absolute; inset:0; width:100%; height:100%; }
+  #links line{ stroke:#3a2c5e; stroke-width:3px; }
+  #links line.on{ stroke:var(--gold); filter:drop-shadow(0 0 4px rgba(232,182,76,.7)); }
+  .node{
+    position:absolute; left:calc(var(--x)*1%); top:calc(var(--y)*1%);
+    transform:translate(-50%,-50%); width:86px; height:86px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #2b2145, #141021 75%);
+    border:2px solid #4a3a70; color:var(--ink); cursor:pointer; touch-action:manipulation;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    font-family:inherit; padding:4px; transition:border-color .2s, box-shadow .2s;
+  }
+  .node .nm{ font-size:10.5px; font-weight:bold; line-height:1.15; text-align:center; }
+  .node .cost{ font-size:10px; color:var(--muted); }
+  .node .pips{ display:flex; gap:3px; }
+  .node .pip{ width:8px; height:8px; border-radius:50%; background:#3a2f55; border:1px solid #5a4a80; }
+  .node .pip.f{ background:var(--gold); border-color:var(--gold); box-shadow:0 0 6px rgba(232,182,76,.8); }
+  .node.avail{ border-color:var(--gold); animation:pulse 1.6s infinite; }
+  .node.avail .cost{ color:var(--gold); }
+  @keyframes pulse{
+    0%,100%{ box-shadow:0 0 0 0 rgba(232,182,76,.45); }
+    50%{ box-shadow:0 0 0 9px rgba(232,182,76,0); }
+  }
+  .node.maxed{ border-color:var(--purple); background:radial-gradient(circle at 35% 30%, #3a2a63, #1c1233 75%); }
+  .node.maxed .pip.f{ background:var(--purple); border-color:var(--purple); box-shadow:0 0 6px rgba(155,107,255,.9); }
+  .node.locked{ opacity:.45; cursor:not-allowed; }
+  .node .lock{ position:absolute; top:2px; right:8px; width:14px; height:14px; }
+  .node.flash{ animation:flash .45s; }
+  @keyframes flash{ 0%{ box-shadow:0 0 0 0 rgba(232,182,76,.9);} 100%{ box-shadow:0 0 0 22px rgba(232,182,76,0);} }
+  #fx{ position:absolute; inset:0; pointer-events:none; overflow:hidden; }
+  .particle{ position:absolute; width:7px; height:7px; border-radius:50%; background:var(--gold);
+    box-shadow:0 0 8px rgba(232,182,76,.9); }
+  .floaty{ position:absolute; color:var(--gold); font-weight:bold; font-size:15px; pointer-events:none;
+    text-shadow:0 0 8px rgba(232,182,76,.8); }
+  #detail{
+    max-width:560px; width:100%; margin-top:12px; background:var(--panel);
+    border:1px solid var(--line); border-radius:12px; padding:12px 16px; min-height:74px;
+  }
+  #detail h3{ margin:0 0 4px; font-size:16px; color:var(--gold); font-family:Georgia,serif; }
+  #detail p{ margin:0; font-size:13.5px; color:var(--muted); line-height:1.55; }
+  #detail .req{ color:var(--purple); font-size:12px; margin-top:4px; display:block; }
+  #build{ max-width:560px; width:100%; margin-top:10px; font-size:13px; color:var(--muted); text-align:center; line-height:1.6;}
+  #build b{ color:var(--ink); }
+  footer{ margin-top:26px; font-size:13px; color:var(--muted); text-align:center; }
+  footer a{ color:var(--gold); }
+  @media (max-width:420px){ .node{ width:76px; height:76px; } .node .nm{ font-size:9.5px; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="kicker">character sheet</div>
+  <h1>Luke Zhang</h1>
+  <p class="sub">Level 27 human. Class: builder, multiclass cat dad. Works at Robinhood, ships side quests at night. Currently building a <a href="https://lukezhang.si/blog/skill-tree-app-design/">skill tree app</a>, because of course he is.</p>
+</header>
+
+<div class="hud">
+  <div class="points" aria-live="polite">
+    <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
+      <circle cx="15" cy="15" r="13" fill="#e8b64c"/>
+      <circle cx="15" cy="15" r="9.5" fill="none" stroke="#8a6a2c" stroke-width="2"/>
+      <text x="15" y="20" text-anchor="middle" font-size="13" font-weight="bold" fill="#5c4418">P</text>
+    </svg>
+    <div><div class="num" id="pts">7</div></div>
+    <div class="lbl">skill<br>points</div>
+  </div>
+  <button id="respec">RESPEC</button>
+</div>
+<p class="tip" id="tip">Tap a glowing node to spend a point. Choose wisely, there are only 7.</p>
+
+<div id="tree" aria-label="Skill tree">
+  <svg id="links" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
+  <div id="fx"></div>
+</div>
+
+<div id="detail" aria-live="polite">
+  <h3>Pick a node</h3>
+  <p>Tap any node to inspect it. Gold ring means you can afford it right now.</p>
+</div>
+
+<p id="build"></p>
+
+<footer><a href="../">back to all 20</a> &middot; no refunds on spent points</footer>
+
+<script>
+(function(){
+  "use strict";
+  var NODES = [
+    {id:"ship",   name:"Ship Fast",        x:16, y:14, max:3, costs:[1,1,2], blurb:"Done beats perfect. Mostly. Ships before the doubt loads.", req:[]},
+    {id:"debug",  name:"Debug Under Fire", x:40, y:26, max:3, costs:[1,1,2], blurb:"The bug is never where you think. It is in the line you skipped.", req:[["ship",2]]},
+    {id:"wasm",   name:"Wasm Wrangling",   x:66, y:12, max:2, costs:[2,2],   blurb:"Runs Lean 4 in a browser tab. For fun. Do not ask why.", req:[["ship",2]]},
+    {id:"explain",name:"Visual Explainers",x:14, y:48, max:3, costs:[1,1,2], blurb:"If it moves on screen, it clicks in the brain. Every blog post is a visualizer.", req:[]},
+    {id:"humor",  name:"Dry Humor",        x:40, y:58, max:2, costs:[1,2],   blurb:"Jokes land better when they whisper. Punchlines kept short.", req:[["explain",1]]},
+    {id:"meme",   name:"Meme Literacy",    x:66, y:48, max:2, costs:[1,1],   blurb:"Fluent in internet. Speaks touch grass.", req:[["humor",1]]},
+    {id:"catdad", name:"Cat Dad",          x:16, y:80, max:3, costs:[1,1,1], blurb:"Two cats. Zero authority. Would lose every negotiation.", req:[]},
+    {id:"foodie", name:"Foodie",           x:42, y:88, max:2, costs:[1,1],   blurb:"Will drive 40 minutes for noodles. Has opinions about broth.", req:[]},
+    {id:"zhongwen",name:"Mandarin, No Tones",x:70, y:80, max:3, costs:[1,1,2], blurb:"Learning Chinese in plain pinyin. Tones are a later patch.", req:[]}
+  ];
+  var LINKS = [["ship","debug"],["ship","wasm"],["explain","humor"],["humor","meme"]];
+  var START_POINTS = 7;
+
+  var state = { points: START_POINTS, levels: {} };
+  var byId = {};
+  NODES.forEach(function(n){ byId[n.id] = n; });
+
+  var tree = document.getElementById("tree");
+  var svg = document.getElementById("links");
+  var fx = document.getElementById("fx");
+  var ptsEl = document.getElementById("pts");
+  var tipEl = document.getElementById("tip");
+  var detailEl = document.getElementById("detail");
+  var buildEl = document.getElementById("build");
+  var nodeEls = {};
+
+  function lvl(id){ return state.levels[id] || 0; }
+  function reqMet(n){
+    return n.req.every(function(r){ return lvl(r[0]) >= r[1]; });
+  }
+  function reqText(n){
+    if(!n.req.length) return "";
+    return "Requires: " + n.req.map(function(r){ return byId[r[0]].name + " " + r[1]; }).join(", ");
+  }
+
+  // Build connectors
+  LINKS.forEach(function(pair){
+    var a = byId[pair[0]], b = byId[pair[1]];
+    var ln = document.createElementNS("http://www.w3.org/2000/svg","line");
+    ln.setAttribute("x1", a.x); ln.setAttribute("y1", a.y);
+    ln.setAttribute("x2", b.x); ln.setAttribute("y2", b.y);
+    ln.setAttribute("vector-effect","non-scaling-stroke");
+    ln.dataset.from = a.id; ln.dataset.to = b.id;
+    svg.appendChild(ln);
+  });
+
+  // Build nodes
+  NODES.forEach(function(n){
+    var b = document.createElement("button");
+    b.className = "node"; b.type = "button";
+    b.style.setProperty("--x", n.x); b.style.setProperty("--y", n.y);
+    b.setAttribute("aria-label", n.name);
+    var pips = "";
+    for(var i=0;i<n.max;i++) pips += '<span class="pip"></span>';
+    b.innerHTML =
+      '<svg class="lock" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2" fill="#8a7ba8"/><path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="#8a7ba8" stroke-width="2.5"/></svg>' +
+      '<span class="nm">' + n.name + '</span>' +
+      '<span class="pips">' + pips + '</span>' +
+      '<span class="cost"></span>';
+    b.addEventListener("click", function(){ onNodeTap(n, b); });
+    tree.appendChild(b);
+    nodeEls[n.id] = b;
+  });
+
+  function onNodeTap(n, el){
+    showDetail(n);
+    var cur = lvl(n.id);
+    if(cur >= n.max){ deny(el, "Already maxed. Greedy."); return; }
+    if(!reqMet(n)){ deny(el, "Locked. " + reqText(n) + "."); return; }
+    var cost = n.costs[cur];
+    if(state.points < cost){ deny(el, "Not enough points. It costs " + cost + "."); return; }
+    state.points -= cost;
+    state.levels[n.id] = cur + 1;
+    var r = el.getBoundingClientRect(), tr = tree.getBoundingClientRect();
+    burst(r.left - tr.left + r.width/2, r.top - tr.top + r.height/2);
+    floaty(r.left - tr.left + r.width/2, r.top - tr.top, "+1 " + n.name.split(" ")[0].toUpperCase());
+    shake();
+    el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+    tipEl.textContent = state.points === 0
+      ? "Out of points. This is your build now. Or hit RESPEC, no judgment."
+      : n.name + " is now level " + (cur+1) + ". " + state.points + " point" + (state.points===1?"":"s") + " left.";
+    render();
+  }
+
+  function deny(el, msg){
+    tipEl.textContent = msg;
+    el.animate(
+      [{transform:"translate(-50%,-50%) translateX(0)"},
+       {transform:"translate(-50%,-50%) translateX(-5px)"},
+       {transform:"translate(-50%,-50%) translateX(5px)"},
+       {transform:"translate(-50%,-50%) translateX(0)"}],
+      {duration:180});
+  }
+
+  function burst(cx, cy){
+    for(var i=0;i<16;i++){
+      var p = document.createElement("span");
+      p.className = "particle";
+      p.style.left = cx + "px"; p.style.top = cy + "px";
+      if(i % 4 === 0) p.style.background = "#9b6bff";
+      fx.appendChild(p);
+      var a = Math.random()*Math.PI*2, d = 26 + Math.random()*56;
+      p.animate([
+        {transform:"translate(-50%,-50%) scale(1)", opacity:1},
+        {transform:"translate(calc(-50% + " + (Math.cos(a)*d).toFixed(1) + "px), calc(-50% + " + (Math.sin(a)*d).toFixed(1) + "px)) scale(0.15)", opacity:0}
+      ], {duration: 450 + Math.random()*350, easing:"cubic-bezier(.2,.7,.3,1)"}).onfinish = (function(el){ return function(){ el.remove(); }; })(p);
+    }
+  }
+
+  function floaty(x, y, text){
+    var s = document.createElement("span");
+    s.className = "floaty"; s.textContent = text;
+    s.style.left = x + "px"; s.style.top = y + "px";
+    fx.appendChild(s);
+    s.animate([
+      {transform:"translate(-50%,0)", opacity:1},
+      {transform:"translate(-50%,-46px)", opacity:0}
+    ], {duration:900, easing:"ease-out"}).onfinish = function(){ s.remove(); };
+  }
+
+  function shake(){
+    tree.animate([
+      {transform:"translate(0,0)"},{transform:"translate(3px,-2px)"},
+      {transform:"translate(-3px,2px)"},{transform:"translate(2px,1px)"},
+      {transform:"translate(0,0)"}
+    ], {duration:200});
+  }
+
+  function showDetail(n){
+    var cur = lvl(n.id);
+    var next = cur < n.max ? "Next level costs " + n.costs[cur] + " point" + (n.costs[cur]===1?"":"s") + "." : "Maxed out. A true specialist.";
+    detailEl.innerHTML = "<h3>" + n.name + " <span style='color:var(--muted);font-size:13px'>lv " + cur + "/" + n.max + "</span></h3>" +
+      "<p>" + n.blurb + "</p>" +
+      (reqText(n) ? "<span class='req'>" + reqText(n) + "</span>" : "") +
+      "<span class='req' style='color:var(--gold)'>" + next + "</span>";
+  }
+
+  function render(){
+    ptsEl.textContent = state.points;
+    NODES.forEach(function(n){
+      var el = nodeEls[n.id], cur = lvl(n.id);
+      var pips = el.querySelectorAll(".pip");
+      for(var i=0;i<pips.length;i++) pips[i].classList.toggle("f", i < cur);
+      el.querySelector(".lock").style.display = reqMet(n) ? "none" : "block";
+      el.querySelector(".cost").textContent = cur >= n.max ? "MAX" : ("cost " + n.costs[cur]);
+      el.classList.toggle("locked", !reqMet(n));
+      el.classList.toggle("maxed", cur >= n.max);
+      el.classList.toggle("avail", reqMet(n) && cur < n.max && state.points >= n.costs[cur]);
+    });
+    var lines = svg.querySelectorAll("line");
+    for(var j=0;j<lines.length;j++){
+      lines[j].classList.toggle("on", lvl(lines[j].dataset.from) > 0);
+    }
+    var parts = [], spent = 0;
+    NODES.forEach(function(n){
+      var c = lvl(n.id);
+      if(c > 0){ parts.push(n.name + " " + c); spent += n.costs.slice(0,c).reduce(function(a,b){return a+b;},0); }
+    });
+    buildEl.innerHTML = parts.length
+      ? "Your build: <b>" + parts.join(" &middot; ") + "</b><br>Points spent: " + spent + " of " + START_POINTS
+      : "No points spent yet. A blank slate. Suspicious.";
+  }
+
+  document.getElementById("respec").addEventListener("click", function(){
+    state.points = START_POINTS; state.levels = {};
+    tipEl.textContent = "Wiped clean. 7 points back. Spend them like you mean it.";
+    detailEl.innerHTML = "<h3>Pick a node</h3><p>Tap any node to inspect it. Gold ring means you can afford it right now.</p>";
+    for(var i=0;i<24;i++){
+      var p = document.createElement("span");
+      p.className = "particle"; p.style.background = "#9b6bff";
+      p.style.left = (20+Math.random()*60) + "%"; p.style.top = (20+Math.random()*60) + "%";
+      fx.appendChild(p);
+      p.animate([{opacity:1, transform:"scale(1)"},{opacity:0, transform:"scale(2.5)"}],
+        {duration:600, easing:"ease-out"}).onfinish = (function(el){ return function(){ el.remove(); }; })(p);
+    }
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

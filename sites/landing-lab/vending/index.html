@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vend-O-Matic | Luke Zhang Projects</title>
+<style>
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:#07070f radial-gradient(ellipse 80% 50% at 50% -10%, #1b1b38 0%, #07070f 60%);
+    color:#e8e8f2; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    min-height:100vh; display:flex; flex-direction:column; align-items:center;
+    padding:24px 14px 60px; -webkit-font-smoothing:antialiased;
+  }
+  button,a{touch-action:manipulation;}
+  h1{font-size:22px; letter-spacing:.02em; margin-bottom:2px; text-align:center;}
+  .sub{color:#8f8fa8; font-size:13px; margin-bottom:20px; text-align:center;}
+  .machine{
+    width:100%; max-width:400px; background:linear-gradient(180deg,#23232f,#17171f);
+    border-radius:22px; padding:18px 16px 22px;
+    border:1px solid #34344a;
+    box-shadow:0 0 60px rgba(120,90,255,.22), 0 30px 60px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.08);
+  }
+  .marquee{
+    text-align:center; font-weight:800; letter-spacing:.3em; font-size:15px; color:#ffd75e;
+    text-shadow:0 0 12px rgba(255,215,94,.8); margin-bottom:14px;
+    animation:neon 2.6s ease-in-out infinite;
+  }
+  @keyframes neon{ 0%,100%{opacity:1;} 50%{opacity:.72;} }
+  .body-row{display:flex; gap:14px;}
+  /* glass case */
+  .case{
+    flex:1; background:#0a0a14; border-radius:12px; border:1px solid #2c2c40;
+    padding:12px; display:grid; grid-template-columns:repeat(3,1fr); gap:10px;
+    box-shadow:inset 0 0 30px rgba(120,140,255,.08);
+  }
+  .slot{background:#12121d; border:1px solid #26263a; border-radius:8px; padding:8px 6px 6px; text-align:center; position:relative;}
+  .slot .code{font-size:10px; font-weight:800; color:#ffd75e; letter-spacing:.1em; margin-bottom:6px;}
+  .shelf{height:64px; display:flex; align-items:center; justify-content:center; margin-bottom:4px;}
+  .prod{
+    width:46px; height:56px; border-radius:6px; display:flex; align-items:center; justify-content:center;
+    font-size:9px; font-weight:800; color:#fff; text-align:center; line-height:1.25; padding:3px;
+    box-shadow:0 4px 8px rgba(0,0,0,.5);
+  }
+  .coil{height:8px; margin:2px 4px 0; border-radius:4px;
+    background:repeating-linear-gradient(115deg,#8f8fa8 0 4px,#55556e 4px 8px);}
+  .coil.spin{animation:coilspin .9s linear;}
+  @keyframes coilspin{ to{ background-position:32px 0; } }
+  .slot .pname{font-size:9px; color:#b9b9d0; margin-top:4px; min-height:22px;}
+  /* side panel */
+  .panel{width:132px; display:flex; flex-direction:column; gap:10px;}
+  #display{
+    background:#04140a; color:#7dff9a; font-family:ui-monospace,Menlo,Consolas,monospace;
+    font-size:12px; font-weight:700; border-radius:8px; padding:10px 8px; min-height:58px;
+    text-align:center; border:1px solid #1d3a26; text-shadow:0 0 8px rgba(125,255,154,.6);
+    display:flex; align-items:center; justify-content:center; line-height:1.5;
+  }
+  #coinSlot{
+    background:#2c2c40; border:1px solid #45455e; border-radius:10px; padding:12px 6px; cursor:pointer;
+    text-align:center; color:#c9c9de; font-size:11px; font-weight:700; min-height:64px;
+    position:relative; overflow:hidden;
+  }
+  #coinSlot .slit{width:8px; height:30px; background:#0a0a12; border-radius:4px; margin:0 auto 6px; border:1px solid #55556e;}
+  #coin{position:absolute; left:50%; top:-24px; width:20px; height:20px; margin-left:-10px; border-radius:50%;
+    background:radial-gradient(circle at 35% 35%, #ffe9a3, #d4a017); box-shadow:0 0 8px rgba(255,215,94,.7);}
+  #coin.drop{transition:top .45s cubic-bezier(.5,0,.8,.4); top:70px;}
+  .keypad{display:grid; grid-template-columns:repeat(3,1fr); gap:6px;}
+  .keypad button{
+    background:#34344a; color:#fff; border:1px solid #4a4a66; border-radius:8px;
+    font-size:14px; font-weight:800; min-height:44px; cursor:pointer; font-family:inherit;
+  }
+  .keypad button:active{background:#4a4a66;}
+  .keypad button.fn{font-size:10px; color:#ffd75e;}
+  /* flap */
+  .flapzone{margin-top:16px;}
+  #flap{
+    background:#0a0a14; border:2px solid #34344a; border-radius:0 0 14px 14px; min-height:96px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; position:relative; overflow:hidden;
+    transition:transform .25s; transform-origin:top center;
+  }
+  #flap.open{transform:perspective(400px) rotateX(-38deg); background:#101018;}
+  #flap .flaplabel{color:#6a6a88; font-size:12px; letter-spacing:.24em; font-weight:700;}
+  #dropped{
+    position:absolute; left:50%; top:-70px; margin-left:-60px; width:120px;
+    background:#fff; color:#14141f; border-radius:8px; padding:10px; text-align:center;
+    font-size:11px; font-weight:700; box-shadow:0 8px 20px rgba(0,0,0,.5);
+  }
+  #dropped.fall{transition:top .55s cubic-bezier(.5,0,.9,.5); top:12px;}
+  #dropped strong{display:block; font-size:12px; margin-bottom:2px;}
+  /* reveal card */
+  #reveal{
+    display:none; margin-top:16px; background:#101019; border:1px solid #ffd75e; border-radius:12px;
+    padding:18px; text-align:center; box-shadow:0 0 24px rgba(255,215,94,.18);
+  }
+  #reveal.show{display:block; animation:pop .3s ease-out;}
+  @keyframes pop{ from{transform:scale(.92); opacity:0;} }
+  #reveal h3{font-size:18px; margin-bottom:6px; color:#ffd75e;}
+  #reveal p{font-size:13px; color:#b9b9d0; margin-bottom:12px; line-height:1.6;}
+  #reveal a{display:inline-block; background:#ffd75e; color:#14141f; font-weight:800; text-decoration:none;
+    padding:12px 24px; border-radius:10px; min-height:44px;}
+  #again{background:none; border:none; color:#8f8fa8; text-decoration:underline; cursor:pointer; margin-top:10px; font-size:13px; padding:8px;}
+  footer{margin-top:28px; font-size:13px; color:#6a6a88;}
+  footer a{color:#a9a9c9;}
+</style>
+</head>
+<body>
+  <h1>VEND-O-MATIC</h1>
+  <p class="sub">insert coin. pick a project. no refunds, only side quests.</p>
+
+  <div class="machine">
+    <div class="marquee">LUKE'S PROJECTS</div>
+    <div class="body-row">
+      <div class="case" id="case"></div>
+      <div class="panel">
+        <div id="display">INSERT<br>COIN</div>
+        <div id="coinSlot" role="button" tabindex="0" aria-label="Coin slot. Activate to insert a coin.">
+          <div id="coin"></div>
+          <div class="slit"></div>
+          COIN<br>SLOT
+        </div>
+        <div class="keypad" id="keypad">
+          <button data-k="A">A</button><button data-k="B">B</button><button data-k="C">C</button>
+          <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+          <button data-k="4">4</button><button data-k="CLR" class="fn">CLR</button><button data-k="ENT" class="fn">ENT</button>
+        </div>
+      </div>
+    </div>
+    <div class="flapzone">
+      <div id="flap" role="button" tabindex="0" aria-label="Pickup flap. Activate to collect your project.">
+        <span class="flaplabel">PUSH FLAP</span>
+        <div id="dropped"></div>
+      </div>
+    </div>
+    <div id="reveal">
+      <h3 id="rTitle"></h3>
+      <p id="rDesc"></p>
+      <div id="rLink"></div>
+      <br><button id="again">vend another</button>
+    </div>
+  </div>
+
+  <footer><a href="../">back to all 20</a></footer>
+
+<script>
+(function(){
+  "use strict";
+  var PRODUCTS = {
+    A1:{name:"Skill Tree", desc:"An app that grows your skills like a tree. Ink-wash style, elite.", color:"#2e86ab", link:"https://lukezhang.si/blog/skill-tree-app-design/", linkLabel:"read the design post"},
+    A2:{name:"Liverpool Rummy", desc:"The card game. Now with online rooms, so my wife can beat me remotely.", color:"#e4572e"},
+    A3:{name:"Get Clocked", desc:"A time tracker with opinions. It roasts your screen time.", color:"#7fb069"},
+    B1:{name:"High Agency", desc:"Notes on the high-agency mindset. Jail-cell phone-call test included.", color:"#9b5de5", link:"https://projects.lukezhang.si/high-agency-draft/", linkLabel:"read the draft"},
+    B2:{name:"Draw & Guess", desc:"Date-night certified. Pinyin guesses, no tone marks required.", color:"#f15bb5"},
+    B3:{name:"Wasm Craft", desc:"WebAssembly experiments. Fast code, tiny packages.", color:"#00bbf9", link:"https://projects.lukezhang.si/wasm-craft/", linkLabel:"see the builds"},
+    C1:{name:"Trace Race", desc:"A blackbox prototype. Race the trace.", color:"#fee440", link:"https://projects.lukezhang.si/blackbox/proto/trace-race.html", linkLabel:"play the prototype"},
+    C2:{name:"Curbside", desc:"Food truck finder. Built by a foodie, for foodies.", color:"#00f5d4"},
+    C3:{name:"Luke HQ", desc:"The dashboard of everything. Auto-syncs every Sunday.", color:"#ff6b6b", link:"https://my-hq-ct5.pages.dev", linkLabel:"open Luke HQ"}
+  };
+  var ORDER = ["A1","A2","A3","B1","B2","B3","C1","C2","C3"];
+
+  var display = document.getElementById("display");
+  var coinSlot = document.getElementById("coinSlot");
+  var coin = document.getElementById("coin");
+  var flap = document.getElementById("flap");
+  var dropped = document.getElementById("dropped");
+  var reveal = document.getElementById("reveal");
+
+  /* state machine: idle -> credit -> vending -> ready -> idle */
+  var state = "idle";
+  var code = "";
+  var vendedCode = null;
+  var actx = null;
+
+  function say(html){ display.innerHTML = html; }
+
+  function clunk(){
+    try{
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === "suspended") actx.resume();
+      var t = actx.currentTime;
+      var o = actx.createOscillator(); o.type = "square";
+      o.frequency.setValueAtTime(220, t);
+      o.frequency.exponentialRampToValueAtTime(60, t + 0.14);
+      var g = actx.createGain();
+      g.gain.setValueAtTime(0.35, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+      o.connect(g); g.connect(actx.destination);
+      o.start(t); o.stop(t + 0.22);
+    }catch(e){}
+  }
+
+  /* build the glass case */
+  var caseEl = document.getElementById("case");
+  ORDER.forEach(function(c){
+    var p = PRODUCTS[c];
+    var d = document.createElement("div");
+    d.className = "slot"; d.id = "slot-" + c;
+    d.innerHTML = '<div class="code">' + c + '</div>' +
+      '<div class="shelf"><div class="prod" style="background:' + p.color + '">' + p.name.split(" ")[0].toUpperCase() + '</div></div>' +
+      '<div class="coil"></div><div class="pname">' + p.name + '</div>';
+    caseEl.appendChild(d);
+  });
+
+  function insertCoin(){
+    if (state !== "idle") return;
+    state = "credit";
+    coin.classList.remove("drop");
+    void coin.offsetWidth;
+    coin.classList.add("drop");
+    clunk();
+    say("$1.00 CREDIT<br>ENTER CODE");
+    code = "";
+  }
+  coinSlot.addEventListener("click", insertCoin);
+  coinSlot.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " ") insertCoin(); });
+
+  function resetCoin(){
+    coin.classList.remove("drop");
+  }
+
+  function vend(c){
+    state = "vending";
+    say("VENDING<br>" + c + "...");
+    var slot = document.getElementById("slot-" + c);
+    var coil = slot.querySelector(".coil");
+    coil.classList.remove("spin"); void coil.offsetWidth; coil.classList.add("spin");
+    var p = PRODUCTS[c];
+    dropped.innerHTML = "<strong>" + p.name + "</strong>project dispensed";
+    setTimeout(function(){
+      dropped.classList.remove("fall"); void dropped.offsetWidth;
+      dropped.classList.add("fall");
+      clunk();
+      setTimeout(function(){
+        state = "ready";
+        vendedCode = c;
+        say("PUSH THE<br>FLAP");
+      }, 600);
+    }, 950);
+  }
+
+  function pressKey(k){
+    if (state === "vending" || state === "ready") return;
+    if (k === "CLR"){ code = ""; say(state === "credit" ? "$1.00 CREDIT<br>ENTER CODE" : "INSERT<br>COIN"); return; }
+    if (k === "ENT"){ submitCode(); return; }
+    if (state !== "credit"){ say("INSERT<br>COIN"); return; }
+    if (code.length >= 2) code = "";
+    code += k;
+    say("CODE: " + code + (code.length < 2 ? "_" : ""));
+    if (code.length === 2) setTimeout(submitCode, 350);
+  }
+  function submitCode(){
+    if (state !== "credit" || code.length !== 2) return;
+    var c = code.toUpperCase();
+    if (!PRODUCTS[c]){ say("BAD CODE<br>TRY AGAIN"); code = ""; return; }
+    vend(c);
+  }
+  document.getElementById("keypad").addEventListener("click", function(e){
+    var b = e.target.closest("button");
+    if (b) pressKey(b.getAttribute("data-k"));
+  });
+
+  function collect(){
+    if (state !== "ready") {
+      if (state === "idle") say("INSERT<br>COIN");
+      return;
+    }
+    flap.classList.add("open");
+    var p = PRODUCTS[vendedCode];
+    document.getElementById("rTitle").textContent = p.name;
+    document.getElementById("rDesc").textContent = p.desc;
+    var rl = document.getElementById("rLink");
+    rl.innerHTML = "";
+    if (p.link){
+      var a = document.createElement("a");
+      a.href = p.link; a.textContent = p.linkLabel || "open it";
+      rl.appendChild(a);
+    }
+    setTimeout(function(){
+      reveal.classList.add("show");
+      state = "idle";
+      code = ""; vendedCode = null;
+      resetCoin();
+      flap.classList.remove("open");
+      dropped.classList.remove("fall");
+      say("INSERT<br>COIN");
+    }, 700);
+  }
+  flap.addEventListener("click", collect);
+  flap.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " ") collect(); });
+
+  document.getElementById("again").addEventListener("click", function(){
+    reveal.classList.remove("show");
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>messages - luke</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    background: #fff;
+    color: #000;
+    font-size: 17px;
+    line-height: 1.35;
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+  }
+  header {
+    position: sticky;
+    top: 0;
+    background: rgba(255,255,255,.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 0.5px solid #c6c6c8;
+    padding: 10px 16px;
+    text-align: center;
+    z-index: 5;
+  }
+  header .name { font-weight: 600; font-size: 17px; }
+  header .sub { font-size: 12px; color: #8e8e93; }
+  #thread {
+    flex: 1;
+    width: 100%;
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 14px 12px 8px;
+    overflow-y: auto;
+  }
+  .row { display: flex; margin: 2px 0; }
+  .row.me { justify-content: flex-end; }
+  .row.him { justify-content: flex-start; }
+  .bubble {
+    max-width: 78%;
+    padding: 8px 14px;
+    position: relative;
+  }
+  .row.me .bubble {
+    background: #0a84ff;
+    color: #fff;
+    border-radius: 20px 20px 4px 20px;
+  }
+  .row.me.last .bubble { border-radius: 20px 20px 20px 20px; border-bottom-right-radius: 20px; }
+  .row.me .bubble::after {
+    content: "";
+    position: absolute;
+    right: -6px;
+    bottom: 0;
+    width: 12px;
+    height: 12px;
+    background: #0a84ff;
+    clip-path: polygon(0 0, 100% 100%, 0 100%);
+    border-bottom-right-radius: 8px;
+  }
+  .row.him .bubble {
+    background: #e9e9eb;
+    color: #000;
+    border-radius: 20px 20px 20px 4px;
+  }
+  .row.him .bubble::after {
+    content: "";
+    position: absolute;
+    left: -6px;
+    bottom: 0;
+    width: 12px;
+    height: 12px;
+    background: #e9e9eb;
+    clip-path: polygon(100% 0, 100% 100%, 0 100%);
+    border-bottom-left-radius: 8px;
+  }
+  .bubble a { color: inherit; }
+  .row.me .bubble a { text-decoration: underline; }
+  .typing .bubble { padding: 12px 16px; }
+  .dots { display: inline-flex; gap: 4px; }
+  .dots span {
+    width: 8px; height: 8px; border-radius: 50%; background: #8e8e93;
+    animation: tp 1.2s infinite;
+  }
+  .dots span:nth-child(2) { animation-delay: .15s; }
+  .dots span:nth-child(3) { animation-delay: .3s; }
+  @keyframes tp { 0%, 60%, 100% { transform: translateY(0); opacity: .5; } 30% { transform: translateY(-4px); opacity: 1; } }
+  .day { text-align: center; color: #8e8e93; font-size: 12px; margin: 10px 0; }
+  #chips {
+    max-width: 560px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 8px 12px calc(10px + env(safe-area-inset-bottom));
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  #chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: 0 0 auto;
+    border: 1.5px solid #0a84ff;
+    color: #0a84ff;
+    background: #fff;
+    border-radius: 22px;
+    padding: 0 18px;
+    min-height: 44px;
+    font-size: 16px;
+    font-family: inherit;
+    touch-action: manipulation;
+    cursor: pointer;
+  }
+  .chip:active { background: #0a84ff; color: #fff; }
+  footer { text-align: center; padding: 14px; font-size: 13px; color: #8e8e93; }
+  footer a { color: #0a84ff; }
+</style>
+</head>
+<body>
+<header>
+  <div class="name">Luke</div>
+  <div class="sub">active now &middot; not really, this is a demo</div>
+</header>
+
+<div id="thread"></div>
+<div id="chips"></div>
+<footer><a href="../">back to all 20</a></footer>
+
+<script>
+(function () {
+  "use strict";
+  var thread = document.getElementById("thread");
+  var chips = document.getElementById("chips");
+
+  function scrollDown() {
+    window.scrollTo(0, document.body.scrollHeight);
+  }
+
+  function addMsg(who, html) {
+    var row = document.createElement("div");
+    row.className = "row " + who;
+    var b = document.createElement("div");
+    b.className = "bubble";
+    b.innerHTML = html;
+    row.appendChild(b);
+    thread.appendChild(row);
+    scrollDown();
+    return row;
+  }
+
+  function addTyping() {
+    var row = document.createElement("div");
+    row.className = "row him typing";
+    var b = document.createElement("div");
+    b.className = "bubble";
+    b.innerHTML = '<span class="dots"><span></span><span></span><span></span></span>';
+    row.appendChild(b);
+    thread.appendChild(row);
+    scrollDown();
+    return row;
+  }
+
+  function setChips(list) {
+    chips.innerHTML = "";
+    list.forEach(function (c) {
+      var btn = document.createElement("button");
+      btn.className = "chip";
+      btn.type = "button";
+      btn.textContent = c.label;
+      btn.addEventListener("click", function () {
+        addMsg("me", c.label);
+        chips.innerHTML = "";
+        respond(c);
+      });
+      chips.appendChild(btn);
+    });
+  }
+
+  var ROOT = "root";
+
+  var TREE = {
+    root: [
+      { label: "so what do you build?", path: "build" },
+      { label: "tell me about the games", path: "games" },
+      { label: "where do you work?", path: "work" },
+      { label: "are you learning chinese?", path: "chinese" },
+      { label: "cats?", path: "cats" },
+      { label: "what is good to eat?", path: "food" }
+    ],
+    build: {
+      reply: [
+        "side projects, mostly. things i wish existed.",
+        "biggest one is a skill tree app, like duolingo but for leveling up your life. i blogged the whole design process: <a href=\"https://lukezhang.si/blog/skill-tree-app-design/\">here</a>"
+      ],
+      follow: [
+        { label: "what else have you shipped?", path: "more" },
+        { label: "back to the start", path: "root2" }
+      ]
+    },
+    more: {
+      reply: [
+        "card game apps: liverpool rummy and get clocked. rummy is the house favorite.",
+        "an llm explainer that teaches like a person, not a textbook. plus a food truck app concept, because the line is the enemy."
+      ],
+      follow: [
+        { label: "where do i see all of it?", path: "links" },
+        { label: "back to the start", path: "root2" }
+      ]
+    },
+    games: {
+      reply: [
+        "i make games i can play with my wife. draw and guess was built exactly for that.",
+        "also two card game apps, liverpool rummy and get clocked. simple rules, hard to put down."
+      ],
+      follow: [
+        { label: "why games?", path: "why" },
+        { label: "back to the start", path: "root2" }
+      ]
+    },
+    why: {
+      reply: [
+        "a game night is the cheapest great evening there is. i would rather build that than another dashboard."
+      ],
+      follow: [
+        { label: "back to the start", path: "root2" }
+      ]
+    },
+    work: {
+      reply: [
+        "i work at robinhood. money stuff by day.",
+        "fun stuff by night. the side projects are the fun stuff."
+      ],
+      follow: [
+        { label: "what is the fun stuff?", path: "build" },
+        { label: "back to the start", path: "root2" }
+      ]
+    },
+    chinese: {
+      reply: [
+        "yes, beginner level. plain pinyin, no tone marks, full confidence.",
+        "the tones are a known issue. mitigation: smile and keep talking."
+      ],
+      follow: [
+        { label: "say something in chinese", path: "pinyin" },
+        { label: "back to the start", path: "root2" }
+      ]
+    },
+    pinyin: {
+      reply: [
+        "ni hao, wo jiao luke. wo xihuan chi jiaozi.",
+        "translation: hi, i am luke. i like dumplings. priorities."
+      ],
+      follow: [
+        { label: "back to the start", path: "root2" }
+      ]
+    },
+    cats: {
+      reply: [
+        "cat dad. one cat, owns the couch, allows me to live here.",
+        "10/10, would adopt again."
+      ],
+      follow: [
+        { label: "back to the start", path: "root2" }
+      ]
+    },
+    food: {
+      reply: [
+        "foodie, professional dumpling enjoyer, taco truck ranker.",
+        "i keep a mental leaderboard of every taco truck in a 20 mile radius. it is rigorous."
+      ],
+      follow: [
+        { label: "best food take?", path: "take" },
+        { label: "back to the start", path: "root2" }
+      ]
+    },
+    take: {
+      reply: [
+        "a great taco truck beats a mid restaurant every time. no contest."
+      ],
+      follow: [
+        { label: "back to the start", path: "root2" }
+      ]
+    },
+    links: {
+      reply: [
+        "home base: <a href=\"https://lukezhang.si/\">lukezhang.si</a>. all the projects: <a href=\"https://projects.lukezhang.si/\">projects.lukezhang.si</a>"
+      ],
+      follow: [
+        { label: "back to the start", path: "root2" }
+      ]
+    }
+  };
+
+  function respond(choice) {
+    var node;
+    if (choice.path === "root2") {
+      setChips(TREE.root);
+      return;
+    }
+    node = TREE[choice.path];
+    if (!node) { setChips(TREE.root); return; }
+    var t = addTyping();
+    setTimeout(function () {
+      t.remove();
+      addMsg("him", node.reply[0]);
+      var t2 = addTyping();
+      setTimeout(function () {
+        t2.remove();
+        if (node.reply[1]) { addMsg("him", node.reply[1]); }
+        setTimeout(function () { setChips(node.follow); }, 400);
+      }, 900 + node.reply[0].length * 8);
+    }, 900);
+  }
+
+  var day = document.createElement("div");
+  day.className = "day";
+  day.textContent = "Today";
+  thread.appendChild(day);
+  addMsg("him", "hey, it is luke. this is a fake chat, but the answers are real. ask me something.");
+  setChips(TREE.root);
+})();
+</script>
+</body>
+</html>

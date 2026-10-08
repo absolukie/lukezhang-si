@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Luke Zhang: Doodle Decoder</title>
+<style>
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{
+    margin:0; color:#2e2a24; font-family:"Comic Sans MS","Chalkboard SE","Segoe Print",cursive;
+    min-height:100vh; display:flex; flex-direction:column; align-items:center;
+    background:#d8cfae;
+    background-image:
+      radial-gradient(ellipse at 20% 10%, rgba(255,255,255,.35), transparent 50%),
+      repeating-linear-gradient(0deg, transparent 0 27px, rgba(90,140,180,.18) 27px 28px);
+    padding:22px 14px 40px;
+  }
+  header{ text-align:center; max-width:560px; }
+  .kicker{ font-family:system-ui,sans-serif; font-size:11px; letter-spacing:.3em; text-transform:uppercase; color:#8a7a5c; }
+  h1{ font-size:clamp(30px,9vw,46px); margin:8px 0 6px; transform:rotate(-1.5deg); }
+  .sub{ font-size:14.5px; line-height:1.6; margin:0 0 4px; color:#4a4234; }
+  .sub b{ background:#fff8b0; padding:0 4px; }
+  #paper{
+    width:100%; max-width:560px; margin-top:14px; background:#fbf7ea; border-radius:6px;
+    box-shadow:0 6px 20px rgba(60,45,20,.35); padding:14px; transform:rotate(.6deg);
+    position:relative;
+  }
+  #paper::before{ /* tape */
+    content:""; position:absolute; top:-12px; left:50%; transform:translateX(-50%) rotate(-2deg);
+    width:110px; height:26px; background:rgba(240,230,180,.75); border:1px solid rgba(180,160,110,.5);
+  }
+  #pad{
+    display:block; width:100%; height:340px; touch-action:none; cursor:crosshair;
+    background:
+      repeating-linear-gradient(0deg, transparent 0 31px, rgba(90,140,180,.14) 31px 32px);
+    border:2px dashed #b9a87e; border-radius:4px;
+  }
+  .btnrow{ display:flex; gap:10px; margin-top:12px; }
+  .dbtn{
+    flex:1; font-family:inherit; font-size:18px; padding:13px 10px; border-radius:10px;
+    cursor:pointer; touch-action:manipulation; min-height:52px; border:2px solid #2e2a24;
+  }
+  #guess{ background:#2e2a24; color:#fbf7ea; box-shadow:3px 3px 0 #8a7a5c; }
+  #guess:active{ transform:translate(2px,2px); box-shadow:1px 1px 0 #8a7a5c; }
+  #clear{ background:#fbf7ea; color:#2e2a24; }
+  #result{
+    width:100%; max-width:560px; margin-top:14px; background:#fbf7ea; border-radius:6px;
+    box-shadow:0 6px 20px rgba(60,45,20,.35); padding:18px; transform:rotate(-.8deg);
+    display:none;
+  }
+  #result.show{ display:block; animation:slap .35s cubic-bezier(.2,1.4,.4,1); }
+  @keyframes slap{ from{ transform:rotate(-.8deg) scale(.9); opacity:0; } }
+  #result .rk{ font-family:system-ui,sans-serif; font-size:11px; letter-spacing:.25em; text-transform:uppercase; color:#8a7a5c; }
+  #result h2{ margin:6px 0 8px; font-size:30px; }
+  #result h2 .stamp{ display:inline-block; border:3px solid #b3402e; color:#b3402e; border-radius:6px;
+    padding:2px 12px; transform:rotate(-4deg); font-size:24px; margin-left:6px; }
+  #result p{ font-size:14.5px; line-height:1.6; color:#4a4234; margin:0 0 8px; }
+  #rstats{ font-family:system-ui,sans-serif; font-size:12px; color:#8a7a5c; background:#f3ecd6;
+    border-radius:6px; padding:10px 12px; margin:10px 0; line-height:1.8; }
+  #rlink{
+    display:block; text-align:center; font-size:17px; background:#2e2a24; color:#fbf7ea;
+    padding:13px; border-radius:10px; text-decoration:none; margin-top:6px; min-height:52px;
+  }
+  #rwhy{ font-size:13.5px !important; color:#6a5f4c !important; font-style:italic; }
+  footer{ margin-top:24px; font-family:system-ui,sans-serif; font-size:12.5px; color:#8a7a5c; text-align:center; }
+  footer a{ color:#5c4f36; }
+</style>
+</head>
+<body>
+<header>
+  <div class="kicker">pencil required</div>
+  <h1>The Doodle Decoder</h1>
+  <p class="sub">I am Luke Zhang. Draw a doodle below, hit <b>guess</b>, and my shape guesser will tell you which of my projects it reminds it of. Fair warning: <b>my guesser is glorified geometry</b>, not AI. It counts corners like it is getting paid per corner.</p>
+  <p class="sub" style="font-size:13px">It knows five shapes: circle, square, triangle, star, zigzag.</p>
+</header>
+
+<div id="paper">
+  <canvas id="pad" aria-label="Drawing canvas"></canvas>
+  <div class="btnrow">
+    <button class="dbtn" id="guess" type="button">Guess my doodle</button>
+    <button class="dbtn" id="clear" type="button">Start over</button>
+  </div>
+</div>
+
+<div id="result" aria-live="polite">
+  <div class="rk">official ruling</div>
+  <h2 id="rguess">?</h2>
+  <p id="rhonest"></p>
+  <div id="rstats"></div>
+  <p id="rwhy"></p>
+  <a id="rlink" href="https://projects.lukezhang.si/">Take me to the project</a>
+</div>
+
+<footer><a href="../">back to all 20</a> &middot; no doodles were judged</footer>
+
+<script>
+(function(){
+  "use strict";
+  var canvas = document.getElementById("pad"),
+      ctx = canvas.getContext("2d");
+  var strokes = [];      // array of arrays of {x,y} in CSS px
+  var cur = null, drawing = false, W = 0, H = 0;
+
+  var ROUTES = {
+    CIRCLE:  { link:"https://projects.lukezhang.si/", why:"A perfect loop, like a good game night. This one goes to Draw and Guess." },
+    SQUARE:  { link:"https://projects.lukezhang.si/", why:"Four equal sides, very responsible. A food truck is basically a square that feeds you. This one goes to Curbside." },
+    TRIANGLE:{ link:"https://projects.lukezhang.si/", why:"Three corners, zero fear. This one goes to Get Clocked, my speed game." },
+    STAR:    { link:"https://lukezhang.si/blog/skill-tree-app-design/", why:"You drew a star, so aim high. This one goes to the skill tree app I am building." },
+    ZIGZAG:  { link:"https://projects.lukezhang.si/high-agency-draft/", why:"The path is never straight. This one goes to my high agency notes." },
+    SCRIBBLE:{ link:"https://projects.lukezhang.si/", why:"Even glorified geometry gives up sometimes. Have the whole projects page instead." }
+  };
+
+  function resize(){
+    var r = canvas.getBoundingClientRect();
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = r.width; H = r.height;
+    canvas.width = Math.round(W*dpr); canvas.height = Math.round(H*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    render();
+  }
+  window.addEventListener("resize", resize);
+
+  function pos(e){
+    var r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+  canvas.addEventListener("pointerdown", function(e){
+    e.preventDefault();
+    drawing = true; cur = [pos(e)]; strokes.push(cur);
+    canvas.setPointerCapture(e.pointerId);
+    hideResult();
+    render();
+  });
+  canvas.addEventListener("pointermove", function(e){
+    if(!drawing) return;
+    var p = pos(e), last = cur[cur.length-1];
+    var dx = p.x-last.x, dy = p.y-last.y;
+    if(dx*dx+dy*dy < 4) return;           // dedupe tiny jitters
+    cur.push(p);
+    drawSeg(last, p);
+  });
+  ["pointerup","pointercancel"].forEach(function(ev){
+    canvas.addEventListener(ev, function(){ drawing = false; cur = null; });
+  });
+
+  function drawSeg(a, b){
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.strokeStyle = "rgba(40,36,30,0.10)"; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    ctx.strokeStyle = "#3d382e"; ctx.lineWidth = 2.6;
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  }
+  function render(){
+    ctx.clearRect(0,0,W,H);
+    strokes.forEach(function(s){
+      for(var i=1;i<s.length;i++) drawSeg(s[i-1], s[i]);
+    });
+  }
+
+  document.getElementById("clear").addEventListener("click", function(){
+    strokes = []; hideResult(); render();
+  });
+
+  function hideResult(){ document.getElementById("result").classList.remove("show"); }
+
+  /* ---------- glorified geometry ---------- */
+  function dist(a,b){ var dx=a.x-b.x, dy=a.y-b.y; return Math.sqrt(dx*dx+dy*dy); }
+
+  function perpDist(p,a,b){
+    var dx=b.x-a.x, dy=b.y-a.y, L2=dx*dx+dy*dy;
+    if(L2===0) return dist(p,a);
+    var t=((p.x-a.x)*dx+(p.y-a.y)*dy)/L2;
+    t=Math.max(0,Math.min(1,t));
+    return dist(p,{x:a.x+t*dx, y:a.y+t*dy});
+  }
+
+  // Ramer-Douglas-Peucker: throw away the wobble, keep the shape
+  function rdp(pts, eps){
+    if(pts.length<3) return pts.slice();
+    var a=pts[0], b=pts[pts.length-1], maxD=0, idx=0;
+    for(var i=1;i<pts.length-1;i++){
+      var d=perpDist(pts[i],a,b);
+      if(d>maxD){ maxD=d; idx=i; }
+    }
+    if(maxD>eps){
+      var l=rdp(pts.slice(0,idx+1),eps), r=rdp(pts.slice(idx),eps);
+      return l.slice(0,l.length-1).concat(r);
+    }
+    return [a,b];
+  }
+
+  function angleDiff(a,b){
+    var d = a-b;
+    while(d > Math.PI) d -= 2*Math.PI;
+    while(d < -Math.PI) d += 2*Math.PI;
+    return d;
+  }
+
+  // light box blur along the stroke: kills hand wobble before RDP,
+  // so a shaky square does not read as seventeen corners
+  function smooth(pts){
+    if(pts.length < 9) return pts;
+    var out = [], n = pts.length, k = 2;
+    for(var i=0;i<n;i++){
+      var sx=0, sy=0, cnt=0;
+      for(var d=-k;d<=k;d++){
+        var q = pts[Math.max(0, Math.min(n-1, i+d))];
+        sx += q.x; sy += q.y; cnt++;
+      }
+      out.push({x:sx/cnt, y:sy/cnt});
+    }
+    return out;
+  }
+
+  // corners = simplified vertices where the direction changes sharply.
+  // sharpMean = average |turn angle| of just the sharp corners: it separates
+  // pentagrams (2.51 rad turns) from squares (1.57) and triangles (2.09).
+  function cornerStats(pts, closed, eps){
+    var TH = 1.0; // about 57 degrees, tuned against synthetic doodles
+    var sp = rdp(pts, eps);
+    if(closed && sp.length>2 && dist(sp[0], sp[sp.length-1]) < eps) sp.pop();
+    var n = sp.length;
+    var out = { corners: 0, meanTurn: 0, sharpMean: 0, verts: sp.length };
+    if(n < 3) return out;
+    var turn = function(i){
+      var p0 = sp[(i-1+n)%n], p1 = sp[i], p2 = sp[(i+1)%n];
+      var a1 = Math.atan2(p1.y-p0.y, p1.x-p0.x);
+      var a2 = Math.atan2(p2.y-p1.y, p2.x-p1.x);
+      return Math.abs(angleDiff(a2,a1));
+    };
+    var sum = 0, sharpSum = 0, count = 0;
+    var tally = function(t){
+      if(t > TH){ count++; sharpSum += t; }
+    };
+    if(closed){
+      for(var i=0;i<n;i++){ var t = turn(i); sum += t; tally(t); }
+      out.meanTurn = sum / n;
+    } else {
+      for(var j=1;j<n-1;j++) tally(turn(j));
+    }
+    out.corners = count;
+    out.sharpMean = count ? sharpSum / count : 0;
+    return out;
+  }
+
+  function analyze(){
+    var totalLen = 0, minX=1e9, minY=1e9, maxX=-1e9, maxY=-1e9, nPts = 0;
+    var longest = null, longestLen = -1;
+    var all = [];
+    strokes.forEach(function(s){
+      var L = 0;
+      s.forEach(function(p){
+        all.push(p); nPts++;
+        if(p.x<minX)minX=p.x; if(p.x>maxX)maxX=p.x;
+        if(p.y<minY)minY=p.y; if(p.y>maxY)maxY=p.y;
+      });
+      for(var i=1;i<s.length;i++) L += dist(s[i-1],s[i]);
+      totalLen += L;
+      if(L > longestLen){ longestLen = L; longest = s; }
+    });
+    var w = maxX-minX, h = maxY-minY, diag = Math.sqrt(w*w+h*h) || 1;
+    var closed = longest && longest.length>1 && dist(longest[0], longest[longest.length-1])/diag < 0.30;
+    // multi-stroke closure: endpoints near other endpoints
+    var ends = [];
+    strokes.forEach(function(s){ if(s.length>1){ ends.push(s[0]); ends.push(s[s.length-1]); } });
+    var near = 0;
+    ends.forEach(function(p, i){
+      for(var j=0;j<ends.length;j++){
+        if(i!==j && dist(p,ends[j])/diag < 0.15){ near++; break; }
+      }
+    });
+    var endpointClosure = ends.length>1 && near/ends.length > 0.6;
+    var isClosed = !!(closed || endpointClosure);
+    var eps = diag*0.04;
+    var blank = { corners: 0, meanTurn: 0, sharpMean: 0, verts: 0 };
+    var stats;
+    if(strokes.length === 1){
+      stats = longest ? cornerStats(smooth(longest), isClosed, eps) : blank;
+    } else if(isClosed){
+      stats = cornerStats(smooth(all), true, eps);
+    } else {
+      // open multi-stroke: tally each stroke on its own, then add up
+      stats = { corners: 0, meanTurn: 0, sharpMean: 0, verts: 0 };
+      var wsum = 0;
+      strokes.forEach(function(s){
+        if(s.length < 3) return;
+        var cs = cornerStats(smooth(s), false, eps);
+        stats.corners += cs.corners;
+        stats.verts += cs.verts;
+        stats.sharpMean += cs.sharpMean * cs.corners;
+        wsum += cs.corners;
+      });
+      stats.sharpMean = wsum ? stats.sharpMean / wsum : 0;
+    }
+    var gapRatio = longest && longest.length>1 ? dist(longest[0], longest[longest.length-1])/diag : 1;
+    return {
+      strokes: strokes.length, corners: stats.corners, closed: isClosed,
+      nearlyClosed: gapRatio < 0.45,
+      meanTurn: stats.meanTurn, sharpMean: stats.sharpMean,
+      aspect: w/(h||1), ink: totalLen, w:w, h:h, diag:diag,
+      closurePct: longest && longest.length>1 ? Math.round(100*(1 - gapRatio)) : 0
+    };
+  }
+
+  function classify(f){
+    if(f.ink < 60) return "TOOSHORT";
+    var a = f.aspect, c = f.corners, closed = f.closed, n = f.strokes, sm = f.sharpMean;
+    // a pentagram turns about 144 deg at each point; a square only 90
+    if(closed && c === 5 && a > 0.7 && a < 1.45 && sm > 2.2) return "STAR";
+    if(c >= 8 && sm > 1.9) return "STAR";
+    if(!closed && c >= 4) return "ZIGZAG"; // works sideways or vertical
+    if(!closed && n > 1 && c >= 2) return "ZIGZAG"; // zigzag drawn in pieces
+    if(closed && c <= 2) return "CIRCLE";
+    if(f.nearlyClosed && c <= 2) return "CIRCLE"; // an open C is a shy circle
+    if(closed && c === 3 && sm*c > 5.3) return "TRIANGLE"; // real 3-corner: the turns add up to about 2pi
+    if(closed && c === 3 && a > 0.7 && a < 1.45) return "SQUARE"; // soft 3-corner blob reads squarish
+    if(closed && c === 4 && (a > 1.5 || a < 0.6)) return "TRIANGLE"; // tall 4-corner: sloppy triangle
+    if(closed && c === 4 && a > 0.7 && a < 1.45 && sm > 1.85) return "TRIANGLE"; // rough triangle with a wobble corner
+    if(closed && c >= 4 && c <= 6 && a > 0.7 && a < 1.45) return "SQUARE";
+    if(n === 1 && !closed && c <= 3) return "ZIGZAG"; // a lonely line is basically a tiny zigzag
+    return "SCRIBBLE";
+  }
+
+  document.getElementById("guess").addEventListener("click", function(){
+    var box = document.getElementById("result");
+    var f = analyze();
+    if(classify(f) === "TOOSHORT"){
+      document.getElementById("rguess").innerHTML = 'Hmm? <span class="stamp">TOO SHORT</span>';
+      document.getElementById("rhonest").textContent = "That is barely any ink. Give me a real doodle and I will give you a real guess.";
+      document.getElementById("rstats").textContent = "ink: " + Math.round(f.ink) + "px. I need at least 60.";
+      document.getElementById("rwhy").textContent = "";
+      document.getElementById("rlink").style.display = "none";
+      box.classList.add("show");
+      return;
+    }
+    var g = classify(f);
+    var route = ROUTES[g];
+    document.getElementById("rguess").innerHTML = g + ' <span class="stamp">GUESSED</span>';
+    document.getElementById("rhonest").textContent =
+      "Full disclosure: I counted " + f.corners + " corners, measured a closure of " + f.closurePct +
+      "%, checked the box was " + f.aspect.toFixed(2) + " times as wide as tall, and rated how sharp the corners were. " +
+      "That is the whole trick. Glorified geometry.";
+    document.getElementById("rstats").textContent =
+      "strokes: " + f.strokes + " · corners: " + f.corners + " · closure: " + f.closurePct +
+      "% · aspect: " + f.aspect.toFixed(2) + " · ink: " + Math.round(f.ink) + "px";
+    document.getElementById("rwhy").textContent = route.why;
+    var link = document.getElementById("rlink");
+    link.href = route.link; link.style.display = "block";
+    box.classList.add("show");
+    box.scrollIntoView({block:"nearest", behavior:"smooth"});
+  });
+
+  resize();
+})();
+</script>
+</body>
+</html>

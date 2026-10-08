@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dr. Zhang's Workbench</title>
+<style>
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{
+    margin:0; color:#f3e7cd;
+    font-family:Georgia,'Times New Roman',serif;
+    min-height:100vh; display:flex; flex-direction:column; align-items:center;
+    background:
+      repeating-linear-gradient(93deg, rgba(0,0,0,.16) 0 3px, transparent 3px 90px),
+      linear-gradient(180deg,#6b4423 0%, #4a2c15 55%, #33200f 100%);
+    padding:22px 12px 40px;
+  }
+  header{ text-align:center; max-width:600px; }
+  .plate{
+    display:inline-block; background:linear-gradient(180deg,#d8b34a,#9a7a24);
+    color:#2c1f08; font-family:system-ui,sans-serif; font-weight:bold; font-size:11px;
+    letter-spacing:.3em; padding:8px 18px 8px 22px; border-radius:6px;
+    box-shadow:0 2px 0 #6e5518, 0 4px 10px rgba(0,0,0,.5); text-transform:uppercase;
+  }
+  h1{ font-size:clamp(28px,8vw,44px); margin:12px 0 4px; font-weight:normal; font-style:italic;
+    text-shadow:0 2px 6px rgba(0,0,0,.6); }
+  .sub{ font-family:system-ui,sans-serif; font-size:13px; color:#d9c49a; margin:0 0 4px; line-height:1.6; }
+  .warn{ font-family:system-ui,sans-serif; font-size:11.5px; color:#e08a7a; letter-spacing:.06em; }
+  #bench{
+    position:relative; width:100%; max-width:620px; margin-top:16px;
+    background:linear-gradient(180deg,#3d2c1c,#2a1e12);
+    border:3px solid #1c130a; border-radius:14px; padding:20px 16px 24px;
+    box-shadow:inset 0 2px 12px rgba(0,0,0,.6), 0 8px 24px rgba(0,0,0,.5);
+  }
+  .rivet{ position:absolute; width:12px; height:12px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #f0d488, #8a6d1f 70%); box-shadow:0 1px 2px #000; }
+  #panel{
+    background:linear-gradient(180deg,#caa14a,#a07e2e 60%,#8a6d28);
+    border-radius:10px; padding:18px 14px; color:#241806;
+    box-shadow:inset 0 2px 8px rgba(255,240,200,.5), inset 0 -3px 10px rgba(0,0,0,.35);
+  }
+  #panel h2{ font-family:system-ui,sans-serif; font-size:12px; letter-spacing:.25em; margin:0 0 14px;
+    text-align:center; text-transform:uppercase; color:#3a2a0c; }
+  .controls{ display:flex; gap:14px; justify-content:center; flex-wrap:wrap; align-items:flex-start; }
+  .ctl{ display:flex; flex-direction:column; align-items:center; gap:8px; min-width:86px; }
+  .ctl .lbl{ font-family:system-ui,sans-serif; font-size:11px; font-weight:bold; letter-spacing:.12em;
+    text-transform:uppercase; color:#3a2a0c; text-align:center; }
+  .ctl .val{ font-family:system-ui,sans-serif; font-size:12px; color:#5c4413; min-height:16px; }
+  /* chunky switch */
+  .switch{
+    width:64px; height:96px; border-radius:12px; cursor:pointer; touch-action:manipulation;
+    background:linear-gradient(180deg,#2b1f10,#17100a); border:2px solid #120c06;
+    position:relative; box-shadow:inset 0 3px 8px #000; padding:0; font-family:inherit;
+  }
+  .switch .slot{ position:absolute; left:50%; top:10px; bottom:10px; width:10px; transform:translateX(-50%);
+    background:#0a0704; border-radius:5px; box-shadow:inset 0 2px 5px #000; }
+  .switch .lever{
+    position:absolute; left:50%; top:12px; width:34px; height:40px; transform:translateX(-50%);
+    border-radius:8px; background:linear-gradient(180deg,#e8c86a,#a07e2e);
+    box-shadow:0 3px 6px rgba(0,0,0,.6), inset 0 2px 3px rgba(255,255,255,.5);
+    transition:top .18s cubic-bezier(.3,1.5,.5,1);
+  }
+  .switch[aria-pressed="true"] .lever{ top:44px; }
+  .switch .lamp{ position:absolute; bottom:-2px; left:50%; transform:translate(-50%,100%);
+    width:12px; height:12px; border-radius:50%; background:#4a3a20; }
+  .switch[aria-pressed="true"] .lamp{ background:#ffdf6b; box-shadow:0 0 10px #ffdf6b; }
+  /* knob */
+  .knob{
+    width:88px; height:88px; border-radius:50%; cursor:grab; touch-action:none; position:relative;
+    background:radial-gradient(circle at 35% 30%, #e8c86a, #8a6d1f 75%);
+    border:3px solid #3a2a0c; box-shadow:0 4px 8px rgba(0,0,0,.5), inset 0 2px 4px rgba(255,255,255,.4);
+  }
+  .knob:active{ cursor:grabbing; }
+  .knob .ptr{ position:absolute; left:50%; top:50%; width:6px; height:34px; border-radius:3px;
+    background:#2c1f08; margin-left:-3px; margin-top:-34px;
+    transform-origin:50% 100%; }
+  .knob .cap{ position:absolute; left:50%; top:50%; width:16px; height:16px; border-radius:50%;
+    background:#3a2a0c; transform:translate(-50%,-50%); }
+  .ticks{ position:relative; width:104px; height:16px; }
+  /* gauge */
+  #gaugebox{ margin-top:18px; background:#1c130a; border-radius:10px; padding:14px;
+    border:2px solid #120c06; box-shadow:inset 0 3px 10px #000; text-align:center; position:relative;}
+  #gaugebox .glbl{ font-family:system-ui,sans-serif; font-size:11px; letter-spacing:.3em; color:#caa14a;
+    text-transform:uppercase; }
+  #needle{ transform-box:view-box; transform-origin:100px 100px;
+    transition:transform .5s cubic-bezier(.3,1.2,.4,1); }
+  #pwrnum{ font-family:system-ui,sans-serif; font-size:30px; font-weight:bold; color:#ffdf6b;
+    text-shadow:0 0 14px rgba(255,223,107,.6); }
+  #pwrbar{ height:12px; background:#0a0704; border-radius:6px; overflow:hidden; margin-top:8px;
+    box-shadow:inset 0 2px 4px #000; }
+  #pwrfill{ height:100%; width:0%; border-radius:6px;
+    background:linear-gradient(90deg,#8a6d1f,#e8c86a,#ff9a3c); transition:width .5s; }
+  #thresh{ display:flex; justify-content:space-between; font-family:system-ui,sans-serif;
+    font-size:10.5px; color:#8a744f; margin-top:6px; letter-spacing:.05em; }
+  #thresh .hit{ color:#ffdf6b; font-weight:bold; }
+  /* experiments */
+  #specimens{ display:grid; gap:12px; margin-top:18px; }
+  @media(min-width:560px){ #specimens{ grid-template-columns:repeat(3,1fr); } }
+  .spec{
+    background:linear-gradient(180deg,#f5ecd4,#e2d3ab); color:#2c1f08; border-radius:10px;
+    padding:16px 14px; border:2px dashed #8a6d1f; min-height:150px; position:relative;
+    font-family:system-ui,sans-serif;
+  }
+  .spec.locked{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+    color:#8a744f; }
+  .spec .stag{ font-size:10px; letter-spacing:.25em; color:#8a6d1f; text-transform:uppercase; }
+  .spec h3{ font-family:Georgia,serif; font-style:italic; margin:6px 0; font-size:19px; }
+  .spec p{ font-size:13px; line-height:1.55; margin:0 0 10px; color:#4a3a20; }
+  .spec a{ font-size:13px; font-weight:bold; color:#7a5c14; }
+  .spec.reveal{ animation:reveal .6s cubic-bezier(.2,1.3,.4,1); }
+  @keyframes reveal{ from{ transform:rotate(-4deg) scale(.85); opacity:0; } }
+  #sparks{ position:absolute; inset:0; pointer-events:none; overflow:hidden; border-radius:14px; }
+  .spark{ position:absolute; width:6px; height:6px; border-radius:50%; background:#ffdf6b;
+    box-shadow:0 0 10px #ff9a3c; }
+  #log{ margin-top:14px; font-family:system-ui,sans-serif; font-size:12.5px; color:#d9c49a;
+    min-height:20px; text-align:center; }
+  footer{ margin-top:22px; font-family:system-ui,sans-serif; font-size:12.5px; color:#a8895c; text-align:center; }
+  footer a{ color:#e8c86a; }
+</style>
+</head>
+<body>
+<header>
+  <span class="plate">est. 2:00 am</span>
+  <h1>Dr. Zhang's Workbench</h1>
+  <p class="sub">Luke Zhang, amateur mad scientist. Flip switches, crank dials, feed the machine. At certain power levels, experiments wake up.</p>
+  <p class="warn">WARNING: do not lick the electrodes.</p>
+</header>
+
+<div id="bench">
+  <span class="rivet" style="top:8px;left:8px"></span><span class="rivet" style="top:8px;right:8px"></span>
+  <span class="rivet" style="bottom:8px;left:8px"></span><span class="rivet" style="bottom:8px;right:8px"></span>
+
+  <div id="panel">
+    <h2>power control</h2>
+    <div class="controls">
+      <div class="ctl">
+        <button class="switch" id="sw0" type="button" aria-pressed="false" aria-label="Curiosity switch">
+          <span class="slot"></span><span class="lever"></span><span class="lamp"></span>
+        </button>
+        <span class="lbl">Curiosity</span><span class="val">+15 PWR</span>
+      </div>
+      <div class="ctl">
+        <button class="switch" id="sw1" type="button" aria-pressed="false" aria-label="Caffeine switch">
+          <span class="slot"></span><span class="lever"></span><span class="lamp"></span>
+        </button>
+        <span class="lbl">Caffeine</span><span class="val">+15 PWR</span>
+      </div>
+      <div class="ctl">
+        <button class="switch" id="sw2" type="button" aria-pressed="false" aria-label="Spite switch">
+          <span class="slot"></span><span class="lever"></span><span class="lamp"></span>
+        </button>
+        <span class="lbl">Spite</span><span class="val">+15 PWR</span>
+      </div>
+      <div class="ctl">
+        <div class="knob" id="knob0" role="slider" tabindex="0" aria-label="Ambition dial"
+             aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><span class="ptr"></span><span class="cap"></span></div>
+        <span class="lbl">Ambition</span><span class="val" id="kval0">0 / 10</span>
+      </div>
+      <div class="ctl">
+        <div class="knob" id="knob1" role="slider" tabindex="0" aria-label="Chaos dial"
+             aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><span class="ptr"></span><span class="cap"></span></div>
+        <span class="lbl">Chaos</span><span class="val" id="kval1">0 / 10</span>
+      </div>
+    </div>
+
+    <div id="gaugebox">
+      <div class="glbl">mains power</div>
+      <svg viewBox="0 0 200 112" width="220" style="max-width:100%" aria-hidden="true">
+        <path d="M14,100 A86,86 0 0 1 186,100" fill="none" stroke="#3a2a0c" stroke-width="14"/>
+        <path d="M14,100 A86,86 0 0 1 186,100" fill="none" stroke="#caa14a" stroke-width="3" stroke-dasharray="4 6"/>
+        <g id="needle"><line x1="100" y1="100" x2="100" y2="30" stroke="#ff5a3c" stroke-width="4" stroke-linecap="round"/></g>
+        <circle cx="100" cy="100" r="10" fill="#3a2a0c" stroke="#caa14a" stroke-width="3"/>
+      </svg>
+      <div id="pwrnum">0</div>
+      <div id="pwrbar"><div id="pwrfill"></div></div>
+      <div id="thresh"><span data-t="30">30: specimen A</span><span data-t="60">60: specimen B</span><span data-t="90">90: specimen C</span></div>
+    </div>
+  </div>
+
+  <div id="specimens">
+    <div class="spec locked" id="spec0">
+      <svg width="26" height="26" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2" fill="#8a744f"/><path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="#8a744f" stroke-width="2.5"/></svg>
+      <span style="font-size:12px;letter-spacing:.15em">SPECIMEN A: DORMANT</span>
+      <span style="font-size:11px">reach 30 power</span>
+    </div>
+    <div class="spec locked" id="spec1">
+      <svg width="26" height="26" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2" fill="#8a744f"/><path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="#8a744f" stroke-width="2.5"/></svg>
+      <span style="font-size:12px;letter-spacing:.15em">SPECIMEN B: DORMANT</span>
+      <span style="font-size:11px">reach 60 power</span>
+    </div>
+    <div class="spec locked" id="spec2">
+      <svg width="26" height="26" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2" fill="#8a744f"/><path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="#8a744f" stroke-width="2.5"/></svg>
+      <span style="font-size:12px;letter-spacing:.15em">SPECIMEN C: DORMANT</span>
+      <span style="font-size:11px">reach 90 power</span>
+    </div>
+  </div>
+
+  <div id="sparks"></div>
+  <div id="log" role="status">The machine hums at zero. It is judging you.</div>
+</div>
+
+<footer><a href="../">back to all 20</a> &middot; the lab accepts no liability</footer>
+
+<script>
+(function(){
+  "use strict";
+  var SW_PWR = 15, KNOB_PWR = 2.75, MAXP = 100;
+  var switches = [false, false, false];
+  var knobs = [0, 0];
+  var discovered = [false, false, false];
+
+  var EXPERIMENTS = [
+    { t:30, tag:"specimen A", name:"Draw and Guess",
+      blurb:"Pictionary night with my wife, bottled. Pinyin guesses in plain letters, no tone marks.",
+      link:"https://projects.lukezhang.si/" },
+    { t:60, tag:"specimen B", name:"Curbside",
+      blurb:"A radar for food trucks. Powered by one man's refusal to eat a boring lunch.",
+      link:"https://projects.lukezhang.si/" },
+    { t:90, tag:"specimen C", name:"How an LLM Works",
+      blurb:"A visual explainer with a working tiny model inside. Every post is a visualizer, obviously.",
+      link:"https://projects.lukezhang.si/" }
+  ];
+
+  var pwrnum = document.getElementById("pwrnum"),
+      pwrfill = document.getElementById("pwrfill"),
+      needle = document.getElementById("needle"),
+      log = document.getElementById("log"),
+      sparks = document.getElementById("sparks"),
+      bench = document.getElementById("bench");
+
+  function power(){
+    var s = switches.reduce(function(a,on){ return a + (on?1:0); }, 0);
+    return Math.min(MAXP, Math.round(s*SW_PWR + (knobs[0]+knobs[1])*KNOB_PWR));
+  }
+
+  function setKnob(i, v){
+    knobs[i] = Math.max(0, Math.min(10, Math.round(v)));
+    var k = document.getElementById("knob"+i);
+    k.setAttribute("aria-valuenow", knobs[i]);
+    k.querySelector(".ptr").style.transform = "rotate(" + (-135 + knobs[i]*27) + "deg)";
+    document.getElementById("kval"+i).textContent = knobs[i] + " / 10";
+    update();
+  }
+
+  function update(){
+    var p = power();
+    pwrnum.textContent = p;
+    pwrfill.style.width = p + "%";
+    needle.style.transform = "rotate(" + (-90 + p*1.8) + "deg)";
+    var marks = document.querySelectorAll("#thresh span");
+    for(var m=0;m<marks.length;m++){
+      marks[m].classList.toggle("hit", p >= parseInt(marks[m].dataset.t,10));
+    }
+    EXPERIMENTS.forEach(function(ex, i){
+      if(!discovered[i] && p >= ex.t) wake(i);
+    });
+    if(p === MAXP) log.textContent = "MAXIMUM POWER. The bench is sweating.";
+    else if(p >= 90) log.textContent = "The lights dim in the next room. Worth it.";
+    else if(p >= 60) log.textContent = "Humming nicely. Something is definitely alive in there.";
+    else if(p >= 30) log.textContent = "Warming up. The machine notices you.";
+    else if(p > 0) log.textContent = "A faint buzz. More power, doctor.";
+    else log.textContent = "The machine hums at zero. It is judging you.";
+  }
+
+  function wake(i){
+    discovered[i] = true;
+    var ex = EXPERIMENTS[i];
+    var el = document.getElementById("spec"+i);
+    var r = el.getBoundingClientRect(), br = bench.getBoundingClientRect();
+    burst(r.left - br.left + r.width/2, r.top - br.top + 20);
+    bench.animate(
+      [{transform:"translate(0,0)"},{transform:"translate(2px,-2px)"},
+       {transform:"translate(-2px,2px)"},{transform:"translate(0,0)"}],
+      {duration:220});
+    setTimeout(function(){
+      el.classList.remove("locked");
+      el.classList.add("reveal");
+      el.innerHTML = '<span class="stag">' + ex.tag + " &middot; awake</span>" +
+        "<h3>" + ex.name + "</h3><p>" + ex.blurb + "</p>" +
+        '<a href="' + ex.link + '">Examine specimen</a>';
+    }, 260);
+  }
+
+  function burst(cx, cy){
+    for(var i=0;i<22;i++){
+      var s = document.createElement("span");
+      s.className = "spark";
+      s.style.left = cx+"px"; s.style.top = cy+"px";
+      if(i%3===0) s.style.background = "#ff9a3c";
+      sparks.appendChild(s);
+      var a = -Math.PI/2 + (Math.random()-0.5)*2.2, d = 40+Math.random()*90;
+      s.animate([
+        {transform:"translate(-50%,-50%)", opacity:1},
+        {transform:"translate(calc(-50% + "+(Math.cos(a)*d).toFixed(1)+"px), calc(-50% + "+(Math.sin(a)*d).toFixed(1)+"px))", opacity:0}
+      ], {duration:500+Math.random()*400, easing:"cubic-bezier(.2,.7,.3,1)"})
+      .onfinish = (function(elm){ return function(){ elm.remove(); }; })(s);
+    }
+  }
+
+  // switches
+  [0,1,2].forEach(function(i){
+    var b = document.getElementById("sw"+i);
+    b.addEventListener("click", function(){
+      switches[i] = !switches[i];
+      b.setAttribute("aria-pressed", String(switches[i]));
+      update();
+    });
+  });
+
+  // knobs: vertical drag + keyboard
+  [0,1].forEach(function(i){
+    var k = document.getElementById("knob"+i);
+    var dragging = false, startY = 0, startV = 0;
+    k.addEventListener("pointerdown", function(e){
+      dragging = true; startY = e.clientY; startV = knobs[i];
+      k.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    k.addEventListener("pointermove", function(e){
+      if(!dragging) return;
+      setKnob(i, startV + (startY - e.clientY)/14);
+    });
+    ["pointerup","pointercancel"].forEach(function(ev){
+      k.addEventListener(ev, function(){ dragging = false; });
+    });
+    k.addEventListener("keydown", function(e){
+      if(e.key==="ArrowUp"||e.key==="ArrowRight"){ setKnob(i, knobs[i]+1); e.preventDefault(); }
+      else if(e.key==="ArrowDown"||e.key==="ArrowLeft"){ setKnob(i, knobs[i]-1); e.preventDefault(); }
+    });
+    setKnob(i, 0);
+  });
+
+  update();
+})();
+</script>
+</body>
+</html>

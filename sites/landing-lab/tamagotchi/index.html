@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Buildergotchi | Keep Luke Alive</title>
+<style>
+  :root{
+    --lcd0:#9bbc0f; --lcd1:#8bac0f; --lcd2:#306230; --lcd3:#0f380f;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:#20242a; color:var(--lcd3);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    min-height:100vh; display:flex; justify-content:center;
+    padding:20px 12px 60px; -webkit-font-smoothing:antialiased;
+  }
+  button,a{touch-action:manipulation;}
+  .device{
+    width:100%; max-width:420px; background:#3a3f4a; border-radius:28px;
+    padding:22px 18px 26px; box-shadow:0 24px 60px rgba(0,0,0,.6), inset 0 2px 0 rgba(255,255,255,.12);
+  }
+  .brandbar{text-align:center; color:#aeb6c4; font-size:12px; letter-spacing:.28em; margin-bottom:14px;}
+  .screen{
+    background:var(--lcd0); border:10px solid #262b33; border-radius:8px;
+    padding:14px 12px 16px; box-shadow:inset 0 0 24px rgba(15,56,15,.35);
+  }
+  .hud{display:flex; justify-content:space-between; font-size:12px; font-weight:700; margin-bottom:8px;}
+  .stage{display:flex; justify-content:center; padding:6px 0 2px;}
+  #sprite{width:160px; height:160px; image-rendering:pixelated; image-rendering:crisp-edges;}
+  #status{min-height:44px; text-align:center; font-size:13px; font-weight:700; margin:8px 0 10px; line-height:1.5;}
+  .meters{display:grid; gap:8px; margin-bottom:6px;}
+  .meter{display:grid; grid-template-columns:86px 1fr 34px; align-items:center; gap:8px; font-size:11px; font-weight:700;}
+  .bar{height:14px; border:2px solid var(--lcd3); background:var(--lcd1); position:relative;}
+  .bar i{position:absolute; inset:0; background:var(--lcd3); transform-origin:left; display:block;}
+  .meter .val{text-align:right;}
+  .meter.low .lbl{animation:blink .7s steps(1) infinite;}
+  @keyframes blink{50%{opacity:.25;}}
+  .pad{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:18px;}
+  .pad button{
+    background:#565d6b; color:#e8ecf2; border:none; border-radius:12px;
+    font-family:inherit; font-size:13px; font-weight:700; letter-spacing:.06em;
+    padding:16px 8px; min-height:56px; cursor:pointer;
+    box-shadow:0 4px 0 #22262d, inset 0 1px 0 rgba(255,255,255,.2);
+  }
+  .pad button:active{transform:translateY(3px); box-shadow:0 1px 0 #22262d;}
+  .pad small{display:block; font-size:10px; font-weight:400; color:#aeb6c4; margin-top:3px; letter-spacing:0;}
+  .overlay{
+    display:none; text-align:center; padding:18px 10px 6px;
+  }
+  .overlay.show{display:block;}
+  .overlay h2{font-size:20px; margin-bottom:8px;}
+  .overlay p{font-size:13px; margin-bottom:14px; line-height:1.6;}
+  .overlay button{
+    background:var(--lcd3); color:var(--lcd0); border:none; border-radius:10px;
+    font-family:inherit; font-size:14px; font-weight:700; padding:14px 26px; min-height:48px; cursor:pointer;
+  }
+  .foot{text-align:center; margin-top:18px; font-size:12px; color:#8b93a3;}
+  .foot a{color:#c8cfdb;}
+</style>
+</head>
+<body>
+<div class="device">
+  <div class="brandbar">BUILDERGOTCHI</div>
+  <div class="screen">
+    <div class="hud"><span id="day">DAY 1</span><span id="clock">09:00</span></div>
+    <div class="stage"><canvas id="sprite" width="32" height="32" aria-label="Luke sprite"></canvas></div>
+    <div id="status">Luke booted up. Keep him alive.</div>
+    <div class="meters">
+      <div class="meter" id="m-caf"><span class="lbl">CAFFEINE</span><div class="bar"><i></i></div><span class="val">80</span></div>
+      <div class="meter" id="m-com"><span class="lbl">COMMITS</span><div class="bar"><i></i></div><span class="val">70</span></div>
+      <div class="meter" id="m-slp"><span class="lbl">SLEEP</span><div class="bar"><i></i></div><span class="val">60</span></div>
+    </div>
+    <div class="overlay" id="overlay">
+      <h2 id="ovTitle"></h2>
+      <p id="ovText"></p>
+      <button id="restart">raise him again</button>
+    </div>
+  </div>
+  <div class="pad">
+    <button id="btnFeed">FEED<small>espresso +25</small></button>
+    <button id="btnCode">CODE<small>commit +25</small></button>
+    <button id="btnNap">NAP<small>sleep +30</small></button>
+  </div>
+  <div class="foot"><a href="../">back to all 20</a></div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var C0 = "#9bbc0f", C1 = "#8bac0f", C2 = "#306230", C3 = "#0f380f";
+  var canvas = document.getElementById("sprite");
+  var ctx = canvas.getContext("2d");
+  var statusEl = document.getElementById("status");
+  var dayEl = document.getElementById("day");
+  var clockEl = document.getElementById("clock");
+  var overlay = document.getElementById("overlay");
+
+  var S = { caf: 80, com: 70, slp: 60 };
+  var tick = 0, day = 1, minute = 9 * 60, over = false, blinkOn = true, zzz = 0;
+
+  function px(x, y, w, h, c){ ctx.fillStyle = c; ctx.fillRect(x, y, w, h); }
+
+  /* 32x32 builder-Luke, drawn in chunky pixels. Mood changes the face. */
+  function mood(){
+    if (over) return "dead";
+    var low = Math.min(S.caf, S.com, S.slp);
+    if (S.slp < 25) return "sleepy";
+    if (low < 25) return "sad";
+    if (low < 55) return "meh";
+    return "happy";
+  }
+
+  function draw(){
+    ctx.clearRect(0, 0, 32, 32);
+    var m = mood();
+    /* body */
+    px(9, 14, 14, 14, C3);          /* torso */
+    px(11, 28, 4, 3, C3); px(17, 28, 4, 3, C3); /* feet */
+    px(6, 16, 3, 8, C3); px(23, 16, 3, 8, C3);  /* arms */
+    /* head */
+    px(9, 4, 14, 11, C3);
+    px(9, 4, 14, 3, C2);            /* hair */
+    if (m === "dead"){
+      /* X eyes */
+      px(11, 8, 1, 1, C0); px(13, 8, 1, 1, C0); px(12, 9, 1, 1, C0); px(11, 10, 1, 1, C0); px(13, 10, 1, 1, C0);
+      px(19, 8, 1, 1, C0); px(21, 8, 1, 1, C0); px(20, 9, 1, 1, C0); px(19, 10, 1, 1, C0); px(21, 10, 1, 1, C0);
+      px(13, 13, 6, 1, C0);         /* flat mouth */
+      return;
+    }
+    if (m === "sleepy"){
+      px(11, 8, 3, 1, C0); px(18, 8, 3, 1, C0); /* closed eyes */
+      px(14, 12, 4, 1, C0);
+      /* floating Z */
+      var zo = zzz % 12;
+      ctx.fillStyle = C3;
+      ctx.font = "6px monospace";
+      ctx.fillText("z", 24 - zo * 0.4, 6 + zo * 0.5);
+      return;
+    }
+    /* eyes: blink every few frames */
+    if (blinkOn){ px(11, 8, 3, 2, C0); px(18, 8, 3, 2, C0); }
+    else { px(11, 9, 3, 1, C0); px(18, 9, 3, 1, C0); }
+    /* mouth by mood */
+    if (m === "happy"){ px(12, 12, 2, 1, C0); px(14, 13, 4, 1, C0); px(18, 12, 2, 1, C0); }
+    else if (m === "sad"){ px(12, 13, 2, 1, C0); px(14, 12, 4, 1, C0); px(18, 13, 2, 1, C0); }
+    else { px(13, 12, 6, 1, C0); }
+    if (m === "sad"){ px(6, 5, 2, 4, C2); } /* sweat drop */
+  }
+
+  function renderMeters(){
+    [["caf","m-caf"],["com","m-com"],["slp","m-slp"]].forEach(function(pair){
+      var row = document.getElementById(pair[1]);
+      var v = Math.max(0, Math.min(100, Math.round(S[pair[0]])));
+      row.querySelector(".bar i").style.transform = "scaleX(" + (v / 100) + ")";
+      row.querySelector(".val").textContent = v;
+      row.classList.toggle("low", v < 25);
+    });
+  }
+
+  var QUIPS = {
+    happy: ["Luke is thriving. Suspiciously productive.", "All green. He might actually ship today.", "Peak builder. Do not disturb."],
+    meh: ["Luke is fine. Define fine.", "Running on vibes and half a commit.", "He could use a top-up."],
+    sad: ["Luke is fading. Intervene.", "Warning: human running low.", "This is how side projects die."],
+    sleepy: ["Luke is dreaming in pinyin. No tone marks.", "Shhh. Recharging the sleep meter.", "Do not wake. He is compiling dreams."],
+    dead: ["Luke has crashed. Blame the sleep meter."]
+  };
+  function pick(a){ return a[Math.floor(Math.random() * a.length)]; }
+
+  function gameOver(win){
+    over = true;
+    overlay.classList.add("show");
+    if (win){
+      document.getElementById("ovTitle").textContent = "SHIPPED IT";
+      document.getElementById("ovText").textContent = "Three full days. Caffeinated, committed, rested. The skill tree app lives. Luke naps, victorious.";
+    } else {
+      document.getElementById("ovTitle").textContent = "LUKE.EXE STOPPED";
+      var cause = S.caf <= 0 ? "caffeine" : (S.com <= 0 ? "commits" : "sleep");
+      document.getElementById("ovText").textContent = "Cause of death: ran out of " + cause + ". Even builders need maintenance.";
+    }
+    draw();
+  }
+
+  function step(){
+    if (over) return;
+    tick++;
+    /* decay */
+    S.caf -= 2 + Math.random() * 2;
+    S.com -= 2 + Math.random() * 3;
+    S.slp -= 1 + Math.random() * 2;
+    /* clock: each tick is 20 in-game minutes */
+    minute += 20;
+    if (minute >= 24 * 60){ minute -= 24 * 60; day++; }
+    var hh = String(Math.floor(minute / 60)).padStart(2, "0");
+    var mm = String(minute % 60).padStart(2, "0");
+    clockEl.textContent = hh + ":" + mm;
+    dayEl.textContent = "DAY " + day;
+    if (tick % 6 === 0) blinkOn = !blinkOn;
+    zzz++;
+    if (S.caf <= 0 || S.com <= 0 || S.slp <= 0){ renderMeters(); gameOver(false); return; }
+    if (day > 3){ renderMeters(); gameOver(true); return; }
+    statusEl.textContent = pick(QUIPS[mood()]);
+    renderMeters();
+    draw();
+  }
+
+  function act(key, amount, line){
+    if (over) return;
+    S[key] = Math.min(100, S[key] + amount);
+    statusEl.textContent = line;
+    renderMeters();
+    draw();
+  }
+
+  document.getElementById("btnFeed").addEventListener("click", function(){
+    act("caf", 25, "Espresso deployed. Hands slightly shaky. Worth it.");
+  });
+  document.getElementById("btnCode").addEventListener("click", function(){
+    act("com", 25, "Commit pushed. The diff was clean. Mostly.");
+  });
+  document.getElementById("btnNap").addEventListener("click", function(){
+    act("slp", 30, "Power nap complete. Dreams were in plain pinyin.");
+  });
+  document.getElementById("restart").addEventListener("click", function(){
+    S = { caf: 80, com: 70, slp: 60 };
+    tick = 0; day = 1; minute = 9 * 60; over = false;
+    overlay.classList.remove("show");
+    dayEl.textContent = "DAY 1"; clockEl.textContent = "09:00";
+    statusEl.textContent = "Luke rebooted. Be nicer this time.";
+    renderMeters(); draw();
+  });
+
+  renderMeters();
+  draw();
+  setInterval(step, 1500);
+})();
+</script>
+</body>
+</html>

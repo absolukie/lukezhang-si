@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Luke Zhang: Character Select</title>
+<style>
+  :root{
+    --bg:#05060f; --pink:#ff2d95; --cyan:#00e5ff; --yellow:#ffe14d;
+    --ink:#eaf6ff; --muted:#7d8aa3;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:ui-monospace,'Cascadia Code','Courier New',monospace;
+    min-height:100vh; display:flex; flex-direction:column; align-items:center;
+    padding:18px 12px 40px; overflow-x:hidden;
+  }
+  body::after{ /* scanlines */
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:60;
+    background:repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 2px, transparent 2px 5px);
+    mix-blend-mode:multiply;
+  }
+  body::before{ /* vignette */
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:61;
+    background:radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(0,0,0,.55) 100%);
+  }
+  .screen{ width:100%; max-width:620px; display:none; flex-direction:column; align-items:center; }
+  .screen.on{ display:flex; }
+  /* BOOT */
+  #boot{ min-height:70vh; justify-content:center; text-align:center; }
+  #boot h1{ font-size:clamp(28px,9vw,52px); letter-spacing:.12em; color:var(--cyan);
+    text-shadow:0 0 12px var(--cyan), 0 0 44px rgba(0,229,255,.5); margin:0 0 6px; }
+  #boot .sub{ color:var(--muted); font-size:13px; margin:0 0 26px; }
+  #pressstart{
+    font-size:clamp(18px,6vw,28px); color:var(--yellow); letter-spacing:.2em;
+    animation:blink 1.1s steps(2) infinite; background:none; border:none;
+    font-family:inherit; cursor:pointer; touch-action:manipulation; padding:16px 24px;
+    text-shadow:0 0 14px var(--yellow);
+  }
+  @keyframes blink{ 50%{ opacity:0; } }
+  /* SELECT */
+  .kicker{ color:var(--pink); letter-spacing:.35em; font-size:11px; text-transform:uppercase;
+    text-shadow:0 0 10px var(--pink); }
+  h2{ font-size:clamp(22px,7vw,34px); margin:8px 0 2px; letter-spacing:.08em; text-align:center; }
+  .hint{ color:var(--muted); font-size:12.5px; margin:0 0 16px; text-align:center; }
+  #grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; width:100%; }
+  @media(min-width:560px){ #grid{ grid-template-columns:repeat(3,1fr); } }
+  .fighter{
+    background:#0b0e1d; border:2px solid #232a45; border-radius:10px; padding:12px 10px 14px;
+    cursor:pointer; touch-action:manipulation; font-family:inherit; color:var(--ink);
+    display:flex; flex-direction:column; align-items:center; gap:8px; min-height:170px;
+    transition:border-color .15s, transform .15s;
+  }
+  .fighter svg{ width:64px; height:64px; }
+  .fighter .fname{ font-weight:bold; font-size:13px; letter-spacing:.04em; text-align:center; }
+  .fighter .ftag{ font-size:11px; color:var(--muted); text-align:center; line-height:1.4; min-height:32px; }
+  .fighter.cursor, .fighter:hover{ border-color:var(--cyan); transform:translateY(-3px);
+    box-shadow:0 0 16px rgba(0,229,255,.35); }
+  .fighter.picked{ border-color:var(--yellow); box-shadow:0 0 22px rgba(255,225,77,.5); }
+  /* SPECIAL MOVE OVERLAY */
+  #special{ position:fixed; inset:0; z-index:50; display:none; overflow:hidden; background:#02030a; cursor:pointer; }
+  #special.show{ display:block; }
+  #special .mv{ position:absolute; inset:0; }
+  #special .mvname{
+    position:absolute; top:14%; width:100%; text-align:center; font-size:clamp(26px,9vw,54px);
+    font-weight:bold; letter-spacing:.1em; color:#fff; opacity:0;
+    text-shadow:0 0 18px currentColor; animation:mvname 1.5s ease-out forwards;
+  }
+  @keyframes mvname{ 0%{opacity:0; transform:scale(2.4);} 25%{opacity:1; transform:scale(1);} 80%{opacity:1;} 100%{opacity:0;} }
+  /* rummy: golden card fan */
+  .sp-rummy .mv{ background:radial-gradient(circle at 50% 60%, #3a2a08, #02030a 70%); }
+  .sp-rummy .cardbit{
+    position:absolute; left:50%; top:55%; width:70px; height:100px; border-radius:8px;
+    background:linear-gradient(160deg,#ffe9a8,#e8b64c); border:2px solid #fff2c9;
+    opacity:0; animation:fan 1.5s ease-out forwards;
+  }
+  @keyframes fan{
+    0%{ opacity:0; transform:translate(-50%,-50%) rotate(0) scale(.4); }
+    20%{ opacity:1; }
+    100%{ opacity:0; transform:translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--rr)) scale(1.3); }
+  }
+  /* draw: sketch slash */
+  .sp-draw .mv{ background:#0a0c16; }
+  .sp-draw svg.slash{ position:absolute; inset:0; width:100%; height:100%; }
+  .sp-draw .slash path{
+    fill:none; stroke:var(--cyan); stroke-width:10; stroke-linecap:round;
+    stroke-dasharray:1400; stroke-dashoffset:1400; animation:drawline 1.1s ease-out forwards;
+    filter:drop-shadow(0 0 12px var(--cyan));
+  }
+  @keyframes drawline{ to{ stroke-dashoffset:0; } }
+  /* curbside: speed lines */
+  .sp-curbside .mv{ background:radial-gradient(circle at 50% 50%, #431a02, #02030a 70%); }
+  .sp-curbside .beam{
+    position:absolute; left:50%; top:50%; height:6px; width:140vmax;
+    background:linear-gradient(90deg, transparent, #ff7a1a, #ffe14d);
+    transform-origin:left center; opacity:0; animation:beam .9s ease-out forwards;
+    filter:drop-shadow(0 0 10px #ff7a1a);
+  }
+  @keyframes beam{ 0%{opacity:0; transform:rotate(var(--ra)) translateX(-10%);} 30%{opacity:1;} 100%{opacity:0; transform:rotate(var(--ra)) translateX(30%);} }
+  /* getclocked: time crunch */
+  .sp-getclocked .mv{ background:conic-gradient(from 0deg, #0a2a33, #02030a, #0a2a33, #02030a, #0a2a33);
+    animation:spinbg 1.5s linear forwards; }
+  @keyframes spinbg{ to{ filter:hue-rotate(0deg); transform:rotate(180deg) scale(1.4); } }
+  .sp-getclocked .hand{
+    position:absolute; left:50%; top:50%; width:8px; height:42vmin; background:var(--cyan);
+    transform-origin:50% 100%; box-shadow:0 0 18px var(--cyan); animation:spinfast 1.2s linear forwards;
+  }
+  @keyframes spinfast{ from{ transform:translate(-50%,-100%) rotate(0);} to{ transform:translate(-50%,-100%) rotate(1440deg);} }
+  /* llm: token cascade */
+  .sp-llm .mv{ background:#060814; }
+  .sp-llm .tok{
+    position:absolute; top:-8%; padding:6px 12px; border:1px solid var(--pink); color:var(--pink);
+    border-radius:6px; font-size:14px; background:rgba(255,45,149,.08); opacity:0;
+    animation:fall 1.3s ease-in forwards; white-space:nowrap;
+  }
+  @keyframes fall{ 0%{opacity:0; transform:translateY(-5vh);} 15%{opacity:1;} 100%{opacity:0; transform:translateY(115vh);} }
+  /* highagency: full send beams */
+  .sp-highagency .mv{ background:#0a0616; animation:shakebg .5s linear 3; }
+  @keyframes shakebg{ 0%,100%{transform:translate(0,0);} 25%{transform:translate(-8px,4px);} 75%{transform:translate(8px,-4px);} }
+  .sp-highagency .diag{
+    position:absolute; left:-20%; width:140%; height:26px;
+    background:linear-gradient(90deg, transparent, var(--yellow), transparent);
+    opacity:0; animation:diag .8s ease-out forwards; filter:drop-shadow(0 0 14px var(--yellow));
+  }
+  @keyframes diag{ 0%{opacity:0; transform:rotate(-24deg) translateX(-60%);} 30%{opacity:1;} 100%{opacity:0; transform:rotate(-24deg) translateX(60%);} }
+  /* DETAIL CARD */
+  #card{ justify-content:flex-start; padding-top:4vh; }
+  .cardbox{
+    width:100%; background:#0b0e1d; border:2px solid var(--cyan); border-radius:14px;
+    padding:22px 20px; box-shadow:0 0 30px rgba(0,229,255,.25);
+    animation:cardpop .35s cubic-bezier(.2,1.4,.4,1);
+  }
+  @keyframes cardpop{ from{ transform:scale(.85); opacity:0; } }
+  .cardbox h3{ margin:0 0 2px; font-size:24px; letter-spacing:.06em; color:var(--yellow);
+    text-shadow:0 0 12px rgba(255,225,77,.6); }
+  .cardbox .move{ color:var(--pink); font-size:12px; letter-spacing:.25em; margin-bottom:12px; }
+  .cardbox p{ font-size:14px; line-height:1.65; color:var(--ink); margin:0 0 16px; }
+  .stat{ margin-bottom:10px; }
+  .stat .row{ display:flex; justify-content:space-between; font-size:11px; letter-spacing:.15em; color:var(--muted); margin-bottom:4px; }
+  .bar{ height:10px; background:#1a2138; border-radius:5px; overflow:hidden; }
+  .bar i{ display:block; height:100%; width:0; border-radius:5px;
+    background:linear-gradient(90deg, var(--cyan), var(--pink)); transition:width .8s cubic-bezier(.2,.8,.3,1); }
+  .btnrow{ display:flex; gap:10px; margin-top:18px; flex-wrap:wrap; }
+  .abtn{
+    flex:1 1 140px; text-align:center; padding:14px 10px; border-radius:10px; font-family:inherit;
+    font-size:14px; font-weight:bold; letter-spacing:.08em; cursor:pointer; touch-action:manipulation;
+    text-decoration:none; min-height:48px; display:flex; align-items:center; justify-content:center;
+  }
+  .abtn.go{ background:var(--pink); color:#0a0510; border:none; box-shadow:0 0 18px rgba(255,45,149,.5); }
+  .abtn.back{ background:transparent; color:var(--cyan); border:2px solid var(--cyan); }
+  footer{ margin-top:26px; font-size:12px; color:var(--muted); text-align:center; }
+  footer a{ color:var(--cyan); }
+</style>
+</head>
+<body>
+
+<div class="screen on" id="boot">
+  <h1>LUKE ZHANG</h1>
+  <p class="sub">1P MODE &middot; NO CONTINUES NEEDED</p>
+  <button id="pressstart">PRESS START</button>
+</div>
+
+<div class="screen" id="select">
+  <div class="kicker">choose your fighter</div>
+  <h2>PROJECT SELECT</h2>
+  <p class="hint">Tap a fighter, or use arrow keys and Enter. Each one has a special move.</p>
+  <div id="grid" role="listbox" aria-label="Projects"></div>
+</div>
+
+<div class="screen" id="card">
+  <div class="cardbox">
+    <h3 id="cname"></h3>
+    <div class="move" id="cmove"></div>
+    <p id="cstory"></p>
+    <div id="cstats"></div>
+    <div class="btnrow">
+      <a class="abtn go" id="clink" href="https://projects.lukezhang.si/">PLAY &rarr;</a>
+      <button class="abtn back" id="cback" type="button">REMATCH</button>
+    </div>
+  </div>
+</div>
+
+<div id="special" aria-hidden="true"><div class="mv" id="mvbox"></div><div class="mvname" id="mvname"></div></div>
+
+<footer><a href="../">back to all 20</a> &middot; winner stays on</footer>
+
+<script>
+(function(){
+  "use strict";
+  var FIGHTERS = [
+    { id:"rummy", name:"LIVERPOOL RUMMY", tag:"card shark. zero mercy.",
+      move:"MELD STORM",
+      story:"The card game my wife and I actually play, rebuilt for the browser. Real melds, real rooms, real trash talk. Shipping beats everything.",
+      stats:[["SPEED",55],["SPICE",80],["SHIPPING",95]],
+      link:"https://projects.lukezhang.si/",
+      portrait:'<svg viewBox="0 0 64 64"><rect x="10" y="12" width="30" height="42" rx="5" fill="#ffe9a8" stroke="#8a6a2c" stroke-width="2" transform="rotate(-12 25 33)"/><rect x="24" y="10" width="30" height="42" rx="5" fill="#fff" stroke="#8a6a2c" stroke-width="2" transform="rotate(10 39 31)"/><circle cx="39" cy="28" r="6" fill="#ff2d95"/></svg>' },
+    { id:"draw", name:"DRAW + GUESS", tag:"pictionary, pinyin edition.",
+      move:"SKETCH SLASH",
+      story:"Draw it, guess it, argue about it. Built so my wife and I can play together, with pinyin matching in plain letters, no tone marks.",
+      stats:[["SPEED",70],["SPICE",95],["SHIPPING",90]],
+      link:"https://projects.lukezhang.si/",
+      portrait:'<svg viewBox="0 0 64 64"><rect x="26" y="6" width="12" height="34" fill="#00e5ff" transform="rotate(35 32 23)"/><polygon points="32,58 24,44 40,44" fill="#e8dcc0" transform="rotate(35 32 50)"/><polygon points="32,58 29,51 35,51" fill="#222" transform="rotate(35 32 54)"/></svg>' },
+    { id:"curbside", name:"CURBSIDE", tag:"food truck radar.",
+      move:"TASTE RUSH",
+      story:"Finds food trucks near you. I will drive 40 minutes for good noodles, so I built the radar I always wanted.",
+      stats:[["SPEED",60],["SPICE",85],["SHIPPING",70]],
+      link:"https://projects.lukezhang.si/",
+      portrait:'<svg viewBox="0 0 64 64"><rect x="8" y="20" width="30" height="22" rx="3" fill="#ff7a1a"/><rect x="38" y="26" width="14" height="16" rx="3" fill="#ffb066"/><rect x="41" y="29" width="8" height="6" fill="#0b0e1d"/><circle cx="18" cy="46" r="6" fill="#222" stroke="#888" stroke-width="2"/><circle cx="44" cy="46" r="6" fill="#222" stroke="#888" stroke-width="2"/></svg>' },
+    { id:"getclocked", name:"GET CLOCKED", tag:"think fast. billed hourly.",
+      move:"TIME CRUNCH",
+      story:"A speed game about time itself. Fast fingers win, slow thinkers get an invoice. Great with a crowd and a short fuse.",
+      stats:[["SPEED",90],["SPICE",70],["SHIPPING",85]],
+      link:"https://projects.lukezhang.si/",
+      portrait:'<svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="24" fill="#0b0e1d" stroke="#00e5ff" stroke-width="3"/><line x1="32" y1="32" x2="32" y2="14" stroke="#00e5ff" stroke-width="3" stroke-linecap="round"/><line x1="32" y1="32" x2="44" y2="38" stroke="#ff2d95" stroke-width="3" stroke-linecap="round"/><circle cx="32" cy="32" r="3" fill="#ffe14d"/></svg>' },
+    { id:"llm", name:"HOW AN LLM WORKS", tag:"a visualizer, obviously.",
+      move:"TOKEN CASCADE",
+      story:"An interactive explainer with a working tiny model inside. Every blog post I write is a visualizer. Text-only posts are for cowards.",
+      stats:[["SPEED",40],["SPICE",90],["SHIPPING",80]],
+      link:"https://projects.lukezhang.si/",
+      portrait:'<svg viewBox="0 0 64 64"><rect x="12" y="8" width="40" height="12" rx="6" fill="#9b6bff"/><rect x="12" y="26" width="40" height="12" rx="6" fill="#ff2d95"/><rect x="12" y="44" width="40" height="12" rx="6" fill="#00e5ff"/></svg>' },
+    { id:"highagency", name:"HIGH AGENCY", tag:"permission: declined.",
+      move:"FULL SEND",
+      story:"Field notes on getting things done when nobody gives you permission. The jail-cell phone-call test, the three wheels, all of it.",
+      stats:[["SPEED",100],["SPICE",75],["SHIPPING",60]],
+      link:"https://projects.lukezhang.si/high-agency-draft/",
+      portrait:'<svg viewBox="0 0 64 64"><polygon points="32,4 44,30 34,30 40,60 24,34 32,34" fill="#ffe14d" stroke="#8a6a2c" stroke-width="2"/></svg>' }
+  ];
+  var TOKENS = ["the","cat","sat","on","mat","zap","wow","hmm","yes","go","ai","hi"];
+
+  var boot = document.getElementById("boot"),
+      select = document.getElementById("select"),
+      card = document.getElementById("card"),
+      grid = document.getElementById("grid"),
+      special = document.getElementById("special"),
+      mvbox = document.getElementById("mvbox"),
+      mvname = document.getElementById("mvname");
+  var cursor = 0, started = false, busy = false;
+
+  function show(el){ [boot,select,card].forEach(function(s){ s.classList.toggle("on", s===el); }); }
+
+  function start(){
+    if(started) return; started = true; show(select);
+    setCursor(0);
+  }
+  document.getElementById("pressstart").addEventListener("click", start);
+  document.addEventListener("keydown", function(e){
+    if(!started){ start(); return; }
+    if(select.classList.contains("on")){
+      var cols = window.matchMedia("(min-width:560px)").matches ? 3 : 2;
+      if(e.key==="ArrowRight") setCursor((cursor+1)%FIGHTERS.length);
+      else if(e.key==="ArrowLeft") setCursor((cursor-1+FIGHTERS.length)%FIGHTERS.length);
+      else if(e.key==="ArrowDown") setCursor((cursor+cols)%FIGHTERS.length);
+      else if(e.key==="ArrowUp") setCursor((cursor-cols+FIGHTERS.length)%FIGHTERS.length);
+      else if(e.key==="Enter") pick(FIGHTERS[cursor]);
+      else return;
+      e.preventDefault();
+    } else if(card.classList.contains("on") && e.key==="Escape"){
+      backToSelect();
+    }
+  });
+
+  FIGHTERS.forEach(function(f, i){
+    var b = document.createElement("button");
+    b.className = "fighter"; b.type = "button";
+    b.setAttribute("role","option");
+    b.innerHTML = f.portrait + '<span class="fname">'+f.name+'</span><span class="ftag">'+f.tag+'</span>';
+    b.addEventListener("click", function(){ pick(f); });
+    b.addEventListener("mouseenter", function(){ setCursor(i); });
+    grid.appendChild(b);
+    f.el = b;
+  });
+
+  function setCursor(i){
+    cursor = i;
+    FIGHTERS.forEach(function(f, j){ f.el.classList.toggle("cursor", j===i); });
+    FIGHTERS[i].el.scrollIntoView({block:"nearest"});
+  }
+
+  function pick(f){
+    if(busy) return; busy = true;
+    f.el.classList.add("picked");
+    show(select);
+    runSpecial(f, function(){ showCard(f); busy = false; f.el.classList.remove("picked"); });
+  }
+
+  function runSpecial(f, done){
+    mvname.textContent = f.move;
+    mvname.style.animation = "none";           // restart the name flash on repeat picks
+    void mvname.offsetWidth;
+    mvname.style.animation = "";
+    mvname.style.color = {rummy:"#ffe14d",draw:"#00e5ff",curbside:"#ff7a1a",getclocked:"#00e5ff",llm:"#ff2d95",highagency:"#ffe14d"}[f.id];
+    mvbox.innerHTML = "";
+    var i, el;
+    if(f.id==="rummy"){
+      for(i=0;i<9;i++){ el=document.createElement("div"); el.className="cardbit";
+        el.style.setProperty("--dx", ((i-4)*46)+"px"); el.style.setProperty("--dy", (Math.abs(i-4)*-26 - 20)+"px");
+        el.style.setProperty("--rr", ((i-4)*22)+"deg"); el.style.animationDelay = (i*0.06)+"s";
+        mvbox.appendChild(el); }
+    } else if(f.id==="draw"){
+      var svgNS="http://www.w3.org/2000/svg";
+      var s=document.createElementNS(svgNS,"svg"); s.setAttribute("class","slash"); s.setAttribute("viewBox","0 0 100 100"); s.setAttribute("preserveAspectRatio","none");
+      var p=document.createElementNS(svgNS,"path"); p.setAttribute("d","M4,88 C30,70 22,40 48,44 C74,48 66,20 96,10");
+      s.appendChild(p); mvbox.appendChild(s);
+    } else if(f.id==="curbside"){
+      for(i=0;i<10;i++){ el=document.createElement("div"); el.className="beam";
+        el.style.top=(6+i*9.5)+"%"; el.style.setProperty("--ra",((i%2)?4:-4)+"deg"); el.style.animationDelay=(i*0.07)+"s";
+        mvbox.appendChild(el); }
+    } else if(f.id==="getclocked"){
+      for(i=0;i<3;i++){ el=document.createElement("div"); el.className="hand";
+        el.style.animationDelay=(i*0.15)+"s"; el.style.opacity=String(1-i*0.25); mvbox.appendChild(el); }
+    } else if(f.id==="llm"){
+      for(i=0;i<16;i++){ el=document.createElement("div"); el.className="tok";
+        el.textContent=TOKENS[i%TOKENS.length]; el.style.left=(3+Math.random()*88)+"%";
+        el.style.animationDelay=(Math.random()*0.9)+"s"; mvbox.appendChild(el); }
+    } else if(f.id==="highagency"){
+      for(i=0;i<7;i++){ el=document.createElement("div"); el.className="diag";
+        el.style.top=(8+i*13)+"%"; el.style.animationDelay=(i*0.09)+"s"; mvbox.appendChild(el); }
+    }
+    special.className = "show sp-" + f.id;
+    var finished = false;
+    function fin(){ if(finished) return; finished = true; special.className = ""; done(); }
+    special.onclick = fin;
+    setTimeout(fin, 1650);
+  }
+
+  function showCard(f){
+    document.getElementById("cname").textContent = f.name;
+    document.getElementById("cmove").textContent = "SPECIAL: " + f.move;
+    document.getElementById("cstory").textContent = f.story;
+    var st = document.getElementById("cstats"); st.innerHTML = "";
+    f.stats.forEach(function(s){
+      var d = document.createElement("div"); d.className = "stat";
+      d.innerHTML = '<div class="row"><span>'+s[0]+'</span><span>'+s[1]+'</span></div><div class="bar"><i></i></div>';
+      st.appendChild(d);
+    });
+    document.getElementById("clink").href = f.link;
+    show(card);
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){
+      var bars = st.querySelectorAll(".bar i");
+      f.stats.forEach(function(s, i){ bars[i].style.width = s[1] + "%"; });
+    }); });
+  }
+
+  function backToSelect(){ show(select); }
+  document.getElementById("cback").addEventListener("click", backToSelect);
+})();
+</script>
+</body>
+</html>

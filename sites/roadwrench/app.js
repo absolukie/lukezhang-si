@@ -58,6 +58,11 @@ const KEY = "roadwrench.v1";
 const STORAGE_WARN_BYTES = 3.5 * 1024 * 1024;
 let lastSaveBytes = 0;
 let storageFullToasted = false;
+/* P0 latch: once a save throws (quota), the banner must stay visible across
+ * navigation until a later save actually succeeds. route() calls
+ * updateStorageBanner() with no mode, so without this latch the banner would
+ * vanish while the app kept running on unsaved in-memory state. */
+let storageFullLatched = false;
 function storeBytes() {
   try { return (localStorage.getItem(KEY) || "").length; } catch (e) { return lastSaveBytes; }
 }
@@ -65,7 +70,7 @@ function updateStorageBanner(mode) {
   const el = document.getElementById("storageBanner");
   if (!el) return;
   const bytes = storeBytes();
-  const full = mode === "full" || bytes >= STORAGE_WARN_BYTES;
+  const full = storageFullLatched || mode === "full" || bytes >= STORAGE_WARN_BYTES;
   if (!full) { el.hidden = true; el.innerHTML = ""; return; }
   const mb = (bytes / 1048576).toFixed(1);
   el.hidden = false;
@@ -110,7 +115,9 @@ function save(s) {
   try {
     localStorage.setItem(KEY, raw);
     storageFullToasted = false;
+    storageFullLatched = false; /* a real write cleared the pressure */
   } catch (e) {
+    storageFullLatched = true;
     updateStorageBanner("full");
     if (!storageFullToasted) { storageFullToasted = true; toast("Storage is full. Export a backup now so no work is lost."); }
     return;
@@ -225,6 +232,16 @@ function route() {
   else viewJobs();
 }
 window.addEventListener("hashchange", route);
+
+/* Print gate: the .packet DOM is hidden in print CSS by default, so Ctrl+P or
+ * the browser menu can never print an unapproved document. Only authorized
+ * print paths (printBtn when the completeness gate passes, printAnyway, and
+ * the invoice print button) add body.print-ok before window.print(). */
+function authorizedPrint() {
+  document.body.classList.add("print-ok");
+  window.print();
+}
+window.addEventListener("afterprint", () => document.body.classList.remove("print-ok"));
 
 /* ================= JOBS BOARD ================= */
 let jobFilter = "all", claimFilter = "all";
@@ -815,8 +832,8 @@ function viewPacket(id) {
       </div>
       <button class="btn rust block" id="printBtn">${I.printer}Print / save as PDF</button>
       <button class="btn secondary block" id="shareBtn">${I.doc}Share packet summary</button>
-      ${j.filedAt
-        ? `<div class="card" style="text-align:center"><strong>Claim filed</strong><div class="muted">${fmtDT(j.filedAt)}</div></div>`
+      ${["filed", "approved", "paid"].includes(j.claim.status)
+        ? `<div class="card" style="text-align:center"><strong>Claim filed</strong><div class="muted">${fmtDT(j.claim.statusDate || j.filedAt || Date.now())}</div></div>`
         : `<button class="btn block" id="filedBtn">${I.check}Mark claim filed</button>`}
       <button class="btn ghost block" id="backJob">Back to job</button>
     </div>`;
@@ -850,8 +867,8 @@ function viewPacket(id) {
     save(S); toast("Claim: " + CLAIM_LABEL[value]); viewPacket(j.id);
   };
   const printAnyway = $("#printAnyway");
-  if (printAnyway) printAnyway.onclick = () => window.print();
-  $("#printBtn").onclick = () => { if (readyToOutput()) window.print(); };
+  if (printAnyway) printAnyway.onclick = () => authorizedPrint();
+  $("#printBtn").onclick = () => { if (readyToOutput()) authorizedPrint(); };
   $("#shareBtn").onclick = () => {
     if (!readyToOutput()) return;
     const lines = [
@@ -887,15 +904,36 @@ function viewPacket(id) {
 function setStatusSilent(j, s) { j.status = s; if (s === "complete" && !j.completedAt) j.completedAt = Date.now(); }
 
 /* ================= CUSTOMER INVOICE ================= */
+/* Invoice numbers are issued on first print/share, never on view. Opening the
+ * invoice view and closing it burns nothing; deleting a job with no issued
+ * number burns nothing. The number only appears in the UI after issueInvoiceNumber
+ * runs, so it is never shown before it exists. */
+const INV_LOCK = "roadwrench.invoicelock.v1";
+function issueInvoiceNumber(j) {
+  if (j.invoiceNumber) return j.invoiceNumber;
+  /* Cheap cross-tab lease: if another tab is mid-assignment, its lease is
+   * fresh; return null so the user taps again instead of double-assigning.
+   * The re-read of the persisted counter below also closes most of the race. */
+  try {
+    const lease = parseInt(localStorage.getItem(INV_LOCK) || "0", 10) || 0;
+    if (Date.now() - lease < 3000) return null;
+    localStorage.setItem(INV_LOCK, String(Date.now()));
+    try {
+      const fresh = JSON.parse(localStorage.getItem(KEY));
+      if (fresh && typeof fresh.invoiceSeq === "number") S.invoiceSeq = Math.max(S.invoiceSeq || 1, fresh.invoiceSeq);
+    } catch (e) {}
+  } catch (e) {}
+  j.invoiceNumber = "RW-" + new Date().getFullYear() + "-" + String(S.invoiceSeq).padStart(4, "0");
+  S.invoiceSeq++;
+  save(S);
+  try { localStorage.removeItem(INV_LOCK); } catch (e) {}
+  return j.invoiceNumber;
+}
 function viewInvoice(id) {
   const j = jobById(id);
   if (!j) { location.hash = "#/jobs"; return; }
   clearInterval(timerInt);
-  if (!j.invoiceNumber) {
-    j.invoiceNumber = "RW-" + new Date().getFullYear() + "-" + String(S.invoiceSeq).padStart(4, "0");
-    S.invoiceSeq++;
-  }
-  save(S);
+  const issued = !!j.invoiceNumber;
   const c = S.company;
   const rv = [j.rvYear, j.rvMake, j.rvModel].filter(Boolean).join(" ");
   const pt = partsTotal(j), lt = laborTotal(j);
@@ -903,13 +941,15 @@ function viewInvoice(id) {
   const sub = pt + lt, tax = sub * taxRate / 100, total = sub + tax;
   $("#view").innerHTML = `
     <button class="backlink noprint" id="back">${I.back}Back to job</button>
-    <div class="sectionhead noprint"><h2>Customer invoice</h2><span class="pill complete">${esc(j.invoiceNumber)}</span></div>
+    <div class="sectionhead noprint"><h2>Customer invoice</h2>${issued
+      ? `<span class="pill complete">${esc(j.invoiceNumber)}</span>`
+      : `<span class="pill draft">Not numbered yet</span>`}</div>
 
     <div class="packet" id="invoiceDoc">
       <div class="p-head">
         <h2>${esc(c.name)}</h2>
         <div class="muted">${esc(c.phone)}${c.email ? " · " + esc(c.email) : ""}${c.address ? "<br>" + esc(c.address) : ""}</div>
-        <div style="margin-top:8px;font-size:13px"><strong>INVOICE ${esc(j.invoiceNumber)}</strong> · ${fmtDate(todayISO())}</div>
+        <div style="margin-top:8px;font-size:13px"><strong>${issued ? "INVOICE " + esc(j.invoiceNumber) : "DRAFT INVOICE, number issued on first print or share"}</strong> · ${fmtDate(todayISO())}</div>
       </div>
 
       <div class="p-sec"><h4>Bill to</h4>
@@ -947,8 +987,14 @@ function viewInvoice(id) {
     </div>`;
   $("#back").onclick = () => location.hash = "#/job/" + j.id;
   $("#backJob").onclick = () => location.hash = "#/job/" + j.id;
-  $("#printInv").onclick = () => window.print();
+  $("#printInv").onclick = () => {
+    if (!issueInvoiceNumber(j)) { toast("Numbering is busy, tap print again"); return; }
+    viewInvoice(j.id); /* re-render so the issued number is on the page */
+    authorizedPrint();
+  };
   $("#shareInv").onclick = () => {
+    if (!issueInvoiceNumber(j)) { toast("Numbering is busy, tap share again"); return; }
+    viewInvoice(j.id);
     const lines = [
       "INVOICE " + j.invoiceNumber + " · " + c.name + (c.phone ? " · " + c.phone : ""),
       "Bill to: " + (j.customer || "Not provided"),
@@ -1226,6 +1272,10 @@ function viewSettings() {
       localStorage.removeItem("roadwrench.device_key");
       localStorage.removeItem("roadwrench.syncmeta.v1");
       localStorage.removeItem("roadwrench.lastsync.v1");
+      localStorage.removeItem("roadwrench.syncbase.v1");
+      localStorage.removeItem("roadwrench.oversized.v1");
+      localStorage.removeItem("roadwrench.sync_on.v1");
+      localStorage.removeItem("roadwrench.invoicelock.v1");
       S = blankState(); save(S); toast("Wiped clean"); route();
     }
   };

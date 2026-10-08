@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sines all the way down: luke's blog</title>
+<meta name="description" content="Sine and cosine are the atoms of repetition: sound, light, JPEG, MP3, MRI. Fourier splits any signal into waves, and the original Transformer fingerprinted token positions with sines and cosines. Interactive visualizers, plain language.">
+<link rel="stylesheet" href="katex/katex.min.css">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    min-height: 100%;
+    background: #f6f1e3;
+    color: #2b2b2b;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.7;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 56px 22px 80px; }
+  nav.top { margin-bottom: 40px; font-size: 14px; }
+  nav.top a { color: rgba(43,43,43,0.55); text-decoration: none; }
+  nav.top a:hover { color: #b3352b; }
+  h1 { font-size: 32px; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 8px; }
+  .meta { color: rgba(43,43,43,0.5); font-size: 14px; margin-bottom: 24px; }
+  .verdict { font-size: 17px; color: #2b2b2b; border-left: 3px solid #b3352b;
+    padding: 4px 0 4px 18px; margin: 0 0 28px; line-height: 1.65; }
+  p { margin-bottom: 16px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  p strong, li strong { color: #2b2b2b; }
+  h2 { font-size: 23px; color: #2b2b2b; margin: 44px 0 10px; letter-spacing: -0.01em; }
+  ul { margin: 0 0 16px 20px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  li { margin-bottom: 8px; }
+  a { color: #b3352b; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px;
+    background: rgba(43,43,43,0.07); padding: 1px 6px; border-radius: 5px; }
+  footer { margin-top: 60px; font-size: 13px; color: rgba(43,43,43,0.35); }
+  footer a { color: rgba(43,43,43,0.6); }
+  .kicker-close { font-size: 19px; font-weight: 700; color: #2b2b2b;
+    border-top: 1px solid rgba(43,43,43,0.15); padding-top: 28px; margin-top: 48px; }
+
+  /* visualizer cards */
+  .viz { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 16px; padding: 20px; margin: 24px 0; }
+  .viz h3 { font-size: 17px; margin-bottom: 4px; color: #2b2b2b; }
+  .viz .sub { font-size: 14px; color: rgba(43,43,43,0.62); margin-bottom: 12px; line-height: 1.55; }
+  .viz label { font-size: 15px; font-weight: 600; display: block; margin: 14px 0 2px; color: #2b2b2b; }
+  .viz input[type=range] { width: 100%; height: 34px; background: transparent;
+    cursor: pointer; touch-action: pan-y; margin: 4px 0 2px;
+    -webkit-appearance: none; appearance: none; }
+  .viz input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px;
+    background: rgba(43,43,43,0.18); }
+  .viz input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none;
+    width: 50px; height: 50px; border-radius: 50%; border: none;
+    background: radial-gradient(circle, #b3352b 0 6px, #2b2b2b 6px 8px, rgba(0,0,0,0) 9px);
+    margin-top: -23px; box-shadow: none; filter: drop-shadow(0 1px 4px rgba(0,0,0,0.35)); }
+  .viz input[type=range]::-moz-range-track { height: 4px; border-radius: 2px;
+    background: rgba(43,43,43,0.18); }
+  .viz input[type=range]::-moz-range-thumb { width: 50px; height: 50px; border-radius: 50%;
+    border: none;
+    background: radial-gradient(circle, #b3352b 0 6px, #2b2b2b 6px 8px, rgba(0,0,0,0) 9px);
+    box-shadow: none; filter: drop-shadow(0 1px 4px rgba(0,0,0,0.35)); }
+  .btn { touch-action: manipulation; border: none; background: #b3352b; color: #f6f1e3;
+    border-radius: 10px; padding: 12px 22px; font-size: 15px; font-weight: 700;
+    cursor: pointer; font-family: inherit; margin: 6px 8px 6px 0; }
+  .btn:active { transform: scale(0.97); }
+  .btn.ghost { background: transparent; color: #2b2b2b; border: 2px solid rgba(43,43,43,0.25); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  .chip { touch-action: manipulation; border: 2px solid rgba(43,43,43,0.2); background: transparent;
+    border-radius: 999px; padding: 8px 16px; font-size: 14px; font-weight: 600;
+    cursor: pointer; color: #2b2b2b; font-family: inherit; }
+  .chip.on { border-color: #b3352b; color: #b3352b; background: rgba(179,53,43,0.07); }
+  .chip:active { transform: scale(0.96); }
+  .readout { display: flex; justify-content: space-between; align-items: baseline; margin: 8px 0; gap: 10px; }
+  .big { font-size: 30px; font-weight: 800; color: #b3352b; font-variant-numeric: tabular-nums; }
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 10px 0; }
+  .stat-cell { background: rgba(43,43,43,0.05); border-radius: 10px; padding: 10px 6px; text-align: center; }
+  .stat-cell .n { font-size: 19px; font-weight: 800; color: #2b2b2b; font-variant-numeric: tabular-nums; }
+  .stat-cell .l { font-size: 11.5px; color: rgba(43,43,43,0.6); margin-top: 2px; line-height: 1.35; }
+  .cap { font-size: 13.5px; color: rgba(43,43,43,0.6); margin-top: 10px; line-height: 1.55; }
+  .heat { display: flex; gap: 2px; margin: 6px 0 2px; }
+  .heat i { flex: 1; height: 26px; border-radius: 3px; background: #fffdf6; min-width: 0; }
+  .heat-lab { font-size: 13px; color: rgba(43,43,43,0.6); margin: 8px 0 0; }
+  svg.wave { width: 100%; height: auto; display: block; touch-action: pan-y; }
+  .insight { background: rgba(179,53,43,0.07); border: 1px solid rgba(179,53,43,0.25);
+    border-radius: 12px; padding: 12px 16px; margin: 14px 0 4px; font-size: 14.5px;
+    color: #2b2b2b; min-height: 3em; line-height: 1.6; }
+  .formula { text-align: center; font-size: 17px; margin: 10px 0 4px; min-height: 40px; color: #2b2b2b; }
+
+  /* keep-exploring link cards */
+  .xlinks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0 8px; }
+  @media (max-width: 520px) { .xlinks { grid-template-columns: 1fr; } }
+  .xlink { display: block; background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 14px; padding: 16px; text-decoration: none; color: #2b2b2b;
+    touch-action: manipulation; }
+  .xlink:active { transform: scale(0.98); }
+  .xlink b { display: block; font-size: 15px; margin-bottom: 4px; color: #b3352b; }
+  .xlink span { font-size: 13.5px; color: rgba(43,43,43,0.62); line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="top"><a href="https://lukezhang.si/blog/">&larr; blog</a></nav>
+  <h1>Sines all the way down</h1>
+  <div class="meta">math &middot; llms &middot; Draft</div>
+  <p class="verdict">Everything that repeats is a sine wearing a costume. Sound, light, your heartbeat, the 60 Hz hum of the power grid. And when the 2017 Transformer needed to tell token 5 from token 500, it reached for the same atoms: sines and cosines.</p>
+
+  <h2>1. The world repeats</h2>
+  <p>A spring bounces. A pendulum swings. Your wall power flips direction 60 times a second. A guitar string shivers. Light itself is a wave. Different costumes, same atom: something going back and forth, smoothly, forever. Mathematicians gave that atom two names, sine and cosine, and then discovered the two names were one thing seen from two angles.</p>
+
+  <h2>2. One circle, two shadows</h2>
+  <p>Walk around a unit circle. Your height above the middle is sine. Your distance to the side is cosine. Drag the dot and watch the sine wave draw itself on the right: the wave is just the dot's shadow, traced over time. Cosine is the same walk, started a quarter turn early. That is the whole secret. Every wave toy below is this circle, stacked.</p>
+
+  <div class="viz" id="toy-circle">
+    <h3>The circle draws the wave</h3>
+    <p class="sub">Drag the dot around the circle. The wave on the right is its vertical shadow.</p>
+    <svg class="wave" id="circ-svg" viewBox="0 0 350 210" role="img" aria-label="Unit circle with draggable angle"></svg>
+    <div class="stat-grid">
+      <div class="stat-cell"><div class="n" id="circ-deg">34&deg;</div><div class="l">angle</div></div>
+      <div class="stat-cell"><div class="n" id="circ-sin">0.56</div><div class="l">sin: height</div></div>
+      <div class="stat-cell"><div class="n" id="circ-cos">0.83</div><div class="l">cos: sideways</div></div>
+    </div>
+    <button class="btn ghost" id="circ-spin">Spin it</button>
+    <p class="cap">Sine and cosine are not two ideas. They are one circle, read two ways.</p>
+  </div>
+
+  <h2>3. The Fourier prism</h2>
+  <p>A glass prism takes white light in and lays out its colors. Joseph Fourier's 1807 insight was the same trick for signals: <strong>any repeating pattern is a stack of pure sines</strong>, each with its own loudness. Feed a messy wave in, get its ingredient list out. Build it yourself first, then take one apart.</p>
+
+  <div class="viz" id="toy-build">
+    <h3>Build a wave</h3>
+    <p class="sub">Three sine ingredients. Drag their loudness and watch the sum on top change.</p>
+    <svg class="wave" id="build-svg" viewBox="0 0 350 170" role="img" aria-label="Sum of three sines"></svg>
+    <label for="build-a1">Slow wave, 1x frequency: <b id="build-v1">70</b></label>
+    <input type="range" id="build-a1" min="0" max="100" value="70" aria-label="Amplitude of first sine">
+    <label for="build-a2">Medium wave, 2x frequency: <b id="build-v2">25</b></label>
+    <input type="range" id="build-a2" min="0" max="100" value="25" aria-label="Amplitude of second sine">
+    <label for="build-a3">Fast wave, 3x frequency: <b id="build-v3">40</b></label>
+    <input type="range" id="build-a3" min="0" max="100" value="40" aria-label="Amplitude of third sine">
+    <div class="formula" id="build-formula">$f(t) = a_1\sin(t) + a_2\sin(2t) + a_3\sin(3t)$</div>
+    <div class="insight" id="build-insight" aria-live="polite"></div>
+  </div>
+
+  <div class="viz" id="toy-square">
+    <h3>Take one apart</h3>
+    <p class="sub">The dashed line is a square wave: on, off, on, off. Add odd harmonics and watch sines converge on it.</p>
+    <svg class="wave" id="square-svg" viewBox="0 0 350 170" role="img" aria-label="Sine harmonics converging on a square wave"></svg>
+    <label for="square-n">Harmonics: <b id="square-v">3</b> <span id="square-list">(1, 3, 5)</span></label>
+    <input type="range" id="square-n" min="1" max="8" step="1" value="3" aria-label="Number of odd harmonics">
+    <div class="formula">$\frac{4}{\pi}\left(\sin x + \frac{\sin 3x}{3} + \frac{\sin 5x}{5} + \cdots\right)$</div>
+    <p class="cap">This is not a party trick. <strong>JPEG</strong> stores your photos as stacked cosines (the DCT is Fourier's cousin). <strong>MP3</strong> throws away the frequencies you cannot hear. <strong>Noise-cancelling headphones</strong> flip the wave upside down. <strong>MRI</strong> reads your body in frequency space. <strong>Shazam</strong> fingerprints songs by their frequency peaks. The prism is everywhere.</p>
+  </div>
+
+  <div class="viz" id="toy-symmetry">
+    <h3>The symmetry breaker</h3>
+    <p class="sub">Why does the sine series use only odd powers? Add an x-squared term and watch the symmetry shatter. Then try x cubed: it never breaks.</p>
+    <svg class="wave" id="sym-svg" viewBox="0 0 350 190" role="img" aria-label="Symmetry test for sine series terms"></svg>
+    <label for="sym-a">Even intruder, a&middot;x&sup2;: <b id="sym-va">0.50</b></label>
+    <input type="range" id="sym-a" min="-1" max="1" step="0.01" value="0.5" aria-label="Coefficient of x squared">
+    <label for="sym-b">Odd guest, b&middot;x&sup3;: <b id="sym-vb">0.00</b></label>
+    <input type="range" id="sym-b" min="-1" max="1" step="0.01" value="0" aria-label="Coefficient of x cubed">
+    <button class="chip on" id="sym-mirror" aria-pressed="true">Mirror check</button>
+    <div class="stat-grid">
+      <div class="stat-cell"><div class="n" id="sym-status">BROKEN</div><div class="l">origin symmetry</div></div>
+      <div class="stat-cell"><div class="n" id="sym-gap">1.62</div><div class="l">worst ghost gap</div></div>
+      <div class="stat-cell"><div class="n">odd</div><div class="l">powers that survive</div></div>
+    </div>
+    <div class="insight" id="sym-insight" aria-live="polite"></div>
+    <p class="cap">Sine has a double flip: mirror it left to right and it flips top to bottom too, $f(-x) = -f(x)$. x cubed does the same double flip, so it fits right in. x squared only flips once, so it shatters the pattern. That is why every even term in the sine series is zero: not by choice, by symmetry. Cosine is the mirror image, $f(-x) = f(x)$, so only even powers survive there.</p>
+  </div>
+
+  <div class="viz" id="toy-converge">
+    <h3>Watch them converge</h3>
+    <p class="sub">Two Lego sets, term by term. Pick a series, then add terms and watch the partial sum hunt down the true curve. Dashed gray is the target.</p>
+    <div class="chips" id="conv-chips">
+      <button class="chip on" data-s="tsin">Taylor sin</button>
+      <button class="chip" data-s="tcos">Taylor cos</button>
+      <button class="chip" data-s="texp">Taylor e^x</button>
+      <button class="chip" data-s="fsq">Fourier square</button>
+      <button class="chip" data-s="fsaw">Fourier sawtooth</button>
+    </div>
+    <svg class="wave" id="conv-svg" viewBox="0 0 350 190" role="img" aria-label="Partial sums converging on a target curve"></svg>
+    <div class="formula" id="conv-formula"></div>
+    <button class="btn" id="conv-next">Next term</button>
+    <button class="btn ghost" id="conv-auto">Auto-play</button>
+    <div class="stat-grid">
+      <div class="stat-cell"><div class="n" id="conv-terms">1</div><div class="l">terms so far</div></div>
+      <div class="stat-cell"><div class="n" id="conv-err">2.86</div><div class="l">worst miss, smooth parts</div></div>
+      <div class="stat-cell"><div class="n">10</div><div class="l">terms available</div></div>
+    </div>
+    <p class="cap">Two Lego sets. Polynomials stack powers and hug the target near the center. Waves stack frequencies and nail the repeating pattern. The square wave's ears at the jumps never fully flatten: that is the Gibbs phenomenon, and it is honest. Error is measured away from the sharp jumps.</p>
+  </div>
+
+  <h2>4. tanh, the wave that isn't</h2>
+  <p>One curve gets invited to wave parties by mistake: <strong>tanh</strong>. It has the S-shape, but it never repeats, it just squashes. It belongs in this post for one reason: the entire RNN era ran on it. An LSTM cell is two ideas shaking hands. The <strong>sigmoid</strong> gates decide <em>how much</em> gets through. The <strong>tanh</strong> decides <em>what</em> gets through, squashed into (-1, 1) so the signal never explodes as it loops.</p>
+
+  <div class="viz" id="toy-tanh">
+    <h3>The squasher, for reference</h3>
+    <p class="sub">Not a wave. Rises once, then flattens. Compare with sine above: sine never stops moving.</p>
+    <svg class="wave" id="tanh-svg" viewBox="0 0 350 150" role="img" aria-label="tanh curve"></svg>
+    <div class="formula">$\tanh(x) = \frac{e^x - e^{-x}}{e^x + e^{-x}}$</div>
+    <p class="cap">Full deep dive lives in the functions post: the sigmoid-to-tanh morph, the logit round trip, and why zero-centered outputs train faster. <a href="https://projects.lukezhang.si/ml-functions-draft/">Read it there</a> instead of here, this post is about waves.</p>
+  </div>
+
+  <h2>5. Waves inside LLMs</h2>
+  <p>Attention is blind. It looks at a bag of tokens and has no idea which came first. So the 2017 Transformer paper gave every position a fingerprint made of waves, and modern models still do. Two generations of the trick, both interactive below.</p>
+
+  <h3 style="font-size:18px; margin-top:28px;">5a. Positional fingerprints (2017)</h3>
+  <p>Each position gets a vector of sines and cosines at different frequencies: $\text{PE}(pos, 2i) = \sin(pos / 10000^{2i/d})$. Slow waves mark the neighborhood, fast waves mark the exact house. Drag the two positions and watch their fingerprints: nearby positions look alike, so the model can <em>feel</em> distance.</p>
+
+  <div class="viz" id="toy-pos">
+    <h3>Two fingerprints</h3>
+    <p class="sub">Each strip is one 32-number position vector. Red is positive, blue is negative.</p>
+    <label for="pos-a">Position A: <b id="pos-va">5</b></label>
+    <input type="range" id="pos-a" min="0" max="50" step="1" value="5" aria-label="Position A">
+    <div class="heat" id="pos-strip-a" aria-hidden="true"></div>
+    <label for="pos-b">Position B: <b id="pos-vb">8</b></label>
+    <input type="range" id="pos-b" min="0" max="50" step="1" value="8" aria-label="Position B">
+    <div class="heat" id="pos-strip-b" aria-hidden="true"></div>
+    <div class="stat-grid">
+      <div class="stat-cell"><div class="n" id="pos-sim">98%</div><div class="l">fingerprint similarity</div></div>
+      <div class="stat-cell"><div class="n" id="pos-dist">3</div><div class="l">positions apart</div></div>
+      <div class="stat-cell"><div class="n">32</div><div class="l">waves per fingerprint</div></div>
+    </div>
+    <div class="insight" id="pos-insight" aria-live="polite"></div>
+  </div>
+
+  <h3 style="font-size:18px; margin-top:28px;">5b. RoPE: rotate, don't stamp (Llama era)</h3>
+  <p>Stamping a fingerprint on every token works, but modern LLMs do something slicker. Instead of <em>adding</em> a position vector, they <strong>rotate</strong> the query and key vectors by a position-dependent angle. Remember the imaginary-numbers toy: multiplying by $e^{i\theta}$ <em>is</em> a rotation. When attention multiplies a rotated query by a rotated key, the absolute positions cancel and only the <strong>relative</strong> angle survives. The model stops asking "where are you" and asks "how far apart are we," which is the question it actually wanted answered.</p>
+
+  <div class="viz" id="toy-rope">
+    <h3>Relative rotation</h3>
+    <p class="sub">Two positions rotate two vectors. Attention only ever sees the angle between them.</p>
+    <svg class="wave" id="rope-svg" viewBox="0 0 350 200" role="img" aria-label="RoPE rotation dial"></svg>
+    <label for="rope-m">Query position m: <b id="rope-vm">2</b></label>
+    <input type="range" id="rope-m" min="0" max="20" step="1" value="2" aria-label="Query position">
+    <label for="rope-n">Key position n: <b id="rope-vn">5</b></label>
+    <input type="range" id="rope-n" min="0" max="20" step="1" value="5" aria-label="Key position">
+    <div class="stat-grid">
+      <div class="stat-cell"><div class="n" id="rope-rel">86&deg;</div><div class="l">relative angle</div></div>
+      <div class="stat-cell"><div class="n" id="rope-cos">0.07</div><div class="l">cos of it: what attention feels</div></div>
+      <div class="stat-cell"><div class="n" id="rope-gap">3</div><div class="l">tokens apart</div></div>
+    </div>
+    <p class="cap">Same m minus n, same relative angle, wherever the pair sits in the sequence. That is the whole trick, and it is why RoPE extrapolates to longer texts better than stamped fingerprints.</p>
+  </div>
+
+  <p class="kicker-close">The universe repeats, so math learned to repeat. Sines went from springs to Shazam to the thing finishing your sentences. Waves all the way down.</p>
+
+  <h2>Keep exploring</h2>
+  <p>The wave family has relatives all over his drafts.</p>
+  <div class="xlinks">
+    <a class="xlink" href="https://projects.lukezhang.si/ml-functions-draft/"><b>The functions that run the machine</b><span>The post this one spun out of: log, softmax, tanh, and the Taylor series deep dive.</span></a>
+    <a class="xlink" href="https://projects.lukezhang.si/math-curiosity-draft/"><b>The math you called useless</b><span>Mocked-then-mandatory ideas, including the imaginary-numbers rotation toy RoPE stands on.</span></a>
+    <a class="xlink" href="https://projects.lukezhang.si/llm-training-draft/"><b>How an LLM learns, step by step</b><span>Softmax, cross-entropy, and gradient descent running inside full training.</span></a>
+    <a class="xlink" href="https://projects.lukezhang.si/model-atlas/"><b>Model Atlas</b><span>56 models on a map, including the Llama family that ships RoPE.</span></a>
+  </div>
+
+  <footer>Draft. Interactive visualizers run entirely in your browser.</footer>
+</div>
+
+<script>
+(function(){
+"use strict";
+function $(id){ return document.getElementById(id); }
+var NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs){
+  var e = document.createElementNS(NS, tag);
+  for (var k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+function svgPoint(svg, ev){
+  var r = svg.getBoundingClientRect();
+  var vb = svg.viewBox.baseVal;
+  return {
+    x: (ev.clientX - r.left) / r.width * vb.width,
+    y: (ev.clientY - r.top) / r.height * vb.height
+  };
+}
+
+/* ---------- 1. unit circle ---------- */
+(function(){
+  var svg = $("circ-svg"); if (!svg) return;
+  var cx = 95, cy = 105, R = 72;
+  var wx0 = 200, wx1 = 336, wy = 105, wamp = 58; // wave region
+  svg.appendChild(el("line", {x1: cx-R-14, y1: cy, x2: cx+R+14, y2: cy, stroke: "rgba(43,43,43,0.25)", "stroke-width": 1}));
+  svg.appendChild(el("line", {x1: cx, y1: cy-R-14, x2: cx, y2: cy+R+14, stroke: "rgba(43,43,43,0.25)", "stroke-width": 1}));
+  svg.appendChild(el("circle", {cx: cx, cy: cy, r: R, fill: "none", stroke: "#2b2b2b", "stroke-width": 2}));
+  var arc = el("path", {fill: "none", stroke: "#b3352b", "stroke-width": 2.5});
+  svg.appendChild(arc);
+  // sine wave template
+  var pts = [];
+  for (var i = 0; i <= 120; i++){
+    var t = i / 120 * Math.PI * 2;
+    pts.push((wx0 + i / 120 * (wx1 - wx0)).toFixed(1) + "," + (wy - wamp * Math.sin(t)).toFixed(1));
+  }
+  svg.appendChild(el("polyline", {points: pts.join(" "), fill: "none", stroke: "rgba(43,43,43,0.45)", "stroke-width": 2}));
+  svg.appendChild(el("line", {x1: wx0, y1: wy, x2: wx1, y2: wy, stroke: "rgba(43,43,43,0.25)", "stroke-width": 1, "stroke-dasharray": "4 4"}));
+  var link = el("line", {stroke: "#b3352b", "stroke-width": 1.5, "stroke-dasharray": "5 4", opacity: 0.7});
+  svg.appendChild(link);
+  var marker = el("circle", {r: 6, fill: "#b3352b"});
+  svg.appendChild(marker);
+  var halo = el("circle", {r: 30, fill: "rgba(0,0,0,0)", "pointer-events": "all", cursor: "grab"});
+  svg.appendChild(halo);
+  var dot = el("circle", {r: 11, fill: "#b3352b", stroke: "#2b2b2b", "stroke-width": 2.5, cursor: "grab"});
+  svg.appendChild(dot);
+
+  var theta = 0.6, spinning = false, raf = null, dragging = false;
+  function pos(){ return { x: cx + R * Math.cos(theta), y: cy - R * Math.sin(theta) }; }
+  function render(){
+    var p = pos();
+    dot.setAttribute("cx", p.x); dot.setAttribute("cy", p.y);
+    halo.setAttribute("cx", p.x); halo.setAttribute("cy", p.y);
+    var a0 = 0, a1 = theta;
+    var large = (a1 - a0) > Math.PI ? 1 : 0;
+    arc.setAttribute("d", "M " + (cx + 20) + " " + cy + " A 20 20 0 " + large + " 0 " +
+      (cx + 20 * Math.cos(a1)).toFixed(1) + " " + (cy - 20 * Math.sin(a1)).toFixed(1));
+    var mx = wx0 + (theta / (Math.PI * 2)) * (wx1 - wx0);
+    var my = wy - wamp * Math.sin(theta);
+    marker.setAttribute("cx", mx); marker.setAttribute("cy", my);
+    link.setAttribute("x1", p.x); link.setAttribute("y1", p.y);
+    link.setAttribute("x2", mx); link.setAttribute("y2", my);
+    $("circ-deg").textContent = Math.round(theta * 180 / Math.PI) + "°";
+    $("circ-sin").textContent = Math.sin(theta).toFixed(2);
+    $("circ-cos").textContent = Math.cos(theta).toFixed(2);
+  }
+  function stop(){ spinning = false; if (raf) cancelAnimationFrame(raf); raf = null;
+    $("circ-spin").textContent = "Spin it"; }
+  function angleFrom(ev){
+    var p = svgPoint(svg, ev);
+    return Math.atan2(-(p.y - cy), p.x - cx);
+  }
+  function onDown(ev){ dragging = true; stop(); theta = angleFrom(ev); render();
+    svg.setPointerCapture(ev.pointerId); ev.preventDefault(); }
+  function onMove(ev){ if (!dragging) return; theta = angleFrom(ev);
+    if (theta < 0) theta += Math.PI * 2; render(); }
+  function onUp(){ dragging = false; }
+  halo.addEventListener("pointerdown", onDown);
+  dot.addEventListener("pointerdown", onDown);
+  svg.addEventListener("pointerdown", function(ev){ if (ev.target === svg){ onDown(ev); } });
+  svg.addEventListener("pointermove", onMove);
+  svg.addEventListener("pointerup", onUp);
+  svg.addEventListener("pointercancel", onUp);
+  $("circ-spin").addEventListener("click", function(){
+    if (spinning){ stop(); return; }
+    spinning = true; $("circ-spin").textContent = "Stop";
+    (function step(){
+      if (!spinning) return;
+      theta += 0.025; if (theta > Math.PI * 2) theta -= Math.PI * 2;
+      render(); raf = requestAnimationFrame(step);
+    })();
+  });
+  render();
+})();
+
+/* ---------- 2. build a wave ---------- */
+(function(){
+  var svg = $("build-svg"); if (!svg) return;
+  var x0 = 12, x1 = 338, yc = 78, amp = 62;
+  svg.appendChild(el("line", {x1: x0, y1: yc, x2: x1, y2: yc, stroke: "rgba(43,43,43,0.25)", "stroke-width": 1}));
+  var curve = el("polyline", {fill: "none", stroke: "#b3352b", "stroke-width": 3, "stroke-linejoin": "round"});
+  svg.appendChild(curve);
+  var bars = document.createElement("div");
+  bars.style.cssText = "display:flex;gap:8px;margin:10px 0 2px;align-items:flex-end;height:44px;";
+  svg.parentNode.insertBefore(bars, $("build-formula"));
+  var barEls = [];
+  for (var b = 0; b < 3; b++){
+    var d = document.createElement("div");
+    d.style.cssText = "flex:1;background:#b3352b;border-radius:6px 6px 0 0;min-height:3px;";
+    bars.appendChild(d); barEls.push(d);
+  }
+  function amps(){ return [ +$("build-a1").value, +$("build-a2").value, +$("build-a3").value ]; }
+  function render(){
+    var a = amps();
+    $("build-v1").textContent = a[0]; $("build-v2").textContent = a[1]; $("build-v3").textContent = a[2];
+    var tot = a[0] + a[1] + a[2];
+    var pts = [];
+    for (var i = 0; i <= 140; i++){
+      var t = i / 140 * Math.PI * 2;
+      var s = tot > 0 ? (a[0]*Math.sin(t) + a[1]*Math.sin(2*t) + a[2]*Math.sin(3*t)) / tot : 0;
+      pts.push((x0 + i / 140 * (x1 - x0)).toFixed(1) + "," + (yc - amp * s).toFixed(1));
+    }
+    curve.setAttribute("points", pts.join(" "));
+    for (var j = 0; j < 3; j++) barEls[j].style.height = (3 + a[j] / 100 * 41) + "px";
+    var names = ["slow 1x wave", "medium 2x wave", "fast 3x wave"];
+    var dom = 0;
+    for (var k = 1; k < 3; k++) if (a[k] > a[dom]) dom = k;
+    $("build-insight").innerHTML = tot === 0
+      ? "All three at zero: a flat line. The prism needs <b>ingredients</b>."
+      : "Mostly a <b>" + names[dom] + "</b>, seasoned by the others. Every ingredient is just a sine; the sum is the signal.";
+  }
+  ["build-a1","build-a2","build-a3"].forEach(function(id){
+    $(id).addEventListener("input", render);
+  });
+  render();
+})();
+
+/* ---------- 3. square wave ---------- */
+(function(){
+  var svg = $("square-svg"); if (!svg) return;
+  var x0 = 12, x1 = 338, yc = 85, amp = 55;
+  var sq = [];
+  for (var i = 0; i <= 140; i++){
+    var t = i / 140 * Math.PI * 2;
+    var v = Math.sin(t) >= 0 ? 1 : -1;
+    sq.push((x0 + i / 140 * (x1 - x0)).toFixed(1) + "," + (yc - amp * v).toFixed(1));
+  }
+  svg.appendChild(el("polyline", {points: sq.join(" "), fill: "none", stroke: "rgba(43,43,43,0.35)",
+    "stroke-width": 2, "stroke-dasharray": "6 5"}));
+  var curve = el("polyline", {fill: "none", stroke: "#b3352b", "stroke-width": 3, "stroke-linejoin": "round"});
+  svg.appendChild(curve);
+  function render(){
+    var n = +$("square-n").value;
+    var labels = [];
+    for (var k = 1; k <= n; k++) labels.push(2 * k - 1);
+    $("square-v").textContent = n;
+    $("square-list").textContent = "(" + labels.join(", ") + ")";
+    var pts = [];
+    for (var i = 0; i <= 160; i++){
+      var t = i / 160 * Math.PI * 2;
+      var s = 0;
+      for (var k = 1; k <= n; k++){ var h = 2 * k - 1; s += Math.sin(h * t) / h; }
+      s *= 4 / Math.PI;
+      pts.push((x0 + i / 160 * (x1 - x0)).toFixed(1) + "," + (yc - amp * s).toFixed(1));
+    }
+    curve.setAttribute("points", pts.join(" "));
+  }
+  $("square-n").addEventListener("input", render);
+  render();
+})();
+
+/* ---------- 4. tanh (static) ---------- */
+(function(){
+  var svg = $("tanh-svg"); if (!svg) return;
+  var x0 = 12, x1 = 338, yc = 75, amp = 58;
+  svg.appendChild(el("line", {x1: x0, y1: yc, x2: x1, y2: yc, stroke: "rgba(43,43,43,0.25)", "stroke-width": 1}));
+  svg.appendChild(el("line", {x1: (x0+x1)/2, y1: 8, x2: (x0+x1)/2, y2: 142, stroke: "rgba(43,43,43,0.25)", "stroke-width": 1}));
+  var pts = [];
+  for (var i = 0; i <= 120; i++){
+    var x = -4 + i / 120 * 8;
+    pts.push((x0 + i / 120 * (x1 - x0)).toFixed(1) + "," + (yc - amp * Math.tanh(x)).toFixed(1));
+  }
+  svg.appendChild(el("polyline", {points: pts.join(" "), fill: "none", stroke: "#b3352b", "stroke-width": 3}));
+})();
+
+/* ---------- 5a. positional fingerprints ---------- */
+(function(){
+  if (!$("pos-strip-a")) return;
+  var D = 32;
+  function pe(pos){
+    var v = [];
+    for (var i = 0; i < D / 2; i++){
+      var a = pos / Math.pow(10000, (2 * i) / D);
+      v.push(Math.sin(a), Math.cos(a));
+    }
+    return v;
+  }
+  function color(x){
+    function hx(n){ var s = Math.round(n).toString(16); return s.length === 1 ? "0" + s : s; }
+    function mix(c1, c2, t){
+      return [ Math.round(c1[0]+(c2[0]-c1[0])*t), Math.round(c1[1]+(c2[1]-c1[1])*t), Math.round(c1[2]+(c2[2]-c1[2])*t) ];
+    }
+    var base = [255, 253, 246], rgb;
+    if (x >= 0) rgb = mix(base, [179, 53, 43], x);
+    else rgb = mix(base, [58, 90, 140], -x);
+    return "#" + hx(rgb[0]) + hx(rgb[1]) + hx(rgb[2]);
+  }
+  var cellsA = [], cellsB = [];
+  for (var c = 0; c < D; c++){
+    var ia = document.createElement("i"); $("pos-strip-a").appendChild(ia); cellsA.push(ia);
+    var ib = document.createElement("i"); $("pos-strip-b").appendChild(ib); cellsB.push(ib);
+  }
+  function render(){
+    var pa = +$("pos-a").value, pb = +$("pos-b").value;
+    $("pos-va").textContent = pa; $("pos-vb").textContent = pb;
+    var va = pe(pa), vb = pe(pb), dot = 0;
+    for (var i = 0; i < D; i++){
+      dot += va[i] * vb[i];
+      cellsA[i].style.background = color(va[i]);
+      cellsB[i].style.background = color(vb[i]);
+    }
+    var sim = dot / (D / 2);
+    var pct = Math.round(sim * 100);
+    $("pos-sim").textContent = pct + "%";
+    $("pos-dist").textContent = Math.abs(pa - pb);
+    $("pos-insight").innerHTML = Math.abs(pa - pb) === 0
+      ? "Same position, identical fingerprint. Of course."
+      : Math.abs(pa - pb) <= 4
+        ? "<b>" + pct + "% alike.</b> Close neighbors share slow waves, so the model feels them as near."
+        : "<b>" + pct + "% alike.</b> Far apart, the fast waves have diverged. Distance you can measure.";
+  }
+  $("pos-a").addEventListener("input", render);
+  $("pos-b").addEventListener("input", render);
+  render();
+})();
+
+/* ---------- 5b. RoPE dial ---------- */
+(function(){
+  var svg = $("rope-svg"); if (!svg) return;
+  var cx = 175, cy = 100, R = 72, OM = 0.5;
+  svg.appendChild(el("circle", {cx: cx, cy: cy, r: R, fill: "none", stroke: "#2b2b2b", "stroke-width": 2}));
+  svg.appendChild(el("line", {x1: cx - R - 12, y1: cy, x2: cx + R + 12, y2: cy, stroke: "rgba(43,43,43,0.25)", "stroke-width": 1}));
+  var arc = el("path", {fill: "none", stroke: "#b3352b", "stroke-width": 2.5, "stroke-dasharray": "4 3"});
+  svg.appendChild(arc);
+  var ql = el("line", {x1: cx, y1: cy, stroke: "#b3352b", "stroke-width": 3.5, "stroke-linecap": "round"});
+  var kl = el("line", {x1: cx, y1: cy, stroke: "#3a5a8c", "stroke-width": 3.5, "stroke-linecap": "round"});
+  svg.appendChild(kl); svg.appendChild(ql);
+  var qd = el("circle", {r: 7, fill: "#b3352b", stroke: "#2b2b2b", "stroke-width": 2});
+  var kd = el("circle", {r: 7, fill: "#3a5a8c", stroke: "#2b2b2b", "stroke-width": 2});
+  svg.appendChild(qd); svg.appendChild(kd);
+  var qlab = el("text", {x: 14, y: 24, "font-size": 14, fill: "#b3352b", "font-weight": 700});
+  qlab.textContent = "q";
+  var klab = el("text", {x: 14, y: 44, "font-size": 14, fill: "#3a5a8c", "font-weight": 700});
+  klab.textContent = "k";
+  svg.appendChild(qlab); svg.appendChild(klab);
+  function pt(a){ return { x: cx + R * Math.cos(a), y: cy - R * Math.sin(a) }; }
+  function render(){
+    var m = +$("rope-m").value, n = +$("rope-n").value;
+    $("rope-vm").textContent = m; $("rope-vn").textContent = n;
+    var aq = m * OM, ak = n * OM;
+    var p = pt(aq), q = pt(ak);
+    ql.setAttribute("x2", p.x); ql.setAttribute("y2", p.y);
+    kl.setAttribute("x2", q.x); kl.setAttribute("y2", q.y);
+    qd.setAttribute("cx", p.x); qd.setAttribute("cy", p.y);
+    kd.setAttribute("cx", q.x); kd.setAttribute("cy", q.y);
+    var d = (m - n) * OM;
+    var sweep = ((d % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    var large = sweep > Math.PI ? 1 : 0;
+    arc.setAttribute("d", "M " + (cx + 30 * Math.cos(aq)).toFixed(1) + " " + (cy - 30 * Math.sin(aq)).toFixed(1) +
+      " A 30 30 0 " + large + " 0 " + (cx + 30 * Math.cos(ak)).toFixed(1) + " " + (cy - 30 * Math.sin(ak)).toFixed(1));
+    var deg = Math.round(sweep * 180 / Math.PI);
+    $("rope-rel").textContent = deg + "°";
+    $("rope-cos").textContent = Math.cos(sweep).toFixed(2);
+    $("rope-gap").textContent = Math.abs(m - n);
+  }
+  $("rope-m").addEventListener("input", render);
+  $("rope-n").addEventListener("input", render);
+  render();
+})();
+
+/* ---------- 3a. symmetry breaker ---------- */
+(function(){
+  var svg = $("sym-svg"); if (!svg) return;
+  var X0 = -5, X1 = 5, YR = 3;
+  var px0 = 14, px1 = 336, py0 = 12, py1 = 178;
+  function X(x){ return px0 + (x - X0) / (X1 - X0) * (px1 - px0); }
+  function Y(y){ return py0 + (YR - y) / (2 * YR) * (py1 - py0); }
+  var clip = el("clipPath", {id: "sym-clip"});
+  clip.appendChild(el("rect", {x: px0, y: py0, width: px1 - px0, height: py1 - py0}));
+  svg.appendChild(clip);
+  var g = el("g", {"clip-path": "url(#sym-clip)"});
+  svg.appendChild(g);
+  g.appendChild(el("line", {x1: px0, y1: Y(0), x2: px1, y2: Y(0), stroke: "rgba(43,43,43,0.25)", "stroke-width": 1}));
+  g.appendChild(el("line", {x1: X(0), y1: py0, x2: X(0), y2: py1, stroke: "rgba(43,43,43,0.25)", "stroke-width": 1}));
+  var truth = el("polyline", {fill: "none", stroke: "rgba(43,43,43,0.45)", "stroke-width": 2, "stroke-dasharray": "6 5"});
+  var ghost = el("polyline", {fill: "none", stroke: "#3a5a8c", "stroke-width": 2, "stroke-dasharray": "3 4"});
+  var test = el("polyline", {fill: "none", stroke: "#b3352b", "stroke-width": 3, "stroke-linejoin": "round"});
+  g.appendChild(truth); g.appendChild(ghost); g.appendChild(test);
+  var showMirror = true;
+  function testFn(a, b, x){ return Math.sin(x) + a * x * x + b * x * x * x; }
+  function render(){
+    var a = +$("sym-a").value, b = +$("sym-b").value;
+    $("sym-va").textContent = a.toFixed(2);
+    $("sym-vb").textContent = b.toFixed(2);
+    var pts = [], i, x;
+    for (i = 0; i <= 200; i++){
+      x = X0 + i / 200 * (X1 - X0);
+      pts.push(X(x).toFixed(1) + "," + Y(Math.sin(x)).toFixed(1));
+    }
+    truth.setAttribute("points", pts.join(" "));
+    pts = [];
+    for (i = 0; i <= 200; i++){
+      x = X0 + i / 200 * (X1 - X0);
+      var v = testFn(a, b, x);
+      pts.push(X(x).toFixed(1) + "," + Y(Math.max(-YR-1, Math.min(YR+1, v))).toFixed(1));
+    }
+    test.setAttribute("points", pts.join(" "));
+    var gap = 0;
+    pts = [];
+    for (i = 0; i <= 200; i++){
+      x = X0 + i / 200 * (X1 - X0);
+      var gv = -testFn(a, b, -x);
+      pts.push(X(x).toFixed(1) + "," + Y(Math.max(-YR-1, Math.min(YR+1, gv))).toFixed(1));
+      var d = Math.abs(testFn(a, b, x) - gv);
+      if (d > gap) gap = d;
+    }
+    ghost.setAttribute("points", pts.join(" "));
+    ghost.style.display = showMirror ? "" : "none";
+    var intact = Math.abs(a) < 0.05;
+    $("sym-status").textContent = intact ? "INTACT" : "BROKEN";
+    $("sym-status").style.color = intact ? "#2b7a3d" : "#b3352b";
+    $("sym-gap").textContent = gap < 10 ? gap.toFixed(2) : ">10";
+    $("sym-insight").innerHTML = intact
+      ? "a is ~0: the ghost sits exactly on the red curve. b = " + b.toFixed(2) + " changes the shape but <b>never breaks the symmetry</b>. Odd powers are safe."
+      : "a = " + a.toFixed(2) + ": the x-squared term breaks the double flip and the ghost pulls away (gap " + (gap < 10 ? gap.toFixed(2) : "over 10") + "). Even powers are <b>forbidden</b>.";
+  }
+  $("sym-a").addEventListener("input", render);
+  $("sym-b").addEventListener("input", render);
+  $("sym-mirror").addEventListener("click", function(){
+    showMirror = !showMirror;
+    this.classList.toggle("on", showMirror);
+    this.setAttribute("aria-pressed", showMirror ? "true" : "false");
+    render();
+  });
+  render();
+})();
+
+/* ---------- 3b. watch them converge ---------- */
+(function(){
+  var svg = $("conv-svg"); if (!svg) return;
+  var X0 = -6.5, X1 = 6.5, YR = 4;
+  var px0 = 14, px1 = 336, py0 = 12, py1 = 178;
+  function X(x){ return px0 + (x - X0) / (X1 - X0) * (px1 - px0); }
+  function Y(y){ return py0 + (YR - y) / (2 * YR) * (py1 - py0); }
+  var clip = el("clipPath", {id: "conv-clip"});
+  clip.appendChild(el("rect", {x: px0, y: py0, width: px1 - px0, height: py1 - py0}));
+  svg.appendChild(clip);
+  var g = el("g", {"clip-path": "url(#conv-clip)"});
+  svg.appendChild(g);
+  g.appendChild(el("line", {x1: px0, y1: Y(0), x2: px1, y2: Y(0), stroke: "rgba(43,43,43,0.25)", "stroke-width": 1}));
+  var truth = el("polyline", {fill: "none", stroke: "rgba(43,43,43,0.45)", "stroke-width": 2, "stroke-dasharray": "6 5"});
+  var psum = el("polyline", {fill: "none", stroke: "#b3352b", "stroke-width": 3, "stroke-linejoin": "round"});
+  g.appendChild(truth); g.appendChild(psum);
+  var FACT = [1];
+  for (var f = 1; f <= 22; f++) FACT.push(FACT[f-1] * f);
+  var PI = Math.PI;
+  function sawTrue(x){
+    var tt = (x + PI) % (2 * PI); if (tt < 0) tt += 2 * PI;
+    return tt - PI;
+  }
+  var S = {
+    tsin: { max: 10, jumps: [],
+      truth: function(x){ return Math.sin(x); },
+      term: function(k, x){ var p = 2*k-1; return (k % 2 ? 1 : -1) * Math.pow(x, p) / FACT[p]; },
+      fx: "$\\sin x = x - \\frac{x^3}{3!} + \\frac{x^5}{5!} - \\cdots$" },
+    tcos: { max: 10, jumps: [],
+      truth: function(x){ return Math.cos(x); },
+      term: function(k, x){ var p = 2*(k-1); return (k % 2 ? 1 : -1) * Math.pow(x, p) / FACT[p]; },
+      fx: "$\\cos x = 1 - \\frac{x^2}{2!} + \\frac{x^4}{4!} - \\cdots$" },
+    texp: { max: 10, jumps: [],
+      truth: function(x){ return Math.exp(x); },
+      term: function(k, x){ var p = k - 1; return Math.pow(x, p) / FACT[p]; },
+      fx: "$e^x = 1 + x + \\frac{x^2}{2!} + \\frac{x^3}{3!} + \\cdots$" },
+    fsq: { max: 10, jumps: [0, PI, -PI],
+      truth: function(x){ var s = Math.sin(x); return s > 0 ? 1 : (s < 0 ? -1 : 0); },
+      term: function(k, x){ var h = 2*k-1; return (4/PI) * Math.sin(h*x) / h; },
+      fx: "$\\frac{4}{\\pi}\\left(\\sin x + \\frac{\\sin 3x}{3} + \\frac{\\sin 5x}{5} + \\cdots\\right)$" },
+    fsaw: { max: 10, jumps: [PI, -PI],
+      truth: sawTrue,
+      term: function(k, x){ return 2 * (k % 2 ? 1 : -1) * Math.sin(k*x) / k; },
+      fx: "$2\\left(\\sin x - \\frac{\\sin 2x}{2} + \\frac{\\sin 3x}{3} - \\cdots\\right)$" }
+  };
+  var cur = "tsin", n = 1, timer = null;
+  function katex(elx){
+    if (window.renderMathInElement){
+      try { renderMathInElement(elx, { delimiters: [{left:"$$",right:"$$",display:true},{left:"$",right:"$",display:false}], throwOnError:false, ignoredClasses:["nokatex"] }); } catch(e){}
+    }
+  }
+  function partial(x){
+    var s = 0, def = S[cur];
+    for (var k = 1; k <= n; k++) s += def.term(k, x);
+    return s;
+  }
+  function fmtErr(e){
+    if (!(e >= 0)) return "--";
+    if (e < 10) return e.toFixed(2);
+    if (e < 1000) return String(Math.round(e));
+    return e.toExponential(0);
+  }
+  function render(){
+    var def = S[cur], pts = [], i, x, t;
+    for (i = 0; i <= 200; i++){
+      x = X0 + i / 200 * (X1 - X0);
+      t = def.truth(x);
+      pts.push(X(x).toFixed(1) + "," + Y(Math.max(-YR-2, Math.min(YR+2, t))).toFixed(1));
+    }
+    truth.setAttribute("points", pts.join(" "));
+    pts = [];
+    for (i = 0; i <= 200; i++){
+      x = X0 + i / 200 * (X1 - X0);
+      t = partial(x);
+      pts.push(X(x).toFixed(1) + "," + Y(Math.max(-YR-2, Math.min(YR+2, t))).toFixed(1));
+    }
+    psum.setAttribute("points", pts.join(" "));
+    var err = 0;
+    for (i = 0; i <= 160; i++){
+      x = -3 + i / 160 * 6;
+      var skip = false;
+      for (var j = 0; j < def.jumps.length; j++)
+        if (Math.abs(x - def.jumps[j]) < 0.35){ skip = true; break; }
+      if (skip) continue;
+      var d = Math.abs(partial(x) - def.truth(x));
+      if (d > err) err = d;
+    }
+    $("conv-terms").textContent = n;
+    $("conv-err").textContent = fmtErr(err);
+    $("conv-next").disabled = (n >= def.max);
+  }
+  function setFormula(){
+    var f = $("conv-formula");
+    f.innerHTML = S[cur].fx;
+    katex(f);
+  }
+  function stop(){
+    if (timer){ clearInterval(timer); timer = null; }
+    $("conv-auto").textContent = "Auto-play";
+  }
+  $("conv-chips").addEventListener("click", function(ev){
+    var b = ev.target.closest("button"); if (!b) return;
+    var btns = $("conv-chips").querySelectorAll("button");
+    for (var i = 0; i < btns.length; i++) btns[i].classList.remove("on");
+    b.classList.add("on");
+    cur = b.getAttribute("data-s"); n = 1; stop(); setFormula(); render();
+  });
+  $("conv-next").addEventListener("click", function(){
+    stop();
+    if (n < S[cur].max){ n++; render(); }
+  });
+  $("conv-auto").addEventListener("click", function(){
+    if (timer){ stop(); return; }
+    $("conv-auto").textContent = "Stop";
+    timer = setInterval(function(){
+      if (n >= S[cur].max){ stop(); return; }
+      n++; render();
+    }, 700);
+  });
+  setFormula();
+  render();
+})();
+})();
+</script>
+<script src="katex/katex.min.js"></script>
+<script src="katex/contrib/auto-render.min.js"></script>
+<script>
+renderMathInElement(document.body, {
+  delimiters: [
+    {left: "$$", right: "$$", display: true},
+    {left: "$", right: "$", display: false}
+  ],
+  throwOnError: false,
+  ignoredClasses: ["nokatex"]
+});
+</script>
+</body>
+</html>

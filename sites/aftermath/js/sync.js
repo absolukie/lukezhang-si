@@ -163,7 +163,7 @@ function escHtml(s){
  * "Synced" only when nothing is pending and nothing is in flight;
  * "Syncing..." while a push/pull is in flight;
  * "Offline" when the network is down;
- * "Not synced — N changes pending" whenever work is unacknowledged. */
+ * "Not synced: N changes pending" whenever work is unacknowledged. */
 /* Lists oversized (device-only) records inside the settings panel. */
 function renderBigWarn(){
   var host = document.querySelector("#syncBigWarn");
@@ -174,7 +174,7 @@ function renderBigWarn(){
     '<div class="syncbig"><strong>Too large to back up (' + keys.length + '):</strong>' +
     '<ul>' + keys.map(function(mk){
       var kb = Math.round((oversized[mk].bytes || 0) / 1024);
-      return '<li>' + escHtml(mk) + ' \u2014 ' + kb +
+      return '<li>' + escHtml(mk) + ': ' + kb +
         ' KB (100 KB cap). Saved on this device only.</li>';
     }).join("") + '</ul></div>';
 }
@@ -192,8 +192,8 @@ function updatePill(){
   try { big = Object.keys(oversized).length; } catch(e){ big = 0; }
   if (inflight > 0){ s = "syncing"; label = "Syncing..."; cls = "warn"; }
   else if (typeof navigator !== "undefined" && navigator.onLine === false){ s = "offline"; label = "Offline"; cls = ""; }
-  else if (n > 0){ s = "pending"; label = "Not synced \u2014 " + n + " change" + (n === 1 ? "" : "s") + " pending"; cls = "crit"; }
-  else if (big > 0){ s = "limited"; label = "Sync limited \u2014 " + big + " too large"; cls = "warn"; }
+  else if (n > 0){ s = "pending"; label = "Not synced: " + n + " change" + (n === 1 ? "" : "s") + " pending"; cls = "crit"; }
+  else if (big > 0){ s = "limited"; label = "Sync limited: " + big + " too large"; cls = "warn"; }
   else { s = "synced"; label = "Synced"; cls = "ok"; }
   status = s;
   var el = document.querySelector("#syncStatus");

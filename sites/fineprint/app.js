@@ -384,14 +384,23 @@ async function shareScore(a, hits){
     const file = new File([blob],"fineprint-score.png",{type:"image/png"});
     if(navigator.canShare && navigator.canShare({files:[file]})){
       await navigator.share({files:[file],title:"FinePrint score card",text:"Deal score: " + a.score + "/100. " + v[0] + "."});
-    }else if(navigator.clipboard && window.ClipboardItem){
-      await navigator.clipboard.write([new window.ClipboardItem({"image/png":blob})]);
-      toast("Score card copied as an image. Paste it anywhere.");
     }else{
-      const url = URL.createObjectURL(blob), link = document.createElement("a");
-      link.href=url;link.download="fineprint-score.png";document.body.appendChild(link);link.click();link.remove();
-      setTimeout(function(){URL.revokeObjectURL(url);},1000);
-      toast("Score card downloaded.");
+      // clipboard image write is gated behind a permission that can be denied;
+      // fall through to the download branch on any failure instead of aborting
+      let copied = false;
+      try{
+        if(navigator.clipboard && window.ClipboardItem){
+          await navigator.clipboard.write([new window.ClipboardItem({"image/png":blob})]);
+          toast("Score card copied as an image. Paste it anywhere.");
+          copied = true;
+        }
+      }catch(clipErr){}
+      if(!copied){
+        const url = URL.createObjectURL(blob), link = document.createElement("a");
+        link.href=url;link.download="fineprint-score.png";document.body.appendChild(link);link.click();link.remove();
+        setTimeout(function(){URL.revokeObjectURL(url);},1000);
+        toast("Score card downloaded.");
+      }
     }
   }catch(e){toast("Could not build the score card.");}
 }
@@ -407,11 +416,16 @@ function feedbackVote(data,id){
 }
 function feedbackRow(id){
   const v = feedbackVote(feedbackData(),id);
+  const votesSoFar = v.up + v.down;
   function button(dir){
     const path = dir === "up" ? 'M8 10l4-7c2 0 3 1 2 4l-1 3h5c2 0 3 1 2 3l-2 7H8zM3 10h5v10H3z' : 'M8 14l4 7c2 0 3-1 2-4l-1-3h5c2 0 3-1 2-3l-2-7H8zM3 4h5v10H3z';
     return '<button class="btn btn-ghost btn-small" data-vote="' + dir + '" aria-label="' + (dir === "up" ? 'This flag was right' : 'This flag was not right') + '" aria-pressed="' + (v.mine === dir) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + path + '"/></svg><span>' + v[dir] + '</span></button>';
   }
-  return '<div class="feedback" data-rule="' + id + '"><span>Was this flag right?</span>' + button("up") + button("down") + '<span class="feedback-counts" aria-live="polite">' + v.up + ' found this right · ' + v.down + ' did not, on this device</span></div>';
+  // counts stay hidden until the first vote on this device: empty tallies are noise
+  const counts = votesSoFar > 0
+    ? '<span class="feedback-counts" aria-live="polite">' + v.up + ' found this right · ' + v.down + ' did not, on this device</span>'
+    : '';
+  return '<div class="feedback" data-rule="' + id + '"><span>Was this flag right?</span>' + button("up") + button("down") + counts + '</div>';
 }
 
 function compareContracts(){
@@ -419,7 +433,7 @@ function compareContracts(){
   if(texts.some(function(t){return t.length < 200;})){toast("Paste at least 200 characters into each contract to compare.");return;}
   const results = texts.map(function(t){
     const hits=analyze(t), flags=rankedHits(hits), score=scoreOf(hits), cats={};
-    hits.forEach(function(h){cats[h.rule.cat]=(cats[h.rule.cat]||0)+1;});
+    hits.forEach(function(h){ if(!h.question) cats[h.rule.cat]=(cats[h.rule.cat]||0)+1; });
     return {flags:flags,score:score,verdict:verdictFor(score)[0],cats:cats,high:flags.filter(function(h){return h.rule.sev==="high";}).length,med:flags.filter(function(h){return h.rule.sev==="med";}).length};
   });
   const diff = Math.abs(results[0].score-results[1].score);
@@ -436,6 +450,89 @@ function compareContracts(){
   $("compare-results").innerHTML = '<h3>' + banner + '</h3><div class="compare-grid">' + cards + '</div><div class="input-actions"><button class="btn btn-ghost" id="copy-comparison">Copy comparison report</button></div>';
   $("compare-results").hidden = false;
   $("copy-comparison").onclick = function(){copyText(report,"Comparison report copied.");};
+}
+
+/* ---------- Cancellation-refund estimator (pass 2) ----------
+   On-device regexes over the cancellation language, beyond the cancel-fee
+   detection rule: full-refund window, pro-rata math, flat fees, claims-paid
+   offsets, no-refund language. $0 marginal cost, pattern-based like the rest. */
+function parseRefundTerms(text){
+  const terms = {fullWindowDays:null, proRata:false, claimsOffset:false, adminFee:null, noRefund:false};
+  let m = /(?:cancel|cancellation|terminat)[\s\S]{0,90}?within\s+(\d+)\s+days[\s\S]{0,90}?(full refund|money-?back)/i.exec(text)
+        || /(\d+)\s*-?\s*day[\s\S]{0,60}?(full refund|money-?back)/i.exec(text);
+  if(m) terms.fullWindowDays = parseInt(m[1], 10);
+  m = /\$\s*([\d,]+)\s*(?:administrative|cancellation)\s+(?:cancellation\s+)?fee/i.exec(text)
+    || /(?:administrative|cancellation)\s+(?:cancellation\s+)?fee[\s\S]{0,24}?\$([\d,]+)/i.exec(text);
+  if(m) terms.adminFee = parseInt(m[1].replace(/,/g,""), 10);
+  terms.proRata = /pro-?rata/i.test(text);
+  terms.claimsOffset = /less\s+(?:any\s+)?claims?\s+paid/i.test(text);
+  terms.noRefund = /\bno\s+refund\b|non-?refundable/i.test(text);
+  return terms;
+}
+function refundFmt(n){ return "$" + Math.round(n).toLocaleString("en-US"); }
+function renderRefundCard(text){
+  const box = $("refund-card");
+  const terms = parseRefundTerms(text);
+  const detected = [];
+  if(terms.fullWindowDays) detected.push("Full refund if you cancel within " + terms.fullWindowDays + " days.");
+  if(terms.proRata) detected.push("Refunds after the window are calculated pro-rata (unused portion).");
+  if(terms.claimsOffset) detected.push("Claims already paid are deducted from the refund.");
+  if(terms.adminFee != null) detected.push(refundFmt(terms.adminFee) + " administrative fee is deducted.");
+  if(terms.noRefund) detected.push("No-refund language detected: after any window, refunds may be $0.");
+  if(!detected.length){
+    box.hidden = false;
+    box.innerHTML = "<h3>Cancellation refund estimate</h3>" +
+      "<p style='font-size:14px;color:var(--ink2);margin:6px 0 0'>No cancellation or refund language was detected in this contract, so there is nothing to estimate from. Check the cancellation section yourself before the window closes.</p>";
+    return;
+  }
+  box.hidden = false;
+  box.innerHTML = "<h3>Cancellation refund estimate</h3>" +
+    "<ul>" + detected.map(function(d){return "<li>" + esc(d) + "</li>";}).join("") + "</ul>" +
+    '<div class="refund-grid">' +
+      '<label>Contract price ($)<input id="refund-price" type="number" inputmode="decimal" min="0" step="1" value=""></label>' +
+      '<label>Cancel after (months)<input id="refund-months" type="number" inputmode="numeric" min="0" step="1" value="6"></label>' +
+      '<label>Contract term (months)<input id="refund-term" type="number" inputmode="numeric" min="1" step="1" value="36"></label>' +
+      '<label>Claims paid so far ($)<input id="refund-claims" type="number" inputmode="decimal" min="0" step="1" value="0"></label>' +
+    "</div>" +
+    '<div class="refund-out" id="refund-out"></div>' +
+    '<div class="refund-math" id="refund-math"></div>' +
+    '<div class="refund-note">Estimate only, built from the detected cancellation language above. The administrator does its own math, so confirm the number with them before you act on it.</div>';
+  const num = function(id){ const v = parseFloat($(id).value); return isFinite(v) && v >= 0 ? v : 0; };
+  function update(){
+    const price = num("refund-price"), months = num("refund-months"),
+          term = Math.max(1, num("refund-term")), claims = num("refund-claims");
+    const out = $("refund-out"), math = $("refund-math");
+    if(!(price > 0)){ out.textContent = "Enter the contract price to get an estimate."; math.textContent = ""; return; }
+    const elapsedDays = months * 30;
+    if(terms.noRefund && !(terms.fullWindowDays && elapsedDays < terms.fullWindowDays)){
+      out.textContent = "Estimated refund: $0";
+      math.textContent = "The contract's no-refund language appears to apply after the window.";
+      return;
+    }
+    if(terms.fullWindowDays && elapsedDays < terms.fullWindowDays){
+      const r = Math.max(0, price - claims);
+      out.textContent = "Estimated refund: " + refundFmt(r);
+      math.textContent = "Inside the " + terms.fullWindowDays + "-day full-refund window: " +
+        refundFmt(price) + " contract price" + (claims > 0 ? " minus " + refundFmt(claims) + " in paid claims" : "") + ".";
+      return;
+    }
+    if(terms.proRata){
+      const unused = Math.max(0, 1 - months / term);
+      const r = Math.max(0, Math.round(price * unused - claims - (terms.adminFee || 0)));
+      out.textContent = "Estimated refund: " + refundFmt(r);
+      let bits = refundFmt(price) + " x " + Math.round(unused * 100) + "% unused (" + months + " of " + term + " months)";
+      if(claims > 0) bits += " minus " + refundFmt(claims) + " in paid claims";
+      if(terms.adminFee != null) bits += " minus " + refundFmt(terms.adminFee) + " fee";
+      math.textContent = "Pro-rata math: " + bits + ".";
+      return;
+    }
+    out.textContent = "No refund formula detected";
+    math.textContent = "The contract mentions cancellation but no usable refund formula was found. Ask the administrator for the exact number.";
+  }
+  ["refund-price","refund-months","refund-term","refund-claims"].forEach(function(id){
+    $(id).addEventListener("input", update);
+  });
+  update();
 }
 
 function renderResults(text, name, opts){
@@ -510,6 +607,7 @@ function renderResults(text, name, opts){
   const questions = financeQuestions(hits);
   $("qa-card").hidden = !questions.length;
   $("qa-card").innerHTML = questions.length ? '<h3>3 questions for the finance office</h3>' + questionsHTML(questions) : "";
+  renderRefundCard(text);
   $("share-score").onclick = function(){ shareScore(currentAnalysis, hits); };
   $("print-onepager").onclick = function(){ buildPrintReport(currentAnalysis, hits); window.print(); };
   window.onbeforeprint = function(){ buildPrintReport(currentAnalysis, hits); };
@@ -745,6 +843,10 @@ $("analyze").addEventListener("click", function(){
 $("clear").addEventListener("click", function(){
   $("contract").value = "";
   $("results").style.display = "none";
+  // reset the print closure so Ctrl+P agrees with the print button: nothing to print
+  currentAnalysis = null;
+  window.onbeforeprint = null;
+  $("print-report").innerHTML = "";
   toast("Cleared.");
 });
 

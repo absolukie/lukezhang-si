@@ -198,10 +198,53 @@ BillingClient.prototype.daysLeft = function(){
 
 /* ---------------- trial / card / portal ---------------- */
 
+// Invisible Cloudflare Turnstile, active only when the app sets
+// window.__BILLING_TURNSTILE_SITEKEY (Curbside reads it from a
+// <meta name="turnstile-sitekey"> tag; other apps add one line when wiring
+// billing). No key configured -> resolves "" and the trial proceeds without
+// it. Never hangs the trial: 15s cap, then proceeds tokenless.
+BillingClient.prototype.turnstileToken = function(){
+  var sitekey = (typeof window !== "undefined" && window.__BILLING_TURNSTILE_SITEKEY) || "";
+  if (!sitekey) return Promise.resolve("");
+  return new Promise(function(resolve){
+    var done = false;
+    function finish(t){ if (!done) { done = true; resolve(t || ""); } }
+    function run(){
+      try {
+        var host = document.createElement("div");
+        host.setAttribute("aria-hidden", "true");
+        host.style.cssText = "position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;";
+        document.body.appendChild(host);
+        var wid = window.turnstile.render(host, {
+          sitekey: sitekey,
+          size: "invisible",
+          callback: function(tok){ try { host.remove(); } catch(e){} finish(tok); },
+          "error-callback": function(){ try { host.remove(); } catch(e){} finish(""); }
+        });
+        window.turnstile.execute(wid);
+      } catch(e){ finish(""); }
+    }
+    function load(){
+      if (window.turnstile && window.turnstile.render) { run(); return; }
+      var s = document.createElement("script");
+      s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+      s.async = true; s.defer = true;
+      s.onload = run;
+      s.onerror = function(){ finish(""); };
+      document.head.appendChild(s);
+    }
+    setTimeout(function(){ finish(""); }, 15000);
+    try { load(); } catch(e){ finish(""); }
+  });
+};
+
 BillingClient.prototype.startTrial = async function(lookupKey){
+  var body = { app_slug: this.appSlug, price_lookup_key: lookupKey };
+  var tsToken = await this.turnstileToken().catch(function(){ return ""; });
+  if (tsToken) body.turnstile_token = tsToken;
   var r = await this.api("/v1/billing/start-trial", {
     method: "POST",
-    body: { app_slug: this.appSlug, price_lookup_key: lookupKey }
+    body: body
   }).catch(async function(e){
     if (e && e.code === "NEEDS_CARD") {
       lsSet(this.appSlug + PENDING_PLAN_KEY, lookupKey);

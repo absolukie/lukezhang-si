@@ -382,9 +382,14 @@ async function shareScore(a, hits){
     text("Pattern-based scan. Not legal advice.",94,1150,24);
     const blob = await new Promise(function(resolve,reject){canvas.toBlob(function(b){if(b) resolve(b);else reject(new Error("PNG unavailable"));},"image/png");});
     const file = new File([blob],"fineprint-score.png",{type:"image/png"});
-    if(navigator.canShare && navigator.canShare({files:[file]})){
-      await navigator.share({files:[file],title:"FinePrint score card",text:"Deal score: " + a.score + "/100. " + v[0] + "."});
-    }else{
+    let shared = false;
+    try{
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        await navigator.share({files:[file],title:"FinePrint score card",text:"Deal score: " + a.score + "/100. " + v[0] + "."});
+        shared = true;
+      }
+    }catch(shareErr){ shared = false; } // permission denied or dismissed: fall through to the clipboard/download branch
+    if(!shared){
       // clipboard image write is gated behind a permission that can be denied;
       // fall through to the download branch on any failure instead of aborting
       let copied = false;

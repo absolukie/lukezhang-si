@@ -6,6 +6,13 @@
 <title>Curbside — Food Truck OS</title>
 <meta name="description" content="Permits, locations, commissary, events, and revenue for food truck owners.">
 <link rel="stylesheet" href="styles.css">
+<style>
+/* Billing theme: match Curbside's palette. */
+:root{
+  --bill-accent:var(--red); --bill-bg:var(--paper); --bill-text:var(--char);
+  --bill-muted:var(--mut); --bill-line:var(--line);
+}
+</style>
 </head>
 <body>
 <div id="app">
@@ -176,5 +183,34 @@
 <script src="app.js"></script>
 <script src="sync.js"></script>
 <script src="auth-ui.js"></script>
+<script src="billing-ui.js"></script>
+<script>
+/* Billing: shared module (see builds/shared/billing-ui.js). Trial = full
+ * access; the paywall overlay blocks the app but local data is untouched. */
+(function(){
+  var PLANS = [
+    { lookupKey: "price_curbside_solo", name: "Solo", price: "$50/mo",
+      blurb: "1 truck: permits with real fees, weekly spots, commissary, events, revenue." },
+    { lookupKey: "price_curbside_fleet", name: "Fleet", price: "$80/mo",
+      blurb: "2 to 3 trucks, one login: per-truck compliance plus combined revenue." }
+  ];
+  function boot(){
+    if (typeof initBilling !== "function") return;
+    initBilling({ appSlug: "curbside", plans: PLANS }).then(function(b){
+      window.__billing = b;
+      b.ensurePaywall();
+      var sb = document.getElementById("settingsBtn");
+      if (sb) sb.addEventListener("click", function(){
+        setTimeout(function(){ try { b.injectSettings(); } catch(e){} }, 0);
+      });
+    }).catch(function(e){
+      // Billing must never break the app. Fail open, log loudly.
+      try { console.error("[billing] init failed:", e); } catch(_){}
+    });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>
 </body>
 </html>

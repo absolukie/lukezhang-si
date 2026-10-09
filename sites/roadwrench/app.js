@@ -18,6 +18,7 @@ const I = {
   pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
   phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.9.6 2.9.7a2 2 0 0 1 1.7 2z"/></svg>',
   chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l3 6.1 6.7 1-4.9 4.7 1.2 6.7-6-3.2-6 3.2 1.2-6.7L2.3 9.6l6.7-1z"/></svg>',
   user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
   rv: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17V7a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v10"/><path d="M18 9h2a2 2 0 0 1 2 2v6"/><path d="M3 17h18"/><circle cx="7.5" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/><path d="M7 7v5h7"/></svg>',
   x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>',
@@ -106,7 +107,7 @@ function rigJobs(vin, exceptId) {
 }
 function blankState() {
   return {
-    company: { name: "Pine Ridge Mobile RV Repair", phone: "(555) 014-2288", email: "", address: "", laborRate: 125 },
+    company: { name: "Pine Ridge Mobile RV Repair", phone: "(555) 014-2288", email: "", address: "", laborRate: 125, reviewLink: "" },
     jobs: [], reminders: [], settings: { requirePhotos: false }, invoiceSeq: 1
   };
 }
@@ -126,6 +127,8 @@ function load() {
       });
       if (!s.settings) s.settings = { requirePhotos: false };
       if (s.invoiceSeq == null) s.invoiceSeq = 1;
+      s.company = s.company || {};
+      if (typeof s.company.reviewLink !== "string") s.company.reviewLink = "";
       return s;
     }
   } catch (e) {}
@@ -460,15 +463,16 @@ function viewJobDetail(id) {
         <span class="muted">Past work for this customer:</span><span class="grow"></span>
         <button class="btn small secondary" id="histBtn">${I.clock}History</button>
       </div>
-      ${normVin(j.vin) ? `<div class="row" style="margin-bottom:10px">
-        <span class="muted">This VIN${rigPrior.length ? ": " + rigPrior.length + " prior visit" + (rigPrior.length > 1 ? "s" : "") : " (first job on this rig)"}:</span><span class="grow"></span>
+      <div class="row" id="rigRow" style="margin-bottom:10px"${normVin(j.vin) ? "" : " hidden"}>
+        <span class="muted" id="rigCount">This VIN${rigPrior.length ? ": " + rigPrior.length + " prior visit" + (rigPrior.length > 1 ? "s" : "") : " (first job on this rig)"}:</span><span class="grow"></span>
         <button class="btn small secondary" id="rigBtn">${I.rv}Rig history</button>
-      </div>` : ""}
+      </div>
       <div class="f2">
         <div class="field"><label>Customer</label><input id="d_customer" value="${esc(j.customer)}"></div>
         <div class="field"><label>Phone</label><input id="d_phone" inputmode="tel" value="${esc(j.phone)}"></div>
       </div>
       <div class="field"><label>Site / location</label><input id="d_site" value="${esc(j.site)}"></div>
+      <div class="row" id="mapsRow" style="margin:-6px 0 10px"${j.site ? "" : " hidden"}><span class="grow"></span><a class="btn small secondary" id="mapsLink" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(j.site || "")}">${I.pin}Open in Maps</a></div>
       <div class="f3">
         <div class="field"><label>Year</label><input id="d_year" value="${esc(j.rvYear)}"></div>
         <div class="field"><label>Make</label><input id="d_make" value="${esc(j.rvMake)}"></div>
@@ -505,8 +509,8 @@ function viewJobDetail(id) {
           <div class="muted" style="margin-bottom:8px">${need ? need + " to order" : ""}${need && ord ? " · " : ""}${ord ? ord + " ordered, waiting" : ""}</div>
           ${pending.map(p => `<div class="item"><div class="grow"><div class="t">${esc(p.name)}</div>
             <div class="s">${esc(p.partNumber) || "No part number"} · qty ${esc(p.qty)} · ${esc(PART_ST_LABEL[p.st])}</div></div></div>`).join("")}
-          <button class="btn secondary block" id="copyOrder" style="margin-top:8px">${I.doc}Copy order list</button>
-          <div class="muted" style="margin-top:8px">Copies a supplier-ready list you send yourself. RoadWrench does not place orders.</div>
+          <button class="btn secondary block" id="copyOrder" style="margin-top:8px">${I.doc}Copy ${need ? "order list" : "ordered-parts list"}</button>
+          <div class="muted" style="margin-top:8px">Copies a parts list you send yourself. RoadWrench does not place orders.</div>
         </div>`;
       })()}
       <h3>Add part</h3>
@@ -576,6 +580,7 @@ function viewJobDetail(id) {
       <button class="btn secondary block" id="viewInvoice">${I.doc}Customer invoice</button>
       <button class="btn secondary block" id="shareUpdate">${I.chat}Share customer update</button>
       <div class="muted" style="margin-top:6px">Copies a message you send yourself. RoadWrench does not text customers on its own.</div>
+      ${j.status === "complete" && S.company.reviewLink ? `<button class="btn secondary block" id="askReview" style="margin-top:10px">${I.star}Ask for a review</button>` : ""}
       ${j.status !== "complete"
         ? `<button class="btn secondary block" id="markComplete">${I.check}Mark job complete</button>`
         : `<button class="btn ghost block" id="reopen">${I.back}Reopen job</button>`}
@@ -596,9 +601,28 @@ function viewJobDetail(id) {
   // live field binding
   const bind = (fid, fn) => { const el = document.getElementById(fid); if (el) el.addEventListener("input", () => { fn(el.value); }); };
   bind("d_customer", v => j.customer = v); bind("d_phone", v => j.phone = v);
-  bind("d_site", v => j.site = v); bind("d_year", v => j.rvYear = v);
+  bind("d_site", v => {
+    j.site = v;
+    const mr = $("#mapsRow");
+    if (mr) {
+      mr.hidden = !v.trim();
+      const ml = $("#mapsLink");
+      if (ml) ml.href = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(v.trim());
+    }
+  }); bind("d_year", v => j.rvYear = v);
   bind("d_make", v => j.rvMake = v); bind("d_model", v => j.rvModel = v);
-  bind("d_vin", v => j.vin = v.toUpperCase()); bind("d_date", v => j.scheduledAt = v);
+  bind("d_vin", v => {
+    j.vin = v.toUpperCase();
+    const rr = $("#rigRow");
+    if (rr) {
+      rr.hidden = !normVin(j.vin);
+      const rc = $("#rigCount");
+      if (rc) {
+        const n = rigJobs(j.vin, j.id).length;
+        rc.textContent = "This VIN" + (n ? ": " + n + " prior visit" + (n > 1 ? "s" : "") : " (first job on this rig)") + ":";
+      }
+    }
+  }); bind("d_date", v => j.scheduledAt = v);
   bind("d_complaint", v => j.complaint = v); bind("d_cause", v => j.cause = v);
   bind("d_correction", v => j.correction = v); bind("d_notes", v => j.notes = v);
   bind("c_insurer", v => j.claim.insurer = v); bind("c_claim", v => j.claim.claimNumber = v);
@@ -698,6 +722,15 @@ function viewJobDetail(id) {
   };
   const mc = $("#markComplete");
   if (mc) mc.onclick = () => { setStatus(j, "complete"); };
+  const ar = $("#askReview");
+  if (ar) ar.onclick = () => {
+    const lines = [
+      "Hi " + (j.customer || "there") + ", thanks for choosing " + S.company.name + "!",
+      "A Google review from a happy customer keeps our little shop rolling:",
+      S.company.reviewLink
+    ].join("\n");
+    shareOrCopy("Review request", lines, "Review request copied, send it from your messages app");
+  };
   const ro = $("#reopen");
   if (ro) ro.onclick = () => { j.status = "onsite"; j.completedAt = 0; save(S); viewJobDetail(j.id); };
   $("#delJob").onclick = () => {
@@ -1385,11 +1418,16 @@ function viewSettings() {
         <div class="field"><label>Email</label><input id="s_email" value="${esc(c.email)}"></div>
       </div>
       <div class="field"><label>Address</label><input id="s_addr" value="${esc(c.address)}" placeholder="Street, city, state, zip"></div>
+      <div class="field"><label>Google review link <span class="muted" style="text-transform:none;letter-spacing:0">(optional)</span></label><input id="s_review" value="${esc(c.reviewLink || "")}" inputmode="url" placeholder="https://g.page/your-shop/review"></div>
+      <div class="muted" style="margin-bottom:10px">Finished jobs get an "Ask for a review" button that shares this link with the customer.</div>
       <div class="f2">
         <div class="field"><label>Default labor rate ($/hr)</label><input id="s_rate" inputmode="decimal" value="${esc(c.laborRate)}"></div>
         <div class="field"><label>Tax rate (%)</label><input id="s_tax" inputmode="decimal" value="${esc(c.taxRate || 0)}" placeholder="0"></div>
       </div>
       <button class="btn block" id="saveCo">${I.check}Save</button>
+    </div>
+    <div class="card"><h2>Subscription</h2>
+      <div id="billSettingsSlot"></div>
     </div>
     <div class="card"><h2>Quality</h2>
       <label class="checkrow"><input type="checkbox" id="s_reqPhotos"${S.settings.requirePhotos ? " checked" : ""}> Require before and after photos before a job can be marked complete</label>
@@ -1413,6 +1451,7 @@ function viewSettings() {
     c.name = $("#s_name").value.trim() || c.name;
     c.phone = $("#s_phone").value.trim(); c.email = $("#s_email").value.trim();
     c.address = $("#s_addr").value.trim();
+    c.reviewLink = $("#s_review").value.trim();
     c.laborRate = parseFloat($("#s_rate").value) || c.laborRate;
     const tx = parseFloat($("#s_tax").value); c.taxRate = isNaN(tx) || tx < 0 ? 0 : tx;
     save(S); toast("Saved");
@@ -1438,6 +1477,7 @@ function viewSettings() {
     }
   };
   try { if (window.__roadwrenchSyncUI) window.__roadwrenchSyncUI(); } catch (e) {}
+  try { if (window.__attachBillSettings) window.__attachBillSettings(); } catch (e) {}
 }
 
 /* ---------- init ---------- */

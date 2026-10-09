@@ -78,7 +78,15 @@
     if (typeof initBilling !== "function") return;
     initBilling({ appSlug: "nextchapter", plans: PLANS }).then(function(b){
       window.__billing = b;
-      b.ensurePaywall();
+      // P0 (wave-B QA): the whole #/family/* surface is never paywalled.
+      // A family member opening a family link on a fresh device must reach
+      // the honest family-missing page (R-19); the overlay has no dismiss
+      // and would trap them behind a failing trial CTA.
+      function familyRoute(){ return /^#\/family\//.test(location.hash); }
+      if (!familyRoute()) b.ensurePaywall();
+      window.addEventListener("hashchange", function(){
+        try { if (!familyRoute() && !b.isEntitled()) b.ensurePaywall(); } catch(e){}
+      });
       // Subscription surface on the dashboard (#billAnchor), re-mounted after every route render
       // and refreshed after every billing status refresh (trial start, card add, etc.).
       function mount(force){

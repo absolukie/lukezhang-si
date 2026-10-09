@@ -172,26 +172,88 @@ function save(s) {
   try { if (window.__roadwrenchSync) window.__roadwrenchSync.onSave(); } catch (e) {}
 }
 
+/* Revision tracking: every persisted state carries rev; a tab whose in-memory
+ * S.rev lags the stored revision is stale. D2 guarded the unload path (P2-10);
+ * red2 found the 500ms keystroke path unguarded (P1), so the guard lives here
+ * and is shared by the debounce, the unload/pagehide flush, and the storage
+ * listener. PRD G5: zero silent data loss. */
+function storedRev() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) return (JSON.parse(raw).rev) || 0;
+  } catch (e) {}
+  return 0;
+}
+function isStaleTab() { return storedRev() > (S.rev || 0); }
+/* Stale-tab warning. A background tab learns it is stale the moment another
+ * tab writes (storage event); it shows a persistent banner and refrains from
+ * saving until reloaded, so newer edits are never silently wiped. Warns once
+ * per stale episode. */
+let staleTabNoted = false;
+function noteStaleTab() {
+  if (staleTabNoted) return;
+  staleTabNoted = true;
+  showStaleBanner();
+  toast("Another tab saved newer data. Reload this tab; edits here are paused so nothing is lost.");
+}
+function showStaleBanner() {
+  let b = document.getElementById("staleBanner");
+  if (!b) {
+    b = document.createElement("div");
+    b.id = "staleBanner";
+    b.className = "stale-banner";
+    document.querySelector(".app").prepend(b);
+  }
+  b.innerHTML = `<span>This tab is out of date. Edits here are paused until you reload.</span><button class="btn small" id="staleReload">Reload</button>`;
+  b.hidden = false;
+  const r = document.getElementById("staleReload");
+  if (r) r.onclick = () => location.reload();
+}
+/* red2 P1: the debounced keystroke autosave passes the same revision check as
+ * the unload flush. A stale tab refrains and warns instead of wiping a newer
+ * tab's edits. */
+function saveGuarded() {
+  if (isStaleTab()) { noteStaleTab(); return false; }
+  save(S);
+  return true;
+}
 /* P1-3: keystroke autosave. Every form input feeds this; a 500ms debounce
  * keeps typing smooth while guaranteeing no keystroke waits on a blur or a
  * tab kill to reach localStorage. */
 let saveTimer = null;
 function scheduleSave() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => save(S), 500);
+  saveTimer = setTimeout(saveGuarded, 500);
 }
+/* red2 P2: the new-job draft debounce must survive a tab kill too. The draft
+ * key, field ids, and timer live at module scope so the global unload and
+ * pagehide flush can reach them. */
+const DRAFT_KEY = "roadwrench.newjobdraft.v1";
+const DRAFT_IDS = ["f_customer", "f_phone", "f_date", "f_site", "f_year", "f_make", "f_model", "f_vin", "f_complaint"];
+let draftTimer = null;
+function writeDraftNow() {
+  try {
+    const d = {};
+    let seen = false, any = false;
+    DRAFT_IDS.forEach(id => { const el = document.getElementById(id); if (el) { seen = true; d[id] = el.value; if (el.value) any = true; } });
+    if (!seen) return; /* not on the new-job form: leave any stored draft alone */
+    if (!any && !localStorage.getItem(DRAFT_KEY)) return; /* nothing typed, nothing stored */
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+  } catch (e) {}
+}
+function scheduleDraftSave() {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(writeDraftNow, 500);
+}
+function flushDraft() { clearTimeout(draftTimer); draftTimer = null; writeDraftNow(); }
 /* P2-10: unload flush. Writes only when this tab's in-memory state is at
  * least as new as what is in storage, so closing a stale tab can never
  * clobber edits made in a newer tab. Registered once globally at boot,
  * never per-view (older per-view listeners accumulated on every render). */
 function flushSave() {
   clearTimeout(saveTimer); saveTimer = null;
-  let storedRev = 0;
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) storedRev = (JSON.parse(raw).rev) || 0;
-  } catch (e) {}
-  if ((S.rev || 0) >= storedRev) save(S);
+  flushDraft(); /* red2 P2: rescue new-job draft keystrokes inside the debounce window */
+  if ((S.rev || 0) >= storedRev()) save(S);
 }
 
 /* Sync bridge (sync.js). Local-first: app works fully offline; sync is debounced and never blocks UI.
@@ -434,25 +496,13 @@ function viewJobForm() {
   $("#back").onclick = () => location.hash = "#/jobs";
   /* P1-3: new-job draft autosave. A killed tab never eats an uncreated job:
    * every keystroke is debounced into localStorage, restored on return,
-   * and cleared the moment the job is created. */
-  const DRAFT_KEY = "roadwrench.newjobdraft.v1";
-  const draftIds = ["f_customer", "f_phone", "f_date", "f_site", "f_year", "f_make", "f_model", "f_vin", "f_complaint"];
-  let draftTimer = null;
-  const saveDraft = () => {
-    clearTimeout(draftTimer);
-    draftTimer = setTimeout(() => {
-      try {
-        const d = {};
-        draftIds.forEach(id => { const el = document.getElementById(id); if (el) d[id] = el.value; });
-        localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
-      } catch (e) {}
-    }, 500);
-  };
+   * and cleared the moment the job is created. The debounce + the global
+   * unload/pagehide flush live at module scope (red2 P2). */
   try {
     const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
-    if (d) draftIds.forEach(id => { const el = document.getElementById(id); if (el && typeof d[id] === "string" && !el.value) el.value = d[id]; });
+    if (d) DRAFT_IDS.forEach(id => { const el = document.getElementById(id); if (el && typeof d[id] === "string" && !el.value) el.value = d[id]; });
   } catch (e) {}
-  draftIds.forEach(id => { const el = document.getElementById(id); if (el) el.addEventListener("input", saveDraft); });
+  DRAFT_IDS.forEach(id => { const el = document.getElementById(id); if (el) el.addEventListener("input", scheduleDraftSave); });
   /* customer autocomplete: suggest past customers, prefill rig on tap */
   const custInput = $("#f_customer"), suggBox = $("#custSuggest");
   const pastCustomers = () => {
@@ -1569,13 +1619,13 @@ function viewSettings() {
     </div>
     <div id="syncSettings"></div>
     <div class="card"><h2>About</h2>
-      <div class="muted">RoadWrench v1: built for mobile RV techs. Job board, parts, labor timer, timestamped photos, and warranty claim packets that adjusters actually accept.</div>
+      <div class="muted">RoadWrench v1: built for mobile RV techs. Job board, parts, labor timer, timestamped photos, and warranty claim packets built to the documentation adjusters ask for.</div>
       <div style="margin-top:10px; display:flex; gap:14px; flex-wrap:wrap">
         <a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="mailto:absolukie@gmail.com">Contact support</a>
       </div>
     </div>`;
   $("#saveCo").onclick = () => {
-    c.name = $("#s_name").value.trim() || c.name;
+    c.name = $("#s_name").value.trim(); /* red2 P2: an emptied name persists as empty (PRD R-34) */
     c.phone = $("#s_phone").value.trim(); c.email = $("#s_email").value.trim();
     c.address = $("#s_addr").value.trim();
     c.reviewLink = $("#s_review").value.trim();
@@ -1587,7 +1637,7 @@ function viewSettings() {
    * kill never eats unsaved company details; the Save button stays for
    * explicit validation and confirmation. */
   const coBind = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener("input", () => { fn(el.value); scheduleSave(); }); };
-  coBind("s_name", v => { if (v.trim()) c.name = v; });
+  coBind("s_name", v => { c.name = v; }); /* red2 P2: clearing the field clears the stored name */
   coBind("s_phone", v => { c.phone = v; });
   coBind("s_email", v => { c.email = v; });
   coBind("s_addr", v => { c.address = v; });
@@ -1633,8 +1683,14 @@ try {
   window.addEventListener("resize", billBannerOffset);
   billBannerOffset();
 } catch (e) { /* observer unavailable: banner overlap is cosmetic only */ }
-/* P2-10: one global unload flush for the whole app, revision-guarded so a
- * stale tab can never clobber a newer tab's edits. */
+  /* P2-10: one global unload flush for the whole app, revision-guarded so a
+ * stale tab can never clobber a newer tab's edits. beforeunload is unreliable
+ * when the OS kills the tab (iOS Safari, the PRD Section 5 device); pagehide
+ * is the reliable signal (red2 P2). Both call the same idempotent flush. */
 window.addEventListener("beforeunload", flushSave);
+window.addEventListener("pagehide", flushSave);
+/* red2 P1: a background tab learns it is stale the moment another tab writes,
+ * so it warns and refrains instead of wiping newer edits on its next save. */
+window.addEventListener("storage", function(e) { if (e && e.key === KEY) noteStaleTab(); });
 document.addEventListener("DOMContentLoaded", () => { route(); });
 if (document.readyState !== "loading") route();

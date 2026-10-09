@@ -62,6 +62,8 @@ svg.ic{width:18px; height:18px; flex:0 0 18px;}
 /* project list */
 .proj{background:var(--bg2); border:1px solid var(--line); border-radius:var(--radius); padding:14px; margin-bottom:12px;}
 .proj .t{font-size:18px; font-weight:800; margin:0 0 2px;}
+/* R2 P2: unbroken hostile strings wrap instead of forcing horizontal scroll. */
+.proj .t,.proj .a,.stencil,.toast,.alert,.kv .k{overflow-wrap:anywhere;}
 .proj .a{color:var(--muted); font-size:14px; margin-bottom:10px;}
 .meter{height:10px; background:#0e0e0e; border-radius:6px; overflow:hidden; border:1px solid var(--line);}
 .meter > i{display:block; height:100%; background:linear-gradient(90deg,var(--orange-d),var(--orange)); transition:width .5s;}
@@ -400,48 +402,130 @@ function seedDemoPhotos(db){
  * clearance object can never brick the dashboard again; unsafe values fall
  * back to unsigned. */
 const CLEARANCE_KEYS=["visual","airClear","wasteShipped","manifestsBack","neshapFiled","areaReleased"];
+const CLEARANCE_PRIOR=[["visual","Visual inspection"],["airClear","Clearance air sampling"],["wasteShipped","Waste shipped"],["manifestsBack","Signed manifests received"],["neshapFiled","Notifications filed"]];
+/* R2 P1-2: every array field a project carries is coerced at load. A
+ * wrong-typed manifests/dailyLogs/photos field is repaired the same way
+ * clearance is: one corrupt project must never deny access to healthy ones. */
+const ARR_FIELDS=["manifests","dailyLogs","airSamples","photos","toolboxTalks","events","corrections"];
 function normalizeProject(p){
-  if(!p||typeof p!=="object") return p;
-  if(!p.clearance||typeof p.clearance!=="object"||Array.isArray(p.clearance)) p.clearance={};
+  if(!p||typeof p!=="object") return false;
+  let changed=false;
+  ARR_FIELDS.forEach(f=>{ if(!Array.isArray(p[f])){ p[f]=[]; changed=true; } });
+  if(!p.clearance||typeof p.clearance!=="object"||Array.isArray(p.clearance)){ p.clearance={}; changed=true; }
   const cl=p.clearance;
-  CLEARANCE_KEYS.forEach(k=>{ if(typeof cl[k]!=="boolean") cl[k]=false; });
+  CLEARANCE_KEYS.forEach(k=>{ if(typeof cl[k]!=="boolean"){ cl[k]=false; changed=true; } });
   /* P1-1 legacy repair: a stored release that outlived a revoked prerequisite
    * is invalid. Invalidate it with an audit event, never silently, so the
    * printed dossier can never show an open prerequisite next to a signed
    * release. */
-  const prior=[["visual","Visual inspection"],["airClear","Clearance air sampling"],["wasteShipped","Waste shipped"],["manifestsBack","Signed manifests received"],["neshapFiled","Notifications filed"]];
+  const prior=CLEARANCE_PRIOR;
   if(cl.areaReleased&&prior.some(r=>!cl[r[0]])){
     cl.areaReleased=false; cl.areaReleasedBy=""; cl.areaReleasedDate="";
     cl.areaReleasedHistory=cl.areaReleasedHistory||[];
     cl.areaReleasedHistory.push({action:"revoked",by:"data repair",date:todayISO(),at:Date.now()});
     p.events=p.events||[];
     p.events.push({t:Date.now(),kind:"revocation",cls:"warn",what:"Area release auto-revoked on load: a prerequisite was revoked while the release was signed. The regulated area is no longer released until every item is signed again."});
-    p._repairedClearance=true;
+    changed=true;
   }
-  return p;
+  return changed;
+}
+/* R2 P1-1: evidence liveness. Each clearance sign-off certifies evidence that
+ * must still be on file. The same conditions gate sign-off time and drive
+ * auto-invalidation when the evidence behind a sign-off is deleted or
+ * corrected away. The dossier must never certify facts the file contradicts. */
+function evidenceLive(p){
+  const manis=live(p.manifests);
+  return {
+    visual: live(p.photos).some(x=>x.category==="Clearance"),
+    airClear: live(p.airSamples).some(s=>s.type==="clearance"&&s.pass),
+    wasteShipped: manis.length>0,
+    manifestsBack: manis.length>0&&manis.every(m=>m.signedCopyReceived),
+    neshapFiled: p.neshapNotified===true
+  };
+}
+/* R2 P1-1: auto-invalidation. Deleting evidence (softDelete) or a correction
+ * that vacates evidence must invalidate the dependent sign-offs, the same
+ * way checkbox revocation auto-revokes the release. Flags are cleared, audit
+ * events are logged, the toast names the invalidation, and the dossier
+ * stamps table updates because it reads the same flags. Returns
+ * {lost:[labels], releaseRevoked:bool}. */
+function revalidateClearance(p, who){
+  const cl=p.clearance; if(!cl) return {lost:[], releaseRevoked:false};
+  const ev=evidenceLive(p);
+  const lost=[];
+  CLEARANCE_PRIOR.forEach(r=>{
+    const k=r[0];
+    if(cl[k]&&!ev[k]){
+      cl[k]=false; cl[k+"By"]=""; cl[k+"Date"]="";
+      cl[k+"History"]=cl[k+"History"]||[];
+      cl[k+"History"].push({action:"revoked",by:who||"evidence change",date:todayISO(),at:Date.now()});
+      logEvent(p,"revocation","warn","Clearance item '"+r[1]+"' auto-revoked: the evidence behind this sign-off was deleted or corrected away. The dossier no longer certifies it.");
+      lost.push(r[1]);
+    }
+  });
+  let releaseRevoked=false;
+  if(lost.length&&cl.areaReleased){
+    cl.areaReleased=false; cl.areaReleasedBy=""; cl.areaReleasedDate="";
+    cl.areaReleasedHistory=cl.areaReleasedHistory||[];
+    cl.areaReleasedHistory.push({action:"revoked",by:who||"evidence change",date:todayISO(),at:Date.now()});
+    logEvent(p,"revocation","warn","Area release auto-revoked: evidence behind '"+lost.join("', '")+"' was deleted or corrected away. The regulated area is no longer released until every item is signed again.");
+    releaseRevoked=true;
+  }
+  return {lost:lost, releaseRevoked:releaseRevoked};
+}
+function invalidationToast(p, r){
+  if(!r.lost.length) return "";
+  return " Invalidated: "+r.lost.join(", ")+(r.releaseRevoked?". The area release was invalidated too.":".");
+}
+/* R2 P0: a failed load must NEVER be persisted over the stored data. When the
+ * stored file cannot be parsed or has no projects array, the raw string is
+ * quarantined under its own key (nothing is deleted) and the app boots into
+ * an explicit recovery screen. No write happens until the user chooses one. */
+let bootQuarantined=false, corruptKey=null;
+function quarantine(raw){
+  /* Dedupe: a repeat boot with the same corrupt file reuses the existing
+   * backup instead of piling up keys (a fresh profile boots twice: the
+   * service worker's controllerchange reloads the page once on takeover).
+   * A *different* corrupt blob always gets its own timestamped key. */
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const k=localStorage.key(i);
+      if(k&&k.indexOf("abate.v1.corrupt.")===0&&localStorage.getItem(k)===raw){
+        corruptKey=k; bootQuarantined=true; return;
+      }
+    }
+  }catch(e){}
+  corruptKey="abate.v1.corrupt."+Date.now();
+  try{ localStorage.setItem(corruptKey, raw); }catch(e){ corruptKey=null; }
+  bootQuarantined=true;
 }
 function loadDb(){
   const raw=store.loadRaw();
   if(raw===null){ const db=seed(); store.save(db); seedDemoPhotos(db); return db; }
-  try{ const db=JSON.parse(raw);
-    if(db&&Array.isArray(db.projects)){
-      let dirty=false;
-      db.projects.forEach(p=>{
-        if(p.id==="demo1"&&!p.synthetic){ p.synthetic=true; dirty=true; }
-        /* Pass 3 fields: toolbox talks, per-manifest custody chains. */
-        if(!Array.isArray(p.toolboxTalks)){ p.toolboxTalks=[]; dirty=true; }
-        (p.manifests||[]).forEach(m=>{ if(!Array.isArray(m.custody)){ m.custody=[]; dirty=true; } });
-        /* P1-3: one corrupt project must never brick the dashboard. */
-        const before=JSON.stringify(p.clearance);
-        normalizeProject(p);
-        if(p._repairedClearance||JSON.stringify(p.clearance)!==before){ dirty=true; delete p._repairedClearance; }
-      });
-      if(dirty) store.save(db);
-      seedDemoPhotos(db);
-      return db;
-    }
-  }catch(e){}
-  return {projects:[],archived:[]};
+  let db=null;
+  try{ db=JSON.parse(raw); }catch(e){ db=null; }
+  if(!db||typeof db!=="object"||!Array.isArray(db.projects)){ quarantine(raw); return {projects:[],archived:[]}; }
+  let dirty=false;
+  if(!Array.isArray(db.archived)){ db.archived=[]; dirty=true; }
+  /* Drop non-object project slots (they were never records); the raw file is
+   * untouched by this filter unless a repair below also saves. */
+  const n0=db.projects.length;
+  db.projects=db.projects.filter(p=>p&&typeof p==="object");
+  if(db.projects.length!==n0) dirty=true;
+  db.projects.forEach(p=>{
+    if(p.id==="demo1"&&!p.synthetic){ p.synthetic=true; dirty=true; }
+    /* Pass 3 fields: toolbox talks, per-manifest custody chains. */
+    if(!Array.isArray(p.toolboxTalks)){ p.toolboxTalks=[]; dirty=true; }
+    /* R2 P0/P1-2: normalize BEFORE touching manifests (a string manifests
+     * field used to throw here and take the whole database down with it). */
+    if(normalizeProject(p)) dirty=true;
+    (p.manifests||[]).forEach(m=>{ if(m&&typeof m==="object"&&!Array.isArray(m.custody)){ m.custody=[]; dirty=true; } });
+  });
+  /* This save only ever runs after a SUCCESSFUL load, repairing in place.
+   * A failed load returns early above and is never written back. */
+  if(dirty) store.save(db);
+  seedDemoPhotos(db);
+  return db;
 }
 let DB = loadDb();
 let view = { name:"dash", projectId:null, tab:"overview" };
@@ -452,8 +536,9 @@ function persist(){
   try{ if(window.__abateSync) window.__abateSync.onSave(); }catch(e){}
 }
 /* Records that are soft-deleted stay in the store as tombstones; this is the
- * only filter the list renderers and the scoring use. */
-const live=a=>(a||[]).filter(x=>!x.deleted);
+ * only filter the list renderers and the scoring use. R2 P1-2: a wrong-typed
+ * field (string/object) is treated as empty, never thrown on. */
+const live=a=>(Array.isArray(a)?a:[]).filter(x=>!x.deleted);
 /* Crew roster: name + credential pairs remembered per project, kept in their
  * own localStorage key (not synced records), used to pre-fill daily logs. */
 const rosterStore={
@@ -511,7 +596,9 @@ function corrRequired(d){
 window.__abate = {
   getS(){ return DB; },
   getView(){ try{ return view.name; }catch(e){ return ""; } },
-  saveLocal(){ store.save(DB); },
+  /* R2 P0: while a corrupt load is quarantined, no background write (sync
+   * included) may persist the empty fallback over the stored file. */
+  saveLocal(){ if(bootQuarantined) return; store.save(DB); },
   refresh(){ render(); },
   normalizeProject: normalizeProject
 };
@@ -655,8 +742,42 @@ function ring(pct,size){
     '<circle class="fg" cx="'+(size||64)/2+'" cy="'+(size||64)/2+'" r="'+r+'" fill="none" stroke="'+col+'" stroke-width="7"'+
     ' stroke-linecap="round" stroke-dasharray="'+c.toFixed(1)+'" stroke-dashoffset="'+off.toFixed(1)+'"/></svg>';
 }
+/* R2 P0 recovery screen: the stored file failed to load and was quarantined
+ * under its own key. Nothing was deleted and nothing is written until the
+ * user explicitly chooses: export the kept file, or discard it and start
+ * fresh. */
+function renderRecovery(main){
+  main.innerHTML=
+    '<div class="disclaimer"><strong>Prototype.</strong> Abate helps assemble abatement records. It is not legal or compliance advice.</div>'+
+    '<div class="alert" style="margin-top:12px"><b>Your saved data would not load.</b> '+
+    (corruptKey
+      ? 'Nothing was deleted. The file as found on this device has been kept safe as <span class="mono">'+esc(corruptKey)+'</span>, and the app is showing an empty workspace so a damaged file cannot overwrite anything.'
+      : 'The file as found on this device could not even be kept: storage is full. The app is showing an empty workspace so a damaged file cannot overwrite anything.')+'</div>'+
+    '<div class="card"><h2 class="stencil">Recover your records</h2>'+
+    '<div class="small muted" style="margin-bottom:12px">The stored file failed its load check, so Abate refused to touch it. Export the kept file to inspect it on a computer, or discard it and start fresh. Nothing is written until you choose.</div>'+
+    '<div class="row"><button class="btn grow" id="rcExport">Export kept file</button></div><div style="height:8px"></div>'+
+    '<div class="row"><button class="btn danger grow" id="rcDiscard">Discard kept file, start fresh</button></div></div>';
+  $("#rcExport").onclick=()=>{ try{
+      const raw=corruptKey?localStorage.getItem(corruptKey):null;
+      if(raw==null){ toast("The kept file is not available on this device."); return; }
+      download("abate-kept-data-"+todayISO()+".json", raw); toast("Kept file exported.");
+    }catch(e){ toast("Could not read the kept file."); } };
+  $("#rcDiscard").onclick=async()=>{
+    if(!await openConfirm("Discard the kept file?","This permanently deletes the file that failed to load and its quarantined copy. Your projects start empty.","Discard kept file",true)) return;
+    try{ if(corruptKey) localStorage.removeItem(corruptKey); }catch(e){}
+    bootQuarantined=false; corruptKey=null;
+    const db=seed(); store.save(db); seedDemoPhotos(db); DB=db;
+    view={name:"dash"}; render();
+  };
+}
 function render(){
   const main=$("#main"), fab=$("#fab"), back=$("#backBtn");
+  /* R2 P0: quarantined load. The recovery screen owns the view; the quota
+   * banner is skipped here because no save is attempted in this state. */
+  if(view.name==="recovery"){
+    back.style.display="none"; fab.style.display="none"; $("#headRight").innerHTML="";
+    renderRecovery(main); window.scrollTo(0,0); return;
+  }
   /* Quota banner: persistent while saves are blocked, with a visible retry. */
   const qb=saveFailed?'<div class="alert" id="quotaBanner" style="border-color:var(--amber); background:#2a1e05; color:#ffe1ae">'+
     '<b style="color:var(--amber)">Storage full.</b> Records are NOT saving right now. Free up device space, then retry. Export your data first so nothing is lost.'+
@@ -1092,7 +1213,13 @@ async function softDelete(p, arr, id, label, whatLine){
    * way (thumbnails kept, full-res excluded). */
   if(rec.dataUrl) rec.dataUrl="";
   logEvent(p,"deletion","warn", label+" deleted by "+r.who+" ("+whatLine+"). Reason: "+r.reason);
-  return true;
+  /* R2 P1-1: deleting evidence behind a signed clearance item invalidates
+   * the sign-off (and the area release), the way checkbox revocation does.
+   * Returns {inv} with the invalidation copy for the caller's toast. */
+  let inv="";
+  if(arr===p.manifests||arr===p.airSamples||arr===p.photos)
+    inv=invalidationToast(p, revalidateClearance(p, r.who));
+  return {inv:inv};
 }
 function openSignoff(title,sub,defName,okLabel){
   return new Promise(res=>{
@@ -1232,7 +1359,10 @@ function fProject(p){
       p.corrections=p.corrections||[];
       p.corrections.push({at:Date.now(),by:cr.by,reason:cr.reason,before:before,after:after});
       logEvent(p,"correction","","Project setup corrected by "+cr.by+": "+diff+". Reason: "+cr.reason);
-      closeSheet(); save(); toast("Correction recorded. Original preserved.");
+      /* R2 P1-1: flipping the NESHAP flag off vacates the evidence behind a
+       * signed neshapFiled, so the sign-off (and the release) is invalidated. */
+      const setupInv=invalidationToast(p, revalidateClearance(p, cr.by));
+      closeSheet(); save(); toast("Correction recorded. Original preserved."+setupInv);
       return;
     }
     const rec=Object.assign({id:uid(),status:"active",dailyLogs:[],airSamples:[],manifests:[],photos:[],events:[],
@@ -1428,7 +1558,10 @@ function fAir(p, existing){
       S.corrections.push({at:Date.now(),by:by,reason:reason,before:before,after:after});
       S.date=d.date; S.result=r; S.location=d.location; S.type=d.type; S.basis=d.basis; S.pump=d.pump; S.pass=r<=limit;
       logEvent(p,"correction","", "Air sample corrected by "+by+" ("+fmtD(S.date)+", "+S.location+"): "+before.result+" → "+r+" f/cc. Reason: "+reason);
-      closeSheet(); save(); toast("Correction recorded. Original preserved.");
+      /* R2 P1-1: a correction that vacates the passing clearance sample
+       * invalidates the dependent sign-offs, like a deletion does. */
+      const airInv=invalidationToast(p, revalidateClearance(p, by));
+      closeSheet(); save(); toast("Correction recorded. Original preserved."+airInv);
       return;
     }
     const rec={id:uid(),date:d.date,location:d.location,type:d.type,result:r,basis:d.basis,pump:d.pump,pass:r<=limit,createdAt:Date.now()};
@@ -1466,7 +1599,9 @@ function fManifest(p, existing){
       existing.corrections.push({at:Date.now(),by:cr.by,reason:cr.reason,before:before,after:after});
       Object.assign(existing,after);
       logEvent(p,"correction","","Waste manifest corrected by "+cr.by+" ("+d.manifestNo+"): "+diff+". Reason: "+cr.reason);
-      closeSheet(); save(); toast("Correction recorded. Original preserved.");
+      /* R2 P1-1: revalidate in case the correction vacated sign-off evidence. */
+      const maniInv=invalidationToast(p, revalidateClearance(p, cr.by));
+      closeSheet(); save(); toast("Correction recorded. Original preserved."+maniInv);
       return;
     }
     const rec={id:uid(),manifestNo:d.manifestNo,qtyYd3:d.qtyYd3,dateShipped:d.dateShipped,
@@ -1535,13 +1670,16 @@ function bindActions(main,p){
     else if(act==="edit-project") b.onclick=()=>fProject(p);
     else if(act==="edit-log") b.onclick=()=>fDaily(p, p.dailyLogs.find(x=>x.id===id));
     else if(act==="del-log") b.onclick=async()=>{ const l=p.dailyLogs.find(x=>x.id===id);
-      if(await softDelete(p,p.dailyLogs,id,"daily log","Shift log "+fmtD(l?l.date:""))){ save(); toast("Daily log deleted. Tombstone kept."); } };
+      const d=await softDelete(p,p.dailyLogs,id,"daily log","Shift log "+fmtD(l?l.date:""));
+      if(d){ save(); toast("Daily log deleted. Tombstone kept."); } };
     else if(act==="del-air") b.onclick=async()=>{ const s=p.airSamples.find(x=>x.id===id);
-      if(await softDelete(p,p.airSamples,id,"air sample","Sample "+fmtD(s?s.date:"")+", "+(s?s.location:""))){ save(); toast("Air sample deleted. Tombstone kept."); } };
+      const d=await softDelete(p,p.airSamples,id,"air sample","Sample "+fmtD(s?s.date:"")+", "+(s?s.location:""));
+      if(d){ save(); toast("Air sample deleted. Tombstone kept."+d.inv); } };
     else if(act==="edit-air") b.onclick=()=>fAir(p, p.airSamples.find(x=>x.id===id));
     else if(act==="edit-manifest") b.onclick=()=>fManifest(p, p.manifests.find(x=>x.id===id));
     else if(act==="del-manifest") b.onclick=async()=>{ const m=p.manifests.find(x=>x.id===id);
-      if(await softDelete(p,p.manifests,id,"manifest record","Manifest "+(m?m.manifestNo:""))){ save(); toast("Manifest record deleted. Tombstone kept."); } };
+      const d=await softDelete(p,p.manifests,id,"manifest record","Manifest "+(m?m.manifestNo:""));
+      if(d){ save(); toast("Manifest record deleted. Tombstone kept."+d.inv); } };
     else if(act==="sign-manifest") b.onclick=async()=>{ const m=p.manifests.find(x=>x.id===id);
       const d=await openDatePrompt("Signed copy received"); if(!d) return;
       const wasSigned=m.signedCopyReceived;
@@ -1564,7 +1702,8 @@ function bindActions(main,p){
       save(); toast("Custody link recorded"); };
     else if(act==="edit-talk") b.onclick=()=>fTalk(p, p.toolboxTalks.find(x=>x.id===id));
     else if(act==="del-talk") b.onclick=async()=>{ const t=p.toolboxTalks.find(x=>x.id===id);
-      if(await softDelete(p,p.toolboxTalks,id,"toolbox talk","Talk '"+(t?t.topic:"")+"' "+fmtD(t?t.date:""))){ save(); toast("Toolbox talk deleted. Tombstone kept."); } };
+      const d=await softDelete(p,p.toolboxTalks,id,"toolbox talk","Talk '"+(t?t.topic:"")+"' "+fmtD(t?t.date:""));
+      if(d){ save(); toast("Toolbox talk deleted. Tombstone kept."); } };
     else if(act==="print") b.onclick=()=>window.print();
     else if(act==="export") b.onclick=()=>exportArchive(p);
     else if(act==="close-project") b.onclick=async()=>{ const c=completeness(p);
@@ -1645,16 +1784,21 @@ function bindActions(main,p){
         return;
       }
       /* Guard R-13: the regulated area cannot be released while any prior
-       * checklist item is unsigned. The refusal names the blocking items. */
+       * checklist item is unsigned. R2 P1-1: a signed item whose evidence is
+       * gone (deleted or corrected away) blocks the release too, so the
+       * release can never be granted on vacated evidence. */
       if(k==="areaReleased"){
-        const prior=[["visual","Visual inspection"],["airClear","Clearance air sampling"],["wasteShipped","Waste shipped"],["manifestsBack","Signed manifests received"],["neshapFiled","Notifications filed"]];
+        const prior=CLEARANCE_PRIOR, ev=evidenceLive(p);
         const blocked=prior.filter(r=>!cl[r[0]]);
-        if(blocked.length){
+        const evGone=prior.filter(r=>cl[r[0]]&&!ev[r[0]]);
+        if(blocked.length||evGone.length){
           cb.checked=false;
+          const n=blocked.length+evGone.length;
           openSheet('<h2 class="stencil">Release blocked</h2>'+
             '<div class="small muted" style="margin-bottom:12px">The regulated area cannot be released while '+
-            blocked.length+' required item'+(blocked.length===1?" is":"s are")+' still unsigned:</div>'+
+            n+' required item'+(n===1?" is":"s are")+' still '+(blocked.length?"unsigned":"missing evidence")+':</div>'+
             blocked.map(r=>'<div class="kv"><div class="k">'+esc(r[1])+'</div><div><span class="badge pend">Unsigned</span></div></div>').join("")+
+            evGone.map(r=>'<div class="kv"><div class="k">'+esc(r[1])+'</div><div><span class="badge pend">Evidence gone</span></div></div>').join("")+
             '<div style="height:12px"></div><button class="btn dark block" id="arBack">Back</button>');
           $("#arBack").onclick=closeSheet;
           return;
@@ -1712,7 +1856,8 @@ function photoSheet(p,id){
     '<button class="btn dark" id="sheetCancel2">Close</button></div>');
   $("#sheetCancel2").onclick=closeSheet;
   $("#phDel").onclick=async()=>{
-    if(await softDelete(p,p.photos,id,"photo","Photo '"+(x.caption||x.category)+"' taken "+fmtDT(x.takenAt))){ closeSheet(); save(); toast("Photo deleted. Tombstone kept."); }
+    const d=await softDelete(p,p.photos,id,"photo","Photo '"+(x.caption||x.category)+"' taken "+fmtDT(x.takenAt));
+    if(d){ closeSheet(); save(); toast("Photo deleted. Tombstone kept."+d.inv); }
   };
 }
 function download(name, text, type){
@@ -1803,7 +1948,10 @@ function fabAction(){
 $("#fab").onclick=fabAction;
 $("#backBtn").onclick=()=>{ view={name:"dash"}; save(); };
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeSheet(); });
-persist();
+/* R2 P0: a quarantined load is NEVER persisted. The recovery screen owns
+ * every write from here; nothing is stored until the user chooses. */
+if(bootQuarantined) view={name:"recovery"};
+else persist();
 render();
 </script>
 <script src="sync.js"></script>

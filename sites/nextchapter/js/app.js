@@ -158,7 +158,9 @@ function checklistTotals(move){
 
 /* ---------- store ---------- */
 const KEY = "nc_v1";
+const CORRUPT_PREFIX = "nc_v1.unreadable.";
 function load(){
+  let corruptRaw = null;
   try{
     const raw = localStorage.getItem(KEY);
     if(raw){
@@ -180,13 +182,30 @@ function load(){
         if(changed) save(s);
         return s;
       }
+      corruptRaw = raw; // valid JSON, but not NextChapter state
     }
-  }catch(e){}
+  }catch(e){
+    try{ corruptRaw = localStorage.getItem(KEY); }catch(_){}
+  }
+  if(corruptRaw != null){
+    // P1-1 fix: unreadable saved data is NEVER overwritten. Quarantine the
+    // bad blob under a backup key, seed fresh state in memory only, and
+    // show an honest recovery screen. KEY is not written until the user
+    // explicitly chooses "Start fresh".
+    try{
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      localStorage.setItem(CORRUPT_PREFIX + stamp, corruptRaw);
+    }catch(_){}
+    window.__ncRecovery = true;
+    return seed();
+  }
   const s = seed();
   save(s);
   return s;
 }
-function save(s){ try{ localStorage.setItem(KEY, JSON.stringify(s||state)); }catch(e){ toast("Storage is full. Photos were kept small, but please export soon."); } try{ if(window.__nextchapterSync) window.__nextchapterSync.onSave(); }catch(e){} }
+function save(s){
+  if(window.__ncRecovery) return; // recovery screen is up; KEY holds quarantined data, do not touch it
+  try{ localStorage.setItem(KEY, JSON.stringify(s||state)); }catch(e){ toast("Storage is full. Photos were kept small, but please export soon."); } try{ if(window.__nextchapterSync) window.__nextchapterSync.onSave(); }catch(e){} }
 let state = load();
 
 function seed(){
@@ -342,7 +361,7 @@ async function importBackup(input){
     if(confirm("Replace everything on this device with this backup?")){
       state = parsed; save(); route(); toast("Backup restored.");
     }
-  }catch(e){ toast("That file is not a valid Next Chapter backup."); }
+  }catch(e){ toast("That file did not look like a NextChapter backup. Nothing was changed."); }
   finally{ input.value = ""; }
 }
 
@@ -357,7 +376,36 @@ function toast(msg){
 }
 
 /* ---------- bottom sheet ---------- */
+/* Drafts survive any non-committed close (navigation, Escape, X): typed
+ * text is user data and interruptions are common. Explicit saves clear the
+ * draft. Photos cannot be restored programmatically, so the restore toast
+ * says so honestly. */
+let sheetDraft = null;
+let sheetCloseTimer = null;
+function captureSheetDraft(sheet){
+  const vals = {};
+  sheet.querySelectorAll("input, select, textarea").forEach(el => {
+    if(!el.id || el.type === "file" || el.disabled) return;
+    if(el.type === "checkbox" || el.type === "radio") vals[el.id] = {checked: el.checked};
+    else vals[el.id] = {value: el.value};
+  });
+  return Object.keys(vals).length ? {vals: vals, ts: Date.now()} : null;
+}
+function restoreSheetDraft(root){
+  if(!sheetDraft) return 0;
+  let restored = 0;
+  root.querySelectorAll("input, select, textarea").forEach(el => {
+    if(!el.id || el.type === "file" || !sheetDraft.vals[el.id]) return;
+    const d = sheetDraft.vals[el.id];
+    if(el.type === "checkbox" || el.type === "radio"){
+      if(el.checked !== d.checked){ el.checked = d.checked; restored++; }
+    } else if(el.value !== d.value){ el.value = d.value; restored++; }
+  });
+  sheetDraft = null;
+  return restored;
+}
 function openSheet(title, sub, bodyHTML, footHTML){
+  if(sheetCloseTimer){ clearTimeout(sheetCloseTimer); sheetCloseTimer = null; }
   const root = $("#sheet-root");
   root.innerHTML =
     '<div class="sheet-scrim" data-action="close-sheet"></div>' +
@@ -369,6 +417,8 @@ function openSheet(title, sub, bodyHTML, footHTML){
       '<div class="sheet-body">'+bodyHTML+'</div>' +
       (footHTML ? '<div style="margin-top:16px">'+footHTML+'</div>' : '') +
     '</div>';
+  const n = restoreSheetDraft(root);
+  if(n) setTimeout(() => toast("Draft restored. Photos are not kept."), 400);
   requestAnimationFrame(() => requestAnimationFrame(() => {
     $(".sheet-scrim", root).classList.add("open");
     $(".sheet", root).classList.add("open");
@@ -376,12 +426,13 @@ function openSheet(title, sub, bodyHTML, footHTML){
     if(f) f.focus({preventScroll:true});
   }));
 }
-function closeSheet(){
+function closeSheet(committed){
   const root = $("#sheet-root");
   const scrim = $(".sheet-scrim", root), sheet = $(".sheet", root);
-  if(!sheet) return;
+  if(!sheet || sheetCloseTimer) return; // already closing: never double-capture
+  sheetDraft = committed ? null : captureSheetDraft(sheet);
   scrim.classList.remove("open"); sheet.classList.remove("open");
-  setTimeout(() => { root.innerHTML = ""; }, 300);
+  sheetCloseTimer = setTimeout(() => { root.innerHTML = ""; sheetCloseTimer = null; }, 300);
 }
 
 /* ---------- photo handling ---------- */
@@ -696,7 +747,7 @@ function vInventory(move){
       '<div class="item-body"><div class="item-name">'+esc(it.name)+'</div>' +
       '<div class="item-room">'+esc(it.room)+'</div>' +
       '<div><span class="disp '+(DISP[it.disposition]||DISP.ask).cls+'">'+esc((DISP[it.disposition]||DISP.ask).label)+'</span>' +
-      (it.disposition==="ask" ? ' <span class="disp '+FAM[it.familyStatus].cls+'">'+esc(FAM[it.familyStatus].label)+'</span>' : '') + '</div></div>';
+      (it.disposition==="ask" ? ' <span class="disp '+((FAM[it.familyStatus]||FAM.pending).cls)+'">'+esc((FAM[it.familyStatus]||FAM.pending).label)+'</span>' : '') + '</div></div>';
     if(invSelectMode){
       const on = invSel.indexOf(it.id) > -1;
       return '<div class="item-card sel'+(on?' on':'')+'" data-action="toggle-item-sel" data-item="'+esc(it.id)+'" role="checkbox" aria-checked="'+on+'">'+inner+'<span class="selbox">'+(on?icon("check","ic-sm"):'')+'</span></div>';
@@ -773,7 +824,7 @@ function vItem(move, it){
       '<div style="padding:16px"><div class="row-between"><h2 style="margin:0">'+esc(it.name)+'</h2></div>' +
       '<div class="muted small" style="margin:6px 0 10px">'+esc(it.room)+'</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap"><span class="disp '+(DISP[it.disposition]||DISP.ask).cls+'">'+esc((DISP[it.disposition]||DISP.ask).label)+'</span>' +
-      (it.disposition==="ask" ? '<span class="disp '+FAM[it.familyStatus].cls+'">'+esc(FAM[it.familyStatus].label)+'</span>' : '') + '</div>' +
+      (it.disposition==="ask" ? '<span class="disp '+((FAM[it.familyStatus]||FAM.pending).cls)+'">'+esc((FAM[it.familyStatus]||FAM.pending).label)+'</span>' : '') + '</div>' +
       (it.notes ? '<p class="muted" style="margin:12px 0 0">'+esc(it.notes)+'</p>' : '') +
       (it.destRoom ? '<div class="kv" style="margin-top:8px"><span class="k">Goes to (new home)</span><span class="v">'+esc(it.destRoom)+'</span></div>' : '') +
       ((function(){ const d = itemDims(it); return d ? '<div class="kv"><span class="k">Footprint</span><span class="v">'+esc(dimsText(d,"in"))+'</span></div>' : ''; })()) +
@@ -783,7 +834,7 @@ function vItem(move, it){
       (it.soldDate ? '<div class="kv"><span class="k">Sale date</span><span class="v">'+esc(fmtDate(it.soldDate))+'</span></div>' : '') +
       '<div style="margin-top:14px"><button class="btn btn-soft btn-block" data-action="edit-item" data-id="'+esc(move.id)+'" data-item="'+esc(it.id)+'">'+icon("edit","ic-sm")+' Edit item</button></div>' +
       '</div></div>' +
-    (it.comments.length ?
+    ((Array.isArray(it.comments) && it.comments.length) ?
       '<div class="section-title">Family comments ('+it.comments.length+')</div>' +
       it.comments.map(c => '<div class="card"><div class="comment" style="margin:0"><span class="by">'+esc(c.by)+'</span><span class="ts">'+timeAgo(c.ts)+'</span><div style="margin-top:4px">'+esc(c.text)+'</div></div></div>').join("")
       : "");
@@ -996,10 +1047,10 @@ function vSale(move){
 function sheetTask(move){
   const cats = Array.from(new Set((move.checklist || []).map(t => t.category)));
   openSheet("Add a task", "Something this move needs that the template missed.",
-    '<div class="field"><label>Task</label><input id="f-task" placeholder="e.g. Return the cable box"></div>' +
-    '<div class="field"><label>Category</label><select id="f-tcat">' +
+    '<div class="field"><label for="f-task">Task</label><input id="f-task" placeholder="e.g. Return the cable box"></div>' +
+    '<div class="field"><label for="f-tcat">Category</label><select id="f-tcat">' +
       cats.concat(["Other"]).map(c => '<option>'+esc(c)+'</option>').join("") + '</select></div>' +
-    '<div class="field"><label>Timing</label><select id="f-toff">' +
+    '<div class="field"><label for="f-toff">Timing</label><select id="f-toff">' +
       TASK_TIMING.map((x,i) => '<option value="'+x.o+'"'+(i===3?" selected":"")+'>'+esc(x.label)+'</option>').join("") + '</select></div>',
     '<button class="btn btn-block" data-action="create-task" data-id="'+esc(move.id)+'">'+icon("check","ic-sm")+' Add task</button>');
 }
@@ -1045,20 +1096,20 @@ function vFamily(move){
   const askDone = askTotal - needs.length;
   const card = it => {
     const ph = itemPhoto(it);
-    const comments = it.comments.map(c => '<div class="comment"><span class="by">'+esc(c.by)+'</span><span class="ts">'+timeAgo(c.ts)+'</span><div style="margin-top:4px">'+esc(c.text)+'</div></div>').join("");
+    const comments = (Array.isArray(it.comments) ? it.comments : []).map(c => '<div class="comment"><span class="by">'+esc(c.by)+'</span><span class="ts">'+timeAgo(c.ts)+'</span><div style="margin-top:4px">'+esc(c.text)+'</div></div>').join("");
     return '<div class="card decision-card"><div class="row-between"><h3 style="margin:0">'+esc(it.name)+'</h3>' +
       '<span class="disp '+(DISP[it.disposition]||DISP.ask).cls+'">'+esc((DISP[it.disposition]||DISP.ask).label)+'</span></div>' +
       '<div class="small faint" style="margin:4px 0 8px">From the '+esc(it.room)+'</div>' +
       (ph ? '<img src="'+esc(ph)+'" alt="'+esc(it.name)+'" style="border-radius:12px;max-height:220px;width:100%;object-fit:cover;margin-bottom:8px">' : '') +
       (it.notes ? '<p class="muted small">'+esc(it.notes)+'</p>' : '') +
-      (it.familyStatus!=="pending" ? '<div><span class="disp '+FAM[it.familyStatus].cls+'">'+esc(FAM[it.familyStatus].label)+'</span></div>' : "") +
+      (it.familyStatus!=="pending" ? '<div><span class="disp '+((FAM[it.familyStatus]||FAM.pending).cls)+'">'+esc((FAM[it.familyStatus]||FAM.pending).label)+'</span></div>' : "") +
       '<div class="fam-actions">' +
         (it.familyStatus==="pending"
           ? '<button class="btn btn-sm" data-action="fam-approve" data-id="'+esc(move.id)+'" data-item="'+esc(it.id)+'">'+icon("check","ic-sm")+' Looks good</button>' +
             '<button class="btn btn-soft btn-sm" data-action="fam-suggest" data-id="'+esc(move.id)+'" data-item="'+esc(it.id)+'">'+icon("chat","ic-sm")+' Suggest instead</button>'
           : '<button class="btn btn-ghost btn-sm" data-action="fam-reopen" data-id="'+esc(move.id)+'" data-item="'+esc(it.id)+'">Reopen decision</button>') +
       '</div>' +
-      '<div style="margin-top:10px"><button class="btn btn-ghost btn-sm" data-action="fam-comment" data-id="'+esc(move.id)+'" data-item="'+esc(it.id)+'">'+icon("chat","ic-sm")+' Add a comment ('+it.comments.length+')</button></div>' +
+      '<div style="margin-top:10px"><button class="btn btn-ghost btn-sm" data-action="fam-comment" data-id="'+esc(move.id)+'" data-item="'+esc(it.id)+'">'+icon("chat","ic-sm")+' Add a comment ('+((it.comments||[]).length)+')</button></div>' +
       (it.disposition === "ask" && it.familyStatus === "pending" ?
         '<details class="record-box"><summary>For the move team: record an answer from a call or text</summary><div class="record-inner"><label class="small" for="rec-note-'+esc(it.id)+'">Note (optional)</label><input id="rec-note-'+esc(it.id)+'" placeholder="e.g. per phone call with Maya">'+recordButtons(move,it)+'</div></details>' : '') +
       comments +
@@ -1089,11 +1140,35 @@ function vFamilyMissing(){
     '<a class="btn" href="#/">Back to start</a></div>';
 }
 
+/* ----- recovery (unreadable saved data) ----- */
+function corruptKeys(){
+  const out = [];
+  try{
+    for(let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if(k && k.indexOf(CORRUPT_PREFIX) === 0) out.push(k);
+    }
+  }catch(e){}
+  return out.sort();
+}
+function vRecovery(){
+  document.body.classList.remove("family-mode");
+  setTabs(null); topbarActions.innerHTML = "";
+  view.innerHTML = '<div class="hero card"><div class="hero-art">'+icon("doc")+'</div>' +
+    '<h1>We could not read your saved data</h1>' +
+    '<p>Something damaged the data stored on this device, so we started you with a clean slate for now. Your old data is kept safe in a backup on this device. Nothing was deleted.</p>' +
+    '<div style="display:grid;gap:10px;margin-top:16px">' +
+    '<button class="btn" data-action="recovery-download">'+icon("download","ic-sm")+' Download the saved backup</button>' +
+    '<button class="btn btn-ghost" data-action="recovery-fresh">Start fresh (clears the backup)</button>' +
+    '</div>' +
+    '<p class="muted small" style="margin-top:16px">Tip: once you are back in, export your moves as a backup file so you always have a copy.</p></div>';
+}
+
 /* ---------- sheets (forms) ---------- */
 function sheetNewMove(){
   openSheet("Start a new move", "The basics. You can fill in the rest later.",
     '<div class="field"><label for="f-name">Client or estate name</label><input id="f-name" placeholder="e.g. Eleanor Vance"></div>' +
-    '<div class="field"><label>Move type</label><div class="seg" id="f-type">' +
+    '<div class="field"><label id="f-type-lbl">Move type</label><div class="seg" id="f-type" role="group" aria-labelledby="f-type-lbl">' +
       ["Downsizing move","Estate cleanout","Relocation","Aging in place"].map((t,i) =>
         '<button type="button" data-v="'+esc(t)+'" aria-pressed="'+(i===0)+'">'+esc(t)+'</button>').join("") + '</div></div>' +
     '<div class="field"><label for="f-from">Current address</label><input id="f-from" placeholder="Street, city"></div>' +
@@ -1109,20 +1184,20 @@ function sheetNewMove(){
 }
 function sheetEditMove(move){
   openSheet("Edit move", "",
-    '<div class="field"><label>Client or estate name</label><input id="f-name" value="'+esc(move.clientName)+'"></div>' +
-    '<div class="field"><label>Current address</label><input id="f-from" value="'+esc(move.fromAddr)+'"></div>' +
-    '<div class="field"><label>New address</label><input id="f-to" value="'+esc(move.toAddr)+'"></div>' +
-    '<div class="field"><label>Target date</label><input id="f-date" type="date" value="'+esc(move.targetDate)+'"></div>' +
-    '<div class="field"><label>Family contact</label><input id="f-fam" value="'+esc(move.familyContact)+'"></div>',
+    '<div class="field"><label for="f-name">Client or estate name</label><input id="f-name" value="'+esc(move.clientName)+'"></div>' +
+    '<div class="field"><label for="f-from">Current address</label><input id="f-from" value="'+esc(move.fromAddr)+'"></div>' +
+    '<div class="field"><label for="f-to">New address</label><input id="f-to" value="'+esc(move.toAddr)+'"></div>' +
+    '<div class="field"><label for="f-date">Target date</label><input id="f-date" type="date" value="'+esc(move.targetDate)+'"></div>' +
+    '<div class="field"><label for="f-fam">Family contact</label><input id="f-fam" value="'+esc(move.familyContact)+'"></div>',
     '<button class="btn btn-block" data-action="save-move" data-id="'+esc(move.id)+'">'+icon("check","ic-sm")+' Save changes</button>');
 }
 function sheetAddRoom(move){
   openSheet("Add a room", "Rooms organize the inventory, one at a time. No rush.",
-    '<div class="field"><label>Room name</label><input id="f-room" placeholder="e.g. Sunroom"></div>',
+    '<div class="field"><label for="f-room">Room name</label><input id="f-room" placeholder="e.g. Sunroom"></div>',
     '<button class="btn btn-block" data-action="create-room" data-id="'+esc(move.id)+'">'+icon("check","ic-sm")+' Add room</button>');
 }
-function dispSeg(current){
-  return '<div class="seg" id="f-disp">' + Object.keys(DISP).map(k =>
+function dispSeg(current, label){
+  return '<div class="seg" id="f-disp" role="group" aria-label="'+esc(label || "Choose one")+'">' + Object.keys(DISP).map(k =>
     '<button type="button" data-v="'+k+'" aria-pressed="'+(current===k)+'">'+esc(DISP[k].label)+'</button>').join("") + '</div>';
 }
 function sheetItem(move, it){
@@ -1131,27 +1206,27 @@ function sheetItem(move, it){
   it = it || {name:"", room: move.rooms[0]||"", disposition:"ask", notes:"", destRoom:"", estValue:"", soldPrice:"", soldTo:"", soldDate:"", dims:null};
   const isSell = it.disposition === "sell", isKeep = it.disposition === "keep";
   const saleFields =
-    '<div class="field"><label>Estimated value ($)</label><input id="f-estval" type="number" inputmode="decimal" min="0" value="'+esc(it.estValue)+'" placeholder="0"></div>' +
+    '<div class="field"><label for="f-estval">Estimated value ($)</label><input id="f-estval" type="number" inputmode="decimal" min="0" value="'+esc(it.estValue)+'" placeholder="0"></div>' +
     '<div id="f-soldwrap"'+(isSell?'':' style="display:none"')+'>' +
-    '<div class="field"><label>Sold price ($)</label><input id="f-soldprice" type="number" inputmode="decimal" min="0" value="'+esc(it.soldPrice)+'" placeholder="0"></div>' +
-    '<div class="field"><label>Sold to</label><input id="f-soldto" value="'+esc(it.soldTo)+'" placeholder="Buyer name"></div>' +
-    '<div class="field"><label>Sale date</label><input id="f-solddate" type="date" value="'+esc(it.soldDate)+'"></div></div>' +
+    '<div class="field"><label for="f-soldprice">Sold price ($)</label><input id="f-soldprice" type="number" inputmode="decimal" min="0" value="'+esc(it.soldPrice)+'" placeholder="0"></div>' +
+    '<div class="field"><label for="f-soldto">Sold to</label><input id="f-soldto" value="'+esc(it.soldTo)+'" placeholder="Buyer name"></div>' +
+    '<div class="field"><label for="f-solddate">Sale date</label><input id="f-solddate" type="date" value="'+esc(it.soldDate)+'"></div></div>' +
     '<div id="f-dimwrap"'+(isKeep?'':' style="display:none"')+'>' +
-    '<div class="field"><label>Footprint, for the new home (inches)</label><div style="display:flex;gap:10px">' +
-      '<input id="f-dim-l" type="number" inputmode="decimal" min="0" placeholder="Length" value="'+esc(it.dims && it.dims.l != null ? it.dims.l : "")+'">' +
-      '<input id="f-dim-w" type="number" inputmode="decimal" min="0" placeholder="Width" value="'+esc(it.dims && it.dims.w != null ? it.dims.w : "")+'">' +
+    '<div class="field"><label id="f-dim-lbl">Footprint, for the new home (inches)</label><div style="display:flex;gap:10px" role="group" aria-labelledby="f-dim-lbl">' +
+      '<input id="f-dim-l" type="number" inputmode="decimal" min="0" placeholder="Length" aria-label="Length in inches" value="'+esc(it.dims && it.dims.l != null ? it.dims.l : "")+'">' +
+      '<input id="f-dim-w" type="number" inputmode="decimal" min="0" placeholder="Width" aria-label="Width in inches" value="'+esc(it.dims && it.dims.w != null ? it.dims.w : "")+'">' +
       '</div><div class="hint">Used to check what fits in each room of the new home.</div></div></div>';
   openSheet(isEdit ? "Edit item" : "Add an item", "Photograph it, name it, decide what happens to it.",
     '<div class="field"><label>Photo</label><div class="photo-pick" id="photo-pick" data-action="pick-photo">' +
       (safePhoto(it.photo) ? '<img src="'+esc(safePhoto(it.photo))+'" alt="">' : icon("camera")+'<div><strong>Tap to add a photo</strong><div class="hint">Take one now or choose from the library</div></div>') +
       '<input type="file" id="f-photo" accept="image/*" style="display:none"></div></div>' +
-    '<div class="field"><label>Item name</label><input id="f-name" value="'+esc(it.name)+'" placeholder="e.g. Oak bookshelf"></div>' +
-    '<div class="field"><label>Room</label><select id="f-room">' +
+    '<div class="field"><label for="f-name">Item name</label><input id="f-name" value="'+esc(it.name)+'" placeholder="e.g. Oak bookshelf"></div>' +
+    '<div class="field"><label for="f-room">Room</label><select id="f-room">' +
       move.rooms.map(r => '<option '+(r===it.room?"selected":"")+'>'+esc(r)+'</option>').join("") + '</select></div>' +
-    '<div class="field"><label>What happens to it?</label>'+dispSeg(it.disposition)+'</div>' +
+    '<div class="field"><label>What happens to it?</label>'+dispSeg(it.disposition, "What happens to it?")+'</div>' +
     saleFields +
-    '<div class="field"><label>Notes (optional)</label><textarea id="f-notes" placeholder="Condition, measurements, memories worth keeping…">'+esc(it.notes)+'</textarea></div>' +
-    (isEdit && it.disposition==="keep" ? '<div class="field"><label>Goes to (new home room)</label><select id="f-dest"><option value="">Not placed yet</option>' +
+    '<div class="field"><label for="f-notes">Notes (optional)</label><textarea id="f-notes" placeholder="Condition, measurements, memories worth keeping…">'+esc(it.notes)+'</textarea></div>' +
+    (isEdit && it.disposition==="keep" ? '<div class="field"><label for="f-dest">Goes to (new home room)</label><select id="f-dest"><option value="">Not placed yet</option>' +
       move.rooms.map(r => '<option '+(r===it.destRoom?"selected":"")+'>'+esc(r)+'</option>').join("") + '</select></div>' : ""),
     '<button class="btn btn-block" data-action="'+(isEdit?"save-item":"create-item")+'" data-id="'+esc(move.id)+'"'+(isEdit?' data-item="'+esc(it.id)+'"':'')+'>'+icon("check","ic-sm")+' '+(isEdit?"Save changes":"Add item")+'</button>');
   $("#f-disp").addEventListener("click", e => {
@@ -1169,32 +1244,32 @@ function sheetVendor(move, v){
   const isEdit = !!v;
   v = v || {kind:"Movers", name:"", phone:"", status:"todo", date:"", notes:"", quote:"", deposit:"", availDate:"", quoteNote:"", awarded:false};
   openSheet(isEdit ? "Edit vendor" : "Add a vendor", "",
-    '<div class="field"><label>Type</label><select id="f-kind">' +
+    '<div class="field"><label for="f-kind">Type</label><select id="f-kind">' +
       VENDOR_KINDS.map(k => '<option '+(k===v.kind?"selected":"")+'>'+esc(k)+'</option>').join("") + '</select></div>' +
-    '<div class="field"><label>Company name</label><input id="f-vname" value="'+esc(v.name)+'" placeholder="e.g. Gentle Giant Moving"></div>' +
-    '<div class="field"><label>Phone</label><input id="f-vphone" value="'+esc(v.phone)+'" inputmode="tel" placeholder="(555) 123-4567"></div>' +
-    '<div class="field"><label>Date (if scheduled)</label><input id="f-vdate" type="date" value="'+esc(v.date)+'"></div>' +
-    '<div class="field"><label>Bid details</label><div style="display:flex;gap:10px">' +
-      '<input id="f-vquote" type="number" inputmode="decimal" min="0" placeholder="Quote ($)" value="'+esc(v.quote)+'">' +
-      '<input id="f-vdeposit" type="number" inputmode="decimal" min="0" placeholder="Deposit ($)" value="'+esc(v.deposit)+'"></div></div>' +
-    '<div class="field"><label>Available date</label><input id="f-vavail" type="date" value="'+esc(v.availDate)+'"></div>' +
-    '<div class="field"><label>What the quote covers</label><textarea id="f-vqnote" placeholder="Insurance, crew size, materials included…">'+esc(v.quoteNote)+'</textarea></div>' +
-    '<div class="field"><label>Notes</label><textarea id="f-vnotes" placeholder="Quote, crew size, parking notes…">'+esc(v.notes)+'</textarea></div>',
+    '<div class="field"><label for="f-vname">Company name</label><input id="f-vname" value="'+esc(v.name)+'" placeholder="e.g. Gentle Giant Moving"></div>' +
+    '<div class="field"><label for="f-vphone">Phone</label><input id="f-vphone" value="'+esc(v.phone)+'" inputmode="tel" placeholder="(555) 123-4567"></div>' +
+    '<div class="field"><label for="f-vdate">Date (if scheduled)</label><input id="f-vdate" type="date" value="'+esc(v.date)+'"></div>' +
+    '<div class="field"><label id="f-vbid-lbl">Bid details</label><div style="display:flex;gap:10px" role="group" aria-labelledby="f-vbid-lbl">' +
+      '<input id="f-vquote" type="number" inputmode="decimal" min="0" placeholder="Quote ($)" aria-label="Quote in dollars" value="'+esc(v.quote)+'">' +
+      '<input id="f-vdeposit" type="number" inputmode="decimal" min="0" placeholder="Deposit ($)" aria-label="Deposit in dollars" value="'+esc(v.deposit)+'"></div></div>' +
+    '<div class="field"><label for="f-vavail">Available date</label><input id="f-vavail" type="date" value="'+esc(v.availDate)+'"></div>' +
+    '<div class="field"><label for="f-vqnote">What the quote covers</label><textarea id="f-vqnote" placeholder="Insurance, crew size, materials included…">'+esc(v.quoteNote)+'</textarea></div>' +
+    '<div class="field"><label for="f-vnotes">Notes</label><textarea id="f-vnotes" placeholder="Quote, crew size, parking notes…">'+esc(v.notes)+'</textarea></div>',
     '<button class="btn btn-block" data-action="'+(isEdit?"save-vendor":"create-vendor")+'" data-id="'+esc(move.id)+'"'+(isEdit?' data-vendor="'+esc(v.id)+'"':'')+'>'+icon("check","ic-sm")+' '+(isEdit?"Save changes":"Add vendor")+'</button>');
 }
 function sheetFloorNote(move, room){
   const d = roomDims(move, room) || {l:"", w:""};
   openSheet(room + " notes", "Where does furniture go? What fits, what doesn't?",
-    '<div class="field"><label>Room size (feet)</label><div style="display:flex;gap:10px">' +
-      '<input id="f-room-l" type="number" inputmode="decimal" min="0" placeholder="Length" value="'+esc(d.l)+'">' +
-      '<input id="f-room-w" type="number" inputmode="decimal" min="0" placeholder="Width" value="'+esc(d.w)+'"></div>' +
+    '<div class="field"><label id="f-roomsize-lbl">Room size (feet)</label><div style="display:flex;gap:10px" role="group" aria-labelledby="f-roomsize-lbl">' +
+      '<input id="f-room-l" type="number" inputmode="decimal" min="0" placeholder="Length" aria-label="Room length in feet" value="'+esc(d.l)+'">' +
+      '<input id="f-room-w" type="number" inputmode="decimal" min="0" placeholder="Width" aria-label="Room width in feet" value="'+esc(d.w)+'"></div>' +
       '<div class="hint">Used to check whether kept furniture fits.</div></div>' +
-    '<div class="field"><label>Notes for the new '+esc(room)+'</label><textarea id="f-fnote" placeholder="e.g. Bookshelf against the east wall…">'+esc(move.floorNotes[room]||"")+'</textarea></div>',
+    '<div class="field"><label for="f-fnote">Notes for the new '+esc(room)+'</label><textarea id="f-fnote" placeholder="e.g. Bookshelf against the east wall…">'+esc(move.floorNotes[room]||"")+'</textarea></div>',
     '<button class="btn btn-block" data-action="save-floornote" data-id="'+esc(move.id)+'" data-room="'+esc(room)+'">'+icon("check","ic-sm")+' Save notes</button>');
 }
 function sheetPlaceItem(move, it){
   openSheet("Place “"+it.name+"”", "Which room of the new home does it go to?",
-    '<div class="field"><label>Destination room</label><select id="f-dest">' +
+    '<div class="field"><label for="f-dest">Destination room</label><select id="f-dest">' +
       move.rooms.map(r => '<option '+(r===it.destRoom?"selected":"")+'>'+esc(r)+'</option>').join("") + '</select></div>',
     '<button class="btn btn-block" data-action="save-placement" data-id="'+esc(move.id)+'" data-item="'+esc(it.id)+'">'+icon("check","ic-sm")+' Place item</button>');
 }
@@ -1203,27 +1278,27 @@ function sheetDonation(move, d){
   d = d || {org:"", date: new Date().toISOString().slice(0,10), itemIds:[], value:"", receipt:false, note:""};
   const donated = move.items.filter(i => i.disposition === "donate");
   openSheet(isEdit ? "Edit donation" : "Record a donation", "Organized records to share with the family or an accountant.",
-    '<div class="field"><label>Organization</label><input id="f-dorg" value="'+esc(d.org)+'" placeholder="e.g. Habitat ReStore"></div>' +
-    '<div class="field"><label>Date</label><input id="f-ddate" type="date" value="'+esc(d.date)+'"></div>' +
-    (donated.length ? '<div class="field"><label>Items from inventory</label>' +
-      donated.map(i => '<label style="display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-weight:400"><input type="checkbox" class="f-ditem" value="'+esc(i.id)+'" '+(d.itemIds.includes(i.id)?"checked":"")+' style="width:22px;height:22px;min-height:0"> '+esc(i.name)+'</label>').join("") + '</div>'
+    '<div class="field"><label for="f-dorg">Organization</label><input id="f-dorg" value="'+esc(d.org)+'" placeholder="e.g. Habitat ReStore"></div>' +
+    '<div class="field"><label for="f-ddate">Date</label><input id="f-ddate" type="date" value="'+esc(d.date)+'"></div>' +
+    (donated.length ? '<div class="field"><fieldset style="border:0;padding:0;margin:0"><legend class="small" style="font-weight:600;margin-bottom:4px">Items from inventory</legend>' +
+      donated.map(i => '<label style="display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-weight:400"><input type="checkbox" class="f-ditem" value="'+esc(i.id)+'" '+(d.itemIds.includes(i.id)?"checked":"")+' style="width:22px;height:22px;min-height:0"> '+esc(i.name)+'</label>').join("") + '</fieldset></div>'
       : '<p class="hint">Tip: tag items as “Donate” in the inventory and they’ll show up here.</p>') +
-    '<div class="field"><label>Other items / description</label><input id="f-dnote" value="'+esc(d.note)+'" placeholder="e.g. 3 bags of linens"></div>' +
-    '<div class="field"><label>Estimated value ($)</label><input id="f-dval" type="number" inputmode="decimal" min="0" value="'+esc(d.value)+'" placeholder="0"></div>' +
+    '<div class="field"><label for="f-dnote">Other items / description</label><input id="f-dnote" value="'+esc(d.note)+'" placeholder="e.g. 3 bags of linens"></div>' +
+    '<div class="field"><label for="f-dval">Estimated value ($)</label><input id="f-dval" type="number" inputmode="decimal" min="0" value="'+esc(d.value)+'" placeholder="0"></div>' +
     '<label style="display:flex;gap:10px;align-items:center;font-weight:600"><input type="checkbox" id="f-dreceipt" '+(d.receipt?"checked":"")+' style="width:22px;height:22px"> Paper receipt saved</label>',
     '<button class="btn btn-block" data-action="'+(isEdit?"save-donation":"create-donation")+'" data-id="'+esc(move.id)+'"'+(isEdit?' data-donation="'+esc(d.id)+'"':'')+'>'+icon("check","ic-sm")+' '+(isEdit?"Save changes":"Record donation")+'</button>');
 }
 function sheetFamComment(move, it){
   openSheet("Comment on “"+it.name+"”", "Kind words travel far during a move.",
-    '<div class="field"><label>Your name</label><input id="f-by" placeholder="e.g. Maya"></div>' +
-    '<div class="field"><label>Comment</label><textarea id="f-text" placeholder="What would you like the family to know?"></textarea></div>',
+    '<div class="field"><label for="f-by">Your name</label><input id="f-by" placeholder="e.g. Maya"></div>' +
+    '<div class="field"><label for="f-text">Comment</label><textarea id="f-text" placeholder="What would you like the family to know?"></textarea></div>',
     '<button class="btn btn-block" data-action="save-comment" data-id="'+esc(move.id)+'" data-item="'+esc(it.id)+'">'+icon("check","ic-sm")+' Post comment</button>');
 }
 function sheetFamSuggest(move, it){
   openSheet("Suggest something different", "“"+it.name+"” is currently marked “"+DISP[it.disposition].label+"”.",
-    '<div class="field"><label>Your name</label><input id="f-by" placeholder="e.g. Maya"></div>' +
-    '<div class="field"><label>What would you suggest?</label>'+dispSeg(it.disposition)+'</div>' +
-    '<div class="field"><label>Why? (optional)</label><textarea id="f-text" placeholder="A sentence helps everyone understand."></textarea></div>',
+    '<div class="field"><label for="f-by">Your name</label><input id="f-by" placeholder="e.g. Maya"></div>' +
+    '<div class="field"><label>What would you suggest?</label>'+dispSeg(it.disposition, "What would you suggest?")+'</div>' +
+    '<div class="field"><label for="f-text">Why? (optional)</label><textarea id="f-text" placeholder="A sentence helps everyone understand."></textarea></div>',
     '<button class="btn btn-block" data-action="save-suggest" data-id="'+esc(move.id)+'" data-item="'+esc(it.id)+'">'+icon("check","ic-sm")+' Send suggestion</button>');
   $("#f-disp").addEventListener("click", e => {
     const b = e.target.closest("button"); if(!b) return;
@@ -1236,6 +1311,21 @@ function sheetFamSuggest(move, it){
 function segVal(id){ const b = $("#"+id+" button[aria-pressed='true']"); return b ? b.getAttribute("data-v") : null; }
 
 const Actions = {
+  "recovery-download": () => {
+    const keys = corruptKeys();
+    if(!keys.length){ toast("No saved backup found."); return; }
+    let raw = "";
+    try{ raw = localStorage.getItem(keys[keys.length - 1]) || ""; }catch(e){}
+    downloadFile(raw, "application/json", "nextchapter-saved-backup.json");
+    toast("Backup downloaded.");
+  },
+  "recovery-fresh": () => {
+    if(!confirm("Start fresh? This clears the saved backup from this device.")) return;
+    try{ corruptKeys().forEach(k => localStorage.removeItem(k)); }catch(e){}
+    window.__ncRecovery = false;
+    state = seed(); save(); route();
+    toast("Started fresh. Your moves are safe to rebuild.");
+  },
   "print-digest": () => window.print(),
   "print-bids": () => window.print(),
   "print-sale": () => window.print(),
@@ -1253,7 +1343,7 @@ const Actions = {
     if(!text){ toast("Please name the task."); return; }
     m.checklist = m.checklist || [];
     m.checklist.push({id: uid(), text, category: $("#f-tcat").value, offset: Number($("#f-toff").value) || 0, done: false, doneAt: null, custom: true});
-    save(); closeSheet(); route(false); toast("Task added.");
+    save(); closeSheet(true); route(false); toast("Task added.");
   },
   "toggle-task": el => {
     const m = getMove(el.getAttribute("data-id"));
@@ -1340,7 +1430,7 @@ const Actions = {
       rooms: DEFAULT_ROOMS.slice(0,5), items: [], vendors: [], floorNotes: {}, donations: [], activity: [], createdAt: Date.now() };
     ensureMoveFields(m);
     logAct(m, "Move created.");
-    state.moves.unshift(m); save(); closeSheet(); toast("Move created.");
+    state.moves.unshift(m); save(); closeSheet(true); toast("Move created.");
     location.hash = "#/move/" + m.id;
   },
   "edit-move": el => sheetEditMove(getMove(el.getAttribute("data-id"))),
@@ -1349,14 +1439,14 @@ const Actions = {
     m.clientName = $("#f-name").value.trim() || m.clientName;
     m.fromAddr = $("#f-from").value.trim(); m.toAddr = $("#f-to").value.trim();
     m.targetDate = $("#f-date").value; m.familyContact = $("#f-fam").value.trim();
-    save(); closeSheet(); route(); toast("Saved.");
+    save(); closeSheet(true); route(); toast("Saved.");
   },
   "add-room": el => sheetAddRoom(getMove(el.getAttribute("data-id"))),
   "create-room": el => {
     const m = getMove(el.getAttribute("data-id")); const name = $("#f-room").value.trim();
     if(!name){ toast("Please name the room."); return; }
     if(!m.rooms.includes(name)) m.rooms.push(name);
-    save(); closeSheet(); route(); toast("Room added.");
+    save(); closeSheet(true); route(); toast("Room added.");
   },
   "filter-room": el => { invFilter.room = el.getAttribute("data-v"); route(false); },
   "filter-disp": el => { invFilter.disp = el.getAttribute("data-v"); route(false); },
@@ -1379,7 +1469,7 @@ const Actions = {
       soldDate: $("#f-solddate") ? $("#f-solddate").value : "",
       dims: (disp === "keep" && dimL > 0 && dimW > 0) ? {l: dimL, w: dimW} : null,
       familyStatus: disp==="ask" ? "pending" : "approved", comments: [], createdAt: Date.now() });
-    save(); closeSheet(); route(); toast("Item added."); coachDone();
+    save(); closeSheet(true); route(); toast("Item added."); coachDone();
   },
   "save-item": el => {
     const m = getMove(el.getAttribute("data-id"));
@@ -1401,7 +1491,7 @@ const Actions = {
       it.familyStatus = disp==="ask" ? "pending" : "approved";
     }
     it.photo = pendingPhoto;
-    save(); closeSheet(); route(); toast("Saved.");
+    save(); closeSheet(true); route(); toast("Saved.");
   },
   "delete-item": el => {
     if(!confirm("Remove this item from the inventory?")) return;
@@ -1419,7 +1509,7 @@ const Actions = {
       status: "todo", date: $("#f-vdate").value, notes: $("#f-vnotes").value.trim(),
       quote: $("#f-vquote").value, deposit: $("#f-vdeposit").value,
       availDate: $("#f-vavail").value, quoteNote: $("#f-vqnote").value.trim(), awarded: false });
-    save(); closeSheet(); route(); toast("Vendor added.");
+    save(); closeSheet(true); route(); toast("Vendor added.");
   },
   "save-vendor": el => {
     const m = getMove(el.getAttribute("data-id"));
@@ -1428,7 +1518,7 @@ const Actions = {
     v.phone = $("#f-vphone").value.trim(); v.date = $("#f-vdate").value; v.notes = $("#f-vnotes").value.trim();
     v.quote = $("#f-vquote").value; v.deposit = $("#f-vdeposit").value;
     v.availDate = $("#f-vavail").value; v.quoteNote = $("#f-vqnote").value.trim();
-    save(); closeSheet(); route(); toast("Saved.");
+    save(); closeSheet(true); route(); toast("Saved.");
   },
   "delete-vendor": el => {
     if(!confirm("Remove this vendor?")) return;
@@ -1451,13 +1541,13 @@ const Actions = {
     const rl = Number($("#f-room-l").value), rw = Number($("#f-room-w").value);
     if(rl > 0 && rw > 0){ m.roomDims = m.roomDims || {}; m.roomDims[room] = {l: rl, w: rw}; }
     else if(m.roomDims){ delete m.roomDims[room]; }
-    save(); closeSheet(); route(); toast("Notes saved.");
+    save(); closeSheet(true); route(); toast("Notes saved.");
   },
   "place-item": el => { const m = getMove(el.getAttribute("data-id")); sheetPlaceItem(m, m.items.find(i=>i.id===el.getAttribute("data-item"))); },
   "save-placement": el => {
     const m = getMove(el.getAttribute("data-id"));
     const it = m.items.find(i=>i.id===el.getAttribute("data-item")); if(!it) return;
-    it.destRoom = $("#f-dest").value; save(); closeSheet(); route(); toast("Placed in "+it.destRoom+".");
+    it.destRoom = $("#f-dest").value; save(); closeSheet(true); route(); toast("Placed in "+it.destRoom+".");
   },
   "add-donation": el => sheetDonation(getMove(el.getAttribute("data-id"))),
   "edit-donation": el => { const m = getMove(el.getAttribute("data-id")); sheetDonation(m, m.donations.find(d=>d.id===el.getAttribute("data-donation"))); },
@@ -1469,7 +1559,7 @@ const Actions = {
       value: $("#f-dval").value, receipt: $("#f-dreceipt").checked,
       itemIds: $$(".f-ditem").filter(c=>c.checked).map(c=>c.value) });
     logAct(m, "Recorded donation to "+org+".");
-    save(); closeSheet(); route(); toast("Donation recorded.");
+    save(); closeSheet(true); route(); toast("Donation recorded.");
   },
   "save-donation": el => {
     const m = getMove(el.getAttribute("data-id"));
@@ -1477,7 +1567,7 @@ const Actions = {
     d.org = $("#f-dorg").value.trim() || d.org; d.date = $("#f-ddate").value;
     d.note = $("#f-dnote").value.trim(); d.value = $("#f-dval").value; d.receipt = $("#f-dreceipt").checked;
     d.itemIds = $$(".f-ditem").filter(c=>c.checked).map(c=>c.value);
-    save(); closeSheet(); route(); toast("Saved.");
+    save(); closeSheet(true); route(); toast("Saved.");
   },
   "delete-donation": el => {
     if(!confirm("Remove this donation record?")) return;
@@ -1525,9 +1615,10 @@ const Actions = {
     const by = $("#f-by").value.trim() || "Family";
     const text = $("#f-text").value.trim();
     if(!text){ toast("Please write a comment first."); return; }
+    if(!Array.isArray(it.comments)) it.comments = [];
     it.comments.push({id: uid(), by, text, ts: Date.now()});
     logAct(m, by+" commented on “"+it.name+"”.");
-    save(); closeSheet(); route(false); toast("Comment posted.");
+    save(); closeSheet(true); route(false); toast("Comment posted.");
   },
   "fam-suggest": el => { const m = getMove(el.getAttribute("data-id")); sheetFamSuggest(m, m.items.find(i=>i.id===el.getAttribute("data-item"))); },
   "save-suggest": el => {
@@ -1537,10 +1628,11 @@ const Actions = {
     const disp = segVal("f-disp");
     const text = $("#f-text").value.trim();
     const label = DISP[disp] ? DISP[disp].label : disp;
+    if(!Array.isArray(it.comments)) it.comments = [];
     it.comments.push({id: uid(), by, text: "Suggested “"+label+"” instead." + (text ? " " + text : ""), ts: Date.now()});
     it.familyStatus = "changed";
     logAct(m, by+" suggested a different decision for “"+it.name+"”.");
-    save(); closeSheet(); route(false); toast("Suggestion sent to the move team.");
+    save(); closeSheet(true); route(false); toast("Suggestion sent to the move team.");
   }
 };
 
@@ -1570,6 +1662,7 @@ document.addEventListener("keydown", e => {
 /* ---------- router ---------- */
 function route(rerender){
   closeSheet();
+  if(window.__ncRecovery){ vRecovery(); window.scrollTo(0,0); return; }
   document.body.classList.remove("printing-receipt");
   const h = location.hash || "#/";
   const parts = h.replace(/^#\//,"").split("/");

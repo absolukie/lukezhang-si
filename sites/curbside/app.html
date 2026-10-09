@@ -77,6 +77,7 @@
       <div class="tab-page" id="page-home">
         <h3>Today</h3>
         <div id="todayCard"></div>
+        <div id="homePaperwork"></div>
         <div class="card score-card">
           <div class="score-ring" id="scoreRing"><span id="scoreNum">0</span><small>compliance</small></div>
           <div class="score-meta">
@@ -214,18 +215,31 @@
     { lookupKey: "price_curbside_fleet", name: "Fleet", price: "$80/mo",
       blurb: "Coming soon: up to 3 trucks on one login. Today each login covers one truck." }
   ];
+  function hookSettings(b){
+    var sb = document.getElementById("settingsBtn");
+    if (sb) sb.addEventListener("click", function(){
+      setTimeout(function(){ try { b.injectSettings(); } catch(e){} }, 0);
+    });
+  }
   function boot(){
     if (typeof initBilling !== "function") return;
     initBilling({ appSlug: "curbside", plans: PLANS }).then(function(b){
       window.__billing = b;
       b.ensurePaywall();
-      var sb = document.getElementById("settingsBtn");
-      if (sb) sb.addEventListener("click", function(){
-        setTimeout(function(){ try { b.injectSettings(); } catch(e){} }, 0);
-      });
+      hookSettings(b);
     }).catch(function(e){
       // Billing must never break the app. Fail open, log loudly.
       try { console.error("[billing] init failed:", e); } catch(_){}
+      /* P2-2 (red2): when billing status fails at boot, the old code never
+       * reached the settings hook, so Settings had no Subscription section
+       * and the trial had no retry path. A status-less billing client still
+       * renders the section (fail-open) and its trial button re-probes
+       * billing, so the retry works in both failure modes. */
+      try {
+        var b2 = new window.BillingClient({ appSlug: "curbside", plans: PLANS });
+        window.__billing = b2;
+        hookSettings(b2);
+      } catch(_2){}
     });
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

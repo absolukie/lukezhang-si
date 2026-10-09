@@ -219,10 +219,18 @@ BillingClient.prototype.daysLeft = function(){
 BillingClient.prototype.friendlyErr = function(e){
   var code = e && e.code;
   if (code === "BILLING_NOT_CONFIGURED") return "Payments are not switched on yet. Please check back soon.";
-  var m = (e && e.message) || "";
+  if (e && (e.status === 429 || code === "RATE_LIMITED" || code === 429))
+    return "Too many tries. Please wait a moment and try again.";
+  var m = String((e && e.message) || "");
   if (/billing_|whsec|rk_test|rk_live|SECRETS\.md|Worker|failed to fetch|networkerror|load failed|ERR_/i.test(m)) return "Something went wrong. Please try again.";
   if (e && e.name === "AbortError") return "Something went wrong. Please try again.";
-  return m || "Something went wrong. Please try again.";
+  // Never surface raw backend/Stripe text on the money surface: account ids,
+  // price ids, paths, code fragments, and stack traces all become the generic
+  // message. Only short, plain sentences pass through.
+  if (!m || m.length > 140 ||
+      /acct_|price_|sk_live|sk_test|whsec|stripe|https?:|\/\S+\.\S+|[{}\[\]]|http \d|error:|undefined|null|D1|SQL|trace|token|secret/i.test(m))
+    return "Something went wrong. Please try again.";
+  return m;
 };
 
 /* ---------------- trial / card / portal ---------------- */

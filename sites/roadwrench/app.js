@@ -134,9 +134,24 @@ function load() {
   } catch (e) {}
   const s = blankState(); seed(s); save(s); return s;
 }
+/* Local-only usage events: trial/packet/claim milestones for activation and
+ * conversion measurement (PRD R-45). Stored on this device only, capped at
+ * 500 entries, included in the JSON backup, never transmitted anywhere. */
+const EVENTS_KEY = "roadwrench.events.v1";
+function logEvent(name, data) {
+  try {
+    let ev = [];
+    try { ev = JSON.parse(localStorage.getItem(EVENTS_KEY)) || []; } catch (e) {}
+    ev.push(Object.assign({ name, ts: Date.now() }, data || {}));
+    if (ev.length > 500) ev = ev.slice(-500);
+    localStorage.setItem(EVENTS_KEY, JSON.stringify(ev));
+  } catch (e) {}
+}
+function readEvents() {
+  try { return JSON.parse(localStorage.getItem(EVENTS_KEY)) || []; } catch (e) { return []; }
+}
 function save(s) {
-  let raw;
-  try { raw = JSON.stringify(s); } catch (e) { toast("Could not save: data error"); return; }
+  let raw;  try { raw = JSON.stringify(s); } catch (e) { toast("Could not save: data error"); return; }
   lastSaveBytes = raw.length;
   window.__roadwrench.stateBytes = lastSaveBytes;
   try {
@@ -246,6 +261,7 @@ function route() {
   const parts = h.replace(/^#\//, "").split("/");
   renderTabs("#/" + parts[0]);
   updateStorageBanner();
+  updateOnline();
   window.scrollTo(0, 0);
   if (parts[0] === "jobs") viewJobs();
   else if (parts[0] === "job" && parts[1] === "new") viewJobForm();
@@ -260,6 +276,13 @@ function route() {
   else viewJobs();
 }
 window.addEventListener("hashchange", route);
+/* Offline indicator: subtle banner, never a blocking modal. Local data keeps working. */
+function updateOnline() {
+  const b = $("#offlineBanner");
+  if (b) b.hidden = navigator.onLine !== false;
+}
+window.addEventListener("online", updateOnline);
+window.addEventListener("offline", updateOnline);
 
 /* Print gate: the .packet DOM is hidden in print CSS by default, so Ctrl+P or
  * the browser menu can never print an unapproved document. Only authorized
@@ -272,7 +295,7 @@ function authorizedPrint() {
 window.addEventListener("afterprint", () => document.body.classList.remove("print-ok"));
 
 /* ================= JOBS BOARD ================= */
-let jobFilter = "all", claimFilter = "all";
+let jobFilter = "today", claimFilter = "all"; /* next-job-first home: today is the default */
 function viewJobs() {
   const counts = { all: S.jobs.length, today: S.jobs.filter(j => j.scheduledAt === todayISO()).length };
   STATUSES.forEach(s => counts[s] = S.jobs.filter(j => j.status === s).length);
@@ -304,7 +327,7 @@ function viewJobs() {
       ${CLAIM_STATUSES.map(s => `<button class="chip${claimFilter === s ? " active" : ""}" data-claim-f="${s}" aria-pressed="${claimFilter === s}">${CLAIM_LABEL[s]} (${claimCounts[s]})</button>`).join("")}
     </div>
     <div id="joblist">
-      ${list.length ? list.map(j => isToday ? jobCardToday(j) : jobCard(j)).join("") : `<div class="card empty">${I.jobs}<div>${isToday ? "Nothing scheduled for today." : "No jobs here yet.<br>Tap New job to book the first one."}</div></div>`}
+      ${list.length ? list.map(j => isToday ? jobCardToday(j) : jobCard(j)).join("") : `<div class="card empty">${I.jobs}<div>${isToday ? "Nothing scheduled for today." : "No jobs here yet.<br>Tap New job to book the first one."}</div>${isToday ? `<button class="btn small secondary" id="newJob2" style="margin-top:10px">${I.plus}New job</button>` : ""}</div>`}
     </div>`;
   document.querySelectorAll("[data-claim-f]").forEach(c => c.onclick = () => { claimFilter = c.dataset.claimF; viewJobs(); });
   document.querySelectorAll("[data-f]").forEach(c => c.onclick = () => { jobFilter = c.dataset.f; viewJobs(); });
@@ -318,6 +341,7 @@ function viewJobs() {
     if (job) setStatus(job, b.dataset.to, true);
   });
   $("#newJob").onclick = () => location.hash = "#/job/new";
+  const nj2 = $("#newJob2"); if (nj2) nj2.onclick = () => location.hash = "#/job/new";
   const clearSamples = () => {
     S.jobs = S.jobs.filter(j => !j.sample); S.reminders = S.reminders.filter(r => !r.sample);
     S.samplePurgeOffered = false; save(S); toast("Sample data cleared"); viewJobs();
@@ -557,7 +581,7 @@ function viewJobDetail(id) {
       <div class="photogrid" id="photoGrid">${j.photos.map(photoHtml).join("")}</div>
       ${j.photos.length ? `<h3>Captions</h3><div id="capList">${j.photos.map(p => `
         <div class="caprow"><img src="${safeDataUrl(p.thumb || p.dataUrl)}" alt="">
-          <div class="grow"><div class="s">${esc(p.tag)} · ${fmtDT(p.ts)}</div>
+          <div class="grow"><div class="s" id="capl-${esc(p.id)}">${esc(p.tag)} · ${fmtDT(p.ts)}${photoMeta(p)}</div>
           <input data-cap="${p.id}" value="${esc(p.caption || "")}" placeholder="Add a caption" aria-label="Caption for ${esc(p.tag)} photo"></div>
         </div>`).join("")}</div>` : ""}
     </div>
@@ -576,13 +600,13 @@ function viewJobDetail(id) {
 
     <div class="card"><h2>Finish</h2>
       <div class="total" style="padding-top:0"><span>Job total</span><span class="mono">${money(jobTotal(j))}</span></div>
-      <button class="btn rust block" id="buildPacket" style="margin:10px 0">${I.doc}Build warranty packet</button>
+      <button class="btn rust block big" id="buildPacket" style="margin:10px 0">${I.doc}Build warranty packet</button>
       <button class="btn secondary block" id="viewInvoice">${I.doc}Customer invoice</button>
       <button class="btn secondary block" id="shareUpdate">${I.chat}Share customer update</button>
       <div class="muted" style="margin-top:6px">Copies a message you send yourself. RoadWrench does not text customers on its own.</div>
       ${j.status === "complete" && S.company.reviewLink ? `<button class="btn secondary block" id="askReview" style="margin-top:10px">${I.star}Ask for a review</button>` : ""}
       ${j.status !== "complete"
-        ? `<button class="btn secondary block" id="markComplete">${I.check}Mark job complete</button>`
+        ? `<button class="btn secondary block big" id="markComplete">${I.check}Mark job complete</button>`
         : `<button class="btn ghost block" id="reopen">${I.back}Reopen job</button>`}
       <button class="btn ghost block danger" id="delJob" style="margin-top:8px; color:var(--danger); border-color:#e5c4bd">${I.trash}Delete job</button>
     </div>`;
@@ -690,8 +714,13 @@ function viewJobDetail(id) {
   $("#fileInput").onchange = e => {
     const f = e.target.files[0]; if (!f) return;
     compressPhoto(f, (dataUrl, thumb) => {
-      j.photos.push({ id: uid(), dataUrl, thumb, ts: Date.now(), caption: $("#ph_cap").value.trim(), tag: photoTag });
+      const photo = { id: uid(), dataUrl, thumb, ts: Date.now(), caption: $("#ph_cap").value.trim(), tag: photoTag, gps: null, hash: "" };
+      j.photos.push(photo);
       $("#ph_cap").value = ""; save(S); toast("Photo added"); viewJobDetail(j.id);
+      /* Evidence metadata, best-effort: content hash + GPS attach after render. */
+      Promise.all([hashPhoto(dataUrl), geoPhoto()]).then(([h, g]) => {
+        photo.hash = h || ""; if (g) photo.gps = g; save(S); refreshPhotoMeta(photo);
+      }).catch(() => {});
     });
   };
   document.querySelectorAll("[data-delphoto]").forEach(b => b.onclick = () => {
@@ -729,6 +758,7 @@ function viewJobDetail(id) {
       "A Google review from a happy customer keeps our little shop rolling:",
       S.company.reviewLink
     ].join("\n");
+    logEvent("review_asked", { job_id: j.id });
     shareOrCopy("Review request", lines, "Review request copied, send it from your messages app");
   };
   const ro = $("#reopen");
@@ -762,7 +792,42 @@ function setStatus(j, s, stay) {
 function photoHtml(p) {
   return `<div class="photo"><img src="${esc(safeDataUrl(p.dataUrl))}" alt="${esc(p.caption || p.tag)}" loading="lazy">
     <button class="del" data-delphoto="${esc(p.id)}" aria-label="Delete photo">×</button>
-    <div class="cap">${esc(p.tag)} · ${fmtDT(p.ts)}${p.caption ? " · " + esc(p.caption) : ""}</div></div>`;
+    <div class="cap" id="cap-${esc(p.id)}">${esc(p.tag)} · ${fmtDT(p.ts)}${p.caption ? " · " + esc(p.caption) : ""}${photoMeta(p)}</div></div>`;
+}
+/* Refresh one photo's evidence line in place when its hash/GPS lands. */
+function refreshPhotoMeta(photo) {
+  const t = photo.tag + " · " + fmtDT(photo.ts) + (photo.caption ? " · " + photo.caption : "") + photoMeta(photo);
+  const c1 = document.getElementById("cap-" + photo.id);
+  if (c1) c1.textContent = t;
+  const c2 = document.getElementById("capl-" + photo.id);
+  if (c2) c2.textContent = t;
+}
+/* Evidence line: GPS (when the device shared it) + short content hash. */
+function photoMeta(p) {
+  let s = "";
+  if (p.gps && isFinite(p.gps.lat) && isFinite(p.gps.lng))
+    s += " · " + Number(p.gps.lat).toFixed(5) + ", " + Number(p.gps.lng).toFixed(5);
+  if (p.hash) s += " · #" + String(p.hash).slice(0, 8);
+  return s;
+}
+function hashPhoto(dataUrl) {
+  try {
+    if (!crypto.subtle) return Promise.resolve("");
+    return crypto.subtle.digest("SHA-256", new TextEncoder().encode(dataUrl)).then(b =>
+      Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2, "0")).join(""));
+  } catch (e) { return Promise.resolve(""); }
+}
+/* Best-effort GPS at capture time. Denied/unavailable = null, never an error. */
+function geoPhoto() {
+  return new Promise(res => {
+    try {
+      if (!navigator.geolocation) return res(null);
+      navigator.geolocation.getCurrentPosition(
+        pos => res({ lat: pos.coords.latitude, lng: pos.coords.longitude, acc: Math.round(pos.coords.accuracy || 0) }),
+        () => res(null),
+        { timeout: 8000, maximumAge: 60000, enableHighAccuracy: false });
+    } catch (e) { res(null); }
+  });
 }
 function renderTimer(j) {
   const box = $("#timerBox"); if (!box) return;
@@ -916,12 +981,12 @@ function viewPacket(id) {
 
       ${before.length || after.length ? `<div class="p-sec"><h4>Condition photos (timestamped)</h4>
         <div class="p-photos">
-        ${before.concat(after).map(p => `<figure><img src="${esc(safeDataUrl(p.dataUrl))}" alt="${esc(p.caption || p.tag)}"><figcaption>${esc(p.tag)} · ${fmtDT(p.ts)}${p.caption ? " · " + esc(p.caption) : ""}</figcaption></figure>`).join("")}
+        ${before.concat(after).map(p => `<figure><img src="${esc(safeDataUrl(p.dataUrl))}" alt="${esc(p.caption || p.tag)}"><figcaption>${esc(p.tag)} · ${fmtDT(p.ts)}${p.caption ? " · " + esc(p.caption) : ""}${p.hash ? " · #" + esc(String(p.hash).slice(0, 8)) : ""}</figcaption></figure>`).join("")}
         </div></div>` : ""}
 
       ${tags.length ? `<div class="p-sec"><h4>Data tags &amp; part photos</h4>
         <div class="p-photos">
-        ${tags.map(p => `<figure><img src="${esc(safeDataUrl(p.dataUrl))}" alt="${esc(p.caption || p.tag)}"><figcaption>${esc(p.tag)} · ${fmtDT(p.ts)}${p.caption ? " · " + esc(p.caption) : ""}</figcaption></figure>`).join("")}
+        ${tags.map(p => `<figure><img src="${esc(safeDataUrl(p.dataUrl))}" alt="${esc(p.caption || p.tag)}"><figcaption>${esc(p.tag)} · ${fmtDT(p.ts)}${p.caption ? " · " + esc(p.caption) : ""}${p.hash ? " · #" + esc(String(p.hash).slice(0, 8)) : ""}</figcaption></figure>`).join("")}
         </div></div>` : ""}
 
       <div class="p-sec"><h4>Signatures</h4>
@@ -960,6 +1025,7 @@ function viewPacket(id) {
 
   $("#back").onclick = () => location.hash = "#/job/" + j.id;
   $("#backJob").onclick = () => location.hash = "#/job/" + j.id;
+  logEvent("packet_built", { job_id: j.id });
   initSigPad($("#sigCustomer"), j.customerSig);
   initSigPad($("#sigTech"), j.techSig);
   $("#clearCSig").onclick = () => clearSig($("#sigCustomer"));
@@ -987,8 +1053,8 @@ function viewPacket(id) {
     save(S); toast("Claim: " + CLAIM_LABEL[value]); viewPacket(j.id);
   };
   const printAnyway = $("#printAnyway");
-  if (printAnyway) printAnyway.onclick = () => authorizedPrint();
-  $("#printBtn").onclick = () => { if (readyToOutput()) authorizedPrint(); };
+  if (printAnyway) printAnyway.onclick = () => { logEvent("packet_printed", { job_id: j.id, override_used: true }); authorizedPrint(); };
+  $("#printBtn").onclick = () => { if (readyToOutput()) { logEvent("packet_printed", { job_id: j.id, override_used: false }); authorizedPrint(); } };
   $("#shareBtn").onclick = () => {
     if (!readyToOutput()) return;
     const lines = [
@@ -1018,7 +1084,7 @@ function viewPacket(id) {
       setStatusSilent(j, "complete");
     }
     j.claim.status = "filed"; j.claim.statusDate = Date.now();
-    j.filedAt = j.claim.statusDate; save(S); toast("Claim marked filed"); viewPacket(j.id);
+    j.filedAt = j.claim.statusDate; save(S); logEvent("claim_filed", { job_id: j.id }); toast("Claim marked filed"); viewPacket(j.id);
   };
 }
 function setStatusSilent(j, s) { j.status = s; if (s === "complete" && !j.completedAt) j.completedAt = Date.now(); }
@@ -1458,7 +1524,7 @@ function viewSettings() {
   };
   $("#s_reqPhotos").onchange = e => { S.settings.requirePhotos = e.target.checked; save(S); toast("Saved"); };
   $("#exportBtn").onclick = () => {
-    const blob = new Blob([JSON.stringify(S, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify({ state: S, events: readEvents() }, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = "roadwrench-backup.json"; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
@@ -1473,6 +1539,8 @@ function viewSettings() {
       localStorage.removeItem("roadwrench.oversized.v1");
       localStorage.removeItem("roadwrench.sync_on.v1");
       localStorage.removeItem("roadwrench.invoicelock.v1");
+      localStorage.removeItem("roadwrench.events.v1");
+      localStorage.removeItem("roadwrench.billinglog.v1");
       S = blankState(); save(S); toast("Wiped clean"); route();
     }
   };

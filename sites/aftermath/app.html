@@ -252,7 +252,7 @@
         <label>Date of loss<input type="date" id="edit-lossDate"></label>
         <label>Cause of loss
           <select id="edit-cause">
-            <option value="">—</option>
+            <option value="">Select cause</option>
             <option>Water damage</option>
             <option>Fire / smoke</option>
             <option>Mold</option>
@@ -427,6 +427,40 @@
 <script src="js/app.js"></script>
 <script src="js/sync.js"></script>
 <script src="js/auth-ui.js"></script>
+<script src="billing-ui.js"></script>
+<style>:root{
+  --bill-accent:var(--accent); --bill-bg:var(--bg); --bill-text:var(--text);
+  --bill-muted:var(--muted); --bill-line:var(--line);
+}</style>
+<script>
+/* Billing: shared module (see builds/shared/billing-ui.js). Trial = full
+ * access; the paywall overlay blocks the app but local data is untouched.
+ * 14-day no-card trial, then Solo crew $99/mo or Company $199/mo. */
+(function(){
+  var PLANS = [
+    { lookupKey: "price_aftermath_solo", name: "Solo crew", price: "$99/mo",
+      blurb: "Unlimited jobs, photo evidence, decon checklists, adjuster dossiers." },
+    { lookupKey: "price_aftermath_company", name: "Company", price: "$199/mo",
+      blurb: "Unlimited jobs, photo evidence, decon checklists, adjuster dossiers, adjuster pipeline, priority support." }
+  ];
+  function boot(){
+    if (typeof initBilling !== "function") return;
+    initBilling({ appSlug: "aftermath", plans: PLANS }).then(function(b){
+      window.__billing = b;
+      b.ensurePaywall();
+      var sb = document.getElementById("settingsBtn");
+      if (sb) sb.addEventListener("click", function(){
+        setTimeout(function(){ try { b.injectSettings(); } catch(e){} }, 0);
+      });
+    }).catch(function(e){
+      // Billing must never break the app. Fail open, log loudly.
+      try { console.error("[billing] init failed:", e); } catch(_){}
+    });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>
 <style>
 /* device sync (prototype) */
 .sync-card{border:1px solid #2a3340;background:#141a23;border-radius:12px;padding:12px 14px;margin-top:8px}

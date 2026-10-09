@@ -18,11 +18,12 @@
       <span id="brandIcon"></span>
       <h1>RoadWrench<small>Mobile RV Repair</small></h1>
     </div>
-    <nav class="tabs" id="tabs"></nav>
   </header>
+  <div id="offlineBanner" class="offline-banner" hidden>You're offline. Everything keeps working, and changes save on this device.</div>
   <div id="storageBanner" class="storage-banner" hidden></div>
   <main id="view"></main>
 </div>
+<nav class="tabs" id="tabs" aria-label="Main navigation"></nav>
 <div class="toast" id="toast"></div>
 <script src="app.js"></script>
 <script src="sync.js"></script>
@@ -68,10 +69,36 @@
       window.__billing = b;
       b.ensurePaywall();
       window.__attachBillSettings();
+      // Log billing milestones on every state refresh, not just at boot
+      // (startTrial refreshes internally; without this, trial_started is missed).
+      try {
+        var origRefresh = b.refresh.bind(b);
+        b.refresh = function(){
+          return origRefresh().then(function(r){ logBillingEvents(b); return r; });
+        };
+      } catch(e){}
+      logBillingEvents(b);
     }).catch(function(e){
       // Billing must never break the app. Fail open, log loudly.
       try { console.error("[billing] init failed:", e); } catch(_){}
     });
+  }
+  // Local-only billing milestones for the usage event log (PRD R-45).
+  function logBillingEvents(b){
+    try {
+      var st = (b && b.status) || {};
+      var key = "roadwrench.billinglog.v1", prev = null;
+      try { prev = JSON.parse(localStorage.getItem(key)); } catch(e){}
+      var cur = { state: st.state || "unknown", trial_ends_at: st.trial_ends_at || 0 };
+      if (!prev || prev.state !== cur.state || prev.trial_ends_at !== cur.trial_ends_at) {
+        if (cur.state === "trialing" && (!prev || prev.state !== "trialing" || prev.trial_ends_at !== cur.trial_ends_at)) {
+          if (typeof logEvent === "function") logEvent("trial_started", { trial_ends_at: cur.trial_ends_at });
+        } else if (prev && typeof logEvent === "function") {
+          logEvent("subscription_changed", { from: prev.state, to: cur.state });
+        }
+        try { localStorage.setItem(key, JSON.stringify(cur)); } catch(e){}
+      }
+    } catch(e){}
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();

@@ -64,7 +64,7 @@ function gpsOnce(cb){
         fin({lat: Math.round(c.latitude*1e6)/1e6, lon: Math.round(c.longitude*1e6)/1e6, acc: Math.round(c.accuracy||0)});
       },
       function(){ fin(null); },
-      {timeout:6000, maximumAge:120000, enableHighAccuracy:false});
+      {timeout:6000, maximumAge:8000, enableHighAccuracy:false});
   }catch(e){ fin(null); }
 }
 function fmtGps(g){
@@ -127,6 +127,10 @@ function photoBytes(jobId){
 }
 
 function save(){
+  /* Recovery screen is up: LS_KEY holds quarantined data, do not touch it.
+   * In-memory work still proceeds (exports work); nothing is reported as a
+   * failure because the session itself is healthy. */
+  if(window.__aftermathRecovery) return true;
   var ok = true;
   try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){ ok = false; }
   try{ if(window.__aftermathSync) window.__aftermathSync.onSave(); }catch(e){}
@@ -155,7 +159,7 @@ function storageMB(){
 /* Sync bridge (sync.js). Local-first: app works fully offline; sync is debounced and never blocks UI. */
 window.__aftermath = {
   getS: function(){ return state; },
-  saveLocal: function(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); return true; }catch(e){ return false; } },
+  saveLocal: function(){ if(window.__aftermathRecovery) return true; try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); return true; }catch(e){ return false; } },
   refresh: function(){ refreshAfterSync(); },
   notifySaveFailed: function(what){ showSaveBanner(what); }
 };
@@ -164,11 +168,53 @@ function refreshAfterSync(){
     renderJobHeader(); renderPhotos(); renderChecklist(); renderWorklog(); renderDossierTab();
   } else renderJobs();
 }
+var LS_CORRUPT_PREFIX = "aftermath.v1.unreadable.";
+function corruptKeys(){
+  var out = [];
+  try{
+    for(var i=0;i<localStorage.length;i++){
+      var k = localStorage.key(i);
+      if(k && k.indexOf(LS_CORRUPT_PREFIX)===0) out.push(k);
+    }
+  }catch(e){}
+  return out.sort();
+}
 function load(){
+  var corruptRaw = null;
   try{
     var raw = localStorage.getItem(LS_KEY);
-    if(raw){ var s = JSON.parse(raw); if(s && s.jobs){ state = s; } }
-  }catch(e){}
+    if(raw){
+      var s = JSON.parse(raw);
+      if(s && s.jobs){ state = s; return; }
+      corruptRaw = raw; // valid JSON, but not an Aftermath store
+    }
+  }catch(e){
+    try{ corruptRaw = localStorage.getItem(LS_KEY); }catch(_){}
+  }
+  if(corruptRaw != null){
+    /* Unreadable saved data is NEVER overwritten. Quarantine the bad blob
+     * under a backup key, run with fresh state in memory only, and show an
+     * honest recovery screen. LS_KEY is not written until the user chooses
+     * "Start fresh". (Same pattern as nextchapter.) */
+    try{
+      var stamp = new Date().toISOString().replace(/[:.]/g,"-");
+      localStorage.setItem(LS_CORRUPT_PREFIX + stamp, corruptRaw);
+    }catch(_){}
+    window.__aftermathRecovery = true;
+  }
+}
+function downloadRecoveryBackup(){
+  var keys = corruptKeys();
+  if(!keys.length){ toast("No saved backup found."); return; }
+  var raw = "";
+  try{ raw = localStorage.getItem(keys[keys.length-1]) || ""; }catch(e){}
+  var blob = new Blob([raw], {type:"application/json"});
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "aftermath-saved-backup.json";
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 800);
+  toast("Backup downloaded.");
 }
 
 function logEvent(jobId, text){
@@ -378,6 +424,7 @@ function switchTab(name){
   });
   document.querySelectorAll(".tab-panel").forEach(function(p){ p.classList.remove("active"); });
   $("tab-"+name).classList.add("active");
+  if(name==="worklog") restoreLineDraft();
 }
 
 /* ---------- photos ---------- */
@@ -452,10 +499,18 @@ function handlePhotoFilesWithGps(files, gps){
         };
         state.photos.push(ph);
         stampPhotoSha(ph); // async integrity checksum; save() runs when it lands
-        if(save()){ done++; hideSaveBanner(); }
-        else { failed++; showSaveBanner("photo ("+(f.name||"upload")+")"); }
-        logEvent(jobId, "Photo added ("+(f.name||"upload")+")" + (rapid ? " ["+rapid.room+", "+rapid.phase+"]" : ""));
-        if(currentJobId===jobId){ renderPhotos(); renderDossierTab(); }
+        if(save()){
+          done++; hideSaveBanner();
+          logEvent(jobId, "Photo added ("+(f.name||"upload")+")" + (rapid ? " ["+rapid.room+", "+rapid.phase+"]" : ""));
+          if(currentJobId===jobId){ renderPhotos(); renderDossierTab(); }
+        } else {
+          /* Storage failed: the photo was never persisted, so roll it back
+           * out of memory. No grid entry, no tag/export surface, and no
+           * "Photo added" custody event for an event that never happened. */
+          failed++;
+          state.photos = state.photos.filter(function(x){return x.id!==ph.id;});
+          showSaveBanner("photo ("+(f.name||"upload")+")");
+        }
         if(done+failed===images.length && images.length && failed===0){
           toast(images.length + (images.length===1?" photo":" photos") + " added" +
             (rapid ? " ("+rapid.room+", "+rapid.phase+")" : ""));
@@ -543,6 +598,62 @@ function restoreJobDraft(){
   JOB_DRAFT_FIELDS.forEach(function(id){ var el=$(id); if(el && !el.value && d[id]) el.value=d[id]; });
 }
 function clearJobDraft(){ try{ localStorage.removeItem(JOB_DRAFT_KEY); }catch(e){} }
+
+/* Restart-safe line-item draft (PRD section 5: every form survives
+ * abandonment mid-entry). Autosaves the add-line-item form on every
+ * keystroke; restored when the Work log tab opens; cleared on submit. */
+var LI_DRAFT_KEY = "aftermath.lidraft.v1";
+var LI_DRAFT_FIELDS = ["li-desc","li-qty","li-unit","li-rate"];
+function saveLineDraft(){
+  try{
+    var d = {};
+    LI_DRAFT_FIELDS.forEach(function(id){ var el=$(id); if(el) d[id]=el.value; });
+    localStorage.setItem(LI_DRAFT_KEY, JSON.stringify(d));
+  }catch(e){}
+}
+function restoreLineDraft(){
+  var d = null;
+  try{ d = JSON.parse(localStorage.getItem(LI_DRAFT_KEY)||"null"); }catch(e){}
+  if(!d) return;
+  LI_DRAFT_FIELDS.forEach(function(id){
+    var el=$(id);
+    if(el && d[id]!==undefined && d[id]!==null) el.value = d[id];
+  });
+}
+function clearLineDraft(){ try{ localStorage.removeItem(LI_DRAFT_KEY); }catch(e){} }
+
+/* Restart-safe tag-modal draft. The tag modal holds unsaved work (notes,
+ * phase, markers with labels); autosave it per photo so a reload mid-tag
+ * does not lose it. Restored when the same photo's modal opens; cleared
+ * when tags are saved or the photo is deleted. */
+var TAG_DRAFT_KEY = "aftermath.tagdraft.v1";
+function saveTagDraft(){
+  if(!taggingPhotoId) return;
+  try{
+    localStorage.setItem(TAG_DRAFT_KEY, JSON.stringify({
+      photoId: taggingPhotoId,
+      room: $("photo-room").value, damageType: $("photo-damage").value,
+      severity: $("photo-severity").value, notes: $("photo-notes").value,
+      phase: taggingPhase,
+      pins: pinDraft.map(function(pin){ return {x:pin.x, y:pin.y, label:pin.label||""}; })
+    }));
+  }catch(e){}
+}
+function restoreTagDraft(photoId){
+  var d = null;
+  try{ d = JSON.parse(localStorage.getItem(TAG_DRAFT_KEY)||"null"); }catch(e){}
+  if(!d || d.photoId!==photoId) return;
+  if(d.room!==undefined) $("photo-room").value = d.room;
+  if(d.damageType!==undefined) $("photo-damage").value = d.damageType;
+  if(d.severity!==undefined) $("photo-severity").value = d.severity;
+  if(d.notes!==undefined) $("photo-notes").value = d.notes;
+  if(typeof d.phase==="string"){ taggingPhase = d.phase; paintPhaseBtns(); }
+  if(Object.prototype.toString.call(d.pins)==="[object Array]"){
+    pinDraft = d.pins.map(function(pin){ return {x:+pin.x||0, y:+pin.y||0, label:String(pin.label||"")}; });
+    renderPinLayer(); renderPinList();
+  }
+}
+function clearTagDraft(){ try{ localStorage.removeItem(TAG_DRAFT_KEY); }catch(e){} }
 var confirmCb = null;
 function askConfirm(title, body, okLabel, danger, cb){
   $("confirm-title").textContent = title;
@@ -568,6 +679,7 @@ function openTagModal(photoId){
   taggingPhase = p.phase || "";
   paintPhaseBtns();
   renderPinLayer(); renderPinList();
+  restoreTagDraft(photoId); // unsaved notes/phase/markers from before a reload
   openModal("modal-photo");
 }
 function renderPinLayer(){
@@ -581,18 +693,19 @@ function renderPinList(){
   if(!pinDraft.length){ list.innerHTML = '<span class="muted" style="font-size:13px;">No markers yet.</span>'; return; }
   list.innerHTML = pinDraft.map(function(pin,i){
     return '<span class="pin-chip"><b>'+(i+1)+'</b> ' +
-      '<input type="text" data-pin="'+i+'" value="'+esc(pin.label)+'" placeholder="Label (e.g. stain)" maxlength="40" style="width:130px;margin:0;padding:5px 8px;font-size:16px;">' +
+      '<input type="text" data-pin="'+i+'" value="'+esc(pin.label)+'" placeholder="Label (e.g. stain)" aria-label="Label for marker '+(i+1)+'" maxlength="40" style="width:130px;margin:0;padding:5px 8px;font-size:16px;">' +
       '<button type="button" data-delpin="'+i+'" aria-label="Remove marker"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M6 18L18 6"/></svg></button></span>';
   }).join("");
   list.querySelectorAll("[data-delpin]").forEach(function(b){
     b.addEventListener("click", function(){
       pinDraft.splice(parseInt(b.getAttribute("data-delpin"),10),1);
-      renderPinLayer(); renderPinList();
+      renderPinLayer(); renderPinList(); saveTagDraft();
     });
   });
   list.querySelectorAll("[data-pin]").forEach(function(inp){
     inp.addEventListener("input", function(){
       pinDraft[parseInt(inp.getAttribute("data-pin"),10)].label = inp.value;
+      saveTagDraft();
     });
   });
 }
@@ -671,7 +784,7 @@ function renderWorklog(){
     return '<div class="li-row" data-id="'+esc(i.id)+'">' +
       '<div><div class="li-desc">'+esc(i.desc)+'</div>' +
       '<div class="li-meta">'+esc(i.qty)+' '+esc(i.unit||"")+' × '+esc(money(i.rate))+'</div>' +
-      '<button type="button" class="linklike" data-linkitem="'+esc(i.id)+'" style="font-size:12.5px;margin-top:3px;">' +
+      '<button type="button" class="linklike" data-linkitem="'+esc(i.id)+'" style="margin-top:3px;">' +
       (n ? esc(n)+" evidence photo"+(n===1?"":"s")+" linked" : "Link evidence photos") + '</button></div>' +
       '<div style="display:flex;align-items:center;gap:6px;"><div class="li-amt">'+esc(money(i.qty*i.rate))+'</div>' +
       '<button class="li-del" data-del="'+esc(i.id)+'" aria-label="Delete"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button></div></div>';
@@ -829,7 +942,15 @@ function renderDossierTab(){
  * that a human did not assert. */
 var linkingItemId = null;
 var linkingSel = [];
-function linkedCount(item){ return (item.photoIds||[]).length; }
+/* Count only links that still point at a real photo on this job. Photo
+ * deletions prune photoIds too, but this guard keeps the coverage card, the
+ * dossier Evidence column, and the file-contents index honest even if a stale
+ * ID ever survives. */
+function linkedCount(item){
+  var ids = {};
+  jobPhotos(item.jobId).forEach(function(p){ ids[p.id] = true; });
+  return (item.photoIds||[]).filter(function(id){ return ids[id]; }).length;
+}
 function renderCoverage(){
   var el = $("coverage-body");
   if(!el) return;
@@ -1278,6 +1399,57 @@ document.addEventListener("DOMContentLoaded", function(){
   });
   $("btn-new-job").addEventListener("click", function(){ restoreJobDraft(); });
 
+  /* Line-item draft: autosave every keystroke, restore when the Work log
+   * tab opens (switchTab calls restoreLineDraft), cleared on submit. */
+  LI_DRAFT_FIELDS.forEach(function(id){
+    var el = $(id);
+    if(el){ el.addEventListener("input", saveLineDraft); el.addEventListener("change", saveLineDraft); }
+  });
+
+  /* Trial/billing banner offset: the banner is position:fixed and wraps to
+   * two lines at 360px (77px), so a fixed 64px offset would cover the app's
+   * own topbar. Measure the banner's real height and push the app down by
+   * exactly that; re-measure on resize and whenever the banner changes. */
+  function syncBillOffset(){
+    var app = $("app"); if(!app) return;
+    var b = document.querySelector(".bill-banner");
+    var h = 0;
+    if(b){
+      try{
+        var cs = getComputedStyle(b);
+        if(cs.display!=="none" && cs.visibility!=="hidden") h = Math.ceil(b.getBoundingClientRect().height);
+      }catch(e){}
+    }
+    var want = h ? h+"px" : "";
+    if(app.style.paddingTop !== want) app.style.paddingTop = want;
+  }
+  var billRaf = null;
+  function queueBillOffset(){
+    if(billRaf) return;
+    billRaf = requestAnimationFrame(function(){ billRaf = null; syncBillOffset(); });
+  }
+  syncBillOffset();
+  window.addEventListener("resize", syncBillOffset);
+  window.addEventListener("load", syncBillOffset);
+  if("MutationObserver" in window){
+    var billObs = new MutationObserver(queueBillOffset);
+    billObs.observe(document.body, {childList:true, subtree:true, characterData:true});
+  }
+
+  /* Unreadable saved data: quarantine happened in load(); show the honest
+   * recovery screen instead of a silent empty app. */
+  if(window.__aftermathRecovery){
+    showView("recovery");
+    $("btn-recovery-download").addEventListener("click", downloadRecoveryBackup);
+    $("btn-recovery-fresh").addEventListener("click", function(){
+      if(!confirm("Start fresh? This clears the saved backup from this device.")) return;
+      try{ corruptKeys().forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
+      window.__aftermathRecovery = false;
+      save(); renderJobs(); showView("jobs");
+      toast("Started fresh. Your jobs are safe to rebuild.");
+    });
+  }
+
   $("btn-edit-job").addEventListener("click", openJobEdit);
   $("job-edit-form").addEventListener("submit", function(e){
     e.preventDefault();
@@ -1330,9 +1502,17 @@ document.addEventListener("DOMContentLoaded", function(){
     };
     state.photos.push(ph);
     stampPhotoSha(ph);
-    saveChecked("sample photo", "Sample photo added");
-    logEvent(currentJobId, "Sample photo added ("+s.room+")");
-    renderPhotos(); renderDossierTab();
+    if(save()){
+      hideSaveBanner();
+      logEvent(currentJobId, "Sample photo added ("+s.room+")");
+      toast("Sample photo added");
+      renderPhotos(); renderDossierTab();
+    } else {
+      /* Same rollback as imports: a failed save must never look like a
+       * success, so the photo leaves memory and no custody event is logged. */
+      state.photos = state.photos.filter(function(x){return x.id!==ph.id;});
+      showSaveBanner("sample photo");
+    }
   });
 
   /* rapid capture */
@@ -1383,20 +1563,27 @@ document.addEventListener("DOMContentLoaded", function(){
     var x = Math.round((e.clientX - r.left)/r.width*1000)/10;
     var y = Math.round((e.clientY - r.top)/r.height*1000)/10;
     pinDraft.push({x:x, y:y, label:""});
-    renderPinLayer(); renderPinList();
+    renderPinLayer(); renderPinList(); saveTagDraft();
   });
   $("btn-pin-mode").addEventListener("click", function(){
     pinMode = !pinMode; updatePinBtn();
   });
   $("btn-pin-clear").addEventListener("click", function(){
-    pinDraft = []; renderPinLayer(); renderPinList();
+    pinDraft = []; renderPinLayer(); renderPinList(); saveTagDraft();
   });
   document.querySelectorAll("#photo-phase .phase-btn").forEach(function(b){
     b.addEventListener("click", function(){
       taggingPhase = b.getAttribute("data-phase");
-      paintPhaseBtns();
+      paintPhaseBtns(); saveTagDraft();
     });
   });
+  /* tag-modal draft: every unsaved change autosaves so a reload mid-tag
+   * does not lose it (restored in openTagModal, cleared on save/delete). */
+  ["photo-room","photo-damage","photo-severity"].forEach(function(id){
+    var el = $(id);
+    if(el){ el.addEventListener("change", saveTagDraft); }
+  });
+  $("photo-notes").addEventListener("input", saveTagDraft);
   $("photo-form").addEventListener("submit", function(e){
     e.preventDefault();
     var p = state.photos.find(function(x){return x.id===taggingPhotoId;});
@@ -1406,6 +1593,7 @@ document.addEventListener("DOMContentLoaded", function(){
     p.pins = pinDraft.map(function(pin){ return {x:pin.x, y:pin.y, label:(pin.label||"").trim()}; });
     p.phase = taggingPhase;
     saveChecked("photo tags", "Photo tagged"); closeModals();
+    clearTagDraft();
     logEvent(currentJobId, "Photo tagged ("+[p.room,p.damageType].filter(Boolean).join(", ")+")");
     renderPhotos(); renderDossierTab();
   });
@@ -1426,7 +1614,16 @@ document.addEventListener("DOMContentLoaded", function(){
   });
   $("btn-photo-delete").addEventListener("click", function(){
     askConfirm("Delete this photo?", "It will be removed from the dossier.", "Delete photo", true, function(){
-      state.photos = state.photos.filter(function(x){return x.id!==taggingPhotoId;});
+      var pid = taggingPhotoId;
+      state.photos = state.photos.filter(function(x){return x.id!==pid;});
+      /* Prune dangling evidence links so coverage, the Evidence column, and
+       * the file-contents index never count a photo that no longer exists. */
+      state.lineItems.forEach(function(li){
+        if(li.photoIds && li.photoIds.length){
+          li.photoIds = li.photoIds.filter(function(id){ return id!==pid; });
+        }
+      });
+      clearTagDraft();
       saveChecked("photo deletion", "Photo deleted"); closeModals();
       logEvent(currentJobId, "Photo deleted");
       renderPhotos(); renderDossierTab();
@@ -1444,6 +1641,7 @@ document.addEventListener("DOMContentLoaded", function(){
     saveChecked("line item", "Line item added");
     logEvent(currentJobId, "Work log: " + desc + " (" + money(qty*rate) + ")");
     $("li-desc").value = ""; $("li-qty").value = "1"; $("li-rate").value = "";
+    clearLineDraft();
     renderWorklog(); renderDossierTab();
   });
 
@@ -1492,9 +1690,13 @@ document.addEventListener("DOMContentLoaded", function(){
   $("btn-link-save").addEventListener("click", function(){
     var item = state.lineItems.find(function(x){return x.id===linkingItemId;});
     if(item){
-      item.photoIds = linkingSel.slice();
+      /* Drop any stale IDs (a photo deleted since the modal opened) before
+       * saving, so photoIds only ever reference existing photos. */
+      var valid = {};
+      jobPhotos(currentJobId).forEach(function(p){ valid[p.id] = true; });
+      item.photoIds = linkingSel.filter(function(id){ return valid[id]; });
       saveChecked("evidence links", "Evidence linked");
-      logEvent(currentJobId, "Evidence linked: '" + item.desc + "' (" + linkingSel.length + " photo(s))");
+      logEvent(currentJobId, "Evidence linked: '" + item.desc + "' (" + item.photoIds.length + " photo(s))");
       renderWorklog(); renderDossierTab();
     }
     closeModals();

@@ -59,7 +59,7 @@ var CSS = [
 " box-shadow:0 2px 10px rgba(0,0,0,.18);}",
 ".bill-banner.warn{background:#8a5a00;}",
 ".bill-banner .bill-bmsg{flex:1;min-width:0;}",
-".bill-banner button{flex:none;border:none;border-radius:999px;padding:8px 16px;font-size:14px;font-weight:700;",
+".bill-banner button{flex:none;border:none;border-radius:999px;padding:12px 16px;min-height:44px;font-size:14px;font-weight:700;",
 " background:#fff;color:#23201B;touch-action:manipulation;cursor:pointer;}",
 ".bill-banner .bill-bx{background:transparent;color:#fff;padding:8px;font-size:16px;}",
 ".bill-overlay{position:fixed;inset:0;z-index:9500;display:flex;align-items:flex-start;justify-content:center;",
@@ -365,7 +365,7 @@ BillingClient.prototype.buildOverlay = function(){
     var code = e && e.code;
     if (code === "BILLING_NOT_CONFIGURED") return "Payments are not switched on yet. Please check back soon.";
     var m = (e && e.message) || "";
-    if (/billing_|whsec|rk_test|rk_live|SECRETS\.md|Worker/i.test(m)) return "Something went wrong. Please try again.";
+    if (/billing_|whsec|rk_test|rk_live|SECRETS\.md|Worker|failed to fetch|networkerror|load failed|ERR_/i.test(m)) return "Something went wrong. Please try again.";
     return m || "Something went wrong. Please try again.";
   }
   ov.querySelectorAll(".bill-plan").forEach(function(b){

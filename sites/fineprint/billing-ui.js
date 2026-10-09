@@ -59,9 +59,10 @@ var CSS = [
 " box-shadow:0 2px 10px rgba(0,0,0,.18);}",
 ".bill-banner.warn{background:#8a5a00;}",
 ".bill-banner .bill-bmsg{flex:1;min-width:0;}",
-".bill-banner button{flex:none;border:none;border-radius:999px;padding:8px 16px;font-size:14px;font-weight:700;",
+".bill-banner button{flex:none;border:none;border-radius:999px;padding:8px 16px;min-height:44px;font-size:14px;font-weight:700;",
 " background:#fff;color:#23201B;touch-action:manipulation;cursor:pointer;}",
-".bill-banner .bill-bx{background:transparent;color:#fff;padding:8px;font-size:16px;}",
+".bill-banner .bill-bx{background:transparent;color:#fff;padding:8px;min-height:44px;font-size:16px;}",
+".bill-banner .bill-berr{flex:1 1 100%;font-size:13px;font-weight:600;}",
 ".bill-overlay{position:fixed;inset:0;z-index:9500;display:flex;align-items:flex-start;justify-content:center;",
 " overflow-y:auto;background:var(--bill-scrim,rgba(24,19,12,.62));padding:24px 16px;}",
 ".bill-overlay[hidden]{display:none;}",
@@ -202,7 +203,11 @@ BillingClient.prototype.refresh = async function(){
     }
   }
   this.renderBanner();
-  if (this.entitled) this.hidePaywall();
+  /* P1-1 (red2): every billing-state change re-renders the paywall. The old
+   * code only hid the overlay when entitled, so after a mid-session "Refresh
+   * status" flipped trialUsed to true, the stale fail-open overlay kept its
+   * X and the expired-trial block could be dismissed. */
+  this.ensurePaywall();
   return this.status;
 };
 
@@ -213,24 +218,14 @@ BillingClient.prototype.daysLeft = function(){
   return Math.max(0, Math.ceil((this.status.trial_ends_at - Date.now()) / 86400000));
 };
 
-// Never show raw backend codes, fetch TypeErrors, or internal references to
-// users. Shared by the trial overlay and app pay sheets (FinePrint calls
+// Default-deny: nothing a backend, network, or SDK hands us reaches the
+// money surface. One generic line for every failure, whatever the cause.
+// Shared by the trial overlay and app pay sheets (FinePrint calls
 // window.__billing.friendlyErr on checkout failures).
 BillingClient.prototype.friendlyErr = function(e){
   var code = e && e.code;
   if (code === "BILLING_NOT_CONFIGURED") return "Payments are not switched on yet. Please check back soon.";
-  if (e && (e.status === 429 || code === "RATE_LIMITED" || code === 429))
-    return "Too many tries. Please wait a moment and try again.";
-  var m = String((e && e.message) || "");
-  if (/billing_|whsec|rk_test|rk_live|SECRETS\.md|Worker|failed to fetch|networkerror|load failed|ERR_/i.test(m)) return "Something went wrong. Please try again.";
-  if (e && e.name === "AbortError") return "Something went wrong. Please try again.";
-  // Never surface raw backend/Stripe text on the money surface: account ids,
-  // price ids, paths, code fragments, and stack traces all become the generic
-  // message. Only short, plain sentences pass through.
-  if (!m || m.length > 140 ||
-      /acct_|price_|sk_live|sk_test|whsec|stripe|https?:|\/\S+\.\S+|[{}\[\]]|http \d|error:|undefined|null|D1|SQL|trace|token|secret/i.test(m))
-    return "Something went wrong. Please try again.";
-  return m;
+  return "Something went wrong. Please try again.";
 };
 
 /* ---------------- trial / card / portal ---------------- */
@@ -350,7 +345,26 @@ BillingClient.prototype.renderBanner = function(){
   bar.innerHTML = html;
   var btn = document.createElement("button");
   btn.textContent = st === "past_due" ? "Update card" : "Add card";
-  btn.onclick = function(){ self.setupCard(); };
+  // Default-deny: nothing a backend, network, or SDK hands us reaches the
+  // banner. One generic line for every failure, whatever the cause (the old
+  // blocklist let novel backend strings render raw).
+  function bannerFriendlyErr(e){
+    return "Something went wrong. Please try again.";
+  }
+  btn.onclick = function(){
+    if (btn.disabled) return;
+    btn.disabled = true;
+    self.setupCard().then(function(){ btn.disabled = false; }, function(e){
+      btn.disabled = false;
+      if (!bar.querySelector(".bill-berr")) {
+        var em = document.createElement("span");
+        em.className = "bill-berr";
+        em.setAttribute("role", "alert");
+        em.textContent = bannerFriendlyErr(e);
+        bar.appendChild(em);
+      }
+    });
+  };
   bar.appendChild(btn);
   document.body.appendChild(bar);
   this._banner = bar;
@@ -397,7 +411,13 @@ BillingClient.prototype.buildOverlay = function(){
 
   var errBox = ov.querySelector(".bill-err");
   function showErr(m){ errBox.textContent = m; errBox.hidden = false; }
-  function friendlyErr(e){ return self.friendlyErr(e); }
+  /* Default-deny twin of the prototype: the overlay's money surface never
+   * renders a backend string, even if the prototype wiring ever changes. */
+  function friendlyErr(e){
+    var code = e && e.code;
+    if (code === "BILLING_NOT_CONFIGURED") return "Payments are not switched on yet. Please check back soon.";
+    return "Something went wrong. Please try again.";
+  }
   ov.querySelectorAll(".bill-plan").forEach(function(b){
     b.addEventListener("click", function(){
       ov.querySelectorAll(".bill-plan").forEach(function(x){ x.classList.remove("sel"); });
@@ -419,13 +439,14 @@ BillingClient.prototype.buildOverlay = function(){
     }
   });
   ov.querySelector(".bill-link").addEventListener("click", async function(ev){
-    ev.currentTarget.textContent = "Checking...";
+    var link = ev.currentTarget; // currentTarget nulls after await; capture now
+    link.textContent = "Checking...";
     try {
       await self.refresh();
       if (self.entitled) self.hidePaywall();
-      else ev.currentTarget.textContent = "Still no active subscription";
+      else link.textContent = "Still no active subscription";
     } catch(e) {
-      ev.currentTarget.textContent = "Could not reach billing. Try again.";
+      link.textContent = "Could not reach billing. Try again.";
     }
   });
   // The overlay is a fixed full-screen layer above the app, so nothing
@@ -480,9 +501,34 @@ BillingClient.prototype.bindSettings = function(root){
   root.querySelectorAll("[data-act]").forEach(function(b){
     b.addEventListener("click", function(){
       var act = b.getAttribute("data-act");
-      if (act === "portal") self.portal();
-      else if (act === "card") self.setupCard();
-      else if (act === "trial") { self.ensurePaywall(); }
+      var pr = null;
+      if (act === "portal") pr = self.portal();
+      else if (act === "card") pr = self.setupCard();
+      else if (act === "trial") {
+        /* P2-2 (red2): the settings trial button re-probes billing before
+         * showing the overlay, so it works as a retry in every failure mode
+         * (including billing status failing at boot, where a status-less
+         * fail-open client renders the section). Failure is reported honestly
+         * in the section line instead of failing silently. */
+        var rowEl = b.closest ? b.closest(".bs-row") : null;
+        var lineEl = rowEl ? rowEl.querySelector(".grow span") : null;
+        var prevLine = lineEl ? lineEl.textContent : "";
+        if (lineEl) lineEl.textContent = "Checking billing" + "\u2026";
+        self.refresh().then(function(){
+          if (lineEl) lineEl.textContent = prevLine;
+          self.ensurePaywall();
+        }, function(){
+          if (lineEl) lineEl.textContent = "Could not reach billing. Try again.";
+        });
+        return;
+      }
+      // A dead backend must not surface as an unhandled rejection: show a
+      // brief honest line on the button itself, then restore it.
+      if (pr && pr.catch) pr.catch(function(){
+        var old = b.innerHTML;
+        b.textContent = "Could not reach billing";
+        setTimeout(function(){ try { b.innerHTML = old; } catch(e){} }, 4000);
+      });
     });
   });
 };

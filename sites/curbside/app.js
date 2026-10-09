@@ -319,10 +319,10 @@ function switchTab(t){
 }
 
 /* ---------- alerts + score ---------- */
-function permitState(sp){
+function permitState(sp,def){
   if(sp.status!=='active') return {level:'needed', days:null};
   const d=daysUntil(sp.expires);
-  if(d===null) return {level:'ok', days:null};
+  if(d===null) return {level:unverifiedSp(sp,def)?'unverified':'ok', days:null};
   if(d<0) return {level:'expired', days:d};
   if(d<=30) return {level:'crit', days:d};
   if(d<=90) return {level:'warn', days:d};
@@ -340,12 +340,20 @@ function cityNameOf(sp){
   const c=CITIES[sp.city||S.city]; return c?c.name:'';
 }
 const ALERT_RANK={expired:0,crit:1,warn:2,needed:3};
+/* P1-3: a renewing permit (any cycle except one-time) with no expiry date is
+ * NOT verified. Blank dates count as unverified everywhere: score, filter,
+ * subline, alerts. One-time permits with no date are genuinely done. */
+function isRenewing(def){ return !!(def && def.cycle && def.cycle!=='onetime'); }
+function unverifiedSp(sp,def){
+  return sp.status==='active' && (sp.expiresEst || (isRenewing(def) && !sp.expires));
+}
 function renderAlerts(){
   const box=$('#alerts'); const items=[];
   allPermits().forEach(({def,sp})=>{
-    const st=permitState(sp);
+    const st=permitState(sp,def);
     const cityBit=(sp.city&&sp.city!==S.city)?' ('+cityNameOf(sp)+')':'';
     if(sp.status!=='active') items.push({level:'needed', text:'Missing: '+def.name+cityBit, tab:'permits'});
+    else if(st.level==='unverified') items.push({level:'warn', text:def.name+cityBit+': no expiry date on file. Enter it from your permit document', tab:'permits'});
     else if(st.level==='expired') items.push({level:'expired', text:def.name+cityBit+' EXPIRED '+approxDays(sp)+Math.abs(st.days)+' days ago. Renew now', tab:'permits'});
     else if(st.level==='crit') items.push({level:'crit', text:def.name+cityBit+' renews in '+approxDays(sp)+st.days+' days', tab:'permits'});
     else if(st.level==='warn') items.push({level:'warn', text:def.name+cityBit+' renews in '+approxDays(sp)+st.days+' days', tab:'permits'});
@@ -374,7 +382,7 @@ function renderAlerts(){
 function complianceScore(){
   const ps=allPermits(); if(!ps.length) return {good:0,total:0};
   let good=0;
-  ps.forEach(({sp})=>{ const st=permitState(sp); if(sp.status==='active'&&(st.level==='ok'||st.level==='warn')) good++; });
+  ps.forEach(({sp,def})=>{ const st=permitState(sp,def); if(sp.status==='active'&&(st.level==='ok'||st.level==='warn')) good++; });
   return {good,total:ps.length};
 }
 
@@ -387,12 +395,14 @@ function renderHome(){
   $('#scoreNum').textContent=pct;
   $('#scoreRing').style.setProperty('--p',(pct*3.6)+'deg');
   $('#scoreLabel').textContent = total? good+' of '+total+' tracked items OK' : 'Getting set up';
-  const act=allPermits().filter(({sp})=>sp.status==='active'&&permitState(sp).days!==null)
-    .sort((a,b)=>permitState(a.sp).days-permitState(b.sp).days);
+  const act=allPermits().filter(({sp,def})=>sp.status==='active'&&permitState(sp,def).days!==null)
+    .sort((a,b)=>permitState(a.sp,a.def).days-permitState(b.sp,b.def).days);
   const unv=act.filter(({sp})=>sp.expiresEst); // nearest unverified item named honestly
+  const unvBlank=allPermits().filter(({sp,def})=>sp.status==='active'&&!sp.expires&&isRenewing(def));
   $('#scoreDetail').textContent =
-    unv.length ? 'Nearest unverified: '+unv[0].def.name+(unv[0].sp.expires?' (~'+permitState(unv[0].sp).days+'d, estimated date)':'')
-    : act.length ? 'Next renewal: '+act[0].def.name+' ('+permitState(act[0].sp).days+'d'+(act[0].sp.expiresEst?', estimated date':'')+')'
+    unv.length ? 'Nearest unverified: '+unv[0].def.name+' (~'+permitState(unv[0].sp,unv[0].def).days+'d, estimated date)'
+    : unvBlank.length ? 'Nearest unverified: '+unvBlank[0].def.name+' (no expiry date on file)'
+    : act.length ? 'Next renewal: '+act[0].def.name+' ('+permitState(act[0].sp,act[0].def).days+'d'+(act[0].sp.expiresEst?', estimated date':'')+')'
     : 'Add your permits to track renewals';
   // today card
   const tK=todayKey(); const spots=S.locations[tK]||[];
@@ -414,7 +424,7 @@ function renderHome(){
   $('#revWeek').textContent=money(rw);
   $('#revWeekSub').textContent=S.revenue.filter(r=>wset.has(r.date)).length+' selling shifts logged';
   // next renewal card
-  if(act.length){ const st=permitState(act[0].sp);
+  if(act.length){ const st=permitState(act[0].sp,act[0].def);
     $('#nextRenewal').textContent=st.days<0?'OVERDUE':approxDays(act[0].sp)+st.days+' days';
     $('#nextRenewalSub').textContent=act[0].def.name+(act[0].sp.expiresEst?' (estimated date)':'');
   } else { $('#nextRenewal').textContent='·'; $('#nextRenewalSub').textContent='No dated permits'; }
@@ -439,7 +449,7 @@ function renderTimeline(){
     const hits=ps.filter(({sp})=>sp.expires.slice(0,7)===mn.key);
     if(!hits.length) return '';
     return '<div class="tl-row"><span class="tl-month">'+mn.label+'</span><div class="tl-chips">'+hits.map(({def,sp})=>{
-      const st=permitState(sp);
+      const st=permitState(sp,def);
       const cls=st.level==='crit'||st.level==='expired'?'crit':st.level==='warn'?'warn':'ok';
       return '<span class="pill '+cls+'">'+esc(def.name.length>26?def.name.slice(0,26)+'…':def.name)+'</span>';
     }).join('')+'</div></div>';
@@ -454,8 +464,8 @@ function copySnapshot(){
     if(!ps.length) return;
     lines.push('== '+CITIES[g].name+' ==');
     ps.forEach(({def,sp})=>{
-      const st=permitState(sp);
-      const s=sp.status!=='active'?'NOT OBTAINED':st.days===null?'active':st.days<0?'EXPIRED '+approxDays(sp)+Math.abs(st.days)+'d ago':'expires '+(sp.expiresEst?'~':'')+sp.expires+' ('+approxDays(sp)+st.days+'d'+(sp.expiresEst?', estimated':', verified')+')';
+      const st=permitState(sp,def);
+      const s=sp.status!=='active'?'NOT OBTAINED':st.level==='unverified'?'NO EXPIRY DATE ON FILE':st.days===null?'active':st.days<0?'EXPIRED '+approxDays(sp)+Math.abs(st.days)+'d ago':'expires '+(sp.expiresEst?'~':'')+sp.expires+' ('+approxDays(sp)+st.days+'d'+(sp.expiresEst?', estimated':', verified')+')';
       lines.push('- '+def.name+' ('+def.agency+'): '+s);
     });
   });
@@ -505,11 +515,12 @@ function exportCalendar(){
   say('Saved! Import it into your calendar');
 }
 function permitPill(def, sp){
-  const st=permitState(sp); const done=sp.status==='active';
+  const st=permitState(sp,def); const done=sp.status==='active';
   if(!done) return '<span class="pill">Not obtained</span>';
   if(st.level==='expired') return '<span class="pill crit">Expired '+approxDays(sp)+Math.abs(st.days)+'d ago</span>';
   if(st.level==='crit') return '<span class="pill crit">'+approxDays(sp)+st.days+' days left</span>';
   if(st.level==='warn') return '<span class="pill warn">'+approxDays(sp)+st.days+' days left</span>';
+  if(st.level==='unverified') return '<span class="pill warn">No date on file</span>';
   if(st.days===null) return '<span class="pill ok">Done</span>';
   return '<span class="pill ok">'+approxDays(sp)+st.days+' days left</span>';
 }
@@ -524,13 +535,13 @@ function renderPermits(){
   // place; the list never re-sorts under the user's finger. Urgency still
   // surfaces through the alerts strip at the top (renderAlerts).
   const groups=[S.city].concat(S.extraCities||[]).filter(k=>CITIES[k]);
-  const needVerify=allPermits().filter(({sp})=>sp.status==='active'&&sp.expires&&sp.expiresEst).length;
+  const needVerify=allPermits().filter(({sp,def})=>unverifiedSp(sp,def)).length;
   let html='<div class="chip-row" role="group" aria-label="Permit filter">'+
     '<button class="chip'+(permFilter==='all'?' on':'')+'" data-f="all">All ('+allPermits().length+')</button>'+
     '<button class="chip'+(permFilter==='verify'?' on':'')+'" data-f="verify">Needs verification ('+needVerify+')</button></div>';
   groups.forEach((g,gi)=>{
     let ps=allPermits().filter(x=>x.cityKey===g);
-    if(permFilter==='verify') ps=ps.filter(({sp})=>sp.status==='active'&&sp.expires&&sp.expiresEst);
+    if(permFilter==='verify') ps=ps.filter(({sp,def})=>unverifiedSp(sp,def));
     html+='<div class="city-head"><h3>'+esc(CITIES[g].name)+'</h3>'+
       (gi>0?'<button class="link-btn" data-rmcity="'+g+'">Remove city</button>':'')+'</div>';
     html+=ps.map(({def,sp})=>{
@@ -539,7 +550,8 @@ function renderPermits(){
         '<button class="p-check" data-p="'+sp.id+'" aria-label="Toggle obtained: '+esc(def.name)+'" aria-pressed="'+done+'">'+(done?I.check:'')+'</button>'+
         '<div class="p-body"><strong>'+esc(def.name)+'</strong><span class="muted">'+esc(def.agency)+'</span>'+
         '<div class="p-meta">'+permitPill(def,sp)+'<span class="pill cost">'+feeLabel(def)+estTag(def)+'</span><span class="pill">'+CYCLE_LABEL[def.cycle]+'</span></div>'+
-        (done&&sp.expires?'<div class="muted" style="margin-top:6px">Expires '+(sp.expiresEst?'~':'')+fmtDate(sp.expires)+(sp.expiresEst?' <span class="est">(estimated date; tap below to enter the real one)</span>':' <span class="est ok-t">(from your document)</span>')+'</div>':'')+
+        (done?(sp.expires?'<div class="muted" style="margin-top:6px">Expires '+(sp.expiresEst?'~':'')+fmtDate(sp.expires)+(sp.expiresEst?' <span class="est">(estimated date; tap below to enter the real one)</span>':' <span class="est ok-t">(from your document)</span>')+'</div>'
+          :(isRenewing(def)?'<div class="muted" style="margin-top:6px">No expiry date on file. <span class="est">Tap below to enter it from your permit document.</span></div>':'')):'')+
         '<div class="muted" style="margin-top:6px">'+esc(def.note||'')+'</div>'+estLine(def)+
         '<div class="p-actions"><button class="link-btn" data-e="'+sp.id+'">'+(done?'Update expiry':'Set expiry & mark obtained')+'</button>'+
         (sp.custom?'<button class="link-btn" data-d="'+sp.id+'" style="color:var(--mut)">Remove</button>':'')+'</div>'+
@@ -588,13 +600,16 @@ function permitDateSheet(id){
     '<fieldset class="radio-group"><legend>How did you get this date?</legend>'+
     '<label class="radio"><input type="radio" name="pdv" value="verified" checked> <span>This is the date on my permit document</span></label>'+
     '<label class="radio"><input type="radio" name="pdv" value="estimate"'+(sp.expiresEst?' checked':'')+'> <span>This is an estimate</span></label></fieldset>'+
-    '<p class="muted">Leave the date blank for one-time permits with no renewal. Estimated dates show with a ~ until you enter the real one.</p>'+
+    '<p class="muted">Leave the date blank for one-time permits with no renewal. A blank date on a renewing permit shows as needing verification until you enter the real date.</p>'+
     '<button class="btn primary big" id="pdSave">Mark obtained</button><button class="btn ghost" id="pdCancel">Cancel</button>', 'Set permit expiry date');
   $('#pdCancel').onclick=closeSheet;
   $('#pdSave').onclick=()=>{
     sp.status='active';
-    sp.expires=$('#pdDate').value||null;
-    sp.expiresEst=$('#sheet input[name="pdv"]:checked').value==='estimate';
+    const blank=!$('#pdDate').value;
+    sp.expires=blank?null:$('#pdDate').value;
+    /* P1-3: a blank date on a renewing permit is unverified, never OK. The
+     * verified/estimate choice only applies when an actual date is saved. */
+    sp.expiresEst=blank?isRenewing(def):($('#sheet input[name="pdv"]:checked').value==='estimate');
     save(); closeSheet(); renderPermits();
   };
 }
@@ -605,15 +620,26 @@ $('#addPermitBtn').onclick=()=>{
     '<div class="row2"><label>Fee ($)<input type="number" id="apFee" inputmode="decimal" min="0" placeholder="0"></label>'+
     '<label>Renews<select id="apCycle"><option value="annual">Yearly</option><option value="biennial">Every 2 yrs</option><option value="3yr">Every 3 yrs</option><option value="5yr">Every 5 yrs</option><option value="onetime">One-time</option></select></label></div>'+
     '<label>Expiry date<input type="date" id="apExp"></label>'+
+    '<fieldset class="radio-group"><legend>How did you get this date?</legend>'+
+    '<label class="radio"><input type="radio" name="apv" value="verified" checked> <span>This is the date on my permit document</span></label>'+
+    '<label class="radio"><input type="radio" name="apv" value="estimate"> <span>This is an estimate</span></label></fieldset>'+
+    '<p class="muted">Blank date on a renewing permit shows as needing verification.</p>'+
     '<button class="btn primary big" id="apSave">Add permit</button><button class="btn ghost" id="apCancel">Cancel</button>', 'Add a permit');
   $('#apCancel').onclick=closeSheet;
   $('#apSave').onclick=()=>{
     const name=$('#apName').value.trim(); if(!name) return;
     const id='custom-'+uid();
+    const exp=$('#apExp').value||null;
+    const cyc=$('#apCycle').value;
     // register custom def in persisted state (CITIES is static and would not survive reload)
-    const def={id, name, agency:$('#apAgency').value.trim()||'Unknown agency', fee:+$('#apFee').value||0, cycle:$('#apCycle').value, applies:[S.truckType], note:'Added by you.', custom:true};
+    const def={id, name, agency:$('#apAgency').value.trim()||'Unknown agency', fee:+$('#apFee').value||0, cycle:cyc, applies:[S.truckType], note:'Added by you.', custom:true};
     S.customDefs.push(def);
-    S.permits.push({id, city:S.city, status:$('#apExp').value?'active':'needed', expires:$('#apExp').value||null, expiresEst:false, cost:+$('#apFee').value||0, custom:true});
+    /* P1-4: custom expiries enter unverified until confirmed. A date gets the
+     * owner's verified/estimate choice; a blank date on a renewing permit
+     * counts as unverified (same rule as standard permits). */
+    S.permits.push({id, city:S.city, status:exp?'active':'needed', expires:exp,
+      expiresEst:exp?($('#sheet input[name="apv"]:checked').value==='estimate'):(cyc!=='onetime'),
+      cost:+$('#apFee').value||0, custom:true});
     save(); closeSheet(); renderPermits();
   };
 };
@@ -635,13 +661,14 @@ function inspectSheet(){
   const paper=[];
   let hasCommPermit=false;
   allPermits().forEach(({def,sp,cityKey})=>{
-    const st=permitState(sp);
+    const st=permitState(sp,def);
     const cityBit=(cityKey&&cityKey!==S.city)?' ('+cityNameOf({city:cityKey})+')':'';
     // The catalog already tracks the commissary agreement for most cities.
     // When it does, the catalog row is canonical and we skip the separate
     // commissary-tab row so the same requirement never counts twice.
     if(/commissary/i.test(def.name||'')) hasCommPermit=true;
     if(sp.status!=='active') paper.push({ok:false, name:def.name+cityBit, detail:'Not obtained yet'});
+    else if(st.level==='unverified') paper.push({ok:false, name:def.name+cityBit, detail:'No expiry date on file'});
     else if(st.level==='expired') paper.push({ok:false, name:def.name+cityBit, detail:'Expired '+(sp.expiresEst?'~':'')+Math.abs(st.days)+' days ago'});
     else paper.push({ok:true, name:def.name+cityBit, detail:sp.expires?('Good through '+(sp.expiresEst?'~':'')+fmtDate(sp.expires)+(sp.expiresEst?' (estimated date)':' (from your document)')):'On file'});
   });
@@ -992,12 +1019,19 @@ function phoneBindForm(){
   $('#phSave').onclick=async ()=>{
     const btn=$('#phSave'), msg=$('#phMsg');
     btn.disabled=true; msg.hidden=true;
+    const name=$('#phName').value.trim(), menu=$('#phMenu').value.trim(),
+      hours=$('#phHours').value.trim(), loc=$('#phLoc').value.trim(),
+      mobile=$('#phMobile').value.trim();
+    /* P2-11: client-side validation before anything posts. The two fields
+     * the replies depend on are required: the truck name (used in greetings)
+     * and the owner mobile (where orders and call alerts go). */
+    const say=t=>{ msg.className='phone-err'; msg.textContent=t; msg.hidden=false; btn.disabled=false; };
+    if(!name){ say('Give the truck a name. It is used in greetings and every reply.'); return; }
+    const digits=mobile.replace(/[^\d]/g,'');
+    if(digits.length<10||digits.length>15){ say('Enter a mobile number we can text, like (555) 123-4567. Customers never see this number.'); return; }
     const config={
-      truck_name:$('#phName').value.trim(),
-      menu:$('#phMenu').value.trim(),
-      hours:$('#phHours').value.trim(),
-      location:$('#phLoc').value.trim(),
-      owner_mobile:$('#phMobile').value.trim()
+      truck_name:name, menu:menu, hours:hours, location:loc,
+      owner_mobile:mobile
     };
     try{
       const k=phoneAuthKey();
@@ -1076,6 +1110,10 @@ function importBackup(file){
       const st=o.state;
       if(!Array.isArray(st.permits)||!Array.isArray(st.events)||!Array.isArray(st.revenue)) throw new Error('bad');
       S=st;
+      /* P2-6: the settings form caps the truck name at 60 chars; enforce the
+       * same bound on import so a crafted backup cannot shove the topbar
+       * off-screen. */
+      if(typeof st.truckName==='string'&&st.truckName.length>60) st.truckName=st.truckName.slice(0,60);
       if(!S.customDefs) S.customDefs=[];
       if(!S.extraCities) S.extraCities=[];
       if(!Array.isArray(S.prepVisits)) S.prepVisits=[];

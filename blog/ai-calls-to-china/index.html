@@ -56,28 +56,22 @@ figure.viz{
 }
 figure.viz figcaption{font-size:13.5px; color:var(--viz-muted); margin-top:14px; max-width:620px;}
 figure.viz figcaption b{color:var(--viz-ink);}
-/* Hop stepper */
-.kc{background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:16px; padding:22px 20px;}
-.kc-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
-.kc-count{font-family:var(--viz-mono); font-size:12.5px; letter-spacing:.08em; color:var(--viz-accent); text-transform:uppercase;}
-.kc-dots{display:flex; gap:7px;}
-.kc-dots i{width:9px; height:9px; border-radius:50%; background:var(--viz-line); transition:background 200ms;}
-.kc-dots i.on{background:var(--viz-accent);}
+/* Hop carousel (one card at a time, snap track) */
+.tcar{position:relative; padding:0 30px;}
+.ttrack{display:flex; overflow-x:auto; scroll-snap-type:x mandatory; scrollbar-width:none; -ms-overflow-style:none; overscroll-behavior-x:contain; border-radius:16px;}
+.ttrack::-webkit-scrollbar{display:none;}
+.tslide{flex:0 0 100%; scroll-snap-align:center; scroll-snap-stop:always; box-sizing:border-box;}
+.tslide-card{background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:16px; padding:22px 20px; box-sizing:border-box; touch-action:manipulation;}
+.tcount{text-align:center; font-family:var(--viz-mono); font-size:12.5px; letter-spacing:.08em; color:var(--viz-accent); margin:10px 0 2px; font-variant-numeric:tabular-nums;}
+.tnav{position:absolute; top:38%; width:46px; height:46px; border-radius:50%; border:1px solid var(--viz-line); background:rgba(29,27,23,.82); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); color:var(--viz-ink); font-size:24px; line-height:1; cursor:pointer; touch-action:manipulation; box-shadow:0 4px 14px rgba(0,0,0,.35); z-index:2;}
+.tnav.prev{left:0;}
+.tnav.next{right:0;}
+.tnav:active{transform:scale(.94);}
 .kc-title{font-size:21px; margin:0 0 10px; letter-spacing:-0.01em;}
 .kc-what{font-size:16px; color:var(--viz-ink); margin:0 0 14px;}
-.kc-lesson{background:rgba(232,163,61,.07); border:1px solid rgba(232,163,61,.35); border-radius:12px; padding:14px 16px; margin:0 0 18px;}
+.kc-lesson{background:rgba(232,163,61,.07); border:1px solid rgba(232,163,61,.35); border-radius:12px; padding:14px 16px; margin:0;}
 .kc-lesson > b{display:block; font-family:var(--viz-mono); font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--viz-accent); margin-bottom:6px;}
 .kc-lesson p{margin:0; font-size:15.5px; color:var(--viz-ink);}
-.kc-body{overflow:hidden;}
-.kc-nav{display:flex; justify-content:space-between; gap:12px;}
-.kc-nav .kc-next{margin-left:auto;}
-.kc-nav button{
-  font-family:inherit; font-size:16px; font-weight:650; color:var(--viz-ink);
-  background:var(--viz-panel); border:1px solid var(--viz-line); border-radius:999px;
-  padding:13px 26px; cursor:pointer; touch-action:manipulation; min-height:52px;
-}
-.kc-nav button:active{transform:scale(.97);}
-.kc-nav button[hidden]{display:none;}
 /* Lane comparison cards */
 .lanes{display:grid; gap:12px; margin:18px 0 6px;}
 @media(min-width:560px){ .lanes{grid-template-columns:1fr 1fr;} }
@@ -119,7 +113,7 @@ figure.viz figcaption b{color:var(--viz-ink);}
 .step-code pre code{font-size:14px; line-height:1.6;}
 @media (prefers-reduced-motion:reduce){
   html{scroll-behavior:auto;}
-  .kc-nav button:active{transform:none;}
+  .tnav:active{transform:none;}
 }
 /* Keep exploring */
 .explore{display:grid; gap:12px; margin:20px 0 6px;}
@@ -258,22 +252,12 @@ footer.end{margin-top:40px; padding-top:18px; border-top:1px solid var(--viz-lin
 
 <section>
   <h2><span class="n">02</span>Follow a call, hop by hop</h2>
-  <p>Every booking is five hops. Tap through and watch a call travel from a prompt to a landline in Shanghai. Use the arrows or your keyboard.</p>
+  <p>Every booking is five hops. Swipe or tap through and watch a call travel from a prompt to a landline in Shanghai.</p>
   <figure class="viz">
-    <div class="kc" id="hop1">
-      <div class="kc-top">
-        <span class="kc-count" id="hopCount">Hop 1 of 5</span>
-        <span class="kc-dots" id="hopDots" aria-hidden="true"></span>
-      </div>
-      <div class="kc-body" id="hopBody">
-        <h3 class="kc-title" id="hopTitle"></h3>
-        <p class="kc-what" id="hopWhat"></p>
-        <div class="kc-lesson"><b>Hop detail</b><p id="hopNote"></p></div>
-      </div>
-      <div class="kc-nav">
-        <button type="button" class="kc-prev" id="hopPrev" aria-label="Previous hop">&#8249; Back</button>
-        <button type="button" class="kc-next" id="hopNext" aria-label="Next hop">Next &#8250;</button>
-      </div>
+    <div class="tcar" id="hopCar">
+      <div class="ttrack" id="hopTrack" aria-label="Pipeline hops"></div>
+      <button type="button" class="tnav prev" id="hopPrev" aria-label="Previous hop">&#8249;</button>
+      <button type="button" class="tnav next" id="hopNext" aria-label="Next hop">&#8250;</button>
     </div>
     <figcaption>Five hops, about two minutes, one dinner table. <b>Hop detail</b> is the cost or the config at each step.</figcaption>
   </figure>
@@ -465,10 +449,13 @@ const call = await res.json();
 </article>
 <script src="/blog/assets/highlight.min.js"></script>
 <script>
-/* Hop stepper: follow a call through the pipeline */
+/* Hop carousel: follow a call through the pipeline, one card at a time */
 (function(){
-  var root = document.getElementById('hop1');
-  if(!root) return;
+  var car = document.getElementById('hopCar');
+  if(!car) return;
+  var track = document.getElementById('hopTrack');
+  var prev = document.getElementById('hopPrev');
+  var next = document.getElementById('hopNext');
   var steps = [
     {
       t: 'The agent thinks and talks',
@@ -496,58 +483,93 @@ const call = await res.json();
       note: 'Result: two real calls, both transcribed above. A table for four, confirmed twice.'
     }
   ];
-  var i = 0;
-  var count = document.getElementById('hopCount');
-  var dots = document.getElementById('hopDots');
-  var title = document.getElementById('hopTitle');
-  var what = document.getElementById('hopWhat');
-  var note = document.getElementById('hopNote');
-  var prev = document.getElementById('hopPrev');
-  var next = document.getElementById('hopNext');
-  var body = document.getElementById('hopBody');
-  steps.forEach(function(){ var d = document.createElement('i'); dots.appendChild(d); });
-  var dotEls = dots.querySelectorAll('i');
-  function setContent(){
-    var s = steps[i];
-    count.textContent = 'Hop ' + (i + 1) + ' of ' + steps.length;
-    title.textContent = s.t;
-    what.textContent = s.what;
-    note.textContent = s.note;
-    dotEls.forEach(function(d, k){ d.classList.toggle('on', k === i); });
+  var n = steps.length, idx = 0;
+
+  function esc(s){
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
-  function render(){
-    setContent();
-    prev.hidden = (i === 0);
-    next.hidden = (i === steps.length - 1);
+  steps.forEach(function(s, k){
+    var slide = document.createElement('div');
+    slide.className = 'tslide';
+    slide.innerHTML =
+      '<div class="tslide-card">' +
+        '<h3 class="kc-title">' + esc(s.t) + '</h3>' +
+        '<p class="kc-what">' + esc(s.what) + '</p>' +
+        '<div class="kc-lesson"><b>Hop detail</b><p>' + esc(s.note) + '</p></div>' +
+      '</div>' +
+      '<p class="tcount">' + (k + 1) + '/' + n + '</p>';
+    track.appendChild(slide);
+  });
+  var cards = track.querySelectorAll('.tslide-card');
+
+  function load(k){
+    idx = ((k % n) + n) % n;
+    track.scrollTo(idx * track.clientWidth, 0);
   }
-  function fitHeight(){
-    var cur = i, max = 0;
-    body.style.minHeight = '';
-    for(var k = 0; k < steps.length; k++){ i = k; setContent(); max = Math.max(max, body.offsetHeight); }
-    i = cur; setContent();
-    body.style.minHeight = max + 'px';
+  prev.addEventListener('click', function(){ load(idx - 1); });
+  next.addEventListener('click', function(){ load(idx + 1); });
+
+  /* track scroll -> idx (rAF throttled) */
+  var ticking = false;
+  track.addEventListener('scroll', function(){
+    if(ticking) return;
+    ticking = true;
+    requestAnimationFrame(function(){
+      ticking = false;
+      var w = track.clientWidth || 1;
+      idx = Math.max(0, Math.min(n - 1, Math.round(track.scrollLeft / w)));
+    });
+  }, {passive:true});
+
+  /* iOS backstop: settle on nearest slide if a tap interrupts a glide */
+  var settleT = null;
+  function settle(){
+    var w = track.clientWidth || 1;
+    var target = Math.round(track.scrollLeft / w) * w;
+    if(Math.abs(track.scrollLeft - target) > 2){
+      track.scrollTo(target, 0);
+    }
   }
-  prev.addEventListener('click', function(){ if(i > 0){ i--; render(); } });
-  next.addEventListener('click', function(){ if(i < steps.length - 1){ i++; render(); } });
+  track.addEventListener('scroll', function(){
+    if(settleT) clearTimeout(settleT);
+    settleT = setTimeout(settle, 180);
+  }, {passive:true});
+  if('onscrollend' in track){ track.addEventListener('scrollend', settle); }
+
+  /* equalize card heights so swiping never shifts the page */
+  function equalize(){
+    var max = 0, i;
+    for(i = 0; i < cards.length; i++){
+      cards[i].style.height = '';
+    }
+    for(i = 0; i < cards.length; i++){
+      max = Math.max(max, cards[i].offsetHeight);
+    }
+    for(i = 0; i < cards.length; i++){
+      cards[i].style.height = max + 'px';
+    }
+  }
+  equalize();
+  if(document.fonts && document.fonts.ready){ document.fonts.ready.then(equalize); }
+  var rzT = null;
+  window.addEventListener('resize', function(){
+    if(rzT) clearTimeout(rzT);
+    rzT = setTimeout(equalize, 200);
+  });
+
+  /* keyboard arrows when the carousel is on screen */
   document.addEventListener('keydown', function(e){
     if(e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     if(e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     var t = e.target, tag = t && t.tagName;
     if(tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT' || (t && t.isContentEditable)) return;
-    if(t && t.closest && t.closest('.step-code')) return;
-    var r = root.getBoundingClientRect();
+    var r = car.getBoundingClientRect();
     if(r.bottom < 0 || r.top > window.innerHeight) return;
-    if(e.key === 'ArrowLeft' && i > 0){ i--; render(); e.preventDefault(); }
-    else if(e.key === 'ArrowRight' && i < steps.length - 1){ i++; render(); e.preventDefault(); }
+    if(e.key === 'ArrowLeft'){ load(idx - 1); e.preventDefault(); }
+    else { load(idx + 1); e.preventDefault(); }
   });
-  render();
-  fitHeight();
-  if(document.fonts && document.fonts.ready){ document.fonts.ready.then(fitHeight); }
-  var rzT = null;
-  window.addEventListener('resize', function(){
-    if(rzT) clearTimeout(rzT);
-    rzT = setTimeout(fitHeight, 200);
-  });
+
+  load(0);
 })();
 
 /* Transcript cards */

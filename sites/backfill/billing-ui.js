@@ -392,13 +392,14 @@ BillingClient.prototype.buildOverlay = function(){
     }
   });
   ov.querySelector(".bill-link").addEventListener("click", async function(ev){
-    ev.currentTarget.textContent = "Checking...";
+    var link = ev.currentTarget; // currentTarget nulls after await; capture now
+    link.textContent = "Checking...";
     try {
       await self.refresh();
       if (self.entitled) self.hidePaywall();
-      else ev.currentTarget.textContent = "Still no active subscription";
+      else link.textContent = "Still no active subscription";
     } catch(e) {
-      ev.currentTarget.textContent = "Could not reach billing. Try again.";
+      link.textContent = "Could not reach billing. Try again.";
     }
   });
   // The overlay is a fixed full-screen layer above the app, so nothing

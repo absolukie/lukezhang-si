@@ -423,7 +423,6 @@ theorem sqrt_two_irrational&#x27; : Irrational&#x27; (Real.sqrt 2) := by
   ];
   var i = 0;
   var stepperEl = document.getElementById('stepper');
-  var stageEl = stepperEl.querySelector('.stage');
   var kicker = document.getElementById('st-kicker');
   var title = document.getElementById('st-title');
   var body = document.getElementById('st-body');
@@ -462,8 +461,8 @@ theorem sqrt_two_irrational&#x27; : Irrational&#x27; (Real.sqrt 2) := by
   bubble.appendChild(bubbleName);
   bubble.appendChild(bubbleText);
   document.body.appendChild(bubble);
-  var bubbleTac = null, bubbleAnchor = null;
-  function hideBubble() { bubble.setAttribute('hidden', ''); bubbleTac = null; bubbleAnchor = null; }
+  var bubbleTac = null, bubbleAnchor = null, bubbleMode = null;
+  function hideBubble() { bubble.setAttribute('hidden', ''); bubbleTac = null; bubbleAnchor = null; bubbleMode = null; }
   function showBubble(anchor, tac) {
     var help = TAC_HELP[tac];
     if (!help) return;
@@ -499,11 +498,32 @@ theorem sqrt_two_irrational&#x27; : Irrational&#x27; (Real.sqrt 2) := by
     if (!t) return;
     e.stopPropagation();
     var tac = t.getAttribute('data-tac');
-    if (bubbleTac === tac && bubbleAnchor === t && !bubble.hasAttribute('hidden')) {
+    if (bubbleMode === 'click' && bubbleTac === tac && bubbleAnchor === t && !bubble.hasAttribute('hidden')) {
       hideBubble();
       return;
     }
     showBubble(t, tac);
+    bubbleMode = 'click';
+  });
+  code.addEventListener('mouseover', function (e) {
+    var t = e.target && e.target.closest ? e.target.closest('.tk-tac') : null;
+    if (!t || bubbleMode === 'click') return;
+    showBubble(t, t.getAttribute('data-tac'));
+    bubbleMode = 'hover';
+  });
+  code.addEventListener('mouseout', function (e) {
+    if (bubbleMode !== 'hover') return;
+    var t = e.target && e.target.closest ? e.target.closest('.tk-tac') : null;
+    if (!t) return;
+    var to = e.relatedTarget;
+    if (to && to.closest) {
+      if (to.closest('.tk-tac')) return;
+      if (bubble.contains(to)) return;
+    }
+    hideBubble();
+  });
+  bubble.addEventListener('mouseleave', function () {
+    if (bubbleMode === 'hover') hideBubble();
   });
   document.addEventListener('click', function (e) {
     if (bubble.hasAttribute('hidden')) return;
@@ -546,21 +566,7 @@ theorem sqrt_two_irrational&#x27; : Irrational&#x27; (Real.sqrt 2) := by
     if (e.key === 'ArrowLeft' && i > 0) { i--; render(); e.preventDefault(); }
     else if (e.key === 'ArrowRight' && i < steps.length - 1) { i++; render(); e.preventDefault(); }
   });
-  /* Pin the stage to the tallest step so the button bar never moves. */
-  function fixStageHeight() {
-    stageEl.style.minHeight = '';
-    var saved = i, maxH = 0, m;
-    for (m = 0; m < steps.length; m++) { i = m; render(); maxH = Math.max(maxH, stageEl.scrollHeight); }
-    i = saved; render();
-    stageEl.style.minHeight = (maxH + 8) + 'px';
-  }
-  var resizeT = null;
-  window.addEventListener('resize', function () {
-    if (resizeT) clearTimeout(resizeT);
-    resizeT = setTimeout(fixStageHeight, 200);
-  });
   render();
-  fixStageHeight();
 })();
 </script>
 <script>

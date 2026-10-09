@@ -28,6 +28,134 @@ const VENDOR_KINDS = ["Movers","Estate sale company","Cleaners","Realtor","Donat
 const VENDOR_STATUS = { todo:{label:"To contact",cls:"st-todo"}, progress:{label:"In progress",cls:"st-progress"}, done:{label:"Done",cls:"st-done"} };
 const DEFAULT_ROOMS = ["Living room","Kitchen","Primary bedroom","Bedroom 2","Bedroom 3","Bathroom","Garage","Basement","Attic","Office","Dining room"];
 
+/* ---------- move checklists (change-of-address + accounts, per move type) ---------- */
+const CHECKLIST_TPL = {
+  "Downsizing move": [
+    {c:"Mail & address", t:"File a USPS change of address", o:-14},
+    {c:"Mail & address", t:"Update address with bank and credit cards", o:-14},
+    {c:"Mail & address", t:"Update voter registration", o:30},
+    {c:"Utilities", t:"Schedule final meter readings (electric, gas, water)", o:-7},
+    {c:"Utilities", t:"Set up utilities at the new home", o:-7},
+    {c:"Utilities", t:"Cancel or move internet and cable service", o:-7},
+    {c:"Money", t:"Notify Social Security or pension payer of the new address", o:-7},
+    {c:"Money", t:"Update homeowners or renters insurance", o:-7},
+    {c:"Health", t:"Transfer prescriptions to a nearby pharmacy", o:-14},
+    {c:"Health", t:"Notify doctors and dentists of the new address", o:7},
+    {c:"Accounts", t:"Forward or cancel subscriptions and memberships", o:-7},
+    {c:"Move day", t:"Confirm movers: time, crew size, parking", o:-3},
+    {c:"Move day", t:"Pack a first-night box: medications, chargers, bedding", o:-2},
+    {c:"Move day", t:"Return keys and remotes for the old home", o:1}
+  ],
+  "Estate cleanout": [
+    {c:"Legal", t:"Locate the will, trust, and powers of attorney", o:-30},
+    {c:"Legal", t:"Order certified death certificates (get extras)", o:-21},
+    {c:"Legal", t:"Notify the estate attorney the cleanout is starting", o:-14},
+    {c:"Property", t:"Secure the property: change locks, set light timers", o:-21},
+    {c:"Property", t:"Check the homeowners policy covers a vacant home", o:-14},
+    {c:"Property", t:"Cancel or transfer utilities after final readings", o:-7},
+    {c:"Money", t:"Notify Social Security and pension payers", o:-14},
+    {c:"Money", t:"Notify banks; ask about an estate account", o:-14},
+    {c:"Money", t:"Notify the three credit bureaus", o:-14},
+    {c:"Mail & address", t:"Forward mail to the executor", o:-14},
+    {c:"Accounts", t:"Cancel subscriptions, memberships, and services", o:-7},
+    {c:"Accounts", t:"Collect and return rented medical equipment", o:-7},
+    {c:"Close-out", t:"Arrange the final cleaning", o:7},
+    {c:"Close-out", t:"Return keys; document the property condition", o:14}
+  ],
+  "Relocation": [
+    {c:"Mail & address", t:"File a USPS change of address", o:-14},
+    {c:"Mail & address", t:"Update address with bank and credit cards", o:-14},
+    {c:"Mail & address", t:"Update voter registration", o:30},
+    {c:"Utilities", t:"Schedule final meter readings (electric, gas, water)", o:-7},
+    {c:"Utilities", t:"Set up utilities at the new home", o:-7},
+    {c:"Money", t:"Notify Social Security or pension payer of the new address", o:-7},
+    {c:"Money", t:"Update homeowners or renters insurance", o:-7},
+    {c:"Health", t:"Transfer prescriptions to a nearby pharmacy", o:-14},
+    {c:"Health", t:"Find new doctors and request record transfers", o:-14},
+    {c:"Accounts", t:"Forward or cancel subscriptions and memberships", o:-7},
+    {c:"Move day", t:"Confirm movers: time, crew size, parking", o:-3},
+    {c:"Move day", t:"Pack a first-night box: medications, chargers, bedding", o:-2}
+  ],
+  "Aging in place": [
+    {c:"Mail & address", t:"Update voter registration", o:30},
+    {c:"Utilities", t:"Review utility bills for assistance programs", o:-14},
+    {c:"Money", t:"Notify Social Security or pension payer of any changes", o:-7},
+    {c:"Money", t:"Review homeowners or renters insurance", o:-7},
+    {c:"Health", t:"Transfer prescriptions to a delivery pharmacy", o:-14},
+    {c:"Health", t:"Schedule home safety check: rails, lighting, rugs", o:-7},
+    {c:"Accounts", t:"Set up autopay for recurring bills", o:-7},
+    {c:"Close-out", t:"Arrange ongoing housekeeping or yard help", o:14}
+  ]
+};
+const TASK_TIMING = [
+  {label:"4 weeks before move day", o:-28},
+  {label:"2 weeks before move day", o:-14},
+  {label:"1 week before move day", o:-7},
+  {label:"3 days before move day", o:-3},
+  {label:"Move day", o:0},
+  {label:"1 week after move day", o:7},
+  {label:"1 month after move day", o:30}
+];
+function genChecklist(moveType){
+  return (CHECKLIST_TPL[moveType] || CHECKLIST_TPL["Downsizing move"]).map(x => ({
+    id: uid(), text: x.t, category: x.c, offset: x.o, done: false, doneAt: null, custom: false
+  }));
+}
+function taskDueISO(move, task){
+  if(!move.targetDate) return null;
+  const t = new Date(move.targetDate + "T12:00:00");
+  if(isNaN(t)) return null;
+  t.setDate(t.getDate() + (Number(task.offset) || 0));
+  return t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0");
+}
+function taskChip(move, task){
+  if(task.done) return "";
+  const due = taskDueISO(move, task);
+  if(!due) return '<span class="pill" style="background:var(--bg-soft);color:var(--ink-faint)">Set a target date for due dates</span>';
+  if(due < todayISO()) return '<span class="pill countdown overdue">Overdue</span>';
+  if(due === todayISO()) return '<span class="pill countdown">Due today</span>';
+  return '<span class="pill countdown">Due '+esc(fmtDate(due))+'</span>';
+}
+function roomDims(move, room){
+  const d = (move.roomDims || {})[room];
+  return (d && Number(d.l) > 0 && Number(d.w) > 0) ? {l: Number(d.l), w: Number(d.w)} : null;
+}
+function itemDims(it){
+  return (it.dims && Number(it.dims.l) > 0 && Number(it.dims.w) > 0) ? {l: Number(it.dims.l), w: Number(it.dims.w)} : null;
+}
+function dimsText(d, unit){ return Math.round(d.l*10)/10 + " x " + Math.round(d.w*10)/10 + " " + unit; }
+/* Bid + sale + checklist fields on every move, so old saved state keeps working */
+function ensureMoveFields(m){
+  m.checklist = Array.isArray(m.checklist) ? m.checklist : genChecklist(m.moveType);
+  if(typeof m.saleFeePct !== "number") m.saleFeePct = 0;
+  m.roomDims = (m.roomDims && typeof m.roomDims === "object" && !Array.isArray(m.roomDims)) ? m.roomDims : {};
+  m.items.forEach(it => {
+    if(it.estValue == null) it.estValue = "";
+    if(it.soldPrice == null) it.soldPrice = "";
+    if(it.soldTo == null) it.soldTo = "";
+    if(it.soldDate == null) it.soldDate = "";
+    if(!it.dims || typeof it.dims !== "object") it.dims = null;
+  });
+  m.vendors.forEach(v => {
+    if(v.quote == null) v.quote = "";
+    if(v.deposit == null) v.deposit = "";
+    if(v.availDate == null) v.availDate = "";
+    if(v.quoteNote == null) v.quoteNote = "";
+    if(typeof v.awarded !== "boolean") v.awarded = false;
+  });
+}
+function saleTotals(move){
+  const sold = move.items.filter(i => i.disposition === "sell");
+  const est = sold.reduce((s,i) => s + (Number(i.estValue) || 0), 0);
+  const gross = sold.reduce((s,i) => s + (Number(i.soldPrice) || 0), 0);
+  const fees = gross * (Number(move.saleFeePct) || 0) / 100;
+  return {count: sold.length, soldCount: sold.filter(i => Number(i.soldPrice) > 0).length, est, gross, fees, net: gross - fees};
+}
+function checklistTotals(move){
+  const list = move.checklist || [];
+  return {done: list.filter(t => t.done).length, total: list.length};
+}
+
 /* ---------- store ---------- */
 const KEY = "nc_v1";
 function load(){
@@ -37,9 +165,14 @@ function load(){
       const s = JSON.parse(raw);
       if(s && Array.isArray(s.moves)){
         let changed = false;
-        s.moves.forEach(m => (m.items || []).forEach(it => {
-          if(it.photo && !safePhoto(it.photo)){ it.photo = null; changed = true; }
-        }));
+        s.moves.forEach(m => {
+          (m.items || []).forEach(it => {
+            if(it.photo && !safePhoto(it.photo)){ it.photo = null; changed = true; }
+          });
+          const before = JSON.stringify(m.checklist);
+          ensureMoveFields(m);
+          if(JSON.stringify(m.checklist) !== before) changed = true;
+        });
         if(!s.sampleMigrated){
           s.moves.forEach(m => { if(m.clientName === "Eleanor Vance" || m.clientName === "The Alvarez Estate") m.sample = true; });
           s.sampleMigrated = true; changed = true;
@@ -111,6 +244,23 @@ function seed(){
   ];
   // a family comment on the demo move so the portal feels alive
   moves[0].items[1].comments.push({id: uid(), by:"Maya", text:"I measured, it fits! Keep it by the window.", ts: Date.now()-86400000});
+  // sample bid + sale + fit-check data so the new pass-3 views have something real to show
+  const vance = moves[0];
+  vance.vendors[0].quote = "1850"; vance.vendors[0].deposit = "200"; vance.vendors[0].availDate = "2026-11-15";
+  vance.vendors[0].quoteNote = "3 crew, truck, blankets included."; vance.vendors[0].awarded = true;
+  vance.vendors.push({id: uid(), kind:"Movers", name:"Bright Move Co.", phone:"(626) 555-3310", status:"todo", date:"",
+    notes:"", quote:"2100", deposit:"250", availDate:"2026-11-14", quoteNote:"2 crew. Packing materials extra.", awarded:false});
+  const chest = vance.items.find(i => i.name === "Tool chest");
+  if(chest){ chest.estValue = "300"; chest.soldPrice = "275"; chest.soldTo = "Estate sale buyer"; chest.soldDate = "2026-10-04"; }
+  const armchair = vance.items.find(i => i.name === "Blue armchair");
+  if(armchair){ armchair.dims = {l:30, w:32}; }
+  vance.roomDims = {"Living room": {l:12, w:14}, "Primary bedroom": {l:11, w:13}};
+  vance.saleFeePct = 20;
+  vance.checklist = genChecklist(vance.moveType);
+  const alvarez = moves[1];
+  alvarez.checklist = genChecklist(alvarez.moveType);
+  alvarez.saleFeePct = 20;
+  ensureMoveFields(vance); ensureMoveFields(alvarez);
   return { moves, sampleMigrated: true, seededAt: Date.now() };
 }
 
@@ -179,6 +329,7 @@ function normalizeBackup(parsed){
     m.vendors.forEach(v => { if(typeof v.phone !== "string") v.phone = ""; });
     m.donations.forEach(d => { if(!Array.isArray(d.itemIds)) d.itemIds = []; });
     if(!parsed.sampleMigrated && (m.clientName === "Eleanor Vance" || m.clientName === "The Alvarez Estate")) m.sample = true;
+    ensureMoveFields(m);
   });
   parsed.sampleMigrated = true;
   return parsed;
@@ -457,7 +608,13 @@ function summaryPrintHTML(move){
         (list.length ? '<p>'+list.map(i=>esc(i.name)+' <span class="faint">('+esc(i.room)+')</span>').join('<br>')+'</p>' : '<p class="faint">None yet</p>');
     }).join("") +
     '<h3>Vendors</h3>' +
-    (move.vendors.length ? move.vendors.map(v=>'<div class="kv"><span class="k">'+esc(v.name)+' ('+esc(v.kind)+')</span><span class="v">'+esc((VENDOR_STATUS[v.status]||{}).label||"")+'</span></div>').join("") : '<p class="faint">None yet</p>') +
+    (move.vendors.length ? move.vendors.map(v=>'<div class="kv"><span class="k">'+esc(v.name)+' ('+esc(v.kind)+')'+(v.awarded?' — awarded':'')+'</span><span class="v">'+esc((VENDOR_STATUS[v.status]||{}).label||"")+(v.quote !== "" ? ' · '+esc(money(v.quote)) : '')+'</span></div>').join("") : '<p class="faint">None yet</p>') +
+    '<h3>Estate sale</h3>' +
+    (function(){ const t = saleTotals(move); return '<div class="kv"><span class="k">Items for sale</span><span class="v">'+t.count+' ('+t.soldCount+' sold)</span></div>' +
+      '<div class="kv"><span class="k">Estimated value</span><span class="v">'+esc(money(t.est))+'</span></div>' +
+      '<div class="kv"><span class="k">Net to the family</span><span class="v">'+esc(money(Math.round(t.net)))+'</span></div>'; })() +
+    '<h3>Move checklist</h3>' +
+    (function(){ const c = checklistTotals(move); return '<div class="kv"><span class="k">Tasks complete</span><span class="v">'+c.done+' of '+c.total+'</span></div>'; })() +
     '<h3>Donations</h3>' +
     (move.donations.length ? move.donations.map(d=>'<div class="kv"><span class="k">'+esc(d.org)+' · '+esc(fmtDate(d.date))+'</span><span class="v">'+money(d.value)+'</span></div>').join("") : '<p class="faint">None yet</p>') +
     '<p class="small faint">Prepared '+new Date().toLocaleDateString()+' by the move team.</p>';
@@ -472,6 +629,9 @@ function vMoveHub(move){
   const byDisp = {};
   Object.keys(DISP).forEach(k => byDisp[k] = 0);
   move.items.forEach(it => byDisp[it.disposition]++);
+  const st = saleTotals(move), ct = checklistTotals(move);
+  const saleSub = st.count ? st.count+" for sale"+(st.soldCount ? " · "+money(Math.round(st.net))+" net so far" : "") : "tag items “Sell” to track proceeds";
+  const taskSub = ct.total ? ct.done+" of "+ct.total+" done" : "no tasks";
   view.innerHTML =
     '<a href="#/" class="btn btn-ghost btn-sm no-print" style="margin-bottom:12px">'+icon("back","ic-sm")+' All moves</a>' +
     '<div class="card"><div class="row-between"><div><h2 style="margin:0 0 4px">'+esc(move.clientName)+(move.sample?' <span class="pill sample-pill">Sample</span>':'')+'</h2>' +
@@ -495,7 +655,9 @@ function vMoveHub(move){
     '<div class="section-title">Shortcuts</div>' +
     '<div class="card card-flat no-print" style="padding:6px 16px">' +
       '<a class="list-row" href="#/move/'+esc(move.id)+'/inventory"><span class="grow"><h4>Room-by-room inventory</h4><div class="sub">'+total+' items photographed &amp; tagged</div></span><span class="chev">'+icon("back")+'</span></a>' +
-      '<a class="list-row" href="#/move/'+esc(move.id)+'/vendors"><span class="grow"><h4>Vendors</h4><div class="sub">'+move.vendors.length+' coordinated</div></span><span class="chev">'+icon("back")+'</span></a>' +
+      '<a class="list-row" href="#/move/'+esc(move.id)+'/vendors"><span class="grow"><h4>Vendors</h4><div class="sub">'+move.vendors.length+' coordinated'+(move.vendors.some(v => v.quote !== "") ? " · bids recorded" : "")+'</div></span><span class="chev">'+icon("back")+'</span></a>' +
+      '<a class="list-row" href="#/move/'+esc(move.id)+'/sale"><span class="grow"><h4>Estate sale</h4><div class="sub">'+esc(saleSub)+'</div></span><span class="chev">'+icon("back")+'</span></a>' +
+      '<a class="list-row" href="#/move/'+esc(move.id)+'/checklist"><span class="grow"><h4>Move checklist</h4><div class="sub">'+esc(taskSub)+'</div></span><span class="chev">'+icon("back")+'</span></a>' +
       '<a class="list-row" href="#/move/'+esc(move.id)+'/digest"><span class="grow"><h4>Family digest</h4><div class="sub">A printable update for the whole family</div></span><span class="chev">'+icon("back")+'</span></a>' +
       '<a class="list-row" href="#/family/'+esc(move.id)+'"><span class="grow"><h4>Family portal</h4><div class="sub">'+(pend?pend+' decisions waiting':'nothing waiting')+'</div></span><span class="chev">'+icon("back")+'</span></a>' +
       '<button class="list-row" data-action="print-summary" style="width:100%;background:none;border-top:0;border-left:0;border-right:0;text-align:left;font-size:16px"><span class="grow"><h4>Print move summary</h4><div class="sub">Inventory, vendors, donations, for the client file</div></span><span class="chev">'+icon("print")+'</span></button>' +
@@ -558,6 +720,11 @@ function vItem(move, it){
       (it.disposition==="ask" ? '<span class="disp '+FAM[it.familyStatus].cls+'">'+esc(FAM[it.familyStatus].label)+'</span>' : '') + '</div>' +
       (it.notes ? '<p class="muted" style="margin:12px 0 0">'+esc(it.notes)+'</p>' : '') +
       (it.destRoom ? '<div class="kv" style="margin-top:8px"><span class="k">Goes to (new home)</span><span class="v">'+esc(it.destRoom)+'</span></div>' : '') +
+      ((function(){ const d = itemDims(it); return d ? '<div class="kv"><span class="k">Footprint</span><span class="v">'+esc(dimsText(d,"in"))+'</span></div>' : ''; })()) +
+      (it.estValue !== "" ? '<div class="kv"><span class="k">Estimated value</span><span class="v">'+esc(money(it.estValue))+'</span></div>' : '') +
+      (Number(it.soldPrice) > 0 ? '<div class="kv"><span class="k">Sold for</span><span class="v">'+esc(money(it.soldPrice))+'</span></div>' : '') +
+      (it.soldTo ? '<div class="kv"><span class="k">Sold to</span><span class="v">'+esc(it.soldTo)+'</span></div>' : '') +
+      (it.soldDate ? '<div class="kv"><span class="k">Sale date</span><span class="v">'+esc(fmtDate(it.soldDate))+'</span></div>' : '') +
       '<div style="margin-top:14px"><button class="btn btn-soft btn-block" data-action="edit-item" data-id="'+esc(move.id)+'" data-item="'+esc(it.id)+'">'+icon("edit","ic-sm")+' Edit item</button></div>' +
       '</div></div>' +
     (it.comments.length ?
@@ -567,28 +734,59 @@ function vItem(move, it){
 }
 
 /* ----- vendors ----- */
+function bidRowHTML(move, v){
+  const st = VENDOR_STATUS[v.status] || VENDOR_STATUS.todo;
+  const attrs = ' data-id="'+esc(move.id)+'" data-vendor="'+esc(v.id)+'"';
+  return '<tr><td><strong>'+esc(v.name)+'</strong>'+(v.awarded?' <span class="pill" style="background:var(--sage-soft);color:var(--sage-deep)">Awarded</span>':'')+'</td>' +
+    '<td>'+(v.quote !== "" ? esc(money(v.quote)) : '<span class="faint">no bid</span>')+'</td>' +
+    '<td>'+(v.deposit !== "" ? esc(money(v.deposit)) : '<span class="faint">—</span>')+'</td>' +
+    '<td>'+(v.availDate ? esc(fmtDate(v.availDate)) : '<span class="faint">—</span>')+'</td>' +
+    '<td><span class="status-dot '+st.cls+'"></span>'+esc(st.label)+'</td>' +
+    '<td class="no-print">'+(v.awarded
+      ? '<button class="btn btn-soft btn-sm" data-action="award-vendor"'+attrs+' disabled>Awarded</button>'
+      : '<button class="btn btn-ghost btn-sm" data-action="award-vendor"'+attrs+'>Award</button>')+'</td></tr>';
+}
 function vVendors(move){
   document.body.classList.remove("family-mode");
   setTabs(moveTabs(move), "vendors");
-  topbarActions.innerHTML = "";
-  const rows = move.vendors.map(v => {
+  topbarActions.innerHTML = '<button class="btn btn-ghost btn-sm no-print" data-action="print-bids">'+icon("print","ic-sm")+' Bid sheet</button>';
+  const byKind = {};
+  move.vendors.forEach(v => { (byKind[v.kind] = byKind[v.kind] || []).push(v); });
+  const card = v => {
     const st = VENDOR_STATUS[v.status] || VENDOR_STATUS.todo;
     return '<div class="vendor"><div class="vendor-ic">'+icon("truck")+'</div><div class="vendor-body">' +
       '<div class="row-between"><h4>'+esc(v.name)+'</h4>' +
       '<button class="btn btn-ghost btn-sm" data-action="vendor-status" data-id="'+esc(move.id)+'" data-vendor="'+esc(v.id)+'"><span class="status-dot '+st.cls+'"></span>'+esc(st.label)+'</button></div>' +
-      '<div class="small muted">'+esc(v.kind)+(v.date?' · '+esc(fmtDate(v.date)):'')+'</div>' +
+      '<div class="small muted">'+esc(v.kind)+(v.awarded?' · <strong>Awarded</strong>':'')+(v.date?' · '+esc(fmtDate(v.date)):'')+'</div>' +
+      (v.quote !== "" ? '<div class="small"><strong>Bid '+esc(money(v.quote))+'</strong>'+(v.deposit !== "" ? ' · deposit '+esc(money(v.deposit)) : '')+(v.availDate ? ' · available '+esc(fmtDate(v.availDate)) : '')+'</div>' : '') +
       (v.phone?'<div class="small"><a href="tel:'+esc(v.phone.replace(/[^+\d]/g,""))+'">'+esc(v.phone)+'</a></div>':'') +
+      (v.quoteNote?'<div class="small muted">'+esc(v.quoteNote)+'</div>':'') +
       (v.notes?'<div class="small muted">'+esc(v.notes)+'</div>':'') +
-      '<div style="margin-top:8px;display:flex;gap:8px"><button class="btn btn-soft btn-sm" data-action="edit-vendor" data-id="'+esc(move.id)+'" data-vendor="'+esc(v.id)+'">'+icon("edit","ic-sm")+' Edit</button>' +
+      '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-soft btn-sm" data-action="edit-vendor" data-id="'+esc(move.id)+'" data-vendor="'+esc(v.id)+'">'+icon("edit","ic-sm")+' Edit</button>' +
       '<button class="btn btn-ghost btn-sm" data-action="delete-vendor" data-id="'+esc(move.id)+'" data-vendor="'+esc(v.id)+'">Remove</button></div>' +
     '</div></div>';
+  };
+  const sections = Object.keys(byKind).map(kind => {
+    const list = byKind[kind];
+    const showCompare = list.length >= 2 && list.some(v => v.quote !== "");
+    return '<div class="section-title">'+esc(kind)+' ('+list.length+')</div>' +
+      '<div class="card">' + list.map(card).join("") + '</div>' +
+      (showCompare ? '<div class="card"><h3 style="margin:0 0 8px">Bid comparison</h3>' +
+        '<div class="table-wrap"><table class="bid-table"><thead><tr><th>Company</th><th>Quote</th><th>Deposit</th><th>Available</th><th>Status</th><th class="no-print">Pick</th></tr></thead><tbody>' +
+        list.slice().sort((a,b) => (Number(a.quote) || Infinity) - (Number(b.quote) || Infinity)).map(v => bidRowHTML(move, v)).join("") +
+        '</tbody></table></div><p class="muted small">Lowest bid first. Awarding marks your choice and clears the rest.</p></div>' : '');
   }).join("");
+  const awarded = move.vendors.filter(v => v.awarded);
   view.innerHTML =
-    '<a href="#/move/'+esc(move.id)+'" class="btn btn-ghost btn-sm" style="margin-bottom:12px">'+icon("back","ic-sm")+' '+esc(move.clientName)+'</a>' +
+    '<a href="#/move/'+esc(move.id)+'" class="btn btn-ghost btn-sm no-print" style="margin-bottom:12px">'+icon("back","ic-sm")+' '+esc(move.clientName)+'</a>' +
     '<div class="row-between"><h2 style="margin:0">Vendors</h2>' +
-    '<button class="btn btn-sm" data-action="add-vendor" data-id="'+esc(move.id)+'">'+icon("plus","ic-sm")+' Add</button></div>' +
-    '<p class="muted small">Everyone involved in this move, with their status.</p>' +
-    '<div class="card">'+(rows || '<div class="empty">'+icon("truck")+'<p>No vendors yet.</p></div>')+'</div>';
+    '<button class="btn btn-sm no-print" data-action="add-vendor" data-id="'+esc(move.id)+'">'+icon("plus","ic-sm")+' Add</button></div>' +
+    '<p class="muted small">Everyone involved in this move. Record each bid, then award the job.</p>' +
+    (sections || '<div class="card empty">'+icon("truck")+'<p>No vendors yet.</p></div>') +
+    '<div class="card print-only bid-summary"><h2>Vendor bid summary: '+esc(move.clientName)+'</h2>' +
+      (awarded.length ? awarded.map(v => '<div class="kv"><span class="k">'+esc(v.name)+' ('+esc(v.kind)+') — awarded</span><span class="v">'+esc(money(v.quote))+'</span></div>').join("")
+        : '<p class="faint">No vendors awarded yet.</p>') +
+      '<p class="small muted">Prepared '+esc(fmtDate(todayISO()))+'.</p></div>';
 }
 
 /* ----- floor plan (new home) ----- */
@@ -598,12 +796,35 @@ function vPlan(move){
   topbarActions.innerHTML = "";
   const kept = move.items.filter(i => i.disposition === "keep");
   const rooms = move.rooms;
+  const fitHTML = r => {
+    const rd = roomDims(move, r);
+    const here = kept.filter(i => i.destRoom === r);
+    const sized = here.map(i => ({it: i, d: itemDims(i)})).filter(x => x.d);
+    if(!rd){
+      return sized.length ? '<p class="faint small">Add the room size under Notes to check fit.</p>' : '';
+    }
+    const area = rd.l * rd.w;
+    const used = sized.reduce((s,x) => s + (x.d.l * x.d.w) / 144, 0);
+    const pct = area > 0 ? Math.round(used / area * 100) : 0;
+    const tooLong = sized.filter(x => x.d.l / 12 > rd.l || x.d.w / 12 > rd.w);
+    let html = '<div class="small" style="margin-top:8px"><strong>'+esc(dimsText(rd,"ft"))+'</strong> ('+Math.round(area)+' sq ft)</div>';
+    if(sized.length){
+      html += '<div class="fit-bar" aria-label="Footprint used"><i style="width:'+Math.min(pct,100)+'%;'+(pct > 100 ? 'background:#a33b3b;':'')+'"></i></div>' +
+        '<div class="small '+(pct > 100 ? 'fit-warn' : 'muted')+'">Furniture covers about '+used.toFixed(1)+' of '+Math.round(area)+' sq ft ('+pct+'%).' +
+        (pct > 100 ? ' May not fit.' : '') + '</div>';
+      if(tooLong.length) html += '<div class="small fit-warn">Longer than the room: '+tooLong.map(x => esc(x.it.name)).join(", ")+'</div>';
+    } else {
+      html += '<p class="faint small">No measured furniture placed here yet.</p>';
+    }
+    return html + '<p class="faint small" style="margin-top:6px">Rough estimate, not a to-scale layout.</p>';
+  };
   const blocks = rooms.map(r => {
     const here = kept.filter(i => i.destRoom === r);
     return '<div class="card"><div class="row-between"><h3 style="margin:0">'+esc(r)+'</h3>' +
       '<button class="btn btn-soft btn-sm" data-action="edit-floornote" data-id="'+esc(move.id)+'" data-room="'+esc(r)+'">'+icon("edit","ic-sm")+' Notes</button></div>' +
       (move.floorNotes[r] ? '<p class="muted">'+esc(move.floorNotes[r])+'</p>' : '<p class="faint small">No notes yet. Where does furniture go in this room?</p>') +
       (here.length ? '<div class="small" style="margin-top:8px"><strong>Placed here:</strong> '+here.map(i=>esc(i.name)).join(", ")+'</div>' : '') +
+      fitHTML(r) +
     '</div>';
   }).join("");
   const unplaced = kept.filter(i => !i.destRoom);
@@ -612,7 +833,7 @@ function vPlan(move){
     '<h2 style="margin:0">The new home</h2>' +
     '<p class="muted small">Floor-plan notes for '+(move.toAddr?esc(move.toAddr):"the new residence")+'. Assign kept items to rooms as you go.</p>' +
     (unplaced.length ? '<div class="card"><div class="section-title" style="margin-top:0">Kept items not yet placed ('+unplaced.length+')</div>' +
-      unplaced.map(i => '<div class="list-row"><span class="grow"><h4>'+esc(i.name)+'</h4><div class="sub">'+esc(i.room)+' → ?</div></span><button class="btn btn-soft btn-sm" data-action="place-item" data-id="'+esc(move.id)+'" data-item="'+esc(i.id)+'">Place</button></div>').join("") + '</div>' : '') +
+      unplaced.map(i => { const d = itemDims(i); return '<div class="list-row"><span class="grow"><h4>'+esc(i.name)+'</h4><div class="sub">'+esc(i.room)+' → ?'+(d ? ' · '+esc(dimsText(d,"in")) : '')+'</div></span><button class="btn btn-soft btn-sm" data-action="place-item" data-id="'+esc(move.id)+'" data-item="'+esc(i.id)+'">Place</button></div>'; }).join("") + '</div>' : '') +
     blocks +
     '<div class="card card-flat"><button class="btn btn-ghost btn-block" data-action="add-room" data-id="'+esc(move.id)+'">'+icon("plus","ic-sm")+' Add a room</button></div>';
 }
@@ -660,6 +881,102 @@ function vGiving(move){
     receiptHTML(move) +
     (rows || '<div class="card empty">'+icon("gift")+'<p>No donations recorded yet.</p></div>') +
     (move.donations.length ? '<div class="card"><div class="kv"><span class="k">Total estimated value</span><span class="v">'+money(total)+'</span></div></div>' : '');
+}
+
+/* ----- estate sale (proceeds tracker) ----- */
+function salePrintHTML(move){
+  const t = saleTotals(move);
+  if(move.sample) return '<p><strong>Sample move, for demonstration only.</strong></p>' + salePrintBody(move, t);
+  return salePrintBody(move, t);
+}
+function salePrintBody(move, t){
+  const rows = move.items.filter(i => i.disposition === "sell").map(i =>
+    '<div class="kv"><span class="k">'+esc(i.name)+' <span class="faint">('+esc(i.room)+')</span></span>' +
+    '<span class="v">'+(Number(i.soldPrice) > 0 ? esc(money(i.soldPrice)) : 'not sold yet')+'</span></div>').join("");
+  return '<h2>Estate sale summary: '+esc(move.clientName)+'</h2>' + (rows || '<p class="faint">No items marked for sale.</p>') +
+    '<div class="kv"><span class="k">Total estimated value</span><span class="v">'+esc(money(t.est))+'</span></div>' +
+    '<div class="kv"><span class="k">Total sold</span><span class="v">'+esc(money(t.gross))+'</span></div>' +
+    '<div class="kv"><span class="k">Sale fees ('+esc(String(Number(move.saleFeePct) || 0))+'%)</span><span class="v">'+esc(money(Math.round(t.fees))) +'</span></div>' +
+    '<div class="kv"><span class="k"><strong>Net to the family</strong></span><span class="v"><strong>'+esc(money(Math.round(t.net)))+'</strong></span></div>' +
+    '<p class="small faint">Values are the organizer\'s estimates, not appraisals. This summary is an organizer\'s worksheet, not tax or legal advice.</p>' +
+    '<p class="small faint">Prepared '+esc(fmtDate(todayISO()))+'.</p>';
+}
+function vSale(move){
+  document.body.classList.remove("family-mode");
+  setTabs(moveTabs(move), null);
+  topbarActions.innerHTML = '<button class="btn btn-ghost btn-sm no-print" data-action="print-sale">'+icon("print","ic-sm")+' Summary</button>';
+  const t = saleTotals(move);
+  const items = move.items.filter(i => i.disposition === "sell");
+  const rows = items.map(it => {
+    const ph = itemPhoto(it);
+    const sold = Number(it.soldPrice) > 0;
+    return '<a class="list-row sale-row" href="#/move/'+esc(move.id)+'/inventory/'+esc(it.id)+'">' +
+      '<span class="sale-thumb">'+(ph ? '<img src="'+esc(ph)+'" alt="">' : icon("camera"))+'</span>' +
+      '<span class="grow"><h4>'+esc(it.name)+'</h4><div class="sub">'+esc(it.room)+
+        (it.estValue !== "" ? ' · est. '+esc(money(it.estValue)) : ' · no estimate yet') +'</div></span>' +
+      '<span style="text-align:right"><strong>'+(sold ? esc(money(it.soldPrice)) : '<span class="faint">—</span>')+'</strong><div class="sub">'+
+        (sold ? '<span class="disp disp-sell">Sold</span>' : '<span class="disp disp-ask">Awaiting sale</span>') +'</div></span></a>';
+  }).join("");
+  view.innerHTML =
+    '<a href="#/move/'+esc(move.id)+'" class="btn btn-ghost btn-sm no-print" style="margin-bottom:12px">'+icon("back","ic-sm")+' '+esc(move.clientName)+'</a>' +
+    '<div class="row-between"><h2 style="margin:0">Estate sale</h2></div>' +
+    '<p class="muted small">Every item marked for sale, with its estimated value and what it actually sold for. Values are estimates, not appraisals.</p>' +
+    '<div class="card no-print"><div class="field" style="margin-bottom:0"><label for="f-fee">Sale commission or fees (%)</label>' +
+      '<div style="display:flex;gap:10px"><input id="f-fee" type="number" inputmode="decimal" min="0" max="100" value="'+esc(String(Number(move.saleFeePct) || 0))+'">' +
+      '<button class="btn btn-soft" data-action="save-fee" data-id="'+esc(move.id)+'">Save</button></div>' +
+      '<div class="hint">The estate-sale company\'s cut, taken off each sold item.</div></div></div>' +
+    '<div class="card"><div class="kv"><span class="k">Items for sale</span><span class="v">'+t.count+' ('+t.soldCount+' sold)</span></div>' +
+      '<div class="kv"><span class="k">Total estimated value</span><span class="v">'+esc(money(t.est))+'</span></div>' +
+      '<div class="kv"><span class="k">Total sold</span><span class="v">'+esc(money(t.gross))+'</span></div>' +
+      '<div class="kv"><span class="k">Fees</span><span class="v">'+esc(money(Math.round(t.fees)))+'</span></div>' +
+      '<div class="kv"><span class="k"><strong>Net to the family</strong></span><span class="v"><strong>'+esc(money(Math.round(t.net)))+'</strong></span></div></div>' +
+    '<div class="section-title">'+items.length+' item'+(items.length===1?"":"s")+' marked for sale</div>' +
+    (rows ? '<div class="card" style="padding:6px 16px">'+rows+'</div>'
+      : '<div class="card empty">'+icon("tag")+'<p>Nothing marked for sale yet. Tag items “Sell” in the inventory, then record what they bring.</p></div>') +
+    '<div class="card print-only">'+salePrintHTML(move)+'</div>';
+}
+
+/* ----- move checklist (change-of-address + accounts) ----- */
+function sheetTask(move){
+  const cats = Array.from(new Set((move.checklist || []).map(t => t.category)));
+  openSheet("Add a task", "Something this move needs that the template missed.",
+    '<div class="field"><label>Task</label><input id="f-task" placeholder="e.g. Return the cable box"></div>' +
+    '<div class="field"><label>Category</label><select id="f-tcat">' +
+      cats.concat(["Other"]).map(c => '<option>'+esc(c)+'</option>').join("") + '</select></div>' +
+    '<div class="field"><label>Timing</label><select id="f-toff">' +
+      TASK_TIMING.map((x,i) => '<option value="'+x.o+'"'+(i===3?" selected":"")+'>'+esc(x.label)+'</option>').join("") + '</select></div>',
+    '<button class="btn btn-block" data-action="create-task" data-id="'+esc(move.id)+'">'+icon("check","ic-sm")+' Add task</button>');
+}
+function vChecklist(move){
+  document.body.classList.remove("family-mode");
+  setTabs(moveTabs(move), null);
+  topbarActions.innerHTML = '<button class="btn btn-ghost btn-sm no-print" data-action="print-checklist">'+icon("print","ic-sm")+' Print</button>';
+  const t = checklistTotals(move);
+  const pct = t.total ? Math.round(t.done / t.total * 100) : 0;
+  const list = move.checklist || [];
+  const cats = [];
+  list.forEach(x => { if(!cats.includes(x.category)) cats.push(x.category); });
+  const groups = cats.map(c => {
+    const tasks = list.filter(x => x.category === c);
+    const rows = tasks.map(x => {
+      const due = taskChip(move, x);
+      return '<div class="task-row"><button class="task-check" data-action="toggle-task" data-id="'+esc(move.id)+'" data-task="'+esc(x.id)+'" aria-pressed="'+x.done+'" aria-label="'+(x.done?"Mark not done":"Mark done")+': '+esc(x.text)+'">' +
+          (x.done ? icon("check","ic-sm") : '') + '</button>' +
+        '<span class="grow'+(x.done ? " task-done" : "")+'">'+esc(x.text)+(due ? ' <span class="task-due">'+due+'</span>' : '')+'</span>' +
+        (x.custom ? '<button class="btn btn-ghost btn-sm no-print" data-action="delete-task" data-id="'+esc(move.id)+'" data-task="'+esc(x.id)+'" aria-label="Remove task">'+icon("x","ic-sm")+'</button>' : '') +
+      '</div>';
+    }).join("");
+    return '<div class="section-title">'+esc(c)+'</div><div class="card" style="padding:6px 16px">'+rows+'</div>';
+  }).join("");
+  view.innerHTML =
+    '<a href="#/move/'+esc(move.id)+'" class="btn btn-ghost btn-sm no-print" style="margin-bottom:12px">'+icon("back","ic-sm")+' '+esc(move.clientName)+'</a>' +
+    '<div class="row-between"><h2 style="margin:0">Move checklist</h2>' +
+    '<button class="btn btn-sm no-print" data-action="add-task" data-id="'+esc(move.id)+'">'+icon("plus","ic-sm")+' Task</button></div>' +
+    '<p class="muted small">The change-of-address and account chores that slip through the cracks, with due dates counted from move day.</p>' +
+    (!move.targetDate ? '<div class="card"><p class="muted small" style="margin:0">Add a target date to the move to see each task\'s due date.</p></div>' : '') +
+    '<div class="card"><div class="progress"><i style="width:'+pct+'%"></i></div><div class="progress-label">'+t.done+' of '+t.total+' tasks done</div></div>' +
+    groups +
+    '<p class="muted small" style="margin-top:16px">An organizer\'s worksheet, not legal or tax advice. Confirm deadlines with the family or the estate\'s attorney.</p>';
 }
 
 /* ----- family portal ----- */
@@ -755,7 +1072,19 @@ function dispSeg(current){
 function sheetItem(move, it){
   pendingPhoto = null;
   const isEdit = !!it;
-  it = it || {name:"", room: move.rooms[0]||"", disposition:"ask", notes:"", destRoom:""};
+  it = it || {name:"", room: move.rooms[0]||"", disposition:"ask", notes:"", destRoom:"", estValue:"", soldPrice:"", soldTo:"", soldDate:"", dims:null};
+  const isSell = it.disposition === "sell", isKeep = it.disposition === "keep";
+  const saleFields =
+    '<div class="field"><label>Estimated value ($)</label><input id="f-estval" type="number" inputmode="decimal" min="0" value="'+esc(it.estValue)+'" placeholder="0"></div>' +
+    '<div id="f-soldwrap"'+(isSell?'':' style="display:none"')+'>' +
+    '<div class="field"><label>Sold price ($)</label><input id="f-soldprice" type="number" inputmode="decimal" min="0" value="'+esc(it.soldPrice)+'" placeholder="0"></div>' +
+    '<div class="field"><label>Sold to</label><input id="f-soldto" value="'+esc(it.soldTo)+'" placeholder="Buyer name"></div>' +
+    '<div class="field"><label>Sale date</label><input id="f-solddate" type="date" value="'+esc(it.soldDate)+'"></div></div>' +
+    '<div id="f-dimwrap"'+(isKeep?'':' style="display:none"')+'>' +
+    '<div class="field"><label>Footprint, for the new home (inches)</label><div style="display:flex;gap:10px">' +
+      '<input id="f-dim-l" type="number" inputmode="decimal" min="0" placeholder="Length" value="'+esc(it.dims && it.dims.l != null ? it.dims.l : "")+'">' +
+      '<input id="f-dim-w" type="number" inputmode="decimal" min="0" placeholder="Width" value="'+esc(it.dims && it.dims.w != null ? it.dims.w : "")+'">' +
+      '</div><div class="hint">Used to check what fits in each room of the new home.</div></div></div>';
   openSheet(isEdit ? "Edit item" : "Add an item", "Photograph it, name it, decide what happens to it.",
     '<div class="field"><label>Photo</label><div class="photo-pick" id="photo-pick" data-action="pick-photo">' +
       (safePhoto(it.photo) ? '<img src="'+esc(safePhoto(it.photo))+'" alt="">' : icon("camera")+'<div><strong>Tap to add a photo</strong><div class="hint">Take one now or choose from the library</div></div>') +
@@ -764,6 +1093,7 @@ function sheetItem(move, it){
     '<div class="field"><label>Room</label><select id="f-room">' +
       move.rooms.map(r => '<option '+(r===it.room?"selected":"")+'>'+esc(r)+'</option>').join("") + '</select></div>' +
     '<div class="field"><label>What happens to it?</label>'+dispSeg(it.disposition)+'</div>' +
+    saleFields +
     '<div class="field"><label>Notes (optional)</label><textarea id="f-notes" placeholder="Condition, measurements, memories worth keeping…">'+esc(it.notes)+'</textarea></div>' +
     (isEdit && it.disposition==="keep" ? '<div class="field"><label>Goes to (new home room)</label><select id="f-dest"><option value="">Not placed yet</option>' +
       move.rooms.map(r => '<option '+(r===it.destRoom?"selected":"")+'>'+esc(r)+'</option>').join("") + '</select></div>' : ""),
@@ -772,23 +1102,37 @@ function sheetItem(move, it){
     const b = e.target.closest("button"); if(!b) return;
     $$("#f-disp button").forEach(x => x.setAttribute("aria-pressed","false"));
     b.setAttribute("aria-pressed","true");
+    const v = b.getAttribute("data-v");
+    const sw = $("#f-soldwrap"), dw = $("#f-dimwrap");
+    if(sw) sw.style.display = v === "sell" ? "" : "none";
+    if(dw) dw.style.display = v === "keep" ? "" : "none";
   });
   if(isEdit && it.photo) pendingPhoto = it.photo;
 }
 function sheetVendor(move, v){
   const isEdit = !!v;
-  v = v || {kind:"Movers", name:"", phone:"", status:"todo", date:"", notes:""};
+  v = v || {kind:"Movers", name:"", phone:"", status:"todo", date:"", notes:"", quote:"", deposit:"", availDate:"", quoteNote:"", awarded:false};
   openSheet(isEdit ? "Edit vendor" : "Add a vendor", "",
     '<div class="field"><label>Type</label><select id="f-kind">' +
       VENDOR_KINDS.map(k => '<option '+(k===v.kind?"selected":"")+'>'+esc(k)+'</option>').join("") + '</select></div>' +
     '<div class="field"><label>Company name</label><input id="f-vname" value="'+esc(v.name)+'" placeholder="e.g. Gentle Giant Moving"></div>' +
     '<div class="field"><label>Phone</label><input id="f-vphone" value="'+esc(v.phone)+'" inputmode="tel" placeholder="(555) 123-4567"></div>' +
     '<div class="field"><label>Date (if scheduled)</label><input id="f-vdate" type="date" value="'+esc(v.date)+'"></div>' +
+    '<div class="field"><label>Bid details</label><div style="display:flex;gap:10px">' +
+      '<input id="f-vquote" type="number" inputmode="decimal" min="0" placeholder="Quote ($)" value="'+esc(v.quote)+'">' +
+      '<input id="f-vdeposit" type="number" inputmode="decimal" min="0" placeholder="Deposit ($)" value="'+esc(v.deposit)+'"></div></div>' +
+    '<div class="field"><label>Available date</label><input id="f-vavail" type="date" value="'+esc(v.availDate)+'"></div>' +
+    '<div class="field"><label>What the quote covers</label><textarea id="f-vqnote" placeholder="Insurance, crew size, materials included…">'+esc(v.quoteNote)+'</textarea></div>' +
     '<div class="field"><label>Notes</label><textarea id="f-vnotes" placeholder="Quote, crew size, parking notes…">'+esc(v.notes)+'</textarea></div>',
     '<button class="btn btn-block" data-action="'+(isEdit?"save-vendor":"create-vendor")+'" data-id="'+esc(move.id)+'"'+(isEdit?' data-vendor="'+esc(v.id)+'"':'')+'>'+icon("check","ic-sm")+' '+(isEdit?"Save changes":"Add vendor")+'</button>');
 }
 function sheetFloorNote(move, room){
+  const d = roomDims(move, room) || {l:"", w:""};
   openSheet(room + " notes", "Where does furniture go? What fits, what doesn't?",
+    '<div class="field"><label>Room size (feet)</label><div style="display:flex;gap:10px">' +
+      '<input id="f-room-l" type="number" inputmode="decimal" min="0" placeholder="Length" value="'+esc(d.l)+'">' +
+      '<input id="f-room-w" type="number" inputmode="decimal" min="0" placeholder="Width" value="'+esc(d.w)+'"></div>' +
+      '<div class="hint">Used to check whether kept furniture fits.</div></div>' +
     '<div class="field"><label>Notes for the new '+esc(room)+'</label><textarea id="f-fnote" placeholder="e.g. Bookshelf against the east wall…">'+esc(move.floorNotes[room]||"")+'</textarea></div>',
     '<button class="btn btn-block" data-action="save-floornote" data-id="'+esc(move.id)+'" data-room="'+esc(room)+'">'+icon("check","ic-sm")+' Save notes</button>');
 }
@@ -837,6 +1181,44 @@ function segVal(id){ const b = $("#"+id+" button[aria-pressed='true']"); return 
 
 const Actions = {
   "print-digest": () => window.print(),
+  "print-bids": () => window.print(),
+  "print-sale": () => window.print(),
+  "print-checklist": () => window.print(),
+  "save-fee": el => {
+    const m = getMove(el.getAttribute("data-id")); if(!m) return;
+    const v = Number($("#f-fee").value);
+    m.saleFeePct = isNaN(v) || v < 0 ? 0 : Math.min(v, 100);
+    save(); route(false); toast("Commission saved.");
+  },
+  "add-task": el => sheetTask(getMove(el.getAttribute("data-id"))),
+  "create-task": el => {
+    const m = getMove(el.getAttribute("data-id")); if(!m) return;
+    const text = $("#f-task").value.trim();
+    if(!text){ toast("Please name the task."); return; }
+    m.checklist = m.checklist || [];
+    m.checklist.push({id: uid(), text, category: $("#f-tcat").value, offset: Number($("#f-toff").value) || 0, done: false, doneAt: null, custom: true});
+    save(); closeSheet(); route(false); toast("Task added.");
+  },
+  "toggle-task": el => {
+    const m = getMove(el.getAttribute("data-id"));
+    const t = m && (m.checklist || []).find(x => x.id === el.getAttribute("data-task")); if(!t) return;
+    t.done = !t.done; t.doneAt = t.done ? Date.now() : null;
+    if(t.done) logAct(m, "Checked off: “"+t.text+"”.");
+    save(); route(false);
+  },
+  "delete-task": el => {
+    const m = getMove(el.getAttribute("data-id")); if(!m) return;
+    if(!confirm("Remove this task?")) return;
+    m.checklist = (m.checklist || []).filter(x => x.id !== el.getAttribute("data-task"));
+    save(); route(false); toast("Task removed.");
+  },
+  "award-vendor": el => {
+    const m = getMove(el.getAttribute("data-id"));
+    const v = m && m.vendors.find(x => x.id === el.getAttribute("data-vendor")); if(!v) return;
+    m.vendors.forEach(x => { if(x.kind === v.kind) x.awarded = (x.id === v.id); });
+    logAct(m, "Awarded “"+v.kind+"” to "+v.name+(v.quote !== "" ? " ("+money(v.quote)+")" : "")+".");
+    save(); route(false); toast("Awarded to "+v.name+".");
+  },
   "digest-toggle-sample": el => {
     const m = getMove(el.getAttribute("data-id")); if(!m) return;
     digestShowSample = !digestShowSample;
@@ -883,6 +1265,7 @@ const Actions = {
       fromAddr: $("#f-from").value.trim(), toAddr: $("#f-to").value.trim(),
       targetDate: $("#f-date").value, familyContact: $("#f-fam").value.trim(),
       rooms: DEFAULT_ROOMS.slice(0,5), items: [], vendors: [], floorNotes: {}, donations: [], activity: [], createdAt: Date.now() };
+    ensureMoveFields(m);
     logAct(m, "Move created.");
     state.moves.unshift(m); save(); closeSheet(); toast("Move created.");
     location.hash = "#/move/" + m.id;
@@ -912,9 +1295,16 @@ const Actions = {
     const name = $("#f-name").value.trim();
     if(!name){ toast("Please name the item."); $("#f-name").focus(); return; }
     const disp = segVal("f-disp") || "ask";
+    const dimL = $("#f-dim-l") ? Number($("#f-dim-l").value) : 0;
+    const dimW = $("#f-dim-w") ? Number($("#f-dim-w").value) : 0;
     logAct(m, "Inventoried “"+name+"” ("+$("#f-room").value+").");
     m.items.unshift({ id: uid(), room: $("#f-room").value, name, disposition: disp,
       notes: $("#f-notes").value.trim(), photo: pendingPhoto, photoSeed: null, destRoom: "",
+      estValue: $("#f-estval") ? $("#f-estval").value : "",
+      soldPrice: $("#f-soldprice") ? $("#f-soldprice").value : "",
+      soldTo: $("#f-soldto") ? $("#f-soldto").value.trim() : "",
+      soldDate: $("#f-solddate") ? $("#f-solddate").value : "",
+      dims: (disp === "keep" && dimL > 0 && dimW > 0) ? {l: dimL, w: dimW} : null,
       familyStatus: disp==="ask" ? "pending" : "approved", comments: [], createdAt: Date.now() });
     save(); closeSheet(); route(); toast("Item added.");
   },
@@ -926,6 +1316,13 @@ const Actions = {
     const disp = segVal("f-disp") || it.disposition;
     it.name = name; it.room = $("#f-room").value; it.notes = $("#f-notes").value.trim();
     if($("#f-dest")) it.destRoom = $("#f-dest").value;
+    if($("#f-estval")) it.estValue = $("#f-estval").value;
+    if($("#f-soldprice")) it.soldPrice = $("#f-soldprice").value;
+    if($("#f-soldto")) it.soldTo = $("#f-soldto").value.trim();
+    if($("#f-solddate")) it.soldDate = $("#f-solddate").value;
+    const dimL = $("#f-dim-l") ? Number($("#f-dim-l").value) : 0;
+    const dimW = $("#f-dim-w") ? Number($("#f-dim-w").value) : 0;
+    it.dims = (disp === "keep" && dimL > 0 && dimW > 0) ? {l: dimL, w: dimW} : null;
     if(disp !== it.disposition){
       it.disposition = disp;
       it.familyStatus = disp==="ask" ? "pending" : "approved";
@@ -946,7 +1343,9 @@ const Actions = {
     const name = $("#f-vname").value.trim();
     if(!name){ toast("Please name the company."); return; }
     m.vendors.push({ id: uid(), kind: $("#f-kind").value, name, phone: $("#f-vphone").value.trim(),
-      status: "todo", date: $("#f-vdate").value, notes: $("#f-vnotes").value.trim() });
+      status: "todo", date: $("#f-vdate").value, notes: $("#f-vnotes").value.trim(),
+      quote: $("#f-vquote").value, deposit: $("#f-vdeposit").value,
+      availDate: $("#f-vavail").value, quoteNote: $("#f-vqnote").value.trim(), awarded: false });
     save(); closeSheet(); route(); toast("Vendor added.");
   },
   "save-vendor": el => {
@@ -954,6 +1353,8 @@ const Actions = {
     const v = m.vendors.find(x=>x.id===el.getAttribute("data-vendor")); if(!v) return;
     v.kind = $("#f-kind").value; v.name = $("#f-vname").value.trim() || v.name;
     v.phone = $("#f-vphone").value.trim(); v.date = $("#f-vdate").value; v.notes = $("#f-vnotes").value.trim();
+    v.quote = $("#f-vquote").value; v.deposit = $("#f-vdeposit").value;
+    v.availDate = $("#f-vavail").value; v.quoteNote = $("#f-vqnote").value.trim();
     save(); closeSheet(); route(); toast("Saved.");
   },
   "delete-vendor": el => {
@@ -972,7 +1373,11 @@ const Actions = {
   "edit-floornote": el => sheetFloorNote(getMove(el.getAttribute("data-id")), el.getAttribute("data-room")),
   "save-floornote": el => {
     const m = getMove(el.getAttribute("data-id"));
-    m.floorNotes[el.getAttribute("data-room")] = $("#f-fnote").value.trim();
+    const room = el.getAttribute("data-room");
+    m.floorNotes[room] = $("#f-fnote").value.trim();
+    const rl = Number($("#f-room-l").value), rw = Number($("#f-room-w").value);
+    if(rl > 0 && rw > 0){ m.roomDims = m.roomDims || {}; m.roomDims[room] = {l: rl, w: rw}; }
+    else if(m.roomDims){ delete m.roomDims[room]; }
     save(); closeSheet(); route(); toast("Notes saved.");
   },
   "place-item": el => { const m = getMove(el.getAttribute("data-id")); sheetPlaceItem(m, m.items.find(i=>i.id===el.getAttribute("data-item"))); },
@@ -1107,6 +1512,8 @@ function route(rerender){
     else if(sub === "plan") vPlan(m);
     else if(sub === "giving") vGiving(m);
     else if(sub === "digest") vDigest(m);
+    else if(sub === "sale") vSale(m);
+    else if(sub === "checklist") vChecklist(m);
     else { summaryShowSample = false; vMoveHub(m); }
     return;
   }

@@ -47,7 +47,7 @@ function stateToRecords(S){
   (S.revenue || []).forEach(function(r){ put("revenue", r.id, r); });
   put("commissary", "main", S.commissary || {});
   put("settings", "main", { truckName: S.truckName, city: S.city,
-    truckType: S.truckType, onboarded: S.onboarded, extraCities: S.extraCities || [], paperworkTemplates: S.paperworkTemplates || [] });
+    truckType: S.truckType, onboarded: S.onboarded, extraCities: S.extraCities || [] });
   return R;
 }
 
@@ -94,7 +94,6 @@ function upsertIntoState(S, collection, key, value){
     S.truckName = value.truckName; S.city = value.city;
     S.truckType = value.truckType; S.onboarded = value.onboarded;
     if (Array.isArray(value.extraCities)) S.extraCities = value.extraCities;
-    if (Array.isArray(value.paperworkTemplates)) S.paperworkTemplates = value.paperworkTemplates;
   }
 }
 function removeFromState(S, collection, key){

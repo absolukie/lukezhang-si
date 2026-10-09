@@ -149,8 +149,15 @@ function hostEl(){ try { return document.querySelector(HOST_SEL); } catch(e){ re
 
 function ensureCard(){
   var host = hostEl();
-  if (!host || host.querySelector("#authBox")) return;
-  var box = document.createElement("div");
+  if (!host) return;
+  /* The card lives only in the Device sync sheet. openSheet() wipes #sheet for
+   * every modal (artwork form, pin editor, signature pad...); without this
+   * guard the MutationObserver re-injects the card into whatever sheet is open. */
+  var inSyncSheet = !!host.querySelector("#syncBox");
+  var box = document.getElementById("authBox");
+  if (!inSyncSheet){ if (box && box.parentNode === host) host.removeChild(box); return; }
+  if (box) return;
+  box = document.createElement("div");
   box.id = "authBox";
   box.className = CARD_CLASS;
   box.style.marginTop = "12px";

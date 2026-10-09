@@ -1,0 +1,319 @@
+"""HTML templates for StayLegal programmatic city pages."""
+import html as _html
+
+CSS = """
+:root{
+  --ink:#0f1f3d; --muted:#5a6b8c; --blue:#123a7d; --blue-dark:#0b2a5b;
+  --wash:#f1f4fa; --paper:#ffffff; --line:#dfe6f2;
+  --green:#177245; --green-bg:#e6f4ec; --amber:#9a5f00; --amber-bg:#fdf3e0;
+  --red:#b3261e; --red-bg:#fbeae9; --radius:14px;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  color:var(--ink);background:var(--wash);line-height:1.5;font-size:16px}
+button{touch-action:manipulation;font:inherit}
+input,textarea{font-size:16px;font-family:inherit}
+a,button,input,textarea,summary,label{touch-action:manipulation}
+.wrap{max-width:720px;margin:0 auto;padding:0 16px}
+header.site{position:sticky;top:0;z-index:10;background:var(--blue-dark);color:#fff}
+header.site .wrap{display:flex;align-items:center;gap:10px;padding:12px 16px}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:18px;color:#fff;text-decoration:none}
+.crumb{font-size:13px;color:var(--muted);padding:14px 0 0}
+.crumb a{color:var(--blue);text-decoration:none}
+.hero{background:linear-gradient(180deg,var(--blue-dark),var(--blue));color:#fff;padding:30px 0 26px}
+.hero h1{margin:0 0 8px;font-size:28px;line-height:1.2;letter-spacing:-.3px}
+.hero p.sub{margin:0 0 18px;color:#cdd8ef;font-size:16px;max-width:36em}
+.hero p.note{margin:12px 0 0;font-size:13px;color:#b9c7e4}
+.search{display:flex;gap:8px}
+.search input{flex:1;min-width:0;padding:14px;border:0;border-radius:12px;font-size:16px}
+.search input:focus{outline:3px solid #7ea4f2}
+.btn{border:0;border-radius:12px;padding:14px 20px;font-weight:700;cursor:pointer;
+  background:#fff;color:var(--blue-dark);font-size:16px;text-decoration:none;display:inline-block}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--blue);color:#fff}
+main{padding:22px 0 40px}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);
+  padding:18px;margin:0 0 14px}
+.card h2{margin:0 0 10px;font-size:18px}
+.eyebrow{font-size:12px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+.verdict{border-radius:var(--radius);padding:20px;border:1px solid var(--line);margin-bottom:14px}
+.verdict .stamp{display:inline-block;font-weight:800;font-size:15px;letter-spacing:1px;
+  text-transform:uppercase;border-radius:8px;padding:7px 12px;margin-bottom:10px}
+.verdict h2{margin:0 0 6px;font-size:22px}
+.verdict p{margin:0;color:var(--muted)}
+.verdict.legal{background:var(--green-bg);border-color:#bfe3cd}
+.verdict.legal .stamp{background:var(--green);color:#fff}
+.verdict.permit{background:var(--amber-bg);border-color:#f0d9a8}
+.verdict.permit .stamp{background:var(--amber);color:#fff}
+.verdict.banned{background:var(--red-bg);border-color:#f3c1bd}
+.verdict.banned .stamp{background:var(--red);color:#fff}
+.kv{display:grid;grid-template-columns:1fr;gap:0}
+.kv .row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.kv .row:first-child{border-top:0}
+.kv dt{color:var(--muted);font-size:14px}
+.kv dd{margin:0;font-weight:600;text-align:right;font-size:14px}
+.steps{list-style:none;margin:0;padding:0;counter-reset:st}
+.steps li{display:flex;gap:12px;padding:12px 0;border-top:1px solid var(--line);align-items:flex-start}
+.steps li:first-child{border-top:0}
+.steps .n{flex:none;width:28px;height:28px;border-radius:50%;background:var(--blue);color:#fff;
+  font-weight:700;font-size:14px;display:grid;place-items:center;margin-top:2px}
+.steps .t{font-weight:600}
+.steps .d{color:var(--muted);font-size:14px}
+.change{padding:10px 0;border-top:1px solid var(--line)}
+.change:first-of-type{border-top:0}
+.change .t{font-weight:600;font-size:15px}
+.change .d{color:var(--muted);font-size:14px}
+.src{font-size:13px;color:var(--muted)}
+.src a{color:var(--blue)}
+.seg{display:flex;background:#e4eaf5;border-radius:12px;padding:4px;margin-bottom:12px}
+.seg button{flex:1;border:0;background:transparent;border-radius:9px;padding:10px;font-size:14px;
+  font-weight:600;color:var(--muted);cursor:pointer}
+.seg button.on{background:#fff;color:var(--blue-dark);box-shadow:0 1px 3px rgba(11,42,91,.18)}
+.pill{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;border-radius:6px;padding:4px 8px}
+.pill.legal{background:var(--green-bg);color:var(--green)}
+.pill.permit{background:var(--amber-bg);color:var(--amber)}
+.pill.banned{background:var(--red-bg);color:var(--red)}
+.price-card{background:var(--blue-dark);color:#fff;border-radius:var(--radius);padding:22px;margin:0 0 14px}
+.price-card h2{margin:0 0 4px;font-size:20px;color:#fff}
+.price-card .amt{font-size:38px;font-weight:800;letter-spacing:-.5px}
+.price-card .amt small{font-size:15px;font-weight:400;color:#b9c7e4}
+.price-card ul{margin:12px 0 0;padding:0;list-style:none}
+.price-card li{padding:7px 0;border-top:1px solid rgba(255,255,255,.15);font-size:15px;color:#dbe4f6}
+.price-card li:first-child{border-top:0}
+.price-card p.note{color:#b9c7e4;font-size:14px}
+.rel{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.rel a{border:1px solid var(--line);background:#fff;border-radius:999px;padding:8px 14px;
+  font-size:14px;color:var(--blue);text-decoration:none}
+.disclaimer{background:#fff8e6;border:1px solid #f0d9a8;border-radius:var(--radius);padding:16px 18px;
+  font-size:14px;color:#6b4d00;margin-bottom:14px}
+.disclaimer strong{display:block;margin-bottom:4px;color:#7a5600}
+footer.site{padding:24px 0 40px;color:var(--muted);font-size:13px}
+footer.site a{color:var(--blue)}
+.hidden{display:none!important}
+.fresh{font-size:13px;color:var(--muted);margin-top:10px}
+.prose p{margin:0 0 12px;color:var(--ink)}
+.prose p.lead{font-size:17px}
+@media(max-width:559px){.search{flex-direction:column}}
+.trust-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 8px;font-size:13px;color:var(--muted)}
+.confidence{display:inline-block;border-radius:999px;padding:4px 10px;font-weight:700}
+.confidence.verified{background:var(--green-bg);color:var(--green)}
+.confidence.secondary{background:var(--amber-bg);color:var(--amber)}
+.scope{font-size:13px;color:var(--muted);margin:0 0 12px}
+.verdict .verdict-note{font-size:13px;margin-top:12px}
+@media(min-width:560px){.hero h1{font-size:36px}}
+:focus-visible{outline:3px solid #7ea4f2;outline-offset:2px}
+"""
+
+STAMP_TEXT = {"legal": "Legal", "permit": "Legal with permit", "banned": "Not allowed"}
+
+
+def esc(s):
+    return _html.escape(str(s), quote=True)
+
+
+def kv_html(rows):
+    out = ['<dl class="kv">']
+    for r in rows:
+        out.append('<div class="row"><dt>%s</dt><dd>%s</dd></div>' % (esc(r.get("label", "")), esc(r.get("value", ""))))
+    out.append("</dl>")
+    return "\n".join(out)
+
+
+def steps_html(steps):
+    out = ['<ol class="steps">']
+    for i, s in enumerate(steps):
+        out.append('<li><span class="n">%d</span><div><div class="t">%s</div><div class="d">%s</div></div></li>'
+                   % (i + 1, esc(s.get("title", "")), esc(s.get("detail", ""))))
+    out.append("</ol>")
+    return "\n".join(out)
+
+
+def changes_html(changes):
+    out = []
+    for c in changes:
+        out.append('<div class="change"><div class="t">%s</div><div class="d">%s</div></div>'
+                   % (esc(c.get("title", "")), esc(c.get("detail", ""))))
+    return "\n".join(out)
+
+
+def sources_html(sources):
+    parts = []
+    for s in sources:
+        parts.append('<a href="%s" target="_blank" rel="noopener">%s</a>' % (esc(s.get("url", "")), esc(s.get("label", ""))))
+    return " · ".join(parts)
+
+
+def view_html(c, hosted=False, researched="October 2026"):
+    """One verdict view (investor or hosted)."""
+    if hosted and c.get("hosted"):
+        h = c["hosted"]
+        verdict = h.get("verdict", c["verdict"])
+        headline = h.get("headline", "")
+        summary = h.get("summary", "")
+        permit = h.get("permit") or c["permit"]
+    else:
+        verdict = c["verdict"]
+        headline = c["headline"]
+        summary = c["summary"]
+        permit = c["permit"]
+    stamp = STAMP_TEXT[verdict]
+    conf = c.get("confidence")
+    confidence = "verified" if conf == "verified" else "secondary"
+    label = "Verified research" if conf == "verified" else ("Hand-researched" if conf == "hand" else "Secondary sources")
+    parts = ['<div class="trust-row"><span class="confidence %s">%s</span><span>Researched %s</span></div>'
+             % (confidence, label, esc(c.get("researched") or researched)),
+             '<p class="scope">City-level rules, not a parcel analysis.</p>']
+    parts.append('<div class="verdict %s"><span class="stamp">%s</span><h2>%s</h2><p>%s</p><p class="verdict-note">This is a research starting point, not legal advice.</p></div>'
+                 % (verdict, stamp, esc(headline), esc(summary)))
+    parts.append('<div class="card"><p class="eyebrow">Permit and costs</p>' + kv_html([
+        {"label": "Permit", "value": permit.get("name", "")},
+        {"label": "Issued by", "value": permit.get("issuer", "")},
+        {"label": "Cost", "value": permit.get("cost", "")},
+        {"label": "Renewal", "value": permit.get("renewal", "")},
+    ]) + "</div>")
+    if not hosted:
+        parts.append('<div class="card"><p class="eyebrow">Key limits</p>' + kv_html(c["limits"]) + "</div>")
+        parts.append('<div class="card"><p class="eyebrow">Taxes</p>' + kv_html(c["taxes"]) + "</div>")
+        parts.append('<div class="card"><p class="eyebrow">Registration checklist</p>' + steps_html(c["steps"]) + "</div>")
+        parts.append('<div class="card"><p class="eyebrow">What could change this verdict</p>' + changes_html(c["changes"]) + "</div>")
+    return "\n".join(parts)
+
+
+def faq_jsonld(c, state_name):
+    import json as _json
+    city = c["city"]
+    tax_bits = "; ".join("%s: %s" % (t.get("label"), t.get("value")) for t in c["taxes"][:2])
+    faq = {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {"@type": "Question", "name": "Is Airbnb legal in %s?" % city,
+             "acceptedAnswer": {"@type": "Answer", "text": "%s. %s" % (c["headline"], c["summary"])}},
+            {"@type": "Question", "name": "How much does a short-term rental permit cost in %s?" % city,
+             "acceptedAnswer": {"@type": "Answer", "text": "The %s from %s costs %s, renewing %s." % (
+                 c["permit"]["name"], c["permit"]["issuer"], c["permit"]["cost"], c["permit"]["renewal"])}},
+            {"@type": "Question", "name": "What taxes apply to Airbnbs in %s, %s?" % (city, state_name),
+             "acceptedAnswer": {"@type": "Answer", "text": tax_bits or "Check with the city tax office."}},
+        ],
+    }
+    return _json.dumps(faq)
+
+
+def city_page(c, state_name, related, base, stamp, total):
+    city, st = c["city"], c["state"]
+    slug = c["id"]
+    canon = "%s/cities/%s/" % (base, slug)
+    title = "Is Airbnb Legal in %s? Short-Term Rental Rules, Permits and Costs | StayLegal" % city
+    desc = "%s in %s, %s: %s. Permit %s. Rules researched %s." % (
+        STAMP_TEXT[c["verdict"]], city, st, c["headline"], c["permit"]["cost"], stamp)
+    if len(desc) > 160:
+        desc = desc[:157] + "..."
+    addr_ph = "123 Main St, %s, %s" % (city, st)
+
+    rel_links = "\n".join(
+        '      <a href="%s/cities/%s/">%s, %s</a>' % (base, r["id"], esc(r["city"]), esc(r["state"]))
+        for r in related)
+
+    js = """
+document.getElementById("cityCheck").addEventListener("submit",function(e){
+  e.preventDefault();
+  document.getElementById("verdictAnchor").scrollIntoView({behavior:"smooth",block:"start"});
+});
+var bI=document.getElementById("segI"),bH=document.getElementById("segH"),
+    vI=document.getElementById("viewI"),vH=document.getElementById("viewH");
+function setP(p){
+  var inv=p==="i";
+  bI.classList.toggle("on",inv);bH.classList.toggle("on",!inv);
+  bI.setAttribute("aria-pressed",inv?"true":"false");
+  bH.setAttribute("aria-pressed",inv?"false":"true");
+  vI.classList.toggle("hidden",!inv);vH.classList.toggle("hidden",inv);
+}
+bI.addEventListener("click",function(){setP("i")});
+bH.addEventListener("click",function(){setP("h")});
+"""
+
+    return """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b2a5b">
+<title>%s</title>
+<meta name="description" content="%s">
+<link rel="canonical" href="%s">
+<meta property="og:type" content="article">
+<meta property="og:title" content="%s">
+<meta property="og:description" content="%s">
+<meta property="og:url" content="%s">
+<style>%s</style>
+<script type="application/ld+json">%s</script>
+</head>
+<body>
+<header class="site"><div class="wrap">
+<a class="logo" href="%s/" aria-label="StayLegal home">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7z" fill="#fff"/><circle cx="12" cy="9" r="2.6" fill="#0b2a5b"/></svg>
+StayLegal</a></div></header>
+<div class="hero"><div class="wrap">
+<p class="crumb" style="color:#b9c7e4;padding:0 0 10px"><a href="%s/" style="color:#cdd8ef">Home</a> / <a href="%s/cities/" style="color:#cdd8ef">Cities</a> / %s</p>
+<h1>Is Airbnb legal in %s, %s?</h1>
+<p class="sub">%s. %s</p>
+<form class="search" id="cityCheck" role="search">
+<input type="text" inputmode="text" autocomplete="street-address" placeholder="%s" aria-label="Property address in %s">
+<button class="btn" type="submit">Show this city's verdict</button>
+</form>
+<p class="note">This guide covers %s only. Type your address to jump straight to its verdict.</p>
+</div></div>
+<main><div class="wrap" id="verdictAnchor">
+<div class="seg" role="group" aria-label="Your situation">
+<button type="button" id="segI" class="on" aria-pressed="true">Buying as an investor</button>
+<button type="button" id="segH" aria-pressed="false">I live there</button>
+</div>
+<div id="viewI">%s</div>
+<div id="viewH" class="hidden">%s</div>
+<div class="card"><p class="eyebrow">Sources</p>
+<div class="src">%s</div>
+<p class="src" style="margin-top:8px">New to these terms? <a href="%s/#glossary">Key terms, plainly</a></p>
+<p class="fresh">Rules researched %s. They change, so verify with the city before you buy.</p></div>
+<div class="price-card">
+<h2>Free address check</h2>
+<p>Every address check includes the verdict, the permit name and cost, night caps, tax rates, and a tick-off registration checklist, with sources you can verify.</p>
+<ul>
+<li>City-level verdict: legal, legal with permit, or not allowed</li>
+<li>Permit name, issuer, fee, and renewal schedule</li>
+<li>Night caps, occupancy rules, and key limits</li>
+<li>Transient occupancy and hotel tax rates</li>
+<li>Step-by-step registration checklist you can tick off</li>
+<li>Sources you can verify</li>
+</ul>
+<p class="note">StayLegal is free while we expand city coverage. <a href="%s/#addressInput" style="color:#fff">Run the free address check</a></p>
+</div>
+<div class="card"><p class="eyebrow">Also check</p>
+<div class="rel">
+%s
+<a href="%s/cities/">All %d cities</a>
+</div></div>
+<div class="disclaimer" role="note"><strong>Verify before you buy.</strong>
+Rules change often and vary by zoning, HOA, and building type. This is a research starting point, not legal advice. Always confirm with the city's planning or business-license office before signing anything.</div>
+</div></main>
+<footer class="site"><div class="wrap">
+<a href="%s/">StayLegal</a>, a legality starting point for short-term rental buyers. Not legal advice.<br>
+<a href="%s/cities/">Browse all city guides</a>
+</div></footer>
+<script>%s</script>
+</body>
+</html>""" % (
+        esc(title), esc(desc), canon,
+        esc(title), esc(desc), canon, CSS, faq_jsonld(c, state_name),
+        base,
+        base, base, esc(city),
+        esc(city), state_name,
+        esc(c["headline"]), esc(c["summary"]),
+        esc(addr_ph), esc(city),
+        esc(city),
+        view_html(c, hosted=False, researched=stamp), view_html(c, hosted=True, researched=stamp),
+        sources_html(c["sources"]), base, stamp,
+        base,
+        rel_links, base, total,
+        base, base, js,
+    )

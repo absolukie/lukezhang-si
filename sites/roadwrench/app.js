@@ -17,6 +17,7 @@ const I = {
   printer: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>',
   pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
   phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.9.6 2.9.7a2 2 0 0 1 1.7 2z"/></svg>',
+  chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
   user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
   rv: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17V7a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v10"/><path d="M18 9h2a2 2 0 0 1 2 2v6"/><path d="M3 17h18"/><circle cx="7.5" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/><path d="M7 7v5h7"/></svg>',
   x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>',
@@ -83,6 +84,26 @@ function updateStorageBanner(mode) {
 }
 const CLAIM_STATUSES = ["draft", "filed", "approved", "paid", "denied"];
 const CLAIM_LABEL = { draft: "Draft", filed: "Filed", approved: "Approved", paid: "Paid", denied: "Denied" };
+/* Per-part order status. Diagnosis and install are two trips: the checklist
+ * tracks what still needs ordering so the return trip is not wasted. */
+const PART_STS = ["have", "need", "ordered"];
+const PART_ST_LABEL = { have: "Have", need: "To order", ordered: "Ordered" };
+/* Share helper: navigator.share when available, clipboard fallback, honest
+ * labeling at every call site (the app never sends anything on its own). */
+function shareOrCopy(title, text, copiedMsg) {
+  if (navigator.share) {
+    navigator.share({ title, text }).catch(() => {});
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => toast(copiedMsg || "Copied"), () => toast("Copy failed"));
+  } else { toast("Sharing not supported here"); }
+}
+const normVin = v => (v || "").trim().toUpperCase();
+/* All jobs on the same VIN, except the one the tech is looking at. */
+function rigJobs(vin, exceptId) {
+  const v = normVin(vin);
+  if (!v) return [];
+  return S.jobs.filter(j => normVin(j.vin) === v && j.id !== exceptId);
+}
 function blankState() {
   return {
     company: { name: "Pine Ridge Mobile RV Repair", phone: "(555) 014-2288", email: "", address: "", laborRate: 125 },
@@ -99,6 +120,9 @@ function load() {
           j.claim.status = j.filedAt ? "filed" : "draft";
           j.claim.statusDate = j.claim.statusDate || j.filedAt || 0;
         }
+        (j.parts || []).forEach(p => {
+          if (!PART_STS.includes(p.st)) p.st = "have";
+        });
       });
       if (!s.settings) s.settings = { requirePhotos: false };
       if (s.invoiceSeq == null) s.invoiceSeq = 1;
@@ -226,6 +250,7 @@ function route() {
   else if (parts[0] === "packet" && parts[1]) viewPacket(parts[1]);
   else if (parts[0] === "invoice" && parts[1]) viewInvoice(parts[1]);
   else if (parts[0] === "customer" && parts[1]) viewCustomer(decodeURIComponent(parts[1]));
+  else if (parts[0] === "rig" && parts[1]) viewRig(decodeURIComponent(parts[1]));
   else if (parts[0] === "reminders") viewReminders();
   else if (parts[0] === "dashboard") viewDashboard();
   else if (parts[0] === "settings") viewSettings();
@@ -413,6 +438,7 @@ function viewJobDetail(id) {
   clearInterval(timerInt);
   const idx = STATUSES.indexOf(j.status);
   const rv = [j.rvYear, j.rvMake, j.rvModel].filter(Boolean).join(" ");
+  const rigPrior = rigJobs(j.vin, j.id);
   $("#view").innerHTML = `
     <button class="backlink" id="back">${I.back}Jobs</button>
     <div class="sectionhead"><h2>${esc(j.customer) || "Unnamed job"}</h2><span class="pill ${esc(j.status)}">${STATUS_LABEL[j.status]}</span></div>
@@ -434,6 +460,10 @@ function viewJobDetail(id) {
         <span class="muted">Past work for this customer:</span><span class="grow"></span>
         <button class="btn small secondary" id="histBtn">${I.clock}History</button>
       </div>
+      ${normVin(j.vin) ? `<div class="row" style="margin-bottom:10px">
+        <span class="muted">This VIN${rigPrior.length ? ": " + rigPrior.length + " prior visit" + (rigPrior.length > 1 ? "s" : "") : " (first job on this rig)"}:</span><span class="grow"></span>
+        <button class="btn small secondary" id="rigBtn">${I.rv}Rig history</button>
+      </div>` : ""}
       <div class="f2">
         <div class="field"><label>Customer</label><input id="d_customer" value="${esc(j.customer)}"></div>
         <div class="field"><label>Phone</label><input id="d_phone" inputmode="tel" value="${esc(j.phone)}"></div>
@@ -461,10 +491,24 @@ function viewJobDetail(id) {
       <div id="partsList">${j.parts.length ? j.parts.map(p => `
         <div class="item"><div class="grow"><div class="t">${esc(p.name)}</div>
           <div class="s">${esc(p.partNumber)}${p.serial ? " · SN " + esc(p.serial) : ""} · ${esc(p.qty)} × ${money(p.unitCost)}</div></div>
+          <button class="stbtn ${esc(p.st)}" data-st="${esc(p.id)}" title="Tap to change: have, to order, ordered" aria-label="Part status: ${esc(PART_ST_LABEL[p.st])}. Tap to change.">${esc(PART_ST_LABEL[p.st])}</button>
           <div class="mono" style="font-weight:800">${money(p.qty * p.unitCost)}</div>
           <button class="iconbtn danger" data-delpart="${esc(p.id)}">${I.trash}</button></div>`).join("")
         : `<div class="muted">No parts logged yet.</div>`}</div>
       <div class="total"><span>Parts total</span><span class="mono">${money(partsTotal(j))}</span></div>
+      ${(() => {
+        const pending = j.parts.filter(p => p.st === "need" || p.st === "ordered");
+        if (!pending.length) return "";
+        const need = pending.filter(p => p.st === "need").length;
+        const ord = pending.length - need;
+        return `<div class="orderbox"><h3>Parts order list</h3>
+          <div class="muted" style="margin-bottom:8px">${need ? need + " to order" : ""}${need && ord ? " · " : ""}${ord ? ord + " ordered, waiting" : ""}</div>
+          ${pending.map(p => `<div class="item"><div class="grow"><div class="t">${esc(p.name)}</div>
+            <div class="s">${esc(p.partNumber) || "No part number"} · qty ${esc(p.qty)} · ${esc(PART_ST_LABEL[p.st])}</div></div></div>`).join("")}
+          <button class="btn secondary block" id="copyOrder" style="margin-top:8px">${I.doc}Copy order list</button>
+          <div class="muted" style="margin-top:8px">Copies a supplier-ready list you send yourself. RoadWrench does not place orders.</div>
+        </div>`;
+      })()}
       <h3>Add part</h3>
       <div class="f2">
         <div class="field"><label>Part name</label><input id="p_name" placeholder="Water pump"></div>
@@ -530,6 +574,8 @@ function viewJobDetail(id) {
       <div class="total" style="padding-top:0"><span>Job total</span><span class="mono">${money(jobTotal(j))}</span></div>
       <button class="btn rust block" id="buildPacket" style="margin:10px 0">${I.doc}Build warranty packet</button>
       <button class="btn secondary block" id="viewInvoice">${I.doc}Customer invoice</button>
+      <button class="btn secondary block" id="shareUpdate">${I.chat}Share customer update</button>
+      <div class="muted" style="margin-top:6px">Copies a message you send yourself. RoadWrench does not text customers on its own.</div>
       ${j.status !== "complete"
         ? `<button class="btn secondary block" id="markComplete">${I.check}Mark job complete</button>`
         : `<button class="btn ghost block" id="reopen">${I.back}Reopen job</button>`}
@@ -538,6 +584,8 @@ function viewJobDetail(id) {
 
   $("#back").onclick = () => location.hash = "#/jobs";
   $("#histBtn").onclick = () => location.hash = "#/customer/" + encodeURIComponent(j.customer || "unnamed");
+  const rigBtn = $("#rigBtn");
+  if (rigBtn) rigBtn.onclick = () => location.hash = "#/rig/" + encodeURIComponent(normVin(j.vin));
   document.querySelectorAll(".stepbtn").forEach(b => b.onclick = () => { setStatus(j, b.dataset.status); });
   const upd = () => save(S);
   ["d_customer", "d_phone", "d_site", "d_year", "d_make", "d_model", "d_vin", "d_date",
@@ -564,12 +612,36 @@ function viewJobDetail(id) {
     if (!name) { toast("Enter a part name"); return; }
     j.parts.push({ id: uid(), name, partNumber: $("#p_num").value.trim(),
       qty: parseFloat($("#p_qty").value) || 1, unitCost: parseFloat($("#p_cost").value) || 0,
-      serial: $("#p_serial").value.trim() });
+      serial: $("#p_serial").value.trim(), st: "have" });
     save(S); toast("Part added"); viewJobDetail(j.id);
   };
   document.querySelectorAll("[data-delpart]").forEach(b => b.onclick = () => {
     j.parts = j.parts.filter(p => p.id !== b.dataset.delpart); save(S); viewJobDetail(j.id);
   });
+  /* part status toggle: have -> need (to order) -> ordered -> have */
+  document.querySelectorAll("[data-st]").forEach(b => b.onclick = () => {
+    const p = j.parts.find(x => x.id === b.dataset.st);
+    if (!p) return;
+    p.st = PART_STS[(PART_STS.indexOf(p.st) + 1) % PART_STS.length];
+    save(S); viewJobDetail(j.id);
+  });
+  const copyOrder = $("#copyOrder");
+  if (copyOrder) copyOrder.onclick = () => {
+    const toOrder = j.parts.filter(p => p.st === "need");
+    const ordered = j.parts.filter(p => p.st === "ordered");
+    const line = p => "- " + p.name + (p.partNumber ? " (" + p.partNumber + ")" : "") + " x " + p.qty;
+    const text = [
+      "PARTS ORDER LIST - " + S.company.name,
+      "Job: " + (j.customer || "Not provided") + (rv ? ", " + rv : ""),
+      "",
+      "TO ORDER:",
+      toOrder.length ? toOrder.map(line).join("\n") : "(none)",
+      "",
+      "ORDERED, WAITING ON DELIVERY:",
+      ordered.length ? ordered.map(line).join("\n") : "(none)"
+    ].join("\n");
+    shareOrCopy("Parts order list", text, "Order list copied");
+  };
 
   /* labor timer */
   renderTimer(j);
@@ -609,6 +681,21 @@ function viewJobDetail(id) {
   /* finish */
   $("#buildPacket").onclick = () => { save(S); location.hash = "#/packet/" + j.id; };
   $("#viewInvoice").onclick = () => { save(S); location.hash = "#/invoice/" + j.id; };
+  $("#shareUpdate").onclick = () => {
+    const pending = j.parts.filter(p => p.st === "need" || p.st === "ordered");
+    const lines = [
+      S.company.name + (S.company.phone ? " - " + S.company.phone : ""),
+      "Hi " + (j.customer || "there") + ", a quick update on your " + (rv || "RV") + ":",
+      "Status: " + STATUS_LABEL[j.status],
+      j.correction ? "Work completed: " + j.correction : null,
+      "Total so far: " + money(jobTotal(j)),
+      pending.length
+        ? "Still outstanding: waiting on " + pending.map(p => p.name + (p.st === "need" ? " (to order)" : " (ordered)")).join(", ")
+        : (j.status === "complete" ? "All work is done. Thank you!" : null),
+      "Reply to this message with any questions."
+    ].filter(Boolean).join("\n");
+    shareOrCopy("Job update for " + (j.customer || "customer"), lines, "Update copied, send it from your messages app");
+  };
   const mc = $("#markComplete");
   if (mc) mc.onclick = () => { setStatus(j, "complete"); };
   const ro = $("#reopen");
@@ -1078,6 +1165,77 @@ function viewCustomer(name) {
       : `<div class="card empty">${I.user}<div>No jobs for this customer yet.</div></div>`}`;
   $("#back").onclick = () => history.back();
   document.querySelectorAll("[data-job]").forEach(el => el.onclick = () => location.hash = "#/job/" + el.dataset.job);
+}
+
+/* ================= RIG SERVICE TIMELINE (VIN-keyed) ================= */
+/* Every job on one VIN, newest first. Answers the adjuster's favorite
+ * question ("has this unit had this repair before") and gives the owner a
+ * service history they can hand to the next buyer. */
+function viewRig(vin) {
+  clearInterval(timerInt);
+  const v = normVin(vin);
+  const jobs = S.jobs.filter(j => v && normVin(j.vin) === v)
+    .sort((a, b) => (b.scheduledAt || "").localeCompare(a.scheduledAt || ""));
+  if (!jobs.length) { toast("No jobs with that VIN yet"); location.hash = "#/jobs"; return; }
+  const latest = jobs[0];
+  const rv = [latest.rvYear, latest.rvMake, latest.rvModel].filter(Boolean).join(" ");
+  const spend = jobs.reduce((t, j) => t + jobTotal(j), 0);
+  const hours = jobs.reduce((t, j) => t + laborHours(j), 0);
+  const partLine = p => esc(p.name) + (p.partNumber ? " (" + esc(p.partNumber) + ")" : "") + (p.serial ? ", SN " + esc(p.serial) : "") + " x " + esc(p.qty);
+  $("#view").innerHTML = `
+    <button class="backlink" id="back">${I.back}Back</button>
+    <div class="sectionhead"><h2>${esc(rv) || "RV service history"}</h2></div>
+    <div class="card"><h2>This rig</h2>
+      <dl class="kv">
+        <dt>Unit</dt><dd>${esc(rv) || "Not provided"}</dd>
+        <dt>VIN</dt><dd class="mono">${esc(v)}</dd>
+        <dt>Visits</dt><dd>${jobs.length}</dd>
+        <dt>Lifetime spend</dt><dd class="mono">${money(spend)}</dd>
+        <dt>Labor logged</dt><dd>${hours.toFixed(2)} hrs</dd>
+      </dl>
+      <button class="btn secondary block" id="copyHist" style="margin-top:10px">${I.doc}Copy service history</button>
+      <div class="muted" style="margin-top:8px">Hand this to the owner for a used-RV listing, or to the adjuster when asked what this unit has had done.</div>
+    </div>
+    ${jobs.map(j => `
+      <div class="card rigvisit">
+        <div class="rv-top"><span class="rv-date">${fmtDate(j.scheduledAt)}</span>
+          <span class="pill ${esc(j.status)}">${STATUS_LABEL[j.status]}</span></div>
+        <div class="muted">${esc(j.customer) || "Unnamed"}${j.site ? " · " + esc(j.site) : ""}</div>
+        <div class="rigtl">
+          ${j.complaint ? `<div><strong>Complaint:</strong> ${esc(j.complaint)}</div>` : ""}
+          ${j.cause ? `<div><strong>Cause:</strong> ${esc(j.cause)}</div>` : ""}
+          ${j.correction ? `<div><strong>Correction:</strong> ${esc(j.correction)}</div>` : ""}
+          ${j.parts.length ? `<div><strong>Parts:</strong> ${j.parts.map(partLine).join("; ")}</div>` : ""}
+          ${j.labor.length ? `<div><strong>Labor:</strong> ${laborHours(j).toFixed(2)} hrs</div>` : ""}
+        </div>
+        <div class="row">
+          <span class="mono" style="font-weight:800">${money(jobTotal(j))}</span>
+          <span class="grow"></span>
+          <span class="pill ${esc(j.claim.status)}">${esc(CLAIM_LABEL[j.claim.status])}</span>
+          <button class="btn small secondary" data-open="${esc(j.id)}">Open job</button>
+        </div>
+      </div>`).join("")}`;
+  $("#back").onclick = () => history.back();
+  document.querySelectorAll("[data-open]").forEach(b => b.onclick = () => location.hash = "#/job/" + b.dataset.open);
+  $("#copyHist").onclick = () => {
+    const lines = [
+      "SERVICE HISTORY - " + (rv || "RV"),
+      "VIN: " + v,
+      jobs.length + " visit" + (jobs.length > 1 ? "s" : "") + ", lifetime spend " + money(spend) + ", " + hours.toFixed(2) + " labor hrs",
+      ""
+    ];
+    jobs.forEach(j => {
+      lines.push(fmtDate(j.scheduledAt) + " - " + (j.customer || "Unnamed"));
+      if (j.complaint) lines.push("Complaint: " + j.complaint);
+      if (j.correction) lines.push("Correction: " + j.correction);
+      if (j.parts.length) lines.push("Parts: " + j.parts.map(p => p.name + (p.partNumber ? " (" + p.partNumber + ")" : "")).join("; "));
+      if (j.labor.length) lines.push("Labor: " + laborHours(j).toFixed(2) + " hrs");
+      lines.push("Claim: " + CLAIM_LABEL[j.claim.status] + " - job total " + money(jobTotal(j)));
+      lines.push("");
+    });
+    lines.push("Recorded by " + S.company.name + (S.company.phone ? ", " + S.company.phone : ""));
+    shareOrCopy("Service history " + v, lines.join("\n"), "Service history copied");
+  };
 }
 
 /* ================= REMINDERS ================= */

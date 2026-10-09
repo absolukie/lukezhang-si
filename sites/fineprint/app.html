@@ -20,7 +20,7 @@ body{margin:0; background:var(--paper); color:var(--ink);
 button{touch-action:manipulation}
 .wrap{max-width:860px; margin:0 auto; padding:0 16px}
 header.top{border-bottom:2px solid var(--ink); background:var(--paper); position:sticky; top:0; z-index:20}
-.top-inner{display:flex; align-items:center; gap:10px; padding:12px 0}
+.top-inner{display:flex; align-items:center; gap:10px; padding:12px 16px}
 .logo{display:flex; align-items:center; gap:9px; font-weight:800; font-size:20px; letter-spacing:-.02em}
 .logo svg{width:30px; height:30px}
 .tag{margin-left:auto; font-size:12.5px; color:var(--ink2); text-align:right; line-height:1.35}
@@ -64,7 +64,8 @@ textarea#contract:focus{outline:2px solid var(--ink); outline-offset:1px}
 .tab{flex:1; border:0; background:transparent; padding:13px 8px; font-size:15.5px; font-weight:800; cursor:pointer; color:var(--ink2)}
 .tab[aria-selected="true"]{background:var(--ink); color:var(--paper)}
 .doc-view{background:#fff; border:2px solid var(--ink); border-top:0; border-radius:0 0 12px 12px;
-  padding:18px 16px; font-family:Georgia,"Times New Roman",serif; font-size:16.5px; line-height:1.75; white-space:pre-wrap}
+  padding:18px 16px; font-family:Georgia,"Times New Roman",serif; font-size:16.5px; line-height:1.75; white-space:pre-wrap;
+  overflow-wrap:break-word}
 .doc-view mark{padding:1px 3px; border-radius:3px; cursor:pointer}
 mark.sev-high{background:var(--hi-r)}
 mark.sev-med{background:var(--hi-y)}
@@ -342,8 +343,9 @@ footer.site{text-align:center; color:var(--ink2); font-size:13px; padding:0 0 34
       <h2>Saved analyses</h2>
       <div id="saved-list"></div>
     </div>
-    <div id="syncBoxHost"></div>
   </section>
+
+  <div id="syncBoxHost"></div>
 
   <p class="how"><strong>How it works:</strong> FinePrint scans your contract against 30+ known warranty-trap patterns (exclusion language, maintenance requirements, claim caps, arbitration clauses) and highlights each hit in the text. It is pattern matching, not AI and not a lawyer. It will miss cleverly worded traps and occasionally flag harmless text. Always read the exclusions section yourself before signing.</p>
   <p class="disclaimer">FinePrint is an educational tool, not legal advice. Pattern-based detection cannot catch every trap. If the deal score is low, take the contract to a mechanic you trust or your state attorney general's consumer protection office before signing. Your contracts are stored in this browser. Device sync is on by default: copies are stored on our server so your other devices can read them.</p>
@@ -374,17 +376,21 @@ window.addEventListener("load", function(){
   --bill-muted:var(--ink2); --bill-line:var(--line);
 }</style>
 <script>
-/* Billing init (pass 4): no paywall overlay for FinePrint. One-time $15
+/* Billing init (pass 6): no paywall overlay for FinePrint. One-time $15
    reviews are gated per analysis in app.js (free first review, then review
    credits). The ?billing=paid return is captured here before initBilling
-   strips it; the app decides what "paid" unlocks: one review credit. */
+   strips it, but it NEVER mints a credit by itself: the parameter is
+   untrusted. app.js verifies the payment against the backend
+   (/v1/billing/status) and only then adds the credit; an unverifiable
+   return adds nothing and is retried on later loads. */
 (function(){
   var paidReturn = /[?&]billing=paid\b/.test(location.search);
   try { history.replaceState(null, "", location.pathname + location.hash); } catch(e){}
   function ready(){
     var fb = window.__fineprintBilling;
     if(!fb) return;
-    if(paidReturn) fb.handlePaidReturn();
+    if(paidReturn) fb.verifyPaidReturn();
+    else if(fb.retryPendingPayment) fb.retryPendingPayment();
     fb.updateCreditPill();
   }
   if(window.initBilling){

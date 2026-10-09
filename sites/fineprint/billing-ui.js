@@ -110,6 +110,23 @@ function injectCSS(){
 
 /* ---------------- client ---------------- */
 
+// Bounded network (pass 5): every backend call fails fast instead of hanging
+// forever on black-hole networks (dealership Wi-Fi). Rejections flow into the
+// existing fail-open paths: initBilling's catch runs ready(), refresh() keeps
+// the device entitled, and checkout shows a friendly error.
+function fetchTimeout(url, opts, ms){
+  opts = opts || {};
+  var ctrl = null;
+  try { ctrl = new AbortController(); } catch(e){ return fetch(url, opts); }
+  var timer = setTimeout(function(){ try { ctrl.abort(); } catch(e){} }, ms || 15000);
+  var p = fetch(url, {
+    method: opts.method, headers: opts.headers, body: opts.body, signal: ctrl.signal
+  });
+  function done(v){ clearTimeout(timer); return v; }
+  function fail(e){ clearTimeout(timer); throw e; }
+  return p.then(done, fail);
+}
+
 function BillingClient(opts){
   opts = opts || {};
   this.appSlug = opts.appSlug;
@@ -134,9 +151,9 @@ BillingClient.prototype.api = async function(path, opts){
     headers["content-type"] = "application/json";
     body = JSON.stringify(opts.body);
   }
-  var res = await fetch(this.backend + path, {
+  var res = await fetchTimeout(this.backend + path, {
     method: opts.method || "GET", headers: headers, body: body
-  });
+  }, 15000);
   var data = null;
   try { data = await res.json(); } catch(e){}
   if (!res.ok || (data && data.ok === false)) {
@@ -155,10 +172,10 @@ BillingClient.prototype.ensureIdentity = async function(){
   if (sess) { this.auth = "Bearer " + sess; return; }
   var dk = lsGet(this.appSlug + ".device_key");
   if (!dk) {
-    var res = await fetch(this.backend + "/v1/devices", {
+    var res = await fetchTimeout(this.backend + "/v1/devices", {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ app_slug: this.appSlug })
-    });
+    }, 15000);
     var d = await res.json().catch(function(){ return {}; });
     if (!res.ok || !d.device_key) throw new Error("could not register device");
     dk = d.device_key;
@@ -194,6 +211,18 @@ BillingClient.prototype.isEntitled = function(){ return this.entitled; };
 BillingClient.prototype.daysLeft = function(){
   if (!this.status || !this.status.trial_ends_at) return 0;
   return Math.max(0, Math.ceil((this.status.trial_ends_at - Date.now()) / 86400000));
+};
+
+// Never show raw backend codes, fetch TypeErrors, or internal references to
+// users. Shared by the trial overlay and app pay sheets (FinePrint calls
+// window.__billing.friendlyErr on checkout failures).
+BillingClient.prototype.friendlyErr = function(e){
+  var code = e && e.code;
+  if (code === "BILLING_NOT_CONFIGURED") return "Payments are not switched on yet. Please check back soon.";
+  var m = (e && e.message) || "";
+  if (/billing_|whsec|rk_test|rk_live|SECRETS\.md|Worker|failed to fetch|networkerror|load failed|ERR_/i.test(m)) return "Something went wrong. Please try again.";
+  if (e && e.name === "AbortError") return "Something went wrong. Please try again.";
+  return m || "Something went wrong. Please try again.";
 };
 
 /* ---------------- trial / card / portal ---------------- */
@@ -360,14 +389,7 @@ BillingClient.prototype.buildOverlay = function(){
 
   var errBox = ov.querySelector(".bill-err");
   function showErr(m){ errBox.textContent = m; errBox.hidden = false; }
-  // Never show raw backend codes or internal references to users.
-  function friendlyErr(e){
-    var code = e && e.code;
-    if (code === "BILLING_NOT_CONFIGURED") return "Payments are not switched on yet. Please check back soon.";
-    var m = (e && e.message) || "";
-    if (/billing_|whsec|rk_test|rk_live|SECRETS\.md|Worker/i.test(m)) return "Something went wrong. Please try again.";
-    return m || "Something went wrong. Please try again.";
-  }
+  function friendlyErr(e){ return self.friendlyErr(e); }
   ov.querySelectorAll(".bill-plan").forEach(function(b){
     b.addEventListener("click", function(){
       ov.querySelectorAll(".bill-plan").forEach(function(x){ x.classList.remove("sel"); });

@@ -346,7 +346,7 @@ BillingClient.prototype.renderBanner = function(){
     var name = (e && e.name) || "";
     if (/abort|timeout/i.test(name)) return "Something went wrong. Please try again.";
     var m = (e && e.message) || "";
-    if (/billing_|whsec|rk_test|rk_live|SECRETS\.md|Worker|failed to fetch|networkerror|load failed|ERR_|http \d{3}/i.test(m)) return "Something went wrong. Please try again.";
+    if (/billing_|whsec|rk_test|rk_live|SECRETS\.md|Worker|failed to fetch|networkerror|load failed|ERR_|http \d{3}|stripe|price_|lookup|test mode/i.test(m)) return "Something went wrong. Please try again.";
     return m || "Something went wrong. Please try again.";
   }
   btn.onclick = function(){
@@ -420,7 +420,9 @@ BillingClient.prototype.buildOverlay = function(){
     var m = (e && e.message) || "";
     // Fetch-level failures (dead backend, proxy hangs) read as TypeErrors
     // like "Failed to fetch": mask those too, never show raw text to users.
-    if (/billing_|whsec|rk_test|rk_live|SECRETS\.md|Worker|failed to fetch|networkerror|load failed|ERR_/i.test(m)) return "Something went wrong. Please try again.";
+    // Also mask backend catalog errors (stripe / price_ / lookup / test mode)
+    // so the user never reads e.g. "price not found in Stripe (test mode)".
+    if (/billing_|whsec|rk_test|rk_live|SECRETS\.md|Worker|failed to fetch|networkerror|load failed|ERR_|http \d{3}|stripe|price_|lookup|test mode/i.test(m)) return "Something went wrong. Please try again.";
     return m || "Something went wrong. Please try again.";
   }
   ov.querySelectorAll(".bill-plan").forEach(function(b){

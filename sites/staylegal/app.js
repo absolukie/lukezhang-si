@@ -211,10 +211,12 @@
     stamp.classList.remove("pop");
     void stamp.offsetWidth; /* restart the pop animation */
     stamp.classList.add("pop");
-    var verified = city.confidence === "verified";
+    var confLabel = city.confidence === "verified" ? ["verified", "Verified research"]
+      : city.confidence === "hand" ? ["secondary", "Hand-researched"]
+      : ["secondary", "Secondary sources"];
     var confidence = document.getElementById("confidencePill");
-    confidence.className = "confidence " + (verified ? "verified" : "secondary");
-    confidence.textContent = verified ? "Verified research" : "Secondary sources";
+    confidence.className = "confidence " + confLabel[0];
+    confidence.textContent = confLabel[1];
     document.getElementById("researchedLine").textContent = "Researched " + (city.researched || DATA.lastChecked);
     document.getElementById("verdictHeadline").textContent = verdict === "unknown" ? "Needs manual review" : view.headline;
     document.getElementById("verdictSummary").textContent = verdict === "unknown"
@@ -305,6 +307,11 @@
     if (!st) return null;
     var citySt = (city.state || "").trim().toUpperCase();
     if (!citySt || st.abbr === citySt) return null;
+    // The full-name substring pass can mistake the city's own name for a
+    // state ("Washington" the city vs Washington the state). If the found
+    // state name is part of the matched city's name, it is the city, not
+    // a state mention: no warning.
+    if ((city.city || "").toLowerCase().indexOf(st.name.toLowerCase()) !== -1) return null;
     return st;
   }
 
@@ -325,9 +332,11 @@
     banner.textContent = note;
     banner.classList.toggle("hidden", !note);
 
+    // Privacy: the URL bar keeps the city-level link only. The address is
+    // never written to the URL here; share links include it only when the
+    // "Include my address in the link" box is ticked (see the Share button).
     try {
-      history.replaceState(null, "",
-        "#/check/" + city.id + (address ? "?address=" + encodeURIComponent(address) : ""));
+      history.replaceState(null, "", "#/check/" + city.id);
     } catch (e) {}
 
     paintVerdict(city, address, true);
@@ -484,8 +493,8 @@
     renderNotifOptIn();
   }
 
-  /* ---------- night tracker (R-12): free, manual, on-device ---------- */
-  var nightStoreKey = null, nightCap = null;
+  /* ---------- night tracker (R-11): free, manual, on-device ---------- */
+  var nightStoreKey = null, nightCap = null, nightCityId = null;
   function nightStored() {
     if (!nightStoreKey) return 0;
     return Math.max(0, parseInt(lsGet(nightStoreKey) || "0", 10) || 0);
@@ -501,13 +510,15 @@
   function bumpNight(d) {
     if (!nightStoreKey || !nightCap) return;
     lsSet(nightStoreKey, String(Math.max(0, nightStored() + d)));
-    if (d > 0) trackEvent("night_count", { city_id: nightStoreKey.split(".")[1], used: nightStored() });
+    if (d > 0) trackEvent("night_count", { city_id: nightCityId, used: nightStored() });
     updateNightUI();
   }
   function renderNightTracker(city) {
     var card = document.getElementById("nightCard");
     nightCap = city.nightCap || null;
-    nightStoreKey = nightCap ? "staylegal.nights." + city.id + "." + perspective : null;
+    nightCityId = city.id;
+    // PRD R-11: keyed per property and view (stable check id), not per city.
+    nightStoreKey = nightCap ? "staylegal.nights." + checkId(currentAddress, city.id, perspective) : null;
     if (!nightCap) { card.classList.add("hidden"); return; }
     card.classList.remove("hidden");
     document.getElementById("nightNote").textContent = nightCap.note;
@@ -643,6 +654,7 @@
     else if (parts.length) guess = parts[parts.length - 1];
     document.getElementById("reqCity").value = guess;
     document.getElementById("reqOk").classList.add("hidden");
+    document.getElementById("reqErr").classList.add("hidden");
     resultSection.classList.add("hidden");
     unknownSection.classList.remove("hidden");
     unknownSection.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1043,11 +1055,15 @@
       p.className = "empty";
       p.textContent = "Answer above to get your document pull list.";
       out.appendChild(p);
-    } else if (flags === 0) {
-      var ok = document.createElement("div");
-      ok.className = "hoa-note";
-      ok.textContent = "No red flags from your answers. The CC&Rs still get the final word: read the use-restriction article end to end before you buy.";
-      out.appendChild(ok);
+    } else {
+      if (flags === 0) {
+        var ok = document.createElement("div");
+        ok.className = "hoa-note";
+        ok.textContent = "No red flags from your answers. The CC&Rs still get the final word: read the use-restriction article end to end before you buy.";
+        out.appendChild(ok);
+      }
+      // PRD section 12: the completion event fires for every triage run,
+      // including runs that surface red flags.
       trackEvent("hoa_triage_done", { answered: answered, flags: flags });
     }
   }
@@ -1086,6 +1102,15 @@
         requestForm.reset();
         try { localStorage.removeItem("staylegal.reqDraft"); } catch (e) {}
         document.getElementById("reqOk").classList.remove("hidden");
+        document.getElementById("reqErr").classList.add("hidden");
+      } else {
+        // Storage unavailable: say so plainly instead of a dead end.
+        // The form keeps its values so nothing the user typed is lost.
+        var reqErr = document.getElementById("reqErr");
+        reqErr.textContent = "We could not save your request because this browser's storage is unavailable. " +
+          "Nothing was sent anywhere, and your request was not recorded.";
+        reqErr.classList.remove("hidden");
+        document.getElementById("reqOk").classList.add("hidden");
       }
     });
     document.getElementById("reqExportBtn").addEventListener("click", function () {
@@ -1400,15 +1425,22 @@
 
   /* ---------- offline: subtle banner, never a blocking modal ---------- */
   function initOffline() {
+    function fitBanner() {
+      var banner = document.getElementById("offlineBanner");
+      if (!banner || banner.classList.contains("hidden")) return;
+      document.body.style.paddingTop = banner.offsetHeight + "px";
+    }
     function updateOnline() {
       var off = !navigator.onLine;
       document.body.classList.toggle("is-offline", off);
       var banner = document.getElementById("offlineBanner");
       if (banner) banner.classList.toggle("hidden", !off);
-      if (off) trackEvent("offline_view", {});
+      if (off) { fitBanner(); trackEvent("offline_view", {}); }
+      else document.body.style.paddingTop = "";
     }
     window.addEventListener("online", updateOnline);
     window.addEventListener("offline", updateOnline);
+    window.addEventListener("resize", function () { if (!navigator.onLine) fitBanner(); });
     updateOnline();
   }
 

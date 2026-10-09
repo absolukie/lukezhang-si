@@ -132,7 +132,52 @@ const RULES = [
 {id:"any-shop", cat:"Good signs", sev:"pos", title:"Repairs at any licensed shop",
  pats:["any (licensed|ase-?certified|qualified) (repair|service) (facility|shop)","your choice of (repair|service)"],
  explain:"Being able to use your own trusted mechanic, rather than an 'authorized' network, removes a whole category of friction and denial risk.",
- tip:"Confirm by phone that your preferred shop will actually work with this administrator."}
+ tip:"Confirm by phone that your preferred shop will actually work with this administrator."},
+/* ---------- Astra wave 2026-10-09: adversarial rule expansion ----------
+   10 new rules from real contract language (CarShield sample contracts,
+   United Service Protection VSC, dealer sample contracts, American Home
+   Shield sample plan agreement, Endurance plan structure). Each rule has one
+   regression test contract in qa/regression-astra4.js. */
+{id:"continued-operation", cat:"Exclusions", sev:"high", title:"Damage from continued operation excluded",
+ pats:["damage caused by continued operation","continued operation after (a )?breakdown","take immediate action to prevent further damage","failure to (stop|cease) (driving|operating)"],
+ explain:"If something breaks and you keep driving, even to the nearest safe spot, the company can call the resulting damage your fault and deny it. The trap is that you often cannot tell a 'stop now' failure from a 'drive to the shop' one in the moment, but the contract judges you in hindsight.",
+ tip:"At the first sign of trouble (noise, light, smell), stop safely and call a tow. Keep the tow receipt as proof you did not keep driving."},
+{id:"stated-component", cat:"Exclusions", sev:"high", title:"Only listed parts are covered",
+ pats:["parts? (that are )?not listed.{0,40}not covered","only.{0,30}(parts|components) listed","coverage is limited to the (parts|components) (named|listed|described)","if (it|a part).{0,20}(is )?not listed.{0,20}not covered","named component","stated component","not listed as .{0,30}covered parts"],
+ explain:"Brochures list systems like 'engine and transmission,' but the contract covers only the specific parts named inside it. Anything not named is excluded by default, which is why stated-component plans are narrower than exclusionary plans that cover everything except listed exclusions.",
+ tip:"Ask which form the plan is: exclusionary (covers everything except named exclusions) or stated-component (covers only named parts). Get the full parts list before signing."},
+{id:"used-parts", cat:"Claim process", sev:"med", title:"Repairs may use used or remanufactured parts",
+ pats:["remanufactured.{0,60}used parts","used parts of like kind and quality","like kind and quality","new, remanufactured.{0,40}used","in our discretion.{0,40}(parts|repair)"],
+ explain:"'Covered' does not mean new parts. The company can install a used or remanufactured part at its discretion, and you have no say in the choice. On a car you plan to keep, that is a meaningful downgrade from the brochure's promise.",
+ tip:"Ask: can I pay the difference for a new OEM part, or is the part choice entirely theirs?"},
+{id:"labor-guide", cat:"Money caps", sev:"med", title:"Labor paid at guide rates, not shop rates",
+ pats:["nationally recognized labor guide","time allowed for the repair.{0,40}labor guide","labor.{0,30}published.{0,20}(rate|guide)","reasonable labor costs will be determined"],
+ explain:"The company pays what a labor guide says the job should take, not what your shop actually charges. If the shop's real time exceeds the guide, you pay the difference out of pocket, and many shops will tell you this before they start.",
+ tip:"Ask your shop what they charge per labor hour and compare it to what the administrator pays. The gap is your bill."},
+{id:"consumables", cat:"Exclusions", sev:"med", title:"Maintenance and wear items excluded",
+ pats:["maintenance (parts|items|services).{0,40}(not covered|excluded)","brake pads.{0,60}(not covered|excluded)","wear items.{0,40}(not covered|excluded)","fluids.{0,40}(not covered|excluded)","consumable"],
+ explain:"Belts, hoses, brake pads, filters, fluids, and spark plugs are excluded as maintenance items even if they fail suddenly. These are also the parts whose failure destroys the expensive parts, and the exclusion list is long.",
+ tip:"Read the maintenance-items list end to end. If a cheap excluded part failing can kill an expensive covered part, the coverage has a hole in the middle."},
+{id:"seals-limited", cat:"Exclusions", sev:"med", title:"Seals and gaskets only if tied to a covered repair",
+ pats:["seals? and gaskets?.{0,60}(only|solely)","only.{0,40}in connection with a covered","required in connection with a covered"],
+ explain:"Some contracts appear to cover seals and gaskets but only when they are replaced as part of an already-covered repair. A seal that fails on its own, the most common case, is still excluded. The coverage reads like a promise and works like an exception.",
+ tip:"Ask: if a seal fails by itself with no other covered failure, is it covered? If the answer is no, treat seals as excluded."},
+{id:"inspection-right", cat:"Claim process", sev:"med", title:"Company can inspect the car and bill you if it disagrees",
+ pats:["reserve.{0,20}right to inspect","right to inspect.{0,40}(vehicle|failure)","relocate your vehicle","you are responsible for any cost incurred"],
+ explain:"Before approving, the company can send its own inspector and even move your car to a shop of its choice. If it decides the repair is not covered, you pay for everything spent so far, including the inspection and any teardown already done.",
+ tip:"Ask how long an inspection can take and who pays for the days your car sits waiting for it."},
+{id:"mold-pest", cat:"Exclusions", sev:"med", title:"Mold, rot, and pest damage excluded (home)",
+ pats:["mold.{0,40}(not covered|excluded|not responsible)","mildew.{0,30}(excluded|not covered)","pest damage","bio-organic growth","rot.{0,20}fungus"],
+ explain:"Home warranty staple: any damage the company can attribute to mold, rot, or pests is excluded, and water damage almost always involves at least one of the three. The exclusion is broad enough to reach most water-related claims.",
+ tip:"For homes in humid climates, assume water claims will be contested under this clause. Document leaks immediately with dated photos."},
+{id:"access-costs", cat:"Money caps", sev:"med", title:"You pay for access, drywall, and restoration (home)",
+ pats:["not responsible.{0,40}(providing|securing) access","restoration of.{0,40}(wall|floor) coverings","costs of construction.{0,40}necessary","cranes? or other specialty"],
+ explain:"The contract covers the appliance but not reaching it. Cutting drywall, moving cabinets, restoring tile and paint, or bringing in a crane for a rooftop unit are billed to you, and on real jobs these costs can rival the repair itself.",
+ tip:"Ask who pays to open the wall and close it back up. If the answer is you, budget a few hundred dollars per claim on top of the service fee."},
+{id:"trip-radius", cat:"Money caps", sev:"low", title:"Trip interruption gated by distance from home",
+ pats:["more than (one hundred|100) miles from.{0,20}home","trip interruption.{0,40}miles","motel and restaurant.{0,40}per day"],
+ explain:"The 'trip interruption' benefit only kicks in if you break down far from home, typically 100 or more miles, and pays a capped daily amount for a few days. A breakdown 40 miles away gets you nothing.",
+ tip:"Check the mileage radius and the daily cap. This is a coupon for road trips, not real travel protection."}
 ];
 
 const RULESET_V = (function(){
@@ -1104,11 +1149,20 @@ var DRAFT_KEY = "fineprint.draft.v1";
 var DRAFT_A_KEY = "fineprint.draft.compare_a.v1";
 var DRAFT_B_KEY = "fineprint.draft.compare_b.v1";
 var draftTimer = null;
+function flushDraft(){
+  // Synchronous draft persist (red-2 P2-1): called when the Buy/sheet-offer
+  // flow starts and on pagehide, so a sub-400ms buy-then-cancel round-trip
+  // cannot land on an empty textarea. Compare drafts save synchronously on
+  // every input already; only the main textarea races.
+  clearTimeout(draftTimer);
+  try {
+    var el = $("contract");
+    if(el) localStorage.setItem(DRAFT_KEY, el.value.slice(0, 200000));
+  } catch(e){}
+}
 function saveDraftSoon(){
   clearTimeout(draftTimer);
-  draftTimer = setTimeout(function(){
-    try { localStorage.setItem(DRAFT_KEY, $("contract").value.slice(0, 200000)); } catch(e){}
-  }, 400);
+  draftTimer = setTimeout(flushDraft, 400);
 }
 function saveCompareDrafts(){
   try {
@@ -1133,9 +1187,29 @@ function restoreDrafts(){
   } catch(e){}
 }
 /* Run the stored intent after a verified paid return: the credit is in hand,
-   so re-enter the same gate the user passed before leaving for Stripe. */
-function resumePendingReview(){
-  var intent = readPendingIntent();
+   so re-enter the same gate the user passed before leaving for Stripe.
+   When force is true (a fresh 7-day pending_payment record exists), run the
+   review even if the 30-min intent TTL lapsed: the durable pending record is
+   the intent. With no intent and no text, stay silent (red-2 P2-2). */
+function readIntentRaw(){
+  // Intent kind as last recorded: no TTL check, no purge.
+  try {
+    var raw = localStorage.getItem(INTENT_KEY);
+    if(!raw) return null;
+    var o = JSON.parse(raw) || {};
+    return o.kind ? o : null;
+  } catch(e){ return null; }
+}
+function resumePendingReview(force){
+  var intent = force ? readIntentRaw() : readPendingIntent();
+  if(!intent && force){
+    // No intent kind survived, but a verified payment confirmed a review the
+    // user never got: resume whichever surface actually holds contract text.
+    var ct = ($("contract").value || "").trim();
+    var ca = ($("compare-a").value || "").trim(), cb = ($("compare-b").value || "").trim();
+    if(ct.length >= 200) intent = {kind: "analyze"};
+    else if(ca.length >= 200 && cb.length >= 200) intent = {kind: "compare"};
+  }
   if(!intent) return;
   clearPendingIntent();
   if(intent.kind === "compare"){
@@ -1232,6 +1306,7 @@ function paySheet(){
   $("pay-buy").addEventListener("click", function(){
     var btn = this, errBox = $("pay-err");
     btn.disabled = true; errBox.hidden = true;
+    flushDraft(); // belt-and-braces: text is persisted before checkout navigates
     var b = window.__billing;
     if(!b || !b.checkoutOnce){
       errBox.textContent = "Payments are not switched on yet. Please check back soon.";
@@ -1262,6 +1337,7 @@ function freeBuyFallback(msg){
   if(cont) cont();
 }
 function offerCheckout(){
+  flushDraft(); // persist the contract text before the Stripe round-trip (red-2 P2-1)
   var ov = paySheet();
   ov.hidden = false;
   var btn = $("pay-buy");
@@ -1304,11 +1380,14 @@ function verifyPaidReturn(opts){
   var b = window.__billing;
   if(!opts.quiet) toast("Confirming your payment with our server...");
   var finish = function(){
+    var hadPendingPayment = pendingPaymentFresh(); // durable 7-day record exists
     if(backendConfirmsPayment()){
       clearPendingPayment();
       addCredit(1);
       toast("Payment received. One review credit added.");
-      resumePendingReview();
+      // Slow confirmation (webhook arrives after the 30-min intent TTL): the
+      // pending record is the durable intent, so resume the review anyway.
+      resumePendingReview(hadPendingPayment);
     } else {
       setPendingPayment();
       if(!opts.quiet) toast("We could not confirm your payment yet, so no credit was added. If you were charged, it will appear automatically once our server records it.");
@@ -1427,6 +1506,7 @@ function updateOffline(){
 }
 window.addEventListener("online", updateOffline);
 window.addEventListener("offline", updateOffline);
+window.addEventListener("pagehide", flushDraft); // persist draft on any navigation away (red-2 P2-1)
 updateOffline();
 
 /* first-run tip: point at the magic moment (iteration 4) */

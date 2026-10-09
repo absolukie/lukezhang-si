@@ -448,11 +448,14 @@ else boot();
  */
 (function(){
   "use strict";
+  /* Same constants as the sync module above (separate scope, so they are
+     redeclared here; without this the reporter silently never fires). */
+  var WORKER = "https://sync-proto.lukezhang.si";
+  var LS_DEVICE = "buyback.device_key";
   try {
     var SLUG = "";
     try { SLUG = String(typeof LS_DEVICE === "string" ? LS_DEVICE : "").replace(/\.device_key$/, ""); } catch(e){}
-    var BASE = "https://sync-proto.lukezhang.si";
-    try { if (typeof WORKER === "string" && WORKER) BASE = WORKER; } catch(e){}
+    var BASE = WORKER;
     var ENDPOINT = BASE + "/v1/client-errors";
 
     function trunc(s, n){
@@ -463,6 +466,7 @@ else boot();
       s = String(s === null || s === undefined ? "" : s);
       s = s.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[email]");
       s = s.replace(/\+?\d[\d][\d\s().-]{6,}\d/g, "[phone]");
+      s = s.replace(/\b[A-HJ-NPR-Z0-9]{17}\b/g, "[vin]");
       s = s.replace(/(bearer[ :]+)[A-Za-z0-9\-._~+/=]{8,}/gi, "$1[token]");
       s = s.replace(/(api[_-]?key|device[_-]?key|token|secret|password|passwd|auth)\s*[:=]\s*["']?[^"'\s,}]{6,}/gi, "$1=[redacted]");
       return s;

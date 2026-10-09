@@ -165,7 +165,7 @@ function ensureCard(){
 function btnStyle(){
   return "display:block;width:100%;box-sizing:border-box;min-height:44px;margin:8px 0 0;" +
     "padding:10px 14px;font-size:16px;border-radius:10px;" +
-    "border:1px solid rgba(128,128,128,.45);background:rgba(128,128,128,.14);" +
+    "border:1px solid rgba(128,128,128,.55);background:rgba(128,128,128,.30);" +
     "color:inherit;touch-action:manipulation;cursor:pointer;";
 }
 function ghostStyle(){

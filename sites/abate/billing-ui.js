@@ -154,14 +154,28 @@ BillingClient.prototype.ensureIdentity = async function(){
   var sess = lsGet(this.appSlug + ".session_token");
   if (sess) { this.auth = "Bearer " + sess; return; }
   var dk = lsGet(this.appSlug + ".device_key");
+  if (!dk && window.__abateDeviceReg && window.__abateDeviceReg.then) {
+    /* P2-2: sync.js registers the same device key at boot. Await its
+     * in-flight registration instead of firing a second POST. */
+    try { await window.__abateDeviceReg; } catch(e){}
+    dk = lsGet(this.appSlug + ".device_key");
+  }
   if (!dk) {
-    var res = await fetch(this.backend + "/v1/devices", {
+    var self = this;
+    var reg = fetch(self.backend + "/v1/devices", {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ app_slug: this.appSlug })
+      body: JSON.stringify({ app_slug: self.appSlug })
+    }).then(function(res){
+      return res.json().catch(function(){ return {}; }).then(function(d){
+        if (!res.ok || !d.device_key) throw new Error("could not register device");
+        return d.device_key;
+      });
     });
-    var d = await res.json().catch(function(){ return {}; });
-    if (!res.ok || !d.device_key) throw new Error("could not register device");
-    dk = d.device_key;
+    /* Shared in-flight guard: overlapping boot paths register exactly once.
+     * Cleared on failure so a later retry is possible. */
+    window.__abateDeviceReg = reg;
+    reg.then(null, function(){ if (window.__abateDeviceReg === reg) window.__abateDeviceReg = null; });
+    dk = await reg;
     lsSet(this.appSlug + ".device_key", dk);
   }
   this.auth = "Bearer " + dk;
@@ -368,7 +382,7 @@ BillingClient.prototype.buildOverlay = function(){
     var code = e && e.code;
     if (code === "BILLING_NOT_CONFIGURED") return "Payments are not switched on yet. Please check back soon.";
     var m = (e && e.message) || "";
-    if (/billing_|whsec|rk_test|rk_live|SECRETS\.md|Worker|failed to fetch|networkerror|load failed|ERR_/i.test(m)) return "Something went wrong. Please try again.";
+    if (/billing_|whsec|rk_test|rk_live|lookup|SECRETS\.md|Worker|failed to fetch|networkerror|load failed|ERR_/i.test(m)) return "Something went wrong. Please try again.";
     return m || "Something went wrong. Please try again.";
   }
   ov.querySelectorAll(".bill-plan").forEach(function(b){

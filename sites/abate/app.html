@@ -185,6 +185,34 @@ footer.app{padding:18px 14px 110px; color:var(--dim); font-size:12px; text-align
   .pthumbs{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:8px;}
   .pthumbs img{width:100%; border:1px solid #999; display:block;}
 }
+/* The notice is an unfiled draft, isolated from dossier printing. */
+body.notice-mode footer.app,body.notice-mode .coach{display:none;}
+#noticeScreen{min-width:0; overflow-wrap:anywhere;}
+#noticeScreen h1{font-size:21px;}
+#noticeScreen input,#noticeScreen textarea,#noticeScreen select,#noticeScreen button,#noticeScreen label{touch-action:manipulation;}
+#noticeScreen input,#noticeScreen textarea,#noticeScreen select{font-size:16px; min-height:48px;}
+#noticeScreen fieldset{min-width:0; margin:22px 0; padding:14px; border:1px solid var(--line); border-radius:10px;}
+#noticeScreen legend{font-weight:700; padding:0 6px; max-width:100%;}
+#noticeScreen .btn{min-height:56px;}
+.notice-source{margin-top:5px;}
+.notice-warning{border:2px solid var(--orange); padding:12px; margin:12px 0; color:var(--ink); overflow-wrap:anywhere;}
+#noticeLetter{margin-top:24px; padding:18px; background:white; color:#111; border-radius:8px;}
+#noticeLetter .notice-warning{border-color:#111; color:#111;}
+.notice-paper{width:100%; border-collapse:collapse; table-layout:fixed;}
+.notice-paper td{padding:0;}
+.notice-paper p{white-space:pre-wrap; overflow-wrap:anywhere;}
+@media print{
+  body.notice-mode #app{display:block;}
+  body.notice-mode main{padding:0;}
+  body.notice-mode .hazard,body.notice-mode .toast,body.notice-mode .coach{display:none !important;}
+  body.notice-mode #main > :not(#noticeScreen){display:none !important;}
+  body.notice-mode #noticeLetter{margin:0; padding:0; border-radius:0; font-size:11pt;}
+  .notice-paper thead{display:table-header-group;}
+  .notice-paper tr,.notice-paper td{break-inside:auto;}
+  .notice-paper p{orphans:3; widows:3;}
+  .notice-paper h2{font-size:15pt;}
+  #noticeLetter .notice-warning{font-size:11pt; margin:0 0 12px;}
+}
 </style>
 </head>
 <body>
@@ -771,6 +799,7 @@ function renderRecovery(main){
   };
 }
 function render(){
+  document.body.classList.toggle("notice-mode",view.name==="notice");
   const main=$("#main"), fab=$("#fab"), back=$("#backBtn");
   /* R2 P0: quarantined load. The recovery screen owns the view; the quota
    * banner is skipped here because no save is attempted in this state. */
@@ -783,6 +812,7 @@ function render(){
     '<b style="color:var(--amber)">Storage full.</b> Records are NOT saving right now. Free up device space, then retry. Export your data first so nothing is lost.'+
     '<div class="row" style="margin-top:10px"><button class="btn sm" id="quotaRetry">Retry save</button>'+
     '<button class="btn dark sm" id="quotaExport">Export raw data</button></div></div>':"";
+  if(view.name==="notice"){ back.style.display="inline-flex"; fab.style.display="none"; $("#headRight").textContent="DRAFT"; renderNotice(main); return; }
   if(view.name==="dash"){ back.style.display="none"; fab.style.display="flex"; $("#headRight").innerHTML=DB.projects.length+" projects"; renderDash(main); }
   else{ back.style.display="inline-flex"; fab.style.display="flex"; const p=proj(); $("#headRight").innerHTML=p?('<span>'+completeness(p).total+'% dossier</span> <span class="sync-pill" id="headSync">…</span>'):""; renderProject(main,p); }
   try{ if(window.__abateSyncPill) window.__abateSyncPill(); }catch(e){}
@@ -1138,6 +1168,7 @@ function vDossier(p,c){
       :'<div class="alert" style="background:#0e2b1a; border-color:var(--green); color:#c9f5da; margin:14px 0 0"><b style="color:var(--green)">Dossier sealed.</b> Every required record is present. This file is ready for the auditor, the insurer, or the property buyer.</div>')+
     '<div class="row" style="margin-top:12px"><button class="btn ghost sm grow" data-act="print">'+IC.print+' Print dossier</button>'+
     '<button class="btn ghost sm grow" data-act="export">'+IC.down+' Export archive</button></div></div>'+
+    '<div class="card no-print"><h3>NESHAP notification draft</h3><p class="small muted">DRAFT / NEEDS-ATTORNEY-REVIEW before any filing.</p><button class="btn ghost block" data-act="notice">'+IC.print+' Draft notification letter</button></div>'+
     '<h2 class="stencil" style="font-size:15px; color:var(--muted); margin:4px 0 4px;">Record events</h2>'+
     '<div class="small dim" style="margin-bottom:8px">Corrections, deletions, and sign-off changes, in order. The dossier remembers what happened.</div>'+recEvHtml+
     '<h2 class="stencil" style="font-size:15px; color:var(--muted); margin:14px 0 4px;">Assembled timeline</h2>'+
@@ -1148,6 +1179,143 @@ function vDossier(p,c){
 </script>
 <script>
 "use strict";
+/* Factual notice drafts only. No applicability, quantity or deadline logic.
+ * Kept in memory, separate from dossier records and the sync store. */
+const noticeDrafts=new Map();
+const NOTICE_WARNING='DRAFT / NEEDS-ATTORNEY-REVIEW';
+const NOTICE_FIELDS=[
+ ['Notice details',[
+  ['notificationDate','Notification date','date'],['recipient','Agency and address','area'],
+  ['noticeStatus','Notice status as entered'],['operation','Operation type as entered'],
+  ['projectName','Project name','text','name'],['site','Site address','text','address'],
+  ['location','County, building and affected floors / rooms','area'],
+  ['facility','Facility size and unit, floors, age, present / prior use','area']]],
+ ['Owner and operators',[
+  ['owner','Owner name','text','owner'],['ownerAddress','Owner address','area'],
+  ['ownerPhone','Owner phone','tel','ownerPhone'],['ownerContact','Owner contact person'],
+  ['contractor','Removal contractor: name, address, phone and contact','area'],
+  ['operator','Other operator: name, address, phone and contact','area']]],
+ ['Schedules',[
+  ['workStart','Project work window start','date','startDate'],['workEnd','Project work window end','date','estEndDate'],
+  ['removalStart','Scheduled asbestos work start','date'],['removalEnd','Scheduled asbestos work completion','date'],
+  ['operationStart','Scheduled demolition / renovation start','date'],['operationEnd','Scheduled demolition / renovation completion','date'],
+  ['reportPeriod','Reporting period as entered']]],
+ ['Materials and procedures',[
+  ['presence','Asbestos presence as entered'],['detection','Detection and analytical procedures','area'],
+  ['work','Planned work, methods and affected components','area'],
+  ['procedures','Removal, emission-control and waste-handling procedures','area'],
+  ['unexpected','Unexpected-material procedures','area']]],
+ ['Transport and disposal',[
+  ['transporter','Transporter name','text',null,'transporter'],['transporterPhone','Transporter phone','tel',null,'transporterPhone'],
+  ['transporterAddress','Transporter address','area'],['transporterContact','Transporter contact person'],
+  ['disposalSite','Disposal site name','text',null,'disposalSite'],['disposalPhone','Disposal site phone','tel',null,'disposalPhone'],
+  ['disposalAddress','Disposal site location / address','area'],['additionalWaste','Additional transporters / disposal sites','area']]],
+ ['Contact and review details',[
+  ['contact','Draft contact: name, role, phone and email','area'],['supervisor','Supervisor and training facts','area'],
+  ['certification','Certification text for attorney review, not executed','area'],
+  ['order','Ordered-demolition details: official, title, authority, order date, start date and attachment reference','area'],
+  ['emergency','Emergency event details: date, time, event and effects','area'],
+  ['attachments','Additional agency fields or attachment references','area'],['preparer','Prepared by: name and role']]]
+];
+function noticeDraft(p){
+  if(!noticeDrafts.has(p.id)){
+    const d={values:{},sources:{},manifestId:'',materials:[{}],synthetic:!!p.synthetic};
+    NOTICE_FIELDS.forEach(g=>g[1].forEach(([key,label,type,source])=>{
+      d.values[key]=source?String(p[source]??''):'';
+      d.sources[key]=source&&d.values[key]?'From project record: '+source:'Manual entry';
+    }));
+    noticeDrafts.set(p.id,d);
+  }
+  return noticeDrafts.get(p.id);
+}
+function noticeInput(key,label,value,type,source){
+  const id='notice-'+key;
+  return '<label for="'+id+'">'+esc(label)+'</label>'+
+    (type==='area'?'<textarea rows="3" id="'+id+'" name="'+key+'" aria-describedby="'+id+'-source">'+esc(value)+'</textarea>':
+      '<input id="'+id+'" name="'+key+'" type="'+(type||'text')+'" value="'+esc(value)+'" aria-describedby="'+id+'-source">')+
+    '<div class="small muted notice-source" id="'+id+'-source">'+esc(source)+'</div>';
+}
+function noticeMaterialFields(d){
+  return d.materials.map((m,i)=>'<fieldset class="notice-material"><legend>ACM entry '+(i+1)+'</legend>'+
+    [['type','Type / category as entered'],['description','Material and location'],['quantity','Quantity as entered'],['unit','Unit as entered'],['handling','Planned handling as entered']].map(([key,label])=>{
+      const id='notice-material-'+i+'-'+key;
+      return '<label for="'+id+'">'+label+'</label><input id="'+id+'" data-material="'+i+'" data-key="'+key+'" type="text"'+(key==='quantity'?' inputmode="decimal"':'')+' value="'+esc(m[key]||'')+'">';
+    }).join('')+'</fieldset>').join('');
+}
+function renderNotice(main){
+  const p=proj();
+  if(!p){ view={name:'dash'}; render(); return; }
+  const d=noticeDraft(p), manifests=live(p.manifests);
+  main.innerHTML='<section id="noticeScreen" aria-labelledby="noticeTitle">'+
+    '<div class="no-print"><h1 id="noticeTitle" class="stencil">NESHAP 10-day notification draft</h1>'+
+    '<div class="notice-warning"><strong>'+NOTICE_WARNING+'</strong><br>Attorney review is required before any filing. Regulatory thresholds remain unreviewed. This tool makes no applicability or deadline determination.</div>'+
+    '<p class="small muted">Fill in factual details for a draft letter. Agency acceptance is unverified. Drafts stay in this open page until reload or close. Project records are not changed. Print to keep a copy.</p>'+
+    '<label for="noticeProject">Project for draft</label><select id="noticeProject">'+DB.projects.map(x=>'<option value="'+esc(x.id)+'"'+(x.id===p.id?' selected':'')+'>'+esc(x.name)+(x.synthetic?' (Synthetic demo data)':'')+'</option>').join('')+'</select>'+
+    (d.synthetic?'<p class="notice-warning">Synthetic demo data. DRAFT / NEEDS-ATTORNEY-REVIEW.</p>':'')+
+    '<form id="noticeForm">'+NOTICE_FIELDS.map(([heading,fields])=>'<fieldset><legend>'+heading+'</legend>'+
+      (heading==='Transport and disposal'?'<label for="noticeManifest">Prefill from project manifest</label><select id="noticeManifest"><option value="">Manual transport / disposal details</option>'+manifests.map(m=>'<option value="'+esc(m.id)+'"'+(m.id===d.manifestId?' selected':'')+'>'+esc(m.manifestNo||m.id)+' | '+esc(m.transporter||'Transporter blank')+' | '+esc(m.disposalSite||'Disposal blank')+'</option>').join('')+'</select><p class="small muted">Choosing a source replaces transport and disposal names / phones and clears their manual addresses and contacts. Other draft fields are kept.</p>':'')+
+      fields.map(([key,label,type])=>noticeInput(key,label,d.values[key],type,d.sources[key])).join('')+'</fieldset>').join('')+
+    '<fieldset><legend>ACM quantities by type</legend><p class="small muted">Enter type, quantity, unit and handling from your records. Values print as entered. Blank fields remain blanks. No categories or quantities are inferred.</p><div id="noticeMaterials">'+noticeMaterialFields(d)+'</div><button type="button" class="btn dark" id="noticeAddMaterial">Add ACM entry</button></fieldset>'+
+    '<button class="btn block" type="submit">'+IC.print+' Generate / refresh DRAFT</button></form>'+
+    '<p class="small muted">DRAFT / NEEDS-ATTORNEY-REVIEW before any filing. Preview follows your current entries. Signature and signed date stay blank.</p>'+
+    '<button type="button" id="noticePrint" class="btn ghost block">'+IC.print+' Print DRAFT for attorney review</button><p id="noticeStatus" role="status" class="small muted"></p></div>'+
+    '<article id="noticeLetter" aria-label="Draft notification letter preview"></article></section>';
+  $('#noticeProject').onchange=e=>{ view.projectId=e.target.value; render(); };
+  const form=$('#noticeForm');
+  form.oninput=e=>{
+    const t=e.target;
+    if(t.dataset.material!==undefined) d.materials[Number(t.dataset.material)][t.dataset.key]=t.value;
+    else if(t.name){
+      d.values[t.name]=t.value;
+      if(d.sources[t.name].startsWith('From ')) d.sources[t.name]='Edited in draft; initially '+d.sources[t.name].toLowerCase();
+      document.getElementById(t.id+'-source').textContent=d.sources[t.name];
+    }
+    paintNoticeLetter(d);
+  };
+  $('#noticeManifest').onchange=e=>{
+    d.manifestId=e.target.value;
+    const m=manifests.find(x=>x.id===d.manifestId);
+    NOTICE_FIELDS.forEach(g=>g[1].forEach(([key,label,type,source,mkey])=>{
+      if(mkey){ d.values[key]=m?String(m[mkey]??''):''; d.sources[key]=m&&d.values[key]?'From project manifest '+(m.manifestNo||m.id)+': '+mkey:'Manual entry'; }
+    }));
+    ['transporterAddress','transporterContact','disposalAddress'].forEach(key=>{ d.values[key]=''; d.sources[key]='Manual entry'; });
+    render();
+  };
+  $('#noticeAddMaterial').onclick=()=>{
+    d.materials.push({});
+    $('#noticeMaterials').innerHTML=noticeMaterialFields(d);
+    $('#notice-material-'+(d.materials.length-1)+'-type').focus();
+    paintNoticeLetter(d);
+  };
+  form.onsubmit=e=>{ e.preventDefault(); paintNoticeLetter(d); $('#noticeStatus').textContent='DRAFT / NEEDS-ATTORNEY-REVIEW preview refreshed.'; $('#noticeLetter').scrollIntoView({block:'start'}); };
+  $('#noticePrint').onclick=()=>{ paintNoticeLetter(d); window.print(); };
+  paintNoticeLetter(d);
+}
+function paintNoticeLetter(d){
+  const target=$('#noticeLetter'); if(!target) return;
+  const v=(key,blank)=>esc(d.values[key]||'['+(blank||key)+']');
+  const para=s=>'<p>'+s+'</p>';
+  target.innerHTML='<table class="notice-paper"><thead><tr><td><div class="notice-warning"><strong>'+NOTICE_WARNING+'</strong><br>Attorney review is required before any filing.'+(d.synthetic?'<br><strong>SYNTHETIC DEMO DATA</strong>':'')+'</div></td></tr></thead><tbody><tr><td>'+
+    '<h2>Draft demolition / renovation notification</h2>'+para('This is an unfiled factual draft. Agency acceptance of this letter is unverified.')+
+    para('Notification date: '+v('notificationDate','date')+'. To: '+v('recipient','agency and address')+'.')+
+    para('Re: Draft demolition / renovation notification for '+v('projectName','project')+'. Notice status: '+v('noticeStatus','status')+'. Operation described by preparer: '+v('operation','operation')+'.')+
+    para('The site is '+v('site','site address')+'. Additional location details: '+v('location','county, building, floors/rooms')+'. Facility description: '+v('facility','size and unit, floors, age, present/prior use')+'.')+
+    para('The owner is '+v('owner','name')+', at '+v('ownerAddress','address')+', phone '+v('ownerPhone','phone')+', contact '+v('ownerContact','person')+'. The removal contractor is '+v('contractor','name, address, phone, contact')+'. Other operator: '+v('operator','name, address, phone, contact')+'.')+
+    para('The project work window supplied for this draft is '+v('workStart','start')+' to '+v('workEnd','end')+'. The scheduled asbestos work dates entered for this draft are '+v('removalStart','start')+' to '+v('removalEnd','end')+'. The scheduled demolition / renovation dates entered for this draft are '+v('operationStart','start')+' to '+v('operationEnd','end')+'. Reporting period: '+v('reportPeriod','period')+'.')+
+    para('Asbestos presence as entered: '+v('presence','description')+'. Detection and analytical procedures: '+v('detection','description')+'.')+
+    d.materials.map(m=>para('ACM type/category as entered: '+esc(m.type||'[type]')+'. Material/location: '+esc(m.description||'[description]')+'. Quantity: '+esc(m.quantity||'[number exactly as entered]')+'. Unit: '+esc(m.unit||'[unit]')+'. Planned handling: '+esc(m.handling||'[description]')+'.')).join('')+
+    para('Planned work, methods and affected components: '+v('work','description')+'. Removal, emission-control and waste-handling procedures: '+v('procedures','description')+'. Unexpected-material procedures: '+v('unexpected','description')+'.')+
+    para('The proposed transporter is '+v('transporter','name')+', at '+v('transporterAddress','address')+', phone '+v('transporterPhone','phone')+', contact '+v('transporterContact','person')+'. The proposed disposal site is '+v('disposalSite','name')+', at '+v('disposalAddress','location')+', phone '+v('disposalPhone','phone')+'. Additional transporters/disposal sites: '+v('additionalWaste','details')+'.')+
+    para('Contact for this draft: '+v('contact','name, role, phone, email')+'.')+
+    para('Supervisor and training facts supplied by preparer: '+v('supervisor','facts')+'. Certification text for attorney review, not executed: '+v('certification','text')+'. Ordered-demolition details and order attachment reference: '+v('order','details')+'. Emergency event details: '+v('emergency','details')+'. Additional agency fields or attachment references: '+v('attachments','details')+'.')+
+    para('Prepared by: '+v('preparer','name and role')+'. Signature: [not signed]. Date signed: [not signed].')+
+    para('<strong>'+NOTICE_WARNING+' before any filing.</strong> No filing or agency receipt is recorded by generating this draft.')+
+    '</td></tr></tbody></table>';
+}
+window.addEventListener('beforeprint',()=>{
+  if(view.name==='notice'&&proj()) paintNoticeLetter(noticeDraft(proj()));
+});
+
 /* ============ forms ============ */
 function openSheet(html){ $("#sheet").innerHTML=html; $("#sheetWrap").classList.add("open");
   /* The first-run tour never covers a form: a sheet opening dismisses any
@@ -1667,6 +1835,7 @@ function bindActions(main,p){
   main.querySelectorAll("[data-act]").forEach(b=>{
     const act=b.dataset.act, id=b.dataset.id;
     if(act==="fab") b.onclick=()=>fabAction();
+    else if(act==="notice") b.onclick=()=>{ view.name="notice"; const coach=$("#coach"); if(coach) coach.remove(); render(); };
     else if(act==="edit-project") b.onclick=()=>fProject(p);
     else if(act==="edit-log") b.onclick=()=>fDaily(p, p.dailyLogs.find(x=>x.id===id));
     else if(act==="del-log") b.onclick=async()=>{ const l=p.dailyLogs.find(x=>x.id===id);
@@ -1946,7 +2115,7 @@ function fabAction(){
   else if(view.tab==="dossier") exportArchive(p);
 }
 $("#fab").onclick=fabAction;
-$("#backBtn").onclick=()=>{ view={name:"dash"}; save(); };
+$("#backBtn").onclick=()=>{ if(view.name==="notice"){ view.name="project"; view.tab="dossier"; render(); } else{ view={name:"dash"}; save(); } };
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeSheet(); });
 /* R2 P0: a quarantined load is NEVER persisted. The recovery screen owns
  * every write from here; nothing is stored until the user chooses. */

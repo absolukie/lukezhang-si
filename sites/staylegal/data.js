@@ -5,11 +5,12 @@
 "use strict";
 
 const STAYLEGAL_DATA = {
-  version: "2026-10-09",
+  version: "2026-10-10",
   lastChecked: "October 2026",
   cities: [
     {
       id: "los-angeles-ca",
+      nightCap: { value: 120, unit: "nights", period: "per calendar year", note: "Applies to unhosted stays. In the I live there view this cap does not bind you." },
       confidence: "verified",
       researched: "October 2026",
       city: "Los Angeles",
@@ -208,6 +209,7 @@ const STAYLEGAL_DATA = {
     },
     {
       id: "palm-springs-ca",
+      nightCap: { value: 26, unit: "rental contracts", period: "per calendar year", note: "Applies to every short-term rental in the city." },
       confidence: "verified",
       researched: "October 2026",
       city: "Palm Springs",
@@ -680,7 +682,7 @@ const STAYLEGAL_DATA = {
             "issuer": "City of Biloxi",
             "cost": "$250 annual application fee",
             "renewal": "Annual",
-            "url": ""
+            "url": "https://biloxi.ms.us/agendas/planning/2022/STR%20COO-app.pdf?ref=hoaweekly.com"
           },
           "limits": [
             {
@@ -1662,7 +1664,7 @@ const STAYLEGAL_DATA = {
             "issuer": "City and County of Honolulu, Dept. of Planning and Permitting",
             "name": "Transient Vacation Unit Registration",
             "renewal": "Annual",
-            "url": ""
+            "url": "https://www.honolulu.gov/dpp/home/faq/"
           },
           "limits": [
             {
@@ -2278,6 +2280,7 @@ const STAYLEGAL_DATA = {
         },
     {
           "id": "jersey-city-nj",
+"nightCap": { "value": 60, "unit": "nights when you are not present", "period": "per calendar year", "note": "Applies to rentals where you are not present. Switch to the I live there view to see the hosted rules." },
           "confidence": "verified",
           "researched": "October 2026",
           "city": "Jersey City",
@@ -2295,7 +2298,7 @@ const STAYLEGAL_DATA = {
             "issuer": "Jersey City Division of Housing Preservation",
             "name": "Short-Term Rental Permit (owner-occupied only)",
             "renewal": "Annual",
-            "url": "https://www.airbnb.com/help/article/2682"
+            "url": "https://www.jcnj.org/UserFiles/Servers/Server_6189660/Image/City Hall/Housing Economic Development/HousingPreservation/2026-07-08 - STR - Updated FAQ.pdf"
           },
           "limits": [
             {
@@ -2351,7 +2354,7 @@ const STAYLEGAL_DATA = {
           "sources": [
             {
               "label": "Airbnb Jersey City rules",
-              "url": "https://www.airbnb.com/help/article/2682"
+              "url": "https://www.jcnj.org/UserFiles/Servers/Server_6189660/Image/City Hall/Housing Economic Development/HousingPreservation/2026-07-08 - STR - Updated FAQ.pdf"
             },
             {
               "label": "BNBCalc Hudson County guide",

@@ -72,7 +72,7 @@
     { lookupKey: "price_nextchapter_solo", name: "Solo", price: "$60/mo",
       blurb: "Unlimited moves and items, shareable family digest, vendor coordination, donation receipts." },
     { lookupKey: "price_nextchapter_team", name: "Team", price: "$100/mo",
-      blurb: "Everything in Solo, plus floor planning, the probate-organized worksheet export pack, and priority support." }
+      blurb: "Everything in Solo, plus floor planning, printable worksheets and data export, and priority support." }
   ];
   function boot(){
     if (typeof initBilling !== "function") return;
@@ -85,8 +85,23 @@
       function familyRoute(){ return /^#\/family\//.test(location.hash); }
       if (!familyRoute()) b.ensurePaywall();
       window.addEventListener("hashchange", function(){
-        try { if (!familyRoute() && !b.isEntitled()) b.ensurePaywall(); } catch(e){}
+        try {
+          // P1-3 fix: entering a family route must HIDE the overlay, not
+          // just skip showing it, so warm navigation never traps a family
+          // member behind the paywall.
+          if (familyRoute()) b.hidePaywall();
+          else if (!b.isEntitled()) b.ensurePaywall();
+        } catch(e){}
       });
+      // Re-gate if the trial expires mid-session. Fail open: refresh
+      // errors never show the paywall.
+      try{
+        setInterval(function(){
+          b.refresh().then(function(){
+            try{ if (!familyRoute() && !b.isEntitled()) b.ensurePaywall(); }catch(e){}
+          }).catch(function(){});
+        }, 5*60*1000);
+      }catch(e){}
       // Subscription surface on the dashboard (#billAnchor), re-mounted after every route render
       // and refreshed after every billing status refresh (trial start, card add, etc.).
       function mount(force){

@@ -250,7 +250,7 @@ footer.site{text-align:center;color:var(--ink2);font-size:13px;padding:26px 20px
   <h2>Questions</h2>
   <p class="sub">Straight answers.</p>
   <details><summary>Is this legal advice?</summary><div class="a">No. FinePrint is pattern matching against 30+ known warranty-trap phrases, explained in plain English. It will miss cleverly worded traps and occasionally flag harmless text. If the score is low, take the contract to a mechanic you trust or your state attorney general's consumer protection office.</div></details>
-  <details><summary>How does the detection work?</summary><div class="a">The demo scans your contract text for known trap patterns (exclusion language, maintenance requirements, claim caps, arbitration clauses) and scores what it finds. No AI, no account. Device sync is on by default: copies of your analyses are stored on our server so they follow you to your other devices.</div></details>
+  <details><summary>How does the detection work?</summary><div class="a">The demo scans your contract text for known trap patterns (exclusion language, maintenance requirements, claim caps, arbitration clauses) and scores what it finds. No AI, no sign-in. For sync, the app creates an anonymous device key in this browser. It is not an account, but anyone holding the key can read your synced records, so treat it like a password. Device sync is on by default: copies of your analyses are stored on our server so they follow you to your other devices.</div></details>
   <details><summary>Does my contract leave my device?</summary><div class="a">The scan itself runs in your browser, but device sync is on by default: copies of your analyses are stored on our server so they follow you to your other devices. Turn sync off to keep everything on this device only.</div></details>
   <details><summary>What about PDF contracts?</summary><div class="a">Copy the text out of the PDF and paste it in, or save as .txt and upload. Direct PDF parsing is on the roadmap.</div></details>
   <details><summary>What if it finds nothing?</summary><div class="a">That means none of the known patterns matched, not that the contract is safe. Clever drafting can dodge pattern matching. Always read the exclusions section yourself.</div></details>
@@ -268,9 +268,11 @@ footer.site{text-align:center;color:var(--ink2);font-size:13px;padding:26px 20px
 <script src="billing-ui.js"></script>
 <script>
 "use strict";
-/* Pricing-card checkout (pass 4): the $15 one-time review. First review is
+/* Pricing-card checkout (pass 6): the $15 one-time review. First review is
    still free in the app; this button is for buyers who want to pay up front.
-   ?billing=paid return adds one review credit to this device. */
+   ?billing=paid NEVER mints a credit by itself: the parameter is untrusted.
+   A credit is added only when the backend confirms the device is entitled
+   via /v1/billing/status (same rule as the app). */
 (function(){
   var toastEl = document.getElementById("toast"), toastT = null;
   function toast(msg){
@@ -292,11 +294,27 @@ footer.site{text-align:center;color:var(--ink2);font-size:13px;padding:26px 20px
   }
   var paidReturn = /[?&]billing=paid\b/.test(location.search);
   try { history.replaceState(null, "", location.pathname + location.hash); } catch(e){}
-  if(paidReturn){
-    setCredits(getCredits() + 1);
-    toast("Payment received. One review credit added. Open the app to use it.");
+  function verifyReturn(b){
+    function finish(){
+      var ok = !!(b && !b.unconfigured && typeof b.isEntitled === "function" && b.isEntitled());
+      if(ok){
+        setCredits(getCredits() + 1);
+        toast("Payment received. One review credit added. Open the app to use it.");
+      } else {
+        toast("We could not confirm your payment yet, so no credit was added. If you were charged, it will appear automatically once our server records it.");
+      }
+      refreshBuyLine();
+    }
+    try {
+      if(b && typeof b.refresh === "function") b.refresh().then(finish, finish);
+      else finish();
+    } catch(e){ finish(); }
   }
-  refreshBuyLine();
+  function afterBilling(b){
+    window.__billing = b;
+    if(paidReturn) verifyReturn(b);
+    refreshBuyLine();
+  }
 
   var buyBtn = document.getElementById("buy-review");
   buyBtn.addEventListener("click", function(){
@@ -312,16 +330,16 @@ footer.site{text-align:center;color:var(--ink2);font-size:13px;padding:26px 20px
          /test mode/i.test(m) || /price not found/i.test(m)){
         toast("Payments are not switched on yet. Please check back soon.");
       } else {
-        toast(m || "Something went wrong. Please try again.");
+        toast(b.friendlyErr ? b.friendlyErr(e) : (m || "Something went wrong. Please try again."));
       }
       buyBtn.disabled = false;
     });
   });
 
   if(window.initBilling){
-    initBilling({ appSlug: "fineprint" }).then(function(b){ window.__billing = b; })
-      .catch(function(e){ console.error("[billing] init failed:", e); });
-  }
+    initBilling({ appSlug: "fineprint" }).then(afterBilling)
+      .catch(function(e){ console.error("[billing] init failed:", e); afterBilling(null); });
+  } else { afterBilling(null); }
 })();
 </script>
 
@@ -373,7 +391,7 @@ footer.site{text-align:center;color:var(--ink2);font-size:13px;padding:26px 20px
     await wait(800);
     markPhrase("sole discretion", "r"); addLabel(TRAPS[1].label);
     await wait(800);
-    markPhrase("binding arbitration", "y"); addLabel(TRAPS[2].label);
+    markPhrase("binding arbitration", "r"); addLabel(TRAPS[2].label);
     await wait(800);
     markPhrase("class action", "r"); addLabel(TRAPS[3].label);
     await wait(600);

@@ -86,27 +86,56 @@ function findMove(S, id){
   for (var i = 0; i < ms.length; i++) if (ms[i] && ms[i].id === id) return ms[i];
   return null;
 }
+/* NFR-7: pulled records are schema-checked before merge. Unknown fields
+ * pass through verbatim, but every field the renderers depend on is
+ * coerced to a safe shape so one bad record can never crash a view. */
+var SYNC_DISP = {keep:1, sell:1, donate:1, discard:1, ask:1};
+var SYNC_FAM = {pending:1, approved:1, changed:1};
+function syncStr(v){ return typeof v === "string" ? v : ""; }
+function sanitizeInventoryRecord(value){
+  var v = (value && typeof value === "object" && !Array.isArray(value)) ? value : {};
+  var o = {}, k;
+  ["name","room","notes","destRoom","soldTo","soldDate","photo"].forEach(function(f){ o[f] = syncStr(v[f]); });
+  ["estValue","soldPrice","createdAt"].forEach(function(f){
+    o[f] = (typeof v[f] === "number" || typeof v[f] === "string") ? v[f] : "";
+  });
+  o.disposition = SYNC_DISP[v.disposition] ? v.disposition : "ask";
+  o.familyStatus = SYNC_FAM[v.familyStatus] ? v.familyStatus : (o.disposition === "ask" ? "pending" : "approved");
+  o.comments = Array.isArray(v.comments)
+    ? v.comments.filter(function(c){ return c && typeof c === "object" && !Array.isArray(c); })
+    : [];
+  o.dims = (v.dims && typeof v.dims === "object" && !Array.isArray(v.dims)) ? v.dims : null;
+  for (k in v){ if (!(k in o)) o[k] = v[k]; }
+  return o;
+}
 function upsertIntoState(S, collection, key, value){
   var i, m, ex, parts, mid, iid;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return;
   if (collection === "moves"){
     S.moves = S.moves || [];
+    var FIELDS = ["clientName","moveType","fromAddr","toAddr","targetDate","familyContact",
+       "rooms","floorNotes","donations","activity","archived","createdAt"];
+    var ARR = {rooms:1, donations:1, activity:1};
     m = findMove(S, key);
     if (m){
       // core fields only: items/vendors arrive as their own records
-      ["clientName","moveType","fromAddr","toAddr","targetDate","familyContact",
-       "rooms","floorNotes","donations","activity","archived","createdAt"].forEach(function(f){
-        if (value[f] !== undefined) m[f] = value[f];
+      FIELDS.forEach(function(f){
+        if (value[f] === undefined) return;
+        if (ARR[f] && !Array.isArray(value[f])) return; // keep local array, never crash renderers
+        m[f] = value[f];
       });
     } else {
       var nm = { id: key, items: [], vendors: [] };
-      ["clientName","moveType","fromAddr","toAddr","targetDate","familyContact",
-       "rooms","floorNotes","donations","activity","archived","createdAt"].forEach(function(f){
+      FIELDS.forEach(function(f){
+        if (value[f] === undefined) return;
+        if (ARR[f] && !Array.isArray(value[f])) return;
         nm[f] = value[f];
       });
       S.moves.unshift(nm);
     }
   } else if (collection === "inventory"){
     parts = key.split(":"); mid = parts[0]; iid = parts.slice(1).join(":");
+    value = sanitizeInventoryRecord(value);
     m = findMove(S, mid); if (!m) return;
     m.items = m.items || [];
     ex = null;

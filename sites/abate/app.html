@@ -4,9 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ABATE: Asbestos Abatement Compliance Dossier</title>
-<meta name="description" content="Compliance-dossier software for asbestos abatement contractors. Daily logs, air monitoring, waste manifests, clearance certificates, assembled into one audit-proof file.">
+<meta name="description" content="Compliance-dossier software for asbestos abatement contractors. Daily logs, air monitoring, waste manifests, clearance certificates, assembled into one audit-ready file.">
 <!-- Billing: paste the site key into content="". See billing/SECRETS.md. -->
 <meta name="turnstile-sitekey" content="">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#141414">
 <style>
 :root{
   --bg:#141414; --bg2:#1d1d1d; --bg3:#262626; --line:#333;
@@ -24,6 +26,7 @@ input,select,textarea{font-size:16px !important; width:100%; background:#101010;
   border:1px solid var(--line); border-radius:8px; padding:12px; margin:0;}
 input:focus,select:focus,textarea:focus{outline:2px solid var(--orange); border-color:var(--orange);}
 label{display:block; font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:14px 0 6px;}
+.flabel{display:block; font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:14px 0 6px;}
 .stencil{font-family:"Arial Black","Archivo Black",Impact,Haettenschweiler,sans-serif;
   text-transform:uppercase; letter-spacing:.06em;}
 #app{max-width:860px; margin:0 auto; min-height:100vh; display:flex; flex-direction:column;}
@@ -54,7 +57,7 @@ main{flex:1; padding:14px 14px 96px;}
 .btn.dark{background:var(--bg3); color:var(--ink); border:1px solid var(--line);}
 .btn.danger{background:transparent; color:var(--red); border:1px solid var(--red);}
 .btn.block{width:100%;}
-.btn.sm{padding:13px 14px; font-size:13px;}
+.btn.sm{padding:13px 14px; font-size:13px; min-height:44px;}
 svg.ic{width:18px; height:18px; flex:0 0 18px;}
 /* project list */
 .proj{background:var(--bg2); border:1px solid var(--line); border-radius:var(--radius); padding:14px; margin-bottom:12px;}
@@ -82,6 +85,9 @@ svg.ic{width:18px; height:18px; flex:0 0 18px;}
 .fab{position:fixed; right:18px; bottom:24px; width:62px; height:62px; border-radius:50%;
   background:var(--orange); color:#141414; border:none; font-size:34px; line-height:1;
   box-shadow:0 6px 24px rgba(255,106,0,.4); z-index:30; display:flex; align-items:center; justify-content:center;}
+/* P2-9: on narrow phones the fixed FAB sat on the demo-delete button.
+ * The delete button steps left of the FAB zone instead. */
+@media (max-width:420px){ .proj [data-del-demo]{ margin-right:74px; } }
 /* sheet (modal form) */
 .sheet-wrap{position:fixed; inset:0; background:rgba(0,0,0,.72); z-index:40; display:none; align-items:flex-end; justify-content:center;}
 .sheet-wrap.open{display:flex;}
@@ -200,7 +206,7 @@ footer.app{padding:18px 14px 110px; color:var(--dim); font-size:12px; text-align
   <main id="main"></main>
   <footer class="app">
     <div class="stencil" style="color:var(--orange); font-size:13px; margin-bottom:6px;">Retain exposure &amp; medical records 30 years: OSHA 29 CFR 1926.1101</div>
-    <div>ABATE prototype. Not legal or compliance advice. Verify all requirements with your accredited program.</div>
+    <div>ABATE prototype. Not legal or compliance advice. Verify all requirements with your accredited program. <a href="privacy.html" style="color:var(--orange)">Privacy</a></div>
   </footer>
 </div>
 <button class="fab" id="fab" aria-label="Add">+</button>
@@ -340,13 +346,10 @@ function seed(){
          {stage:"loaded", at:new Date("2026-10-06T08:50:00").getTime(), by:"Marcus Webb"},
          {stage:"departed", at:new Date("2026-10-06T09:30:00").getTime(), by:"Marcus Webb"}]}
     ],
-    photos:(()=>{ const sp=(l,h)=>{ const u=seedPhoto(l,h); return {id:uid(),dataUrl:u,thumb:u}; };
-      return [
-      Object.assign(sp("CONTAINMENT",28),{caption:"Containment entry, double flap", category:"Containment", takenAt:new Date("2026-10-01T08:12:00").getTime()}),
-      Object.assign(sp("NEG AIR",210),{caption:"Neg-air unit gauge -0.024 in w.g.", category:"Containment", takenAt:new Date("2026-10-01T08:15:00").getTime()}),
-      Object.assign(sp("REMOVAL",120),{caption:"Tile removal in progress, wet methods", category:"Removal", takenAt:new Date("2026-10-02T10:40:00").getTime()}),
-      Object.assign(sp("WASTE",0),{caption:"Double-bagged labeled waste staged", category:"Waste", takenAt:new Date("2026-10-02T14:05:00").getTime()})
-      ]; })(),
+    /* Sample photos generate after first paint (see seedDemoPhotos below):
+     * four 320x320 JPEG encodes block DOMContentLoaded for seconds on cheap
+     * phones, so they never run inside the seed path. */
+    photos:[],
     toolboxTalks:[
       {id:uid(), date:"2026-10-01", topic:"Containment integrity",
        points:TALK_TOPICS[0].points.slice(), by:"Marcus Webb",
@@ -364,9 +367,37 @@ function seed(){
  * on a device that has never had a database (raw key absent). Corrupt data is
  * never overwritten with a fresh seed; it loads as an empty dossier instead.
  * Existing installs get the synthetic flag via migration on demo1. */
+/* Deferred sample-photo seeding (P1-5): the four demo JPEG encodes run after
+ * first paint, never inside seed(), so first load is not parser-stalled.
+ * Idempotent via a flag: a service-worker first-install reload can land
+ * between seed and the idle callback, so this also runs on later loads
+ * whenever demo1 still has no photos and was never seeded. */
+function seedDemoPhotos(db){
+  let done=false; try{ done=!!localStorage.getItem("abate.seedPhotos.v1"); }catch(e){}
+  if(done) return;
+  const p=(db.projects||[]).find(x=>x.id==="demo1");
+  if(!p||!Array.isArray(p.photos)||p.photos.length) return;
+  const run=()=>{
+    try{
+      if(p.photos.length) return;
+      const sp=(l,h)=>{ const u=seedPhoto(l,h); return {id:uid(),dataUrl:u,thumb:u}; };
+      p.photos=[
+        Object.assign(sp("CONTAINMENT",28),{caption:"Containment entry, double flap", category:"Containment", takenAt:new Date("2026-10-01T08:12:00").getTime()}),
+        Object.assign(sp("NEG AIR",210),{caption:"Neg-air unit gauge -0.024 in w.g.", category:"Containment", takenAt:new Date("2026-10-01T08:15:00").getTime()}),
+        Object.assign(sp("REMOVAL",120),{caption:"Tile removal in progress, wet methods", category:"Removal", takenAt:new Date("2026-10-02T10:40:00").getTime()}),
+        Object.assign(sp("WASTE",0),{caption:"Double-bagged labeled waste staged", category:"Waste", takenAt:new Date("2026-10-02T14:05:00").getTime()})
+      ];
+      store.save(db);
+      try{ localStorage.setItem("abate.seedPhotos.v1","1"); }catch(e){}
+      if(view.name==="project"&&view.projectId==="demo1") render();
+    }catch(e){}
+  };
+  if("requestIdleCallback" in window) requestIdleCallback(run,{timeout:3000});
+  else setTimeout(run,500);
+}
 function loadDb(){
   const raw=store.loadRaw();
-  if(raw===null){ const db=seed(); store.save(db); return db; }
+  if(raw===null){ const db=seed(); store.save(db); seedDemoPhotos(db); return db; }
   try{ const db=JSON.parse(raw);
     if(db&&Array.isArray(db.projects)){
       let dirty=false;
@@ -377,6 +408,7 @@ function loadDb(){
         (p.manifests||[]).forEach(m=>{ if(!Array.isArray(m.custody)){ m.custody=[]; dirty=true; } });
       });
       if(dirty) store.save(db);
+      seedDemoPhotos(db);
       return db;
     }
   }catch(e){}
@@ -439,7 +471,7 @@ function corrFields(){
   return field("Corrected by (your name) *","corrBy","","text","required placeholder='Who is making this correction'");
 }
 const CORR_DISCLAIMER='<div class="disclaimer" style="margin-bottom:4px"><strong>Correction, not an edit.</strong> The original record stays in the file. Your name, today\u2019s date, and a reason are logged with the change.</div>';
-const CORR_REASON='<label>Reason for correction *</label><textarea name="corrReason" rows="2" required placeholder="What was wrong, and how you know the new value"></textarea>';
+const CORR_REASON='<label for="corrReason">Reason for correction *</label><textarea id="corrReason" name="corrReason" rows="2" required placeholder="What was wrong, and how you know the new value"></textarea>';
 function corrRequired(d){
   const by=String(d.corrBy||"").trim(), reason=String(d.corrReason||"").trim();
   if(!by||!reason){ toast("Name and reason are required to record a correction."); return null; }
@@ -674,7 +706,7 @@ function renderDash(main){
 function renderProject(main,p){
   if(!p){ view={name:"dash"}; save(); return; }
   const c=completeness(p);
-  const tabs=TABS.map(t=>'<button class="tab'+(view.tab===t[0]?" on":"")+'" data-tab="'+t[0]+'">'+t[1]+'</button>').join("");
+  const tabs=TABS.map(t=>'<button class="tab'+(view.tab===t[0]?" on":"")+'" role="tab" aria-selected="'+(view.tab===t[0])+'" data-tab="'+t[0]+'">'+t[1]+'</button>').join("");
   let body="";
   if(view.tab==="overview") body=vOverview(p,c);
   else if(view.tab==="daily") body=vDaily(p);
@@ -688,7 +720,7 @@ function renderProject(main,p){
     (p.synthetic?' <span class="badge pend">Synthetic demo data</span>':"")+'</h3>'+
     '<div class="small muted">'+esc(p.address)+'</div></div><div class="ringwrap">'+ring(c.total,64)+
     '<div><div class="ringtxt">'+c.total+'<span class="small">%</span></div><div class="small dim">dossier</div></div></div></div></div>'+
-    '<div class="tabs">'+tabs+'</div><div style="height:12px"></div>'+body;
+    '<div class="tabs" role="tablist">'+tabs+'</div><div style="height:12px"></div>'+body;
   main.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{ view.tab=b.dataset.tab; save(); });
   bindActions(main,p);
   if(view.tab==="photos") paintCovMap(p);
@@ -723,6 +755,11 @@ function showCoach(key, steps){
   if(!steps || !steps.length || localStorage.getItem(key)) return;
   let i=0;
   const paint=()=>{
+    /* Never paint the tour over a form the user is filling. The next
+     * render() re-arms the timer, so the coach still appears once the
+     * sheet is closed. */
+    const sw=document.getElementById("sheetWrap");
+    if(sw && sw.classList.contains("open")) return;
     let el=document.getElementById("coach");
     if(!el){ el=document.createElement("div"); el.id="coach"; el.className="coach"; document.body.appendChild(el); }
     el.innerHTML='<div class="dots">'+steps.map((_,k)=>'<i class="'+(k===i?"on":"")+'"></i>').join("")+'</div>'+
@@ -919,7 +956,6 @@ function vDossier(p,c){
     '<h1 style="font-size:20px;margin:0 0 4px">Abatement Compliance Dossier</h1>'+
     '<div style="font-size:12px"><b>'+esc(p.name)+'</b><br>'+esc(p.address)+'<br>Owner: '+esc(p.owner||"–")+' · Contract '+esc(p.contractNo||"–")+
     '<br>Generated '+new Date().toLocaleString("en-US")+' · Dossier completeness '+c.total+"%"+(crewHrs!=null?" · "+crewHrs+" crew-hours logged":"")+
-    '<br>Keep this file until '+retainUntil
     '<br>Keep this file until '+retainUntil+' (30-year retention, OSHA 29 CFR 1926.1101). This printed copy came from a device; keep the exported archive for long-term storage.'+
     '<br><i>Prototype record. Not legal or compliance advice.</i></div><hr></div>'+
     '<div class="print-only print-section"><h2 style="font-size:15px">Sign-off stamps</h2>'+
@@ -954,7 +990,11 @@ function vDossier(p,c){
 <script>
 "use strict";
 /* ============ forms ============ */
-function openSheet(html){ $("#sheet").innerHTML=html; $("#sheetWrap").classList.add("open"); }
+function openSheet(html){ $("#sheet").innerHTML=html; $("#sheetWrap").classList.add("open");
+  /* The first-run tour never covers a form: a sheet opening dismisses any
+   * visible coach (its localStorage key is untouched, so the next render
+   * re-arms the tour once the form is closed). */
+  const cc=$("#coach"); if(cc) cc.remove(); }
 function closeSheet(){ $("#sheetWrap").classList.remove("open"); }
 let toastT=null;
 function toast(m){ let t=$("#toast"); if(!t){ t=document.createElement("div"); t.id="toast"; t.className="toast"; document.body.appendChild(t); }
@@ -974,8 +1014,8 @@ function openDeleteReason(title, whatLine){
   return new Promise(res=>{
     openSheet('<h2 class="stencil">'+esc(title)+'</h2>'+
       '<div class="small muted" style="margin-bottom:12px">'+esc(whatLine)+'<br><br>The record leaves the lists but stays in the file as a tombstone, and this deletion is logged for the auditor.</div>'+
-      '<form id="delForm"><label>Your name *</label><input name="who" required autocomplete="off" placeholder="Who is deleting this?">'+
-      '<label>Reason *</label><textarea name="reason" rows="2" required placeholder="Why is this record being removed?"></textarea>'+
+      '<form id="delForm"><label for="delWho">Your name *</label><input id="delWho" name="who" required autocomplete="off" placeholder="Who is deleting this?">'+
+      '<label for="delReason">Reason *</label><textarea id="delReason" name="reason" rows="2" required placeholder="Why is this record being removed?"></textarea>'+
       '<div style="height:14px"></div><div class="row"><button class="btn danger grow" type="submit">Delete record</button>'+
       '<button class="btn dark" type="button" id="delNo">Cancel</button></div></form>');
     $("#delNo").onclick=()=>{ closeSheet(); res(null); };
@@ -998,11 +1038,11 @@ async function softDelete(p, arr, id, label, whatLine){
   logEvent(p,"deletion","warn", label+" deleted by "+r.who+" ("+whatLine+"). Reason: "+r.reason);
   return true;
 }
-function openSignoff(title,sub,defName){
+function openSignoff(title,sub,defName,okLabel){
   return new Promise(res=>{
     openSheet('<h2 class="stencil">'+esc(title)+'</h2><div class="small dim" style="margin-bottom:6px">'+esc(sub||"Each sign-off is stamped with name and date.")+'</div>'+
-      '<form id="soForm"><label>Sign-off name</label><input name="who" required autocomplete="off" placeholder="Competent person name" value="'+esc(defName||"")+'">'+
-      '<div style="height:14px"></div><div class="row"><button class="btn grow" type="submit">Sign off</button>'+
+      '<form id="soForm"><label for="soWho">Sign-off name</label><input id="soWho" name="who" required autocomplete="off" placeholder="Competent person name" value="'+esc(defName||"")+'">'+
+      '<div style="height:14px"></div><div class="row"><button class="btn grow" type="submit">'+esc(okLabel||"Sign off")+'</button>'+
       '<button class="btn dark" type="button" id="soNo">Cancel</button></div></form>');
     $("#soNo").onclick=()=>{ closeSheet(); res(null); };
     $("#soForm").onsubmit=e=>{ e.preventDefault(); const v=e.target.who.value.trim(); closeSheet(); res(v||null); };
@@ -1010,9 +1050,9 @@ function openSignoff(title,sub,defName){
 }
 function openDatePrompt(title){
   return new Promise(res=>{
-    openSheet('<h2 class="stencil">'+esc(title)+'</h2><form id="dtForm"><label>Date signed copy received</label>'+
-      '<input name="d" type="date" value="'+todayISO()+'" required>'+
-      '<label>Recorded by</label><input name="by" autocomplete="off" placeholder="Who recorded this?">'+
+    openSheet('<h2 class="stencil">'+esc(title)+'</h2><form id="dtForm"><label for="dtD">Date signed copy received</label>'+
+      '<input id="dtD" name="d" type="date" value="'+todayISO()+'" required>'+
+      '<label for="dtBy">Recorded by</label><input id="dtBy" name="by" autocomplete="off" placeholder="Who recorded this?">'+
       '<div style="height:14px"></div><div class="row"><button class="btn grow" type="submit">Save</button>'+
       '<button class="btn dark" type="button" id="dtNo">Cancel</button></div></form>');
     $("#dtNo").onclick=()=>{ closeSheet(); res(null); };
@@ -1036,8 +1076,10 @@ function openCustodyPrompt(title, defName){
   });
 }
 $("#sheetWrap").addEventListener("click",e=>{ if(e.target.id==="sheetWrap") closeSheet(); });
+let fieldSeq=0;
 function field(label,name,val,type,attrs){
-  return '<label>'+esc(label)+'</label><input name="'+name+'" type="'+(type||"text")+'" value="'+esc(val==null?"":val)+'" '+(attrs||"")+'>';
+  const fid="fld"+(++fieldSeq);
+  return '<label for="'+fid+'">'+esc(label)+'</label><input id="'+fid+'" name="'+name+'" type="'+(type||"text")+'" value="'+esc(val==null?"":val)+'" '+(attrs||"")+'>';
 }
 function formShell(title,inner,saveLabel){
   return '<h2 class="stencil">'+esc(title)+'</h2><div class="small dim" style="margin-bottom:6px">Fields marked * are required for the dossier.</div>'+
@@ -1052,6 +1094,44 @@ function collect(form){
   });
   return d;
 }
+/* ============ form drafts (restart-safe autosave) ============
+ * Every new-entry form autosaves to localStorage as the user types.
+ * Interruptions (Escape, backdrop tap, a closed tab) keep the draft;
+ * reopening the form restores it with a one-tap discard. Successful save
+ * clears the draft. Correction forms never draft: they are quick,
+ * single-purpose edits. */
+function draftKey(pid,key){ return "abate.draft."+pid+"."+key; }
+function draftInit(p,key,isNew){
+  const form=$("#sheetForm"); if(!form||!isNew) return;
+  const dk=draftKey(p.id,key);
+  let raw=null; try{ raw=localStorage.getItem(dk); }catch(e){}
+  if(raw){
+    try{
+      const vals=JSON.parse(raw);
+      form.querySelectorAll("[name]").forEach(el=>{
+        const v=vals[el.name]; if(v===undefined) return;
+        if(el.type==="file") return;
+        if(el.type==="checkbox"){ el.checked=Array.isArray(v)?v.indexOf(el.value)>=0:!!v; }
+        else el.value=v;
+      });
+      toast("Draft restored. Your unfinished entry is back.");
+      const c=$("#sheetCancel");
+      if(c&&!document.getElementById("draftDiscard")){
+        const b=document.createElement("button");
+        b.type="button"; b.id="draftDiscard"; b.className="btn ghost sm"; b.textContent="Discard draft";
+        b.style.marginRight="8px";
+        b.onclick=()=>{ draftClear(p,key); closeSheet(); toast("Draft discarded."); };
+        c.parentNode.insertBefore(b,c);
+      }
+    }catch(e){}
+  }
+  let t=null;
+  form.addEventListener("input",()=>{
+    clearTimeout(t);
+    t=setTimeout(()=>{ try{ localStorage.setItem(dk, JSON.stringify(collect(form))); }catch(e){} },400);
+  });
+}
+function draftClear(p,key){ try{ localStorage.removeItem(draftKey(p.id,key)); }catch(e){} }
 const ACTIVITIES=["Containment setup","Negative-air units placed","Tile removal","Pipe insulation removal","Mastic removal","Wet methods","Bagging","HEPA vacuuming","Decon","Teardown","Air monitoring","Waste loadout"];
 function fProject(p){
   p=p||{};
@@ -1062,18 +1142,19 @@ function fProject(p){
     field("Building owner","owner",p.owner)+
     field("Owner phone","ownerPhone",p.ownerPhone,"tel")+
     field("Contract #","contractNo",p.contractNo)+
-    '<label>NESHAP notification filed? *</label><select name="neshapNotified"><option value="1"'+(p.neshapNotified?" selected":"")+'>Yes, agency notified</option><option value="0"'+(!p.neshapNotified?" selected":"")+'>Not yet</option></select>'+
+    '<label for="neshapNotified">NESHAP notification filed? *</label><select id="neshapNotified" name="neshapNotified"><option value="1"'+(p.neshapNotified?" selected":"")+'>Yes, agency notified</option><option value="0"'+(!p.neshapNotified?" selected":"")+'>Not yet</option></select>'+
     field("NESHAP notice date","neshapDate",p.neshapDate,"date")+
     field("Competent person (OSHA 1926.1101) *","competentPerson",p.competentPerson,"text","required")+
     field("Competent person license #","competentLicense",p.competentLicense)+
     field("Start date","startDate",p.startDate||todayISO(),"date")+
     field("Est. end date","estEndDate",p.estEndDate,"date")+
     (p.id?corrFields()+CORR_REASON:"")+
-    (!p.id&&DB.projects.length?'<label>Start from a template (optional)</label><select name="templateId"><option value="">Blank dossier</option>'+
+    (!p.id&&DB.projects.length?'<label for="templateId">Start from a template (optional)</label><select id="templateId" name="templateId"><option value="">Blank dossier</option>'+
       DB.projects.map(q=>'<option value="'+q.id+'">'+esc(q.name)+'</option>').join("")+'</select>'+
       '<div class="small dim" style="margin-top:4px">Copies the setup and crew roster, never the logs, samples, manifests, or photos.</div>':""),
     p.id?"Record correction":"Create dossier"));
   $("#sheetCancel").onclick=closeSheet;
+  draftInit(p,"project",!p.id);
   $("#sheetForm").onsubmit=e=>{ e.preventDefault(); const d=collect(e.target);
     if(p.id){
       /* Regulatory facts (competent person, NESHAP notice) are never edited
@@ -1110,7 +1191,7 @@ function fProject(p){
       rec.events.push({t:Date.now(),kind:"info",cls:"",what:"Project created from template \u2018"+tpl.name+"\u2019 (setup and roster copied)"});
     }
     DB.projects.unshift(rec); view={name:"project",projectId:rec.id,tab:"overview"};
-    closeSheet(); save();
+    draftClear(p,"project"); closeSheet(); save();
   };
 }
 function fDaily(p, existing){
@@ -1122,18 +1203,19 @@ function fDaily(p, existing){
   openSheet(formShell(existing?"Correct daily log: "+fmtD(L.date):"Daily field log: "+fmtD(todayISO()),
     (existing?CORR_DISCLAIMER:"")+
     field("Date *","date",L.date||todayISO(),"date","required")+
-    '<label>Crew (one per line: name, accreditation #)</label>'+
+    '<label for="crewTa">Crew (one per line: name, accreditation #)</label>'+
     (!existing&&ros.length?'<div class="small dim" style="margin-bottom:6px">Roster: tap to add:</div><div class="row" style="flex-wrap:wrap; gap:6px; margin-bottom:8px">'+
       ros.map((c,i)=>'<button type="button" class="btn dark sm" data-ros="'+i+'">'+esc(c.name)+(c.cred?' <span class="dim">'+esc(c.cred)+'</span>':"")+'</button>').join("")+'</div>':"")+
     '<textarea id="crewTa" name="crew" rows="3" placeholder="Marcus Webb, AZ-ABT-4471 (supervisor)&#10;D. Okafor, AZ-ABT-5120">'+esc(crewTxt)+'</textarea>'+
     '<div id="credHint"></div>'+
     '<div class="row"><div class="grow">'+field("Shift start","start",L.start||"06:30","time")+'</div><div class="grow">'+field("Shift end","end",L.end||"15:00","time")+'</div></div>'+
-    '<label>Activities performed</label><div class="checks">'+ACTIVITIES.map(a=>'<label class="check"><input type="checkbox" name="activities" value="'+esc(a)+'"'+(has(a)?" checked":"")+'> '+esc(a)+'</label>').join("")+'</div>'+
+    '<div class="flabel" id="actsLbl">Activities performed</div><div class="checks" role="group" aria-labelledby="actsLbl">'+ACTIVITIES.map(a=>'<label class="check"><input type="checkbox" name="activities" value="'+esc(a)+'"'+(has(a)?" checked":"")+'> '+esc(a)+'</label>').join("")+'</div>'+
     field("Neg-air differential (in w.g., e.g. -0.024)","negAir",L.negAir||"","text","inputmode='decimal' placeholder='-0.024'")+
-    '<label>Notes</label><textarea name="notes" rows="3" placeholder="Containment intact, decon shower operational…">'+esc(L.notes||"")+'</textarea>'+
+    '<label for="dailyNotes">Notes</label><textarea id="dailyNotes" name="notes" rows="3" placeholder="Containment intact, decon shower operational…">'+esc(L.notes||"")+'</textarea>'+
     (existing?corrFields()+CORR_REASON:""),
     existing?"Record correction":"Log shift"));
   $("#sheetCancel").onclick=closeSheet;
+  draftInit(p,"daily",!existing);
   /* Roster chips: tap to append "name, cred" as a new line. */
   const ta=$("#crewTa");
   document.querySelectorAll("#sheet [data-ros]").forEach(b=>b.onclick=()=>{
@@ -1156,6 +1238,17 @@ function fDaily(p, existing){
   };
   ta.addEventListener("input",paintHint); paintHint();
   $("#sheetForm").onsubmit=e=>{ e.preventDefault(); const d=collect(e.target);
+    /* Neg-air must be numeric; a typo like "abc" is refused, not stored. */
+    const neg=String(d.negAir||"").trim();
+    if(neg!==""&&!/^-?\d*\.?\d+$/.test(neg)){ toast("Neg-air must be a number, like -0.024."); return; }
+    /* A fat-fingered time that implies a >16h shift gets a beat, not silent
+     * acceptance. Tapping Save again keeps the times as entered. */
+    const hrs=shiftHours(d.start,d.end);
+    if(hrs!=null&&hrs>16&&e.target.dataset.warned!=="1"){
+      e.target.dataset.warned="1";
+      toast("That shift is "+hrs+" hours. Check the times, then tap Save again to keep them.");
+      return;
+    }
     const crew=String(d.crew||"").split("\n").map(s=>s.trim()).filter(Boolean).map(s=>{ const m=s.match(/^(.*?),\s*(.*)$/); return {name:m?m[1]:s, cred:m?m[2]:""}; });
     addToRoster(p.id, crew);
     let acts=d.activities||[]; if(!Array.isArray(acts)) acts=[acts];
@@ -1177,7 +1270,7 @@ function fDaily(p, existing){
     }
     const rec={id:uid(),date:d.date,crew,start:d.start,end:d.end,activities:acts,negAir:d.negAir,notes:d.notes,createdAt:Date.now()};
     p.dailyLogs.push(rec);
-    closeSheet(); save();
+    draftClear(p,"daily"); closeSheet(); save();
   };
 }
 /* Pass 3: toolbox talk form. Topic picker drives the talking-points preview;
@@ -1192,18 +1285,19 @@ function fTalk(p, existing){
   openSheet(formShell(existing?"Correct toolbox talk: "+fmtD(T.date):"Toolbox talk: "+fmtD(todayISO()),
     (existing?CORR_DISCLAIMER:"")+
     field("Date *","date",T.date||todayISO(),"date","required")+
-    '<label>Topic *</label><select name="topic" id="talkTopic">'+topics.map(x=>'<option'+(x===curTopic?" selected":"")+'>'+esc(x)+'</option>').join("")+'</select>'+
+    '<label for="talkTopic">Topic *</label><select name="topic" id="talkTopic">'+topics.map(x=>'<option'+(x===curTopic?" selected":"")+'>'+esc(x)+'</option>').join("")+'</select>'+
     '<div id="talkPoints" style="margin-top:4px"></div>'+
     field("Given by *","by",T.by||p.competentPerson||"","text","required placeholder='Name of person giving the talk'")+
-    '<label>Attendees (one per line: name, accreditation #)</label>'+
+    '<label for="talkAtt">Attendees (one per line: name, accreditation #)</label>'+
     (!existing&&ros.length?'<div class="small dim" style="margin-bottom:6px">Roster: tap to add:</div><div class="row" style="flex-wrap:wrap; gap:6px; margin-bottom:8px">'+
       ros.map((c,i)=>'<button type="button" class="btn dark sm" data-ros2="'+i+'">'+esc(c.name)+(c.cred?' <span class="dim">'+esc(c.cred)+'</span>':"")+'</button>').join("")+'</div>':"")+
     '<textarea id="talkAtt" name="attendees" rows="3" placeholder="Marcus Webb, AZ-ABT-4471 (supervisor)&#10;D. Okafor, AZ-ABT-5120">'+esc(attTxt)+'</textarea>'+
     (existing?corrFields()+CORR_REASON:""),
     existing?"Record correction":"Log talk"));
   $("#sheetCancel").onclick=closeSheet;
+  draftInit(p,"talk",!existing);
   const paintPts=()=>{ const tp=TALK_TOPICS.find(x=>x.t===$("#talkTopic").value)||TALK_TOPICS[0];
-    $("#talkPoints").innerHTML='<label>Talking points</label><ul class="small" style="margin:0 0 4px; padding-left:18px">'+
+    $("#talkPoints").innerHTML='<div class="flabel" style="margin-top:10px">Talking points</div><ul class="small" style="margin:0 0 4px; padding-left:18px">'+
       tp.points.map(x=>'<li style="margin-bottom:3px">'+esc(x)+'</li>').join("")+'</ul>'; };
   $("#talkTopic").onchange=paintPts; paintPts();
   const ta=$("#talkAtt");
@@ -1235,7 +1329,7 @@ function fTalk(p, existing){
     const rec={id:uid(),date:d.date,topic:d.topic,points:tp.points.slice(),by:d.by,attendees:attendees,createdAt:Date.now()};
     p.toolboxTalks.push(rec);
     logEvent(p,"info","good","Toolbox talk given: '"+d.topic+"' by "+d.by+" ("+attendees.length+" attendee"+(attendees.length===1?"":"s")+")");
-    closeSheet(); save(); toast("Toolbox talk logged");
+    draftClear(p,"talk"); closeSheet(); save(); toast("Toolbox talk logged");
   };
 }
 function fAir(p, existing){
@@ -1244,16 +1338,17 @@ function fAir(p, existing){
     (existing?'<div class="disclaimer" style="margin-bottom:4px"><strong>Correction, not an edit.</strong> The original reading stays in the record. Your name, today\u2019s date, and a reason are logged with the change.</div>':"")+
     field("Date *","date",S.date||todayISO(),"date","required")+
     field("Sample location *","location",S.location||"","text","required placeholder='Inside containment, north corner'")+
-    '<label>Sample type *</label><select name="type">'+
+    '<label for="airType">Sample type *</label><select id="airType" name="type">'+
       [["area","Work-area"],["personal","Personal (breathing zone)"],["clearance","Clearance"]].map(o=>'<option value="'+o[0]+'"'+(S.type===o[0]?" selected":"")+'>'+o[1]+'</option>').join("")+'</select>'+
     field("Result (fibers/cc) *","result",S.result==null?"":S.result,"number","required step='0.001' min='0' placeholder='0.042'")+
-    '<label>Limit basis *</label><select name="basis">'+
+    '<label for="airBasis">Limit basis *</label><select id="airBasis" name="basis">'+
       [["8hr","8-hr TWA: PEL 0.1 f/cc"],["exc","30-min excursion: 1.0 f/cc"],["clr","Clearance: 0.01 f/cc"]].map(o=>'<option value="'+o[0]+'"'+(S.basis===o[0]?" selected":"")+'>'+o[1]+'</option>').join("")+'</select>'+
     field("Pump / cassette ID","pump",S.pump||"","text placeholder='SKC-03'")+
     (existing?field("Corrected by (your name) *","corrBy","","text","required placeholder='Who is making this correction'")+
-      '<label>Reason for correction *</label><textarea name="corrReason" rows="2" required placeholder="e.g. Transcribed 0.42 instead of 0.042 from the lab sheet"></textarea>':""),
+      '<label for="airCorrReason">Reason for correction *</label><textarea id="airCorrReason" name="corrReason" rows="2" required placeholder="e.g. Transcribed 0.42 instead of 0.042 from the lab sheet"></textarea>':""),
     existing?"Record correction":"Log sample"));
   $("#sheetCancel").onclick=closeSheet;
+  draftInit(p,"air",!existing);
   $("#sheetForm").onsubmit=e=>{ e.preventDefault(); const d=collect(e.target);
     const r=parseFloat(d.result);
     const limit=d.type==="clearance"?0.01:(d.basis==="8hr"?0.1:d.basis==="exc"?1.0:0.01);
@@ -1272,7 +1367,7 @@ function fAir(p, existing){
     }
     const rec={id:uid(),date:d.date,location:d.location,type:d.type,result:r,basis:d.basis,pump:d.pump,pass:r<=limit,createdAt:Date.now()};
     p.airSamples.push(rec);
-    closeSheet(); save();
+    draftClear(p,"air"); closeSheet(); save();
   };
 }
 function fManifest(p, existing){
@@ -1290,6 +1385,7 @@ function fManifest(p, existing){
     (existing?corrFields()+CORR_REASON:""),
     existing?"Record correction":"Record shipment"));
   $("#sheetCancel").onclick=closeSheet;
+  draftInit(p,"manifest",!existing);
   $("#sheetForm").onsubmit=e=>{ e.preventDefault(); const d=collect(e.target);
     if(existing){
       /* The 35-day countdown anchors on dateShipped, so manifest changes are
@@ -1314,18 +1410,19 @@ function fManifest(p, existing){
       signedDate:"",
       signedRecordedAt:0,createdAt:Date.now()};
     p.manifests.push(rec);
-    closeSheet(); save();
+    draftClear(p,"manifest"); closeSheet(); save();
   };
 }
 function fPhoto(p){
   const cats=["Containment","Removal","Waste","Decon","Clearance","Other"];
   openSheet(formShell("Add site photo",
-    '<label>Photo *</label><input type="file" name="photo" accept="image/*" capture="environment" required>'+
+    '<label for="photoFile">Photo *</label><input id="photoFile" type="file" name="photo" accept="image/*" capture="environment" required>'+
     '<div id="geoStatus" class="small dim" style="margin-top:8px">Locating: the GPS position is burned into the photo next to the timestamp.</div>'+
-    '<label>Category</label><select name="category">'+cats.map(c=>'<option>'+c+'</option>').join("")+'</select>'+
+    '<label for="photoCat">Category</label><select id="photoCat" name="category">'+cats.map(c=>'<option>'+c+'</option>').join("")+'</select>'+
     field("Caption","caption","","text placeholder='North wall after final HEPA pass'"),
     "Add to dossier"));
   $("#sheetCancel").onclick=closeSheet;
+  draftInit(p,"photo",true);
   /* Best-effort GPS at capture: coordinates are burned into the strip next to
    * the timestamp. No fix is fine; the photo still gets its timestamp. */
   let geo=null;
@@ -1359,7 +1456,7 @@ function fPhoto(p){
       tc.getContext("2d").drawImage(cv,0,0,tc.width,tc.height);
       p.photos.push({id:uid(),dataUrl:full,thumb:tc.toDataURL("image/jpeg",0.6),caption:d.caption,category:d.category,takenAt:Date.now(),
         lat:geo?geo.lat:null, lng:geo?geo.lng:null, acc:geo?geo.acc:null});
-      URL.revokeObjectURL(img.src); closeSheet(); save();
+      URL.revokeObjectURL(img.src); draftClear(p,"photo"); closeSheet(); save();
     };
     img.src=URL.createObjectURL(file);
   };
@@ -1444,6 +1541,22 @@ function bindActions(main,p){
         if(await openConfirm("No passing clearance sample","Clearance sign-off needs an aggressive air sample at or below 0.01 f/cc. Add one now?","Add sample")){ view.tab="air"; save(); fAir(p); }
         return;
       }
+      /* Guard R-13: the regulated area cannot be released while any prior
+       * checklist item is unsigned. The refusal names the blocking items. */
+      if(k==="areaReleased"){
+        const prior=[["visual","Visual inspection"],["airClear","Clearance air sampling"],["wasteShipped","Waste shipped"],["manifestsBack","Signed manifests received"],["neshapFiled","Notifications filed"]];
+        const blocked=prior.filter(r=>!cl[r[0]]);
+        if(blocked.length){
+          cb.checked=false;
+          openSheet('<h2 class="stencil">Release blocked</h2>'+
+            '<div class="small muted" style="margin-bottom:12px">The regulated area cannot be released while '+
+            blocked.length+' required item'+(blocked.length===1?" is":"s are")+' still unsigned:</div>'+
+            blocked.map(r=>'<div class="kv"><div class="k">'+esc(r[1])+'</div><div><span class="badge pend">Unsigned</span></div></div>').join("")+
+            '<div style="height:12px"></div><button class="btn dark block" id="arBack">Back</button>');
+          $("#arBack").onclick=closeSheet;
+          return;
+        }
+      }
       const who=await openSignoff("Sign off: "+label,
         "Your name and today's date are stamped into the dossier.", p.competentPerson||"");
       if(!who){ cb.checked=false; return; }
@@ -1459,7 +1572,7 @@ function bindActions(main,p){
     } else {
       /* Revocation: never silent. The event and the history stay on the item. */
       const who=await openSignoff("Revoke: "+label,
-        "Revoking removes this sign-off. The revocation is stamped into the record with your name and today's date.", cl[k+"By"]||"");
+        "Revoking removes this sign-off. The revocation is stamped into the record with your name and today's date.", cl[k+"By"]||"", "Revoke sign-off");
       if(!who){ cb.checked=true; return; }
       cl[k]=false; cl[k+"By"]=""; cl[k+"Date"]="";
       cl[k+"History"]=cl[k+"History"]||[];
@@ -1530,6 +1643,30 @@ function exportArchive(p){
   download(fname, JSON.stringify(full,null,2));
   toast("Archive exported");
 }
+/* ============ sync queue sheet (P2-10) ============
+ * Tapping the sync pill lists exactly which records are pending upload,
+ * oversized, or removed. The queue uploads itself; nothing here needs a tap. */
+window.__abateSyncQueueSheet=function(){
+  const q=(window.__abateSyncQueue?window.__abateSyncQueue():[]);
+  let S=null; try{ S=window.__abate.getS(); }catch(e){}
+  const allP=((S&&S.projects)||[]).concat((S&&S.archived)||[]);
+  const projName=id=>{ let n=null; allP.forEach(p=>{ if(p.id===id) n=p.name; }); return n||id; };
+  const photoCap=id=>{ let c=null; allP.forEach(p=>{ (p.photos||[]).forEach(ph=>{ if(ph.id===id) c=ph.caption||ph.category||"site photo"; }); }); return c||"site photo"; };
+  const rows=q.map(r=>{
+    let what;
+    if(r.collection==="photos") what="Photo: "+photoCap(r.key);
+    else if(r.collection==="projects"||r.collection==="archived") what="Project file: "+projName(r.key);
+    else what=r.collection+": "+r.key;
+    if(r.deleted) what="Removed "+what.charAt(0).toLowerCase()+what.slice(1);
+    return '<div class="kv"><div class="k">'+esc(what)+'</div><div>'+
+      (r.oversized?'<span class="badge pend">Too large to sync</span>':'<span class="badge pend">Pending</span>')+'</div></div>';
+  }).join("");
+  openSheet('<h2 class="stencil">Sync queue</h2>'+
+    '<div class="small muted" style="margin-bottom:12px">Records waiting to upload. They go up on their own when the device syncs.</div>'+
+    (rows||'<div class="empty">Nothing pending. This device is caught up.</div>')+
+    '<div style="height:12px"></div><button class="btn dark block" id="sqBack">Back</button>');
+  $("#sqBack").onclick=closeSheet;
+};
 /* ============ fab + init ============ */
 /* Section 8: every empty state carries the button that fixes it. fabAction is
  * the single tap-target behind the FAB and all empty-state buttons. */
@@ -1582,6 +1719,31 @@ render();
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
+})();
+</script>
+<script>
+/* Offline-first: the app shell is cached on first load so a closed tab
+ * reopens with zero network. Local records live in localStorage. */
+(function(){
+  if(!("serviceWorker" in navigator)) return;
+  var refreshing=false;
+  function onUpdate(reg){
+    var nw=reg.installing; if(!nw) return;
+    nw.addEventListener("statechange", function(){
+      if (nw.state === "installed" && navigator.serviceWorker.controller){
+        if (confirm("A new version of Abate is ready. Reload to update?"))
+          nw.postMessage("SKIP_WAITING");
+      }
+    });
+  }
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("sw.js").then(function(reg){
+      reg.addEventListener("updatefound", function(){ onUpdate(reg); });
+    }).catch(function(){});
+    navigator.serviceWorker.addEventListener("controllerchange", function(){
+      if (!refreshing){ refreshing = true; location.reload(); }
+    });
+  });
 })();
 </script>
 <style>

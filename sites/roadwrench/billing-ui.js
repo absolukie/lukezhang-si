@@ -3,17 +3,27 @@
  * One include per app:
  *   <script src="billing-ui.js"></script>
  *   <script>
- *     initBilling({ appSlug: "curbside", plans: [
+ *     function hookSettings(b){   // attach in BOTH boot paths below
+ *       document.getElementById("settingsBtn").addEventListener("click",
+ *         function(){ setTimeout(function(){ b.injectSettings(); }, 0); });
+ *     }
+ *     var PLANS = [
  *       { lookupKey: "price_curbside_solo", name: "Solo", price: "$50/mo",
  *         blurb: "1 truck: permits, spots, commissary, events, revenue." },
  *       { lookupKey: "price_curbside_fleet", name: "Fleet", price: "$80/mo",
  *         blurb: "2 to 3 trucks, one login: per-truck compliance plus combined revenue." },
- *     ]}).then(function(b){
+ *     ];
+ *     initBilling({ appSlug: "curbside", plans: PLANS }).then(function(b){
  *       window.__billing = b;
  *       b.ensurePaywall();          // overlay when not entitled
- *       // settings sheet hook (app-specific; curbside example):
- *       // document.getElementById("settingsBtn").addEventListener("click",
- *       //   function(){ setTimeout(function(){ b.injectSettings(); }, 0); });
+ *       hookSettings(b);
+ *     }).catch(function(){
+ *       // Billing must never break the app. Fail open with a status-less
+ *       // client so Settings > Subscription still renders; its trial button
+ *       // re-probes billing, so the retry works in both failure modes.
+ *       var b2 = new BillingClient({ appSlug: "curbside", plans: PLANS });
+ *       window.__billing = b2;
+ *       hookSettings(b2);
  *     });
  *   </script>
  *
@@ -36,12 +46,15 @@ var DEFAULT_BACKEND = "https://sync-proto.lukezhang.si";
 var PENDING_PLAN_KEY = ".billing.pending_plan.v1";
 
 function lsGet(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+function lsSet(k, v){ try { localStorage.setItem(k, v); } catch(e){} }
+function lsDel(k){ try { localStorage.removeItem(k); } catch(e){} }
+
 /* Fetch with a hard timeout. Without this, a stalled network (e.g. a proxy
  * hanging the POST) leaves the trial CTA disabled forever with no feedback.
- * 30s is generous for the billing backend; aborts surface as normal errors
- * through the existing catch paths (fail open / friendly message). */
+ * Aborts surface as normal errors through the existing catch paths (fail open
+ * / friendly message). Canonical: merged from the roadwrench/fineprint passes. */
 function fetchWithTimeout(url, opts, ms) {
-  ms = ms || 30000;
+  ms = ms || 15000;
   try {
     if (typeof AbortSignal !== "undefined" && AbortSignal.timeout) {
       var o2 = {};
@@ -62,8 +75,6 @@ function fetchWithTimeout(url, opts, ms) {
   } catch(e){}
   return fetch(url, opts);
 }
-function lsSet(k, v){ try { localStorage.setItem(k, v); } catch(e){} }
-function lsDel(k){ try { localStorage.removeItem(k); } catch(e){} }
 
 function esc(s){
   return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
@@ -80,15 +91,15 @@ var ICONS = {
 };
 
 var CSS = [
-".bill-banner{position:fixed;top:0;left:0;right:0;z-index:9000;display:flex;align-items:center;gap:10px;flex-wrap:wrap;",
+".bill-banner{position:fixed;top:0;left:0;right:0;z-index:9000;display:flex;align-items:center;gap:10px;",
 " padding:10px 14px;font-size:14px;line-height:1.35;background:var(--bill-accent,#B73220);color:#fff;",
 " box-shadow:0 2px 10px rgba(0,0,0,.18);}",
-".bill-banner .bill-berr{flex:1 1 100%;font-size:13px;font-weight:600;}",
 ".bill-banner.warn{background:#8a5a00;}",
 ".bill-banner .bill-bmsg{flex:1;min-width:0;}",
-".bill-banner button{flex:none;border:none;border-radius:999px;padding:8px 16px;font-size:14px;font-weight:700;",
+".bill-banner button{flex:none;border:none;border-radius:999px;padding:8px 16px;min-height:44px;font-size:14px;font-weight:700;",
 " background:#fff;color:#23201B;touch-action:manipulation;cursor:pointer;}",
-".bill-banner .bill-bx{background:transparent;color:#fff;padding:8px;font-size:16px;}",
+".bill-banner .bill-bx{background:transparent;color:#fff;padding:8px 12px;min-height:44px;font-size:16px;}",
+".bill-banner .bill-berr{flex:1 1 100%;font-size:13px;font-weight:600;}",
 ".bill-overlay{position:fixed;inset:0;z-index:9500;display:flex;align-items:flex-start;justify-content:center;",
 " overflow-y:auto;background:var(--bill-scrim,rgba(24,19,12,.62));padding:24px 16px;}",
 ".bill-overlay[hidden]{display:none;}",
@@ -212,7 +223,11 @@ BillingClient.prototype.refresh = async function(){
     }
   }
   this.renderBanner();
-  if (this.entitled) this.hidePaywall();
+  /* P1-1 (red2): every billing-state change re-renders the paywall. The old
+   * code only hid the overlay when entitled, so after a mid-session "Refresh
+   * status" flipped trialUsed to true, the stale fail-open overlay kept its
+   * X and the expired-trial block could be dismissed. */
+  this.ensurePaywall();
   return this.status;
 };
 
@@ -340,14 +355,11 @@ BillingClient.prototype.renderBanner = function(){
   bar.innerHTML = html;
   var btn = document.createElement("button");
   btn.textContent = st === "past_due" ? "Update card" : "Add card";
-  // A dead backend must show a friendly line in the banner, never an
-  // unhandled rejection. Fail open: the app keeps working either way.
+  // Default-deny: nothing a backend, network, or SDK hands us reaches the
+  // banner. One generic line for every failure, whatever the cause (the old
+  // blocklist let novel backend strings render raw).
   function bannerFriendlyErr(e){
-    var name = (e && e.name) || "";
-    if (/abort|timeout/i.test(name)) return "Something went wrong. Please try again.";
-    var m = (e && e.message) || "";
-    if (/billing_|whsec|rk_test|rk_live|SECRETS\.md|Worker|failed to fetch|networkerror|load failed|ERR_|http \d{3}|stripe|price_|lookup|test mode/i.test(m)) return "Something went wrong. Please try again.";
-    return m || "Something went wrong. Please try again.";
+    return "Something went wrong. Please try again.";
   }
   btn.onclick = function(){
     if (btn.disabled) return;
@@ -409,21 +421,13 @@ BillingClient.prototype.buildOverlay = function(){
 
   var errBox = ov.querySelector(".bill-err");
   function showErr(m){ errBox.textContent = m; errBox.hidden = false; }
-  // Never show raw backend codes or internal references to users.
+  /* Default-deny: nothing a backend, network, or SDK hands us reaches the
+   * screen. One generic line for every failure, whatever the cause. (The old
+   * blocklist let novel backend strings, like account refs, render raw.) */
   function friendlyErr(e){
     var code = e && e.code;
     if (code === "BILLING_NOT_CONFIGURED") return "Payments are not switched on yet. Please check back soon.";
-    // Network stalls (e.g. a hung POST surfacing via our 30s fetch timeout)
-    // read as aborts/timeouts: never show raw DOMException text to users.
-    var name = (e && e.name) || "";
-    if (/abort|timeout/i.test(name)) return "Something went wrong. Please try again.";
-    var m = (e && e.message) || "";
-    // Fetch-level failures (dead backend, proxy hangs) read as TypeErrors
-    // like "Failed to fetch": mask those too, never show raw text to users.
-    // Also mask backend catalog errors (stripe / price_ / lookup / test mode)
-    // so the user never reads e.g. "price not found in Stripe (test mode)".
-    if (/billing_|whsec|rk_test|rk_live|SECRETS\.md|Worker|failed to fetch|networkerror|load failed|ERR_|http \d{3}|stripe|price_|lookup|test mode/i.test(m)) return "Something went wrong. Please try again.";
-    return m || "Something went wrong. Please try again.";
+    return "Something went wrong. Please try again.";
   }
   ov.querySelectorAll(".bill-plan").forEach(function(b){
     b.addEventListener("click", function(){
@@ -446,13 +450,14 @@ BillingClient.prototype.buildOverlay = function(){
     }
   });
   ov.querySelector(".bill-link").addEventListener("click", async function(ev){
-    ev.currentTarget.textContent = "Checking...";
+    var link = ev.currentTarget; // currentTarget nulls after await; capture now
+    link.textContent = "Checking...";
     try {
       await self.refresh();
       if (self.entitled) self.hidePaywall();
-      else ev.currentTarget.textContent = "Still no active subscription";
+      else link.textContent = "Still no active subscription";
     } catch(e) {
-      ev.currentTarget.textContent = "Could not reach billing. Try again.";
+      link.textContent = "Could not reach billing. Try again.";
     }
   });
   // The overlay is a fixed full-screen layer above the app, so nothing
@@ -510,7 +515,24 @@ BillingClient.prototype.bindSettings = function(root){
       var pr = null;
       if (act === "portal") pr = self.portal();
       else if (act === "card") pr = self.setupCard();
-      else if (act === "trial") { self.ensurePaywall(); return; }
+      else if (act === "trial") {
+        /* P2-2 (red2): the settings trial button re-probes billing before
+         * showing the overlay, so it works as a retry in every failure mode
+         * (including billing status failing at boot, where a status-less
+         * fail-open client renders the section). Failure is reported honestly
+         * in the section line instead of failing silently. */
+        var rowEl = b.closest ? b.closest(".bs-row") : null;
+        var lineEl = rowEl ? rowEl.querySelector(".grow span") : null;
+        var prevLine = lineEl ? lineEl.textContent : "";
+        if (lineEl) lineEl.textContent = "Checking billing" + "\u2026";
+        self.refresh().then(function(){
+          if (lineEl) lineEl.textContent = prevLine;
+          self.ensurePaywall();
+        }, function(){
+          if (lineEl) lineEl.textContent = "Could not reach billing. Try again.";
+        });
+        return;
+      }
       // A dead backend must not surface as an unhandled rejection: show a
       // brief honest line on the button itself, then restore it.
       if (pr && pr.catch) pr.catch(function(){

@@ -55,6 +55,23 @@ function stateToRecords(S){
   return R;
 }
 
+/* Demo records never leave the device. The demo job (demo:true) and its sample
+ * photos (sample:true) are throwaway local fixtures; the privacy policy
+ * promises they never sync, so pushes skip them and incoming demo records are
+ * never applied. (P1 red-team finding: demo thumbnails were auto-pushed.) */
+function demoJobIds(S){
+  var ids = {};
+  (S.jobs || []).forEach(function(j){ if (j && j.demo) ids[j.id] = true; });
+  return ids;
+}
+function isDemoRecord(S, rec){
+  var v = rec ? rec.value : null;
+  if (!v) return false;
+  if (v.demo || v.sample) return true;
+  var ids = demoJobIds(S);
+  return !!(v.jobId && ids[v.jobId]);
+}
+
 /* Apply pulled records to state. Last-writer-wins per item via meta timestamps.
  * meta: {"collection:key" -> updated_at}. Returns true if state changed. */
 function applyRecords(S, records, meta){
@@ -116,7 +133,8 @@ function removeFromState(S, collection, key){
 if (typeof module !== "undefined" && module.exports){
   module.exports = { stateToRecords: stateToRecords, applyRecords: applyRecords,
     hashRecord: hashRecord, upsertIntoState: upsertIntoState,
-    removeFromState: removeFromState, photoSyncValue: photoSyncValue };
+    removeFromState: removeFromState, photoSyncValue: photoSyncValue,
+    isDemoRecord: isDemoRecord, demoJobIds: demoJobIds };
   return;
 }
 
@@ -240,6 +258,10 @@ function snapshot(records){
 function diffOut(){
   var S = window.__aftermath.getS();
   var records = stateToRecords(S);
+  /* Demo records never leave the device (privacy policy promise). */
+  var demoKeys = {};
+  records.forEach(function(r){ if (isDemoRecord(S, r)) demoKeys[r.collection + ":" + r.key] = true; });
+  records = records.filter(function(r){ return !demoKeys[r.collection + ":" + r.key]; });
   var now = Date.now();
   var cur = snapshot(records);
   var out = [];
@@ -251,7 +273,11 @@ function diffOut(){
     }
   });
   Object.keys(lastPushed).forEach(function(mk){
-    if (!(mk in cur)){
+    /* Never emit tombstones for locally-present demo records: their server
+     * rows are stale but harmless, and a returned tombstone would delete the
+     * user's local demo job. (Records of a deleted demo job still tombstone
+     * normally, since they are no longer demo records.) */
+    if (!(mk in cur) && !demoKeys[mk]){
       var i = mk.indexOf(":");
       out.push({ app_slug: APP, collection: mk.slice(0, i), key: mk.slice(i + 1),
         value: null, updated_at: now, deleted: true });
@@ -322,14 +348,36 @@ async function pull(){
     var data = await api("/v1/sync/pull?app=" + APP + "&since=" + lastSync);
     var S = window.__aftermath.getS();
     var applied = {};
-    (data.records || []).forEach(function(r){
+    var metaDirty = false;
+    /* Demo records never enter local state (privacy policy promise). Mark
+     * their baseline so they are not re-pulled forever, then drop them.
+     * A demo job pushed by another device before this rule arrives with a
+     * foreign jobId, so its unflagged checklist/line-item/event records are
+     * dropped as part of the same family. */
+    var batch = data.records || [];
+    var remoteDemoJobs = {};
+    batch.forEach(function(r){
+      if (r.collection === "jobs" && r.value && r.value.demo) remoteDemoJobs[r.key] = true;
+    });
+    var localDemoIds = demoJobIds(S);
+    var incoming = batch.filter(function(r){
+      var mk = r.collection + ":" + r.key;
+      var v = r.value || {};
+      var demo = v.demo || v.sample || (v.jobId && (remoteDemoJobs[v.jobId] || localDemoIds[v.jobId]));
+      if (demo){
+        if (r.updated_at > (meta[mk] || 0)){ meta[mk] = r.updated_at; metaDirty = true; }
+        return false;
+      }
+      return true;
+    });
+    incoming.forEach(function(r){
       var mk = r.collection + ":" + r.key;
       if (r.updated_at > (meta[mk] || 0)) applied[mk] = !!r.deleted;
     });
     applyingRemote = true;
-    var changed = applyRecords(S, data.records || [], meta);
+    var changed = applyRecords(S, incoming, meta);
+    if (metaDirty) saveMeta();
     if (changed){
-      saveMeta();
       if(window.__aftermath.saveLocal() === false) window.__aftermath.notifySaveFailed("synced records");
       window.__aftermath.refresh();
       var cur = snapshot(stateToRecords(S));
@@ -375,7 +423,7 @@ function renderSettingsUI(){
     'Full-size photos stay on the device that took them; thumbnails sync. ' +
     'Anyone with the key can read your records.</p>' +
     '<div class="sync-row"><button class="btn btn-ghost" id="syncCopy" style="font-size:13px">Copy device key</button></div>' +
-    '<div class="sync-row"><input id="syncPaste" type="text" placeholder="Paste a 64-char key from another device" maxlength="64" style="font-size:12px">' +
+    '<div class="sync-row"><input id="syncPaste" type="text" aria-label="Device key to sync with" placeholder="Paste a 64-char key from another device" maxlength="64" style="font-size:12px">' +
     '<button class="btn btn-ghost" id="syncUse" style="font-size:13px">Use this key</button></div>';
   host.appendChild(box);
   updatePill();
@@ -458,97 +506,4 @@ if (document.readyState === "loading")
   document.addEventListener("DOMContentLoaded", boot);
 else boot();
 
-})();
-
-
-/* Client error reporter (v1).
- * Reports window errors and unhandled promise rejections to the sync backend
- * so crashes can be triaged from the status dashboard. Fire and forget:
- * it never throws, never blocks the app, and skips silently when the backend
- * is unreachable or no device key exists yet. PII patterns are scrubbed
- * client-side before sending (the server scrubs again).
- */
-(function(){
-  "use strict";
-  try {
-    var SLUG = "";
-    try { SLUG = String(typeof LS_DEVICE === "string" ? LS_DEVICE : "").replace(/\.device_key$/, ""); } catch(e){}
-    var BASE = "https://sync-proto.lukezhang.si";
-    try { if (typeof WORKER === "string" && WORKER) BASE = WORKER; } catch(e){}
-    var ENDPOINT = BASE + "/v1/client-errors";
-
-    function trunc(s, n){
-      s = String(s === null || s === undefined ? "" : s);
-      return s.length > n ? s.slice(0, n) : s;
-    }
-    function scrub(s){
-      s = String(s === null || s === undefined ? "" : s);
-      s = s.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[email]");
-      s = s.replace(/\+?\d[\d][\d\s().-]{6,}\d/g, "[phone]");
-      s = s.replace(/(bearer[ :]+)[A-Za-z0-9\-._~+/=]{8,}/gi, "$1[token]");
-      s = s.replace(/(api[_-]?key|device[_-]?key|token|secret|password|passwd|auth)\s*[:=]\s*["']?[^"'\s,}]{6,}/gi, "$1=[redacted]");
-      return s;
-    }
-
-    var busy = false;
-    var queue = [];
-    function pump(){
-      try {
-        if (busy) return;
-        var item = queue.shift();
-        if (!item) return;
-        var key = null;
-        try { key = localStorage.getItem(LS_DEVICE); } catch(e){}
-        if (!key || !SLUG) { pump(); return; }
-        busy = true;
-        var page = "";
-        try { page = location.href.split("#")[0]; } catch(e){}
-        var body = JSON.stringify({
-          app_slug: SLUG,
-          message: trunc(scrub(item.message), 500),
-          stack: trunc(scrub(item.stack), 4000),
-          page_url: trunc(page, 500)
-        });
-        fetch(ENDPOINT, {
-          method: "POST",
-          headers: {"Content-Type": "application/json", "Authorization": "Bearer " + key},
-          body: body,
-          keepalive: true
-        }).then(function(){ busy = false; pump(); }, function(){ busy = false; pump(); });
-      } catch(e){ busy = false; }
-    }
-    function send(message, stack){
-      try {
-        if (!SLUG) return;
-        queue.push({message: message, stack: stack});
-        if (queue.length > 5) queue.shift();
-        pump();
-      } catch(e){}
-    }
-
-    window.addEventListener("error", function(ev){
-      try {
-        var msg = ev && ev.message ? ev.message : "window.onerror";
-        try {
-          if (ev && ev.filename) msg += " @ " + ev.filename + ":" + (ev.lineno || 0) + ":" + (ev.colno || 0);
-        } catch(e){}
-        var stack = "";
-        try { stack = (ev && ev.error && ev.error.stack) ? ev.error.stack : ""; } catch(e){}
-        send(msg, stack);
-      } catch(e){}
-    });
-    window.addEventListener("unhandledrejection", function(ev){
-      try {
-        var r = ev ? ev.reason : null;
-        var msg = "unhandledrejection";
-        var stack = "";
-        try {
-          if (r instanceof Error) { msg = r.message || msg; stack = r.stack || ""; }
-          else if (typeof r === "string") { msg = r; }
-          else { msg = trunc(JSON.stringify(r), 500); }
-        } catch(e){}
-        send(msg, stack);
-      } catch(e){}
-    });
-  } catch(e){}
 })();

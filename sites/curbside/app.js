@@ -464,8 +464,10 @@ function renderPermits(){
   $('#permitTimeline').innerHTML=renderTimeline();
   const sb=$('#snapBtn'); if(sb) sb.onclick=copySnapshot;
   const box=$('#permitList');
-  const order={expired:0,crit:1,warn:2,needed:3,ok:4};
-  const levelOf=x=>x.sp.status==='active'?permitState(x.sp).level:'needed';
+  // Stable order: permits stay in their curated definition order no matter
+  // how their status changes. Toggling a checkmark only flips that card in
+  // place; the list never re-sorts under the user's finger. Urgency still
+  // surfaces through the alerts strip at the top (renderAlerts).
   const groups=[S.city].concat(S.extraCities||[]).filter(k=>CITIES[k]);
   const needVerify=allPermits().filter(({sp})=>sp.status==='active'&&sp.expires&&sp.expiresEst).length;
   let html='<div class="chip-row" role="group" aria-label="Permit filter">'+
@@ -474,7 +476,6 @@ function renderPermits(){
   groups.forEach((g,gi)=>{
     let ps=allPermits().filter(x=>x.cityKey===g);
     if(permFilter==='verify') ps=ps.filter(({sp})=>sp.status==='active'&&sp.expires&&sp.expiresEst);
-    ps.sort((a,b)=>order[levelOf(a)]-order[levelOf(b)]);
     html+='<div class="city-head"><h3>'+esc(CITIES[g].name)+'</h3>'+
       (gi>0?'<button class="link-btn" data-rmcity="'+g+'">Remove city</button>':'')+'</div>';
     html+=ps.map(({def,sp})=>{
@@ -577,16 +578,25 @@ const INSPECT_PHYSICAL=[
 ];
 function inspectSheet(){
   const paper=[];
+  let hasCommPermit=false;
   allPermits().forEach(({def,sp,cityKey})=>{
     const st=permitState(sp);
     const cityBit=(cityKey&&cityKey!==S.city)?' ('+cityNameOf({city:cityKey})+')':'';
+    // The catalog already tracks the commissary agreement for most cities.
+    // When it does, the catalog row is canonical and we skip the separate
+    // commissary-tab row so the same requirement never counts twice.
+    if(/commissary/i.test(def.name||'')) hasCommPermit=true;
     if(sp.status!=='active') paper.push({ok:false, name:def.name+cityBit, detail:'Not obtained yet'});
     else if(st.level==='expired') paper.push({ok:false, name:def.name+cityBit, detail:'Expired '+(sp.expiresEst?'~':'')+Math.abs(st.days)+' days ago'});
     else paper.push({ok:true, name:def.name+cityBit, detail:sp.expires?('Good through '+(sp.expiresEst?'~':'')+fmtDate(sp.expires)+(sp.expiresEst?' (estimated date)':' (from your document)')):'On file'});
   });
-  const cr=S.commissary.renews?daysUntil(S.commissary.renews):null;
-  paper.push({ok:cr===null||cr>0, name:'Commissary agreement',
-    detail:cr===null?'No renewal date set':cr<0?'Expired '+Math.abs(cr)+' days ago':'Good through '+fmtDate(S.commissary.renews)});
+  if(!hasCommPermit){
+    const cr=S.commissary.renews?daysUntil(S.commissary.renews):null;
+    // A missing renewal date is not readiness: it counts against the total
+    // until the owner sets a date on the Commissary tab.
+    paper.push({ok:cr!==null&&cr>0, name:'Commissary agreement',
+      detail:cr===null?'No renewal date set. Add it on the Commissary tab.':cr<0?'Expired '+Math.abs(cr)+' days ago':'Good through '+fmtDate(S.commissary.renews)});
+  }
   const checks=S.inspectionChecks||{};
   const physReady=INSPECT_PHYSICAL.filter(i=>checks[i.k]).length;
   const paperReady=paper.filter(p=>p.ok).length;

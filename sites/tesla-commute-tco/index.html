@@ -140,6 +140,11 @@
       <input type="range" id="in-used" min="20000" max="32000" step="500" value="25000">
     </div>
     <div class="ctl">
+      <label>Used 2024 Model 3 price <b id="v-used24">$32,000</b></label>
+      <input type="range" id="in-used24" min="28000" max="38000" step="500" value="32000">
+      <div class="hint">Highland RWD with HW4: the cheapest unsupervised-capable hardware. CarGurus avg ~$36k Oct 2026; good deals from ~$28k.</div>
+    </div>
+    <div class="ctl">
       <label>FSD subscription</label>
       <div class="toggle on" id="tg-fsd"><span class="pill"></span><b id="v-fsd">$99/mo · on</b></div>
     </div>
@@ -225,6 +230,7 @@
       <div class="fact"><h4>The hardware ceiling</h4><p>HW3 has <b>1/8 the memory bandwidth</b> of HW4. FSD v13's neural nets (7.5 GB) physically cannot fit on HW3's chips. Tesla had to ship a pruned, quantized v12 instead. Newer cars on HW4/AI4 get <b>~450 miles</b> between interventions.</p></div>
       <div class="fact"><h4>No unsupervised future</h4><p>Elon confirmed on the Q1 2026 earnings call: <b>HW3 will never achieve unsupervised FSD</b>. The v14 Lite build now rolling out stays supervised: hands on wheel, eyes on road, forever. If robotaxi-style autonomy matters to you, a 2022 is a dead end.</p></div>
       <div class="fact"><h4>The verdict for your commute</h4><p>For 2 days/week of highway stop-and-go, FSD on HW3 is genuinely good: that's FSD's strongest scenario. <b>Subscribe at $99/mo, never buy outright</b> ($8k+ for a depreciating, capped platform makes no sense). If you go 5 days/week or want the latest, a new HW4 car pulls ahead.</p></div>
+      <div class="fact"><h4>The 2024 alternative</h4><p>A used <b>2024 Highland</b> (~$28-36k) is the cheapest way into HW4: the full FSD v14 stack at <b>~450 miles between interventions</b> vs ~120 on HW3 Lite, plus the only hardware path to unsupervised. Verify before buying: Controls &gt; Software &gt; Additional Vehicle Information, or look for the red camera lenses. Compared as option D in the calculator above.</p></div>
     </div>
     <div class="warn"><b>Bottom line:</b> 2022 FSD is a very good supervised highway assistant with no upgrade path. Price it as a $99/mo convenience, not an appreciating asset.</div>
   </section>
@@ -245,6 +251,7 @@
     <ul>
       <li>All figures computed live in your browser from the inputs above. Defaults: 127-mi round trip (Antioch; ~140 Brentwood toggle), 52 weeks, 3.0 mi/kWh (used) / 3.4 mi/kWh (new), $8.50 Dumbarton toll westbound only, FSD $99/mo.</li>
       <li>Used 2022 Model 3: assumes cash purchase; resale retention 60% at 3 yrs / 52% at 4 yrs. Battery &amp; drive-unit warranty runs 8 yrs/120k mi, still active on a 2022.</li>
+      <li>Used 2024 Model 3 Highland RWD: ~$32k default (CarGurus avg ~$36k Oct 2026, good deals from ~$28k); resale retention 65% at 3 yrs / 58% at 4 yrs; 3.4 mi/kWh efficiency. All 2024+ Model 3s carry HW4.</li>
       <li>Lease: 2026 Model 3 Standard RWD at $419/mo + $4,114 due at signing (Oct 2026 Tesla pricing, 10k mi/yr base) with a +$60/mo estimate for the 15k mi/yr tier. Miles beyond 15k/yr are charged at $0.25/mi overage. 4-yr view assumes a 12-mo extension at the same rate. $395 disposition fee applied once.</li>
       <li>New purchase: $38,380 MSRP + ~$1,420 destination/fees, 10% down, 1.99% APR / 72 mo (current Tesla promo rate). Interest is amortized properly per horizon.</li>
       <li>Charging model: each 2-hour work session adds 15 kWh (25% of the 60 kWh LFP pack) at the work rate; home wall outlet adds 14 kWh/night and dryer outlet 30 kWh/night (5 nights/week) at ~$0.30/kWh; everything else is Supercharger-priced. Bay Area Supercharger snapshot, Oct 8 2026: peak ~$0.50/kWh, off-peak ~$0.29-0.34/kWh, so the $0.45/kWh default is a blended average. Tesla prices each station with its own time-of-use tiers, so check the exact rate on the car's nav pin before plugging in. Work charging default $0.25/kWh: set it to $0 if Robinhood's chargers are free. Insurance ($1,800 used / $2,200 new), tires &amp; maintenance, and CA registration incl. the ZEV fee are estimates.</li>
@@ -260,7 +267,7 @@ const $ = id => document.getElementById(id);
 const fmt$ = n => "$" + Math.round(n).toLocaleString("en-US");
 const fmtMo = n => "$" + Math.round(n).toLocaleString("en-US");
 
-const S = { days: 2, horizon: 3, workKwh: 0.25, superKwh: 0.45, personal: 5000, usedPrice: 25000, fsd: true, rt: 127, sess: 1, home: 0 };
+const S = { days: 2, horizon: 3, workKwh: 0.25, superKwh: 0.45, personal: 5000, usedPrice: 25000, used2024Price: 32000, fsd: true, rt: 127, sess: 1, home: 0 };
 
 const WEEKS = 52, TOLL = 8.50, FSD_MO = 99;
 const NEW_PRICE = 38380 + 1420; // MSRP + dest/fees
@@ -351,8 +358,22 @@ function compute() {
     ["Registration ($550/yr est.)", 550 * H],
   ];
 
+  // D: used 2024 Highland, cash (HW4, unsupervised-capable)
+  const retD = H === 3 ? 0.65 : 0.58;
+  const depD = S.used2024Price * (1 - retD);
+  const linesD = [
+    ["Depreciation (" + fmt$(S.used2024Price) + " → " + fmt$(S.used2024Price * retD) + " resale)", depD],
+    ["Insurance ($2,000/yr est.)", 2000 * H],
+    [chargeLabel, elecNew],
+    ["FSD subscription" + (S.fsd ? "" : " (off)"), fsd],
+    ["Tires & maintenance ($500/yr est.)", 500 * H],
+    ["Dumbarton tolls ($8.50 × mornings)", tolls],
+    ["Registration + CA ZEV fee ($450/yr est.)", 450 * H],
+  ];
+
   const opts = [
     { id: "A", name: "Buy used 2022 Model 3", sub: fmt$(S.usedPrice) + " cash · RWD LFP, the sweet spot", lines: linesA },
+    { id: "D", name: "Buy used 2024 Model 3", sub: fmt$(S.used2024Price) + " cash · Highland RWD, HW4", lines: linesD },
     { id: "B", name: "Lease new Model 3", sub: "2026 Standard RWD · 15k mi/yr lease", lines: linesB },
     { id: "C", name: "Buy new Model 3", sub: fmt$(NEW_PRICE) + " · 1.99% APR financing", lines: linesC },
   ];
@@ -402,6 +423,7 @@ function render() {
   $("v-super").textContent = "$" + S.superKwh.toFixed(2) + "/kWh";
   $("v-pers").textContent = S.personal.toLocaleString();
   $("v-used").textContent = fmt$(S.usedPrice);
+  $("v-used24").textContent = fmt$(S.used2024Price);
   $("v-fsd").textContent = S.fsd ? "$99/mo · on" : "off";
 }
 
@@ -410,6 +432,7 @@ $("in-work").addEventListener("input", e => { S.workKwh = +e.target.value; rende
 $("in-super").addEventListener("input", e => { S.superKwh = +e.target.value; render(); });
 $("in-pers").addEventListener("input", e => { S.personal = +e.target.value; render(); });
 $("in-used").addEventListener("input", e => { S.usedPrice = +e.target.value; render(); });
+$("in-used24").addEventListener("input", e => { S.used2024Price = +e.target.value; render(); });
 function segWire(id, fn) {
   $(id).querySelectorAll("button").forEach(b =>
     b.addEventListener("click", () => {

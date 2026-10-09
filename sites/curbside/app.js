@@ -217,6 +217,7 @@ function openSheet(html, label){
   lastFocus=document.activeElement;
   const w=$('#sheetWrap'); const sh=$('#sheet');
   sh.innerHTML=html;
+  delete sh.dataset.paperworkEvent;
   const h=sh.querySelector('h3');
   sh.setAttribute('aria-label', label || (h?h.textContent.trim():'Dialog'));
   w.classList.remove('hidden');
@@ -389,6 +390,7 @@ function complianceScore(){
 /* ---------- home ---------- */
 function weekKeys(offset){ const d=new Date(); const day=(d.getDay()+6)%7; d.setDate(d.getDate()-day+offset*7); const out=[]; for(let i=0;i<7;i++){ const x=new Date(d); x.setDate(d.getDate()+i); out.push(fmtKey(x)); } return out; }
 function renderHome(){
+  renderPaperworkHome();
   renderAlerts();
   const {good,total}=complianceScore();
   const pct=total?Math.round(good/total*100):0;
@@ -807,6 +809,170 @@ $('#comSave').onclick=()=>{
   save(); renderCommissary();
 };
 
+/* ---------- event paperwork: evidence, never a blanket clearance ---------- */
+const PW_ICON='<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H5v18h14V8zM14 3v5h5M8 12h8M8 16h5"/></svg>';
+const PW_COMMON=[
+  {id:'insurance',label:'Insurance / COI expiry',kind:'permit',category:'insurance',help:'Link the insurance record behind your COI. This checks its recorded expiry, not coverage terms or venue delivery.'},
+  {id:'coi-sent',label:'COI to venue or organizer',kind:'evidence',optional:true,help:'Record who received the COI and the sent-email subject. A policy date alone does not prove delivery.'},
+  {id:'temporary',label:'Temporary food permit for this city',kind:'permit-evidence',category:'temporary',optional:true,help:'Link the issued permit. Record where the copy is kept and its approval for this event, city and date. An application is still pending. If not needed, name the agency and its confirmation.'},
+  {id:'rider',label:'Insurance rider / endorsement',kind:'evidence',optional:true,help:'Record the broker confirmation or endorsement location for the venue request. If none is needed, record who confirmed that and why.'},
+  {id:'load-in',label:'Venue load-in rules',kind:'evidence',optional:true,help:'After reading the venue email, record its subject and arrival, parking, power, waste and departure instructions.'},
+  {id:'commissary',label:'Commissary agreement letter',kind:'permit-evidence',category:'commissary',optional:true,help:'Record where the signed letter is kept and confirm it applies to this booking. The Commissary renewal field has no document provenance; link a verified permit record to verify the date.'},
+  {id:'health',label:'Health permit copy',kind:'permit-evidence',category:'health',optional:true,help:'Link the permit and record the copy location and confirmation it applies to this event city and date. Explicitly select a regional or statewide record if it applies.'}
+];
+const PW_FIRE={id:'fire',label:'Fire / fuel approval, if applicable',kind:'permit-evidence',category:'fire',optional:true,help:'Confirm cooking, propane and generator requirements with the venue or fire authority. Link any issued approval and record its scope and copy location, or who confirmed it is not needed.'};
+const PW_DEFAULTS=[
+  ['wedding','Wedding','Signed catering agreement','Record the signed agreement location, guest count and agreed service schedule.'],
+  ['festival','Festival','Vendor acceptance / booth assignment','Record the organizer acceptance and booth assignment reference.'],
+  ['brewery','Brewery pop-up','Site permission / service agreement','Record the brewery permission and agreed service hours.'],
+  ['corporate','Corporate catering','Purchase order / vendor onboarding','Record the purchase order or onboarding confirmation reference. Note whether a W-9 was requested and sent; do not enter tax identifiers.'],
+  ['street','Street vending','Location / right-of-way authorization','Record the location authorization reference and scope, or the authority that confirmed no separate authorization is needed.'],
+  ['private','Private party','Host permission / catering agreement','Record host permission, agreement location, guest count and service schedule.']
+].map(([id,label,title,help])=>({id,label,version:1,items:[...PW_COMMON.map(i=>({...i,label:id==='street'&&i.id==='load-in'?'Parking / access rules':i.label})),{id:'agreement',label:title,kind:'evidence',optional:true,help},...(['festival','brewery','street'].includes(id)?[{...PW_FIRE}]:[])]}));
+const pwObject=o=>!!o&&typeof o==='object'&&!Array.isArray(o);
+const pwDate=d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&fmtKey(parseKey(d))===d;
+const pwText=(s,n=300)=>typeof s==='string'?s.slice(0,n):'';
+function pwTemplates(){
+  const templates=new Map(PW_DEFAULTS.map(t=>[t.id,t]));
+  (Array.isArray(S.paperworkTemplates)?S.paperworkTemplates:[]).forEach(t=>{
+    if(pwObject(t)&&typeof t.id==='string'&&t.label&&Array.isArray(t.items)&&t.items.length&&t.items.every(i=>pwObject(i)&&typeof i.id==='string'&&typeof i.label==='string')&&new Set(t.items.map(i=>i.id)).size===t.items.length) templates.set(t.id,t);
+  });
+  return [...templates.values()];
+}
+function pwInstance(e){
+  if(!pwObject(e.paperwork)) e.paperwork={version:1,records:{},items:[]};
+  if(!pwObject(e.paperwork.records)) e.paperwork.records={};
+  return e.paperwork;
+}
+function pwApplyTemplate(e,id){
+  const t=pwTemplates().find(t=>t.id===id), p=pwInstance(e);
+  if(t){ p.templateId=t.id; p.templateVersion=t.version; p.items=JSON.parse(JSON.stringify(t.items)); }
+  e.eventType=id;
+}
+function pwItems(e){return pwObject(e.paperwork)&&Array.isArray(e.paperwork.items)?e.paperwork.items.filter(i=>pwObject(i)&&i.id&&i.label):[];}
+function pwCity(s){
+  const name=CITIES[s]?CITIES[s].name:s;
+  return String(name||'').split(',')[0].trim().toLowerCase().replace(/\s+/g,' ');
+}
+function pwCandidates(e,i){
+  const match={insurance:/insurance|\bcoi\b|liability/i,temporary:/temporary|special event/i,health:/health|mobile food|food (service|facility)|dshs/i,commissary:/commissary/i,fire:/fire|propane|lp-gas/i}[i.category];
+  return allPermits().filter(x=>match&&match.test(x.def.name)&&(['insurance','commissary'].includes(i.category)||pwCity(x.cityKey)===pwCity(e.city)));
+}
+function pwSource(e,i,r){
+  if(r.permitId){
+    if(r.permitId==='@commissary'&&i.category==='commissary') return {sp:{id:'@commissary',status:S.commissary.name?'active':'needed',expires:S.commissary.renews,expiresEst:true},def:{name:'Commissary agreement'}};
+    return (i.category==='insurance'?pwCandidates(e,i):allPermits()).find(x=>x.sp.id===r.permitId)||null;
+  }
+  const choices=pwCandidates(e,i);
+  if(choices.length===1) return choices[0];
+  if(!choices.length&&i.category==='commissary') return {sp:{id:'@commissary',status:S.commissary.name?'active':'needed',expires:S.commissary.renews,expiresEst:true},def:{name:'Commissary agreement'}};
+  return null;
+}
+function pwContext(e,i,source){
+  return JSON.stringify([e.name,e.date,e.city,e.venue,e.eventType,i,source?source.sp:null]);
+}
+function pwAssess(e,i){
+  const r=(e.paperwork.records||{})[i.id]||{}, source=i.kind==='evidence'?null:pwSource(e,i,r);
+  const context=pwContext(e,i,source);
+  const evidence=!!pwText(r.note).trim()&&r.context===context;
+  if(!['permit','permit-evidence','evidence'].includes(i.kind)) return {i,r,source,context,ok:false,detail:'Unsupported check. Review this template.'};
+  if(i.optional&&r.disposition==='not-needed'&&evidence) return {i,r,source,context,ok:true,detail:'Not needed, owner confirmation: '+r.note};
+  let dateDetail='', dateOK=true;
+  if(i.kind!=='evidence'){
+    if(!source){dateOK=false;dateDetail=r.permitId?'Linked record is missing.':'Link a permit record. No unique match for this booking.';}
+    else {
+      const sp=source.sp;
+      dateOK=sp.status==='active'&&pwDate(sp.expires)&&sp.expiresEst===false&&sp.expires>=e.date;
+      if(i.category==='insurance'&&sp.expires===e.date) dateOK=false;
+      dateDetail=source.def.name+': '+(pwDate(sp.expires)?(sp.expiresEst===false?'':'~')+sp.expires+(sp.expiresEst===false?' · verified from document (by you)':' · estimated date'):'no expiry date on file');
+      if(sp.status!=='active') dateDetail+=' · not obtained';
+      else if(pwDate(sp.expires)&&sp.expires<e.date) dateDetail+=' · expires before event';
+      else if(i.category==='insurance'&&sp.expires===e.date) dateDetail+=' · expires on event day; check exact time with broker';
+      else if(sp.expiresEst!==false) dateDetail+=' · verify in Permits';
+      else if(dateOK) dateDetail+=' · date check passes for event';
+    }
+  }
+  const needsEvidence=i.kind!=='permit';
+  const ok=dateOK&&(!needsEvidence||(r.disposition==='recorded'&&evidence));
+  const evidenceDetail=needsEvidence?(r.note&&r.disposition!=='pending'&&!evidence?'Booking or permit changed. Review saved evidence.':r.disposition==='recorded'&&evidence?'Owner evidence: '+r.note:'Record evidence or confirm it is not needed.') : 'Auto-derived from live Permits.';
+  return {i,r,source,context,ok,detail:[dateDetail,evidenceDetail].filter(Boolean).join(' ')};
+}
+function pwSummary(e){
+  const items=pwItems(e);
+  if(!e.eventType||!items.length||!e.city||!e.venue||!pwDate(e.date)) return {missing:1,setup:true,first:'Choose event type, city and venue',rows:[]};
+  const rows=items.map(i=>pwAssess(e,i)), missing=rows.filter(x=>!x.ok);
+  return {missing:missing.length,first:missing.length?missing[0].i.label:'Date checks and owner evidence recorded',rows};
+}
+function pwButton(e){
+  const s=pwSummary(e);
+  return '<button class="pw-entry '+(s.missing?'needs':'')+'" data-paperwork="'+esc(e.id)+'">'+PW_ICON+'<span><strong>'+(s.missing?'Paperwork: '+(s.setup?'set up':s.missing+' to resolve'):'Paperwork: evidence recorded')+'</strong><small>'+esc(s.first)+'</small></span>'+I.chevR+'</button>';
+}
+function pwBind(root){root.querySelectorAll('[data-paperwork]').forEach(b=>b.onclick=()=>paperworkSheet(b.dataset.paperwork));}
+function renderPaperworkHome(){
+  const box=$('#homePaperwork'); if(!box) return;
+  const list=S.events.filter(e=>e.status==='booked'&&pwSummary(e).missing).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  box.innerHTML=list.length?'<div class="pw-home"><h3>'+list.length+' booking'+(list.length===1?'':'s')+' need paperwork</h3><p>Next to resolve: '+esc(list[0].name)+(pwDate(list[0].date)?' · '+fmtDate(list[0].date):' · date missing')+'</p>'+pwButton(list[0])+'</div>':'';
+  pwBind(box);
+}
+function pwContextFields(e){
+  return '<label>Event type<select id="pwType"><option value="">Choose a type</option>'+pwTemplates().map(t=>'<option value="'+esc(t.id)+'"'+(e.eventType===t.id?' selected':'')+'>'+esc(t.label)+'</option>').join('')+'</select></label>'+
+    '<label>Event city<input id="pwCity" type="text" maxlength="80" value="'+esc(e.city||'')+'" placeholder="City where you will serve" list="pwCities"></label><datalist id="pwCities">'+Object.values(CITIES).map(c=>'<option value="'+esc(c.name.split(',')[0])+'">').join('')+'</datalist>'+
+    '<label>Venue / site<input id="pwVenue" type="text" maxlength="120" value="'+esc(e.venue||'')+'" placeholder="Venue name or vending location"></label>';
+}
+function paperworkSetup(e){
+  const draft=pwObject(e.paperworkSetupDraft)?e.paperworkSetupDraft:e;
+  openSheet('<h3>Booking paperwork details</h3><p class="muted">'+esc(e.name)+'. Changing these details keeps your notes and asks you to review them.</p>'+pwContextFields(draft)+
+    '<label>Event date<input id="pwDate" type="date" value="'+esc(draft.date||e.date||'')+'"></label><p id="pwError" role="alert"></p><button class="btn primary big" id="pwSetupSave">Save details</button><button class="btn ghost" id="pwBack">Back to paperwork</button>','Booking paperwork details');
+  const read=()=>({eventType:$('#pwType').value,city:$('#pwCity').value.trim(),venue:$('#pwVenue').value.trim(),date:$('#pwDate').value});
+  $$('#sheet input,#sheet select').forEach(el=>el.oninput=()=>{e.paperworkSetupDraft=read();save();});
+  $('#pwBack').onclick=()=>paperworkSheet(e.id);
+  $('#pwSetupSave').onclick=()=>{
+    const v=read(); if(!v.eventType||!v.city||!v.venue||!pwDate(v.date)){ $('#pwError').textContent='Choose a type and enter a city, venue and valid date.'; return; }
+    if(e.eventType!==v.eventType||!pwItems(e).length) pwApplyTemplate(e,v.eventType);
+    Object.assign(e,v); delete e.paperworkSetupDraft; save(); renderEvents();renderPaperworkHome();paperworkSheet(e.id);
+  };
+}
+function paperworkSheet(id){
+  const e=S.events.find(x=>x.id===id); if(!e) return;
+  const s=pwSummary(e);
+  const row=x=>'<article class="pw-item '+(x.ok?'':'needs')+'"><div class="pw-item-head"><strong>'+esc(x.i.label)+'</strong><span class="pill '+(x.ok?'ok':'warn')+'">'+(x.ok?'Recorded':'Needs action')+'</span></div><p>'+esc(x.detail)+'</p><button class="btn small" data-pw-item="'+esc(x.i.id)+'">'+(x.i.kind==='permit'?'Review live record':x.ok?'Review evidence':'Record evidence')+'</button></article>';
+  const todo=s.rows.filter(x=>!x.ok), done=s.rows.filter(x=>x.ok);
+  openSheet('<div class="pw-head"><h3>Booking paperwork</h3><button class="btn small" id="pwClose">Close</button></div><p class="pw-event">'+esc(e.name)+'<br>'+esc([pwDate(e.date)?fmtDate(e.date)+' (booking date)':'Date missing',e.city,e.venue].filter(Boolean).join(' · '))+'</p>'+
+    '<div class="pw-status '+(s.missing?'needs':'')+'"><strong>'+(s.setup?'Set up this booking':s.missing?s.missing+' items to resolve':'Evidence recorded for every item')+'</strong><p>Live date checks plus your evidence. Confirm requirements with the venue, broker and issuing agency.</p></div>'+
+    '<button class="btn small" id="pwSetup">'+(s.setup?'Choose type, city and venue':'Edit booking details')+'</button>'+
+    (s.setup?'': '<h4 class="pw-section">'+(todo.length?'Resolve before service':'No unresolved items')+'</h4>'+todo.map(row).join('')+(done.length?'<details class="pw-done"><summary>'+done.length+' recorded items</summary>'+done.map(row).join('')+'</details>':''))+
+    '<p class="muted">Notes and references only. No files are uploaded or sent. Dates labeled verified are entered by you from a document. This guide is not legal advice; verify with the agency.</p>','Booking paperwork');
+  $('#sheet').dataset.paperworkEvent=id;
+  $('#sheet').scrollTop=0;
+  $('#pwClose').onclick=closeSheet;
+  $('#pwSetup').onclick=()=>paperworkSetup(e);
+  $$('#sheet [data-pw-item]').forEach(b=>b.onclick=()=>paperworkEvidence(e,b.dataset.pwItem));
+}
+function paperworkEvidence(e,itemId){
+  const i=pwItems(e).find(x=>x.id===itemId); if(!i) return;
+  const p=pwInstance(e), r=p.records[itemId]||{}, d=pwObject(r.draft)?r.draft:r;
+  const x=pwAssess(e,i), isPermit=i.kind!=='evidence';
+  const choices=i.category==='insurance'?pwCandidates(e,i):allPermits();
+  openSheet('<h3>'+esc(i.label)+'</h3><p>'+esc(i.help||'Record a source and where you can find the evidence.')+'</p><p class="pw-source">'+esc(x.detail)+'</p>'+
+    (isPermit?'<label>Live permit record<select id="pwPermit"><option value="">Use a unique matching record</option>'+choices.map(v=>'<option value="'+esc(v.sp.id)+'"'+(d.permitId===v.sp.id?' selected':'')+'>'+esc(v.def.name+' · '+cityNameOf(v.sp))+'</option>').join('')+(i.category==='commissary'?'<option value="@commissary"'+(d.permitId==='@commissary'?' selected':'')+'>Commissary renewal (estimated)</option>':'')+'</select></label><p class="muted">Choose only a record that applies to this item and booking. Cross-city permits need scope evidence.</p><button class="btn small" id="pwPermits">Edit dates / add record in Permits</button>':'')+
+    (i.kind==='permit'?'':'<label>Evidence status<select id="pwDisposition"><option value="pending">Pending / requested</option><option value="recorded">Evidence recorded</option>'+(i.optional?'<option value="not-needed">Confirmed not needed</option>':'')+'</select></label><label>Source and evidence<textarea id="pwNote" rows="4" maxlength="300" placeholder="Document location, email subject, recipient, or who confirmed and why">'+esc(d.note||'')+'</textarea></label><p class="muted">Drafts save as you type. Save evidence confirms your source for this booking. Do not enter passwords or tax identifiers.</p>')+
+    '<p id="pwError" role="alert"></p><button class="btn primary big" id="pwEvidenceSave">'+(i.kind==='permit'?'Save record link':'Save evidence')+'</button><button class="btn ghost" id="pwBack">Back to paperwork</button>','Paperwork evidence');
+  delete $('#sheet').dataset.paperworkEvent;
+  if($('#pwDisposition')) $('#pwDisposition').value=['pending','recorded','not-needed'].includes(d.disposition)?d.disposition:'pending';
+  if(isPermit&&d.permitId&&!choices.some(v=>v.sp.id===d.permitId)&&d.permitId!=='@commissary') $('#pwPermit').insertAdjacentHTML('beforeend','<option selected value="'+esc(d.permitId)+'">Missing linked record</option>');
+  const read=()=>({permitId:$('#pwPermit')?$('#pwPermit').value:'',disposition:$('#pwDisposition')?$('#pwDisposition').value:'pending',note:$('#pwNote')?$('#pwNote').value.trim():''});
+  const draft=()=>{p.records[itemId]={...r,draft:read()};save();};
+  $$('#sheet input,#sheet textarea,#sheet select').forEach(el=>el.oninput=draft);
+  $('#pwBack').onclick=()=>paperworkSheet(e.id);
+  if($('#pwPermits')) $('#pwPermits').onclick=()=>{draft();closeSheet();switchTab('permits');};
+  $('#pwEvidenceSave').onclick=()=>{
+    const v=read();
+    if(i.kind!=='permit'&&v.disposition!=='pending'&&!v.note){$('#pwError').textContent='Add the evidence source, or who confirmed this is not needed and why.';return;}
+    p.records[itemId]={...v,context:pwContext(e,i,isPermit?pwSource(e,i,v):null),recordedAt:new Date().toISOString()};
+    save();renderEvents();renderPaperworkHome();paperworkSheet(e.id);
+  };
+}
+
 /* ---------- events + ROI ---------- */
 /* Net = revenue taken minus fee paid. Both are owner-entered; the result is a
  * personal record, never a tax document. */
@@ -826,7 +992,7 @@ function renderEvents(){
       const net=key==='done'?eventNet(e):null;
       let roiLine='';
       if(net) roiLine='<div class="roi-line"><span class="pill '+(net.net>=0?'ok':'crit')+'">Net '+moneySigned(net.net)+'</span><span class="muted">'+money(net.rev)+' taken · '+money(net.fee)+' fee'+(e.result.notes?' · '+esc(e.result.notes):'')+'</span></div>';
-      d.innerHTML='<strong>'+esc(e.name)+'</strong><span class="muted">'+fmtDate(e.date)+(e.fee?' · '+money(e.fee)+' fee':'')+(e.contact?' · '+esc(e.contact):'')+'</span>'+roiLine+
+      d.innerHTML='<strong>'+esc(e.name)+'</strong><span class="muted">'+fmtDate(e.date)+(e.fee?' · '+money(e.fee)+' fee':'')+(e.contact?' · '+esc(e.contact):'')+'</span>'+roiLine+pwButton(e)+
         '<div class="ev-foot">'+
         (key!=='lead'?'<button class="btn small" data-mv="'+e.id+'|lead">← Lead</button>':'')+
         (key!=='booked'?'<button class="btn small" data-mv="'+e.id+'|booked">'+(key==='lead'?'Book →':'← Booked')+'</button>':'')+
@@ -840,6 +1006,7 @@ function renderEvents(){
     col.appendChild(em); }
     box.appendChild(col);
   });
+  pwBind(box);
   // season totals across done events with logged results
   const done=S.events.filter(e=>e.status==='done').map(e=>({e,net:eventNet(e)})).filter(x=>x.net);
   const fees=done.reduce((a,x)=>a+x.net.fee,0), revs=done.reduce((a,x)=>a+x.net.rev,0);
@@ -872,14 +1039,17 @@ $('#addEventBtn').onclick=()=>{
   openSheet('<h3>Add booking</h3>'+
     '<label>Event name<input type="text" id="evName" placeholder="e.g. Garcia wedding" maxlength="80"></label>'+
     '<div class="row2"><label>Date<input type="date" id="evDate" value="'+todayKey()+'"></label><label>Fee ($) (optional)<input type="number" id="evFee" inputmode="decimal" min="0" placeholder="500"></label></div>'+
+    pwContextFields({})+
     '<label>Contact<input type="text" id="evContact" placeholder="Name / phone" maxlength="80"></label>'+
     '<label>Status<select id="evStatus"><option value="lead">Lead</option><option value="booked">Booked</option><option value="done">Done</option></select></label>'+
     '<button class="btn primary big" id="evSave">Add booking</button><button class="btn ghost" id="evCancel">Cancel</button>', 'Add booking');
   $('#evCancel').onclick=closeSheet;
   $('#evSave').onclick=()=>{
     const name=$('#evName').value.trim(); if(!name||!$('#evDate').value) return;
-    S.events.push({id:uid(), name, date:$('#evDate').value, fee:$('#evFee').value, contact:$('#evContact').value.trim(), status:$('#evStatus').value});
-    save(); closeSheet(); renderEvents();
+    const e={id:uid(), name, date:$('#evDate').value, fee:$('#evFee').value, contact:$('#evContact').value.trim(), status:$('#evStatus').value,city:$('#pwCity').value.trim(),venue:$('#pwVenue').value.trim()};
+    if($('#pwType').value) pwApplyTemplate(e,$('#pwType').value);
+    S.events.push(e);
+    save(); closeSheet(); renderEvents(); renderPaperworkHome();
   };
 };
 
@@ -1101,6 +1271,47 @@ function exportBackup(){
 /* Exposed for the billing paywall: the owner's data stays exportable even
    when the trial has ended and the overlay blocks the app. */
 window.__exportBackup=exportBackup;
+/* Clamp a free-text value to the same bound its form field enforces. */
+function clampStr(v,n){ v=String(v==null?'':v); return v.length>n?v.slice(0,n):v; }
+/* P1-2 (red2): the import clamp covered only truckName; a 500-char
+ * commissary.name or 300-char custom permit name blew the phone layout
+ * thousands of px wide. Every free-text field is clamped on import to its
+ * form's maxlength: truckName 60, commissary name 60, commissary notes 300,
+ * custom permit name/agency 80, spot names 80, addresses 120, hours 40,
+ * event names/contacts 80, event result notes and visit notes 200.
+ * Sync pulls take the same guarded path (see sync.js pull). */
+function sanitizeImportedState(st){
+  if(!st||typeof st!=='object') return st;
+  if(typeof st.truckName==='string') st.truckName=clampStr(st.truckName,60);
+  var c=st.commissary;
+  if(c&&typeof c==='object'){ c.name=clampStr(c.name,60); c.notes=clampStr(c.notes,300); }
+  (Array.isArray(st.customDefs)?st.customDefs:[]).forEach(function(d){
+    if(!d||typeof d!=='object') return;
+    d.name=clampStr(d.name,80); d.agency=clampStr(d.agency,80);
+    if(typeof d.note==='string') d.note=clampStr(d.note,200);
+  });
+  var locs=(st.locations&&typeof st.locations==='object')?st.locations:{};
+  Object.keys(locs).forEach(function(k){
+    (Array.isArray(locs[k])?locs[k]:[]).forEach(function(sp){
+      if(!sp||typeof sp!=='object') return;
+      sp.spot=clampStr(sp.spot,80); sp.addr=clampStr(sp.addr,120); sp.hours=clampStr(sp.hours,40);
+    });
+  });
+  (Array.isArray(st.events)?st.events:[]).forEach(function(e){
+    if(!e||typeof e!=='object') return;
+    e.name=clampStr(e.name,80); e.contact=clampStr(e.contact,80);
+    if(e.result&&typeof e.result==='object'&&typeof e.result.notes==='string') e.result.notes=clampStr(e.result.notes,200);
+  });
+  (Array.isArray(st.revenue)?st.revenue:[]).forEach(function(r){
+    if(!r||typeof r!=='object') return;
+    r.spot=clampStr(r.spot,80);
+  });
+  (Array.isArray(st.prepVisits)?st.prepVisits:[]).forEach(function(v){
+    if(!v||typeof v!=='object') return;
+    if(typeof v.notes==='string') v.notes=clampStr(v.notes,200);
+  });
+  return st;
+}
 function importBackup(file){
   const r=new FileReader();
   r.onload=()=>{
@@ -1110,10 +1321,9 @@ function importBackup(file){
       const st=o.state;
       if(!Array.isArray(st.permits)||!Array.isArray(st.events)||!Array.isArray(st.revenue)) throw new Error('bad');
       S=st;
-      /* P2-6: the settings form caps the truck name at 60 chars; enforce the
-       * same bound on import so a crafted backup cannot shove the topbar
-       * off-screen. */
-      if(typeof st.truckName==='string'&&st.truckName.length>60) st.truckName=st.truckName.slice(0,60);
+      /* P1-2 (red2): clamp every free-text field on import (was: truckName
+       * only). See sanitizeImportedState above for the full field list. */
+      sanitizeImportedState(st);
       if(!S.customDefs) S.customDefs=[];
       if(!S.extraCities) S.extraCities=[];
       if(!Array.isArray(S.prepVisits)) S.prepVisits=[];
@@ -1158,10 +1368,18 @@ function refreshUI(){
   var cur=null;
   $$('.tab-page').forEach(function(p){ if(!p.classList.contains('hidden')) cur=p; });
   if(cur) switchTab(cur.id.replace('page-',''));
+  const pwOpen=$('#sheet').dataset.paperworkEvent;
+  if(pwOpen&&!$('#sheetWrap').classList.contains('hidden')){
+    const focus=document.activeElement, item=focus&&focus.dataset.pwItem, scroll=$('#sheet').scrollTop;
+    paperworkSheet(pwOpen);
+    if(item) $$('#sheet [data-pw-item]').find(b=>b.dataset.pwItem===item)?.focus({preventScroll:true});
+    $('#sheet').scrollTop=scroll;
+  }
 }
 window.__curbside = {
   getS: function(){ return S; },
   saveLocal: function(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(e){} },
-  refresh: refreshUI
+  refresh: refreshUI,
+  sanitizeState: sanitizeImportedState
 };
 })();

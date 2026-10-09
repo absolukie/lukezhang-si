@@ -115,14 +115,35 @@
   footer a { color: #c9b490; text-decoration: none; border-bottom: 1px solid #6b532f; padding-bottom: 2px; }
   #result { min-height: 44px; text-align: center; margin-top: 10px; font-size: 15px; color: #f4ead6; line-height: 1.5; padding: 0 6px; }
   #result strong { color: #e8c96a; }
+
+/* A small green casino, brass hardware, warm reel paper. */
+body{background:radial-gradient(ellipse at 50% 30%,#153d35,transparent 70%),repeating-linear-gradient(45deg,#bda26e05 0 1px,transparent 1px 6px),#091e1b;padding-top:30px}
+header h1{font:700 43px Georgia,serif;letter-spacing:-1.8px;text-transform:none;color:#f3d994}header p{color:#c6cab0}header .hint{color:#a9b499;display:inline-block;margin-top:5px}
+#machine{background:linear-gradient(135deg,#376055,#173b32 55%,#102b25);border:2px solid #bba366;box-shadow:0 25px 45px #020e0bc9,inset 0 0 0 4px #122b24,inset 0 0 0 5px #b49b624d;padding-right:46px;border-radius:28px 28px 12px 12px}
+#marquee{border-radius:14px 14px 3px 3px;border:1px solid #cab47e;background:radial-gradient(ellipse,#3c4b2b,#1b291c);letter-spacing:2px;font-size:11px;box-shadow:inset 0 0 15px #eed58f18}#marquee .win{color:#f4dd9f}
+#reels{gap:6px}.reel{border-radius:5px;border-color:#b4a06f;background:linear-gradient(#beb19a,#fff8e6 30%,#fff8e6 65%,#b4a48a)}.sym{font-size:10px;letter-spacing:.4px}
+#leverZone{right:-9px;width:58px}#track{background:#081d17;border-color:#8c794e}#knob{background:radial-gradient(circle at 32% 24%,#ffb695,#a23b2f 58%,#591e1b);border:2px solid #c97751}
+.stat{border-radius:4px;border-color:#6d7950}.stat .v{font-family:ui-monospace,monospace}.stat .k,#par,#nudgeHint{color:#acb998}.bet{border-radius:6px;border-color:#8d9666}.bet.on{background:linear-gradient(#f2d999,#cfb46b);box-shadow:0 3px 0 #7c6d3b}
+#tray{border-radius:4px;border-style:solid;background:linear-gradient(#07140f,#12251b);color:#a5af88}#paytable{font-family:ui-monospace,monospace;gap:5px 8px;letter-spacing:0;font-size:10px}.links{font-size:12px}
+
+/* Shared input and accessibility baseline; each object's styling stays local. */
+html{-webkit-text-size-adjust:100%}body{-webkit-font-smoothing:antialiased}*{touch-action:manipulation!important}
+input,textarea,select{font-size:16px!important}button,a,[role="button"],input{ -webkit-tap-highlight-color:transparent }
+button{font-family:inherit}a{text-underline-offset:4px}p{ text-wrap:pretty }h1,h2{ text-wrap:balance }
+:focus-visible{outline:2px solid currentColor;outline-offset:5px}button{transition:background-color .2s,box-shadow .2s,filter .2s,transform .22s cubic-bezier(.2,.9,.3,1.25)}button:active:not(:disabled){filter:brightness(.94)}
+@media(hover:hover){button:hover:not(:disabled){filter:brightness(1.06)}a:hover{text-decoration-thickness:2px}}
+@media(prefers-reduced-motion:no-preference){.wrap>header,.wrap>.kicker,.wrap>h1,.wrap>.sub{animation:arrival .65s ease both}#machine{animation:arrival .8s .12s ease backwards}@keyframes arrival{from{opacity:0}to{opacity:1}}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-delay:0ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;transition-delay:0ms!important;scroll-behavior:auto!important}}
+@media(max-width:420px){.links{overflow-wrap:anywhere;line-height:1.8}footer,.foot{line-height:1.7}}
+
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
     <h1>lucky luke</h1>
-    <p>Pull the lever. Three reels of him. Every combo pays out in personality.<br>
-    <span class="hint">Drag the brass knob down, or tap a reel to nudge it. Sound on for the clinks.</span></p>
+    <p>Three reels. One person. Questionable riches.<br>
+    <span class="hint">Pull the knob to spin. Tap a reel to nudge. Sound on for the clinks.</span></p>
   </header>
 
   <div id="machine">
@@ -136,7 +157,7 @@
     <div id="paytable">
       <span>SHIP <b>30</b></span><span>BUILD <b>24</b></span><span>NAP <b>21</b></span><span>EAT <b>18</b></span><span>WAIT <b>15</b></span><span>PLAY <b>11</b></span>
     </div>
-    <div id="par">par 96.8% &middot; every symbol equally likely &middot; pair gets your bet back</div>
+    <div id="par">96.8% paid back over time &middot; matching pairs return your bet</div>
 
     <div id="controls">
       <div id="stats">
@@ -163,6 +184,11 @@
   <footer><a href="../">all 40 ways to say hi</a></footer>
 </div>
 
+<script>
+// Respect changes to the motion preference without reloading the toy.
+window.toyMotion = matchMedia('(prefers-reduced-motion: reduce)');
+document.addEventListener('touchmove', function(e){if(e.target.closest('#leverZone') && e.cancelable) e.preventDefault();}, {passive:false});
+</script>
 <script>
 (function () {
   "use strict";
@@ -283,7 +309,7 @@
       var dist = 6 * N + ((finalIdx[r] - (Math.round(reel.pos) % N) + N) % N);
       var tick = 0;
       function frame2(now) {
-        var p = Math.min(1, (now - start) / stopTime);
+        var p = toyMotion.matches ? 1 : Math.min(1, (now - start) / stopTime);
         var eased = 1 - Math.pow(1 - p, 3);
         var cur = Math.floor(eased * dist);
         if (cur > tick) { tick = cur; if (p < 0.9) tickSnd(); }

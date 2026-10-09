@@ -330,7 +330,7 @@ function injectStyles(){
     ".syncpill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;background:#e2e8f0;color:#475569}" +
     ".syncpill.ok{background:#dcfce7;color:#166534}.syncpill.warn{background:#fef9c3;color:#854d0e}.syncpill.crit{background:#fee2e2;color:#991b1b}" +
     ".synckey{font-family:ui-monospace,monospace;font-size:11px;word-break:break-all;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px;margin:6px 0;max-height:60px;overflow:auto}" +
-    ".syncbtn{border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:10px 14px;font-size:14px;font-weight:600;touch-action:manipulation;cursor:pointer}" +
+    ".syncbtn{border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:10px 14px;min-height:44px;box-sizing:border-box;font-size:14px;font-weight:600;touch-action:manipulation;cursor:pointer}" +
     ".syncbtn.primary{background:#b45309;color:#fff;border-color:#b45309;margin-top:8px;width:100%}" +
     ".syncinput{width:100%;font-size:16px;padding:10px;border:1px solid #cbd5e1;border-radius:8px;margin-top:6px;box-sizing:border-box}" +
     ".syncnote{font-size:12px;color:#64748b;margin:8px 0 0;line-height:1.5}" +

@@ -1,4 +1,4 @@
-/* Buyback — lemon law case builder. All data stays in localStorage. */
+/* Buyback - lemon law case builder. All data stays in localStorage. */
 "use strict";
 
 /* ---- Real statute thresholds (researched 2026-10-07) ---- */
@@ -234,6 +234,8 @@ function normalizeDb() {
   db.celebrated = db.celebrated || {};
   db.moments = Array.isArray(db.moments) ? db.moments : [];
   db.checklist = (db.checklist && typeof db.checklist === "object") ? db.checklist : {};
+  db.estimate = (db.estimate && typeof db.estimate === "object") ? db.estimate : { price: "", miles: "", costs: "" };
+  db.recalls = (db.recalls && typeof db.recalls === "object") ? db.recalls : null;
 }
 normalizeDb();
 let uidc = Date.now();
@@ -551,7 +553,7 @@ const CHECKLIST_MANUAL = [
   { id: "defectmedia", label: "Photos or video of the defect itself", hint: "The noise, the leak, the warning light." }
 ];
 const STATE_NOTICE_DOC = {
-  FL: "Proof you sent the 15-day written notice to the manufacturer (certified or express mail receipt)",
+  FL: "Proof you sent the 15-day written notice to the manufacturer (certified or registered mail receipt)",
   NJ: "Proof you sent written notice to the manufacturer after 2 attempts or 20 days (certified mail receipt)",
   GA: "Proof you sent notice to the manufacturer by certified mail or overnight delivery (28-day final repair chance)",
   CO: "Proof you sent written notice by certified mail (the 10-business-day cure period)",
@@ -626,6 +628,88 @@ function renderDates(c) {
   body.innerHTML = `<div class="date-row"><span>Presumption window</span><strong>${fmtDate(c.windowStart)} to ${fmtDate(c.windowEnd)}</strong></div>` + count + extra + bizNote;
 }
 
+/* ---- claim value estimator (rough, consumer-education math) ---- */
+const num = s => { const v = parseFloat(String(s == null ? "" : s).replace(/[$,\s]/g, "")); return isFinite(v) ? v : 0; };
+const fmtUSD = v => "$" + Math.round(v).toLocaleString("en-US");
+function prefillEstimate() {
+  const e = db.estimate;
+  if ($("#ePrice")) $("#ePrice").value = e.price || "";
+  if ($("#eMiles")) $("#eMiles").value = e.miles || "";
+  if ($("#eCosts")) $("#eCosts").value = e.costs || "";
+}
+function renderEstimate() {
+  const out = $("#estimateOut");
+  if (!out) return;
+  const P = num($("#ePrice") && $("#ePrice").value), M = num($("#eMiles") && $("#eMiles").value), C = num($("#eCosts") && $("#eCosts").value);
+  const hasPrice = $("#ePrice") && String($("#ePrice").value).trim() !== "";
+  const hasMiles = $("#eMiles") && String($("#eMiles").value).trim() !== "";
+  if (!hasPrice || !hasMiles || !(P > 0)) {
+    out.innerHTML = `<p class="micro">Enter the purchase price and the mileage when the problem first appeared to see a rough figure.</p>`;
+    return;
+  }
+  const offset = P * Math.min(Math.max(M, 0), 120000) / 120000;
+  const est = Math.max(0, P - offset) + C;
+  out.innerHTML = `
+    <div class="est-num">${fmtUSD(est)} <span>rough estimate</span></div>
+    <div class="est-rows">
+      <div class="est-row"><span>Purchase price</span><strong>${fmtUSD(P)}</strong></div>
+      <div class="est-row"><span>Minus mileage offset (${Math.round(Math.max(M, 0)).toLocaleString("en-US")} mi)</span><strong>&minus;${fmtUSD(offset)}</strong></div>
+      <div class="est-row"><span>Plus out-of-pocket costs</span><strong>+${fmtUSD(C)}</strong></div>
+    </div>`;
+}
+function wireEstimate() {
+  ["ePrice", "eMiles", "eCosts"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && !el.dataset.wired) {
+      el.dataset.wired = "1";
+      el.addEventListener("input", () => {
+        db.estimate = { price: $("#ePrice").value, miles: $("#eMiles").value, costs: $("#eCosts").value };
+        save(); renderEstimate();
+      });
+    }
+  });
+}
+
+/* ---- NHTSA recall checker (live federal data, nothing stored server-side) ---- */
+function renderRecalls() {
+  const out = $("#recallOut");
+  if (!out) return;
+  const r = db.recalls;
+  if (!r || !Array.isArray(r.items)) { out.innerHTML = `<p class="micro">Tap "Check recalls" to look up your car.</p>`; return; }
+  const when = r.checkedAt ? new Date(r.checkedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+  let html = `<p class="micro">Checked ${esc(when)} for ${esc(r.year)} ${esc(r.make)} ${esc(r.model)}.</p>`;
+  if (!r.items.length) {
+    html += `<p><strong>No open recalls found</strong> in NHTSA's records for that exact year, make, and model. If that looks wrong, check the spelling against your registration.</p>`;
+  } else {
+    html += `<p><strong>${r.items.length} open recall${r.items.length === 1 ? "" : "s"} found.</strong></p>` +
+      r.items.slice(0, 25).map(it => `<div class="recall-item"><strong>${esc(it.num)}</strong> <span class="micro">${esc(it.component)}</span><p>${esc(it.summary)}</p></div>`).join("");
+    if (r.items.length > 25) html += `<p class="micro">Showing 25 of ${r.items.length}.</p>`;
+  }
+  out.innerHTML = html;
+}
+async function checkRecalls() {
+  const out = $("#recallOut");
+  const car = db.car || {};
+  const year = String(car.year || "").trim(), make = String(car.make || "").trim(), model = String(car.model || "").trim();
+  if (!year || !make || !model) { out.innerHTML = `<p class="form-err">Add your car's year, make, and model first, then check again.</p>`; return; }
+  out.innerHTML = `<p class="micro">Checking NHTSA...</p>`;
+  try {
+    const url = "https://api.nhtsa.gov/recalls/recallsByVehicle?make=" + encodeURIComponent(make) + "&model=" + encodeURIComponent(model) + "&modelYear=" + encodeURIComponent(year);
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error("http " + resp.status);
+    const data = await resp.json();
+    const items = (data.results || []).map(x => ({ num: x.NHTSACampaignNumber || "", component: x.Component || "", summary: x.Summary || "" }));
+    db.recalls = { checkedAt: new Date().toISOString(), year, make, model, items };
+    save(); renderRecalls();
+  } catch (e) {
+    out.innerHTML = `<p class="form-err">Could not reach NHTSA. Check your connection and try again.</p>`;
+  }
+}
+function wireRecallBtn() {
+  const el = document.getElementById("recallCheckBtn");
+  if (el && !el.dataset.wired) { el.dataset.wired = "1"; el.addEventListener("click", checkRecalls); }
+}
+
 /* ---- case rendering ---- */
 function renderCase() {
   const c = computeCase();
@@ -681,6 +765,8 @@ function renderCase() {
   // dates to know + case file checklist
   renderDates(c);
   renderChecklist();
+  wireEstimate(); wireRecallBtn();
+  prefillEstimate(); renderEstimate(); renderRecalls();
 
   // repair list
   $("#repairCount").textContent = db.repairs.length;
@@ -694,7 +780,8 @@ function renderCase() {
     openHtml = `<div class="inshop"><h4><svg class="ic"><use href="#i-wrench"/></svg> In the shop now</h4>` +
       open.map(r => {
         const n = daysOut(r, c.biz, c.windowStart, c.windowEnd);
-        return `<div class="inshop-row"><span><strong>${esc(r.problem)}</strong>${r.dealer ? " at " + esc(r.dealer) : ""} <span class="micro">since ${fmtDate(r.dateIn)}</span></span><span class="inshop-days">In the shop, ${n} ${(c.biz ? "business " : "")}day${n === 1 ? "" : "s"} and counting</span></div>`;
+        const stale = n >= 10 ? `<div class="stale-nudge"><svg class="ic"><use href="#i-alert"/></svg><span>Still at the dealer after ${n} days? Call for an update and log what they tell you in the visit's description.</span></div>` : "";
+        return `<div class="inshop-row"><span><strong>${esc(r.problem)}</strong>${r.dealer ? " at " + esc(r.dealer) : ""} <span class="micro">since ${fmtDate(r.dateIn)}</span></span><span class="inshop-days">In the shop, ${n} ${(c.biz ? "business " : "")}day${n === 1 ? "" : "s"} and counting</span>${stale}</div>`;
       }).join("") + `</div>`;
   }
   if (!db.repairs.length) {
@@ -1054,7 +1141,7 @@ $("#printLetterBtn").addEventListener("click", () => doPrint(`<div style="white-
 
 /* ---- JSON export / import: real data portability ---- */
 $("#exportJsonBtn").addEventListener("click", () => {
-  const payload = { format: "buyback.case/v1", exportedAt: new Date().toISOString(), state: db.state, car: db.car, repairs: db.repairs, intake: db.intake, celebrated: db.celebrated, moments: db.moments, checklist: db.checklist };
+  const payload = { format: "buyback.case/v1", exportedAt: new Date().toISOString(), state: db.state, car: db.car, repairs: db.repairs, intake: db.intake, celebrated: db.celebrated, moments: db.moments, checklist: db.checklist, estimate: db.estimate, recalls: db.recalls };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -1084,6 +1171,8 @@ $("#importJsonFile").addEventListener("change", e => {
       if (data.celebrated && typeof data.celebrated === "object") db.celebrated = data.celebrated;
       if (Array.isArray(data.moments)) db.moments = data.moments;
       if (data.checklist && typeof data.checklist === "object") db.checklist = data.checklist;
+      if (data.estimate && typeof data.estimate === "object") db.estimate = data.estimate;
+      if (data.recalls && typeof data.recalls === "object") db.recalls = data.recalls;
       save();
       window.__buyback.refresh();
       err.textContent = "";

@@ -61,6 +61,12 @@
   function saveJSON(key, val) {
     try { localStorage.setItem(key, JSON.stringify(val)); return true; } catch (e) { return false; }
   }
+  /* Raw (non-JSON) localStorage access, all guarded: localStorage can be
+     disabled or full, and every one of these paths must degrade silently
+     (PRD section 10 edge table), never throw. */
+  function lsGet(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+  function lsSet(key, val) { try { localStorage.setItem(key, val); return true; } catch (e) { return false; } }
+  function lsRemove(key) { try { localStorage.removeItem(key); } catch (e) {} }
 
   /* ---------- analytics events (PRD 12): local-only, no beacons ---------- */
   function trackEvent(name, props) {
@@ -345,8 +351,8 @@
       btn.setAttribute("role", "checkbox");
       btn.setAttribute("aria-checked", checked ? "true" : "false");
       btn.setAttribute("aria-label", "Mark step done: " + s.title);
-      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">' +
-        '<path d="M2.5 7.5l3.2 3.2L11.5 4" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg>';
+      btn.innerHTML = '<span class="box"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">' +
+        '<path d="M2.5 7.5l3.2 3.2L11.5 4" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg></span>';
       btn.addEventListener("click", function () {
         var d = loadJSON(key, {});
         d[s.id] = !d[s.id];
@@ -390,6 +396,10 @@
 
     var pct = total ? Math.round((doneCount / total) * 100) : 0;
     document.getElementById("checkProgress").style.width = pct + "%";
+    var countEl = document.getElementById("checkCount");
+    if (countEl) {
+      countEl.textContent = doneCount + " of " + total + (total === 1 ? " step" : " steps") + " done.";
+    }
   }
 
   function renderChanges(city) {
@@ -451,6 +461,7 @@
     if (!r || !r.date) return null;
     var days = daysUntil(r.date);
     if (days === null) return null;
+    if (days > 30) return null; // PRD R-10: the countdown banner appears only within 30 days
     var div = document.createElement("div");
     div.className = "remind-banner" + (days <= 7 ? " overdue" : "");
     div.textContent = (r.label || (permitName ? permitName + " renewal" : "Renewal")) + ": " + reminderText(days);
@@ -477,7 +488,7 @@
   var nightStoreKey = null, nightCap = null;
   function nightStored() {
     if (!nightStoreKey) return 0;
-    return Math.max(0, parseInt(localStorage.getItem(nightStoreKey) || "0", 10) || 0);
+    return Math.max(0, parseInt(lsGet(nightStoreKey) || "0", 10) || 0);
   }
   function updateNightUI() {
     if (!nightCap) return;
@@ -489,7 +500,7 @@
   }
   function bumpNight(d) {
     if (!nightStoreKey || !nightCap) return;
-    localStorage.setItem(nightStoreKey, String(Math.max(0, nightStored() + d)));
+    lsSet(nightStoreKey, String(Math.max(0, nightStored() + d)));
     if (d > 0) trackEvent("night_count", { city_id: nightStoreKey.split(".")[1], used: nightStored() });
     updateNightUI();
   }
@@ -1417,7 +1428,7 @@
   document.getElementById("nightPlus").addEventListener("click", function () { bumpNight(1); });
   document.getElementById("nightMinus").addEventListener("click", function () { bumpNight(-1); });
   document.getElementById("nightReset").addEventListener("click", function () {
-    if (nightStoreKey) { localStorage.removeItem(nightStoreKey); updateNightUI(); }
+    if (nightStoreKey) { lsRemove(nightStoreKey); updateNightUI(); }
   });
   document.getElementById("savedEmptyBtn").addEventListener("click", function () {
     window.scrollTo({ top: 0, behavior: "smooth" });

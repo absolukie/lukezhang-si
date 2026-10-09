@@ -80,9 +80,10 @@ var ICONS = {
 };
 
 var CSS = [
-".bill-banner{position:fixed;top:0;left:0;right:0;z-index:9000;display:flex;align-items:center;gap:10px;",
+".bill-banner{position:fixed;top:0;left:0;right:0;z-index:9000;display:flex;align-items:center;gap:10px;flex-wrap:wrap;",
 " padding:10px 14px;font-size:14px;line-height:1.35;background:var(--bill-accent,#B73220);color:#fff;",
 " box-shadow:0 2px 10px rgba(0,0,0,.18);}",
+".bill-banner .bill-berr{flex:1 1 100%;font-size:13px;font-weight:600;}",
 ".bill-banner.warn{background:#8a5a00;}",
 ".bill-banner .bill-bmsg{flex:1;min-width:0;}",
 ".bill-banner button{flex:none;border:none;border-radius:999px;padding:8px 16px;font-size:14px;font-weight:700;",
@@ -339,7 +340,29 @@ BillingClient.prototype.renderBanner = function(){
   bar.innerHTML = html;
   var btn = document.createElement("button");
   btn.textContent = st === "past_due" ? "Update card" : "Add card";
-  btn.onclick = function(){ self.setupCard(); };
+  // A dead backend must show a friendly line in the banner, never an
+  // unhandled rejection. Fail open: the app keeps working either way.
+  function bannerFriendlyErr(e){
+    var name = (e && e.name) || "";
+    if (/abort|timeout/i.test(name)) return "Something went wrong. Please try again.";
+    var m = (e && e.message) || "";
+    if (/billing_|whsec|rk_test|rk_live|SECRETS\.md|Worker|failed to fetch|networkerror|load failed|ERR_|http \d{3}/i.test(m)) return "Something went wrong. Please try again.";
+    return m || "Something went wrong. Please try again.";
+  }
+  btn.onclick = function(){
+    if (btn.disabled) return;
+    btn.disabled = true;
+    self.setupCard().then(function(){ btn.disabled = false; }, function(e){
+      btn.disabled = false;
+      if (!bar.querySelector(".bill-berr")) {
+        var em = document.createElement("span");
+        em.className = "bill-berr";
+        em.setAttribute("role", "alert");
+        em.textContent = bannerFriendlyErr(e);
+        bar.appendChild(em);
+      }
+    });
+  };
   bar.appendChild(btn);
   document.body.appendChild(bar);
   this._banner = bar;
@@ -395,7 +418,9 @@ BillingClient.prototype.buildOverlay = function(){
     var name = (e && e.name) || "";
     if (/abort|timeout/i.test(name)) return "Something went wrong. Please try again.";
     var m = (e && e.message) || "";
-    if (/billing_|whsec|rk_test|rk_live|SECRETS\.md|Worker/i.test(m)) return "Something went wrong. Please try again.";
+    // Fetch-level failures (dead backend, proxy hangs) read as TypeErrors
+    // like "Failed to fetch": mask those too, never show raw text to users.
+    if (/billing_|whsec|rk_test|rk_live|SECRETS\.md|Worker|failed to fetch|networkerror|load failed|ERR_/i.test(m)) return "Something went wrong. Please try again.";
     return m || "Something went wrong. Please try again.";
   }
   ov.querySelectorAll(".bill-plan").forEach(function(b){
@@ -480,9 +505,17 @@ BillingClient.prototype.bindSettings = function(root){
   root.querySelectorAll("[data-act]").forEach(function(b){
     b.addEventListener("click", function(){
       var act = b.getAttribute("data-act");
-      if (act === "portal") self.portal();
-      else if (act === "card") self.setupCard();
-      else if (act === "trial") { self.ensurePaywall(); }
+      var pr = null;
+      if (act === "portal") pr = self.portal();
+      else if (act === "card") pr = self.setupCard();
+      else if (act === "trial") { self.ensurePaywall(); return; }
+      // A dead backend must not surface as an unhandled rejection: show a
+      // brief honest line on the button itself, then restore it.
+      if (pr && pr.catch) pr.catch(function(){
+        var old = b.innerHTML;
+        b.textContent = "Could not reach billing";
+        setTimeout(function(){ try { b.innerHTML = old; } catch(e){} }, 4000);
+      });
     });
   });
 };

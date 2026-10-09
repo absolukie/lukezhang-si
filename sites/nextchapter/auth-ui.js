@@ -163,16 +163,21 @@ function ensureCard(){
 }
 
 function btnStyle(){
+  // Solid colors: the old translucent gray computed to ~3:1 against the card.
+  // #3b372d on #fffdf8 is ~11.9:1, well past the 4.5 bar.
   return "display:block;width:100%;box-sizing:border-box;min-height:44px;margin:8px 0 0;" +
     "padding:10px 14px;font-size:16px;border-radius:10px;" +
-    "border:1px solid rgba(128,128,128,.45);background:rgba(128,128,128,.14);" +
-    "color:inherit;touch-action:manipulation;cursor:pointer;";
+    "border:1.5px solid #d5ddcb;background:#fffdf8;" +
+    "color:#3b372d;touch-action:manipulation;cursor:pointer;";
 }
 function ghostStyle(){
   return "display:block;width:100%;box-sizing:border-box;min-height:44px;margin:8px 0 0;" +
     "padding:10px 14px;font-size:16px;border-radius:10px;" +
     "border:1px solid transparent;background:transparent;" +
-    "color:inherit;touch-action:manipulation;cursor:pointer;opacity:.8;";
+    "color:#3b372d;touch-action:manipulation;cursor:pointer;";
+}
+function labelStyle(){
+  return "display:block;font-size:14px;font-weight:600;margin:10px 0 0;color:#3b372d;";
 }
 function inputStyle(){
   return "display:block;width:100%;box-sizing:border-box;min-height:44px;margin:8px 0 0;" +
@@ -201,25 +206,28 @@ function paintCard(){
         (phoneState.sent
           ? '<p style="' + mutedStyle() + '">Enter the 6-digit code sent to ' +
             esc(phoneState.phone) + '</p>' +
+            '<label for="authCode" style="' + labelStyle() + '">Code</label>' +
             '<input id="authCode" inputmode="numeric" pattern="[0-9]*" maxlength="6" ' +
-            'placeholder="123456" autocomplete="one-time-code" style="' + inputStyle() + '">' +
+            'placeholder="123456" autocomplete="one-time-code" aria-label="Verification code" style="' + inputStyle() + '">' +
             '<button id="authVerifyCode" style="' + btnStyle() + '">Verify code</button>' +
             '<p style="' + mutedStyle() + '">Demo mode: no text is sent yet. ' +
             'Phone verification goes live with Twilio.</p>'
           : '<p style="' + mutedStyle() + '">Enter your phone number</p>' +
+            '<label for="authPhone" style="' + labelStyle() + '">Phone number</label>' +
             '<input id="authPhone" type="tel" inputmode="tel" placeholder="+1 555 010 2030" ' +
-            'autocomplete="tel" style="' + inputStyle() + '">' +
+            'autocomplete="tel" aria-label="Phone number" style="' + inputStyle() + '">' +
             '<button id="authSendCode" style="' + btnStyle() + '">Text me a code</button>') +
         '<p style="' + mutedStyle() + '" id="authMsg">' + esc(cardMsg) + '</p>' +
         '<button id="authPhoneBack" style="' + ghostStyle() + '">Back</button>' +
         '</div>';
     } else {
       h += '<div id="authMain">' +
+        '<label for="authEmail" style="' + labelStyle() + '">Email address</label>' +
         '<input id="authEmail" type="email" inputmode="email" placeholder="you@example.com" ' +
-        'autocomplete="email" style="' + inputStyle() + '">' +
+        'autocomplete="email" aria-label="Email address" style="' + inputStyle() + '">' +
         '<button id="authEmailGo" style="' + btnStyle() + '">Email me a sign-in link</button>' +
         '<p style="' + mutedStyle() + '" id="authMsg">' + esc(cardMsg) + '</p>' +
-        '<div style="text-align:center;font-size:12px;opacity:.55;margin:10px 0 2px;">' +
+        '<div style="text-align:center;font-size:13px;opacity:.8;margin:10px 0 2px;">' +
         'or continue with</div>' +
         '<button id="authApple" style="' + btnStyle() + '">Continue with Apple</button>' +
         '<button id="authGoogle" style="' + btnStyle() + '">Continue with Google</button>' +

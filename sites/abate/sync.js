@@ -234,16 +234,33 @@ function updatePill(){
   try { big = Object.keys(oversized).length; } catch(e){ big = 0; }
   if (inflight > 0){ s = "syncing"; label = "Syncing..."; cls = "warn"; }
   else if (typeof navigator !== "undefined" && navigator.onLine === false){ s = "offline"; label = "Offline"; cls = ""; }
-  else if (n > 0){ s = "pending"; label = "Not synced: " + n + " change" + (n === 1 ? "" : "s") + " pending"; cls = "crit"; }
+  else if (n > 0){
+    s = "pending";
+    if (lastSync > 0){ label = "Not synced: " + n + " change" + (n === 1 ? "" : "s") + " pending"; cls = "crit"; }
+    /* Never successfully synced (the default field posture): neutral wording
+     * and styling. A permanent red warning trains the crew to ignore the
+     * pill, dulling it for real sync failures. */
+    else { label = "Local only: " + n + " record" + (n === 1 ? "" : "s") + " on this device"; cls = ""; }
+  }
   else if (big > 0){ s = "limited"; label = "Sync limited: " + big + " too large"; cls = "warn"; }
   else { s = "synced"; label = "Synced"; cls = "ok"; }
   status = s;
   /* Every .sync-pill on the page stays honest: the dashboard card and the
-   * sticky project header both carry one. */
+   * sticky project header both carry one. Tapping a pill opens the itemized
+   * queue (the app provides window.__abateSyncQueueSheet). */
   var els = document.querySelectorAll(".sync-pill");
   for (var i = 0; i < els.length; i++){
     els[i].textContent = label;
     els[i].className = "sync-pill" + (cls ? " " + cls : "");
+    if (!els[i].dataset.queueBound){
+      els[i].dataset.queueBound = "1";
+      els[i].style.cursor = "pointer";
+      els[i].style.touchAction = "manipulation";
+      els[i].title = "Tap to see the sync queue";
+      els[i].addEventListener("click", function(){
+        if (window.__abateSyncQueueSheet){ try { window.__abateSyncQueueSheet(); } catch(e){} }
+      });
+    }
   }
 }
 
@@ -480,6 +497,18 @@ async function boot(){
 /* hooks consumed by app.html */
 window.__abateSync = { onSave: onSave };
 window.__abateSyncPill = updatePill;   // lets the app refresh header pills on render
+/* Itemized pending queue for the tap-the-pill sheet (P2-10). */
+window.__abateSyncQueue = function(){
+  var items = [];
+  try {
+    items = diffOut().map(function(r){
+      var mk = r.collection + ":" + r.key;
+      return { collection: r.collection, key: r.key, deleted: !!r.deleted,
+        oversized: !!(typeof oversized !== "undefined" && oversized[mk]) };
+    });
+  } catch(e){}
+  return items;
+};
 window.__abateSyncUI = renderSettingsUI;
 window.__abateSyncPull = pull;   // exposed for testing
 window.__abateSyncPush = pushDirty;

@@ -36,6 +36,32 @@ var DEFAULT_BACKEND = "https://sync-proto.lukezhang.si";
 var PENDING_PLAN_KEY = ".billing.pending_plan.v1";
 
 function lsGet(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+/* Fetch with a hard timeout. Without this, a stalled network (e.g. a proxy
+ * hanging the POST) leaves the trial CTA disabled forever with no feedback.
+ * 30s is generous for the billing backend; aborts surface as normal errors
+ * through the existing catch paths (fail open / friendly message). */
+function fetchWithTimeout(url, opts, ms) {
+  ms = ms || 30000;
+  try {
+    if (typeof AbortSignal !== "undefined" && AbortSignal.timeout) {
+      var o2 = {};
+      for (var k in opts) o2[k] = opts[k];
+      o2.signal = AbortSignal.timeout(ms);
+      return fetch(url, o2);
+    }
+    if (typeof AbortController !== "undefined") {
+      var ctrl = new AbortController();
+      var timer = setTimeout(function(){ try { ctrl.abort(); } catch(e){} }, ms);
+      var o3 = {};
+      for (var k2 in opts) o3[k2] = opts[k2];
+      o3.signal = ctrl.signal;
+      var pr = fetch(url, o3);
+      if (pr && pr.then) pr.then(function(){ clearTimeout(timer); }, function(){ clearTimeout(timer); });
+      return pr;
+    }
+  } catch(e){}
+  return fetch(url, opts);
+}
 function lsSet(k, v){ try { localStorage.setItem(k, v); } catch(e){} }
 function lsDel(k){ try { localStorage.removeItem(k); } catch(e){} }
 
@@ -134,7 +160,7 @@ BillingClient.prototype.api = async function(path, opts){
     headers["content-type"] = "application/json";
     body = JSON.stringify(opts.body);
   }
-  var res = await fetch(this.backend + path, {
+  var res = await fetchWithTimeout(this.backend + path, {
     method: opts.method || "GET", headers: headers, body: body
   });
   var data = null;
@@ -155,7 +181,7 @@ BillingClient.prototype.ensureIdentity = async function(){
   if (sess) { this.auth = "Bearer " + sess; return; }
   var dk = lsGet(this.appSlug + ".device_key");
   if (!dk) {
-    var res = await fetch(this.backend + "/v1/devices", {
+    var res = await fetchWithTimeout(this.backend + "/v1/devices", {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ app_slug: this.appSlug })
     });
@@ -364,6 +390,10 @@ BillingClient.prototype.buildOverlay = function(){
   function friendlyErr(e){
     var code = e && e.code;
     if (code === "BILLING_NOT_CONFIGURED") return "Payments are not switched on yet. Please check back soon.";
+    // Network stalls (e.g. a hung POST surfacing via our 30s fetch timeout)
+    // read as aborts/timeouts: never show raw DOMException text to users.
+    var name = (e && e.name) || "";
+    if (/abort|timeout/i.test(name)) return "Something went wrong. Please try again.";
     var m = (e && e.message) || "";
     if (/billing_|whsec|rk_test|rk_live|SECRETS\.md|Worker/i.test(m)) return "Something went wrong. Please try again.";
     return m || "Something went wrong. Please try again.";

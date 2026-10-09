@@ -50,6 +50,28 @@ function stampPhotoSha(p){
   });
 }
 
+/* GPS capture metadata (parity with Encircle / CompanyCam).
+ * Best-effort device location at photo import: attached to each photo so the
+ * manifest and dossier can show where evidence was captured. Never required:
+ * denial or failure yields null, and the app never asks twice for a batch. */
+function gpsOnce(cb){
+  var done = false;
+  function fin(g){ if(!done){ done = true; cb(g); } }
+  try{
+    if(!navigator.geolocation) return fin(null);
+    navigator.geolocation.getCurrentPosition(
+      function(pos){ var c = pos.coords;
+        fin({lat: Math.round(c.latitude*1e6)/1e6, lon: Math.round(c.longitude*1e6)/1e6, acc: Math.round(c.accuracy||0)});
+      },
+      function(){ fin(null); },
+      {timeout:6000, maximumAge:120000, enableHighAccuracy:false});
+  }catch(e){ fin(null); }
+}
+function fmtGps(g){
+  if(!g || typeof g.lat !== "number" || typeof g.lon !== "number") return "";
+  return g.lat.toFixed(4)+", "+g.lon.toFixed(4)+(g.acc ? " (±"+g.acc+"m)" : "");
+}
+
 /* ---------- state ---------- */
 var state = { jobs:[], photos:[], checklist:[], lineItems:[], events:[] };
 var currentJobId = null;
@@ -214,6 +236,14 @@ function renderJobs(){
     '<button type="button" class="linklike" id="btn-storage">Storage '+mb.toFixed(1)+'/5 MB'+(mb>4?" (almost full)":"")+'</button>';
   var bstor = $("btn-storage");
   if(bstor) bstor.addEventListener("click", openStorageModal);
+  /* next-job-first: the job they were last working on sits on top. */
+  var lastId = null; try{ lastId = localStorage.getItem("aftermath.lastJob"); }catch(e){}
+  var lastJ = lastId ? getJob(lastId) : null;
+  var resumeHTML = (lastJ && lastJ.status!=="closed" && state.jobs.length>1)
+    ? '<button type="button" class="resume-card" id="btn-resume"><span class="resume-kicker">Continue where you left off</span>' +
+      '<span class="resume-name">'+esc(lastJ.name)+'</span>' +
+      (lastJ.client?'<span class="resume-sub">'+esc(lastJ.client)+'</span>':'') + '</button>'
+    : "";
   if(!state.jobs.length){
     var welcomed = false;
     try{ welcomed = !!localStorage.getItem("aftermath.welcomed"); }catch(e){}
@@ -270,7 +300,7 @@ function renderJobs(){
     });
     return;
   }
-  list.innerHTML = shown.map(function(j){
+  list.innerHTML = resumeHTML + shown.map(function(j){
     var pc = jobPhotos(j.id).length;
     return '<div class="job-card" data-id="'+esc(j.id)+'">' +
       '<div class="job-card-top"><div class="job-card-name">'+esc(j.name)+'</div>' +
@@ -286,6 +316,8 @@ function renderJobs(){
   list.querySelectorAll(".job-card").forEach(function(c){
     c.addEventListener("click", function(){ openJob(c.getAttribute("data-id")); });
   });
+  var br = $("btn-resume");
+  if(br) br.addEventListener("click", function(){ openJob(lastId); });
 }
 
 /* ---------- storage honesty ---------- */
@@ -310,6 +342,7 @@ function openStorageModal(){
 
 function openJob(id){
   currentJobId = id;
+  try{ localStorage.setItem("aftermath.lastJob", id); }catch(e){}
   ensureChecklist(id);
   renderJobHeader();
   renderPhotos(); renderChecklist(); renderWorklog(); renderDossierTab();
@@ -397,6 +430,9 @@ function renderRapidBanner(){
 }
 
 function handlePhotoFiles(files){
+  gpsOnce(function(gps){ handlePhotoFilesWithGps(files, gps); });
+}
+function handlePhotoFilesWithGps(files, gps){
   var jobId = currentJobId; // capture now: async callbacks must not use the live currentJobId
   var rapid = rapidDefaults; // capture now: banner may change mid-batch
   var arr = Array.prototype.slice.call(files);
@@ -411,7 +447,8 @@ function handlePhotoFiles(files){
           id:uid(), jobId:jobId, dataUrl:dataUrl, thumb:thumb,
           takenAt: f.lastModified || Date.now(),
           room: rapid ? rapid.room : "", damageType:"", severity:"", notes:"", pins:[],
-          phase: rapid ? rapid.phase : "", sample:false
+          phase: rapid ? rapid.phase : "", sample:false,
+          gps: gps || null
         };
         state.photos.push(ph);
         stampPhotoSha(ph); // async integrity checksum; save() runs when it lands
@@ -759,6 +796,7 @@ function renderDossierTab(){
   renderCoverage();
   renderIntegrity();
   renderSendLog();
+  renderSignatures();
 }
 
 /* ---------- evidence coverage: line item <-> photo linking ----------
@@ -908,6 +946,75 @@ function renderSendLog(){
     }).join("");
 }
 
+/* ---------- signatures: technician + client sign-off ----------
+ * Two signature slots per job, captured on a drawing canvas. Stored as
+ * PNG data URLs on the job, printed on the dossier, logged to custody.
+ * This is a wet-ink equivalent for the field, not a PKI signature. */
+var signSlot = null;
+function renderSignatures(){
+  var el = $("sign-body");
+  if(!el) return;
+  var j = getJob(currentJobId);
+  if(!j){ el.innerHTML = ""; return; }
+  function slot(key, label){
+    var s = j[key];
+    var inner = s && s.dataUrl
+      ? '<img src="'+esc(s.dataUrl)+'" alt="Signature" style="max-height:56px;background:#fff;border-radius:6px;padding:2px 6px;">' +
+        '<div class="muted" style="font-size:12px;margin:4px 0 6px;">'+esc(s.name||"")+(s.signedAt?" · "+esc(fmtTime(s.signedAt)):"")+'</div>' +
+        '<div style="display:flex;gap:8px;"><button type="button" class="btn btn-secondary btn-small" data-sign="'+key+'">Re-sign</button>' +
+        '<button type="button" class="btn btn-ghost btn-small" data-sign-clear="'+key+'">Clear</button></div>'
+      : '<div class="muted" style="margin-bottom:6px;">Not signed yet</div>' +
+        '<button type="button" class="btn btn-secondary btn-small" data-sign="'+key+'">Sign</button>';
+    return '<div style="flex:1;min-width:0;"><div class="form-title" style="font-size:14px;margin-bottom:6px;">'+esc(label)+'</div>'+inner+'</div>';
+  }
+  el.innerHTML = '<div style="display:flex;gap:12px;">'+slot("sigTech","Technician")+slot("sigClient","Client / adjuster")+'</div>';
+  el.querySelectorAll("[data-sign]").forEach(function(b){
+    b.addEventListener("click", function(){ openSignModal(b.getAttribute("data-sign")); });
+  });
+  el.querySelectorAll("[data-sign-clear]").forEach(function(b){
+    b.addEventListener("click", function(){
+      var k = b.getAttribute("data-sign-clear"), jj = getJob(currentJobId);
+      if(!jj) return;
+      jj[k] = null; save();
+      logEvent(jj.id, "Signature cleared ("+(k==="sigTech"?"technician":"client")+").");
+      renderSignatures();
+    });
+  });
+}
+function openSignModal(key){
+  signSlot = key;
+  $("sign-title").textContent = key==="sigTech" ? "Technician signature" : "Client / adjuster signature";
+  $("sign-name").value = "";
+  var c = $("sign-canvas"), ctx = c.getContext("2d");
+  ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,c.width,c.height);
+  ctx.strokeStyle = "#14181f"; ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.lineJoin = "round";
+  var drawing = false, lx = 0, ly = 0;
+  function pos(e){ var r = c.getBoundingClientRect(); return [(e.clientX-r.left)*c.width/r.width, (e.clientY-r.top)*c.height/r.height]; }
+  c.onpointerdown = function(e){ drawing = true; var p = pos(e); lx = p[0]; ly = p[1]; try{ c.setPointerCapture(e.pointerId); }catch(_){} e.preventDefault(); };
+  c.onpointermove = function(e){ if(!drawing) return; var p = pos(e); ctx.beginPath(); ctx.moveTo(lx,ly); ctx.lineTo(p[0],p[1]); ctx.stroke(); lx = p[0]; ly = p[1]; e.preventDefault(); };
+  c.onpointerup = function(){ drawing = false; };
+  c.onpointercancel = function(){ drawing = false; };
+  $("btn-sign-clear").onclick = function(){ ctx.clearRect(0,0,c.width,c.height); };
+  $("btn-sign-save").onclick = saveSig;
+  openModal("modal-sign");
+}
+function isCanvasBlank(c){
+  var d = c.getContext("2d").getImageData(0,0,c.width,c.height).data;
+  for(var i=3;i<d.length;i+=32){ if(d[i]!==0) return false; }
+  return true;
+}
+function saveSig(){
+  var j = getJob(currentJobId);
+  if(!j || !signSlot) return;
+  var c = $("sign-canvas");
+  if(isCanvasBlank(c)){ toast("Draw a signature first"); return; }
+  var name = $("sign-name").value.trim();
+  j[signSlot] = { dataUrl: c.toDataURL("image/png"), name: name, signedAt: Date.now() };
+  save();
+  logEvent(j.id, "Signed by "+(name||"unnamed")+" ("+(signSlot==="sigTech"?"technician":"client")+").");
+  closeModals(); renderSignatures(); toast("Signature saved");
+}
+
 function buildDossierHTML(){
   var j = getJob(currentJobId);
   var photos = jobPhotos(currentJobId);
@@ -928,6 +1035,7 @@ function buildDossierHTML(){
       (p.damageType?'<span class="cap-tag">'+esc(p.damageType)+'</span>':'') +
       (p.severity?'<span class="cap-tag">'+esc(p.severity)+'</span>':'') + pins +
       '</div>' +
+      (p.gps?'<div class="muted" style="font-size:12px;margin-top:4px;">GPS: '+esc(fmtGps(p.gps))+' (device location at capture, approximate)</div>':'') +
       (p.notes?'<div style="margin-top:6px;">'+esc(p.notes)+'</div>':'') +
       '</div></div>';
   }
@@ -1004,9 +1112,16 @@ function buildDossierHTML(){
     '<h2 class="dz-h2 dz-h2-break">2 · Decontamination checklist</h2>' + checkHTML +
     '<h2 class="dz-h2 dz-h2-break">3 · Line-item work record</h2>' + liHTML +
     '<h2 class="dz-h2 dz-h2-break">4 · Chain of custody</h2>' + custHTML +
-    '<div class="dz-sign-wrap"><div class="dz-sign"><div><div class="sig-line">Technician signature / date</div></div>' +
-    '<div><div class="sig-line">Client / adjuster signature / date</div></div></div>' +
-    '<div class="dz-footer">This dossier documents conditions observed and work performed. Timestamps are captured at the time of photo capture and checklist completion. Retain with claim file.</div></div>';
+    '<div class="dz-sign-wrap"><div class="dz-sign">' + signBlock(j.sigTech,"Technician signature") + signBlock(j.sigClient,"Client / adjuster signature") + '</div>' +
+    '<div class="dz-footer">This dossier documents conditions observed and work performed. Timestamps are captured at the time of photo capture and checklist completion. GPS coordinates, when shown, are the device\'s best-effort location at photo capture and are approximate. Retain with claim file.</div></div>';
+}
+
+function signBlock(sig, label){
+  if(sig && sig.dataUrl){
+    return '<div><img src="'+esc(sig.dataUrl)+'" alt="'+esc(label)+'" style="max-width:100%;max-height:64px;background:#fff;border:1px solid #ccc;border-radius:4px;padding:2px 6px;">' +
+      '<div class="sig-line">'+esc(label)+': '+esc(sig.name||"unnamed")+(sig.signedAt ? ", signed "+esc(fmtTime(sig.signedAt)) : "")+'</div></div>';
+  }
+  return '<div><div class="sig-line">'+esc(label)+'</div></div>';
 }
 
 /* ---------- demo seed ---------- */
@@ -1207,10 +1322,10 @@ document.addEventListener("DOMContentLoaded", function(){
   $("btn-manifest").addEventListener("click", function(){
     var photos = jobPhotos(currentJobId);
     if(!photos.length){ toast("No photos to export yet"); return; }
-    var rows = [["Photo #","Timestamp","Phase","Room","Damage type","Severity","Notes","Markers","Sample","Size KB","SHA-256"]];
+    var rows = [["Photo #","Timestamp","GPS","Phase","Room","Damage type","Severity","Notes","Markers","Sample","Size KB","SHA-256"]];
     photos.forEach(function(p, idx){
       var markers = (p.pins||[]).map(function(pin,i){ return (i+1)+": "+(pin.label||""); }).join("; ");
-      rows.push([idx+1, fmtTime(p.takenAt),
+      rows.push([idx+1, fmtTime(p.takenAt), fmtGps(p.gps),
         p.phase ? p.phase.charAt(0).toUpperCase()+p.phase.slice(1) : "Unclassified",
         p.room||"", p.damageType||"", p.severity||"", p.notes||"", markers,
         p.sample?"Yes":"No", Math.round((p.dataUrl||"").length/1024), p.sha||"not stamped"]);
@@ -1381,6 +1496,16 @@ document.addEventListener("DOMContentLoaded", function(){
   document.addEventListener("keydown", function(e){
     if(e.key === "Escape") closeModals();
   });
+
+  /* offline banner: subtle, never a blocking modal. Local store is the
+   * source of truth; the banner only announces connectivity. */
+  function paintOffline(){
+    var b = $("offline-banner");
+    if(b) b.hidden = navigator.onLine !== false;
+  }
+  window.addEventListener("online", paintOffline);
+  window.addEventListener("offline", paintOffline);
+  paintOffline();
 
   /* device sync (prototype) */
   try{ if(window.__aftermathSyncUI) window.__aftermathSyncUI(); }catch(e){}

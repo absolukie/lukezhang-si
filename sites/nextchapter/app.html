@@ -57,8 +57,60 @@
 <div id="sheet-root"></div>
 <div id="toast-root" class="toast-root" aria-live="polite"></div>
 
+<script src="js/qrcode.js"></script>
 <script src="js/app.js"></script>
 <script src="sync.js"></script>
 <script src="auth-ui.js"></script>
+<script src="billing-ui.js"></script>
+<style>:root{
+  --bill-accent:#4c5a47; --bill-bg:#fffdf8; --bill-text:#3b372d;
+  --bill-muted:#6e675a; --bill-line:#d5ddcb;
+}</style>
+<script>
+(function(){
+  var PLANS = [
+    { lookupKey: "price_nextchapter_solo", name: "Solo", price: "$60/mo",
+      blurb: "Unlimited moves and items, shareable family digest, vendor coordination, donation receipts." },
+    { lookupKey: "price_nextchapter_team", name: "Team", price: "$100/mo",
+      blurb: "Everything in Solo, plus floor planning, the probate-organized worksheet export pack, and priority support." }
+  ];
+  function boot(){
+    if (typeof initBilling !== "function") return;
+    initBilling({ appSlug: "nextchapter", plans: PLANS }).then(function(b){
+      window.__billing = b;
+      b.ensurePaywall();
+      // Subscription surface on the dashboard (#billAnchor), re-mounted after every route render
+      // and refreshed after every billing status refresh (trial start, card add, etc.).
+      function mount(force){
+        var a = document.getElementById("billAnchor");
+        if (!a) return;
+        var old = a.querySelector("[data-bill-settings]");
+        if (old && !force) return;
+        if (old) old.remove();
+        var html = "";
+        try { html = b.settingsHTML(); } catch(e){}
+        if (!html) return;
+        var div = document.createElement("div");
+        div.innerHTML = html;
+        a.appendChild(div.firstChild);
+        try { b.bindSettings(a); } catch(e){}
+      }
+      try {
+        var origRefresh = b.refresh.bind(b);
+        b.refresh = function(){ return origRefresh().then(function(s){ mount(true); return s; }); };
+      } catch(e){}
+      try {
+        new MutationObserver(function(){ mount(); }).observe(document.getElementById("view"), { childList: true });
+      } catch(e){}
+      mount();
+    }).catch(function(e){
+      // Billing must never break the app. Fail open, log loudly.
+      try { console.error("[billing] init failed:", e); } catch(_){}
+    });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>
 </body>
 </html>

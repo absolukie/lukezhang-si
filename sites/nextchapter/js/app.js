@@ -517,7 +517,7 @@ function recordAnswer(el, approved){
     it.comments = it.comments || [];
     it.comments.push({id:uid(), by:"Move team", text:note, ts:Date.now()});
   }
-  save(); route(false); toast("Recorded.");
+  save(); route(false); toast("Recorded."); coachDone();
 }
 
 function setTabs(tabs, active){
@@ -550,6 +550,13 @@ function vDashboard(){
   const nudgeHTML = nudges.length ? '<div class="card nudge no-print"><h3>Needs attention</h3>' +
     nudges.slice(0,5).map(({move:m,vendor:v}) => '<a class="list-row" href="#/move/'+esc(m.id)+'/vendors"><span class="grow">'+esc(v.name)+' ('+esc(v.kind)+') · '+esc(m.clientName)+'</span><span class="chev">'+icon("back")+'</span></a>').join("") +
     (nudges.length>5?'<p class="muted small">+'+(nudges.length-5)+' more</p>':'')+'</div>' : '';
+  const todayList = [];
+  state.moves.filter(m => !m.archived).forEach(m => (m.checklist || []).forEach(t => {
+    if(t.done) return; const d = taskDueISO(m, t); if(d && d <= todayISO()) todayList.push({move:m, task:t, due:d});
+  }));
+  const todayHTML = todayList.length ? '<div class="card nudge no-print"><h3>Today</h3>' +
+    todayList.slice(0,5).map(({move:m,task:t,due}) => '<a class="list-row" href="#/move/'+esc(m.id)+'/checklist"><span class="grow">'+esc(t.text)+'<div class="sub">'+esc(m.clientName)+' · '+(due < todayISO() ? 'Overdue' : 'Due today')+'</div></span><span class="chev">'+icon("back")+'</span></a>').join("") +
+    (todayList.length>5?'<p class="muted small">+'+(todayList.length-5)+' more</p>':'')+'</div>' : '';
   let coach = "";
   try{
     if(!localStorage.getItem("nc_coach") && moves.some(m => m.sample)){
@@ -581,7 +588,7 @@ function vDashboard(){
     '<p>Inventory each room, align the family, coordinate vendors, and document donations. All in one calm place.</p>' +
     '<button class="btn" data-action="new-move">'+icon("plus","ic-sm")+' Start a new move</button></div>' +
     '<div class="section-title">'+(showArchived?"Archived moves":"Active moves")+'</div>' +
-    coach + nudgeHTML +
+    coach + todayHTML + nudgeHTML +
     (cards || '<div class="card empty">'+icon("home")+'<p>'+(showArchived?"No archived moves.":"No moves yet. Start your first above.")+'</p></div>') +
     (archivedCount && !showArchived ? '<div style="text-align:center;margin-top:8px"><a class="btn btn-ghost btn-sm" href="#/archived">View archived ('+archivedCount+')</a></div>' : "") +
     (showArchived ? '<div style="text-align:center;margin-top:8px"><a class="btn btn-ghost btn-sm" href="#/">Back to active</a></div>' : "") +
@@ -590,6 +597,7 @@ function vDashboard(){
     '<button class="btn btn-soft" data-action="export-data">'+icon("download","ic-sm")+' Export backup</button>' +
     '<button class="btn btn-ghost" data-action="import-data">Import backup</button></div><input type="file" id="import-file" accept="application/json,.json" hidden></div>' +
     '<div id="syncAnchor"></div>' +
+    '<div id="billAnchor" class="no-print"></div>' +
     '<footer class="app-foot no-print">Your data lives on this device, backed up to the sync prototype. <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a></footer>';
   if (window.__nextchapterSyncUI){ try{ window.__nextchapterSyncUI(); }catch(e){} }
 }
@@ -608,7 +616,7 @@ function summaryPrintHTML(move){
         (list.length ? '<p>'+list.map(i=>esc(i.name)+' <span class="faint">('+esc(i.room)+')</span>').join('<br>')+'</p>' : '<p class="faint">None yet</p>');
     }).join("") +
     '<h3>Vendors</h3>' +
-    (move.vendors.length ? move.vendors.map(v=>'<div class="kv"><span class="k">'+esc(v.name)+' ('+esc(v.kind)+')'+(v.awarded?' — awarded':'')+'</span><span class="v">'+esc((VENDOR_STATUS[v.status]||{}).label||"")+(v.quote !== "" ? ' · '+esc(money(v.quote)) : '')+'</span></div>').join("") : '<p class="faint">None yet</p>') +
+    (move.vendors.length ? move.vendors.map(v=>'<div class="kv"><span class="k">'+esc(v.name)+' ('+esc(v.kind)+')'+(v.awarded?' \u00b7 awarded':'')+'</span><span class="v">'+esc((VENDOR_STATUS[v.status]||{}).label||"")+(v.quote !== "" ? ' · '+esc(money(v.quote)) : '')+'</span></div>').join("") : '<p class="faint">None yet</p>') +
     '<h3>Estate sale</h3>' +
     (function(){ const t = saleTotals(move); return '<div class="kv"><span class="k">Items for sale</span><span class="v">'+t.count+' ('+t.soldCount+' sold)</span></div>' +
       '<div class="kv"><span class="k">Estimated value</span><span class="v">'+esc(money(t.est))+'</span></div>' +
@@ -659,6 +667,7 @@ function vMoveHub(move){
       '<a class="list-row" href="#/move/'+esc(move.id)+'/sale"><span class="grow"><h4>Estate sale</h4><div class="sub">'+esc(saleSub)+'</div></span><span class="chev">'+icon("back")+'</span></a>' +
       '<a class="list-row" href="#/move/'+esc(move.id)+'/checklist"><span class="grow"><h4>Move checklist</h4><div class="sub">'+esc(taskSub)+'</div></span><span class="chev">'+icon("back")+'</span></a>' +
       '<a class="list-row" href="#/move/'+esc(move.id)+'/digest"><span class="grow"><h4>Family digest</h4><div class="sub">A printable update for the whole family</div></span><span class="chev">'+icon("back")+'</span></a>' +
+      '<a class="list-row" href="#/move/'+esc(move.id)+'/qr"><span class="grow"><h4>Box labels</h4><div class="sub">Printable QR labels: scan a box, see what is inside</div></span><span class="chev">'+icon("back")+'</span></a>' +
       '<a class="list-row" href="#/family/'+esc(move.id)+'"><span class="grow"><h4>Family portal</h4><div class="sub">'+(pend?pend+' decisions waiting':'nothing waiting')+'</div></span><span class="chev">'+icon("back")+'</span></a>' +
       '<button class="list-row" data-action="print-summary" style="width:100%;background:none;border-top:0;border-left:0;border-right:0;text-align:left;font-size:16px"><span class="grow"><h4>Print move summary</h4><div class="sub">Inventory, vendors, donations, for the client file</div></span><span class="chev">'+icon("print")+'</span></button>' +
       (move.sample?'<button class="list-row" data-action="summary-toggle-sample" data-id="'+esc(move.id)+'" aria-pressed="'+summaryShowSample+'" style="width:100%;background:none;border-top:0;border-left:0;border-right:0;text-align:left;font-size:16px"><span class="grow"><h4>Include sample data</h4><div class="sub">'+(summaryShowSample?'Sample data will appear in the printed summary.':'Sample data is hidden from the printed summary.')+'</div></span><span class="chev">'+icon("back")+'</span></button>':'') +
@@ -670,10 +679,12 @@ function vMoveHub(move){
 
 /* ----- inventory ----- */
 let invFilter = {room:"all", disp:"all"};
+let invSelectMode = false, invSel = [], invSelMove = null;
 function vInventory(move){
   document.body.classList.remove("family-mode");
   setTabs(moveTabs(move), "inventory");
   topbarActions.innerHTML = "";
+  if(invSelMove !== move.id){ invSelMove = move.id; invSel = []; invSelectMode = false; }
   const rooms = ["all"].concat(move.rooms);
   const countFor = r => r==="all" ? move.items.length : move.items.filter(i=>i.room===r).length;
   let items = move.items.slice();
@@ -681,17 +692,29 @@ function vInventory(move){
   if(invFilter.disp !== "all") items = items.filter(i => i.disposition === invFilter.disp);
   const cards = items.map(it => {
     const ph = itemPhoto(it);
-    return '<a class="item-card" href="#/move/'+esc(move.id)+'/inventory/'+esc(it.id)+'">' +
-      '<div class="item-photo">' + (ph ? '<img src="'+esc(ph)+'" alt="" loading="lazy">' : '<div class="no-photo">'+icon("camera")+'</div>') + '</div>' +
+    const inner = '<div class="item-photo">' + (ph ? '<img src="'+esc(ph)+'" alt="" loading="lazy">' : '<div class="no-photo">'+icon("camera")+'</div>') + '</div>' +
       '<div class="item-body"><div class="item-name">'+esc(it.name)+'</div>' +
       '<div class="item-room">'+esc(it.room)+'</div>' +
       '<div><span class="disp '+(DISP[it.disposition]||DISP.ask).cls+'">'+esc((DISP[it.disposition]||DISP.ask).label)+'</span>' +
-      (it.disposition==="ask" ? ' <span class="disp '+FAM[it.familyStatus].cls+'">'+esc(FAM[it.familyStatus].label)+'</span>' : '') + '</div></div></a>';
+      (it.disposition==="ask" ? ' <span class="disp '+FAM[it.familyStatus].cls+'">'+esc(FAM[it.familyStatus].label)+'</span>' : '') + '</div></div>';
+    if(invSelectMode){
+      const on = invSel.indexOf(it.id) > -1;
+      return '<div class="item-card sel'+(on?' on':'')+'" data-action="toggle-item-sel" data-item="'+esc(it.id)+'" role="checkbox" aria-checked="'+on+'">'+inner+'<span class="selbox">'+(on?icon("check","ic-sm"):'')+'</span></div>';
+    }
+    return '<a class="item-card" href="#/move/'+esc(move.id)+'/inventory/'+esc(it.id)+'">'+inner+'</a>';
   }).join("");
+  const bulkBar = (invSelectMode && invSel.length) ?
+    '<div class="card bulk-bar no-print"><div class="row-between"><strong>'+invSel.length+' selected</strong><button class="btn btn-ghost btn-sm" data-action="clear-sel">Clear</button></div>' +
+    '<div class="section-title">Set disposition</div><div class="chiprow">' +
+      Object.keys(DISP).map(k => '<button class="chip" data-action="bulk-disp" data-v="'+k+'" data-id="'+esc(move.id)+'">'+esc(DISP[k].label)+'</button>').join("") +
+    '</div><div class="section-title">Move to room</div>' +
+    '<select id="bulk-room" data-move="'+esc(move.id)+'" aria-label="Move selected items to room">' +
+      move.rooms.map(r => '<option value="'+esc(r)+'">'+esc(r)+'</option>').join("") + '</select></div>' : '';
   view.innerHTML =
     '<a href="#/move/'+esc(move.id)+'" class="btn btn-ghost btn-sm" style="margin-bottom:12px">'+icon("back","ic-sm")+' '+esc(move.clientName)+'</a>' +
     '<div class="row-between"><h2 style="margin:0">Inventory</h2>' +
-    '<button class="btn btn-sm" data-action="add-room" data-id="'+esc(move.id)+'">'+icon("plus","ic-sm")+' Room</button></div>' +
+    '<div style="display:flex;gap:8px"><button class="btn btn-ghost btn-sm" data-action="toggle-select">'+(invSelectMode?'Done':'Select')+'</button>' +
+    '<button class="btn btn-sm" data-action="add-room" data-id="'+esc(move.id)+'">'+icon("plus","ic-sm")+' Room</button></div></div>' +
     '<div class="section-title">Rooms</div><div class="chiprow">' +
       rooms.map(r => '<button class="chip" data-action="filter-room" data-v="'+esc(r)+'" aria-pressed="'+(invFilter.room===r)+'">'+esc(r==="all"?"All rooms":r)+' · '+countFor(r)+'</button>').join("") +
     '</div>' +
@@ -700,8 +723,41 @@ function vInventory(move){
         .concat(Object.keys(DISP).map(k => '<button class="chip" data-action="filter-disp" data-v="'+k+'" aria-pressed="'+(invFilter.disp===k)+'">'+esc(DISP[k].label)+'</button>')).join("") +
     '</div>' +
     '<div class="section-title">'+items.length+' item'+(items.length===1?"":"s")+'</div>' +
+    bulkBar +
     (cards ? '<div class="item-grid">'+cards+'</div>' : '<div class="card empty">'+icon("box")+'<p>Nothing here yet. Tap + to photograph the first item.</p></div>') +
     '<button class="fab" data-action="add-item" data-id="'+esc(move.id)+'" aria-label="Add item">'+icon("plus")+'</button>';
+}
+
+/* ----- QR box labels ----- */
+function qrText(move, it){
+  const disp = ((DISP[it.disposition]||{}).label || it.disposition);
+  return ["NextChapter", it.name, "Room: "+it.room, "Decision: "+disp, move.clientName+" move"].join("\n");
+}
+function vQRLabels(move){
+  document.body.classList.remove("family-mode");
+  setTabs(moveTabs(move), "inventory");
+  topbarActions.innerHTML = '<button class="btn btn-ghost btn-sm no-print" data-action="print-qr">'+icon("print","ic-sm")+' Print labels</button>';
+  let items = move.items.slice();
+  if(invFilter.room !== "all") items = items.filter(i => i.room === invFilter.room);
+  if(invFilter.disp !== "all") items = items.filter(i => i.disposition === invFilter.disp);
+  const labels = items.map(it =>
+    '<div class="qr-label"><div class="qrbox" data-qr="'+esc(qrText(move,it))+'"></div>' +
+    '<div class="qr-name">'+esc(it.name)+'</div>' +
+    '<div class="qr-meta">'+esc(it.room)+' · '+esc(((DISP[it.disposition]||{}).label||it.disposition))+'</div></div>'
+  ).join("");
+  view.innerHTML =
+    '<a href="#/move/'+esc(move.id)+'" class="btn btn-ghost btn-sm no-print" style="margin-bottom:12px">'+icon("back","ic-sm")+' '+esc(move.clientName)+'</a>' +
+    '<div class="row-between"><h2 style="margin:0">Box labels</h2></div>' +
+    '<div class="card no-print"><p class="muted small" style="margin:0">Print these labels and tape one to each box or item. Any phone camera reads them: the item name, the room, and what to do with it. No app or login needed. Labels follow the room and disposition filters from the inventory.</p></div>' +
+    (labels ? '<div class="qr-sheet">'+labels+'</div>'
+            : '<div class="card empty">'+icon("box")+'<p>No items match the current filters.</p></div>');
+  view.querySelectorAll(".qrbox").forEach(box => {
+    const text = box.getAttribute("data-qr");
+    if(typeof QRCode !== "undefined"){
+      try{ new QRCode(box, {text: text, width: 104, height: 104, correctLevel: QRCode.CorrectLevel.M}); }
+      catch(e){ box.textContent = text; }
+    } else { box.textContent = text; }
+  });
 }
 
 /* ----- item detail ----- */
@@ -739,11 +795,11 @@ function bidRowHTML(move, v){
   const attrs = ' data-id="'+esc(move.id)+'" data-vendor="'+esc(v.id)+'"';
   return '<tr><td><strong>'+esc(v.name)+'</strong>'+(v.awarded?' <span class="pill" style="background:var(--sage-soft);color:var(--sage-deep)">Awarded</span>':'')+'</td>' +
     '<td>'+(v.quote !== "" ? esc(money(v.quote)) : '<span class="faint">no bid</span>')+'</td>' +
-    '<td>'+(v.deposit !== "" ? esc(money(v.deposit)) : '<span class="faint">—</span>')+'</td>' +
-    '<td>'+(v.availDate ? esc(fmtDate(v.availDate)) : '<span class="faint">—</span>')+'</td>' +
+    '<td>'+(v.deposit !== "" ? esc(money(v.deposit)) : '<span class="faint">-</span>')+'</td>' +
+    '<td>'+(v.availDate ? esc(fmtDate(v.availDate)) : '<span class="faint">-</span>')+'</td>' +
     '<td><span class="status-dot '+st.cls+'"></span>'+esc(st.label)+'</td>' +
     '<td class="no-print">'+(v.awarded
-      ? '<button class="btn btn-soft btn-sm" data-action="award-vendor"'+attrs+' disabled>Awarded</button>'
+      ? '<span class="pill" style="background:var(--sage-soft);color:var(--sage-deep)">Awarded</span>'
       : '<button class="btn btn-ghost btn-sm" data-action="award-vendor"'+attrs+'>Award</button>')+'</td></tr>';
 }
 function vVendors(move){
@@ -784,7 +840,7 @@ function vVendors(move){
     '<p class="muted small">Everyone involved in this move. Record each bid, then award the job.</p>' +
     (sections || '<div class="card empty">'+icon("truck")+'<p>No vendors yet.</p></div>') +
     '<div class="card print-only bid-summary"><h2>Vendor bid summary: '+esc(move.clientName)+'</h2>' +
-      (awarded.length ? awarded.map(v => '<div class="kv"><span class="k">'+esc(v.name)+' ('+esc(v.kind)+') — awarded</span><span class="v">'+esc(money(v.quote))+'</span></div>').join("")
+      (awarded.length ? awarded.map(v => '<div class="kv"><span class="k">'+esc(v.name)+' ('+esc(v.kind)+') · awarded</span><span class="v">'+esc(money(v.quote))+'</span></div>').join("")
         : '<p class="faint">No vendors awarded yet.</p>') +
       '<p class="small muted">Prepared '+esc(fmtDate(todayISO()))+'.</p></div>';
 }
@@ -914,7 +970,7 @@ function vSale(move){
       '<span class="sale-thumb">'+(ph ? '<img src="'+esc(ph)+'" alt="">' : icon("camera"))+'</span>' +
       '<span class="grow"><h4>'+esc(it.name)+'</h4><div class="sub">'+esc(it.room)+
         (it.estValue !== "" ? ' · est. '+esc(money(it.estValue)) : ' · no estimate yet') +'</div></span>' +
-      '<span style="text-align:right"><strong>'+(sold ? esc(money(it.soldPrice)) : '<span class="faint">—</span>')+'</strong><div class="sub">'+
+      '<span style="text-align:right"><strong>'+(sold ? esc(money(it.soldPrice)) : '<span class="faint">-</span>')+'</strong><div class="sub">'+
         (sold ? '<span class="disp disp-sell">Sold</span>' : '<span class="disp disp-ask">Awaiting sale</span>') +'</div></span></a>';
   }).join("");
   view.innerHTML =
@@ -1204,7 +1260,7 @@ const Actions = {
     const t = m && (m.checklist || []).find(x => x.id === el.getAttribute("data-task")); if(!t) return;
     t.done = !t.done; t.doneAt = t.done ? Date.now() : null;
     if(t.done) logAct(m, "Checked off: “"+t.text+"”.");
-    save(); route(false);
+    save(); route(false); coachDone();
   },
   "delete-task": el => {
     const m = getMove(el.getAttribute("data-id")); if(!m) return;
@@ -1257,6 +1313,23 @@ const Actions = {
   },
   "close-sheet": () => closeSheet(),
   "coach-ok": () => { try{ localStorage.setItem("nc_coach","1"); }catch(e){} route(false); },
+  "toggle-select": () => { invSelectMode = !invSelectMode; invSel = []; route(false); },
+  "toggle-item-sel": el => {
+    const id = el.getAttribute("data-item");
+    const i = invSel.indexOf(id);
+    if(i > -1) invSel.splice(i,1); else invSel.push(id);
+    route(false);
+  },
+  "clear-sel": () => { invSel = []; route(false); },
+  "bulk-disp": el => {
+    const m = getMove(el.getAttribute("data-id")); if(!m || !invSel.length) return;
+    const k = el.getAttribute("data-v"); const label = DISP[k].label;
+    let n = 0;
+    m.items.forEach(it => { if(invSel.indexOf(it.id) > -1){ it.disposition = k; n++; } });
+    logAct(m, "Set "+n+" item"+(n===1?"":"s")+" to "+label+" (bulk).");
+    invSel = []; save(); route(false); toast(n+" item"+(n===1?"":"s")+" set to "+label+".");
+  },
+  "print-qr": () => window.print(),
   "new-move": () => sheetNewMove(),
   "create-move": () => {
     const name = $("#f-name").value.trim();
@@ -1306,7 +1379,7 @@ const Actions = {
       soldDate: $("#f-solddate") ? $("#f-solddate").value : "",
       dims: (disp === "keep" && dimL > 0 && dimW > 0) ? {l: dimL, w: dimW} : null,
       familyStatus: disp==="ask" ? "pending" : "approved", comments: [], createdAt: Date.now() });
-    save(); closeSheet(); route(); toast("Item added.");
+    save(); closeSheet(); route(); toast("Item added."); coachDone();
   },
   "save-item": el => {
     const m = getMove(el.getAttribute("data-id"));
@@ -1481,7 +1554,15 @@ document.addEventListener("click", e => {
 document.addEventListener("change", e => {
   if(e.target && e.target.id === "f-photo") handlePhotoInput(e.target);
   if(e.target && e.target.id === "import-file") importBackup(e.target);
+  if(e.target && e.target.id === "bulk-room") bulkRoom(e.target);
 });
+function bulkRoom(sel){
+  const m = getMove(sel.getAttribute("data-move")); if(!m || !invSel.length || !sel.value) return;
+  let n = 0;
+  m.items.forEach(it => { if(invSel.indexOf(it.id) > -1){ it.room = sel.value; n++; } });
+  logAct(m, "Moved "+n+" item"+(n===1?"":"s")+" to "+sel.value+" (bulk).");
+  invSel = []; save(); route(false); toast(n+" item"+(n===1?"":"s")+" moved to "+sel.value+".");
+}
 document.addEventListener("keydown", e => {
   if(e.key === "Escape") closeSheet();
 });
@@ -1514,6 +1595,7 @@ function route(rerender){
     else if(sub === "digest") vDigest(m);
     else if(sub === "sale") vSale(m);
     else if(sub === "checklist") vChecklist(m);
+    else if(sub === "qr") vQRLabels(m);
     else { summaryShowSample = false; vMoveHub(m); }
     return;
   }
@@ -1521,6 +1603,26 @@ function route(rerender){
 }
 window.addEventListener("hashchange", () => route());
 route();
+
+/* ---------- offline banner: subtle, never a modal ---------- */
+function updateOfflineBanner(){
+  let b = document.getElementById("offlineBanner");
+  if(typeof navigator !== "undefined" && navigator.onLine === false){
+    if(!b){
+      b = document.createElement("div");
+      b.id = "offlineBanner"; b.className = "offline-banner no-print"; b.setAttribute("role","status");
+      document.body.prepend(b);
+    }
+    b.textContent = "You are offline. Everything keeps working; changes stay on this device.";
+    b.hidden = false;
+  } else if(b){ b.hidden = true; }
+}
+window.addEventListener("online", updateOfflineBanner);
+window.addEventListener("offline", updateOfflineBanner);
+updateOfflineBanner();
+
+/* ---------- first-run coach completes on the first real task ---------- */
+function coachDone(){ try{ localStorage.setItem("nc_coach","1"); }catch(e){} }
 
 /* ---- sync bridge (consumed by sync.js; local-first, sync never blocks UI) ---- */
 window.__nextchapter = {

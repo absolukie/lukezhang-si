@@ -54,7 +54,7 @@ var ICONS = {
 };
 
 var CSS = [
-".bill-banner{position:fixed;top:0;left:0;right:0;z-index:9000;display:flex;align-items:center;gap:10px;",
+".bill-banner{position:sticky;top:0;left:0;right:0;z-index:9000;display:flex;align-items:center;gap:10px;",
 " padding:10px 14px;font-size:14px;line-height:1.35;background:var(--bill-accent,#B73220);color:#fff;",
 " box-shadow:0 2px 10px rgba(0,0,0,.18);}",
 ".bill-banner.warn{background:#8a5a00;}",
@@ -315,7 +315,10 @@ BillingClient.prototype.renderBanner = function(){
   btn.textContent = st === "past_due" ? "Update card" : "Add card";
   btn.onclick = function(){ self.setupCard(); };
   bar.appendChild(btn);
-  document.body.appendChild(bar);
+  // In-flow at the top of the page (sticky), so the banner never covers the
+  // app's own topbar, wordmark, dossier score, or sync pill.
+  if (document.body.firstChild) document.body.insertBefore(bar, document.body.firstChild);
+  else document.body.appendChild(bar);
   this._banner = bar;
 };
 
@@ -365,7 +368,7 @@ BillingClient.prototype.buildOverlay = function(){
     var code = e && e.code;
     if (code === "BILLING_NOT_CONFIGURED") return "Payments are not switched on yet. Please check back soon.";
     var m = (e && e.message) || "";
-    if (/billing_|whsec|rk_test|rk_live|SECRETS\.md|Worker/i.test(m)) return "Something went wrong. Please try again.";
+    if (/billing_|whsec|rk_test|rk_live|SECRETS\.md|Worker|failed to fetch|networkerror|load failed|ERR_/i.test(m)) return "Something went wrong. Please try again.";
     return m || "Something went wrong. Please try again.";
   }
   ov.querySelectorAll(".bill-plan").forEach(function(b){

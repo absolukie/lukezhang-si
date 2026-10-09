@@ -443,6 +443,7 @@ function render(){
   const h=(location.hash||'#/').replace(/^#\//,'');
   const parts=h.split('/');
   closeSheet();
+  if(parts[0]==='portfolio'){ renderPortfolio(); return; }
   if(parts[0]==='art'&&parts[1]){
     const art=getArt(parts[1]); if(!art){ nav('/'); return; }
     if(parts[2]==='photo'&&parts[3]){ renderAnnotate(art,parts[3]); return; }
@@ -450,6 +451,68 @@ function render(){
     renderDetail(art, parts[2]||'photos'); return;
   }
   renderList();
+}
+
+/* ================= portfolio report (insurance rider) ================= */
+function artFlags(a){
+  const f=[];
+  if(!a.photos.length) f.push('No photos on file');
+  else{ const miss=a.photos.filter(p=>!p.dataUrl).length;
+        if(miss) f.push(miss+' photo'+(miss===1?'':'s')+' captured on another device'); }
+  if(!a.custody.length) f.push('No custody events logged');
+  if(!a.condition||a.condition==='Not assessed') f.push('Condition not assessed');
+  if(!a.climate.length) f.push('No climate readings');
+  else{ const last=[...a.climate].sort((x,y)=>new Date(x.at)-new Date(y.at)).pop();
+        if(Date.now()-new Date(last.at).getTime()>90*864e5) f.push('Climate reading older than 90 days'); }
+  return f;
+}
+function renderPortfolio(){
+  const arts=DB.artworks;
+  const total=arts.reduce((s,a)=>{ const n=Number(a.value); return s+(isFinite(n)?n:0); },0);
+  const rows=arts.map(a=>{
+    const pins=a.photos.reduce((n,p)=>n+p.pins.length,0);
+    const flags=artFlags(a);
+    return `<tr>
+      <td><b>${esc(a.title)||'Untitled'}</b><br><span style="color:var(--ink2)">${esc(a.artist)||'Unknown artist'}${a.year?' · '+esc(a.year):''}</span></td>
+      <td>${fmtMoney(a.value)}</td>
+      <td>${esc(a.condition||'Not assessed')}</td>
+      <td>${a.photos.length} / ${a.custody.length} / ${a.climate.length}</td>
+      <td>${flags.length?flags.map(f=>`<span class="chip warn" style="margin:0 4px 4px 0">${esc(f)}</span>`).join(''):'<span class="chip dark">Ready</span>'}</td>
+    </tr>`;
+  }).join('');
+  const ready=arts.filter(a=>artFlags(a).length===0).length;
+  app.innerHTML=`
+    <div class="backrow noprint">
+      <button class="iconbtn" id="btnBack" aria-label="Back">${IC.back}</button>
+      <div style="flex:1"><b>Portfolio report</b><div style="font-size:12px;color:var(--ink2)">Insurance-ready schedule of the collection on file</div></div>
+      <button class="btn small" id="btnPFPrint">${IC.doc} Print</button>
+    </div>
+    <div class="dossier" id="pfDoc">
+      <p class="rid">Collection Schedule · ${fmtDateShort(new Date().toISOString())}</p>
+      <h1>Portfolio report</h1>
+      <table>
+        <tr><th>Field</th><th>Detail</th></tr>
+        <tr><td>Records on file</td><td>${arts.length}</td></tr>
+        <tr><td>Records ready</td><td>${ready} of ${arts.length} (photos, custody, condition assessed, fresh climate)</td></tr>
+        <tr><td>Total declared value</td><td><b>${arts.length?fmtMoney(total):'Not recorded'}</b></td></tr>
+      </table>
+      <h3 class="serif">Works</h3>
+      ${rows?`<table><tr><th>Work</th><th>Declared value</th><th>Condition</th><th>Photos / Custody / Climate</th><th>Readiness</th></tr>${rows}</table>`:'<p>No records on file.</p>'}
+      <p style="font-size:13px;color:var(--ink2)">Declared values are entered by the examiner and are not appraisals. Readiness flags describe the record on this device only. Photos captured on another device are flagged because their image bytes are not on this device.</p>
+      <p class="disclaimer">This document is a working collection schedule. It is not an appraisal, a certificate of authenticity, or a legal determination of value.</p>
+    </div>
+    <div class="fabrow noprint"><button class="btn ghost" id="btnPFCopy">Copy summary</button></div>`;
+  document.getElementById('btnBack').onclick=()=>nav('/');
+  document.getElementById('btnPFPrint').onclick=()=>window.print();
+  document.getElementById('btnPFCopy').onclick=async()=>{
+    const lines=['Portfolio report, '+fmtDateShort(new Date().toISOString()),
+      'Records: '+arts.length+' ('+ready+' ready)',
+      'Total declared value: '+(arts.length?fmtMoney(total):'not recorded'),
+      ...arts.map(a=>{ const fl=artFlags(a); return '- '+(a.title||'Untitled')+', '+fmtMoney(a.value)+', '+(a.condition||'not assessed')+(fl.length?'; '+fl.join('; '):'; ready'); }),
+      'Declared values are examiner-entered, not appraisals.'];
+    try{ await navigator.clipboard.writeText(lines.join('\n')); toast('Summary copied'); }
+    catch(e){ toast('Copy not available in this browser'); }
+  };
 }
 
 /* ================= list view ================= */
@@ -478,12 +541,14 @@ function renderList(){
     ${DB.artworks.length?`<div class="field" style="margin-bottom:12px"><input id="artSearch" placeholder="Search title, artist, owner…" value="${esc(window._artq||'')}" style="border-radius:999px;padding:12px 18px"></div>`:''}
     <div class="fabrow noprint">
       <button class="btn" id="btnNew">${IC.plus} New artwork</button>
+      ${DB.artworks.length?`<button class="btn ghost" id="btnPortfolio">${IC.doc} Portfolio report</button>`:''}
     </div>
     ${cards || (q?`<div class="empty"><div class="big">No matches</div><p>Nothing matches “${esc(window._artq)}”.</p></div>`:`<div class="empty"><div class="big">No artworks yet</div>
       <p>Register a piece to begin its condition record.<br>Handlers photograph in the warehouse; the dossier writes itself.</p>
       <p style="margin-top:16px"><button class="btn ghost small" id="btnSample">Load a sample record</button></p></div>`)}
   `;
   document.getElementById('btnNew').onclick=()=>artworkForm();
+  const bp=document.getElementById('btnPortfolio'); if(bp) bp.onclick=()=>nav('/portfolio');
   const si=document.getElementById('artSearch');
   if(si){ let t; si.addEventListener('input',()=>{ clearTimeout(t);
       t=setTimeout(()=>{ const pos=si.selectionStart; window._artq=si.value; render();
@@ -612,7 +677,8 @@ function photosTab(art){
       ${art.photos.length>=2?`<button class="btn ghost" id="btnCompare" style="flex:0 0 auto">${IC.layers} Compare</button>`:''}
     </div>
     <input type="file" id="photoFile" accept="image/*" capture="environment" class="hidden" multiple>
-    <div class="photogrid">${cards||'<p style="color:var(--ink2);grid-column:1/-1">No photos yet. Photograph the piece to begin its visual record.</p>'}</div>`;
+    <div class="photogrid">${cards||'<p style="color:var(--ink2);grid-column:1/-1">No photos yet. Photograph the piece to begin its visual record.</p>'}</div>
+    ${conditionHistory(art)}`;
 }
 function wirePhotos(art){
   const fi=document.getElementById('photoFile'); if(!fi) return;
@@ -658,6 +724,7 @@ function wirePhotos(art){
     };
   });
   showCoach(art);
+  wireConditionHistory(art);
 }
 
 /* first-run coach: teach the magic moment in under a minute */
@@ -974,6 +1041,46 @@ function buildSnapshot(art){
   out.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
+/* ---------- condition history: drift over time (storage operators) ---------- */
+function conditionHistory(art){
+  const photos=[...art.photos].sort((a,b)=>new Date(a.takenAt)-new Date(b.takenAt));
+  if(!photos.length) return '';
+  let prevKeys=new Set();
+  const rows=photos.map((p,i)=>{
+    const s=sevCounts(p), total=s.minor+s.moderate+s.severe;
+    const curKeys=new Set(p.pins.map(pinKey));
+    let fresh=0;
+    if(i>0) fresh=[...curKeys].filter(k=>!prevKeys.has(k)).length;
+    prevKeys=curKeys;
+    return `<div class="newpin"><b>${fmtDate(p.takenAt)}</b> · ${esc(p.caption)||'Check-in '+(i+1)}${p.stage?' · '+esc(p.stage):''}<br>
+      <span style="color:var(--ink2)">${total} finding${total===1?'':'s'} (${s.severe} severe · ${s.moderate} moderate · ${s.minor} minor)${i>0?(fresh?' · <b style="color:var(--red)">'+fresh+' new since previous check-in</b>':' · no new findings'):''}</span></div>`;
+  }).join('');
+  return `<div class="snapcard noprint" id="histCard">
+    <h3 class="serif">Condition history</h3>
+    <p class="micro" style="margin:0 0 6px">Periodic check-ins over time. New findings are matched by type, severity, and note text.</p>
+    ${rows}
+    <div class="fabrow noprint" style="margin-bottom:0"><button class="btn ghost small" id="btnCopyHist">Copy history</button></div>
+  </div>`;
+}
+function wireConditionHistory(art){
+  const b=document.getElementById('btnCopyHist'); if(!b) return;
+  b.onclick=async()=>{
+    const photos=[...art.photos].sort((a,b)=>new Date(a.takenAt)-new Date(b.takenAt));
+    let prevKeys=new Set();
+    const lines=['Condition history: '+(art.title||'Untitled')+(art.artist?' by '+art.artist:'')];
+    photos.forEach((p,i)=>{
+      const s=sevCounts(p), total=s.minor+s.moderate+s.severe;
+      const curKeys=new Set(p.pins.map(pinKey));
+      const fresh=i>0?[...curKeys].filter(k=>!prevKeys.has(k)).length:0;
+      prevKeys=curKeys;
+      lines.push(fmtDate(p.takenAt)+' ('+(p.caption||'check-in')+(p.stage?', '+p.stage:'')+'): '+total+' findings, '+fresh+' new since previous');
+    });
+    lines.push('New findings matched by type, severity, and note text.');
+    try{ await navigator.clipboard.writeText(lines.join('\n')); toast('History copied'); }
+    catch(e){ toast('Copy not available in this browser'); }
+  };
+}
+
 /* ================= custody tab ================= */
 function custodyTab(art){
   const items=[...art.custody].reverse().map(c=>`<li>
@@ -1059,7 +1166,141 @@ function dossierTab(art){
       <input id="examInp" value="${esc(art.examiner||getExaminer())}" placeholder="Your name" autocomplete="name"></div>
     <div class="field noprint"><button class="btn ghost" id="btnSign">${IC.edit} Sign dossier</button>
       <p class="micro">${art.signature?'Signature captured for '+esc(art.signature.name)+'.':'Not signed.'} Signatures are captured on this device. Identity is not verified.</p></div>
+    ${loanSection(art)}
     <div id="dossierOut"></div>`;
+}
+/* ================= loan packet (exhibition / consignment outbound) ================= */
+function loanDates(L){
+  const f=d=>d?fmtDateShort(d):'';
+  return [f(L.loanStart),f(L.loanEnd)].filter(Boolean).join(' to ')||'Dates not recorded';
+}
+function loanSection(art){
+  const L=art.loan;
+  return `<hr class="hairline noprint">
+    <h3 class="serif noprint" style="margin:0 0 6px">Loan packet</h3>
+    ${L?`<p class="micro noprint">Outbound to <b>${esc(L.borrower)||'borrower'}</b>${L.venue?' · '+esc(L.venue):''} · ${loanDates(L)}</p>`:''}
+    <p class="micro noprint">${L?'Generate the print-ready packet for the borrowing venue and the insurer.':'Record the loan terms to generate a print-ready loan packet: lender, borrower, venue, dates, courier, insurance.'}</p>
+    <div class="fabrow noprint">
+      ${L?`<button class="btn ghost small" id="btnLoanEdit">${IC.edit} Edit loan</button><button class="btn small" id="btnLoanPacket">${IC.doc} Generate loan packet</button>`
+         :`<button class="btn ghost small" id="btnLoanAdd">${IC.plus} Record loan</button>`}
+    </div>
+    <div id="loanOut"></div>`;
+}
+function loanForm(art){
+  const L=art.loan||{};
+  const v=k=>(L[k]||'');
+  openSheet(`
+    <h3>${art.loan?'Edit loan':'Record loan'}</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="field"><label>Lender</label><input id="l_lender" value="${esc(v('lender'))}" placeholder="Whitfield Gallery"></div>
+      <div class="field"><label>Borrower</label><input id="l_borrower" value="${esc(v('borrower'))}" placeholder="City Museum"></div>
+    </div>
+    <div class="field"><label>Venue</label><input id="l_venue" value="${esc(v('venue'))}" placeholder="Main Gallery, north wing"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="field"><label>Loan start</label><input id="l_start" type="date" value="${esc(v('loanStart'))}"></div>
+      <div class="field"><label>Loan end</label><input id="l_end" type="date" value="${esc(v('loanEnd'))}"></div>
+    </div>
+    <div class="field"><label>Courier</label><input id="l_courier" value="${esc(v('courier'))}" placeholder="Handler traveling with the work"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="field"><label>Insurance carrier</label><input id="l_carrier" value="${esc(v('carrier'))}" placeholder="Fine arts insurer"></div>
+      <div class="field"><label>Policy number</label><input id="l_policy" value="${esc(v('policyNo'))}" placeholder=""></div>
+    </div>
+    <div class="field"><label>Loan conditions</label><textarea id="l_cond" placeholder="Display lighting limits, handling notes, installation requirements…">${esc(v('conditions'))}</textarea></div>
+    <p class="micro">Loan and insurance details are declared by the lender. This packet is not an insurance binder or policy.</p>
+    <div class="actions">
+      ${art.loan?`<button class="btn danger" id="l_del">${IC.trash}</button>`:''}
+      <button class="btn ghost" id="l_no">Cancel</button>
+      <button class="btn" id="l_yes">${IC.check} Save loan</button>
+    </div>`);
+  document.getElementById('l_no').onclick=closeSheet;
+  const del=document.getElementById('l_del');
+  if(del) del.onclick=()=>{ art.loan=null; save(); closeSheet(); render(); toast('Loan removed'); };
+  document.getElementById('l_yes').onclick=()=>{
+    const g=id=>document.getElementById(id).value.trim();
+    if(!g('l_borrower')&&!g('l_venue')){ toast('Name the borrower or venue'); return; }
+    art.loan={id:art.loan&&art.loan.id?art.loan.id:uid(), lender:g('l_lender'), borrower:g('l_borrower'),
+      venue:g('l_venue'), loanStart:g('l_start'), loanEnd:g('l_end'), courier:g('l_courier'),
+      carrier:g('l_carrier'), policyNo:g('l_policy'), conditions:g('l_cond'), recordedAt:nowISO()};
+    save(); closeSheet(); render(); toast('Loan terms recorded');
+  };
+}
+function wireLoan(art){
+  const add=document.getElementById('btnLoanAdd'), ed=document.getElementById('btnLoanEdit'),
+        gen=document.getElementById('btnLoanPacket');
+  if(add) add.onclick=()=>loanForm(art);
+  if(ed) ed.onclick=()=>loanForm(art);
+  if(gen) gen.onclick=async()=>{
+    gen.disabled=true;
+    try{
+      const out=document.getElementById('loanOut');
+      out.innerHTML='<p class="micro">Assembling loan packet…</p>';
+      const pkt=await buildLoanPacket(art);
+      if(!out.isConnected) return;
+      out.innerHTML=pkt.html;
+      document.getElementById('btnLoanPrint').onclick=()=>window.print();
+      document.getElementById('btnLoanCopy').onclick=async()=>{
+        try{ await navigator.clipboard.writeText(pkt.summary); toast('Packet summary copied'); }
+        catch(e){ toast('Copy not available in this browser'); }
+      };
+      document.getElementById('loanDoc').scrollIntoView({behavior:'smooth'});
+      toast('Loan packet ready, print or save as PDF');
+    }catch(err){ toast('Could not assemble the loan packet'); }
+    finally{ gen.disabled=false; }
+  };
+}
+async function buildLoanPacket(art){
+  art=JSON.parse(JSON.stringify(art)); // Hash and render the same frozen record.
+  const L=art.loan;
+  const loanId='PRV-LOAN-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+Math.random().toString(36).slice(2,6).toUpperCase();
+  const at=new Date().toISOString();
+  const findRows=art.photos.flatMap(p=>p.pins.map((pin,i)=>`<tr><td>${esc(p.caption)||'Photo'} · ${fmtDateShort(p.takenAt)}</td><td>${esc(pin.type)}</td><td>${SEV_LABEL[pin.severity]}</td><td>${esc(pin.note||'No note')}</td></tr>`)).join('');
+  const custRows=art.custody.map(c=>`<tr><td>${fmtDate(c.at)}</td><td><b>${esc(c.action)}</b></td><td>${esc(c.handler||'Not recorded')}</td><td>${esc(c.location||'Not recorded')}</td><td>${esc(c.ack&&c.ack.name||'None')}</td></tr>`).join('');
+  const climRows=art.climate.map(c=>`<tr><td>${fmtDate(c.at)}</td><td>${c.temp}°F</td><td>${c.humidity}% RH</td><td>${esc(c.location||'Not recorded')}</td></tr>`).join('');
+  const hash=await sha256(canonical({loanId,at,loan:L,evidence:await evidencePayload(art)}));
+  const html=`<div class="dossier" id="loanDoc">
+      <p class="rid">Exhibition Loan Packet · ${loanId}</p>
+      <h1>${esc(art.title)||'Untitled'}</h1>
+      <p style="color:var(--ink2);margin:0 0 4px">${esc(art.artist)||'Unknown artist'}${art.year?' · '+esc(art.year):''}</p>
+      <table>
+        <tr><th>Field</th><th>Detail</th></tr>
+        <tr><td>Lender</td><td>${esc(L.lender)||'Not recorded'}</td></tr>
+        <tr><td>Borrower</td><td>${esc(L.borrower)||'Not recorded'}</td></tr>
+        <tr><td>Venue</td><td>${esc(L.venue)||'Not recorded'}</td></tr>
+        <tr><td>Loan period</td><td>${loanDates(L)}</td></tr>
+        <tr><td>Courier</td><td>${esc(L.courier)||'Not recorded'}</td></tr>
+        <tr><td>Insurance carrier</td><td>${esc(L.carrier)||'Not recorded'}</td></tr>
+        <tr><td>Policy number</td><td>${esc(L.policyNo)||'Not recorded'}</td></tr>
+        <tr><td>Declared value</td><td>${fmtMoney(art.value)}</td></tr>
+        <tr><td>Overall condition</td><td><b>${esc(art.condition||'Not assessed')}</b></td></tr>
+        <tr><td>Packet prepared</td><td>${fmtDate(at)}</td></tr>
+      </table>
+      ${L.conditions?`<h3 class="serif">Loan conditions</h3><p style="font-size:14px">${esc(L.conditions)}</p>`:''}
+      <h3 class="serif">Condition findings at handoff</h3>
+      ${findRows?`<table><tr><th>Photo</th><th>Type</th><th>Severity</th><th>Note</th></tr>${findRows}</table>`:'<p>No condition findings recorded.</p>'}
+      <h3 class="serif">Chain of custody</h3>
+      <p class="micro">Acknowledgements are self-reported by the examiner. Countersigning through a verified channel is not yet available.</p>
+      ${custRows?`<table><tr><th>When</th><th>Action</th><th>Handler</th><th>Location</th><th>Ack</th></tr>${custRows}</table>`:'<p>No custody events logged.</p>'}
+      <h3 class="serif">Climate history</h3>
+      ${climRows?`<table><tr><th>When</th><th>Temp</th><th>RH</th><th>Location</th></tr>${climRows}</table>`:'<p>No climate readings logged.</p>'}
+      <h3 class="serif">Integrity</h3>
+      <p style="font-size:13px;color:var(--ink2)">This SHA-256 hash covers the loan terms above, the full condition record (artwork details, condition pins, photo image bytes stored as data URLs, custody log, climate readings), and the examiner signature when captured. It is computed in the browser on this device when the packet is generated and records the evidence used for this document at that moment. The hash alone cannot prove that a printed document is unchanged. Loan and insurance details are declared by the lender; this packet is not an insurance binder or policy.${art.photos.some(p=>!p.dataUrl)?' Photos marked image bytes unavailable were captured on another device; their recorded values cover metadata only, not image bytes.':''}</p>
+      <div class="hash">${hash}</div>
+      <p class="disclaimer">This document is a working loan record, not an appraisal, a certificate of authenticity, or a legal determination of damage.</p>
+    </div>
+    <div class="fabrow noprint">
+      <button class="btn" id="btnLoanPrint">${IC.doc} Print / Save PDF</button>
+      <button class="btn ghost" id="btnLoanCopy">Copy summary</button>
+    </div>`;
+  const summary=[
+    'Loan packet '+loanId+': '+(art.title||'Untitled')+(art.artist?', '+art.artist:''),
+    'Lender: '+(L.lender||'not recorded')+' | Borrower: '+(L.borrower||'not recorded'),
+    'Venue: '+(L.venue||'not recorded')+' | Period: '+loanDates(L),
+    'Declared value: '+fmtMoney(art.value),
+    'Condition: '+(art.condition||'not assessed')+' | Findings: '+art.photos.reduce((n,p)=>n+p.pins.length,0),
+    'Integrity hash (SHA-256): '+hash,
+    'Loan and insurance details are lender-declared; this packet is not an insurance binder or policy.'
+  ].join('\n');
+  return {html,summary};
 }
 function signDossier(art){
   openSheet(`<h3>Sign dossier</h3>
@@ -1168,6 +1409,7 @@ function wireDossier(art){
   const cs=document.getElementById('condSel'); if(cs) cs.onchange=()=>{ art.condition=cs.value; save(); };
   const ex=document.getElementById('examInp'); if(ex) ex.onchange=()=>{ art.examiner=ex.value.trim(); setExaminer(art.examiner); save(); };
   const sign=document.getElementById('btnSign'); if(sign) sign.onclick=()=>{art.examiner=ex.value.trim();setExaminer(art.examiner);save();signDossier(art);};
+  wireLoan(art);
   const b=document.getElementById('btnPrint'); if(!b) return;
   b.onclick=async()=>{
     art.examiner=(document.getElementById('examInp').value||'').trim(); setExaminer(art.examiner); save();

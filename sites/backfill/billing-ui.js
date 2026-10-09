@@ -365,7 +365,10 @@ BillingClient.prototype.buildOverlay = function(){
     var code = e && e.code;
     if (code === "BILLING_NOT_CONFIGURED") return "Payments are not switched on yet. Please check back soon.";
     var m = (e && e.message) || "";
-    if (/billing_|stripe|lookup key|test mode|whsec|rk_test|rk_live|SECRETS\.md|Worker/i.test(m)) return "Something went wrong. Please try again.";
+    // Never show raw backend codes, internal references, or fetch/network
+    // TypeErrors to users. (Cross-app finding: "Failed to fetch" leaked raw
+    // on trial CTA when the backend was unreachable.)
+    if (/billing_|stripe|lookup key|test mode|whsec|rk_test|rk_live|SECRETS\.md|Worker|failed to fetch|networkerror|load failed|ERR_/i.test(m)) return "Something went wrong. Please try again.";
     return m || "Something went wrong. Please try again.";
   }
   ov.querySelectorAll(".bill-plan").forEach(function(b){

@@ -335,7 +335,7 @@ BillingClient.prototype.buildOverlay = function(){
     ? "Your trial has ended"
     : "Start your free " + esc(String(this.trialDays)) + "-day trial";
   var sub = this.trialUsed
-    ? "Pick a plan to keep going. Your data is right where you left it."
+    ? "Pick a plan to keep going. Your data is right where you left it, and you can export it any time."
     : "Full access, no credit card required. Cancel anytime.";
 
   var plansHtml = plans.map(function(p, i){
@@ -345,6 +345,7 @@ BillingClient.prototype.buildOverlay = function(){
       '<span class="bp-blurb">' + esc(p.blurb) + "</span></button>";
   }).join("");
 
+  var canExport = (typeof window.__exportBackup === "function");
   ov.innerHTML =
     '<div class="bill-card">' +
       '<div class="bill-eyebrow">' + esc(this.appSlug.toUpperCase()) + "</div>" +
@@ -353,6 +354,7 @@ BillingClient.prototype.buildOverlay = function(){
       '<div class="bill-err" hidden></div>' +
       '<div class="bill-plans">' + plansHtml + "</div>" +
       '<button class="bill-cta">' + esc(trialCta) + "</button>" +
+      (canExport ? '<div class="bill-linkrow"><button class="bill-link" id="billExport">Export my data (JSON)</button></div>' : "") +
       '<p class="bill-fine">After your trial, billing starts automatically only if you add a card. ' +
       "30-day money-back guarantee.</p>" +
       '<div class="bill-linkrow"><button class="bill-link">Already subscribed? Refresh status</button></div>' +
@@ -365,7 +367,7 @@ BillingClient.prototype.buildOverlay = function(){
     var code = e && e.code;
     if (code === "BILLING_NOT_CONFIGURED") return "Payments are not switched on yet. Please check back soon.";
     var m = (e && e.message) || "";
-    if (/billing_|whsec|rk_test|rk_live|SECRETS\.md|Worker|price.*not found|lookup/i.test(m)) return "Something went wrong. Please try again.";
+    if (/billing_|whsec|rk_test|rk_live|SECRETS\.md|Worker|price.*not found|lookup|failed to fetch|networkerror|load failed|ERR_/i.test(m)) return "Something went wrong. Please try again.";
     return m || "Something went wrong. Please try again.";
   }
   ov.querySelectorAll(".bill-plan").forEach(function(b){
@@ -388,8 +390,7 @@ BillingClient.prototype.buildOverlay = function(){
       btn.disabled = false;
     }
   });
-  ov.querySelector(".bill-link").addEventListener("click", async function(ev){
-    ev.currentTarget.textContent = "Checking...";
+  ov.querySelector(".bill-link").addEventListener("click", async function(ev){    ev.currentTarget.textContent = "Checking...";
     try {
       await self.refresh();
       if (self.entitled) self.hidePaywall();
@@ -397,6 +398,10 @@ BillingClient.prototype.buildOverlay = function(){
     } catch(e) {
       ev.currentTarget.textContent = "Could not reach billing. Try again.";
     }
+  });
+  var exBtn = ov.querySelector("#billExport");
+  if (exBtn) exBtn.addEventListener("click", function(){
+    try { window.__exportBackup(); } catch(e){}
   });
   // The overlay is a fixed full-screen layer above the app, so nothing
   // behind it can receive clicks. No stopPropagation needed here: one on the

@@ -180,6 +180,7 @@ function inputStyle(){
     "border:1px solid rgba(128,128,128,.45);background:rgba(0,0,0,.25);color:inherit;";
 }
 function mutedStyle(){ return "font-size:12px;opacity:.65;margin:8px 0 0;line-height:1.45;"; }
+function labelStyle(){ return "display:block;font-size:12px;font-weight:700;opacity:.7;margin:10px 0 4px;"; }
 function titleStyle(){ return "font-weight:700;font-size:15px;"; }
 
 function paintCard(){
@@ -201,12 +202,14 @@ function paintCard(){
         (phoneState.sent
           ? '<p style="' + mutedStyle() + '">Enter the 6-digit code sent to ' +
             esc(phoneState.phone) + '</p>' +
+            '<label for="authCode" style="' + labelStyle() + '">Verification code</label>' +
             '<input id="authCode" inputmode="numeric" pattern="[0-9]*" maxlength="6" ' +
             'placeholder="123456" autocomplete="one-time-code" style="' + inputStyle() + '">' +
             '<button id="authVerifyCode" style="' + btnStyle() + '">Verify code</button>' +
             '<p style="' + mutedStyle() + '">Demo mode: no text is sent yet. ' +
             'Phone verification goes live with Twilio.</p>'
           : '<p style="' + mutedStyle() + '">Enter your phone number</p>' +
+            '<label for="authPhone" style="' + labelStyle() + '">Phone number</label>' +
             '<input id="authPhone" type="tel" inputmode="tel" placeholder="+1 555 010 2030" ' +
             'autocomplete="tel" style="' + inputStyle() + '">' +
             '<button id="authSendCode" style="' + btnStyle() + '">Text me a code</button>') +
@@ -215,6 +218,7 @@ function paintCard(){
         '</div>';
     } else {
       h += '<div id="authMain">' +
+        '<label for="authEmail" style="' + labelStyle() + '">Email address</label>' +
         '<input id="authEmail" type="email" inputmode="email" placeholder="you@example.com" ' +
         'autocomplete="email" style="' + inputStyle() + '">' +
         '<button id="authEmailGo" style="' + btnStyle() + '">Email me a sign-in link</button>' +

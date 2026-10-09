@@ -1,7 +1,7 @@
 /* Abate offline app shell. Versioned cache: bump SW_VERSION to ship a new shell.
  * Navigations are network-first with a cache fallback (fresh HTML, offline relaunch);
  * static assets are cache-first. Local state lives in localStorage and is never touched. */
-const SW_VERSION = 'abate-shell-v1';
+const SW_VERSION = 'abate-shell-v2-notice-draft';
 const STATIC = ['./', 'app.html', 'index.html', 'privacy.html', 'sync.js', 'auth-ui.js', 'billing-ui.js', 'manifest.webmanifest', 'icon.svg'];
 
 self.addEventListener('install', e => {

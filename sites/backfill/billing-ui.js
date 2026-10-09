@@ -86,7 +86,7 @@ var CSS = [
 ".bill-fine{font-size:13px;color:var(--bill-muted,#6b6257);text-align:center;margin:12px 0 0;}",
 ".bill-linkrow{text-align:center;margin-top:10px;}",
 ".bill-link{background:none;border:none;color:var(--bill-muted,#6b6257);font-size:14px;text-decoration:underline;",
-" touch-action:manipulation;cursor:pointer;padding:8px;}",
+" touch-action:manipulation;cursor:pointer;padding:12px 8px;min-height:44px;}",
 ".bill-err{background:#fdeceb;color:#8f1d0e;border-radius:10px;padding:10px 12px;font-size:14px;margin-bottom:12px;}",
 ".bill-err[hidden]{display:none;}",
 ".bill-set{border-top:1px solid var(--bill-line,#EADFC8);margin-top:14px;padding-top:14px;}",
@@ -368,7 +368,7 @@ BillingClient.prototype.buildOverlay = function(){
     // Never show raw backend codes, internal references, or fetch/network
     // TypeErrors to users. (Cross-app finding: "Failed to fetch" leaked raw
     // on trial CTA when the backend was unreachable.)
-    if (/billing_|stripe|lookup key|test mode|whsec|rk_test|rk_live|SECRETS\.md|Worker|failed to fetch|networkerror|load failed|ERR_/i.test(m)) return "Something went wrong. Please try again.";
+    if (/billing_|stripe|lookup key|test mode|whsec|rk_test|rk_live|sk_test|sk_live|bearer|SECRETS\.md|Worker|failed to fetch|networkerror|load failed|ERR_/i.test(m)) return "Something went wrong. Please try again.";
     return m || "Something went wrong. Please try again.";
   }
   ov.querySelectorAll(".bill-plan").forEach(function(b){

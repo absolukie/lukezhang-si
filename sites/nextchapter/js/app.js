@@ -427,7 +427,7 @@ let printReceiptId = null;
 
 function recordButtons(move, it){
   const attrs = ' data-id="'+esc(move.id)+'" data-item="'+esc(it.id)+'"';
-  return '<div class="fam-actions no-print"><button class="btn btn-sm" data-action="fam-record-approve"'+attrs+'>Record approval</button>' +
+  return '<div class="fam-actions no-print"><button class="btn btn-sm" data-action="fam-record-approve"'+attrs+'>Record: approved</button>' +
     '<button class="btn btn-soft btn-sm" data-action="fam-record-suggest"'+attrs+'>Record suggestion</button></div>';
 }
 function digestSections(move, interactive){

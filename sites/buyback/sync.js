@@ -462,8 +462,64 @@ else boot();
       s = String(s === null || s === undefined ? "" : s);
       return s.length > n ? s.slice(0, n) : s;
     }
+    /* Words that look name-like but are really error text or code: the general
+       name pattern below skips any candidate containing one of these, so
+       "Uncaught Error" and "Type Error" survive the scrub untouched. */
+    var NAME_STOP = {
+      uncaught:1, error:1, errors:1, type:1, syntax:1, reference:1, range:1,
+      eval:1, aggregate:1, internal:1, failed:1, invalid:1, expected:1,
+      unknown:1, missing:1, undefined:1, promise:1, object:1, array:1,
+      string:1, number:1, boolean:1, bigint:1, symbol:1, function:1,
+      window:1, document:1, element:1, node:1, event:1, button:1, input:1,
+      form:1, module:1, script:1, network:1, request:1, response:1,
+      server:1, client:1, timeout:1, abort:1, fetch:1, json:1, http:1,
+      url:1, uri:1, dom:1, sync:1, async:1, html:1, css:1, api:1,
+      storage:1, quota:1, local:1, session:1, cookie:1, auth:1, oauth:1,
+      token:1, bearer:1, key:1, secret:1, password:1, vin:1, email:1,
+      phone:1, name:1, app:1, page:1, data:1, stack:1, trace:1,
+      message:1, value:1, property:1, method:1, constructor:1,
+      prototype:1, resolved:1, rejected:1, pending:1, fulfilled:1,
+      january:1, february:1, march:1, april:1, may:1, june:1, july:1,
+      august:1, september:1, october:1, november:1, december:1
+    };
+    function scrubOwnerName(s){
+      /* The user's own name lives in the intake form (buyback.v1 -> intake.name).
+         Scrub it exactly, whole-word, case-insensitive, so a name typed into any
+         error string never leaves the device. Never throws. */
+      try {
+        var raw = localStorage.getItem("buyback.v1");
+        if (!raw) return s;
+        var db = JSON.parse(raw);
+        var nm = db && db.intake && db.intake.name;
+        if (typeof nm !== "string") return s;
+        nm = nm.trim();
+        if (nm.length < 2) return s;
+        var esc = function(w){ return w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); };
+        var words = nm.split(/\s+/).filter(function(w){ return w.length >= 2; });
+        words.unshift(nm);
+        for (var i = 0; i < words.length; i++){
+          s = s.replace(new RegExp("\\b" + esc(words[i]) + "\\b", "gi"), "[name]");
+        }
+      } catch(e){}
+      return s;
+    }
+    function scrubNamePattern(s){
+      /* General person-name pattern: two or more capitalized words in a row.
+         Catches names that never touched the intake form (free-text problem
+         descriptions echoed into an error). Skips the match when any word is a
+         known error/code word. */
+      return s.replace(/\b[A-Z][a-z]{2,}(?: [A-Z][a-z]{2,})+\b/g, function(m){
+        var words = m.split(" ");
+        for (var i = 0; i < words.length; i++){
+          if (NAME_STOP[words[i].toLowerCase()]) return m;
+        }
+        return "[name]";
+      });
+    }
     function scrub(s){
       s = String(s === null || s === undefined ? "" : s);
+      s = scrubOwnerName(s);
+      s = scrubNamePattern(s);
       s = s.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[email]");
       s = s.replace(/\+?\d[\d][\d\s().-]{6,}\d/g, "[phone]");
       s = s.replace(/\b[A-HJ-NPR-Z0-9]{17}\b/g, "[vin]");

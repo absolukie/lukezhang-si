@@ -379,8 +379,9 @@ function renderSettingsUI(){
     '<p class="muted" style="font-size:12px">Same key on two devices = same records. Photo originals stay on the capturing device. ' +
     'Anyone with the key can read your records.</p>' +
     '<div class="set-row"><span>Device key</span><button class="link-btn" id="syncCopy">Copy</button></div>' +
-    '<label>Use a key from another device<input id="syncPaste" type="text" placeholder="paste 64-char key" maxlength="64" style="font-size:12px"></label>' +
-    '<button class="btn small" id="syncUse" style="margin-top:6px">Switch to this key</button>';
+    '<label>Use a key from another device<input id="syncPaste" type="text" placeholder="paste 64-char key" maxlength="64" style="font-size:16px"></label>' +
+    '<button class="btn small" id="syncUse" style="margin-top:6px">Switch to this key</button>' +
+    '<p class="muted" style="font-size:12px;margin-top:10px"><a href="privacy.html" style="color:inherit">Privacy policy</a></p>';
   sheet.appendChild(box);
   updatePill();
   renderBigWarn();

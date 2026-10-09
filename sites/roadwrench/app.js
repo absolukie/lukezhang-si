@@ -185,7 +185,7 @@ function seed(s) {
       rvMake: "Grand Design", rvModel: "Reflection 150 260RD", rvYear: "2022", vin: "573FR2628N9X04117",
       complaint: "Dometic AC blows warm after 20 minutes of runtime.", cause: "Low refrigerant; condenser coil caked with road grime.",
       correction: "Cleaned condenser coil, recharged to spec, verified 38F vent temp.",
-      parts: [{id: uid(), name: "R-410A refrigerant", partNumber: "R410A-25LB", qty: 1, unitCost: 68, serial: ""}],
+      parts: [{id: uid(), name: "R-410A refrigerant", partNumber: "R410A-25LB", qty: 1, unitCost: 68, serial: "", st: "have"}],
       labor: [{id: uid(), desc: "AC diagnosis + recharge", hours: 1.5, rate: 125}], timerStart: 0,
       photos: [], notes: "Customer full-timing; prefers morning appointments.",
       claim: {insurer: "Wholesale Warranties", claimNumber: "", authNumber: "", authBy: "", authDate: "", status: "draft", statusDate: 0},
@@ -195,7 +195,7 @@ function seed(s) {
       rvMake: "Airstream", rvModel: "Flying Cloud 25RB", rvYear: "2021", vin: "1STVBYU28MJ500923",
       complaint: "Slide-out stalls halfway on extension, grinding noise.", cause: "Worn slide gearbox; rail bolts loose.",
       correction: "",
-      parts: [{id: uid(), name: "Slide-out gearbox assembly", partNumber: "LCI-191073", qty: 1, unitCost: 214, serial: "GBX-88412"}],
+      parts: [{id: uid(), name: "Slide-out gearbox assembly", partNumber: "LCI-191073", qty: 1, unitCost: 214, serial: "GBX-88412", st: "have"}],
       labor: [], timerStart: 0, photos: [], notes: "",
       claim: {insurer: "Good Sam ESP", claimNumber: "", authNumber: "", authBy: "", authDate: "", status: "draft", statusDate: 0},
       customerSig: "", techSig: "", filedAt: 0, completedAt: 0, createdAt: t - D },
@@ -205,8 +205,8 @@ function seed(s) {
       complaint: "Water pump cycles every 30 seconds, no fixtures open.", cause: "Failed check valve in pump head; small leak at city water inlet.",
       correction: "Replaced pump head assembly, resealed city inlet, pressure-tested system.",
       parts: [
-        {id: uid(), name: "Shurflo pump head kit", partNumber: "SH-94-800-00", qty: 1, unitCost: 89, serial: ""},
-        {id: uid(), name: "City water inlet, white", partNumber: "JR-CWI-W", qty: 1, unitCost: 24, serial: ""}
+        {id: uid(), name: "Shurflo pump head kit", partNumber: "SH-94-800-00", qty: 1, unitCost: 89, serial: "", st: "have"},
+        {id: uid(), name: "City water inlet, white", partNumber: "JR-CWI-W", qty: 1, unitCost: 24, serial: "", st: "have"}
       ],
       labor: [{id: uid(), desc: "Pump replacement + leak repair", hours: 2, rate: 125}], timerStart: 0,
       photos: [], notes: "",
@@ -390,19 +390,19 @@ function viewJobForm() {
     <button class="backlink" id="back">${I.back}Jobs</button>
     <div class="sectionhead"><h2>New job</h2></div>
     <div class="card">
-      <div class="field" style="position:relative"><label>Customer name</label><input id="f_customer" placeholder="Full name" autocomplete="off"><div id="custSuggest" class="suggest" hidden></div></div>
+      <div class="field" style="position:relative"><label for="f_customer">Customer name</label><input id="f_customer" maxlength="80" placeholder="Full name" autocomplete="off"><div id="custSuggest" class="suggest" hidden></div></div>
       <div class="f2">
-        <div class="field"><label>Phone</label><input id="f_phone" inputmode="tel" placeholder="(555) 000-0000"></div>
-        <div class="field"><label>Date</label><input id="f_date" type="date" value="${todayISO()}"></div>
+        <div class="field"><label for="f_phone">Phone</label><input id="f_phone" maxlength="24" inputmode="tel" placeholder="(555) 000-0000"></div>
+        <div class="field"><label for="f_date">Date</label><input id="f_date" type="date" value="${todayISO()}"></div>
       </div>
-      <div class="field"><label>Site / location</label><input id="f_site" placeholder="Campground + site number"></div>
+      <div class="field"><label for="f_site">Site / location</label><input id="f_site" maxlength="120" placeholder="Campground + site number"></div>
       <div class="f3">
-        <div class="field"><label>Year</label><input id="f_year" inputmode="numeric" placeholder="2022"></div>
-        <div class="field"><label>Make</label><input id="f_make" placeholder="Grand Design"></div>
-        <div class="field"><label>Model</label><input id="f_model" placeholder="Reflection 260RD"></div>
+        <div class="field"><label for="f_year">Year</label><input id="f_year" maxlength="4" inputmode="numeric" placeholder="2022"></div>
+        <div class="field"><label for="f_make">Make</label><input id="f_make" maxlength="60" placeholder="Grand Design"></div>
+        <div class="field"><label for="f_model">Model</label><input id="f_model" maxlength="60" placeholder="Reflection 260RD"></div>
       </div>
-      <div class="field"><label>VIN <span class="muted" style="text-transform:none;letter-spacing:0">(17 chars)</span></label><input id="f_vin" placeholder="17-char VIN" autocapitalize="characters" maxlength="17"></div>
-      <div class="field"><label>Complaint (what's wrong)</label><textarea id="f_complaint" placeholder="Customer's words: AC blows warm..."></textarea></div>
+      <div class="field"><label for="f_vin">VIN <span class="muted" style="text-transform:none;letter-spacing:0">(17 chars)</span></label><input id="f_vin" placeholder="17-char VIN" autocapitalize="characters" maxlength="17"></div>
+      <div class="field"><label for="f_complaint">Complaint (what's wrong)</label><textarea id="f_complaint" maxlength="1000" placeholder="Customer's words: AC blows warm..."></textarea></div>
       <button class="btn block" id="save">${I.check}Create job</button>
     </div>`;
   $("#back").onclick = () => location.hash = "#/jobs";
@@ -440,9 +440,11 @@ function viewJobForm() {
   custInput.addEventListener("keydown", e => { if (e.key === "Escape") suggBox.hidden = true; });
   custInput.addEventListener("blur", () => setTimeout(() => { suggBox.hidden = true; }, 150));
   $("#save").onclick = () => {
+    const cust = $("#f_customer").value.trim();
+    if (!cust) { toast("Enter a customer name to create the job"); $("#f_customer").focus(); return; }
     const j = {
       id: uid(), status: "scheduled",
-      customer: $("#f_customer").value.trim(), phone: $("#f_phone").value.trim(),
+      customer: cust, phone: $("#f_phone").value.trim(),
       site: $("#f_site").value.trim(), scheduledAt: $("#f_date").value || todayISO(),
       rvYear: $("#f_year").value.trim(), rvMake: $("#f_make").value.trim(),
       rvModel: $("#f_model").value.trim(), vin: $("#f_vin").value.trim().toUpperCase(),
@@ -492,36 +494,36 @@ function viewJobDetail(id) {
         <button class="btn small secondary" id="rigBtn">${I.rv}Rig history</button>
       </div>
       <div class="f2">
-        <div class="field"><label>Customer</label><input id="d_customer" value="${esc(j.customer)}"></div>
-        <div class="field"><label>Phone</label><input id="d_phone" inputmode="tel" value="${esc(j.phone)}"></div>
+        <div class="field"><label for="d_customer">Customer</label><input id="d_customer" maxlength="80" value="${esc(j.customer)}"></div>
+        <div class="field"><label for="d_phone">Phone</label><input id="d_phone" maxlength="24" inputmode="tel" value="${esc(j.phone)}"></div>
       </div>
-      <div class="field"><label>Site / location</label><input id="d_site" value="${esc(j.site)}"></div>
+      <div class="field"><label for="d_site">Site / location</label><input id="d_site" maxlength="120" value="${esc(j.site)}"></div>
       <div class="row" id="mapsRow" style="margin:-6px 0 10px"${j.site ? "" : " hidden"}><span class="grow"></span><a class="btn small secondary" id="mapsLink" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(j.site || "")}">${I.pin}Open in Maps</a></div>
       <div class="f3">
-        <div class="field"><label>Year</label><input id="d_year" value="${esc(j.rvYear)}"></div>
-        <div class="field"><label>Make</label><input id="d_make" value="${esc(j.rvMake)}"></div>
-        <div class="field"><label>Model</label><input id="d_model" value="${esc(j.rvModel)}"></div>
+        <div class="field"><label for="d_year">Year</label><input id="d_year" maxlength="4" value="${esc(j.rvYear)}"></div>
+        <div class="field"><label for="d_make">Make</label><input id="d_make" maxlength="60" value="${esc(j.rvMake)}"></div>
+        <div class="field"><label for="d_model">Model</label><input id="d_model" maxlength="60" value="${esc(j.rvModel)}"></div>
       </div>
       <div class="f2">
-        <div class="field"><label>VIN <span class="muted" style="text-transform:none;letter-spacing:0">(17 chars)</span></label><input id="d_vin" value="${esc(j.vin)}" autocapitalize="characters" maxlength="17"></div>
-        <div class="field"><label>Scheduled</label><input id="d_date" type="date" value="${esc(j.scheduledAt || todayISO())}"></div>
+        <div class="field"><label for="d_vin">VIN <span class="muted" style="text-transform:none;letter-spacing:0">(17 chars)</span></label><input id="d_vin" value="${esc(j.vin)}" autocapitalize="characters" maxlength="17"></div>
+        <div class="field"><label for="d_date">Scheduled</label><input id="d_date" type="date" value="${esc(j.scheduledAt || todayISO())}"></div>
       </div>
     </div>
 
     <div class="card"><h2>Diagnosis</h2>
-      <div class="field"><label>Complaint</label><textarea id="d_complaint" placeholder="What the customer reports">${esc(j.complaint)}</textarea></div>
-      <div class="field"><label>Cause</label><textarea id="d_cause" placeholder="What you found wrong">${esc(j.cause)}</textarea></div>
-      <div class="field"><label>Correction</label><textarea id="d_correction" placeholder="What you did to fix it">${esc(j.correction)}</textarea></div>
-      <div class="field"><label>Tech notes</label><textarea id="d_notes" placeholder="Anything the claim or customer should know">${esc(j.notes)}</textarea></div>
+      <div class="field"><label for="d_complaint">Complaint</label><textarea id="d_complaint" maxlength="1000" placeholder="What the customer reports">${esc(j.complaint)}</textarea></div>
+      <div class="field"><label for="d_cause">Cause</label><textarea id="d_cause" maxlength="1000" placeholder="What you found wrong">${esc(j.cause)}</textarea></div>
+      <div class="field"><label for="d_correction">Correction</label><textarea id="d_correction" maxlength="1000" placeholder="What you did to fix it">${esc(j.correction)}</textarea></div>
+      <div class="field"><label for="d_notes">Tech notes</label><textarea id="d_notes" maxlength="2000" placeholder="Anything the claim or customer should know">${esc(j.notes)}</textarea></div>
     </div>
 
     <div class="card"><h2>Parts</h2>
       <div id="partsList">${j.parts.length ? j.parts.map(p => `
         <div class="item"><div class="grow"><div class="t">${esc(p.name)}</div>
           <div class="s">${esc(p.partNumber)}${p.serial ? " · SN " + esc(p.serial) : ""} · ${esc(p.qty)} × ${money(p.unitCost)}</div></div>
-          <button class="stbtn ${esc(p.st)}" data-st="${esc(p.id)}" title="Tap to change: have, to order, ordered" aria-label="Part status: ${esc(PART_ST_LABEL[p.st])}. Tap to change.">${esc(PART_ST_LABEL[p.st])}</button>
+          <button class="stbtn ${esc(p.st || "have")}" data-st="${esc(p.id)}" title="Tap to change: have, to order, ordered" aria-label="Part status: ${esc(PART_ST_LABEL[p.st] || PART_ST_LABEL.have)}. Tap to change.">${esc(PART_ST_LABEL[p.st] || PART_ST_LABEL.have)}</button>
           <div class="mono" style="font-weight:800">${money(p.qty * p.unitCost)}</div>
-          <button class="iconbtn danger" data-delpart="${esc(p.id)}">${I.trash}</button></div>`).join("")
+          <button class="iconbtn danger" data-delpart="${esc(p.id)}" title="Delete part">${I.trash}</button></div>`).join("")
         : `<div class="muted">No parts logged yet.</div>`}</div>
       <div class="total"><span>Parts total</span><span class="mono">${money(partsTotal(j))}</span></div>
       ${(() => {
@@ -532,38 +534,38 @@ function viewJobDetail(id) {
         return `<div class="orderbox"><h3>Parts order list</h3>
           <div class="muted" style="margin-bottom:8px">${need ? need + " to order" : ""}${need && ord ? " · " : ""}${ord ? ord + " ordered, waiting" : ""}</div>
           ${pending.map(p => `<div class="item"><div class="grow"><div class="t">${esc(p.name)}</div>
-            <div class="s">${esc(p.partNumber) || "No part number"} · qty ${esc(p.qty)} · ${esc(PART_ST_LABEL[p.st])}</div></div></div>`).join("")}
+            <div class="s">${esc(p.partNumber) || "No part number"} · qty ${esc(p.qty)} · ${esc(PART_ST_LABEL[p.st] || PART_ST_LABEL.have)}</div></div></div>`).join("")}
           <button class="btn secondary block" id="copyOrder" style="margin-top:8px">${I.doc}Copy ${need ? "order list" : "ordered-parts list"}</button>
           <div class="muted" style="margin-top:8px">Copies a parts list you send yourself. RoadWrench does not place orders.</div>
         </div>`;
       })()}
       <h3>Add part</h3>
       <div class="f2">
-        <div class="field"><label>Part name</label><input id="p_name" placeholder="Water pump"></div>
-        <div class="field"><label>Part number</label><input id="p_num" placeholder="SH-94-800-00"></div>
+        <div class="field"><label for="p_name">Part name</label><input id="p_name" maxlength="120" placeholder="Water pump"></div>
+        <div class="field"><label for="p_num">Part number</label><input id="p_num" maxlength="60" placeholder="SH-94-800-00"></div>
       </div>
       <div class="f3">
-        <div class="field"><label>Qty</label><input id="p_qty" inputmode="decimal" value="1"></div>
-        <div class="field"><label>Unit cost</label><input id="p_cost" inputmode="decimal" placeholder="0.00"></div>
-        <div class="field"><label>Serial #</label><input id="p_serial" placeholder="If tagged"></div>
+        <div class="field"><label for="p_qty">Qty</label><input id="p_qty" maxlength="10" inputmode="decimal" value="1"></div>
+        <div class="field"><label for="p_cost">Unit cost</label><input id="p_cost" maxlength="12" inputmode="decimal" placeholder="0.00"></div>
+        <div class="field"><label for="p_serial">Serial #</label><input id="p_serial" maxlength="60" placeholder="If tagged"></div>
       </div>
       <button class="btn secondary block" id="addPart">${I.plus}Add part</button>
     </div>
 
     <div class="card"><h2>Labor</h2>
       <div id="timerBox"></div>
-      <div class="field"><label>Task description</label><input id="t_desc" placeholder="e.g. Slide-out gearbox replacement"></div>
+      <div class="field"><label for="t_desc">Task description</label><input id="t_desc" maxlength="120" placeholder="e.g. Slide-out gearbox replacement"></div>
       <div id="laborList">${j.labor.length ? j.labor.map(l => `
         <div class="item"><div class="grow"><div class="t">${esc(l.desc) || "Labor"}</div>
           <div class="s">${esc(l.hours)} hrs × ${money(l.rate)}/hr</div></div>
           <div class="mono" style="font-weight:800">${money(l.hours * l.rate)}</div>
-          <button class="iconbtn danger" data-dellabor="${esc(l.id)}">${I.trash}</button></div>`).join("")
+          <button class="iconbtn danger" data-dellabor="${esc(l.id)}" title="Delete labor line">${I.trash}</button></div>`).join("")
         : `<div class="muted">No labor logged yet.</div>`}</div>
       <div class="total"><span>Labor total (${laborHours(j).toFixed(2)} hrs)</span><span class="mono">${money(laborTotal(j))}</span></div>
       <h3>Add labor manually</h3>
       <div class="f3">
-        <div class="field"><label>Hours</label><input id="l_hours" inputmode="decimal" placeholder="1.5"></div>
-        <div class="field"><label>Rate $/hr</label><input id="l_rate" inputmode="decimal" value="${esc(S.company.laborRate)}"></div>
+        <div class="field"><label for="l_hours">Hours</label><input id="l_hours" maxlength="10" inputmode="decimal" placeholder="1.5"></div>
+        <div class="field"><label for="l_rate">Rate $/hr</label><input id="l_rate" maxlength="12" inputmode="decimal" value="${esc(S.company.laborRate)}"></div>
         <div class="field"><label>&nbsp;</label><button class="btn block" id="addLabor">${I.plus}Add</button></div>
       </div>
     </div>
@@ -575,7 +577,7 @@ function viewJobDetail(id) {
         ${["before", "after", "data tag", "part"].map((t, i) =>
           `<button class="tagbtn${i === 0 ? " sel" : ""}" data-tag="${t}">${t}</button>`).join("")}
       </div>
-      <div class="field" style="margin-top:8px"><input id="ph_cap" placeholder="Caption (optional)"></div>
+      <div class="field" style="margin-top:8px"><input id="ph_cap" maxlength="200" placeholder="Caption (optional)" aria-label="Photo caption (optional)"></div>
       <button class="btn secondary block" id="takePhoto">${I.camera}Take / upload photo</button>
       <input type="file" id="fileInput" class="hiddenfile" accept="image/*" capture="environment">
       <div class="photogrid" id="photoGrid">${j.photos.map(photoHtml).join("")}</div>
@@ -588,13 +590,13 @@ function viewJobDetail(id) {
 
     <div class="card"><h2>Warranty / insurance claim</h2>
       <div class="f2">
-        <div class="field"><label>Insurer / warranty co.</label><input id="c_insurer" value="${esc(j.claim.insurer)}" placeholder="Wholesale Warranties"></div>
-        <div class="field"><label>Claim number</label><input id="c_claim" value="${esc(j.claim.claimNumber)}"></div>
+        <div class="field"><label>Insurer / warranty co.</label><input id="c_insurer" maxlength="80" value="${esc(j.claim.insurer)}" placeholder="Wholesale Warranties"></div>
+        <div class="field"><label for="c_claim">Claim number</label><input id="c_claim" maxlength="60" value="${esc(j.claim.claimNumber)}"></div>
       </div>
       <div class="f3">
-        <div class="field"><label>Auth number</label><input id="c_auth" value="${esc(j.claim.authNumber)}"></div>
-        <div class="field"><label>Auth by</label><input id="c_authby" value="${esc(j.claim.authBy)}" placeholder="Rep name"></div>
-        <div class="field"><label>Auth date</label><input id="c_authdate" type="date" value="${esc(j.claim.authDate)}"></div>
+        <div class="field"><label for="c_auth">Auth number</label><input id="c_auth" maxlength="60" value="${esc(j.claim.authNumber)}"></div>
+        <div class="field"><label for="c_authby">Auth by</label><input id="c_authby" maxlength="60" value="${esc(j.claim.authBy)}" placeholder="Rep name"></div>
+        <div class="field"><label for="c_authdate">Auth date</label><input id="c_authdate" type="date" value="${esc(j.claim.authDate)}"></div>
       </div>
     </div>
 
@@ -841,7 +843,7 @@ function renderTimer(j) {
     if (j.timerStart) {
       const hrs = Math.round(((Date.now() - j.timerStart) / 36e5) * 100) / 100;
       if (hrs > 0) { renderTimerConfirm(j, hrs); }
-      else { j.timerStart = 0; save(S); renderTimer(j); }
+      else { j.timerStart = 0; save(S); renderTimer(j); toast("Timer was too short to log"); }
     } else { j.timerStart = Date.now(); save(S); renderTimer(j); tickTimer(j); }
   };
   if (running) tickTimer(j);
@@ -854,7 +856,7 @@ function renderTimerConfirm(j, hrs) {
   const rate = S.company.laborRate;
   box.innerHTML = `<div class="timerconfirm">
     <div class="tc-title">Log <span class="mono">${hrs.toFixed(2)} hrs</span> as labor? (${money(hrs * rate)})</div>
-    <div class="field"><label>Task description</label><input id="tc_desc" value="${esc(pre)}" placeholder="What was this time for"></div>
+    <div class="field"><label for="tc_desc">Task description</label><input id="tc_desc" maxlength="120" value="${esc(pre)}" placeholder="What was this time for"></div>
     <div class="row">
       <button class="btn grow" id="tcAdd">${I.check}Add labor</button>
       <button class="btn ghost grow" id="tcDiscard">Discard</button>
@@ -1002,7 +1004,7 @@ function viewPacket(id) {
     </div>
 
     <div class="card noprint" style="margin-top:12px"><h2>Sign the packet</h2>
-      <div class="field"><label>Customer signature: sign below</label>
+      <div class="field"><label for="claimStatus">Customer signature: sign below</label>
         <div class="sigwrap"><canvas class="sigpad" id="sigCustomer" width="600" height="150"></canvas>
         <button class="btn small ghost clear" id="clearCSig">Clear</button></div></div>
       <div class="field"><label>Technician signature</label>
@@ -1012,8 +1014,7 @@ function viewPacket(id) {
     </div>
 
     <div class="noprint" style="display:grid;gap:10px;margin-top:4px">
-      <div class="field"><label for="claimStatus">Claim status</label>
-        <select id="claimStatus">${CLAIM_STATUSES.map(s => `<option value="${s}"${j.claim.status === s ? " selected" : ""}>${CLAIM_LABEL[s]}</option>`).join("")}</select>
+      <div class="field"><label for="claimStatus">Claim status</label><select id="claimStatus">${CLAIM_STATUSES.map(s => `<option value="${s}"${j.claim.status === s ? " selected" : ""}>${CLAIM_LABEL[s]}</option>`).join("")}</select>
       </div>
       <button class="btn rust block" id="printBtn">${I.printer}Print / save as PDF</button>
       <button class="btn secondary block" id="shareBtn">${I.doc}Share packet summary</button>
@@ -1356,21 +1357,20 @@ function viewReminders() {
           <button class="iconbtn" data-done="${esc(r.id)}" title="Mark done">${I.check}</button>
           <button class="iconbtn" data-sched="${esc(r.id)}" title="Schedule job">${I.cal}</button>
           <a class="iconbtn" title="Text customer" href="sms:?&body=${encodeURIComponent(`Hi ${r.customer}, this is ${S.company.name}: your ${r.service} for your ${r.rvLabel || "RV"} is due. Reply to schedule a visit!`)}">${I.phone}</a>
-          <button class="iconbtn danger" data-delrem="${esc(r.id)}">${I.trash}</button>
+          <button class="iconbtn danger" data-delrem="${esc(r.id)}" title="Delete reminder">${I.trash}</button>
         </div>`;
       }).join("") : `<div class="empty">${I.bell}<div>No reminders yet.<br>Set one below and never miss a reseal again.</div></div>`}
     </div>
     <div class="card"><h2>Add reminder</h2>
       <div class="f2">
-        <div class="field"><label>Customer</label><input id="r_customer" placeholder="Full name"></div>
-        <div class="field"><label>RV</label><input id="r_rv" placeholder="2022 Reflection 260RD"></div>
+        <div class="field"><label for="r_customer">Customer</label><input id="r_customer" maxlength="80" placeholder="Full name"></div>
+        <div class="field"><label for="r_rv">RV</label><input id="r_rv" maxlength="60" placeholder="2022 Reflection 260RD"></div>
       </div>
       <div class="f2">
-        <div class="field"><label>Service</label><input id="r_service" placeholder="Roof reseal inspection"></div>
-        <div class="field"><label>Last done</label><input id="r_last" type="date" value="${todayISO()}"></div>
+        <div class="field"><label for="r_service">Service</label><input id="r_service" maxlength="120" placeholder="Roof reseal inspection"></div>
+        <div class="field"><label for="r_last">Last done</label><input id="r_last" type="date" value="${todayISO()}"></div>
       </div>
-      <div class="field"><label>Repeat every (months)</label>
-        <select id="r_int">${[3, 6, 12, 24, 36].map(m => `<option value="${m}"${m === 12 ? " selected" : ""}>${m} months</option>`).join("")}</select></div>
+      <div class="field"><label for="r_int">Repeat every (months)</label><select id="r_int">${[3, 6, 12, 24, 36].map(m => `<option value="${m}"${m === 12 ? " selected" : ""}>${m} months</option>`).join("")}</select></div>
       <button class="btn block" id="addRem">${I.plus}Add reminder</button>
     </div>`;
   $("#addRem").onclick = () => {
@@ -1478,17 +1478,17 @@ function viewSettings() {
     <div class="sectionhead"><h2>Setup</h2></div>
     <div class="card"><h2>Your business</h2>
       <div class="muted" style="margin-bottom:10px">This appears on every warranty packet as the service center.</div>
-      <div class="field"><label>Business name</label><input id="s_name" value="${esc(c.name)}"></div>
+      <div class="field"><label for="s_name">Business name</label><input id="s_name" maxlength="80" value="${esc(c.name)}"></div>
       <div class="f2">
-        <div class="field"><label>Phone</label><input id="s_phone" value="${esc(c.phone)}"></div>
-        <div class="field"><label>Email</label><input id="s_email" value="${esc(c.email)}"></div>
+        <div class="field"><label for="s_phone">Phone</label><input id="s_phone" maxlength="24" inputmode="tel" value="${esc(c.phone)}"></div>
+        <div class="field"><label for="s_email">Email</label><input id="s_email" maxlength="120" value="${esc(c.email)}"></div>
       </div>
-      <div class="field"><label>Address</label><input id="s_addr" value="${esc(c.address)}" placeholder="Street, city, state, zip"></div>
-      <div class="field"><label>Google review link <span class="muted" style="text-transform:none;letter-spacing:0">(optional)</span></label><input id="s_review" value="${esc(c.reviewLink || "")}" inputmode="url" placeholder="https://g.page/your-shop/review"></div>
+      <div class="field"><label for="s_addr">Address</label><input id="s_addr" maxlength="160" value="${esc(c.address)}" placeholder="Street, city, state, zip"></div>
+      <div class="field"><label for="s_review">Google review link <span class="muted" style="text-transform:none;letter-spacing:0">(optional)</span></label><input id="s_review" maxlength="300" value="${esc(c.reviewLink || "")}" inputmode="url" placeholder="https://g.page/your-shop/review"></div>
       <div class="muted" style="margin-bottom:10px">Finished jobs get an "Ask for a review" button that shares this link with the customer.</div>
       <div class="f2">
-        <div class="field"><label>Default labor rate ($/hr)</label><input id="s_rate" inputmode="decimal" value="${esc(c.laborRate)}"></div>
-        <div class="field"><label>Tax rate (%)</label><input id="s_tax" inputmode="decimal" value="${esc(c.taxRate || 0)}" placeholder="0"></div>
+        <div class="field"><label for="s_rate">Default labor rate ($/hr)</label><input id="s_rate" maxlength="10" inputmode="decimal" value="${esc(c.laborRate)}"></div>
+        <div class="field"><label for="s_tax">Tax rate (%)</label><input id="s_tax" maxlength="10" inputmode="decimal" value="${esc(c.taxRate || 0)}" placeholder="0"></div>
       </div>
       <button class="btn block" id="saveCo">${I.check}Save</button>
     </div>

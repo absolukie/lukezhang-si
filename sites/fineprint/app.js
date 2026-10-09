@@ -270,7 +270,7 @@ function scoreOf(hits){
 function verdictFor(score){
   if(score >= 80) return ["Looks reasonable","Few major traps detected. Still read the exclusions yourself before signing.","#1e7a34"];
   if(score >= 60) return ["Proceed with caution","Real traps found. Price them into your decision or negotiate.","#8a5a00"];
-  if(score >= 40) return ["Trap-heavy","Multiple dealbreakers. This contract protects the company more than you.","#c25a1e"];
+  if(score >= 40) return ["Trap-heavy","Multiple dealbreakers. This contract protects the company more than you.","#a84e12"];
   return ["Walk away","This contract is engineered to deny claims. Do not sign it in a finance office.","#c92a1e"];
 }
 
@@ -766,6 +766,7 @@ function generateAppeal(){
 
 function renderResults(text, name, opts){
   opts = opts || {};
+  clearDraft(); // the text just became a saved analysis; the draft is spent
   const hits = analyze(text);
   const score = scoreOf(hits);
   const v = verdictFor(score);
@@ -997,6 +998,9 @@ function extIcon(){
 
 function saveAnalysis(a){
   const all = storeGet("fineprint_analyses", []);
+  // No duplicates: re-running identical text re-renders without a new row
+  // (tapping a sample chip twice, re-pasting the same contract, etc.).
+  if(all.some(function(x){ return x && x.text === a.text; })) return;
   all.unshift({id:a.id, date:a.date, name:(a.name||"Pasted contract").slice(0,60), score:a.score, rv:RULESET_V, flags:a.hits.length, text:a.text});
   if(!storeSet("fineprint_analyses", all.slice(0,20))){
     storageWarning("this analysis could not be saved.");
@@ -1065,9 +1069,91 @@ function switchTab(which){
    paid review credit ($15 one-time via Stripe Checkout). Demo sample
    contracts never consume a free review or a credit. The billing client
    fails open: if billing is unconfigured or unreachable, analyses run
-   normally and the pay sheet never appears. Zero LLM calls; $0 per analysis. */
+   normally and the pay sheet never appears. ?billing=paid never mints a
+   credit by itself; credits come only from a backend-confirmed payment
+   (see verifyPaidReturn). Zero LLM calls; $0 per analysis. */
 var REVIEW_PRICE_KEY = "price_fineprint_review";
 var pendingReview = null; // continuation offered when payments are not switched on
+
+/* ---------- Pending purchase intent + textarea drafts (red-1 #3) ----------
+   The Stripe round-trip is a full page load: in-memory state (the contract
+   text, the pending review continuation) dies with the navigation. So the
+   intent ({kind, ts}, 30-min TTL) and the textarea contents are persisted to
+   localStorage. Cancel on Stripe -> text restored, sheet re-offered while
+   the intent is fresh. Paid return -> the intent resumes after the credit
+   is verified. "Not now" and completed reviews clear the intent. */
+var INTENT_KEY = "fineprint.pending_intent.v1";
+var INTENT_TTL_MS = 30 * 60 * 1000;
+function setPendingIntent(kind){
+  try { localStorage.setItem(INTENT_KEY, JSON.stringify({kind: kind, ts: Date.now()})); } catch(e){}
+}
+function readPendingIntent(){
+  try {
+    var raw = localStorage.getItem(INTENT_KEY);
+    if(!raw) return null;
+    var o = JSON.parse(raw) || {};
+    if(!o.kind || Date.now() - (o.ts || 0) > INTENT_TTL_MS){ clearPendingIntent(); return null; }
+    return o;
+  } catch(e){ return null; }
+}
+function clearPendingIntent(){
+  try { localStorage.removeItem(INTENT_KEY); } catch(e){}
+  pendingReview = null;
+}
+var DRAFT_KEY = "fineprint.draft.v1";
+var DRAFT_A_KEY = "fineprint.draft.compare_a.v1";
+var DRAFT_B_KEY = "fineprint.draft.compare_b.v1";
+var draftTimer = null;
+function saveDraftSoon(){
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(function(){
+    try { localStorage.setItem(DRAFT_KEY, $("contract").value.slice(0, 200000)); } catch(e){}
+  }, 400);
+}
+function saveCompareDrafts(){
+  try {
+    localStorage.setItem(DRAFT_A_KEY, $("compare-a").value.slice(0, 200000));
+    localStorage.setItem(DRAFT_B_KEY, $("compare-b").value.slice(0, 200000));
+  } catch(e){}
+}
+function clearDraft(){ try { localStorage.removeItem(DRAFT_KEY); } catch(e){} }
+function clearCompareDrafts(){
+  try { localStorage.removeItem(DRAFT_A_KEY); localStorage.removeItem(DRAFT_B_KEY); } catch(e){}
+}
+function restoreDrafts(){
+  try {
+    if(!$("contract").value){
+      var d = localStorage.getItem(DRAFT_KEY);
+      if(d) $("contract").value = d;
+    }
+    var da = localStorage.getItem(DRAFT_A_KEY);
+    if(da && !$("compare-a").value) $("compare-a").value = da;
+    var db = localStorage.getItem(DRAFT_B_KEY);
+    if(db && !$("compare-b").value) $("compare-b").value = db;
+  } catch(e){}
+}
+/* Run the stored intent after a verified paid return: the credit is in hand,
+   so re-enter the same gate the user passed before leaving for Stripe. */
+function resumePendingReview(){
+  var intent = readPendingIntent();
+  if(!intent) return;
+  clearPendingIntent();
+  if(intent.kind === "compare"){
+    var a = $("compare-a").value.trim(), b = $("compare-b").value.trim();
+    if(a.length >= 200 && b.length >= 200){
+      if(consumeReviews(2, compareContracts)){ clearCompareDrafts(); compareContracts(); }
+    } else {
+      toast("Your compare texts were restored. Tap Compare to run them.");
+    }
+  } else {
+    var t = $("contract").value.trim();
+    if(t.length >= 200){
+      if(consumeReviews(1, function(){ renderResults(t, "Pasted contract"); })){ clearDraft(); renderResults(t, "Pasted contract"); }
+    } else {
+      toast("Your contract text was restored. Tap Analyze to run your review.");
+    }
+  }
+}
 function getCredits(){
   try { return Math.max(0, parseInt(localStorage.getItem("fineprint.review_credits") || "0", 10) || 0); }
   catch(e){ return 0; }
@@ -1092,10 +1178,18 @@ function billingReady(){
 }
 function consumeReviews(n, cont){
   if(!billingReady()) return true; // billing off or unreachable: fail open, reviews run free
+  // Decide first, mark only when the review will actually run: dismissing the
+  // pay sheet must never burn the free review (or a credit) for zero analysis.
   var usedFree = 0;
-  if(!freeReviewUsed()){ markFreeUsed(); usedFree = 1; }
+  if(!freeReviewUsed()) usedFree = 1;
   var have = getCredits();
-  if(usedFree + have < n){ pendingReview = cont || null; offerCheckout(); return false; }
+  if(usedFree + have < n){
+    pendingReview = cont || null;
+    setPendingIntent(n >= 2 ? "compare" : "analyze"); // survives the Stripe round-trip
+    offerCheckout();
+    return false;
+  }
+  if(usedFree) markFreeUsed();
   setCredits(have - (n - usedFree));
   updateCreditPill();
   return true;
@@ -1134,7 +1228,7 @@ function paySheet(){
       '<p class="pay-fine">30-day money-back guarantee. Review credits stay on this device.</p>' +
     "</div>";
   document.body.appendChild(ov);
-  $("pay-later").addEventListener("click", function(){ ov.hidden = true; pendingReview = null; });
+  $("pay-later").addEventListener("click", function(){ ov.hidden = true; clearPendingIntent(); });
   $("pay-buy").addEventListener("click", function(){
     var btn = this, errBox = $("pay-err");
     btn.disabled = true; errBox.hidden = true;
@@ -1162,7 +1256,8 @@ function freeBuyFallback(msg){
   // Payments are broken or not on: run the pending review free, honestly.
   var ov = $("pay-overlay");
   if(ov) ov.hidden = true;
-  var cont = pendingReview; pendingReview = null;
+  var cont = pendingReview;
+  clearPendingIntent();
   toast(msg);
   if(cont) cont();
 }
@@ -1174,16 +1269,68 @@ function offerCheckout(){
   var errBox = $("pay-err");
   if(errBox) errBox.hidden = true;
 }
-function handlePaidReturn(){
-  addCredit(1);
-  toast("Payment received. One review credit added.");
+/* ---------- Paid return verification (red-1 #1) ----------
+   ?billing=paid is UNTRUSTED and never mints a credit by itself: typing it
+   into the address bar used to mint unlimited review credits with no payment.
+   A credit is added ONLY when the backend confirms the device is entitled
+   via /v1/billing/status. An unverifiable return adds nothing (not even a
+   free review: a forged param must grant nothing at all); the attempt is
+   remembered and re-checked on later loads, so the credit appears
+   automatically once the server can confirm the payment (server-side
+   purchase records are PRD open question 1, owned by the backend). */
+var PENDING_PAYMENT_KEY = "fineprint.pending_payment.v1";
+var PAYMENT_RETRY_DAYS = 7;
+function setPendingPayment(){
+  try { localStorage.setItem(PENDING_PAYMENT_KEY, JSON.stringify({ts: Date.now()})); } catch(e){}
+}
+function clearPendingPayment(){
+  try { localStorage.removeItem(PENDING_PAYMENT_KEY); } catch(e){}
+}
+function pendingPaymentFresh(){
+  try {
+    var raw = localStorage.getItem(PENDING_PAYMENT_KEY);
+    if(!raw) return false;
+    var ts = (JSON.parse(raw) || {}).ts || 0;
+    if(Date.now() - ts > PAYMENT_RETRY_DAYS * 86400000){ clearPendingPayment(); return false; }
+    return true;
+  } catch(e){ return false; }
+}
+function backendConfirmsPayment(){
+  var b = window.__billing;
+  return !!(b && !b.unconfigured && typeof b.isEntitled === "function" && b.isEntitled());
+}
+function verifyPaidReturn(opts){
+  opts = opts || {};
+  var b = window.__billing;
+  if(!opts.quiet) toast("Confirming your payment with our server...");
+  var finish = function(){
+    if(backendConfirmsPayment()){
+      clearPendingPayment();
+      addCredit(1);
+      toast("Payment received. One review credit added.");
+      resumePendingReview();
+    } else {
+      setPendingPayment();
+      if(!opts.quiet) toast("We could not confirm your payment yet, so no credit was added. If you were charged, it will appear automatically once our server records it.");
+    }
+    updateCreditPill();
+  };
+  try {
+    if(b && typeof b.refresh === "function") b.refresh().then(finish, finish);
+    else finish();
+  } catch(e){ finish(); }
+}
+function retryPendingPayment(){
+  if(!pendingPaymentFresh()) return;
+  verifyPaidReturn({quiet: true});
 }
 window.__fineprintBilling = {
   addCredit: addCredit,
   updateCreditPill: updateCreditPill,
   consumeReviews: consumeReviews,
   offerCheckout: offerCheckout,
-  handlePaidReturn: handlePaidReturn
+  verifyPaidReturn: verifyPaidReturn,
+  retryPendingPayment: retryPendingPayment
 };
 
 /* ---------- Wire up ---------- */
@@ -1192,10 +1339,11 @@ $("compare-toggle").addEventListener("click",function(){
   this.setAttribute("aria-expanded",String(!$("compare-sec").hidden));
   if(!$("compare-sec").hidden) $("compare-a").focus();
 });
-$("compare-sample-a").addEventListener("click",function(){ $("compare-a").value=SAMPLES.car.text; $("compare-results").hidden=true; });
-$("compare-sample-b").addEventListener("click",function(){ $("compare-b").value=SAMPLES.home.text; $("compare-results").hidden=true; });
-["compare-a","compare-b"].forEach(function(id){$(id).addEventListener("input",function(){ $("compare-results").hidden=true; });});
-$("compare-run").addEventListener("click",function(){ if(consumeReviews(2, compareContracts)) compareContracts(); });
+$("compare-sample-a").addEventListener("click",function(){ $("compare-a").value=SAMPLES.car.text; saveCompareDrafts(); $("compare-results").hidden=true; });
+$("compare-sample-b").addEventListener("click",function(){ $("compare-b").value=SAMPLES.home.text; saveCompareDrafts(); $("compare-results").hidden=true; });
+["compare-a","compare-b"].forEach(function(id){$(id).addEventListener("input",function(){ $("compare-results").hidden=true; saveCompareDrafts(); });});
+$("compare-run").addEventListener("click",function(){ if(consumeReviews(2, compareContracts)){ clearPendingIntent(); clearCompareDrafts(); compareContracts(); } });
+$("contract").addEventListener("input", saveDraftSoon);
 $("flag-list").addEventListener("click",function(event){
   const button = event.target.closest("button[data-vote]");
   if(!button) return;
@@ -1231,11 +1379,12 @@ $("analyze").addEventListener("click", function(){
   if(t.length < 200){ toast("Paste a bit more contract text first (at least a paragraph)."); return; }
   // Demo samples never consume the free review or credits (PRD FR-1.5);
   // they run through the same handlers above without a gate.
-  if(consumeReviews(1, function(){ renderResults(t, "Pasted contract"); })) renderResults(t, "Pasted contract");
+  if(consumeReviews(1, function(){ renderResults(t, "Pasted contract"); })){ clearPendingIntent(); renderResults(t, "Pasted contract"); }
 });
 
 $("clear").addEventListener("click", function(){
   $("contract").value = "";
+  clearDraft();
   $("results").style.display = "none";
   $("fight-kit").hidden = true;
   // reset the print closure so Ctrl+P agrees with the print button: nothing to print
@@ -1249,12 +1398,24 @@ $("file").addEventListener("change", function(e){
   const f = e.target.files[0];
   if(!f) return;
   const r = new FileReader();
-  r.onload = function(){ $("contract").value = String(r.result || "").slice(0, 200000); toast("File loaded. Hit Analyze."); };
+  r.onload = function(){ $("contract").value = String(r.result || "").slice(0, 200000); saveDraftSoon(); toast("File loaded. Hit Analyze."); };
   r.readAsText(f);
   e.target.value = "";
 });
 
 renderSaved();
+
+/* draft restore: a Stripe round-trip is a full page load, so text typed
+   before leaving for checkout is restored here (red-1 #3). */
+restoreDrafts();
+
+/* Returning from a cancelled Stripe session (no ?billing=paid param): the
+   intent is still fresh, so re-offer the sheet instead of stranding the
+   user on an empty form. Paid returns skip this; the verified-credit flow
+   in the billing init script resumes the intent instead. */
+if(!/[?&]billing=paid\b/.test(location.search)){
+  try { if(readPendingIntent()) offerCheckout(); } catch(e){}
+}
 
 /* offline banner: subtle, never a modal (Section 8 bar). Analysis is fully
    local, so offline only pauses sync and payments. */

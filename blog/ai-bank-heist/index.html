@@ -66,6 +66,7 @@ figure.viz figcaption b{color:var(--viz-ink);}
 .kc-lesson{background:rgba(232,163,61,.07); border:1px solid rgba(232,163,61,.35); border-radius:12px; padding:14px 16px; margin:0 0 18px;}
 .kc-lesson > b{display:block; font-family:var(--viz-mono); font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--viz-accent); margin-bottom:6px;}
 .kc-lesson p{margin:0; font-size:15.5px; color:var(--viz-ink);}
+.kc-body{overflow:hidden;} /* BFC: contains child margins so height measurement is exact */
 .kc-nav{display:flex; justify-content:space-between; gap:12px;}
 .kc-nav .kc-next{margin-left:auto;}
 .kc-nav button{
@@ -169,9 +170,11 @@ footer.end{margin-top:40px; padding-top:18px; border-top:1px solid var(--viz-lin
         <span class="kc-count" id="kcCount">Step 1 of 7</span>
         <span class="kc-dots" id="kcDots" aria-hidden="true"></span>
       </div>
-      <h3 class="kc-title" id="kcTitle"></h3>
-      <p class="kc-what" id="kcWhat"></p>
-      <div class="kc-lesson"><b>The defense</b><p id="kcLesson"></p></div>
+      <div class="kc-body" id="kcBody">
+        <h3 class="kc-title" id="kcTitle"></h3>
+        <p class="kc-what" id="kcWhat"></p>
+        <div class="kc-lesson"><b>The defense</b><p id="kcLesson"></p></div>
+      </div>
       <div class="kc-nav">
         <button type="button" class="kc-prev" id="kcPrev" aria-label="Previous step">&#8249; Back</button>
         <button type="button" class="kc-next" id="kcNext" aria-label="Next step">Next &#8250;</button>
@@ -380,18 +383,30 @@ footer.end{margin-top:40px; padding-top:18px; border-top:1px solid var(--viz-lin
   var lesson = document.getElementById('kcLesson');
   var prev = document.getElementById('kcPrev');
   var next = document.getElementById('kcNext');
+  var body = document.getElementById('kcBody');
   steps.forEach(function(){ var d = document.createElement('i'); dots.appendChild(d); });
   var dotEls = dots.querySelectorAll('i');
-  function render(){
+  function setContent(){
     var s = steps[i];
     count.textContent = 'Step ' + (i + 1) + ' of ' + steps.length;
     title.textContent = s.t;
     what.textContent = s.what;
     lesson.textContent = s.lesson;
     dotEls.forEach(function(d, k){ d.classList.toggle('on', k === i); });
+  }
+  function render(){
+    setContent();
     /* Back is display:none on step 1; Next stays right via margin-left:auto. No bounce, no phantom slot. */
     prev.hidden = (i === 0);
     next.hidden = (i === steps.length - 1);
+  }
+  /* Lock the content area to the tallest step so the nav buttons never ride up and down. */
+  function fitHeight(){
+    var cur = i, max = 0;
+    body.style.minHeight = '';
+    for(var k = 0; k < steps.length; k++){ i = k; setContent(); max = Math.max(max, body.offsetHeight); }
+    i = cur; setContent();
+    body.style.minHeight = max + 'px';
   }
   prev.addEventListener('click', function(){ if(i > 0){ i--; render(); } });
   next.addEventListener('click', function(){ if(i < steps.length - 1){ i++; render(); } });
@@ -407,6 +422,13 @@ footer.end{margin-top:40px; padding-top:18px; border-top:1px solid var(--viz-lin
     else if(e.key === 'ArrowRight' && i < steps.length - 1){ i++; render(); e.preventDefault(); }
   });
   render();
+  fitHeight();
+  if(document.fonts && document.fonts.ready){ document.fonts.ready.then(fitHeight); }
+  var rzT = null;
+  window.addEventListener('resize', function(){
+    if(rzT) clearTimeout(rzT);
+    rzT = setTimeout(fitHeight, 200);
+  });
 })();
 
 /* Target cards */

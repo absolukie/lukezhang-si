@@ -57,7 +57,7 @@ figure.viz{
 figure.viz figcaption{font-size:13.5px; color:var(--viz-muted); margin-top:14px; max-width:620px;}
 figure.viz figcaption b{color:var(--viz-ink);}
 /* Stepper (proven pattern) */
-.kc{position:relative; background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:16px; padding:22px 20px;}
+.kc{position:relative; background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:16px; padding:22px 54px;}
 .kc-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
 .kc-count{font-family:var(--viz-mono); font-size:12.5px; letter-spacing:.08em; color:var(--viz-accent); text-transform:uppercase;}
 .kc-dots{display:flex; gap:7px;}
@@ -70,18 +70,19 @@ figure.viz figcaption b{color:var(--viz-ink);}
 .kc-lesson p{margin:0; font-size:15.5px; color:var(--viz-ink);}
 .kc-body{overflow:hidden;}
 .kc-dia{margin:2px 0 16px;}
-/* Gutter arrows: fixed left/right, vertically centered, never move between steps */
+/* Gutter arrows: fixed to the card's top edge (which never moves between steps),
+   so they can't bounce when step heights differ. No content-height lock needed. */
 .kc-arrow{
-  position:absolute; top:50%; transform:translateY(-50%);
+  position:absolute; top:112px;
   width:46px; height:46px; border-radius:50%; padding:0 0 3px 0;
-  background:rgba(29,27,23,.72); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  background:rgba(29,27,23,.85);
   border:1px solid var(--viz-line); color:var(--viz-ink); font-size:26px; line-height:1;
   display:flex; align-items:center; justify-content:center;
   cursor:pointer; touch-action:manipulation; box-shadow:0 2px 10px rgba(0,0,0,.35);
 }
-.kc-arrow:active{transform:translateY(-50%) scale(.94);}
-.kc-arrow.kc-prev{left:8px;}
-.kc-arrow.kc-next{right:8px;}
+.kc-arrow:active{transform:scale(.94);}
+.kc-arrow.kc-prev{left:4px;}
+.kc-arrow.kc-next{right:4px;}
 .kc-arrow[hidden]{display:none;}
 /* Pod diagrams */
 .pod{border:2px dashed var(--viz-line); border-radius:14px; padding:14px; background:rgba(232,163,61,.03);}
@@ -170,7 +171,7 @@ footer.end{margin-top:40px; padding-top:18px; border-top:1px solid var(--viz-lin
   font-size:13.5px; color:var(--viz-faint);}
 @media (prefers-reduced-motion:reduce){
   html{scroll-behavior:auto;}
-  .kc-arrow:active{transform:translateY(-50%);}
+  .kc-arrow:active{transform:none;}
   .cmp-tabs button:active{transform:none;}
   .excard:active{transform:none;}
 }
@@ -517,7 +518,6 @@ if(window.hljs){ hljs.highlightAll(); }
   var lesson = document.getElementById('kcLesson');
   var prev = document.getElementById('kcPrev');
   var next = document.getElementById('kcNext');
-  var body = document.getElementById('kcBody');
   steps.forEach(function(){ var d = document.createElement('i'); dots.appendChild(d); });
   var dotEls = dots.querySelectorAll('i');
   function setContent(){
@@ -531,15 +531,9 @@ if(window.hljs){ hljs.highlightAll(); }
   }
   function render(){
     setContent();
+    /* Terminal arrows are display:none, never disabled. */
     prev.hidden = (i === 0);
     next.hidden = (i === steps.length - 1);
-  }
-  function fitHeight(){
-    var cur = i, max = 0;
-    body.style.minHeight = '';
-    for(var k = 0; k < steps.length; k++){ i = k; setContent(); max = Math.max(max, body.offsetHeight); }
-    i = cur; setContent();
-    body.style.minHeight = max + 'px';
   }
   prev.addEventListener('click', function(){ if(i > 0){ i--; render(); } });
   next.addEventListener('click', function(){ if(i < steps.length - 1){ i++; render(); } });
@@ -555,13 +549,6 @@ if(window.hljs){ hljs.highlightAll(); }
     else if(e.key === 'ArrowRight' && i < steps.length - 1){ i++; render(); e.preventDefault(); }
   });
   render();
-  fitHeight();
-  if(document.fonts && document.fonts.ready){ document.fonts.ready.then(fitHeight); }
-  var rzT = null;
-  window.addEventListener('resize', function(){
-    if(rzT) clearTimeout(rzT);
-    rzT = setTimeout(fitHeight, 200);
-  });
 })();
 
 /* Comparison tabs */

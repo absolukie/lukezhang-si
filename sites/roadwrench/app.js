@@ -1549,5 +1549,17 @@ function viewSettings() {
 }
 
 /* ---------- init ---------- */
+/* Keep the shared billing trial banner (position:fixed;top:0) from covering the
+   topbar: measure the banner and expose its height as --bill-banner-h, which the
+   app-local :has() CSS rules use to offset the app column and sticky topbar. */
+function billBannerOffset() {
+  var b = document.querySelector(".bill-banner");
+  document.documentElement.style.setProperty("--bill-banner-h", (b ? b.offsetHeight : 0) + "px");
+}
+try {
+  new MutationObserver(billBannerOffset).observe(document.body, { childList: true });
+  window.addEventListener("resize", billBannerOffset);
+  billBannerOffset();
+} catch (e) { /* observer unavailable: banner overlap is cosmetic only */ }
 document.addEventListener("DOMContentLoaded", () => { route(); });
 if (document.readyState !== "loading") route();

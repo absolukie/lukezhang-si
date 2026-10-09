@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>chaos paint | Luke Zhang</title>
+<style>
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; touch-action:manipulation;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;
+    background:linear-gradient(180deg,#fdf6ec 0%,#f7ecf4 55%,#efe7f6 100%);
+    color:#3a3340; min-height:100dvh; display:flex; flex-direction:column; align-items:center;
+    padding:20px 12px 40px; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{width:100%; max-width:430px;}
+  .kicker{font-size:11px; letter-spacing:.32em; text-transform:uppercase; color:#a78b9e; text-align:center; margin-bottom:6px;}
+  h1{font-size:26px; font-weight:700; text-align:center; letter-spacing:-.02em; margin-bottom:2px;}
+  .sub{text-align:center; font-size:14px; color:#a78b9e; margin-bottom:12px; line-height:1.5; padding:0 8px;}
+  .stage{
+    position:relative; border-radius:20px; overflow:hidden; background:#fffdf8;
+    border:1px solid rgba(190,160,200,.35);
+    box-shadow:0 18px 44px rgba(150,120,170,.22), inset 0 2px 0 rgba(255,255,255,.8);
+    touch-action:none; user-select:none; -webkit-user-select:none; cursor:grab;
+  }
+  .stage:active{cursor:grabbing;}
+  canvas{display:block; width:100%; height:auto; touch-action:none;}
+  .meter{display:flex; align-items:center; gap:10px; margin-top:12px;}
+  .meter span{font-size:11px; letter-spacing:.24em; text-transform:uppercase; color:#a78b9e;}
+  .meter .track{flex:1; height:12px; background:rgba(255,255,255,.7); border-radius:8px; overflow:hidden; border:1px solid rgba(190,160,200,.4);}
+  .meter .fill{height:100%; width:0%; border-radius:8px; background:linear-gradient(90deg,#67e8f9,#f472b6,#fbbf24); transition:width .12s linear;}
+  .hint{margin-top:8px; text-align:center; font-size:13.5px; color:#8a7a92; min-height:20px;}
+  .row{display:flex; gap:8px; margin-top:10px;}
+  .row button{
+    flex:1; border:none; border-radius:14px; padding:14px 6px; min-height:52px; cursor:pointer;
+    font-size:14px; font-weight:700; color:#fff; letter-spacing:.02em;
+  }
+  #shakeBtn{background:linear-gradient(180deg,#f472b6,#db5a9e); box-shadow:0 4px 0 #b0447c;}
+  #moonBtn{background:linear-gradient(180deg,#8b7bd8,#6f5fc4); box-shadow:0 4px 0 #54478f;}
+  #clearBtn{background:linear-gradient(180deg,#94a3b8,#7488a3); box-shadow:0 4px 0 #5b6c84;}
+  .row button:active{transform:translateY(3px); box-shadow:0 1px 0 rgba(0,0,0,.2);}
+  .about{
+    margin-top:14px; background:rgba(255,255,255,.65); border-radius:16px; padding:12px 14px;
+    border:1px solid rgba(190,160,200,.35); font-size:13px; line-height:1.6; color:#6b5f73;
+  }
+  .about b{color:#3a3340;}
+  .foot{margin-top:22px; text-align:center; font-size:13px; color:#a78b9e; line-height:1.7;}
+  .foot a{color:#3a3340; font-weight:600; text-decoration:none; border-bottom:1px solid #f472b6; padding:10px 4px; display:inline-block;}
+  input,textarea,select{font-size:16px;}
+  @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">Luke Zhang</div>
+  <h1>chaos paint</h1>
+  <p class="sub">A double pendulum with real physics. Drag to fling it, then watch chaos paint.</p>
+  <div class="stage" id="stage" aria-label="Chaos painting canvas. Drag to fling the pendulum.">
+    <canvas id="cv"></canvas>
+  </div>
+  <div class="meter" aria-hidden="true"><span>chaos</span><div class="track"><div class="fill" id="chaosFill"></div></div></div>
+  <div class="hint" id="hint">drag anywhere on the canvas to fling it</div>
+  <div class="row">
+    <button id="shakeBtn">shake it</button>
+    <button id="moonBtn">moon: off</button>
+    <button id="clearBtn">new canvas</button>
+  </div>
+  <div class="about">
+    <b>The machinery:</b> two rods, two equal masses, four coupled differential equations, integrated with RK4 at 240 steps per second. The trail color reads the tip speed in real time: teal when it drifts, hot pink when it panics. Chaotic systems never repeat, so every painting is a one of one.
+  </div>
+  <div class="foot"><a href="../">all the ways to say hi</a></div>
+</div>
+<script>
+(function(){
+  "use strict";
+  var reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var stage = document.getElementById("stage");
+  var cv = document.getElementById("cv");
+  var ctx = cv.getContext("2d");
+  var hint = document.getElementById("hint");
+  var chaosFill = document.getElementById("chaosFill");
+  var shakeBtn = document.getElementById("shakeBtn");
+  var moonBtn = document.getElementById("moonBtn");
+  var clearBtn = document.getElementById("clearBtn");
+
+  var W = 0, H = 0, DPR = 1;
+  var paint = document.createElement("canvas");
+  var pctx = paint.getContext("2d");
+
+  function size(){
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    W = stage.clientWidth;
+    H = Math.round(W * 1.05);
+    cv.width = W * DPR; cv.height = H * DPR;
+    cv.style.height = H + "px";
+    paint.width = W * DPR; paint.height = H * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    pctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    pctx.lineCap = "round"; pctx.lineJoin = "round";
+  }
+  size();
+  window.addEventListener("resize", size);
+
+  /* Double pendulum: the real equations of motion.
+     State: t1, t2 (angles from straight down), w1, w2 (angular velocities). */
+  var G = 9.81, MOON_G = 1.62, L1 = 1, L2 = 1, M1 = 1, M2 = 1;
+  var moon = false;
+  var s = {t1: 1.15, t2: 2.35, w1: 0, w2: 0};
+
+  function deriv(st, g){
+    var d = st.t1 - st.t2;
+    var den = 2*M1 + M2 - M2*Math.cos(2*st.t1 - 2*st.t2);
+    var a1 = (-g*(2*M1+M2)*Math.sin(st.t1) - M2*g*Math.sin(st.t1-2*st.t2)
+      - 2*Math.sin(d)*M2*(st.w2*st.w2*L2 + st.w1*st.w1*L1*Math.cos(d))) / (L1*den);
+    var a2 = (2*Math.sin(d)*(st.w1*st.w1*L1*(M1+M2) + g*(M1+M2)*Math.cos(st.t1)
+      + st.w2*st.w2*L2*M2*Math.cos(d))) / (L2*den);
+    return {t1: st.w1, t2: st.w2, w1: a1, w2: a2};
+  }
+  function rk4(h){
+    var g = moon ? MOON_G : G;
+    var k1 = deriv(s, g);
+    var s2 = {t1:s.t1+k1.t1*h/2, t2:s.t2+k1.t2*h/2, w1:s.w1+k1.w1*h/2, w2:s.w2+k1.w2*h/2};
+    var k2 = deriv(s2, g);
+    var s3 = {t1:s.t1+k2.t1*h/2, t2:s.t2+k2.t2*h/2, w1:s.w1+k2.w1*h/2, w2:s.w2+k2.w2*h/2};
+    var k3 = deriv(s3, g);
+    var s4 = {t1:s.t1+k3.t1*h, t2:s.t2+k3.t2*h, w1:s.w1+k3.w1*h, w2:s.w2+k3.w2*h};
+    var k4 = deriv(s4, g);
+    s.t1 += h/6*(k1.t1 + 2*k2.t1 + 2*k3.t1 + k4.t1);
+    s.t2 += h/6*(k1.t2 + 2*k2.t2 + 2*k3.t2 + k4.t2);
+    s.w1 += h/6*(k1.w1 + 2*k2.w1 + 2*k3.w1 + k4.w1);
+    s.w2 += h/6*(k1.w2 + 2*k2.w2 + 2*k3.w2 + k4.w2);
+  }
+
+  function joints(){
+    var px = W/2, py = H*0.16;
+    var arm = H*0.30;
+    var x1 = px + arm*Math.sin(s.t1), y1 = py + arm*Math.cos(s.t1);
+    var x2 = x1 + arm*Math.sin(s.t2), y2 = y1 + arm*Math.cos(s.t2);
+    return {px:px, py:py, x1:x1, y1:y1, x2:x2, y2:y2};
+  }
+
+  var prevTip = null;
+  function speed(){ return Math.abs(s.w1)*L1 + Math.abs(s.w2)*L2; }
+  function hueFor(sp){ return Math.round(315 - Math.min(1, sp/13)*145); }
+
+  function paintTip(j){
+    var sp = speed();
+    if(prevTip){
+      pctx.strokeStyle = "hsla(" + hueFor(sp) + ", 85%, 62%, 0.9)";
+      pctx.lineWidth = 2.6;
+      pctx.beginPath();
+      pctx.moveTo(prevTip.x, prevTip.y);
+      pctx.lineTo(j.x2, j.y2);
+      pctx.stroke();
+    }
+    prevTip = {x:j.x2, y:j.y2};
+  }
+
+  function draw(){
+    ctx.clearRect(0, 0, W, H);
+    ctx.drawImage(paint, 0, 0, W, H);
+    var j = joints();
+    /* arms */
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#4a4152"; ctx.lineWidth = 7;
+    ctx.beginPath(); ctx.moveTo(j.px, j.py); ctx.lineTo(j.x1, j.y1); ctx.stroke();
+    ctx.strokeStyle = "#5c5266"; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(j.x1, j.y1); ctx.lineTo(j.x2, j.y2); ctx.stroke();
+    /* pivot */
+    ctx.fillStyle = "#3a3340";
+    ctx.beginPath(); ctx.arc(j.px, j.py, 6, 0, 7); ctx.fill();
+    /* bob 1 */
+    ctx.fillStyle = "#f472b6";
+    ctx.beginPath(); ctx.arc(j.x1, j.y1, 11, 0, 7); ctx.fill();
+    /* bob 2 with googly eyes that follow the motion */
+    ctx.fillStyle = "#8b7bd8";
+    ctx.beginPath(); ctx.arc(j.x2, j.y2, 16, 0, 7); ctx.fill();
+    var sp = speed();
+    var ex = Math.min(1, sp/10);
+    var dx = Math.cos(s.t2)*4*ex, dy = Math.sin(s.t2)*4*ex;
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(j.x2-5+dx, j.y2-4+dy, 5.2, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(j.x2+6+dx, j.y2-4+dy, 5.2, 0, 7); ctx.fill();
+    ctx.fillStyle = "#2b2530";
+    ctx.beginPath(); ctx.arc(j.x2-5+dx*1.6, j.y2-4+dy*1.6, 2.4, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(j.x2+6+dx*1.6, j.y2-4+dy*1.6, 2.4, 0, 7); ctx.fill();
+    /* chaos meter */
+    chaosFill.style.width = Math.min(100, sp/13*100).toFixed(1) + "%";
+  }
+
+  var running = !reduced;
+  var last = performance.now();
+  function frame(now){
+    var dt = Math.min(0.05, (now - last)/1000);
+    last = now;
+    if(running){
+      var h = 1/240, acc = dt;
+      while(acc > 1e-9){ var step = Math.min(h, acc); rk4(step); acc -= step; }
+      paintTip(joints());
+    }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  function wake(){
+    if(!running){ running = true; hint.textContent = "it lives. chaos does the rest."; }
+  }
+
+  /* Fling: drag imparts real angular velocity; a plain tap gives a nudge. */
+  var pdown = null;
+  stage.addEventListener("pointerdown", function(e){
+    wake();
+    pdown = {x:e.clientX, y:e.clientY, t:performance.now(), moved:0};
+    stage.setPointerCapture(e.pointerId);
+  });
+  stage.addEventListener("pointermove", function(e){
+    if(!pdown) return;
+    pdown.moved = Math.max(pdown.moved, Math.hypot(e.clientX-pdown.x, e.clientY-pdown.y));
+  });
+  stage.addEventListener("pointerup", function(e){
+    if(!pdown) return;
+    var dt = Math.max(16, performance.now() - pdown.t);
+    if(pdown.moved < 10){
+      s.w2 += (Math.random() < 0.5 ? -1 : 1) * (2 + Math.random()*2.5);
+      s.w1 += (Math.random() < 0.5 ? -1 : 1) * Math.random()*1.5;
+      hint.textContent = "a gentle nudge. the pendulum has opinions.";
+    } else {
+      var vx = (e.clientX - pdown.x)/dt, vy = (e.clientY - pdown.y)/dt;
+      s.w2 += Math.max(-7, Math.min(7, vx*9));
+      s.w1 += Math.max(-5, Math.min(5, vy*7));
+      hint.textContent = "flung. no takebacks in chaotic systems.";
+    }
+    pdown = null;
+  });
+
+  shakeBtn.addEventListener("click", function(){
+    wake();
+    s.w1 = (Math.random()*2-1)*8;
+    s.w2 = (Math.random()*2-1)*11;
+    hint.textContent = "maximum chaos achieved. you are welcome.";
+  });
+  moonBtn.addEventListener("click", function(){
+    moon = !moon;
+    moonBtn.textContent = moon ? "moon: on" : "moon: off";
+    hint.textContent = moon ? "moon gravity. everything is slower and dreamier." : "earth gravity. business as usual.";
+  });
+  clearBtn.addEventListener("click", function(){
+    pctx.clearRect(0, 0, W, H);
+    prevTip = null;
+    hint.textContent = "fresh canvas. the pendulum remembers nothing.";
+  });
+})();
+</script>
+</body>
+</html>

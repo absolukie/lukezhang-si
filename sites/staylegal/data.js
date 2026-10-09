@@ -11,7 +11,7 @@ const STAYLEGAL_DATA = {
     {
       id: "los-angeles-ca",
       nightCap: { value: 120, unit: "nights", period: "per calendar year", note: "Applies to unhosted stays. In the I live there view this cap does not bind you." },
-      confidence: "verified",
+      confidence: "hand",
       researched: "October 2026",
       city: "Los Angeles",
       state: "CA",
@@ -55,7 +55,7 @@ const STAYLEGAL_DATA = {
     },
     {
       id: "new-york-ny",
-      confidence: "verified",
+      confidence: "hand",
       researched: "October 2026",
       city: "New York",
       state: "NY",
@@ -93,7 +93,7 @@ const STAYLEGAL_DATA = {
     },
     {
       id: "austin-tx",
-      confidence: "verified",
+      confidence: "hand",
       researched: "October 2026",
       city: "Austin",
       state: "TX",
@@ -130,7 +130,7 @@ const STAYLEGAL_DATA = {
     },
     {
       id: "denver-co",
-      confidence: "verified",
+      confidence: "hand",
       researched: "October 2026",
       city: "Denver",
       state: "CO",
@@ -168,7 +168,7 @@ const STAYLEGAL_DATA = {
     },
     {
       id: "miami-fl",
-      confidence: "verified",
+      confidence: "hand",
       researched: "October 2026",
       city: "Miami",
       state: "FL",
@@ -210,7 +210,7 @@ const STAYLEGAL_DATA = {
     {
       id: "palm-springs-ca",
       nightCap: { value: 26, unit: "rental contracts", period: "per calendar year", note: "Applies to every short-term rental in the city." },
-      confidence: "verified",
+      confidence: "hand",
       researched: "October 2026",
       city: "Palm Springs",
       state: "CA",
@@ -247,7 +247,7 @@ const STAYLEGAL_DATA = {
     },
     {
       id: "scottsdale-az",
-      confidence: "verified",
+      confidence: "hand",
       researched: "October 2026",
       city: "Scottsdale",
       state: "AZ",
@@ -283,7 +283,7 @@ const STAYLEGAL_DATA = {
     },
     {
       id: "nashville-tn",
-      confidence: "verified",
+      confidence: "hand",
       researched: "October 2026",
       city: "Nashville",
       state: "TN",
@@ -320,7 +320,7 @@ const STAYLEGAL_DATA = {
     },
     {
       id: "san-diego-ca",
-      confidence: "verified",
+      confidence: "hand",
       researched: "October 2026",
       city: "San Diego",
       state: "CA",
@@ -362,7 +362,7 @@ const STAYLEGAL_DATA = {
     },
     {
       id: "new-orleans-la",
-      confidence: "verified",
+      confidence: "hand",
       researched: "October 2026",
       city: "New Orleans",
       state: "LA",

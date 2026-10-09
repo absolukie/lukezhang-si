@@ -27,6 +27,56 @@
 <script src="app.js"></script>
 <script src="sync.js"></script>
 <script src="auth-ui.js"></script>
+<script src="billing-ui.js"></script>
+<style>
+/* Billing theme: pine green + rust to match RoadWrench */
+:root{
+  --bill-accent:#1e3d2b; --bill-bg:#fffdf6; --bill-text:#22281f;
+  --bill-muted:#6d7263; --bill-line:#d9d0b8;
+}
+</style>
+<script>
+/* Billing: shared module (see builds/shared/billing-ui.js). Trial = full
+ * access; the paywall overlay blocks the app but local data is untouched.
+ * If the billing backend is unreachable, the app works normally (fail open). */
+(function(){
+  var PLANS = [
+    { lookupKey: "price_roadwrench_solo", name: "Solo", price: "$50/mo",
+      blurb: "1 tech: unlimited jobs, warranty packets, photo docs, signatures." },
+    { lookupKey: "price_roadwrench_shop", name: "Shop", price: "$100/mo",
+      blurb: "Up to 5 techs: per-tech job and revenue views, priority support." }
+  ];
+  // Attaches the billing Subscription card into the Setup view (if rendered).
+  // If billing is not configured, the card header is hidden so nothing shows.
+  window.__attachBillSettings = function(){
+    try {
+      var slot = document.getElementById("billSettingsSlot");
+      var b = window.__billing;
+      if (!slot || !b || slot.querySelector("[data-bill-settings]")) return;
+      var html = b.settingsHTML();
+      var card = slot.closest(".card");
+      if (!html) { if (card) card.style.display = "none"; return; }
+      var div = document.createElement("div");
+      div.innerHTML = html;
+      slot.appendChild(div.firstChild);
+      b.bindSettings(slot);
+    } catch(e){}
+  };
+  function boot(){
+    if (typeof initBilling !== "function") return;
+    initBilling({ appSlug: "roadwrench", plans: PLANS }).then(function(b){
+      window.__billing = b;
+      b.ensurePaywall();
+      window.__attachBillSettings();
+    }).catch(function(e){
+      // Billing must never break the app. Fail open, log loudly.
+      try { console.error("[billing] init failed:", e); } catch(_){}
+    });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>
 <script>
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(() => {}); });

@@ -702,7 +702,7 @@ let weekOffset=0;
 function renderLocations(){
   const wk=weekKeys(weekOffset);
   const first=parseKey(wk[0]), last=parseKey(wk[6]);
-  $('#weekLabel').textContent=first.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' – '+last.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  $('#weekLabel').textContent=first.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' - '+last.toLocaleDateString('en-US',{month:'short',day:'numeric'});
   const tK=todayKey();
   $('#weekGrid').innerHTML=wk.map(k=>{
     const d=parseKey(k); const spots=S.locations[k]||[];
@@ -740,7 +740,7 @@ function spotSheet(k){
   openSheet('<h3>Schedule spot</h3><p class="muted">'+fmtDate(k)+'</p>'+
     '<label>Spot name<input type="text" id="spName" placeholder="e.g. Brewery X lot, 5th & Main" maxlength="80"></label>'+
     '<label>Address<input type="text" id="spAddr" placeholder="Optional" maxlength="120"></label>'+
-    '<label>Hours<input type="text" id="spHours" placeholder="e.g. 11a–2p, 5–9p" maxlength="40"></label>'+
+    '<label>Hours<input type="text" id="spHours" placeholder="e.g. 11a-2p, 5-9p" maxlength="40"></label>'+
     '<button class="btn primary big" id="spSave">Add to schedule</button><button class="btn ghost" id="spCancel">Cancel</button>', 'Schedule spot');
   $('#spCancel').onclick=closeSheet;
   $('#spSave').onclick=()=>{

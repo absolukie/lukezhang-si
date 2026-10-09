@@ -544,21 +544,40 @@ function renderRefundCard(text){
    The checklist used to say "[company name]". The name is usually in the
    contract's first line or in an "X LLC" phrasing, so we pull it out and turn
    the checklist chores into one-tap pre-filled searches. */
+function isGenericTitle(line){
+  // True only when the whole line is generic document-title words, e.g.
+  // "VEHICLE SERVICE CONTRACT" or "Platinum Protection Plan". A line that
+  // contains a generic word inside a name ("Sunrise Vehicle Protection")
+  // is NOT generic and must pass through.
+  const stripped = line.replace(/[:;.\-–—]+$/,"").trim();
+  const words = stripped.split(/\s+/);
+  const generic = /^(vehicle|service|contract|extended|warranty|protection|plan|policy|coverage|agreement|platinum|gold|silver|bronze|diamond|terms?|conditions?|disclosures?|home|auto|car|residential|systems?|declarations?|summary)$/i;
+  return words.length > 0 && words.every(function(w){ return generic.test(w.replace(/[^a-zA-Z]/g,"")); });
+}
 function extractCompany(text){
   const m = text.match(/([A-Z][\w&'\u2019.\- ]{2,60}?)\s+(LLC|Inc\.?|Corp\.?|Corporation|Ltd\.?|Holdings?|Warranty\sServices\sInc\.?)/);
   if(m) return m[1].replace(/^[\s"'“”'‘]+|[\s"'“”'‘]+$/g,"").trim() || null;
   const lines = text.split(/\n/).map(function(l){return l.trim();}).filter(Boolean);
   const first = lines[0] || "";
-  if(first.length > 3 && first.length < 64 && !/(contract|plan|policy|coverage|agreement|protection)/i.test(first)) return first;
+  if(first.length > 3 && first.length < 64 && !isGenericTitle(first)) return first;
   return null;
 }
 function checklistLinks(i, company){
-  if(!company) return [];
-  const q = encodeURIComponent(company);
-  if(i===0) return [{href:"https://www.google.com/search?q=" + q + "+complaints", text:"Search complaints"}];
-  if(i===1) return [{href:"https://www.google.com/search?q=" + q + "+scam+OR+lawsuit", text:"Search scam / lawsuit"}];
-  if(i===2) return [{href:"https://www.bbb.org/search?find_text=" + q, text:"Search BBB"}];
-  return [];
+  // i===3 (state AG) needs no company: the NAAG directory routes you to
+  // your state's own complaint office. BBB filing is verified at
+  // bbb.org/file-a-complaint/search.
+  const links = [];
+  if(company){
+    const q = encodeURIComponent(company);
+    if(i===0) links.push({href:"https://www.google.com/search?q=" + q + "+complaints", text:"Search complaints"});
+    if(i===1) links.push({href:"https://www.google.com/search?q=" + q + "+scam+OR+lawsuit", text:"Search scam / lawsuit"});
+    if(i===2){
+      links.push({href:"https://www.bbb.org/search?find_text=" + q, text:"Search BBB"});
+      links.push({href:"https://www.bbb.org/file-a-complaint/search", text:"File a BBB complaint"});
+    }
+  }
+  if(i===3) links.push({href:"https://www.naag.org/our-work/center-for-consumer-protection/consumer-file-a-complaint/", text:"Find your AG's complaint office"});
+  return links;
 }
 
 /* ---------- Claim-denial fight kit (pass 3) ----------
@@ -599,7 +618,7 @@ function renderFightKit(text, hits, company){
     '<div class="escalate"><strong>The escalation ladder</strong><ol>' +
     '<li>Get the denial in writing, with the exact clause cited. A phone "no" is not a denial.</li>' +
     '<li>Send the appeal letter below. Keep a copy and the tracking number.</li>' +
-    '<li>File with your state attorney general\u2019s consumer protection office and the BBB (<a href="https://www.bbb.org/search" target="_blank" rel="noopener">search BBB</a>).</li>' +
+    '<li>File a complaint: <a href="https://www.bbb.org/file-a-complaint/search" target="_blank" rel="noopener">file with the BBB</a>, and find your state attorney general\u2019s complaint office through <a href="https://www.naag.org/our-work/center-for-consumer-protection/consumer-file-a-complaint/" target="_blank" rel="noopener">NAAG\u2019s directory</a> (NAAG itself does not take individual complaints; it routes you to your state).</li>' +
     (hasArb
       ? '<li>This contract has binding arbitration, so small claims court may not be available. Check whether the 30-day opt-out window is still open, then talk to a consumer attorney.</li>'
       : '<li>Last step: small claims court. Bring the contract, the denial letter, and your maintenance records.</li>') +
@@ -655,7 +674,7 @@ function showFightCase(ruleIds, reasonLabel, script, text, hits, company){
     '<p class="fight-label">The clause they are leaning on</p>' + clauseHtml +
     '<p class="fight-label">Why this works for them</p>' +
     '<p style="font-size:14px">' + esc(rules.map(function(r){return r.explain;}).join(" ")) + '</p>' +
-    '<div class="tip"><strong>What to say on the phone</strong><br>"' + esc(script) + '"</div>' +
+    '<div class="tip fight-script"><strong>What to say on the phone</strong><br>"' + esc(script) + '"</div>' +
     '<div class="input-actions" style="margin-top:10px"><button class="btn btn-ghost btn-small" id="ap-toggle">Build my appeal letter</button></div>' +
     '<div id="ap-form" hidden></div></div>';
   $("ap-toggle").addEventListener("click", function(){ renderAppealForm(company, reasonLabel); });
@@ -1001,6 +1020,131 @@ function switchTab(which){
   $("flag-list").style.display = doc ? "none" : "";
 }
 
+/* ---------- Review credits (billing, pass 4) ----------
+   First review on a device is free. After that, each analysis consumes one
+   paid review credit ($15 one-time via Stripe Checkout). Demo sample
+   contracts never consume a free review or a credit. The billing client
+   fails open: if billing is unconfigured or unreachable, analyses run
+   normally and the pay sheet never appears. Zero LLM calls; $0 per analysis. */
+var REVIEW_PRICE_KEY = "price_fineprint_review";
+var pendingReview = null; // continuation offered when payments are not switched on
+function getCredits(){
+  try { return Math.max(0, parseInt(localStorage.getItem("fineprint.review_credits") || "0", 10) || 0); }
+  catch(e){ return 0; }
+}
+function setCredits(n){
+  try { localStorage.setItem("fineprint.review_credits", String(Math.max(0, n))); } catch(e){}
+}
+function addCredit(n){ setCredits(getCredits() + n); updateCreditPill(); }
+function freeReviewUsed(){
+  try { return !!localStorage.getItem("fineprint.free_review_used"); } catch(e){ return false; }
+}
+function markFreeUsed(){
+  try { localStorage.setItem("fineprint.free_review_used", "1"); } catch(e){}
+}
+function billingOn(){
+  var b = window.__billing;
+  return !!(b && !b.unconfigured);
+}
+function billingReady(){
+  // Called at click time: billingOn() is the gate; this is just the client check.
+  return billingOn();
+}
+function consumeReviews(n, cont){
+  if(!billingReady()) return true; // billing off or unreachable: fail open, reviews run free
+  var usedFree = 0;
+  if(!freeReviewUsed()){ markFreeUsed(); usedFree = 1; }
+  var have = getCredits();
+  if(usedFree + have < n){ pendingReview = cont || null; offerCheckout(); return false; }
+  setCredits(have - (n - usedFree));
+  updateCreditPill();
+  return true;
+}
+function updateCreditPill(){
+  var pill = $("credit-pill");
+  if(!pill) return;
+  var note = $("bill-note");
+  if(!billingOn()){
+    pill.hidden = true;
+    if(note) note.textContent = "Reviews are free while payments are being set up. The demo samples are always free.";
+    return;
+  }
+  pill.hidden = false;
+  if(note) note.textContent = "First review free. After that, $15 per review, one contract at a time. Review credits stay on this device. 30-day money-back guarantee.";
+  if(!freeReviewUsed()){ pill.textContent = "First review free"; return; }
+  var c = getCredits();
+  pill.textContent = c > 0 ? c + (c === 1 ? " review left" : " reviews left") : "No reviews left: $15 each";
+}
+function paySheet(){
+  var ov = $("pay-overlay");
+  if(ov) return ov;
+  ov = document.createElement("div");
+  ov.id = "pay-overlay";
+  ov.className = "pay-overlay";
+  ov.setAttribute("hidden", "");
+  ov.setAttribute("role", "dialog");
+  ov.setAttribute("aria-label", "Buy a contract review");
+  ov.innerHTML =
+    '<div class="pay-card">' +
+      '<h2>One more step before your review</h2>' +
+      '<p class="pay-sub">Your first review was free. Every review after that is <strong>$15</strong>, one contract at a time. You pay on Stripe\'s secure page; FinePrint never sees your card.</p>' +
+      '<div class="pay-err" id="pay-err" hidden></div>' +
+      '<button class="btn btn-primary" id="pay-buy" style="width:100%;justify-content:center">Buy one review · $15</button>' +
+      '<button class="btn btn-ghost" id="pay-later" style="width:100%;justify-content:center;margin-top:8px">Not now</button>' +
+      '<p class="pay-fine">30-day money-back guarantee. Review credits stay on this device.</p>' +
+    "</div>";
+  document.body.appendChild(ov);
+  $("pay-later").addEventListener("click", function(){ ov.hidden = true; pendingReview = null; });
+  $("pay-buy").addEventListener("click", function(){
+    var btn = this, errBox = $("pay-err");
+    btn.disabled = true; errBox.hidden = true;
+    var b = window.__billing;
+    if(!b || !b.checkoutOnce){
+      errBox.textContent = "Payments are not switched on yet. Please check back soon.";
+      errBox.hidden = false; btn.disabled = false; return;
+    }
+    b.checkoutOnce(REVIEW_PRICE_KEY).catch(function(e){
+      var m = String((e && e.message) || "");
+      if(/billing_not_configured|BILLING_NOT_CONFIGURED/i.test(m) || (e && e.code === "BILLING_NOT_CONFIGURED")){
+        freeBuyFallback("Payments are not switched on yet, so this review is on the house.");
+      } else if(/test mode/i.test(m) || /price not found/i.test(m)){
+        freeBuyFallback("Payments are not switched on yet, so this review is on the house.");
+      } else {
+        errBox.textContent = m || "Something went wrong. Please try again.";
+        errBox.hidden = false; btn.disabled = false;
+      }
+    });
+  });
+  return ov;
+}
+function freeBuyFallback(msg){
+  // Payments are broken or not on: run the pending review free, honestly.
+  var ov = $("pay-overlay");
+  if(ov) ov.hidden = true;
+  var cont = pendingReview; pendingReview = null;
+  toast(msg);
+  if(cont) cont();
+}
+function offerCheckout(){
+  var ov = paySheet();
+  ov.hidden = false;
+  var btn = $("pay-buy");
+  if(btn) btn.disabled = false;
+  var errBox = $("pay-err");
+  if(errBox) errBox.hidden = true;
+}
+function handlePaidReturn(){
+  addCredit(1);
+  toast("Payment received. One review credit added.");
+}
+window.__fineprintBilling = {
+  addCredit: addCredit,
+  updateCreditPill: updateCreditPill,
+  consumeReviews: consumeReviews,
+  offerCheckout: offerCheckout,
+  handlePaidReturn: handlePaidReturn
+};
+
 /* ---------- Wire up ---------- */
 $("compare-toggle").addEventListener("click",function(){
   $("compare-sec").hidden = !$("compare-sec").hidden;
@@ -1010,7 +1154,7 @@ $("compare-toggle").addEventListener("click",function(){
 $("compare-sample-a").addEventListener("click",function(){ $("compare-a").value=SAMPLES.car.text; $("compare-results").hidden=true; });
 $("compare-sample-b").addEventListener("click",function(){ $("compare-b").value=SAMPLES.home.text; $("compare-results").hidden=true; });
 ["compare-a","compare-b"].forEach(function(id){$(id).addEventListener("input",function(){ $("compare-results").hidden=true; });});
-$("compare-run").addEventListener("click",compareContracts);
+$("compare-run").addEventListener("click",function(){ if(consumeReviews(2, compareContracts)) compareContracts(); });
 $("flag-list").addEventListener("click",function(event){
   const button = event.target.closest("button[data-vote]");
   if(!button) return;
@@ -1044,7 +1188,9 @@ $("sample-home").addEventListener("click", function(){
 $("analyze").addEventListener("click", function(){
   const t = $("contract").value.trim();
   if(t.length < 200){ toast("Paste a bit more contract text first (at least a paragraph)."); return; }
-  renderResults(t, "Pasted contract");
+  // Demo samples never consume the free review or credits (PRD FR-1.5);
+  // they run through the same handlers above without a gate.
+  if(consumeReviews(1, function(){ renderResults(t, "Pasted contract"); })) renderResults(t, "Pasted contract");
 });
 
 $("clear").addEventListener("click", function(){
@@ -1068,6 +1214,18 @@ $("file").addEventListener("change", function(e){
 });
 
 renderSaved();
+
+/* offline banner: subtle, never a modal (Section 8 bar). Analysis is fully
+   local, so offline only pauses sync and payments. */
+function updateOffline(){
+  var b = $("offline-banner");
+  if(!b) return;
+  var off = (typeof navigator !== "undefined" && navigator.onLine === false);
+  b.hidden = !off;
+}
+window.addEventListener("online", updateOffline);
+window.addEventListener("offline", updateOffline);
+updateOffline();
 
 /* first-run tip: point at the magic moment (iteration 4) */
 (function(){

@@ -233,6 +233,7 @@ let db = load() || { state: null, car: null, repairs: [], intake: null };
 function normalizeDb() {
   db.celebrated = db.celebrated || {};
   db.moments = Array.isArray(db.moments) ? db.moments : [];
+  db.checklist = (db.checklist && typeof db.checklist === "object") ? db.checklist : {};
 }
 normalizeDb();
 let uidc = Date.now();
@@ -531,6 +532,100 @@ $("#resetBtn").addEventListener("click", () => {
   }
 });
 
+/* ---- case file checklist + dates to know ---- */
+/* Document organizer, not legal advice. Auto items are detected from the
+   case data; manual items are ticked by the owner. The per-state notice
+   documents name the paper trail the already-encoded notice rules need. */
+const CHECKLIST_AUTO = [
+  { id: "delivery", label: "Delivery date on file", hint: "Starts your state's presumption window.", done: () => !!(db.car && db.car.deliveryDate) },
+  { id: "vin", label: "VIN on file", hint: "Firms use it to pull warranty history. Add it on the Your car step.", done: () => !!(db.car && db.car.vin) },
+  { id: "visits", label: "Repair visits logged with dates", hint: "Every visit counts, even the diagnosis-only ones.", done: () => db.repairs.length > 0, sub: () => db.repairs.length + " logged" },
+  { id: "photos", label: "Repair-order photos saved", hint: "Snap the invoice before you leave the dealer.", done: () => { const n = db.repairs.filter(r => r.photo).length; return n >= db.repairs.length && db.repairs.length > 0; }, sub: () => db.repairs.filter(r => r.photo).length + " of " + db.repairs.length + " visits have photos" }
+];
+const CHECKLIST_MANUAL = [
+  { id: "agreement", label: "Purchase or lease agreement", hint: "Shows price, dates, and warranty terms." },
+  { id: "warranty", label: "Warranty booklet or terms", hint: "What the manufacturer promised to cover." },
+  { id: "orders", label: "All repair orders, on paper", hint: "The invoice from every visit, even the ones that say could not reproduce." },
+  { id: "dealernotes", label: "Notes from every dealer conversation", hint: "Dates, names, what they promised." },
+  { id: "comms", label: "Letters or emails with the dealer or manufacturer", hint: "Anything in writing, in both directions." },
+  { id: "defectmedia", label: "Photos or video of the defect itself", hint: "The noise, the leak, the warning light." }
+];
+const STATE_NOTICE_DOC = {
+  FL: "Proof you sent the 15-day written notice to the manufacturer (certified or express mail receipt)",
+  NJ: "Proof you sent written notice to the manufacturer after 2 attempts or 20 days (certified mail receipt)",
+  GA: "Proof you sent notice to the manufacturer by certified mail or overnight delivery (28-day final repair chance)",
+  CO: "Proof you sent written notice by certified mail (the 10-business-day cure period)",
+  TX: "Your 6-month filing-deadline date, written down somewhere you will see it",
+  MA: "Proof of the final 7-business-day repair chance you gave the manufacturer",
+  NC: "Copy of your written notice to the manufacturer, and the 10-day pre-suit notice before filing",
+  IL: "Copy of your prior written notice to the manufacturer",
+  WA: "Copy of your written repurchase or replacement request to the manufacturer",
+  AZ: "Copy of your prior written notice to the manufacturer",
+  VA: "Copy of your written notice to the manufacturer"
+};
+function renderChecklist() {
+  const box = $("#checklist");
+  if (!box) return;
+  const items = CHECKLIST_AUTO.concat(CHECKLIST_MANUAL);
+  let done = 0, html = "";
+  items.forEach(it => {
+    let checked, disabled = false, tag = "", sub = "";
+    if (it.done) {
+      checked = !!it.done();
+      disabled = true;
+      tag = '<span class="auto-tag">auto</span>';
+      if (it.sub) sub = '<span class="cl-sub">' + esc(it.sub()) + "</span>";
+    } else {
+      checked = !!(db.checklist && db.checklist[it.id]);
+    }
+    if (checked) done++;
+    html += '<label class="cl-item' + (checked ? " done" : "") + '">' +
+      '<input type="checkbox" data-cl="' + it.id + '"' + (checked ? " checked" : "") + (disabled ? " disabled" : "") + ">" +
+      "<span><strong>" + esc(it.label) + "</strong>" + tag +
+      (it.hint ? '<span class="cl-hint">' + esc(it.hint) + "</span>" : "") + sub + "</span></label>";
+  });
+  const nid = "notice-" + (db.state || "xx").toLowerCase();
+  const nchecked = !!(db.checklist && db.checklist[nid]);
+  if (nchecked) done++;
+  const pct = Math.round(done / (items.length + 1) * 100);
+  $("#fileMeterFill").style.width = pct + "%";
+  $("#fileMeterPill").textContent = pct + "%";
+  html += '<div class="cl-sect">Notices and deadlines paper trail</div>' +
+    '<p class="micro" style="margin:0 0 8px">Your state has written-notice rules that can decide a case. Keep proof of every one.</p>' +
+    '<label class="cl-item' + (nchecked ? " done" : "") + '"><input type="checkbox" data-cl="' + nid + '"' + (nchecked ? " checked" : "") + ">" +
+    "<span><strong>" + esc(STATE_NOTICE_DOC[db.state] || "Copies of any letters or emails you sent the manufacturer") + "</strong></span></label>";
+  box.innerHTML = html;
+}
+$("#checklist").addEventListener("change", e => {
+  const cb = e.target.closest("[data-cl]");
+  if (!cb || cb.disabled) return;
+  if (cb.checked) db.checklist[cb.dataset.cl] = true;
+  else delete db.checklist[cb.dataset.cl];
+  save();
+  renderChecklist();
+});
+
+/* Dates to know: window dates and a live countdown from the same arithmetic
+   the meter already uses, plus the state's notice/deadline rules quoted
+   verbatim from the researched summary with a confirm-with-attorney line. */
+function renderDates(c) {
+  const body = $("#datesBody");
+  if (!body) return;
+  const today = todayLocalISO();
+  const open = today <= c.windowEnd;
+  const n = open ? daysBetween(today, c.windowEnd) : 0;
+  const count = open
+    ? `<div class="date-row${n <= 60 ? " urgent" : ""}"><span>Window closes in</span><strong>${n} day${n === 1 ? "" : "s"}</strong></div>`
+    : `<div class="date-row closed"><span>Window status</span><strong>Closed ${fmtDate(c.windowEnd)}. Cases can still win outside the presumption, and an attorney can evaluate other routes.</strong></div>`;
+  const extra = c.st.extra
+    ? `<div class="date-extra"><strong>Notice and deadline rules for ${esc(c.st.name)}.</strong> ${esc(c.st.extra)}<br><span class="micro">Quoted from the same research as the thresholds above. Deadlines can permanently end a claim, so confirm every date with an attorney before relying on it.</span></div>`
+    : "";
+  const bizNote = c.biz
+    ? `<p class="micro" style="margin:10px 0 0"><strong>Business-day counting:</strong> Mon to Fri only; federal holidays are <strong>not</strong> excluded, so this total can differ from your state's official count (${esc(c.st.cite)}).</p>`
+    : "";
+  body.innerHTML = `<div class="date-row"><span>Presumption window</span><strong>${fmtDate(c.windowStart)} to ${fmtDate(c.windowEnd)}</strong></div>` + count + extra + bizNote;
+}
+
 /* ---- case rendering ---- */
 function renderCase() {
   const c = computeCase();
@@ -580,10 +675,12 @@ function renderCase() {
   if (c.outWin > 0) wn += `<strong>${c.outWin} repair(s)</strong> fall outside the ${c.st.windowMonths}-month presumption window and don't count toward it. `;
   if (c.st.windowMiles && car.miles && parseInt(car.miles.replace(/\D/g, ""), 10) > c.st.windowMiles)
     wn += `<strong>Mileage check:</strong> your current mileage may exceed the ${c.st.windowMiles.toLocaleString()}-mile window. A lawyer can still evaluate your case outside the presumption.`;
-  if (c.st.extra) wn += (wn ? "<br>" : "") + esc(c.st.extra);
-  if (c.biz) wn += (wn ? "<br>" : "") + `<strong>Business-day counting:</strong> Mon\u2013Fri only; federal holidays are <strong>not</strong> excluded, so this total can differ from your state's official count (${esc(c.st.cite)}).`;
   $("#windowNote").innerHTML = wn;
   $("#windowNote").style.display = wn ? "" : "none";
+
+  // dates to know + case file checklist
+  renderDates(c);
+  renderChecklist();
 
   // repair list
   $("#repairCount").textContent = db.repairs.length;
@@ -940,6 +1037,15 @@ function printableSummary() {
   Generated ${new Date().toLocaleDateString()} by Buyback (prototype, not legal advice).</p>
   <h2>Qualification routes</h2><table><tr><th>Route</th><th>Progress</th><th>Status</th></tr>${meters}</table>
   <h2>Repair history (${c.inWin.length} in-window)</h2><table><tr><th>#</th><th>Visit</th></tr>${rows}</table>
+  <h2>Questions to ask your attorney</h2><ul>${[
+    "Do you handle lemon law cases in " + c.st.name + "?",
+    "How many buyback or replacement cases did you close last year?",
+    "On contingency, what percentage do you take, and who pays the costs if we lose?",
+    "Should my case aim for repurchase, replacement, or a cash settlement?",
+    "What is the realistic timeline for a case like mine?",
+    "What is the next deadline on my calendar?",
+    "Who will actually work my file day to day?"
+  ].map(q => `<li>${esc(q)}</li>`).join("")}</ul>
   <p>Bring this summary plus every original repair order to a lemon law attorney. Most offer free reviews and work on contingency.</p>`;
 }
 function doPrint(html) { $("#printArea").innerHTML = html; window.print(); }
@@ -948,7 +1054,7 @@ $("#printLetterBtn").addEventListener("click", () => doPrint(`<div style="white-
 
 /* ---- JSON export / import: real data portability ---- */
 $("#exportJsonBtn").addEventListener("click", () => {
-  const payload = { format: "buyback.case/v1", exportedAt: new Date().toISOString(), state: db.state, car: db.car, repairs: db.repairs, intake: db.intake, celebrated: db.celebrated, moments: db.moments };
+  const payload = { format: "buyback.case/v1", exportedAt: new Date().toISOString(), state: db.state, car: db.car, repairs: db.repairs, intake: db.intake, celebrated: db.celebrated, moments: db.moments, checklist: db.checklist };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -977,6 +1083,7 @@ $("#importJsonFile").addEventListener("change", e => {
       normalizeDb();
       if (data.celebrated && typeof data.celebrated === "object") db.celebrated = data.celebrated;
       if (Array.isArray(data.moments)) db.moments = data.moments;
+      if (data.checklist && typeof data.checklist === "object") db.checklist = data.checklist;
       save();
       window.__buyback.refresh();
       err.textContent = "";

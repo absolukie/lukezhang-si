@@ -27,6 +27,29 @@ function csvSafe(v){
   return '"'+s.replace(/"/g,'""')+'"';
 }
 
+/* ---------- photo integrity (SHA-256 checksums) ----------
+ * Each stored photo gets a SHA-256 hash of its bytes at import time.
+ * Re-checking later compares current bytes to the stored hash: a match
+ * proves the photo was not altered on this device since import.
+ * Honest limits: hashes are device-local; timestamps are device-clock. */
+function sha256Hex(str){
+  if(!(window.crypto && crypto.subtle && window.isSecureContext)) return Promise.resolve(null);
+  try{
+    return crypto.subtle.digest("SHA-256", new TextEncoder().encode(str)).then(function(h){
+      return Array.prototype.map.call(new Uint8Array(h), function(b){
+        return ("0"+b.toString(16)).slice(-2);
+      }).join("");
+    }).catch(function(){ return null; });
+  }catch(e){ return Promise.resolve(null); }
+}
+function stampPhotoSha(p){
+  if(!p || p.sha) return Promise.resolve(p ? p.sha : null);
+  return sha256Hex(p.dataUrl).then(function(h){
+    if(h){ p.sha = h; save(); refreshIntegritySummary(); }
+    return h;
+  });
+}
+
 /* ---------- state ---------- */
 var state = { jobs:[], photos:[], checklist:[], lineItems:[], events:[] };
 var currentJobId = null;
@@ -303,7 +326,9 @@ function renderJobHeader(){
 var JOB_EDIT_FIELDS = [
   ["name", "Job name"], ["client", "Client"], ["address", "Address"],
   ["claim", "Claim #"], ["insurer", "Insurer"], ["type", "Job type"],
-  ["company", "Company"], ["invoice", "Invoice #"], ["discountPct", "Discount"]
+  ["company", "Company"], ["invoice", "Invoice #"], ["discountPct", "Discount"],
+  ["lossDate", "Date of loss"], ["cause", "Cause of loss"], ["causeNotes", "Loss description"],
+  ["adjName", "Adjuster name"], ["adjPhone", "Adjuster phone"]
 ];
 function openJobEdit(){
   var j = getJob(currentJobId); if(!j) return;
@@ -382,12 +407,14 @@ function handlePhotoFiles(files){
     var reader = new FileReader();
     reader.onload = function(){
       downscale(reader.result, function(dataUrl, thumb){
-        state.photos.push({
+        var ph = {
           id:uid(), jobId:jobId, dataUrl:dataUrl, thumb:thumb,
           takenAt: f.lastModified || Date.now(),
           room: rapid ? rapid.room : "", damageType:"", severity:"", notes:"", pins:[],
           phase: rapid ? rapid.phase : "", sample:false
-        });
+        };
+        state.photos.push(ph);
+        stampPhotoSha(ph); // async integrity checksum; save() runs when it lands
         if(save()){ done++; hideSaveBanner(); }
         else { failed++; showSaveBanner("photo ("+(f.name||"upload")+")"); }
         logEvent(jobId, "Photo added ("+(f.name||"upload")+")" + (rapid ? " ["+rapid.room+", "+rapid.phase+"]" : ""));
@@ -583,9 +610,12 @@ function renderWorklog(){
   var list = $("worklog-list");
   if(!items.length){ list.innerHTML = '<div class="empty" style="padding:20px;">No line items yet.</div>'; return; }
   list.innerHTML = items.map(function(i){
+    var n = linkedCount(i);
     return '<div class="li-row" data-id="'+esc(i.id)+'">' +
       '<div><div class="li-desc">'+esc(i.desc)+'</div>' +
-      '<div class="li-meta">'+esc(i.qty)+' '+esc(i.unit||"")+' × '+esc(money(i.rate))+'</div></div>' +
+      '<div class="li-meta">'+esc(i.qty)+' '+esc(i.unit||"")+' × '+esc(money(i.rate))+'</div>' +
+      '<button type="button" class="linklike" data-linkitem="'+esc(i.id)+'" style="font-size:12.5px;margin-top:3px;">' +
+      (n ? esc(n)+" evidence photo"+(n===1?"":"s")+" linked" : "Link evidence photos") + '</button></div>' +
       '<div style="display:flex;align-items:center;gap:6px;"><div class="li-amt">'+esc(money(i.qty*i.rate))+'</div>' +
       '<button class="li-del" data-del="'+esc(i.id)+'" aria-label="Delete"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button></div></div>';
   }).join("");
@@ -599,6 +629,12 @@ function renderWorklog(){
       if(it) logEvent(currentJobId, "Work log: removed '" + it.desc + "'");
       renderWorklog(); renderDossierTab();
       toast("Line item removed");
+    });
+  });
+  list.querySelectorAll("[data-linkitem]").forEach(function(b){
+    b.addEventListener("click", function(ev){
+      ev.stopPropagation();
+      openLinkModal(b.getAttribute("data-linkitem"));
     });
   });
 }
@@ -629,8 +665,8 @@ function dossierScore(jobId){
   var done = items.filter(function(c){return c.done;}).length;
   var lis = jobItems(jobId);
   var parts = [];
-  var metaPts = (j.claim?8:0)+(j.insurer?7:0)+(j.client?5:0)+(j.address?5:0);
-  parts.push({label:"Claim details (claim #, insurer, client, address)", pts:metaPts, max:25});
+  var metaPts = (j.claim?7:0)+(j.insurer?6:0)+(j.client?4:0)+(j.address?4:0)+(j.lossDate?2:0)+(j.cause?2:0);
+  parts.push({label:"Claim details (claim #, insurer, client, address, date of loss, cause)", pts:metaPts, max:25});
   var pc = phaseCounts(jobId);
   var photoPts = Math.round(25*(Math.min(pc.before,PHASE_MIN.before)/PHASE_MIN.before +
     Math.min(pc.during,PHASE_MIN.during)/PHASE_MIN.during +
@@ -648,6 +684,8 @@ function scoreMissing(jobId, sc){
   var out = [];
   if(!j.claim) out.push({text:"Add the insurance claim number", target:"edit"});
   if(!j.insurer) out.push({text:"Add the insurer name", target:"edit"});
+  if(!j.lossDate) out.push({text:"Add the date of loss", target:"edit"});
+  if(!j.cause) out.push({text:"Add the cause of loss", target:"edit"});
   var photos = jobPhotos(jobId);
   var sampleCount = photos.filter(function(p){return p.sample;}).length;
   var pc = phaseCounts(jobId);
@@ -718,7 +756,142 @@ function renderDossierTab(){
       return '<div class="custody-row"><div class="custody-time">'+esc(fmtTimeShort(e.ts))+'</div><div class="custody-text">'+esc(e.text)+'</div></div>';
     }).join("");
   }
+  renderCoverage();
+  renderIntegrity();
   renderSendLog();
+}
+
+/* ---------- evidence coverage: line item <-> photo linking ----------
+ * Every charged line should have photo evidence behind it. Linking is
+ * explicit (tap, pick photos) so the dossier never implies support
+ * that a human did not assert. */
+var linkingItemId = null;
+var linkingSel = [];
+function linkedCount(item){ return (item.photoIds||[]).length; }
+function renderCoverage(){
+  var el = $("coverage-body");
+  if(!el) return;
+  var items = jobItems(currentJobId);
+  if(!items.length){
+    el.innerHTML = '<div class="muted">No line items yet. Add them in the Work log tab, then link each one to the photos that support it.</div>';
+    return;
+  }
+  var withEv = items.filter(function(i){ return linkedCount(i)>0; }).length;
+  var pct = Math.round(withEv/items.length*100);
+  var rows = items.map(function(i){
+    var n = linkedCount(i);
+    return '<div class="cov-row"><div style="flex:1;min-width:0;"><div class="li-desc">'+esc(i.desc)+'</div>' +
+      '<div class="li-meta">'+(n ? esc(n)+" photo"+(n===1?"":"s")+" linked" : "No photos linked")+'</div></div>' +
+      '<button type="button" class="btn btn-secondary btn-small" data-linkitem="'+esc(i.id)+'">Link photos</button></div>';
+  }).join("");
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">' +
+    '<div class="checklist-progress" style="flex:1;margin:0;"><div class="checklist-bar" style="width:'+pct+'%;"></div></div>' +
+    '<div style="font-weight:800;font-size:15px;white-space:nowrap;">'+pct+'%</div></div>' +
+    '<div class="muted" style="margin-bottom:6px;">'+esc(withEv)+' of '+esc(items.length)+' line items have at least one linked photo.</div>' + rows;
+  el.querySelectorAll("[data-linkitem]").forEach(function(b){
+    b.addEventListener("click", function(){ openLinkModal(b.getAttribute("data-linkitem")); });
+  });
+}
+function openLinkModal(itemId){
+  var item = state.lineItems.find(function(x){return x.id===itemId;});
+  if(!item) return;
+  linkingItemId = itemId;
+  linkingSel = (item.photoIds||[]).slice();
+  $("link-sub").textContent = "Select the photos that support: " + item.desc;
+  renderLinkGrid();
+  openModal("modal-link");
+}
+function renderLinkGrid(){
+  var grid = $("link-grid");
+  if(!grid) return;
+  var photos = jobPhotos(currentJobId);
+  if(!photos.length){
+    grid.innerHTML = '<div class="muted" style="grid-column:1/-1;">No photos on this job yet.</div>';
+    return;
+  }
+  grid.innerHTML = photos.map(function(p){
+    var sel = linkingSel.indexOf(p.id) >= 0;
+    return '<div class="link-cell'+(sel?" sel":"")+'" data-ph="'+esc(p.id)+'" role="button" tabindex="0" aria-label="Photo'+(sel?", selected":"")+'">' +
+      '<img src="'+esc(p.thumb||p.dataUrl)+'" alt="" loading="lazy">' +
+      (sel?'<div class="link-sel-badge"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>':'') +
+      '</div>';
+  }).join("");
+  grid.querySelectorAll(".link-cell").forEach(function(c){
+    var toggle = function(){
+      var id = c.getAttribute("data-ph");
+      var k = linkingSel.indexOf(id);
+      if(k>=0) linkingSel.splice(k,1); else linkingSel.push(id);
+      renderLinkGrid();
+    };
+    c.addEventListener("click", toggle);
+    c.addEventListener("keydown", function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); toggle(); } });
+  });
+}
+
+/* ---------- integrity card rendering ---------- */
+function refreshIntegritySummary(){
+  var el = $("integrity-summary");
+  if(!el) return;
+  var photos = jobPhotos(currentJobId);
+  var bv = $("btn-verify-integrity"), bs = $("btn-stamp-hashes");
+  if(!photos.length){
+    el.innerHTML = '<div class="muted">No photos on this job yet.</div>';
+    if(bv) bv.disabled = true;
+    if(bs) bs.hidden = true;
+    return;
+  }
+  var stamped = photos.filter(function(p){return p.sha;}).length;
+  el.innerHTML = '<div class="muted">'+esc(stamped)+' of '+esc(photos.length)+' photos carry a SHA-256 checksum.</div>';
+  if(bv) bv.disabled = false;
+  if(bs) bs.hidden = (stamped === photos.length);
+}
+function renderIntegrity(){
+  $("integrity-result").innerHTML = "";
+  refreshIntegritySummary();
+}
+function verifyIntegrity(){
+  var btn = $("btn-verify-integrity");
+  btn.disabled = true;
+  btn.textContent = "Checking...";
+  var photos = jobPhotos(currentJobId);
+  var results = [];
+  var chain = Promise.resolve();
+  photos.forEach(function(p){
+    chain = chain.then(function(){
+      if(!p.sha){ results.push({p:p, ok:null}); return null; }
+      return sha256Hex(p.dataUrl).then(function(h){
+        results.push({p:p, ok: h !== null && h === p.sha});
+      });
+    });
+  });
+  chain.then(function(){
+    var okN = results.filter(function(r){return r.ok===true;}).length;
+    var badN = results.filter(function(r){return r.ok===false;}).length;
+    var pendN = results.filter(function(r){return r.ok===null;}).length;
+    $("integrity-result").innerHTML = results.map(function(r, i){
+      var cls = r.ok===true ? "int-ok" : r.ok===false ? "int-bad" : "int-pend";
+      var txt = r.ok===true ? "Checksum matches" : r.ok===false ? "CHECKSUM MISMATCH" : "No checksum stamped";
+      return '<div class="int-row '+cls+'"><div class="custody-text" style="flex:1;">Photo '+(i+1)+
+        (r.p.room?" ("+esc(r.p.room)+")":"") + '</div><div class="int-status">'+txt+'</div></div>';
+    }).join("");
+    logEvent(currentJobId, "Photo integrity re-checked: "+okN+" matched"+(badN?", "+badN+" MISMATCHED":"")+(pendN?", "+pendN+" unstamped":""));
+    toast(badN ? badN+" photo(s) failed the integrity check" : "Integrity check complete: "+okN+" matched");
+    btn.disabled = false;
+    btn.textContent = "Re-check all photos";
+    refreshIntegritySummary(); // summary only: must not wipe the result list above
+  });
+}
+function stampMissingHashes(){
+  var photos = jobPhotos(currentJobId).filter(function(p){return !p.sha;});
+  if(!photos.length){ toast("Every photo already has a checksum"); return; }
+  var chain = Promise.resolve();
+  photos.forEach(function(p){ chain = chain.then(function(){ return stampPhotoSha(p); }); });
+  chain.then(function(){
+    logEvent(currentJobId, "Integrity checksums stamped for "+photos.length+" photo(s)");
+    toast("Checksums stamped");
+    renderIntegrity();
+  });
 }
 
 /* ---------- dossier send log ---------- */
@@ -781,26 +954,51 @@ function buildDossierHTML(){
       '</div></div>';
   }).join("");
 
-  var liHTML = lis.length ? '<table class="dz-table"><tr><th>Description</th><th>Qty</th><th>Rate</th><th style="text-align:right;">Amount</th></tr>' +
+  var liHTML = lis.length ? '<table class="dz-table"><tr><th>Description</th><th>Qty</th><th>Rate</th><th>Evidence</th><th style="text-align:right;">Amount</th></tr>' +
     lis.map(function(i){
-      return '<tr><td>'+esc(i.desc)+'</td><td>'+esc(i.qty)+' '+esc(i.unit||"")+'</td><td>'+esc(money(i.rate))+'</td><td style="text-align:right;">'+esc(money(i.qty*i.rate))+'</td></tr>';
+      var lc = linkedCount(i);
+      return '<tr><td>'+esc(i.desc)+'</td><td>'+esc(i.qty)+' '+esc(i.unit||"")+'</td><td>'+esc(money(i.rate))+'</td>' +
+        '<td>'+(lc ? esc(lc)+' photo'+(lc===1?"":"s") : '<span style="color:#999;">Not linked</span>')+'</td>' +
+        '<td style="text-align:right;">'+esc(money(i.qty*i.rate))+'</td></tr>';
     }).join("") +
-    (t.pct?'<tr><td colspan="3">Discount ('+esc(t.pct)+'%)</td><td style="text-align:right;">-'+esc(money(t.disc))+'</td></tr>':'') +
-    '<tr class="dz-total-row"><td colspan="3">Total</td><td style="text-align:right;">'+esc(money(t.total))+'</td></tr></table>'
+    (t.pct?'<tr><td colspan="4">Discount ('+esc(t.pct)+'%)</td><td style="text-align:right;">-'+esc(money(t.disc))+'</td></tr>':'') +
+    '<tr class="dz-total-row"><td colspan="4">Total</td><td style="text-align:right;">'+esc(money(t.total))+'</td></tr></table>'
     : '<p>No line items recorded.</p>';
 
   var custHTML = evs.length ? '<table class="dz-table"><tr><th>Timestamp</th><th>Event</th></tr>' +
     evs.map(function(e){ return '<tr><td style="white-space:nowrap;">'+esc(fmtTime(e.ts))+'</td><td>'+esc(e.text)+'</td></tr>'; }).join("") +
     '</table>' : '<p>No custody events recorded.</p>';
 
+  var sendLast = (j.sendLog||[]).slice(-1)[0];
+  var adjName = j.adjName || (sendLast && sendLast.name) || "Not provided";
+  var adjContact = [sendLast ? sendLast.email : null, j.adjPhone].filter(Boolean).join(" · ");
+  var linkedTotal = lis.reduce(function(s,i){ return s + linkedCount(i); }, 0);
+  var doneSteps = items.filter(function(c){return c.done;}).length;
+
   return ((j.demo || jobHasSamplePhoto(currentJobId)) ? '<div class="dz-demo-banner">DEMONSTRATION DOSSIER: this file uses sample photos and is not a real claim file.</div>' : '') +
-    '<div class="dz-cover"><h1>REMEDIATION DOSSIER</h1>' +
+    '<div class="dz-cover"><h1>REMEDIATION CLAIM FILE</h1>' +
     '<div class="dz-cover-sub">Prepared by '+esc(j.company||"Cleanup contractor")+' · Generated '+esc(fmtTime(Date.now()))+' via Aftermath</div>' +
+    '<h2 class="dz-h2" style="margin-top:18px;">First notice of loss</h2>' +
     '<div class="dz-meta">' +
-    '<div><b>Job</b>'+esc(j.name)+'</div><div><b>Job type</b>'+esc(j.type||"Not provided")+'</div>' +
-    '<div><b>Client / policyholder</b>'+esc(j.client||"Not provided")+'</div><div><b>Property address</b>'+esc(j.address||"Not provided")+'</div>' +
-    '<div><b>Claim number</b>'+esc(j.claim||"Not provided")+'</div><div><b>Insurer</b>'+esc(j.insurer||"Not provided")+'</div>' +
+    '<div><b>Insured / policyholder</b>'+esc(j.client||"Not provided")+'</div>' +
+    '<div><b>Property address</b>'+esc(j.address||"Not provided")+'</div>' +
+    '<div><b>Claim number</b>'+esc(j.claim||"Not provided")+'</div>' +
+    '<div><b>Insurer</b>'+esc(j.insurer||"Not provided")+'</div>' +
+    '<div><b>Date of loss</b>'+esc(j.lossDate||"Not provided")+'</div>' +
+    '<div><b>Cause of loss</b>'+esc(j.cause||"Not provided")+'</div>' +
+    (j.causeNotes?'<div style="grid-column:1/-1;"><b>Loss description</b>'+esc(j.causeNotes)+'</div>':'') +
+    '<div><b>Job</b>'+esc(j.name)+'</div>' +
+    '<div><b>Job type</b>'+esc(j.type||"Not provided")+'</div>' +
     (j.invoice?'<div><b>Invoice #</b>'+esc(j.invoice)+'</div>':'') +
+    '<div><b>Adjuster</b>'+esc(adjName)+'</div>' +
+    '<div><b>Adjuster contact</b>'+esc(adjContact||"Not provided")+'</div>' +
+    '</div>' +
+    '<h2 class="dz-h2">File contents</h2>' +
+    '<div class="dz-meta">' +
+    '<div><b>1 · Photo evidence</b>'+esc(photos.length)+' photos (before / during / after)</div>' +
+    '<div><b>2 · Decontamination checklist</b>'+esc(doneSteps)+'/'+esc(items.length)+' steps completed</div>' +
+    '<div><b>3 · Line-item work record</b>'+esc(lis.length)+' line items, '+esc(money(t.total))+', '+esc(linkedTotal)+' evidence photos linked</div>' +
+    '<div><b>4 · Chain of custody</b>'+esc(evs.length)+' events</div>' +
     '</div></div>' +
     '<h2 class="dz-h2">1 · Photo evidence ('+esc(photos.length)+')</h2>' + photoHTML +
     '<h2 class="dz-h2 dz-h2-break">2 · Decontamination checklist</h2>' + checkHTML +
@@ -827,15 +1025,19 @@ function seedDemo(toDossier){
   var damages = ["Hoarding debris","Hoarding debris","Mold","Water damage","Biohazard","Odor"];
   var sevs = ["Severe","Moderate","Severe","Extreme","Moderate","Light"];
   var phases = ["before","before","before","during","after","after"];
+  var seedPhotoIds = [];
   rooms.forEach(function(room,i){
     var s = makeSamplePhoto();
     var taken = now - 5*D + i*3*H;
-    state.photos.push({
+    var ph = {
       id:uid(), jobId:jobId, dataUrl:s.dataUrl, thumb:s.thumb, takenAt:taken,
       room:room, damageType:damages[i], severity:sevs[i], phase:phases[i], sample:true,
       notes: i===0 ? "Bulk debris 3-4 ft deep across full kitchen floor." : "",
       pins: i===0 ? [{x:42,y:55,label:"deepest accumulation"},{x:70,y:38,label:"blocked egress"}] : []
-    });
+    };
+    state.photos.push(ph);
+    seedPhotoIds.push(ph.id);
+    stampPhotoSha(ph);
     state.events.push({id:uid(), jobId:jobId, ts:taken, text:"Photo added ("+room+")"});
   });
   var items = jobChecklist(jobId);
@@ -843,12 +1045,13 @@ function seedDemo(toDossier){
     c.done = true; c.doneAt = now - 4*D + i*2*H;
     state.events.push({id:uid(), jobId:jobId, ts:c.doneAt, text:"Checklist: "+c.label});
   });
-  [["Biohazard remediation, crew of 3",26,"hr",185],
-   ["Debris removal and disposal",4.5,"ton",320],
-   ["EPA disinfectant + deodorizing treatment",1,"job",950],
-   ["PPE and consumables",1,"lot",420]
+  [["Biohazard remediation, crew of 3",26,"hr",185,[0,1]],
+   ["Debris removal and disposal",4.5,"ton",320,[2,3]],
+   ["EPA disinfectant + deodorizing treatment",1,"job",950,[4]],
+   ["PPE and consumables",1,"lot",420,[]]
   ].forEach(function(r){
-    state.lineItems.push({id:uid(), jobId:jobId, desc:r[0], qty:r[1], unit:r[2], rate:r[3]});
+    state.lineItems.push({id:uid(), jobId:jobId, desc:r[0], qty:r[1], unit:r[2], rate:r[3],
+      photoIds: r[4].map(function(k){ return seedPhotoIds[k]; })});
   });
   state.events.push({id:uid(), jobId:jobId, ts:now-6*D, text:"Job created"});
   state.events.push({id:uid(), jobId:jobId, ts:now-1*D, text:"Status changed to Awaiting adjuster"});
@@ -971,10 +1174,12 @@ document.addEventListener("DOMContentLoaded", function(){
   });
   $("btn-sample-photo").addEventListener("click", function(){
     var s = makeSamplePhoto();
-    state.photos.push({
+    var ph = {
       id:uid(), jobId:currentJobId, dataUrl:s.dataUrl, thumb:s.thumb, takenAt:Date.now(),
       room:s.room, damageType:"", severity:"", notes:"", pins:[], phase:"", sample:true
-    });
+    };
+    state.photos.push(ph);
+    stampPhotoSha(ph);
     saveChecked("sample photo", "Sample photo added");
     logEvent(currentJobId, "Sample photo added ("+s.room+")");
     renderPhotos(); renderDossierTab();
@@ -1002,13 +1207,13 @@ document.addEventListener("DOMContentLoaded", function(){
   $("btn-manifest").addEventListener("click", function(){
     var photos = jobPhotos(currentJobId);
     if(!photos.length){ toast("No photos to export yet"); return; }
-    var rows = [["Photo #","Timestamp","Phase","Room","Damage type","Severity","Notes","Markers","Sample","Size KB"]];
+    var rows = [["Photo #","Timestamp","Phase","Room","Damage type","Severity","Notes","Markers","Sample","Size KB","SHA-256"]];
     photos.forEach(function(p, idx){
       var markers = (p.pins||[]).map(function(pin,i){ return (i+1)+": "+(pin.label||""); }).join("; ");
       rows.push([idx+1, fmtTime(p.takenAt),
         p.phase ? p.phase.charAt(0).toUpperCase()+p.phase.slice(1) : "Unclassified",
         p.room||"", p.damageType||"", p.severity||"", p.notes||"", markers,
-        p.sample?"Yes":"No", Math.round((p.dataUrl||"").length/1024)]);
+        p.sample?"Yes":"No", Math.round((p.dataUrl||"").length/1024), p.sha||"not stamped"]);
     });
     var csv = rows.map(function(r){ return r.map(csvSafe).join(","); }).join("\r\n");
     var blob = new Blob([csv], {type:"text/csv"});
@@ -1085,7 +1290,7 @@ document.addEventListener("DOMContentLoaded", function(){
     var qty = parseFloat($("li-qty").value)||0;
     var rate = parseFloat($("li-rate").value)||0;
     if(!desc || !rate) return;
-    state.lineItems.push({id:uid(), jobId:currentJobId, desc:desc, qty:qty, unit:$("li-unit").value.trim(), rate:rate});
+    state.lineItems.push({id:uid(), jobId:currentJobId, desc:desc, qty:qty, unit:$("li-unit").value.trim(), rate:rate, photoIds:[]});
     saveChecked("line item", "Line item added");
     logEvent(currentJobId, "Work log: " + desc + " (" + money(qty*rate) + ")");
     $("li-desc").value = ""; $("li-qty").value = "1"; $("li-rate").value = "";
@@ -1129,6 +1334,20 @@ document.addEventListener("DOMContentLoaded", function(){
       $("send-name").value = ""; $("send-email").value = "";
       renderDossierTab();
     }
+  });
+
+  /* evidence coverage + integrity */
+  $("btn-verify-integrity").addEventListener("click", verifyIntegrity);
+  $("btn-stamp-hashes").addEventListener("click", stampMissingHashes);
+  $("btn-link-save").addEventListener("click", function(){
+    var item = state.lineItems.find(function(x){return x.id===linkingItemId;});
+    if(item){
+      item.photoIds = linkingSel.slice();
+      saveChecked("evidence links", "Evidence linked");
+      logEvent(currentJobId, "Evidence linked: '" + item.desc + "' (" + linkingSel.length + " photo(s))");
+      renderWorklog(); renderDossierTab();
+    }
+    closeModals();
   });
 
   /* dossier */

@@ -149,6 +149,16 @@ footer.app{padding:18px 14px 110px; color:var(--dim); font-size:12px; text-align
 .countdown{font-weight:800;}
 .countdown.over{color:var(--red);}
 .countdown.soon{color:var(--amber);}
+/* custody chain stepper */
+.chain{display:flex; align-items:flex-start; margin:12px 0 4px;}
+.clink{flex:1; text-align:center; position:relative; font-size:11px; color:var(--dim);}
+.clink::before{content:""; position:absolute; top:14px; left:-50%; width:100%; height:2px; background:var(--line); z-index:0;}
+.clink:first-child::before{display:none;}
+.clink.done::before{background:var(--green);}
+.cdot{width:28px; height:28px; border-radius:50%; border:2px solid var(--line); background:#101010;
+  display:flex; align-items:center; justify-content:center; margin:0 auto 4px; position:relative; z-index:1; color:var(--green);}
+.clink.done .cdot{border-color:var(--green); background:#0e2b1a;}
+.clink .who{font-size:10px; color:var(--dim); display:block; margin-top:2px; line-height:1.35;}
 @media print{
   header.top,.tabs,.fab,.sheet-wrap,.disclaimer,.btn,footer.app,.no-print,#dashSearch{display:none !important;}
   .print-only{display:block !important;}
@@ -215,6 +225,47 @@ let saveFailed=false;
 </script>
 <script>
 "use strict";
+/* Toolbox talk templates: operational talking points for the morning safety
+ * briefing. Kept to things a foreman says out loud, never to regulatory
+ * interpretation or encoded thresholds. Reminders, not training. */
+const TALK_TOPICS=[
+ {t:"Containment integrity",points:[
+   "Walk the poly sheeting and look for tears, gaps, and failed tape before anyone enters.",
+   "Critical barriers and the decon unit flaps stay sealed all shift.",
+   "Report any damage immediately. Work stops until it is repaired."]},
+ {t:"Negative air pressure",points:[
+   "Negative-air units are running before work starts, not after.",
+   "Check the manometer reading every time you enter the containment.",
+   "Keep decon flaps closed so air flows inward.",
+   "If a unit dies, stop work and tell the supervisor."]},
+ {t:"Respiratory protection",points:[
+   "Respirator on before entering the regulated area, off after leaving decon.",
+   "Fit-check the seal every time you put it on.",
+   "No facial hair where the mask seals.",
+   "Change filters when breathing gets hard or at the scheduled change."]},
+ {t:"Decontamination procedure",points:[
+   "Enter and exit only through the decon unit.",
+   "Shower and wash before leaving the work area.",
+   "Bag work clothes separately from street clothes.",
+   "No eating, drinking, or smoking in the work area."]},
+ {t:"Wet methods and fiber control",points:[
+   "Keep material wet while removing it. Mist, do not soak electrical.",
+   "Bag waste as you go, do not let piles build up.",
+   "HEPA-vacuum visible debris before leaving the area."]},
+ {t:"Waste bagging and labeling",points:[
+   "Double-bag in 6-mil poly. Twist, goose-neck, and tape each bag shut.",
+   "Label every bag with the generator information.",
+   "Stage labeled bags in the locked loadout area only."]},
+ {t:"Emergency egress",points:[
+   "Know your exit route before work starts.",
+   "Alarm signal and muster point: confirm them out loud.",
+   "If containment is breached, stop work and tell the competent person.",
+   "Keep the decon path clear for the whole shift."]},
+ {t:"Heat stress in containment",points:[
+   "Tyvek suits trap heat. Drink water on every break.",
+   "Watch your buddy for dizziness, nausea, or confusion.",
+   "Call a break before anyone tries to push through."]}
+];
 /* ============ seed data ============ */
 function seedPhoto(label, hue){
   const c=document.createElement("canvas"); c.width=320; c.height=320;
@@ -260,10 +311,19 @@ function seed(){
     manifests:[
       {id:uid(), manifestNo:"AZ-2026-88412", transporter:"Desert Haul Environmental", transporterPhone:"(480) 555-2290",
        disposalSite:"Salt River Secure Landfill", disposalPhone:"(602) 555-7710",
-       qtyYd3:"14", dateShipped:"2026-10-03", signedCopyReceived:true, signedDate:"2026-10-05", certSigned:true, createdAt:t-4*864e5},
+       qtyYd3:"14", dateShipped:"2026-10-03", signedCopyReceived:true, signedDate:"2026-10-05", certSigned:true, createdAt:t-4*864e5,
+       signedRecordedAt:new Date("2026-10-05T16:40:00").getTime(), signedRecordedBy:"Marcus Webb",
+       custody:[
+         {stage:"loaded", at:new Date("2026-10-03T09:20:00").getTime(), by:"Marcus Webb"},
+         {stage:"departed", at:new Date("2026-10-03T10:05:00").getTime(), by:"Marcus Webb"},
+         {stage:"delivered", at:new Date("2026-10-03T13:45:00").getTime(), by:"R. Sandoval"},
+         {stage:"signed", at:new Date("2026-10-05T16:40:00").getTime(), by:"Marcus Webb"}]},
       {id:uid(), manifestNo:"AZ-2026-88457", transporter:"Desert Haul Environmental", transporterPhone:"(480) 555-2290",
        disposalSite:"Salt River Secure Landfill", disposalPhone:"(602) 555-7710",
-       qtyYd3:"9", dateShipped:"2026-10-06", signedCopyReceived:false, signedDate:"", certSigned:true, createdAt:t-864e5}
+       qtyYd3:"9", dateShipped:"2026-10-06", signedCopyReceived:false, signedDate:"", certSigned:true, createdAt:t-864e5,
+       custody:[
+         {stage:"loaded", at:new Date("2026-10-06T08:50:00").getTime(), by:"Marcus Webb"},
+         {stage:"departed", at:new Date("2026-10-06T09:30:00").getTime(), by:"Marcus Webb"}]}
     ],
     photos:(()=>{ const sp=(l,h)=>{ const u=seedPhoto(l,h); return {id:uid(),dataUrl:u,thumb:u}; };
       return [
@@ -272,6 +332,12 @@ function seed(){
       Object.assign(sp("REMOVAL",120),{caption:"Tile removal in progress, wet methods", category:"Removal", takenAt:new Date("2026-10-02T10:40:00").getTime()}),
       Object.assign(sp("WASTE",0),{caption:"Double-bagged labeled waste staged", category:"Waste", takenAt:new Date("2026-10-02T14:05:00").getTime()})
       ]; })(),
+    toolboxTalks:[
+      {id:uid(), date:"2026-10-01", topic:"Containment integrity",
+       points:TALK_TOPICS[0].points.slice(), by:"Marcus Webb",
+       attendees:[{name:"D. Okafor",cred:"AZ-ABT-5120"},{name:"R. Sandoval",cred:"AZ-ABT-5332"}],
+       createdAt:t-6*864e5}
+    ],
     clearance:{ visual:false, visualBy:"", visualDate:"",
       airClear:false, airClearBy:"", airClearDate:"",
       wasteShipped:true, manifestsBack:false, neshapFiled:true, areaReleased:false }
@@ -289,7 +355,12 @@ function loadDb(){
   try{ const db=JSON.parse(raw);
     if(db&&Array.isArray(db.projects)){
       let dirty=false;
-      db.projects.forEach(p=>{ if(p.id==="demo1"&&!p.synthetic){ p.synthetic=true; dirty=true; } });
+      db.projects.forEach(p=>{
+        if(p.id==="demo1"&&!p.synthetic){ p.synthetic=true; dirty=true; }
+        /* Pass 3 fields: toolbox talks, per-manifest custody chains. */
+        if(!Array.isArray(p.toolboxTalks)){ p.toolboxTalks=[]; dirty=true; }
+        (p.manifests||[]).forEach(m=>{ if(!Array.isArray(m.custody)){ m.custody=[]; dirty=true; } });
+      });
       if(dirty) store.save(db);
       return db;
     }
@@ -376,7 +447,11 @@ function completeness(p){
   const cl=p.clearance, keys=["visual","airClear","wasteShipped","manifestsBack","neshapFiled","areaReleased"];
   const done=keys.filter(k=>cl[k]).length;
   parts.push({label:"Clearance certificate ("+done+"/6)", pct:done/6*30, max:30});
-  const total=Math.round(parts.reduce((a,x)=>a+x.pct,0));
+  /* Pass 3: toolbox talks are bonus evidence. They can push a near-complete
+   * dossier to 100, the total is capped, and the row is labeled bonus. */
+  const talks=live(p.toolboxTalks);
+  parts.push({label:"Toolbox talks ("+talks.length+") bonus", pct:Math.min(talks.length,5), max:5, bonus:true});
+  const total=Math.min(100,Math.round(parts.reduce((a,x)=>a+x.pct,0)));
   return {parts, total};
 }
 function missingItems(p){
@@ -411,6 +486,61 @@ function manifestCountdown(m){
   if(left<=7) return {cls:"soon", txt:left+" days left to receive signed copy"};
   return {cls:"", txt:left+" days left to receive signed copy"};
 }
+/* ============ pass 3 helpers ============ */
+const fmtCoord=x=>(x.lat!=null&&x.lng!=null)?x.lat.toFixed(5)+", "+x.lng.toFixed(5)+" (±"+(x.acc||"?")+" m)":"Not recorded";
+/* Shared "correction history" block for the pass-3 record types. */
+function corrHist(list){
+  return (list&&list.length)?'<div class="small" style="margin-top:8px; border-top:1px solid var(--line); padding-top:8px"><b style="color:var(--blue)">Correction history: original preserved</b>'+
+    list.map(c=>'<div class="small muted" style="margin-top:6px">'+esc(corrDiff(c.before,c.after))+' · '+esc(c.by)+' · '+fmtDT(c.at)+'<br>Reason: '+esc(c.reason)+'</div>').join("")+'</div>':"";
+}
+/* Custody chain: the four links between "waste exists" and "signed copy back".
+ * The signed link falls back to the signed-copy fields when no custody event
+ * was recorded (older records). */
+const CUSTODY_STAGES=[["loaded","Loaded on site"],["departed","Departed site"],["delivered","Delivered to disposal"],["signed","Signed copy back"]];
+function hasStage(m,s){ return (m.custody||[]).some(c=>c.stage===s)||(s==="signed"&&m.signedCopyReceived); }
+function custodyChain(m){
+  const evs=m.custody||[];
+  const nodes=CUSTODY_STAGES.map(st=>{
+    let rec=evs.find(e=>e.stage===st[0]);
+    if(st[0]==="signed"&&m.signedCopyReceived&&!rec)
+      rec={stage:"signed", at:m.signedRecordedAt||Date.now(), by:m.signedRecordedBy||""};
+    const done=!!rec;
+    return '<div class="clink'+(done?" done":"")+'"><div class="cdot">'+(done?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l6 6L20 6"/></svg>':"")+'</div>'+
+      '<b style="color:'+(done?"var(--ink)":"var(--dim)")+'">'+st[1]+'</b>'+
+      (done?'<span class="who">'+fmtD(new Date(rec.at).toISOString().slice(0,10))+(rec.by?"<br>"+esc(rec.by):"")+'</span>':'<span class="who">pending</span>')+'</div>';
+  }).join("");
+  return '<div class="small dim" style="margin-top:10px">Custody chain: each link is stamped with who and when.</div><div class="chain">'+nodes+'</div>';
+}
+/* Site coverage map: relative positions of GPS-tagged photos on a canvas.
+ * Explicitly labeled relative, not to scale, never a survey. */
+function paintCovMap(p){
+  const cv=document.getElementById("covMap"); if(!cv) return;
+  const tagged=live(p.photos).filter(x=>x.lat!=null&&x.lng!=null).sort((a,b)=>a.takenAt-b.takenAt);
+  if(!tagged.length) return;
+  const W=cv.clientWidth||320, H=220, dpr=window.devicePixelRatio||1;
+  cv.width=W*dpr; cv.height=H*dpr;
+  const g=cv.getContext("2d"); g.scale(dpr,dpr);
+  const lats=tagged.map(x=>x.lat), lngs=tagged.map(x=>x.lng);
+  let loLa=Math.min.apply(null,lats), hiLa=Math.max.apply(null,lats),
+      loLn=Math.min.apply(null,lngs), hiLn=Math.max.apply(null,lngs);
+  if(hiLa-loLa<1e-7){ hiLa+=5e-6; loLa-=5e-6; }
+  if(hiLn-loLn<1e-7){ hiLn+=5e-6; loLn-=5e-6; }
+  const pad=30;
+  const X=lng=>pad+(lng-loLn)/(hiLn-loLn)*(W-2*pad);
+  const Y=lat=>pad+(hiLa-lat)/(hiLa-loLa)*(H-2*pad);
+  g.strokeStyle="#2c2c2c"; g.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const gx=pad+i*(W-2*pad)/4, gy=pad+i*(H-2*pad)/4;
+    g.beginPath(); g.moveTo(gx,0); g.lineTo(gx,H); g.stroke();
+    g.beginPath(); g.moveTo(0,gy); g.lineTo(W,gy); g.stroke();
+  }
+  tagged.forEach((t,i)=>{
+    const cx=X(t.lng), cy=Y(t.lat);
+    g.fillStyle="#ff6a00"; g.beginPath(); g.arc(cx,cy,13,0,7); g.fill();
+    g.fillStyle="#141414"; g.font="bold 12px sans-serif"; g.textAlign="center"; g.textBaseline="middle";
+    g.fillText(String(i+1),cx,cy+0.5);
+  });
+}
 </script>
 <script>
 "use strict";
@@ -423,10 +553,13 @@ const IC={
   cam:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="7" width="13" height="11" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>',
   print:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 8V3h10v5M7 17H4v-7h16v7h-3M7 14h10v7H7z"/></svg>',
   down:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>',
-  trash:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14"/></svg>'
+  trash:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14"/></svg>',
+  pin:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-6.1-7-11a7 7 0 0114 0c0 4.9-7 11-7 11z"/><circle cx="12" cy="10" r="2.6"/></svg>',
+  talk:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v11H9l-5 4V5z"/><path d="M8 9h8M8 12h5"/></svg>',
+  truck:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6h12v10H2zM14 10h4l4 4v2h-8z"/><circle cx="6" cy="18" r="1.8"/><circle cx="18" cy="18" r="1.8"/></svg>'
 };
 /* ============ views ============ */
-const TABS=[["overview","Overview"],["daily","Daily Log"],["air","Air"],["waste","Waste"],["photos","Photos"],["clearance","Clearance"],["dossier","Dossier"]];
+const TABS=[["overview","Overview"],["daily","Daily Log"],["toolbox","Toolbox"],["air","Air"],["waste","Waste"],["photos","Photos"],["clearance","Clearance"],["dossier","Dossier"]];
 function ring(pct,size){
   const r=(size||64)/2-7, c=2*Math.PI*r, off=c*(1-pct/100);
   const col=pct>=90?"var(--green)":pct>=50?"var(--orange)":"var(--red)";
@@ -519,6 +652,7 @@ function renderProject(main,p){
   let body="";
   if(view.tab==="overview") body=vOverview(p,c);
   else if(view.tab==="daily") body=vDaily(p);
+  else if(view.tab==="toolbox") body=vToolbox(p);
   else if(view.tab==="air") body=vAir(p);
   else if(view.tab==="waste") body=vWaste(p);
   else if(view.tab==="photos") body=vPhotos(p);
@@ -531,6 +665,7 @@ function renderProject(main,p){
     '<div class="tabs">'+tabs+'</div><div style="height:12px"></div>'+body;
   main.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{ view.tab=b.dataset.tab; save(); });
   bindActions(main,p);
+  if(view.tab==="photos") paintCovMap(p);
   const rn=document.getElementById("ringNum");
   if(rn){ const target=c.total; let n=0; const step=Math.max(1,Math.round(target/30));
     const tick=()=>{ n=Math.min(target,n+step); rn.textContent=n; if(n<target) requestAnimationFrame(tick); };
@@ -618,6 +753,23 @@ function vDaily(p){
   return '<h2 class="stencil" style="font-size:15px; color:var(--muted); margin:4px 0 12px;">Daily field logs</h2>'+
     (items||'<div class="empty">No daily logs yet.<br>Foremen: log each shift from the site.</div>');
 }
+/* Pass 3: toolbox talks. The morning safety briefing, documented: topic with
+ * talking points, given-by sign-off, attendee list from the crew roster.
+ * Corrections use the same tamper-evident pattern as every other record. */
+function vToolbox(p){
+  const items=live(p.toolboxTalks).sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt-a.createdAt).map(t=>
+    '<div class="card"><div class="row"><div class="grow"><b>'+esc(t.topic)+'</b> <span class="dim small">'+fmtD(t.date)+'</span>'+
+    ((t.corrections&&t.corrections.length)?' <span class="badge info">Corrected</span>':"")+'</div>'+
+    '<button class="btn dark sm" data-act="edit-talk" data-id="'+t.id+'">Correct</button> '+
+    '<button class="btn danger sm" data-act="del-talk" data-id="'+t.id+'">Delete</button></div>'+
+    '<div class="small muted" style="margin:6px 0">Given by <b>'+esc(t.by||"–")+'</b> · '+(t.attendees||[]).length+' attendee'+((t.attendees||[]).length===1?"":"s")+': '+
+    (t.attendees||[]).map(a=>esc(a.name)+(a.cred?" ("+esc(a.cred)+")":"")).join(" · ")+'</div>'+
+    '<ul class="small" style="margin:6px 0 0; padding-left:18px">'+(t.points||[]).map(x=>'<li style="margin-bottom:3px">'+esc(x)+'</li>').join("")+'</ul>'+
+    corrHist(t.corrections)+'</div>').join("");
+  return '<h2 class="stencil" style="font-size:15px; color:var(--muted); margin:4px 0 12px;">Toolbox talks</h2>'+
+    '<div class="card"><div class="row">'+IC.talk+'<div class="small muted grow" style="margin-left:8px">Start the shift with a safety briefing. Pick a topic, read the points out loud, sign off who was there. The talk lands in the dossier timeline. Talking points are reminders, not training or legal advice.</div></div></div>'+
+    (items||'<div class="empty">No toolbox talks yet.<br>Tap + to log this morning\u2019s safety briefing.</div>');
+}
 function vAir(p){
   const ss=live(p.airSamples).sort((a,b)=>a.date.localeCompare(b.date)||a.createdAt-b.createdAt);  let spark="";
   if(ss.length>=2){
@@ -659,9 +811,14 @@ function vWaste(p){
     kv("Transporter",esc(m.transporter)+(m.transporterPhone?'<br><span class="dim">'+esc(m.transporterPhone)+'</span>':""))+
     kv("Disposal site",esc(m.disposalSite)+(m.disposalPhone?'<br><span class="dim">'+esc(m.disposalPhone)+'</span>':""))+
     '<div class="small" style="margin:8px 0"><span class="countdown '+cd.cls+'">'+esc(cd.txt)+'</span></div>'+
+    custodyChain(m)+
     ((m.corrections&&m.corrections.length)?'<div class="small" style="margin:8px 0; border-top:1px solid var(--line); padding-top:8px"><b style="color:var(--blue)">Correction history: original preserved</b>'+
       m.corrections.map(c=>'<div class="small muted" style="margin-top:6px">'+esc(corrDiff(c.before,c.after))+' · '+esc(c.by)+' · '+fmtDT(c.at)+'<br>Reason: '+esc(c.reason)+'</div>').join("")+'</div>':"")+
-    '<div class="row"><button class="btn dark sm" data-act="edit-manifest" data-id="'+m.id+'">Correct</button>'+
+    '<div class="row" style="margin-top:8px; flex-wrap:wrap; gap:8px">'+
+    (hasStage(m,"loaded")?"":'<button class="btn dark sm" data-act="cust-loaded" data-id="'+m.id+'">Record loading</button>')+
+    (hasStage(m,"departed")?"":'<button class="btn dark sm" data-act="cust-departed" data-id="'+m.id+'">Record departure</button>')+
+    (hasStage(m,"delivered")?"":'<button class="btn dark sm" data-act="cust-delivered" data-id="'+m.id+'">Record delivery</button>')+
+    '<button class="btn dark sm" data-act="edit-manifest" data-id="'+m.id+'">Correct</button>'+
     '<button class="btn ghost sm" data-act="sign-manifest" data-id="'+m.id+'">'+(m.signedCopyReceived?"Update signed copy":"Mark signed copy received")+'</button>'+
     '<button class="btn danger sm" data-act="del-manifest" data-id="'+m.id+'">Delete</button></div></div>'; }).join("");
   return '<div class="disclaimer"><strong>NESHAP 35-day rule:</strong> if the signed waste-shipment copy is not back from the disposal site within 35 days of shipment, you must contact the transporter and disposal site. Abate counts it down for you.</div>'+
@@ -674,10 +831,20 @@ function vPhotos(p){
   const list=live(p.photos).filter(x=>f==="All"||x.category===f).sort((a,b)=>b.takenAt-a.takenAt);
   const chips=cats.map(c=>'<button class="tab'+(f===c?" on":"")+'" data-pcat="'+c+'">'+c+'</button>').join("");
   const grid=list.map(x=>'<div class="photo" data-photo="'+x.id+'"><img src="'+x.dataUrl+'" alt="'+esc(x.caption||"site photo")+'" loading="lazy">'+
-    '<div class="ts">'+fmtDT(x.takenAt)+'</div><div class="cap">'+esc(x.caption||x.category)+'</div></div>').join("");
+    '<div class="ts">'+fmtDT(x.takenAt)+(x.lat!=null?" · GPS":"")+'</div><div class="cap">'+esc(x.caption||x.category)+'</div></div>').join("");
+  /* Site coverage map: GPS-tagged photos plotted by relative position, so the
+   * crew chief can see the whole work area was photographed. */
+  const tagged=live(p.photos).filter(x=>x.lat!=null&&x.lng!=null).sort((a,b)=>a.takenAt-b.takenAt);
+  const mapCard='<div class="card"><div class="row">'+IC.pin+'<h3 class="stencil" style="color:var(--orange); margin:0 0 0 8px">Site coverage map</h3></div>'+
+    (tagged.length?
+      '<div class="small dim" style="margin:8px 0">'+tagged.length+' of '+live(p.photos).length+' photos carry GPS coordinates, burned in at capture. Relative positions, not to scale, not a survey.</div>'+
+      '<canvas id="covMap" style="width:100%; height:220px; background:#0e0e0e; border:1px solid var(--line); border-radius:8px"></canvas>'+
+      '<div class="small" style="margin-top:8px">'+tagged.map((x,i)=>'<div class="kv"><div class="k"><b style="color:var(--orange)">'+(i+1)+'</b> '+esc(x.caption||x.category)+'</div><div class="mono" style="font-size:11px; text-align:right">'+fmtDT(x.takenAt)+'</div></div>').join("")+'</div>'
+    :'<div class="small dim" style="margin-top:8px">No photos carry GPS yet. New photos capture coordinates when the device has a fix; the map draws itself.</div>')+'</div>';
   return '<h2 class="stencil" style="font-size:15px; color:var(--muted); margin:4px 0 12px;">Photo documentation</h2>'+
-    '<div class="small dim" style="margin-bottom:8px">Every photo is timestamped at capture and locked to the dossier. Courts and insurers trust timestamps; captions are free.</div>'+
-    '<div class="tabs" style="position:static; margin:0 0 10px; padding:0; border:none; background:none">'+chips+'</div>'+
+    '<div class="small dim" style="margin-bottom:8px">Every photo is timestamped at capture and locked to the dossier. Photos with a GPS fix also carry coordinates, burned into the image. Courts and insurers trust timestamps; captions are free.</div>'+
+    mapCard+
+    '<div class="tabs" style="position:static; margin:12px 0 10px; padding:0; border:none; background:none">'+chips+'</div>'+
     (grid?'<div class="photogrid">'+grid+'</div>':'<div class="empty">No photos in this category yet.<br>Tap + to add timestamped site photos.</div>');
 }
 function vClearance(p){
@@ -705,6 +872,8 @@ function vDossier(p,c){
   live(p.airSamples).forEach(s=>ev.push({t:new Date(s.date+"T12:00:00").getTime()+1, cls:s.pass?"good":"warn", when:fmtD(s.date), what:"Air sample, "+s.location+": "+s.result+" f/cc ("+(s.pass?"PASS":"EXCEEDS")+")"+((s.corrections&&s.corrections.length)?" [corrected]":"")}));
   live(p.manifests).forEach(m=>ev.push({t:new Date(m.dateShipped+"T12:00:00").getTime()+2, cls:m.signedCopyReceived?"good":"warn", when:fmtD(m.dateShipped), what:"Waste manifest "+m.manifestNo+": "+m.qtyYd3+" yd³ → "+m.disposalSite+(m.signedCopyReceived?" (signed copy back)":" (signature PENDING)")+((m.corrections&&m.corrections.length)?" [corrected]":"")}));
   live(p.photos).forEach(x=>ev.push({t:x.takenAt, cls:"", when:fmtDT(x.takenAt), what:"Photo: "+(x.caption||x.category)}));
+  live(p.toolboxTalks).forEach(t=>ev.push({t:new Date(t.date+"T12:00:00").getTime()+3, cls:"good", when:fmtD(t.date),
+    what:"Toolbox talk: "+t.topic+" by "+t.by+" ("+(t.attendees||[]).length+" attendee"+((t.attendees||[]).length===1?"":"s")+")"}));
   (p.events||[]).forEach(e=>ev.push({t:e.t, cls:e.cls||"", when:fmtDT(e.t), what:e.what}));
   ev.sort((a,b)=>a.t-b.t);
   const retainUntil=new Date(Math.max.apply(null,ev.map(e=>e.t).concat([Date.now()]))+30*365.25*864e5).getFullYear();
@@ -725,8 +894,11 @@ function vDossier(p,c){
     signRows.map(r=>'<tr><td>'+r[1]+'</td><td>'+(cl[r[0]]?"SIGNED":"open")+'</td><td>'+esc(cl[r[0]+"By"]||"–")+'</td><td>'+(cl[r[0]+"Date"]?fmtD(cl[r[0]+"Date"]):"–")+'</td></tr>').join("")+
     '</table></div>'+
     '<div class="print-only print-section"><h2 style="font-size:15px">Photo evidence ('+live(p.photos).length+')</h2>'+
-    (live(p.photos).length?'<div class="pthumbs">'+live(p.photos).map(x=>'<div><img src="'+x.thumb+'" alt="'+esc(x.caption||"site photo")+'"><div style="font-size:10px">'+esc(x.caption||x.category)+'<br>'+fmtDT(x.takenAt)+'</div></div>').join("")+'</div>'
+    (live(p.photos).length?'<div class="pthumbs">'+live(p.photos).map(x=>'<div><img src="'+x.thumb+'" alt="'+esc(x.caption||"site photo")+'"><div style="font-size:10px">'+esc(x.caption||x.category)+'<br>'+fmtDT(x.takenAt)+(x.lat!=null?'<br>GPS '+x.lat.toFixed(5)+', '+x.lng.toFixed(5):"")+'</div></div>').join("")+'</div>'
       :'<div style="font-size:12px">No photos on file.</div>')+'</div>'+
+    '<div class="print-only print-section"><h2 style="font-size:15px">Toolbox talks ('+live(p.toolboxTalks).length+')</h2>'+
+    (live(p.toolboxTalks).length?live(p.toolboxTalks).sort((a,b)=>a.date.localeCompare(b.date)).map(t=>'<div style="font-size:11px; margin-bottom:6px"><b>'+esc(fmtD(t.date))+' '+esc(t.topic)+'</b>, given by '+esc(t.by||"–")+': '+(t.attendees||[]).map(a=>esc(a.name)).join(", ")+'</div>').join("")
+      :'<div style="font-size:12px">None logged.</div>')+'</div>'+
     '<div class="print-only print-section"><h2 style="font-size:15px">Record events</h2>'+
     (recEv.length?recEv.map(e=>'<div style="font-size:11px; margin-bottom:6px"><b>'+esc(fmtDT(e.t))+'</b>: '+esc(e.what)+'</div>').join("")
       :'<div style="font-size:12px">No corrections, deletions, or sign-off changes recorded.</div>')+'</div>';
@@ -807,10 +979,27 @@ function openDatePrompt(title){
   return new Promise(res=>{
     openSheet('<h2 class="stencil">'+esc(title)+'</h2><form id="dtForm"><label>Date signed copy received</label>'+
       '<input name="d" type="date" value="'+todayISO()+'" required>'+
+      '<label>Recorded by</label><input name="by" autocomplete="off" placeholder="Who recorded this?">'+
       '<div style="height:14px"></div><div class="row"><button class="btn grow" type="submit">Save</button>'+
       '<button class="btn dark" type="button" id="dtNo">Cancel</button></div></form>');
     $("#dtNo").onclick=()=>{ closeSheet(); res(null); };
-    $("#dtForm").onsubmit=e=>{ e.preventDefault(); const v=e.target.d.value; closeSheet(); res(v||null); };
+    $("#dtForm").onsubmit=e=>{ e.preventDefault(); const d=collect(e.target); const v=d.d;
+      closeSheet(); res(v?{date:v, by:String(d.by||"").trim()}:null); };
+  });
+}
+/* Custody handoff recorder: each link in the chain gets a date, a time, and
+ * a name. Used by the Waste tab buttons for loading, departure, delivery. */
+function openCustodyPrompt(title, defName){
+  return new Promise(res=>{
+    openSheet('<h2 class="stencil">'+esc(title)+'</h2><form id="cuForm">'+
+      field("Date","d",todayISO(),"date","required")+
+      field("Time","t",new Date().toTimeString().slice(0,5),"time")+
+      field("Recorded by","by",defName||"","text placeholder='Who recorded this handoff'")+
+      '<div style="height:14px"></div><div class="row"><button class="btn grow" type="submit">Record</button>'+
+      '<button class="btn dark" type="button" id="cuNo">Cancel</button></div></form>');
+    $("#cuNo").onclick=()=>{ closeSheet(); res(null); };
+    $("#cuForm").onsubmit=e=>{ e.preventDefault(); const d=collect(e.target); closeSheet();
+      res({at:new Date(d.d+"T"+(d.t||"12:00")+":00").getTime(), by:String(d.by||"").trim()}); };
   });
 }
 $("#sheetWrap").addEventListener("click",e=>{ if(e.target.id==="sheetWrap") closeSheet(); });
@@ -958,6 +1147,64 @@ function fDaily(p, existing){
     closeSheet(); save();
   };
 }
+/* Pass 3: toolbox talk form. Topic picker drives the talking-points preview;
+ * attendees reuse the roster chips and credential hints from the daily log. */
+function fTalk(p, existing){
+  const T=existing||{};
+  const ros=getRoster(p.id);
+  const rosTxt=ros.map(c=>c.name+(c.cred?", "+c.cred:"")).join("\n");
+  const attTxt=(T.attendees||[]).map(c=>c.name+(c.cred?", "+c.cred:"")).join("\n")||(!existing?rosTxt:"");
+  const topics=TALK_TOPICS.map(x=>x.t);
+  const curTopic=T.topic||topics[0];
+  openSheet(formShell(existing?"Correct toolbox talk: "+fmtD(T.date):"Toolbox talk: "+fmtD(todayISO()),
+    (existing?CORR_DISCLAIMER:"")+
+    field("Date *","date",T.date||todayISO(),"date","required")+
+    '<label>Topic *</label><select name="topic" id="talkTopic">'+topics.map(x=>'<option'+(x===curTopic?" selected":"")+'>'+esc(x)+'</option>').join("")+'</select>'+
+    '<div id="talkPoints" style="margin-top:4px"></div>'+
+    field("Given by *","by",T.by||p.competentPerson||"","text","required placeholder='Name of person giving the talk'")+
+    '<label>Attendees (one per line: name, accreditation #)</label>'+
+    (!existing&&ros.length?'<div class="small dim" style="margin-bottom:6px">Roster: tap to add:</div><div class="row" style="flex-wrap:wrap; gap:6px; margin-bottom:8px">'+
+      ros.map((c,i)=>'<button type="button" class="btn dark sm" data-ros2="'+i+'">'+esc(c.name)+(c.cred?' <span class="dim">'+esc(c.cred)+'</span>':"")+'</button>').join("")+'</div>':"")+
+    '<textarea id="talkAtt" name="attendees" rows="3" placeholder="Marcus Webb, AZ-ABT-4471 (supervisor)&#10;D. Okafor, AZ-ABT-5120">'+esc(attTxt)+'</textarea>'+
+    (existing?corrFields()+CORR_REASON:""),
+    existing?"Record correction":"Log talk"));
+  $("#sheetCancel").onclick=closeSheet;
+  const paintPts=()=>{ const tp=TALK_TOPICS.find(x=>x.t===$("#talkTopic").value)||TALK_TOPICS[0];
+    $("#talkPoints").innerHTML='<label>Talking points</label><ul class="small" style="margin:0 0 4px; padding-left:18px">'+
+      tp.points.map(x=>'<li style="margin-bottom:3px">'+esc(x)+'</li>').join("")+'</ul>'; };
+  $("#talkTopic").onchange=paintPts; paintPts();
+  const ta=$("#talkAtt");
+  document.querySelectorAll("#sheet [data-ros2]").forEach(b=>b.onclick=()=>{
+    const c=ros[+b.dataset.ros2]; if(!c) return;
+    const line=c.name+(c.cred?", "+c.cred:"");
+    ta.value=(ta.value.replace(/\s+$/,"")?ta.value.replace(/\s+$/,"")+"\n":"")+line;
+    ta.focus();
+  });
+  $("#sheetForm").onsubmit=e=>{ e.preventDefault(); const d=collect(e.target);
+    const tp=TALK_TOPICS.find(x=>x.t===d.topic)||TALK_TOPICS[0];
+    const attendees=String(d.attendees||"").split("\n").map(s=>s.trim()).filter(Boolean).map(s=>{ const m=s.match(/^(.*?),\s*(.*)$/); return {name:m?m[1]:s, cred:m?m[2]:""}; });
+    addToRoster(p.id, attendees);
+    if(existing){
+      /* Talks are safety records: corrections name who changed what and why,
+       * and the original stays in existing.corrections and the audit event. */
+      const cr=corrRequired(d); if(!cr) return;
+      const before={date:existing.date,topic:existing.topic,points:existing.points,by:existing.by,attendees:existing.attendees};
+      const after={date:d.date,topic:d.topic,points:tp.points.slice(),by:d.by,attendees:attendees};
+      const diff=corrDiff(before,after);
+      if(!diff){ closeSheet(); toast("No changes."); return; }
+      existing.corrections=existing.corrections||[];
+      existing.corrections.push({at:Date.now(),by:cr.by,reason:cr.reason,before:before,after:after});
+      Object.assign(existing,after);
+      logEvent(p,"correction","","Toolbox talk corrected by "+cr.by+" ("+fmtD(d.date)+"): "+diff+". Reason: "+cr.reason);
+      closeSheet(); save(); toast("Correction recorded. Original preserved.");
+      return;
+    }
+    const rec={id:uid(),date:d.date,topic:d.topic,points:tp.points.slice(),by:d.by,attendees:attendees,createdAt:Date.now()};
+    p.toolboxTalks.push(rec);
+    logEvent(p,"info","good","Toolbox talk given: '"+d.topic+"' by "+d.by+" ("+attendees.length+" attendee"+(attendees.length===1?"":"s")+")");
+    closeSheet(); save(); toast("Toolbox talk logged");
+  };
+}
 function fAir(p, existing){
   const S=existing||{};
   openSheet(formShell(existing?"Correct air sample":"Log air sample",
@@ -1041,10 +1288,25 @@ function fPhoto(p){
   const cats=["Containment","Removal","Waste","Decon","Clearance","Other"];
   openSheet(formShell("Add site photo",
     '<label>Photo *</label><input type="file" name="photo" accept="image/*" capture="environment" required>'+
+    '<div id="geoStatus" class="small dim" style="margin-top:8px">Locating: the GPS position is burned into the photo next to the timestamp.</div>'+
     '<label>Category</label><select name="category">'+cats.map(c=>'<option>'+c+'</option>').join("")+'</select>'+
     field("Caption","caption","","text placeholder='North wall after final HEPA pass'"),
     "Add to dossier"));
   $("#sheetCancel").onclick=closeSheet;
+  /* Best-effort GPS at capture: coordinates are burned into the strip next to
+   * the timestamp. No fix is fine; the photo still gets its timestamp. */
+  let geo=null;
+  const gs=$("#geoStatus");
+  const setGeo=t=>{ if(gs) gs.innerHTML=t; };
+  try{
+    if(navigator.geolocation){
+      navigator.geolocation.getCurrentPosition(
+        pos=>{ geo={lat:pos.coords.latitude, lng:pos.coords.longitude, acc:Math.round(pos.coords.accuracy||0)};
+          setGeo('<span style="color:var(--green)">Location captured</span>: '+geo.lat.toFixed(5)+', '+geo.lng.toFixed(5)+' (±'+geo.acc+' m). It will be burned into the photo.'); },
+        ()=>{ setGeo("No GPS fix. The photo still gets its timestamp."); },
+        {timeout:12000, maximumAge:60000, enableHighAccuracy:true});
+    } else setGeo("Location not available on this device. The photo still gets its timestamp.");
+  }catch(e){ setGeo("No GPS fix. The photo still gets its timestamp."); }
   $("#sheetForm").onsubmit=e=>{ e.preventDefault();
     const file=e.target.photo.files[0]; if(!file){ return; }
     const d=collect(e.target);
@@ -1054,13 +1316,16 @@ function fPhoto(p){
       cv.width=Math.round(img.width*s); cv.height=Math.round(img.height*s);
       cv.getContext("2d").drawImage(img,0,0,cv.width,cv.height);
       const stamp=new Date().toLocaleString("en-US");
-      const cx=cv.getContext("2d"); cx.fillStyle="rgba(0,0,0,.7)"; cx.fillRect(0,cv.height-30,cv.width,30);
-      cx.fillStyle="#ff6a00"; cx.font="16px monospace"; cx.fillText(stamp+" - ABATE",10,cv.height-9);
+      const cx=cv.getContext("2d"); cx.fillStyle="rgba(0,0,0,.7)"; cx.fillRect(0,cv.height-46,cv.width,46);
+      cx.fillStyle="#ff6a00"; cx.font="16px monospace"; cx.fillText(stamp+" - ABATE",10,cv.height-26);
+      cx.fillStyle="#ffd9ae"; cx.font="13px monospace";
+      cx.fillText(geo?("GPS "+geo.lat.toFixed(5)+", "+geo.lng.toFixed(5)+" (+/-"+geo.acc+"m)"):"no GPS fix",10,cv.height-8);
       const full= cv.toDataURL("image/jpeg",0.72);
       const tc=document.createElement("canvas"); const tr=240/Math.max(cv.width,cv.height);
       tc.width=Math.round(cv.width*tr); tc.height=Math.round(cv.height*tr);
       tc.getContext("2d").drawImage(cv,0,0,tc.width,tc.height);
-      p.photos.push({id:uid(),dataUrl:full,thumb:tc.toDataURL("image/jpeg",0.6),caption:d.caption,category:d.category,takenAt:Date.now()});
+      p.photos.push({id:uid(),dataUrl:full,thumb:tc.toDataURL("image/jpeg",0.6),caption:d.caption,category:d.category,takenAt:Date.now(),
+        lat:geo?geo.lat:null, lng:geo?geo.lng:null, acc:geo?geo.acc:null});
       URL.revokeObjectURL(img.src); closeSheet(); save();
     };
     img.src=URL.createObjectURL(file);
@@ -1083,9 +1348,26 @@ function bindActions(main,p){
     else if(act==="sign-manifest") b.onclick=async()=>{ const m=p.manifests.find(x=>x.id===id);
       const d=await openDatePrompt("Signed copy received"); if(!d) return;
       const wasSigned=m.signedCopyReceived;
-      m.signedCopyReceived=true; m.signedDate=d; m.signedRecordedAt=Date.now();
-      logEvent(p,"manifest","good","Signed copy recorded for manifest "+m.manifestNo+", dated "+fmtD(d)+(wasSigned?" (updated)":""));
+      m.signedCopyReceived=true; m.signedDate=d.date; m.signedRecordedAt=Date.now(); m.signedRecordedBy=d.by;
+      /* The signed copy is the final custody link. */
+      m.custody=m.custody||[];
+      const se=m.custody.find(c=>c.stage==="signed");
+      if(se){ se.at=Date.now(); se.by=d.by; } else m.custody.push({stage:"signed", at:Date.now(), by:d.by});
+      logEvent(p,"manifest","good","Signed copy recorded for manifest "+m.manifestNo+", dated "+fmtD(d.date)+(d.by?" by "+d.by:"")+(wasSigned?" (updated)":""));
       save(); toast("Manifest signed copy recorded"); };
+    else if(act==="cust-loaded"||act==="cust-departed"||act==="cust-delivered") b.onclick=async()=>{
+      const m=p.manifests.find(x=>x.id===id); if(!m) return;
+      const stage=act==="cust-loaded"?"loaded":act==="cust-departed"?"departed":"delivered";
+      const label=stage==="loaded"?"loading":stage==="departed"?"site departure":"disposal-site delivery";
+      const r=await openCustodyPrompt("Record "+label, p.competentPerson||"");
+      if(!r) return;
+      m.custody=m.custody||[];
+      m.custody.push({stage:stage, at:r.at, by:r.by});
+      logEvent(p,"manifest","", "Manifest "+m.manifestNo+": "+label+" recorded "+fmtDT(r.at)+(r.by?" by "+r.by:""));
+      save(); toast("Custody link recorded"); };
+    else if(act==="edit-talk") b.onclick=()=>fTalk(p, p.toolboxTalks.find(x=>x.id===id));
+    else if(act==="del-talk") b.onclick=async()=>{ const t=p.toolboxTalks.find(x=>x.id===id);
+      if(await softDelete(p,p.toolboxTalks,id,"toolbox talk","Talk '"+(t?t.topic:"")+"' "+fmtD(t?t.date:""))){ save(); toast("Toolbox talk deleted. Tombstone kept."); } };
     else if(act==="print") b.onclick=()=>window.print();
     else if(act==="export") b.onclick=()=>exportArchive(p);
     else if(act==="close-project") b.onclick=async()=>{ const c=completeness(p);
@@ -1160,7 +1442,7 @@ function photoSheet(p,id){
   const x=p.photos.find(y=>y.id===id); if(!x) return;
   openSheet('<h2 class="stencil">Site photo</h2>'+
     '<img src="'+x.dataUrl+'" style="width:100%;border-radius:10px;margin:10px 0" alt="site photo">'+
-    kv("Captured",fmtDT(x.takenAt))+kv("Category",esc(x.category))+kv("Caption",esc(x.caption||"–"))+
+    kv("Captured",fmtDT(x.takenAt))+kv("Location",fmtCoord(x))+kv("Category",esc(x.category))+kv("Caption",esc(x.caption||"–"))+
     '<div style="height:12px"></div><div class="row"><button class="btn danger grow" id="phDel">'+IC.trash+' Delete photo</button>'+
     '<button class="btn dark" id="sheetCancel2">Close</button></div>');
   $("#sheetCancel2").onclick=closeSheet;
@@ -1220,6 +1502,7 @@ $("#fab").onclick=()=>{
   const p=proj(); if(!p) return;
   if(view.tab==="overview") fProject(p);
   else if(view.tab==="daily") fDaily(p);
+  else if(view.tab==="toolbox") fTalk(p);
   else if(view.tab==="air") fAir(p);
   else if(view.tab==="waste") fManifest(p);
   else if(view.tab==="photos") fPhoto(p);

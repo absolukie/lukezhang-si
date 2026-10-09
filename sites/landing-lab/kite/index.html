@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kite - fly Luke's homepage</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;
+    background:#bfe3ff;color:#0b2a4a;overflow:hidden;
+    display:flex;flex-direction:column;height:100dvh;
+    user-select:none;-webkit-user-select:none;
+  }
+  button{touch-action:manipulation}
+  header{padding:12px 16px 8px;text-align:center;z-index:5}
+  header h1{font-size:20px;font-weight:800;letter-spacing:-.02em}
+  header p{font-size:13px;color:#3d5a76;margin-top:2px}
+  #hud{display:flex;gap:8px;justify-content:center;padding:2px 12px 6px;z-index:5}
+  .pill{background:rgba(255,255,255,.75);backdrop-filter:blur(6px);border-radius:999px;
+    padding:6px 12px;font-size:12px;font-weight:700;color:#0b2a4a;
+    display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(11,42,74,.12)}
+  .pill svg{width:14px;height:14px;flex:none}
+  #sky{flex:1;position:relative;touch-action:none;cursor:grab}
+  #sky:active{cursor:grabbing}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  #toast{
+    position:absolute;left:50%;bottom:18px;transform:translateX(-50%) translateY(20px);
+    background:#0b2a4a;color:#fff;font-size:14px;font-weight:600;line-height:1.4;
+    padding:12px 18px;border-radius:14px;max-width:min(86vw,380px);text-align:center;
+    opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;z-index:6;
+    box-shadow:0 10px 30px rgba(11,42,74,.35);
+  }
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #toast .tag{display:block;font-size:10px;letter-spacing:.18em;color:#8fd0ff;margin-bottom:4px;font-weight:800}
+  footer{padding:8px 16px calc(10px + env(safe-area-inset-bottom));text-align:center;z-index:5}
+  footer a{color:#0b2a4a;font-size:13px;font-weight:700;text-decoration:none;
+    display:inline-flex;align-items:center;gap:6px}
+  footer a svg{width:14px;height:14px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Kite</h1>
+  <p>Drag anywhere to move your hand. The kite does the rest. Snag the glowing facts.</p>
+</header>
+<div id="hud">
+  <div class="pill" id="windPill">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M3 8h9a3 3 0 1 0-3-3M3 12h13a3 3 0 1 1-3 3M3 16h7a2.5 2.5 0 1 1-2.5 2.5"/></svg>
+    <span id="windVal">calm</span>
+  </div>
+  <div class="pill">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 19V5m0 0l-6 6m6-6l6 6"/></svg>
+    <span id="altVal">best 0m</span>
+  </div>
+  <div class="pill">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>
+    <span id="orbVal">0 facts</span>
+  </div>
+</div>
+<div id="sky">
+  <canvas id="c"></canvas>
+  <div id="toast"><span class="tag">FACT SNAGGED</span><span id="toastText"></span></div>
+</div>
+<footer>
+  <a href="https://lukezhang.si" aria-label="lukezhang.si home">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>
+    lukezhang.si
+  </a>
+</footer>
+<script>
+(function(){
+  "use strict";
+  var sky=document.getElementById("sky"), cv=document.getElementById("c"), ctx=cv.getContext("2d");
+  var windVal=document.getElementById("windVal"), altVal=document.getElementById("altVal"),
+      orbVal=document.getElementById("orbVal"), toast=document.getElementById("toast"),
+      toastText=document.getElementById("toastText");
+  var W=0,H=0,DPR=1;
+  function resize(){
+    DPR=Math.min(window.devicePixelRatio||1,2);
+    W=sky.clientWidth; H=sky.clientHeight;
+    cv.width=W*DPR; cv.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener("resize",resize); resize();
+
+  var FACTS=[
+    "Luke has shipped 40+ tiny web toys and counting.",
+    "He commutes from Antioch. The Tesla math stays live.",
+    "He dictates everything from an iPhone 13 Pro Max.",
+    "Draw and Guess exists so he can play with his wife Gabe.",
+    "Pinyin guesses match on plain letters, no tone marks.",
+    "His studio is called Bonsoir. Tagline: Yours, truly.",
+    "Math-cute is the law: deep machinery, cute surface.",
+    "No em dashes. Ever. Rewrite with a comma or a period."
+  ];
+
+  // --- state ---
+  var kite={x:0,y:0,vx:0,vy:0,ang:-0.5,spin:0};
+  var anchor={x:0,y:0,tx:0,ty:0};
+  var best=0, got=0, t=0, last=performance.now();
+  try{ best=parseInt(localStorage.getItem("kite_best")||"0",10)||0; }catch(e){}
+  var lineLen=0;
+
+  function reset(){
+    anchor.x=W/2; anchor.y=H*0.86; anchor.tx=W/2; anchor.ty=H*0.86;
+    kite.x=W/2; kite.y=H*0.45; kite.vx=0; kite.vy=0;
+    lineLen=H*0.52;
+  }
+  reset();
+
+  var orbs=[];
+  function spawnOrb(i){
+    orbs[i]={x:40+Math.random()*(W-80), y:40+Math.random()*(H*0.55),
+      r:16+Math.random()*6, ph:Math.random()*6.28, fact:FACTS[Math.floor(Math.random()*FACTS.length)],
+      alive:true, respawn:0};
+  }
+  for(var i=0;i<3;i++) spawnOrb(i);
+
+  var streaks=[];
+  for(var s=0;s<36;s++) streaks.push({x:Math.random(),y:Math.random(),l:20+Math.random()*40});
+
+  // --- input: drag moves your hand (the anchor) ---
+  var dragging=false;
+  function point(e){ var r=cv.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; }
+  sky.addEventListener("pointerdown",function(e){ dragging=true; var p=point(e); anchor.tx=p.x; anchor.ty=Math.min(p.y,H*0.9); sky.setPointerCapture(e.pointerId); });
+  sky.addEventListener("pointermove",function(e){ if(!dragging) return; var p=point(e); anchor.tx=p.x; anchor.ty=Math.min(p.y,H*0.9); });
+  sky.addEventListener("pointerup",function(){ dragging=false; });
+  sky.addEventListener("pointercancel",function(){ dragging=false; });
+  // idle sway when untouched
+  var idleT=0;
+
+  function windAt(x,y,time){
+    var base=26;
+    var g1=Math.sin(time*0.6 + y*0.012)*14;
+    var g2=Math.sin(time*1.7 + x*0.004)*Math.max(0,Math.sin(time*0.23+1.3))*22;
+    var wx=base+g1+g2;
+    var wy=Math.sin(time*0.9 + x*0.008)*10;
+    return {x:wx, y:wy, spd:Math.sqrt(wx*wx+wy*wy)};
+  }
+
+  function showToast(txt){
+    toastText.textContent=txt;
+    toast.classList.add("show");
+    clearTimeout(showToast.t);
+    showToast.t=setTimeout(function(){ toast.classList.remove("show"); },2600);
+  }
+
+  function step(now){
+    var dt=Math.min((now-last)/1000,0.033); last=now; t+=dt;
+
+    // anchor follows hand target
+    if(!dragging){ idleT+=dt; anchor.tx=W/2+Math.sin(idleT*0.5)*W*0.08; anchor.ty=H*0.86+Math.sin(idleT*0.8)*8; }
+    anchor.x+=(anchor.tx-anchor.x)*Math.min(1,dt*8);
+    anchor.y+=(anchor.ty-anchor.y)*Math.min(1,dt*8);
+
+    var w=windAt(kite.x,kite.y,t);
+    // kite gets carried toward wind velocity (drag), gravity pulls down
+    var drag=1.6;
+    kite.vx+=(w.x-kite.vx)*drag*dt;
+    kite.vy+=(w.y-kite.vy)*drag*dt;
+    kite.vy+=150*dt;
+    // extra lift when wind is strong: kite climbs
+    kite.vy-=Math.min(190, w.spd*2.6)*dt;
+
+    kite.x+=kite.vx*dt; kite.y+=kite.vy*dt;
+
+    // string constraint
+    var dx=kite.x-anchor.x, dy=kite.y-anchor.y;
+    var d=Math.sqrt(dx*dx+dy*dy)||1;
+    if(d>lineLen){
+      var nx=dx/d, ny=dy/d;
+      kite.x=anchor.x+nx*lineLen; kite.y=anchor.y+ny*lineLen;
+      var vr=kite.vx*nx+kite.vy*ny;
+      if(vr>0){ kite.vx-=nx*vr; kite.vy-=ny*vr; }
+      // taut line in wind gives a little upward pop
+      kite.vy-=Math.min(120,w.spd*1.5)*dt*10;
+    }
+    // soft ceiling/floor
+    if(kite.y<30){ kite.y=30; kite.vy=Math.abs(kite.vy)*0.3; }
+    if(kite.x<20){ kite.x=20; kite.vx=Math.abs(kite.vx)*0.4; }
+    if(kite.x>W-20){ kite.x=W-20; kite.vx=-Math.abs(kite.vx)*0.4; }
+
+    // tilt into motion
+    var targetAng=Math.atan2(kite.vy,kite.vx)*0.35 - 0.5;
+    kite.ang+=(targetAng-kite.ang)*Math.min(1,dt*6);
+
+    // altitude = height above hand, in "meters"
+    var alt=Math.max(0,Math.round((anchor.y-kite.y)/14));
+    if(alt>best){ best=alt; try{ localStorage.setItem("kite_best",String(best)); }catch(e){} }
+
+    // orbs
+    for(var k=0;k<orbs.length;k++){
+      var o=orbs[k];
+      if(!o.alive){ o.respawn-=dt; if(o.respawn<=0) spawnOrb(k); continue; }
+      var ox=o.x+Math.sin(t*1.2+o.ph)*10, oy=o.y+Math.cos(t*0.9+o.ph)*8;
+      var ddx=kite.x-ox, ddy=kite.y-oy;
+      if(ddx*ddx+ddy*ddy < (o.r+18)*(o.r+18)){
+        o.alive=false; o.respawn=2.5; got++;
+        orbVal.textContent=got+(got===1?" fact":" facts");
+        showToast(o.fact);
+      }
+    }
+
+    // wind streaks drift
+    for(var q=0;q<streaks.length;q++){
+      var st=streaks[q];
+      st.x+= (w.x/600)*dt*2; st.y+=(w.y/600)*dt*2;
+      if(st.x>1.05){ st.x=-0.05; st.y=Math.random(); }
+      if(st.x<-0.05){ st.x=1.05; st.y=Math.random(); }
+    }
+
+    draw(w);
+    altVal.textContent="best "+best+"m";
+    var wspd=w.spd;
+    windVal.textContent = wspd<30?"calm":wspd<55?"breezy":wspd<85?"gusty":"howling";
+    requestAnimationFrame(step);
+  }
+
+  function draw(w){
+    // sky gradient
+    var g=ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,"#8ec9f7"); g.addColorStop(0.7,"#c9e7ff"); g.addColorStop(1,"#e8f5ff");
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    // sun
+    ctx.fillStyle="rgba(255,236,170,.9)";
+    ctx.beginPath(); ctx.arc(W*0.82,H*0.14,34,0,6.29); ctx.fill();
+    // clouds
+    ctx.fillStyle="rgba(255,255,255,.85)";
+    cloud(W*0.18+Math.sin(t*0.1)*20, H*0.16, 1);
+    cloud(W*0.55+Math.cos(t*0.07)*25, H*0.30, 0.7);
+    cloud(W*0.88, H*0.45, 0.55);
+    // wind streaks
+    ctx.strokeStyle="rgba(255,255,255,.5)"; ctx.lineWidth=2; ctx.lineCap="round";
+    var spdF=Math.min(1.6, w.spd/70);
+    for(var q=0;q<streaks.length;q++){
+      var st=streaks[q];
+      ctx.beginPath();
+      ctx.moveTo(st.x*W, st.y*H);
+      ctx.lineTo(st.x*W - st.l*spdF, st.y*H);
+      ctx.stroke();
+    }
+    // hills
+    ctx.fillStyle="#a8d8a8";
+    ctx.beginPath(); ctx.moveTo(0,H);
+    ctx.quadraticCurveTo(W*0.25,H*0.86,W*0.5,H*0.94);
+    ctx.quadraticCurveTo(W*0.75,H*1.0,W,H*0.9);
+    ctx.lineTo(W,H); ctx.closePath(); ctx.fill();
+
+    // string
+    ctx.strokeStyle="rgba(60,60,70,.75)"; ctx.lineWidth=1.6;
+    ctx.beginPath(); ctx.moveTo(anchor.x,anchor.y);
+    var mx=(anchor.x+kite.x)/2, my=(anchor.y+kite.y)/2+24;
+    ctx.quadraticCurveTo(mx,my,kite.x,kite.y); ctx.stroke();
+
+    // orbs
+    for(var k=0;k<orbs.length;k++){
+      var o=orbs[k]; if(!o.alive) continue;
+      var ox=o.x+Math.sin(t*1.2+o.ph)*10, oy=o.y+Math.cos(t*0.9+o.ph)*8;
+      var pulse=1+Math.sin(t*3+o.ph)*0.08;
+      var og=ctx.createRadialGradient(ox,oy,2,ox,oy,o.r*pulse*1.8);
+      og.addColorStop(0,"rgba(255,255,255,.95)");
+      og.addColorStop(0.45,"rgba(255,240,180,.85)");
+      og.addColorStop(1,"rgba(255,240,180,0)");
+      ctx.fillStyle=og;
+      ctx.beginPath(); ctx.arc(ox,oy,o.r*pulse*1.8,0,6.29); ctx.fill();
+      ctx.fillStyle="#fff";
+      ctx.beginPath(); ctx.arc(ox,oy,o.r*0.55*pulse,0,6.29); ctx.fill();
+      ctx.fillStyle="#f5b301";
+      ctx.beginPath(); ctx.arc(ox,oy,o.r*0.4*pulse,0,6.29); ctx.fill();
+    }
+
+    // kite
+    ctx.save(); ctx.translate(kite.x,kite.y); ctx.rotate(kite.ang);
+    var kw=44, kh=56;
+    ctx.fillStyle="#ff5d5d";
+    ctx.beginPath(); ctx.moveTo(0,-kh/2); ctx.lineTo(kw/2,0); ctx.lineTo(0,kh/2); ctx.lineTo(-kw/2,0); ctx.closePath(); ctx.fill();
+    ctx.fillStyle="#ffd166";
+    ctx.beginPath(); ctx.moveTo(0,-kh/2); ctx.lineTo(kw/2,0); ctx.lineTo(0,0); ctx.lineTo(-kw/2,0); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle="#7a2e2e"; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(0,-kh/2); ctx.lineTo(0,kh/2); ctx.moveTo(-kw/2,0); ctx.lineTo(kw/2,0); ctx.stroke();
+    // tail
+    ctx.strokeStyle="#7a2e2e"; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(0,kh/2);
+    var tx=0, ty=kh/2;
+    for(var b=1;b<=4;b++){
+      var sway=Math.sin(t*4+b*1.7)*10*b*0.4;
+      ctx.quadraticCurveTo(tx+sway*0.5, ty+16, tx+sway, ty+30);
+      tx+=sway; ty+=30;
+    }
+    ctx.stroke();
+    ctx.fillStyle="#4d96ff";
+    var bx=0, by=kh/2;
+    for(var b2=1;b2<=4;b2++){
+      var sw=Math.sin(t*4+b2*1.7)*10*b2*0.4;
+      bx+=sw; by+=30;
+      ctx.save(); ctx.translate(bx,by); ctx.rotate(sw*0.02);
+      ctx.fillRect(-7,-4,14,8); ctx.restore();
+    }
+    ctx.restore();
+
+    // hand (anchor)
+    ctx.fillStyle="#8b5e3c";
+    ctx.beginPath(); ctx.arc(anchor.x,anchor.y,10,0,6.29); ctx.fill();
+    ctx.fillStyle="#a9714b";
+    ctx.beginPath(); ctx.arc(anchor.x-3,anchor.y-3,6,0,6.29); ctx.fill();
+  }
+
+  function cloud(x,y,s){
+    ctx.beginPath();
+    ctx.arc(x,y,22*s,0,6.29); ctx.arc(x+24*s,y-8*s,18*s,0,6.29);
+    ctx.arc(x+48*s,y,20*s,0,6.29); ctx.arc(x+24*s,y+8*s,20*s,0,6.29);
+    ctx.fill();
+  }
+
+  requestAnimationFrame(step);
+})();
+</script>
+</body>
+</html>

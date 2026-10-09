@@ -61,7 +61,8 @@ var CSS = [
 ".bill-banner .bill-bmsg{flex:1;min-width:0;}",
 ".bill-banner button{flex:none;border:none;border-radius:999px;padding:8px 16px;font-size:14px;font-weight:700;",
 " background:#fff;color:#23201B;touch-action:manipulation;cursor:pointer;}",
-".bill-banner .bill-bx{background:transparent;color:#fff;padding:8px;font-size:16px;}",
+".bill-banner .bill-bx{background:transparent;color:#fff;padding:8px;font-size:16px;",
+" min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;}",
 ".bill-overlay{position:fixed;inset:0;z-index:9500;display:flex;align-items:flex-start;justify-content:center;",
 " overflow-y:auto;background:var(--bill-scrim,rgba(24,19,12,.62));padding:24px 16px;}",
 ".bill-overlay[hidden]{display:none;}",
@@ -86,7 +87,12 @@ var CSS = [
 ".bill-fine{font-size:13px;color:var(--bill-muted,#6b6257);text-align:center;margin:12px 0 0;}",
 ".bill-linkrow{text-align:center;margin-top:10px;}",
 ".bill-link{background:none;border:none;color:var(--bill-muted,#6b6257);font-size:14px;text-decoration:underline;",
-" touch-action:manipulation;cursor:pointer;padding:8px;}",
+" touch-action:manipulation;cursor:pointer;padding:8px;min-height:44px;display:inline-block;}",
+".bill-close{position:absolute;top:10px;right:10px;width:44px;height:44px;border:none;border-radius:12px;",
+" background:transparent;color:var(--bill-muted,#6b6257);touch-action:manipulation;cursor:pointer;",
+" display:inline-flex;align-items:center;justify-content:center;}",
+".bill-close:active{background:rgba(0,0,0,.06);}",
+".bill-card{position:relative;}",
 ".bill-err{background:#fdeceb;color:#8f1d0e;border-radius:10px;padding:10px 12px;font-size:14px;margin-bottom:12px;}",
 ".bill-err[hidden]{display:none;}",
 ".bill-set{border-top:1px solid var(--bill-line,#EADFC8);margin-top:14px;padding-top:14px;}",
@@ -293,7 +299,7 @@ BillingClient.prototype.checkoutOnce = async function(lookupKey){
 
 BillingClient.prototype.renderBanner = function(){
   if (this._banner) { this._banner.remove(); this._banner = null; }
-  if (this.unconfigured || !this.status) return;
+  if (this.unconfigured || !this.status || this._bannerGone) return;
   var st = this.status.state, html = null, warn = false;
   if (st === "trialing") {
     var d = this.daysLeft();
@@ -315,6 +321,15 @@ BillingClient.prototype.renderBanner = function(){
   btn.textContent = st === "past_due" ? "Update card" : "Add card";
   btn.onclick = function(){ self.setupCard(); };
   bar.appendChild(btn);
+  /* P2-5: the trial banner is dismissable. The X is a real 44px control;
+   * dismissal lasts for this page session (the banner re-renders on reload,
+   * which is honest since the trial state is still live). */
+  var x = document.createElement("button");
+  x.className = "bill-bx";
+  x.setAttribute("aria-label", "Dismiss trial banner");
+  x.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  x.onclick = function(){ self._bannerGone = true; self.renderBanner(); };
+  bar.appendChild(x);
   document.body.appendChild(bar);
   this._banner = bar;
 };
@@ -329,6 +344,14 @@ BillingClient.prototype.buildOverlay = function(){
   ov.setAttribute("hidden", "");
   ov.setAttribute("role", "dialog");
   ov.setAttribute("aria-label", "Subscription required");
+
+  /* Fail-open: a billing outage must never lock a new owner out. When the
+   * trial was never used (fresh owner, trial could not start), the overlay
+   * gets a real dismiss path: an X close control, Escape, and (after a
+   * failed trial attempt) a "Continue without trial for now" link. The
+   * trial stays retryable from Settings > Subscription. A genuinely expired
+   * trial (trialUsed) keeps the blocking paywall per the product rules. */
+  var failOpen = !this.trialUsed;
 
   var trialCta = this.trialUsed ? "Subscribe" : "Start my free trial";
   var head = this.trialUsed
@@ -348,6 +371,8 @@ BillingClient.prototype.buildOverlay = function(){
   var canExport = (typeof window.__exportBackup === "function");
   ov.innerHTML =
     '<div class="bill-card">' +
+      (failOpen ? '<button class="bill-close" id="billClose" aria-label="Close for now">' +
+        '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' : "") +
       '<div class="bill-eyebrow">' + esc(this.appSlug.toUpperCase()) + "</div>" +
       "<h2>" + head + "</h2>" +
       '<p class="bill-sub">' + sub + "</p>" +
@@ -355,19 +380,22 @@ BillingClient.prototype.buildOverlay = function(){
       '<div class="bill-plans">' + plansHtml + "</div>" +
       '<button class="bill-cta">' + esc(trialCta) + "</button>" +
       (canExport ? '<div class="bill-linkrow"><button class="bill-link" id="billExport">Export my data (JSON)</button></div>' : "") +
+      (failOpen ? '<div class="bill-linkrow" id="billDismissRow" hidden><button class="bill-link" id="billDismiss">Continue without trial for now</button></div>' : "") +
       '<p class="bill-fine">After your trial, billing starts automatically only if you add a card. ' +
       "30-day money-back guarantee.</p>" +
-      '<div class="bill-linkrow"><button class="bill-link">Already subscribed? Refresh status</button></div>' +
+      '<div class="bill-linkrow"><button class="bill-link" id="billRefresh">Already subscribed? Refresh status</button></div>' +
     "</div>";
 
   var errBox = ov.querySelector(".bill-err");
   function showErr(m){ errBox.textContent = m; errBox.hidden = false; }
   // Never show raw backend codes or internal references to users.
+  // Anything that does not match is masked as well: backend strings are
+  // internal identifiers by default, and only the generic message ships.
   function friendlyErr(e){
     var code = e && e.code;
     if (code === "BILLING_NOT_CONFIGURED") return "Payments are not switched on yet. Please check back soon.";
     var m = (e && e.message) || "";
-    if (/billing_|whsec|rk_test|rk_live|SECRETS\.md|Worker|price.*not found|lookup|failed to fetch|networkerror|load failed|ERR_/i.test(m)) return "Something went wrong. Please try again.";
+    if (/billing_|whsec|rk_test|rk_live|sk_test|sk_live|SECRETS\.md|Worker|price.*not found|no such price|unknown plan|lookup|failed to fetch|networkerror|load failed|ERR_|http\s*\d{3}|price_[a-z0-9_]+|device_key|session|bearer|token/i.test(m)) return "Something went wrong. Please try again.";
     return m || "Something went wrong. Please try again.";
   }
   ov.querySelectorAll(".bill-plan").forEach(function(b){
@@ -387,22 +415,43 @@ BillingClient.prototype.buildOverlay = function(){
       await self.startTrial(p.lookupKey);
     } catch(e) {
       showErr(friendlyErr(e));
+      if (failOpen) {
+        var dr = ov.querySelector("#billDismissRow");
+        if (dr) dr.hidden = false;
+      }
       btn.disabled = false;
     }
   });
-  ov.querySelector(".bill-link").addEventListener("click", async function(ev){    ev.currentTarget.textContent = "Checking...";
+  /* P1-2 fix: the refresh handler used querySelector(".bill-link"), which
+   * matched the FIRST link (the export button). It now targets #billRefresh,
+   * and the label element is captured before the await (ev.currentTarget is
+   * nulled after an await boundary). */
+  ov.querySelector("#billRefresh").addEventListener("click", async function(ev){
+    var link = ev.currentTarget;
+    link.textContent = "Checking...";
     try {
       await self.refresh();
       if (self.entitled) self.hidePaywall();
-      else ev.currentTarget.textContent = "Still no active subscription";
+      else link.textContent = "Still no active subscription";
     } catch(e) {
-      ev.currentTarget.textContent = "Could not reach billing. Try again.";
+      link.textContent = "Could not reach billing. Try again.";
     }
   });
   var exBtn = ov.querySelector("#billExport");
   if (exBtn) exBtn.addEventListener("click", function(){
     try { window.__exportBackup(); } catch(e){}
   });
+  if (failOpen) {
+    var closeBtn = ov.querySelector("#billClose");
+    if (closeBtn) closeBtn.addEventListener("click", function(){ self.hidePaywall(); });
+    var dismissBtn = ov.querySelector("#billDismiss");
+    if (dismissBtn) dismissBtn.addEventListener("click", function(){ self.hidePaywall(); });
+    var escHandler = function(e){
+      if (e && e.key === "Escape" && !ov.hidden) self.hidePaywall();
+    };
+    ov._escHandler = escHandler;
+    document.addEventListener("keydown", escHandler);
+  }
   // The overlay is a fixed full-screen layer above the app, so nothing
   // behind it can receive clicks. No stopPropagation needed here: one on the
   // overlay itself would also swallow clicks on the plan cards and CTA.
@@ -411,9 +460,19 @@ BillingClient.prototype.buildOverlay = function(){
   return ov;
 };
 
+/* P2-13 fix: the overlay copy was frozen at build time. If entitlement state
+ * changed mid-session (trial used, trial started, expired without a reload),
+ * the old overlay is torn down and rebuilt so the headline and CTA always
+ * match the current state. */
 BillingClient.prototype.ensurePaywall = function(){
   if (this.entitled || this.unconfigured) { this.hidePaywall(); return; }
-  if (!this._overlay) this.buildOverlay();
+  var key = (this.trialUsed ? "1" : "0") + "|" + String(this.trialDays);
+  if (this._overlay && this._overlayState !== key) {
+    try { document.removeEventListener("keydown", this._overlay._escHandler); } catch(e){}
+    try { this._overlay.remove(); } catch(e){}
+    this._overlay = null;
+  }
+  if (!this._overlay) { this.buildOverlay(); this._overlayState = key; }
   this._overlay.hidden = false;
 };
 

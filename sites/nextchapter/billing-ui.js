@@ -60,7 +60,7 @@ var CSS = [
 ".bill-banner.warn{background:#8a5a00;}",
 ".bill-banner .bill-bmsg{flex:1;min-width:0;}",
 ".bill-banner button{flex:none;border:none;border-radius:999px;padding:8px 16px;font-size:14px;font-weight:700;",
-" background:#fff;color:#23201B;touch-action:manipulation;cursor:pointer;}",
+" background:#fff;color:#23201B;touch-action:manipulation;cursor:pointer;min-height:44px;}",
 ".bill-banner .bill-bx{background:transparent;color:#fff;padding:8px;font-size:16px;}",
 ".bill-overlay{position:fixed;inset:0;z-index:9500;display:flex;align-items:flex-start;justify-content:center;",
 " overflow-y:auto;background:var(--bill-scrim,rgba(24,19,12,.62));padding:24px 16px;}",
@@ -89,6 +89,9 @@ var CSS = [
 " touch-action:manipulation;cursor:pointer;padding:8px;}",
 ".bill-err{background:#fdeceb;color:#8f1d0e;border-radius:10px;padding:10px 12px;font-size:14px;margin-bottom:12px;}",
 ".bill-err[hidden]{display:none;}",
+".bill-note{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9600;background:#23201B;",
+" color:#fff;padding:14px 18px;border-radius:12px;font-size:15px;line-height:1.4;max-width:92vw;",
+" box-shadow:0 8px 24px rgba(0,0,0,.25);text-align:center;}",
 ".bill-set{border-top:1px solid var(--bill-line,#EADFC8);margin-top:14px;padding-top:14px;}",
 ".bill-set .bs-row{display:flex;align-items:center;gap:10px;font-size:15px;margin-bottom:10px;}",
 ".bill-set .bs-row .grow{flex:1;}",
@@ -197,6 +200,28 @@ BillingClient.prototype.daysLeft = function(){
 };
 
 /* ---------------- trial / card / portal ---------------- */
+
+// Never show raw backend codes or internal references to users.
+BillingClient.prototype.friendlyErr = function(e){
+  var code = e && e.code;
+  if (code === "BILLING_NOT_CONFIGURED") return "Payments are not switched on yet. Please check back soon.";
+  var m = (e && e.message) || "";
+  if (/billing_|stripe|lookup key|test mode|whsec|rk_test|rk_live|SECRETS\.md|Worker|failed to fetch|networkerror|load failed|ERR_/i.test(m)) return "Something went wrong. Please try again.";
+  return m || "Something went wrong. Please try again.";
+};
+
+/* Small transient notice for billing actions outside the overlay (banner,
+ * settings card). Self-styled so it works in every app sharing this file. */
+BillingClient.prototype.billNote = function(msg){
+  try{
+    var d = document.createElement("div");
+    d.className = "bill-note";
+    d.setAttribute("role", "status");
+    d.textContent = msg;
+    document.body.appendChild(d);
+    setTimeout(function(){ try{ d.remove(); }catch(e){} }, 6000);
+  }catch(e){}
+};
 
 // Invisible Cloudflare Turnstile, active only when the app sets
 // window.__BILLING_TURNSTILE_SITEKEY (Curbside reads it from a
@@ -313,7 +338,7 @@ BillingClient.prototype.renderBanner = function(){
   bar.innerHTML = html;
   var btn = document.createElement("button");
   btn.textContent = st === "past_due" ? "Update card" : "Add card";
-  btn.onclick = function(){ self.setupCard(); };
+  btn.onclick = function(){ self.setupCard().catch(function(e){ self.billNote(self.friendlyErr(e)); }); };
   bar.appendChild(btn);
   document.body.appendChild(bar);
   this._banner = bar;
@@ -360,14 +385,7 @@ BillingClient.prototype.buildOverlay = function(){
 
   var errBox = ov.querySelector(".bill-err");
   function showErr(m){ errBox.textContent = m; errBox.hidden = false; }
-  // Never show raw backend codes or internal references to users.
-  function friendlyErr(e){
-    var code = e && e.code;
-    if (code === "BILLING_NOT_CONFIGURED") return "Payments are not switched on yet. Please check back soon.";
-    var m = (e && e.message) || "";
-    if (/billing_|stripe|lookup key|test mode|whsec|rk_test|rk_live|SECRETS\.md|Worker|failed to fetch|networkerror|load failed|ERR_/i.test(m)) return "Something went wrong. Please try again.";
-    return m || "Something went wrong. Please try again.";
-  }
+  function friendlyErr(e){ return self.friendlyErr(e); }
   ov.querySelectorAll(".bill-plan").forEach(function(b){
     b.addEventListener("click", function(){
       ov.querySelectorAll(".bill-plan").forEach(function(x){ x.classList.remove("sel"); });
@@ -402,6 +420,19 @@ BillingClient.prototype.buildOverlay = function(){
   // behind it can receive clicks. No stopPropagation needed here: one on the
   // overlay itself would also swallow clicks on the plan cards and CTA.
   document.body.appendChild(ov);
+  // Focus trap: Tab cycles inside the modal so keyboard users never land
+  // on the app behind the scrim. There is deliberately no Escape dismiss:
+  // the overlay is modal with no dismiss path (family routes never show it).
+  ov.addEventListener("keydown", function(ev){
+    if (ev.key !== "Tab") return;
+    var f = Array.prototype.filter.call(
+      ov.querySelectorAll("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])"),
+      function(x){ return !x.disabled && x.offsetParent !== null; });
+    if (!f.length) return;
+    var first = f[0], last = f[f.length - 1];
+    if (ev.shiftKey && document.activeElement === first){ ev.preventDefault(); last.focus(); }
+    else if (!ev.shiftKey && document.activeElement === last){ ev.preventDefault(); first.focus(); }
+  });
   this._overlay = ov;
   return ov;
 };
@@ -409,7 +440,12 @@ BillingClient.prototype.buildOverlay = function(){
 BillingClient.prototype.ensurePaywall = function(){
   if (this.entitled || this.unconfigured) { this.hidePaywall(); return; }
   if (!this._overlay) this.buildOverlay();
+  var wasHidden = this._overlay.hidden;
   this._overlay.hidden = false;
+  if (wasHidden){
+    var cta = this._overlay.querySelector(".bill-cta");
+    if (cta) { try{ cta.focus(); }catch(e){} }
+  }
 };
 
 BillingClient.prototype.hidePaywall = function(){
@@ -450,8 +486,8 @@ BillingClient.prototype.bindSettings = function(root){
   root.querySelectorAll("[data-act]").forEach(function(b){
     b.addEventListener("click", function(){
       var act = b.getAttribute("data-act");
-      if (act === "portal") self.portal();
-      else if (act === "card") self.setupCard();
+      if (act === "portal") self.portal().catch(function(e){ self.billNote(self.friendlyErr(e)); });
+      else if (act === "card") self.setupCard().catch(function(e){ self.billNote(self.friendlyErr(e)); });
       else if (act === "trial") { self.ensurePaywall(); }
     });
   });

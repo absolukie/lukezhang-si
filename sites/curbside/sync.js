@@ -243,8 +243,9 @@ function updatePill(){
   else if (big > 0){ s = "limited"; label = "Sync limited: " + big + " too large"; cls = "warn"; }
   else { s = "synced"; label = "Synced"; cls = "ok"; }
   status = s;
-  var el = document.querySelector("#syncStatus");
-  if (el){ el.textContent = label; el.className = "pill" + (cls ? " " + cls : ""); }
+  document.querySelectorAll(".sync-status").forEach(function(el){
+    el.textContent = label; el.className = "pill sync-status" + (cls ? " " + cls : "");
+  });
 }
 
 
@@ -361,7 +362,7 @@ function renderSettingsUI(){
   box.style.marginTop = "12px";
   box.innerHTML =
     '<h4>Device sync <span class="muted" style="font-weight:normal">(prototype)</span></h4>' +
-    '<div class="set-row"><span>Status</span><span id="syncStatus" class="pill">…</span></div>' +
+    '<div class="set-row"><span>Status</span><span class="pill sync-status">…</span></div>' +
     '<p style="font-size:12px;color:#64748b;margin:8px 0 0;line-height:1.5">Prototype backup cap: each record may be up to 100 KB. Larger records stay on this device only and are listed below.</p>' +
     '<div id="syncBigWarn"></div>' +
     '<p class="muted" style="font-size:12px">Same key on two devices = same data. ' +

@@ -66,7 +66,7 @@ const CITIES = {
     {id:'la-btrc', name:'Business Tax Registration Certificate', agency:'City of LA Office of Finance', fee:60, cycle:'annual', applies:['full','limited','prepack'], note:'City business tax registration.'},
     {id:'la-seller', name:"Seller's Permit", agency:'CA Dept. of Tax & Fee Admin', fee:0, cycle:'onetime', applies:['full','limited','prepack'], note:'Free. Required before your first sale.'},
     {id:'la-fire', est:true, name:'Fire inspection + Class K extinguisher', agency:'LA Fire Dept.', fee:150, cycle:'annual', applies:['full','limited'], note:'Required with open flame or fryers.'},
-    {id:'la-comm', name:'Commissary agreement', agency:'LA County-approved commissary', fee:0, feeNote:'Free agreement', cycle:'annual', applies:['full','limited','prepack'], note:'Required before health permit issues. Track the monthly cost in the Commissary tab.'},
+    {id:'la-comm', name:'Commissary agreement', agency:'LA County-approved commissary', fee:0, feeNote:'Free agreement', cycle:'annual', applies:['full','limited','prepack'], note:'Required before health permit issues. Track the monthly cost in the Commissary section.'},
     {id:'la-ins', name:'General liability insurance', agency:'Your carrier', fee:2400, cycle:'annual', applies:['full','limited','prepack'], note:'Typically $1M/$2M. Venues and events ask for proof.'}
   ]},
   austin:{name:'Austin, TX', sub:'TX statewide license (2026)', permits:[
@@ -75,7 +75,7 @@ const CITIES = {
     {id:'at-dshs1', name:'TX DSHS Type I mobile food license', agency:'TX Dept. of State Health Services', fee:309, cycle:'annual', applies:['prepack'], note:'Prepackaged only. Lowest tier.'},
     {id:'at-fire', name:'Fire inspection', agency:'Austin Fire Dept.', fee:222, cycle:'annual', applies:['full','limited'], note:'If cooking equipment on board.'},
     {id:'at-cfm', est:true, name:'Certified Food Manager certificate', agency:'ANSI-accredited provider', fee:150, cycle:'5yr', applies:['full','limited'], note:'One CFM must be assigned to the unit.'},
-    {id:'at-comm', name:'Commissary agreement', agency:'Licensed commissary', fee:0, feeNote:'Free agreement', cycle:'annual', applies:['full','limited','prepack'], note:'Written agreement required with application. Track the monthly cost in the Commissary tab.'}
+    {id:'at-comm', name:'Commissary agreement', agency:'Licensed commissary', fee:0, feeNote:'Free agreement', cycle:'annual', applies:['full','limited','prepack'], note:'Written agreement required with application. Track the monthly cost in the Commissary section.'}
   ]},
   portland:{name:'Portland, OR', sub:'Multnomah County Health', permits:[
     {id:'pd-mfu', name:'Mobile Food Unit license (Class III/IV)', agency:'Multnomah County Health Dept.', fee:500, cycle:'annual', applies:['full'], note:'Class I/II (~$300) for limited or prepack. Classed by menu complexity.'},
@@ -83,7 +83,7 @@ const CITIES = {
     {id:'pd-fhc', name:'Oregon Food Handler Card', agency:'Multnomah County / OR Health Authority', fee:10, cycle:'3yr', applies:['full','limited','prepack'], note:'$10, every handler on the truck needs one.'},
     {id:'pd-fire', est:true, name:'Propane / fire safety permit', agency:'Portland Fire & Rescue', fee:150, cycle:'annual', applies:['full','limited'], note:'Annual inspection for gas cooking equipment.'},
     {id:'pd-biz', name:'Portland business license', agency:'City of Portland', fee:100, cycle:'annual', applies:['full','limited','prepack'], note:'Standard city business registration.'},
-    {id:'pd-comm', name:'Commissary agreement', agency:'Approved commissary', fee:0, feeNote:'Free agreement', cycle:'annual', applies:['full','limited','prepack'], note:'Proof of approved prep/storage facility. Track the monthly cost in the Commissary tab.'}
+    {id:'pd-comm', name:'Commissary agreement', agency:'Approved commissary', fee:0, feeNote:'Free agreement', cycle:'annual', applies:['full','limited','prepack'], note:'Proof of approved prep/storage facility. Track the monthly cost in the Commissary section.'}
   ]},
   denver:{name:'Denver, CO', sub:'State + City of Denver', permits:[
     {id:'dv-state', name:'CO retail food license (full mobile unit)', agency:'CDPHE / Denver County', fee:481, cycle:'annual', applies:['full'], note:'2026 statutory fee. Prepackaged-only units pay ~$338.'},
@@ -301,8 +301,8 @@ function enterMain(){
   $('#permitCitySub').textContent=CITIES[S.city]?('Requirements for '+CITIES[S.city].name+' · '+TRUCK_TYPES[S.truckType].name+'. Fees are typical. Verify with the agency.'):'';
   $('#weekPrev').innerHTML=I.chevL; $('#weekNext').innerHTML=I.chevR;
   $$('#tabbar .ti')[0].innerHTML=I.home; $$('#tabbar .ti')[1].innerHTML=I.shield;
-  $$('#tabbar .ti')[2].innerHTML=I.pin; $$('#tabbar .ti')[3].innerHTML=I.warehouse;
-  $$('#tabbar .ti')[4].innerHTML=I.cal; $$('#tabbar .ti')[5].innerHTML=I.cash;
+  $$('#tabbar .ti')[2].innerHTML=I.pin; $$('#tabbar .ti')[3].innerHTML=I.cal;
+  $$('#tabbar .ti')[4].innerHTML=I.cash;
   switchTab('home');
 }
 $$('#tabbar button').forEach(b=>{ b.onclick=()=>switchTab(b.dataset.tab); });
@@ -311,8 +311,8 @@ function switchTab(t){
   $$('#tabbar button').forEach(b=>b.classList.toggle('active', b.dataset.tab===t));
   $$('.tab-page').forEach(p=>p.classList.add('hidden'));
   $('#page-'+t).classList.remove('hidden');
-  if(t==='home') renderHome(); if(t==='permits') renderPermits();
-  if(t==='locations') renderLocations(); if(t==='commissary') renderCommissary();
+  if(t==='home') renderHome(); if(t==='permits'){ renderPermits(); renderCommissary(); }
+  if(t==='locations') renderLocations();
   if(t==='events') renderEvents(); if(t==='revenue') renderRevenue();
   window.scrollTo(0,0);
 }
@@ -350,7 +350,7 @@ function renderAlerts(){
     else if(st.level==='warn') items.push({level:'warn', text:def.name+cityBit+' renews in '+approxDays(sp)+st.days+' days', tab:'permits'});
   });
   if(S.commissary.renews){ const d=daysUntil(S.commissary.renews);
-    if(d!==null&&d<=60) items.push({level:d<=14?'crit':'warn', text:'Commissary agreement renews in '+d+' days', tab:'commissary'});
+    if(d!==null&&d<=60) items.push({level:d<=14?'crit':'warn', text:'Commissary agreement renews in '+d+' days', tab:'permits'});
   }
   items.sort((a,b)=>ALERT_RANK[a.level]-ALERT_RANK[b.level]);
   box.innerHTML=items.map((a,i)=>
@@ -409,14 +409,15 @@ function renderHome(){
   const up=S.events.filter(e=>e.status!=='done'&&e.date>=tK).sort((a,b)=>a.date<b.date?-1:1).slice(0,3);
   $('#homeEvents').innerHTML=up.length?up.map(e=>
     '<div class="spot-row"><div class="s-info"><strong>'+esc(e.name)+'</strong><span>'+fmtDate(e.date)+' · '+e.status+(e.fee?' · '+money(e.fee):'')+'</span></div></div>'
-  ).join(''):'<div class="empty">No upcoming events. Add bookings in the Events tab.</div>';
+  ).join(''):'<div class="empty">No upcoming events yet.<br><button class="btn small" id="homeAddEvent" style="margin-top:8px">Add a booking</button></div>';
+  const hae=$('#homeAddEvent'); if(hae) hae.onclick=()=>switchTab('events');
 }
 
 /* ---------- permits ---------- */
 let permFilter='all'; // 'all' | 'verify'
 function renderTimeline(){
   const ps=allPermits().filter(({sp})=>sp.status==='active'&&sp.expires);
-  const head='<div class="tl-head"><h4>12-month renewal timeline</h4><button class="link-btn" id="snapBtn">Copy compliance snapshot</button></div>';
+  const head='<div class="tl-head"><h4>12-month renewal timeline</h4><div style="display:flex;gap:4px"><button class="link-btn" id="calBtn" title="Curbside can\'t send reminders itself yet. This downloads a calendar file; your phone\'s calendar will remind you.">Add renewals to calendar</button><button class="link-btn" id="snapBtn">Copy compliance snapshot</button></div></div>';
   if(!ps.length) return '<div class="card">'+head+'<div class="empty">Mark a permit as obtained to see your 12-month renewal timeline.</div></div>';
   const months=[]; const now=new Date();
   for(let i=0;i<12;i++){ const d=new Date(now.getFullYear(),now.getMonth()+i,1);
@@ -450,6 +451,46 @@ function copySnapshot(){
     ()=>{ $('#snapBtn').textContent='Copied!'; setTimeout(()=>{ const b=$('#snapBtn'); if(b) b.textContent='Copy compliance snapshot'; },2000); },
     ()=>{ prompt('Copy your compliance snapshot:', txt); });
 }
+/* R-7: renewal reminders have no delivery channel of their own (no push,
+ * no SMS), so the phone's calendar becomes the channel. One tap downloads
+ * a calendar file with a 30-day heads-up for every upcoming renewal.
+ * Copy is honest: Curbside can't send reminders itself yet. */
+function exportCalendar(){
+  const btn=$('#calBtn');
+  const say=t=>{ if(btn){ btn.textContent=t; setTimeout(()=>{ const b=$('#calBtn'); if(b) b.textContent='Add renewals to calendar'; },2500); } };
+  const items=[];
+  const plus30=iso=>{ const d=new Date(iso+'T12:00:00'); d.setDate(d.getDate()-30); return d.toISOString().slice(0,10); };
+  const today=todayKey();
+  allPermits().forEach(({def,sp})=>{
+    if(sp.status!=='active'||!sp.expires||sp.expires<today) return;
+    const when=plus30(sp.expires)<today?today:plus30(sp.expires);
+    items.push({title:'Renew permit: '+def.name, date:when,
+      desc:'Expires '+(sp.expiresEst?'~':'')+sp.expires+(sp.expiresEst?' (estimated date)':' (from your document)')+'. '+def.agency+'. '+S.truckName});
+  });
+  if(S.commissary.renews&&S.commissary.renews>=today){
+    const when=plus30(S.commissary.renews)<today?today:plus30(S.commissary.renews);
+    items.push({title:'Renew: commissary agreement', date:when,
+      desc:'Agreement renews '+S.commissary.renews+'. '+(S.commissary.name||'')+'. '+S.truckName});
+  }
+  if(!items.length){ say('No upcoming renewals'); return; }
+  const escIcs=s=>String(s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');
+  const stamp=new Date().toISOString().replace(/[-:]/g,'').slice(0,15)+'Z';
+  const ics=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Curbside//Renewals//EN']
+    .concat(items.map((e,i)=>['BEGIN:VEVENT',
+      'UID:curbside-renew-'+i+'-'+Date.now()+'@curbside',
+      'DTSTAMP:'+stamp,
+      'DTSTART;VALUE=DATE:'+e.date.replace(/-/g,''),
+      'SUMMARY:'+escIcs(e.title),
+      'DESCRIPTION:'+escIcs(e.desc),
+      'END:VEVENT'].join('\r\n')))
+    .concat(['END:VCALENDAR']).join('\r\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([ics],{type:'text/calendar'}));
+  a.download='curbside-renewals.ics';
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ try{ URL.revokeObjectURL(a.href); a.remove(); }catch(e){} },4000);
+  say('Saved! Import it into your calendar');
+}
 function permitPill(def, sp){
   const st=permitState(sp); const done=sp.status==='active';
   if(!done) return '<span class="pill">Not obtained</span>';
@@ -463,6 +504,7 @@ function renderPermits(){
   renderAlerts();
   $('#permitTimeline').innerHTML=renderTimeline();
   const sb=$('#snapBtn'); if(sb) sb.onclick=copySnapshot;
+  const cb=$('#calBtn'); if(cb) cb.onclick=exportCalendar;
   const box=$('#permitList');
   // Stable order: permits stay in their curated definition order no matter
   // how their status changes. Toggling a checkmark only flips that card in
@@ -547,7 +589,7 @@ $('#addPermitBtn').onclick=()=>{
   openSheet('<h3>Add a permit</h3><p class="muted">For city-specific extras not in the list.</p>'+
     '<label>Name<input type="text" id="apName" placeholder="e.g. Special event permit" maxlength="80"></label>'+
     '<label>Agency<input type="text" id="apAgency" placeholder="e.g. ' + esc(CITIES[S.city].name) + ' health dept." maxlength="80"></label>'+
-    '<div class="row2"><label>Fee ($)<input type="number" id="apFee" min="0" placeholder="0"></label>'+
+    '<div class="row2"><label>Fee ($)<input type="number" id="apFee" inputmode="decimal" min="0" placeholder="0"></label>'+
     '<label>Renews<select id="apCycle"><option value="annual">Yearly</option><option value="biennial">Every 2 yrs</option><option value="3yr">Every 3 yrs</option><option value="5yr">Every 5 yrs</option><option value="onetime">One-time</option></select></label></div>'+
     '<label>Expiry date<input type="date" id="apExp"></label>'+
     '<button class="btn primary big" id="apSave">Add permit</button><button class="btn ghost" id="apCancel">Cancel</button>', 'Add a permit');
@@ -595,7 +637,7 @@ function inspectSheet(){
     // A missing renewal date is not readiness: it counts against the total
     // until the owner sets a date on the Commissary tab.
     paper.push({ok:cr!==null&&cr>0, name:'Commissary agreement',
-      detail:cr===null?'No renewal date set. Add it on the Commissary tab.':cr<0?'Expired '+Math.abs(cr)+' days ago':'Good through '+fmtDate(S.commissary.renews)});
+      detail:cr===null?'No renewal date set. Add it in the Commissary section below.':cr<0?'Expired '+Math.abs(cr)+' days ago':'Good through '+fmtDate(S.commissary.renews)});
   }
   const checks=S.inspectionChecks||{};
   const physReady=INSPECT_PHYSICAL.filter(i=>checks[i.k]).length;
@@ -632,6 +674,26 @@ function renderLocations(){
 }
 $('#weekPrev').onclick=()=>{ weekOffset--; renderLocations(); };
 $('#weekNext').onclick=()=>{ weekOffset++; renderLocations(); };
+/* R-9: Goodfynd publishes each stop to customers; our grid was internal
+ * only. One tap shares the week's own spots as text. Nothing is published
+ * automatically; the owner chooses where it goes. */
+function shareWeek(){
+  const btn=$('#shareWeekBtn');
+  const say=t=>{ if(btn){ const o=btn.textContent; btn.textContent=t; setTimeout(()=>{ const b=$('#shareWeekBtn'); if(b) b.textContent=o; },2000); } };
+  const wk=weekKeys(weekOffset);
+  const lines=wk.map(k=>{
+    const d=parseKey(k).toLocaleDateString('en-US',{weekday:'short',month:'numeric',day:'numeric'});
+    const spots=S.locations[k]||[];
+    return d+': '+(spots.length?spots.map(s=>s.spot+(s.hours?' ('+s.hours+')':'')).join(' · '):'none');
+  });
+  const txt=S.truckName+' this week\n'+lines.join('\n');
+  const done=()=>say('Shared!');
+  if(navigator.share){ navigator.share({title:S.truckName+' this week', text:txt}).then(done,()=>{}); return; }
+  (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(
+    ()=>say('Copied! Paste it anywhere'),
+    ()=>{ prompt('Copy your week:', txt); });
+}
+$('#shareWeekBtn').onclick=shareWeek;
 function spotSheet(k){
   openSheet('<h3>Schedule spot</h3><p class="muted">'+fmtDate(k)+'</p>'+
     '<label>Spot name<input type="text" id="spName" placeholder="e.g. Brewery X lot, 5th & Main" maxlength="80"></label>'+
@@ -733,7 +795,9 @@ function renderEvents(){
         '<button class="link-btn" data-del="'+e.id+'" style="margin-left:auto">Remove</button></div>';
       col.appendChild(d);
     });
-    if(!list.length){ const em=document.createElement('div'); em.className='empty'; em.textContent='Nothing here.'; col.appendChild(em); }
+    if(!list.length){ const em=document.createElement('div'); em.className='empty';
+    em.textContent=key==='lead'?'No leads yet. Tap + Add booking above.':key==='booked'?'Nothing booked yet.':'Nothing done yet. Log a result when one lands.';
+    col.appendChild(em); }
     box.appendChild(col);
   });
   // season totals across done events with logged results
@@ -767,7 +831,7 @@ function resultSheet(id){
 $('#addEventBtn').onclick=()=>{
   openSheet('<h3>Add booking</h3>'+
     '<label>Event name<input type="text" id="evName" placeholder="e.g. Garcia wedding" maxlength="80"></label>'+
-    '<div class="row2"><label>Date<input type="date" id="evDate" value="'+todayKey()+'"></label><label>Fee ($) (optional)<input type="number" id="evFee" min="0" placeholder="500"></label></div>'+
+    '<div class="row2"><label>Date<input type="date" id="evDate" value="'+todayKey()+'"></label><label>Fee ($) (optional)<input type="number" id="evFee" inputmode="decimal" min="0" placeholder="500"></label></div>'+
     '<label>Contact<input type="text" id="evContact" placeholder="Name / phone" maxlength="80"></label>'+
     '<label>Status<select id="evStatus"><option value="lead">Lead</option><option value="booked">Booked</option><option value="done">Done</option></select></label>'+
     '<button class="btn primary big" id="evSave">Add booking</button><button class="btn ghost" id="evCancel">Cancel</button>', 'Add booking');

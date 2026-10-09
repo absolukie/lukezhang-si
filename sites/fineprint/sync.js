@@ -98,6 +98,7 @@ var applyingRemote = false;
 var pushTimer = null;
 var inflight = 0;      // pushes/pulls currently in flight
 var status = "starting"; // starting|syncing|offline|pending|synced (see updatePill)
+var booted = false;
 
 try { meta = JSON.parse(localStorage.getItem(LS_META) || "{}") || {}; } catch(e){ meta = {}; }
 try { lastSync = +localStorage.getItem(LS_LAST) || 0; } catch(e){}
@@ -126,12 +127,19 @@ function escHtml(s){
 }
 
 
+/* Sync pause (pass 4): the landing FAQ promises an off switch, so there is one.
+ * When fineprint.sync_paused === "1", nothing registers, pushes, or pulls.
+ * Local analyses keep working; the pill reads "Sync paused". */
+function syncPaused(){
+  try { return localStorage.getItem("fineprint.sync_paused") === "1"; } catch(e){ return false; }
+}
+
 /* The one honest status function. Five states, derived from real conditions:
  * "Synced" only when nothing is pending, nothing oversized, and nothing in flight;
  * "Syncing..." while a push/pull is in flight;
  * "Offline" when the network is down;
- * "Not synced — N changes pending" whenever sendable work is unacknowledged;
- * "Sync limited" when everything sendable is synced but oversized records are
+ * "Not synced: N changes pending" whenever sendable work is unacknowledged;
+ * "Sync limited: N too large" when everything sendable is synced but oversized records are
  * device-only (they are surfaced, never marked acknowledged). */
 function updatePill(){
   var n, s, label, cls, big;
@@ -240,6 +248,7 @@ function diffOut(){
  * safe to retry. The baseline only advances on success — a failed push keeps
  * the work visible in the pill instead of claiming "Synced". */
 async function pushDirty(){
+  if (syncPaused()) return;
   if (!deviceKey || applyingRemote){ updatePill(); return; }
   var out = diffOut();
   if (!out.length){ updatePill(); return; } // honest no-op: recompute, don't claim
@@ -265,6 +274,7 @@ async function pushDirty(){
  * Applied records merge into the persisted baseline WITHOUT snapshotting the
  * whole state — local-only work stays unacknowledged and keeps its pill. */
 async function pull(){
+  if (syncPaused()) return;
   if (!deviceKey || applyingRemote) return;
   inflight++; updatePill();
   try {
@@ -302,7 +312,7 @@ function onSave(){
    * unreachable at boot): the work is still unacknowledged. Only schedule
    * the push when we have a key to push with. */
   updatePill();
-  if (applyingRemote || !deviceKey) return;
+  if (syncPaused() || applyingRemote || !deviceKey) return;
   clearTimeout(pushTimer);
   pushTimer = setTimeout(pushDirty, PUSH_DEBOUNCE_MS);
 }
@@ -361,6 +371,9 @@ function renderSettingsUI(){
   box.innerHTML =
     '<h4>Device sync <span style="font-weight:normal;color:#64748b">(prototype)</span></h4>' +
     '<div class="syncrow"><span>Status</span><span id="syncStatus" class="syncpill">…</span></div>' +
+    '<div class="syncrow"><span>Pause sync</span><input type="checkbox" id="syncPause" ' +
+      (syncPaused() ? 'checked' : '') + ' style="width:22px;height:22px;accent-color:#1c1a15" aria-label="Pause device sync"></div>' +
+    '<p class="syncnote">Paused: nothing leaves this device. Uncheck to resume syncing.</p>' +
     '<p class="syncnote">Same key on two devices = your saved analyses on both. ' +
     'Anyone with the key can read your records.</p>' +
     '<p class="syncnote">Prototype backup cap: each analysis may be up to 100 KB. ' +
@@ -398,10 +411,24 @@ function renderSettingsUI(){
     try { await pull(); } catch(e){}
     try { await pushDirty(); } catch(e){}
   };
+  box.querySelector("#syncPause").addEventListener("change", function(){
+    try { localStorage.setItem("fineprint.sync_paused", this.checked ? "1" : "0"); } catch(e){}
+    if (this.checked){
+      var el = box.querySelector("#syncStatus");
+      if (el){ el.textContent = "Sync paused"; el.className = "syncpill"; }
+    } else {
+      boot(); // resume: register if needed, then pull + push
+    }
+  });
 }
 
 async function boot(){
   try{ if (typeof renderSettingsUI === "function") renderSettingsUI(); }catch(e){}
+  if (syncPaused()){
+    var el = document.querySelector("#syncStatus");
+    if (el){ el.textContent = "Sync paused"; el.className = "syncpill"; }
+    return;
+  }
   deviceKey = null;
   try { deviceKey = localStorage.getItem(LS_DEVICE) || null; } catch(e){}
   var fresh = !deviceKey;
@@ -418,7 +445,7 @@ async function boot(){
    * fresh device's first upload) that must go up. */
   if (fresh){ lastPushed = {}; saveBaseline(); await pushDirty(); }
   else { await pull(); }
-  setInterval(pull, PULL_INTERVAL_MS);
+  if (!booted){ booted = true; setInterval(pull, PULL_INTERVAL_MS); }
   window.addEventListener("online", pull);
   window.addEventListener("offline", updatePill);
   updatePill();

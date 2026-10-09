@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Marble Run - drop into Luke's projects</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;
+    background:#1c1526;color:#f5efe6;overflow:hidden;
+    display:flex;flex-direction:column;height:100dvh;
+    user-select:none;-webkit-user-select:none;
+  }
+  button{touch-action:manipulation}
+  header{padding:12px 16px 4px;text-align:center;z-index:5}
+  header h1{font-size:20px;font-weight:800;letter-spacing:-.02em}
+  header p{font-size:13px;color:#b9a8d6;margin-top:2px}
+  #stats{display:flex;gap:8px;justify-content:center;padding:6px 12px;z-index:5}
+  .pill{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:999px;
+    padding:6px 12px;font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px}
+  .pill svg{width:14px;height:14px;flex:none}
+  #board{flex:1;position:relative;touch-action:none}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  #dropBtn{
+    position:absolute;left:50%;transform:translateX(-50%);bottom:14px;z-index:6;
+    background:#ffd166;color:#1c1526;border:none;border-radius:999px;
+    font-size:16px;font-weight:800;padding:15px 34px;min-height:56px;cursor:pointer;
+    box-shadow:0 6px 24px rgba(255,209,102,.35);display:flex;align-items:center;gap:8px;
+  }
+  #dropBtn:active{transform:translateX(-50%) scale(.96)}
+  #dropBtn svg{width:20px;height:20px}
+  #card{
+    position:absolute;left:50%;top:12px;transform:translateX(-50%) translateY(-12px);
+    width:min(88vw,340px);background:#f5efe6;color:#1c1526;border-radius:18px;
+    padding:16px 18px;z-index:7;opacity:0;pointer-events:none;
+    transition:opacity .25s,transform .25s;box-shadow:0 16px 40px rgba(0,0,0,.45);
+  }
+  #card.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+  #card .kicker{font-size:10px;font-weight:800;letter-spacing:.2em;color:#8a6fc9;margin-bottom:6px}
+  #card h2{font-size:18px;font-weight:800;letter-spacing:-.01em;margin-bottom:6px}
+  #card p{font-size:14px;line-height:1.5;color:#4a3f5e;margin-bottom:12px}
+  #card .row{display:flex;gap:8px}
+  #card a{
+    flex:1;text-align:center;background:#1c1526;color:#fff;text-decoration:none;
+    font-size:14px;font-weight:700;padding:12px;border-radius:12px;
+  }
+  #card button{
+    background:#e8dfd2;color:#1c1526;border:none;border-radius:12px;
+    font-size:14px;font-weight:700;padding:12px 16px;cursor:pointer;
+  }
+  footer{padding:6px 16px calc(8px + env(safe-area-inset-bottom));text-align:center;z-index:5}
+  footer a{color:#b9a8d6;font-size:13px;font-weight:700;text-decoration:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>Marble Run</h1>
+  <p>Drop a marble. Physics decides which project you land on. Physics is never wrong.</p>
+</header>
+<div id="stats">
+  <div class="pill">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="8"/></svg>
+    <span id="dropCount">0 drops</span>
+  </div>
+  <div class="pill">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3v10m0 0l-4-4m4 4l4-4"/><path d="M4 17v3h16v-3"/></svg>
+    <span id="lastLand">no landings yet</span>
+  </div>
+</div>
+<div id="board">
+  <canvas id="c"></canvas>
+  <button id="dropBtn">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/></svg>
+    Drop a marble
+  </button>
+  <div id="card" role="dialog" aria-live="polite">
+    <div class="kicker">YOU LANDED ON</div>
+    <h2 id="cardTitle"></h2>
+    <p id="cardBody"></p>
+    <div class="row">
+      <a id="cardLink" href="https://projects.lukezhang.si/">See it live</a>
+      <button id="cardClose">Nice</button>
+    </div>
+  </div>
+</div>
+<footer><a href="https://lukezhang.si">lukezhang.si</a></footer>
+<script>
+(function(){
+  "use strict";
+  var board=document.getElementById("board"), cv=document.getElementById("c"), ctx=cv.getContext("2d");
+  var dropCount=document.getElementById("dropCount"), lastLand=document.getElementById("lastLand");
+  var card=document.getElementById("card"), cardTitle=document.getElementById("cardTitle"),
+      cardBody=document.getElementById("cardBody"), cardClose=document.getElementById("cardClose");
+  var W=0,H=0,DPR=1;
+  function resize(){
+    DPR=Math.min(window.devicePixelRatio||1,2);
+    W=board.clientWidth; H=board.clientHeight;
+    cv.width=W*DPR; cv.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0);
+    layout();
+  }
+  window.addEventListener("resize",resize);
+
+  var BINS=[
+    {name:"Liverpool Rummy", blurb:"The card game, rebuilt for phones. Real rooms, real friends, zero shuffling.", color:"#ff5d5d"},
+    {name:"Get Clocked", blurb:"A time tracker that treats your hours like a game you can win.", color:"#4d96ff"},
+    {name:"Draw and Guess", blurb:"Pictionary night, but the pinyin needs no tone marks.", color:"#ffd166"},
+    {name:"Skill Tree", blurb:"Your skills, painted in ink. A shui mo map of everything learned.", color:"#6bcb77"},
+    {name:"Poteto Tracker", blurb:"Watching one engineer's token bill like it is the weather.", color:"#c084fc"}
+  ];
+  var pegs=[], walls=[], binTop=0, binW=0, marbleR=8, pegR=5;
+  var marbles=[], t=0, last=performance.now();
+  var drops=0, landed={};
+  try{
+    drops=parseInt(localStorage.getItem("marble_drops")||"0",10)||0;
+    landed=JSON.parse(localStorage.getItem("marble_landed")||"{}");
+  }catch(e){ landed={}; }
+
+  function layout(){
+    pegs=[]; walls=[];
+    var topPad=30, rows=7, gapX=Math.min(64, W/7), gapY=Math.min(58,(H*0.62)/rows);
+    var startY=topPad;
+    for(var r=0;r<rows;r++){
+      var n=Math.floor(W/gapX)-1;
+      var y=startY+r*gapY;
+      var off=(r%2)?gapX/2:0;
+      for(var cix=0;cix<=n;cix++){
+        var x=off+cix*gapX;
+        if(x<24||x>W-24) continue;
+        pegs.push({x:x,y:y});
+      }
+    }
+    binTop=startY+rows*gapY+26;
+    binW=W/BINS.length;
+    for(var b=0;b<=BINS.length;b++){
+      walls.push({x:b*binW, top:binTop});
+    }
+    updateStats();
+  }
+
+  function updateStats(){
+    dropCount.textContent=drops+(drops===1?" drop":" drops");
+  }
+  function saveStats(){
+    try{
+      localStorage.setItem("marble_drops",String(drops));
+      localStorage.setItem("marble_landed",JSON.stringify(landed));
+    }catch(e){}
+  }
+
+  function dropMarble(x){
+    if(marbles.length>=6) return;
+    var mx=(typeof x==="number")?x:40+Math.random()*(W-80);
+    marbles.push({x:mx,y:6,vx:(Math.random()-0.5)*40,vy:0,landed:false,spin:Math.random()*6.28,
+      hue:Math.floor(Math.random()*360)});
+    drops++; updateStats(); saveStats();
+  }
+  document.getElementById("dropBtn").addEventListener("click",function(){ dropMarble(); });
+  // tap the top zone to choose where the marble drops
+  board.addEventListener("pointerdown",function(e){
+    if(e.target.closest("#card")||e.target.closest("#dropBtn")) return;
+    var r=cv.getBoundingClientRect();
+    if(e.clientY-r.top < binTop*0.5) dropMarble(e.clientX-r.left);
+  });
+
+  function showCard(bin){
+    var b=BINS[bin];
+    cardTitle.textContent=b.name;
+    cardBody.textContent=b.blurb;
+    card.classList.add("show");
+    clearTimeout(showCard.t);
+    showCard.t=setTimeout(hideCard,5200);
+  }
+  function hideCard(){ card.classList.remove("show"); }
+  cardClose.addEventListener("click",hideCard);
+
+  var GRAV=1500, REST=0.52;
+  function collide(m,px,py,pr){
+    var dx=m.x-px, dy=m.y-py, rr=marbleR+pr;
+    var d2=dx*dx+dy*dy;
+    if(d2>=rr*rr||d2===0) return;
+    var d=Math.sqrt(d2), nx=dx/d, ny=dy/d;
+    m.x=px+nx*rr; m.y=py+ny*rr;
+    var vn=m.vx*nx+m.vy*ny;
+    if(vn<0){
+      m.vx-= (1+REST)*vn*nx;
+      m.vy-= (1+REST)*vn*ny;
+      // tangential friction
+      m.vx*=0.985; m.vy*=0.985;
+      m.spin+=vn*0.002;
+    }
+  }
+
+  function step(now){
+    var dt=Math.min((now-last)/1000,0.033); last=now; t+=dt;
+    for(var i=marbles.length-1;i>=0;i--){
+      var m=marbles[i];
+      m.vy+=GRAV*dt;
+      m.vx*= (1-0.12*dt);
+      m.x+=m.vx*dt; m.y+=m.vy*dt;
+      if(m.x<marbleR+6){ m.x=marbleR+6; m.vx=Math.abs(m.vx)*0.5; }
+      if(m.x>W-marbleR-6){ m.x=W-marbleR-6; m.vx=-Math.abs(m.vx)*0.5; }
+      if(m.y<marbleR){ m.y=marbleR; m.vy=Math.abs(m.vy)*0.4; }
+      for(var p=0;p<pegs.length;p++) collide(m,pegs[p].x,pegs[p].y,pegR);
+      // bin divider walls
+      if(m.y>binTop-40){
+        for(var wix=0;wix<walls.length;wix++){
+          var wx=walls[wix].x;
+          if(Math.abs(m.x-wx)<marbleR+3 && m.y>binTop){
+            collide(m,wx,m.y,3);
+          }
+        }
+      }
+      // landed in a bin
+      if(m.y>binTop+18 && !m.landed){
+        m.landed=true;
+        var bin=Math.max(0,Math.min(BINS.length-1,Math.floor(m.x/binW)));
+        var key=BINS[bin].name;
+        landed[key]=(landed[key]||0)+1; saveStats();
+        lastLand.textContent="landed: "+key;
+        showCard(bin);
+        marbles.splice(i,1);
+      } else if(m.y>H+40){
+        marbles.splice(i,1);
+      }
+    }
+    draw();
+    requestAnimationFrame(step);
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    // backdrop glow
+    var g=ctx.createRadialGradient(W/2,H*0.35,40,W/2,H*0.35,H*0.7);
+    g.addColorStop(0,"rgba(140,100,220,.16)"); g.addColorStop(1,"rgba(140,100,220,0)");
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    // pegs
+    ctx.fillStyle="#8f7fb8";
+    for(var p=0;p<pegs.length;p++){
+      ctx.beginPath(); ctx.arc(pegs[p].x,pegs[p].y,pegR,0,6.29); ctx.fill();
+      ctx.fillStyle="rgba(255,255,255,.25)";
+      ctx.beginPath(); ctx.arc(pegs[p].x-1.5,pegs[p].y-1.5,1.6,0,6.29); ctx.fill();
+      ctx.fillStyle="#8f7fb8";
+    }
+    // bin walls
+    ctx.strokeStyle="rgba(245,239,230,.35)"; ctx.lineWidth=3; ctx.lineCap="round";
+    for(var wix=0;wix<walls.length;wix++){
+      ctx.beginPath(); ctx.moveTo(walls[wix].x,binTop); ctx.lineTo(walls[wix].x,H); ctx.stroke();
+    }
+    // bin labels
+    ctx.textAlign="center";
+    for(var b=0;b<BINS.length;b++){
+      var cx=b*binW+binW/2;
+      ctx.fillStyle=BINS[b].color;
+      var bw=Math.min(binW-14,86);
+      roundRect(cx-bw/2,binTop+6,bw,46,9); ctx.fill();
+      ctx.fillStyle="#1c1526";
+      ctx.font="700 10px -apple-system,Helvetica,Arial,sans-serif";
+      var words=BINS[b].name.split(" ");
+      if(words.length===1){
+        ctx.fillText(words[0], cx, binTop+34);
+      }else{
+        ctx.fillText(words[0], cx, binTop+26);
+        ctx.fillText(words.slice(1).join(" "), cx, binTop+40);
+      }
+    }
+    // marbles
+    for(var i=0;i<marbles.length;i++){
+      var m=marbles[i];
+      var mg=ctx.createRadialGradient(m.x-3,m.y-3,1,m.x,m.y,marbleR+2);
+      mg.addColorStop(0,"hsl("+m.hue+",90%,78%)");
+      mg.addColorStop(1,"hsl("+m.hue+",70%,45%)");
+      ctx.fillStyle=mg;
+      ctx.beginPath(); ctx.arc(m.x,m.y,marbleR,0,6.29); ctx.fill();
+      ctx.strokeStyle="rgba(255,255,255,.5)"; ctx.lineWidth=1.5;
+      ctx.beginPath();
+      ctx.arc(m.x,m.y,marbleR-3,m.spin,m.spin+2.2); ctx.stroke();
+    }
+  }
+  function roundRect(x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+  }
+
+  resize();
+  requestAnimationFrame(step);
+})();
+</script>
+</body>
+</html>

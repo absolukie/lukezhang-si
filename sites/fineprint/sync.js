@@ -139,8 +139,8 @@ function updatePill(){
   try { big = Object.keys(oversized).length; } catch(e){ big = 0; }
   if (inflight > 0){ s = "syncing"; label = "Syncing..."; cls = "warn"; }
   else if (typeof navigator !== "undefined" && navigator.onLine === false){ s = "offline"; label = "Offline"; cls = ""; }
-  else if (n > 0){ s = "pending"; label = "Not synced \u2014 " + n + " change" + (n === 1 ? "" : "s") + " pending"; cls = "crit"; }
-  else if (big > 0){ s = "limited"; label = "Sync limited \u2014 " + big + " too large"; cls = "warn"; }
+  else if (n > 0){ s = "pending"; label = "Not synced: " + n + " change" + (n === 1 ? "" : "s") + " pending"; cls = "crit"; }
+  else if (big > 0){ s = "limited"; label = "Sync limited: " + big + " too large"; cls = "warn"; }
   else { s = "synced"; label = "Synced"; cls = "ok"; }
   status = s;
   var el = document.querySelector("#syncStatus");
@@ -346,8 +346,8 @@ function renderBigWarn(){
     '<ul>' + keys.map(function(mk){
       var key = mk.split(":").slice(1).join(":");
       var kb = Math.round((oversized[mk].bytes || 0) / 1024);
-      return '<li>' + escHtml(names[key] || key) + ' \u2014 ' + kb +
-        ' KB (100 KB cap). Saved on this device only.</li>';
+      return '<li>' + escHtml(names[key] || key) + ' (' + kb +
+        ' KB, 100 KB cap). Saved on this device only.</li>';
     }).join("") + '</ul></div>';
 }
 

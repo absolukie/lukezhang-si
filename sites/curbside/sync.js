@@ -446,10 +446,23 @@ else boot();
 (function(){
   "use strict";
   try {
+    /* P2-7 fix: LS_DEVICE and WORKER live in the first IIFE's scope and are
+     * invisible here, so this IIFE always resolved SLUG to "" and every
+     * report early-returned. Resolve the slug by scanning localStorage for
+     * the device-key record instead. Resolution is lazy (at send time) so
+     * first-boot crashes after async device registration still report. */
     var SLUG = "";
-    try { SLUG = String(typeof LS_DEVICE === "string" ? LS_DEVICE : "").replace(/\.device_key$/, ""); } catch(e){}
+    function resolveSlug(){
+      try {
+        for (var ki = 0; ki < localStorage.length; ki++) {
+          var kk = localStorage.key(ki) || "";
+          var mm = /^(.+)\.device_key$/.exec(kk);
+          if (mm) return mm[1];
+        }
+      } catch(e2){}
+      return "";
+    }
     var BASE = "https://sync-proto.lukezhang.si";
-    try { if (typeof WORKER === "string" && WORKER) BASE = WORKER; } catch(e){}
     var ENDPOINT = BASE + "/v1/client-errors";
 
     function trunc(s, n){
@@ -473,7 +486,7 @@ else boot();
         var item = queue.shift();
         if (!item) return;
         var key = null;
-        try { key = localStorage.getItem(LS_DEVICE); } catch(e){}
+        try { key = localStorage.getItem(SLUG + ".device_key"); } catch(e){}
         if (!key || !SLUG) { pump(); return; }
         busy = true;
         var page = "";
@@ -494,6 +507,7 @@ else boot();
     }
     function send(message, stack){
       try {
+        if (!SLUG) SLUG = resolveSlug();
         if (!SLUG) return;
         queue.push({message: message, stack: stack});
         if (queue.length > 5) queue.shift();

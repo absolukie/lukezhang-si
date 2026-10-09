@@ -269,9 +269,42 @@ table.cmp td .pill{white-space:nowrap}
 .quiz-note{border-left:4px solid var(--blue);padding:10px 14px;background:var(--wash);
   border-radius:0 12px 12px 0;margin:10px 0;font-size:15px}
 .quiz-cta{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+
+/* night tracker + HOA verdict CTA (pass 4) */
+.hoa-cta{margin-top:12px;font-size:14px}
+#nightCard .progress{height:10px;background:var(--wash);border-radius:99px;overflow:hidden}
+#nightCard .progress i{display:block;height:100%;background:var(--blue);border-radius:99px}
+
+/* Section 8 quality bar: form labels */
+.flabel{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:10px 0 4px}
+.req-form input{width:100%;box-sizing:border-box}
+
+/* Section 8 quality bar: 44x44 minimum tap targets */
+.btn{min-height:44px}
+.chip{min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+.linklike{min-height:44px;display:inline-flex;align-items:center}
+.seg button{min-height:44px}
+
+/* Section 8 quality bar: offline is a subtle banner, never a blocking modal */
+.offline-banner{position:fixed;top:0;left:0;right:0;z-index:60;background:#7a4d00;color:#fff;
+  font-size:13px;font-weight:600;text-align:center;padding:8px 12px}
+body.is-offline{padding-top:34px}
+
+/* Section 8 quality bar: bottom tabs, 4 labeled items, mobile only */
+.tabbar{display:none}
+@media (max-width:720px){
+  .tabbar{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:60;background:var(--paper);
+    border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
+  .tabbar button{flex:1;border:0;background:none;color:var(--muted);font-size:11px;font-weight:600;
+    display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 0;min-height:56px;touch-action:manipulation}
+  .tabbar button.on{color:var(--blue)}
+  .tabbar svg{width:24px;height:24px}
+  body{padding-bottom:76px}
+}
 </style>
 </head>
 <body>
+<div id="offlineBanner" class="offline-banner hidden" role="status">You are offline. The checker and your saved checks still work.</div>
 <header class="site">
   <div class="wrap">
     <span class="logo" aria-label="StayLegal home">
@@ -333,12 +366,14 @@ table.cmp td .pill{white-space:nowrap}
         <p id="verdictSummary"></p>
         <p class="addr-line" id="verdictAddr"></p>
         <p class="verdict-note">This is a research starting point, not legal advice.</p>
+        <div class="hoa-cta"><span>Condo or HOA property?</span> <button class="linklike" id="hoaCtaBtn" type="button" style="color:var(--blue);padding:0">Run the 2-minute HOA screen before you buy.</button></div>
       </div>
 
       <div class="card">
         <p class="eyebrow">Permit and costs</p>
         <dl class="kv" id="permitKv"></dl>
         <div id="remindBannerSlot"></div>
+        <label class="flabel" for="remindDate" style="margin-top:0">Permit renewal date</label>
         <div class="remind-row">
           <input type="date" id="remindDate" aria-label="Permit renewal date">
           <button class="btn ghost" id="remindSetBtn" type="button" style="padding:10px 14px;font-size:14px">Remind me</button>
@@ -350,6 +385,19 @@ table.cmp td .pill{white-space:nowrap}
       <div class="card">
         <p class="eyebrow">Key limits</p>
         <dl class="kv" id="limitsKv"></dl>
+      </div>
+
+      <div class="card hidden" id="nightCard">
+        <p class="eyebrow">Night tracker</p>
+        <p style="margin:0 0 8px" id="nightLine"></p>
+        <div class="progress" aria-hidden="true"><i id="nightProgress" style="width:0%"></i></div>
+        <div class="quiz-cta" style="margin-top:10px">
+          <button class="btn ghost" id="nightPlus" type="button" style="padding:8px 14px;font-size:14px">+1 night</button>
+          <button class="btn ghost" id="nightMinus" type="button" style="padding:8px 14px;font-size:14px">-1 night</button>
+          <button class="btn ghost" id="nightReset" type="button" style="padding:8px 14px;font-size:14px">Reset</button>
+        </div>
+        <p class="empty" style="margin:8px 0 0" id="nightNote"></p>
+        <p class="empty" style="margin:4px 0 0">Your own count, kept on this device only. Not a filing with the city.</p>
       </div>
 
       <div class="card">
@@ -383,8 +431,11 @@ table.cmp td .pill{white-space:nowrap}
         <div class="chips" id="cityChips" style="margin-top:10px"></div>
         <form class="req-form" id="requestForm">
           <p class="eyebrow" style="margin:6px 0 0">Request your city</p>
+          <label class="flabel" for="reqCity">City</label>
           <input type="text" id="reqCity" placeholder="City" aria-label="City to request" autocomplete="address-level2">
+          <label class="flabel" for="reqState">State (optional)</label>
           <input type="text" id="reqState" placeholder="State (optional)" aria-label="State, optional" autocomplete="address-level1">
+          <label class="flabel" for="reqEmail">Email for the update (optional)</label>
           <input type="email" id="reqEmail" placeholder="Email for the update (optional)" aria-label="Email, optional" autocomplete="email">
           <button class="btn primary" type="submit">Request this city</button>
         </form>
@@ -396,11 +447,15 @@ table.cmp td .pill{white-space:nowrap}
     <section id="savedSection" class="hidden">
       <div class="card">
         <p class="eyebrow">Your saved checks</p>
+        <div id="savedEmpty" class="hidden">
+          <p class="empty" style="margin:0 0 10px">No saved checks yet. Check an address, then tap Save check.</p>
+          <button class="btn primary" id="savedEmptyBtn" type="button">Check an address</button>
+        </div>
         <div id="savedList"></div>
       </div>
     </section>
 
-    <section aria-label="Compare cities">
+    <section id="compareSection" aria-label="Compare cities">
       <div class="card">
         <p class="eyebrow">Compare cities</p>
         <h2 style="margin-top:0">Which market costs less to comply with?</h2>
@@ -414,7 +469,7 @@ table.cmp td .pill{white-space:nowrap}
       </div>
     </section>
 
-    <section aria-label="Rule changes">
+    <section id="changesSection" aria-label="Rule changes">
       <div class="card">
         <p class="eyebrow">Rule changes we are watching</p>
         <h2 style="margin-top:0">The rules move. We track the moves.</h2>
@@ -544,6 +599,24 @@ table.cmp td .pill{white-space:nowrap}
   </div>
 </footer>
 
+<nav class="tabbar" aria-label="Sections" id="tabbar">
+  <button type="button" data-tab="top" class="on">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg>
+    <span>Check</span>
+  </button>
+  <button type="button" data-tab="saved">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4h10v16l-5-3.6L7 20z"/></svg>
+    <span>Saved</span>
+  </button>
+  <button type="button" data-tab="compare">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><rect x="4" y="5" width="7" height="14" rx="1.5"/><rect x="13" y="5" width="7" height="14" rx="1.5"/></svg>
+    <span>Compare</span>
+  </button>
+  <button type="button" data-tab="changes">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.8 2"/></svg>
+    <span>Changes</span>
+  </button>
+</nav>
 <script src="data.js"></script>
 <script src="changes.js"></script>
 <script src="app.js"></script>

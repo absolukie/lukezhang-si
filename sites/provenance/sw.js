@@ -12,7 +12,8 @@ const SHELL = [
   'icons/icon-512.png',
   'icons/icon.svg',
   'sync.js',
-  'auth-ui.js'
+  'auth-ui.js',
+  'billing-ui.js'
 ];
 
 self.addEventListener('install', event => {

@@ -78,6 +78,8 @@
   @media (max-width: 480px) {
     .stepper .step-code { font-size: 12px; padding: 10px 12px; }
   }
+  .stepper .step-code .tk-tac { color: #f0b0a8; }
+  .stepper .step-code .tk-com { color: rgba(246,241,227,0.42); font-style: italic; }
   .tactic-gloss { border: 1px solid rgba(43,43,43,0.15); border-radius: 12px;
     padding: 4px 18px 8px; margin: 18px 0 4px; background: rgba(255,255,255,0.35); }
   .tactic-gloss h3 { font-size: 16px; margin: 12px 0 4px; color: #2b2b2b; }
@@ -327,7 +329,7 @@ theorem sqrt_two_irrational&#x27; : Irrational&#x27; (Real.sqrt 2) := by
   var steps = [
     { title: "First, what 'irrational' means",
       body: "Lean has no idea what the word irrational means until we define it. Mathlib has its own version, but the browser build of Lean does not include it, so this file defines its own. A real number is irrational when no fraction of integers can equal it.",
-      code: "def Irrational' (x : \\u211d) : Prop := \\u2200 a b : \\u2124, b \\u2260 0 \\u2192 x \\u2260 a / b",
+      code: "def Irrational' (x : \u211d) : Prop := \u2200 a b : \u2124, b \u2260 0 \u2192 x \u2260 a / b",
       gloss: "def creates a new named thing. Irrational' is our own version: the apostrophe says so, since Mathlib's built-in one is missing here. It takes a real number x and says: for all integers a and b, if b is not zero, then x is not a divided by b. Prop means this is a statement, something that can be true or false." },
     { title: "Assume \u221a2 is a fraction",
       body: "The goal says: for any integers a and b, if b is not zero then \u221a2 is not a/b. To prove a \u201cnot\u201d, assume the opposite and break it. So suppose \u221a2 = a/b.",
@@ -361,7 +363,7 @@ theorem sqrt_two_irrational&#x27; : Irrational&#x27; (Real.sqrt 2) := by
       gloss: "Apply natAbs (absolute value) to both sides of a\u00b2 = 2b\u00b2; the library lemmas say it passes through powers and products, and rwa rewrites then closes the goal. hbN checks the denominator stays nonzero." },
     { title: "The descent machine: induction on a bound",
       body: "The helper theorem says: for every bound n, any naturals a and b with b at most n, b nonzero, and a squared equal to 2 times b squared, lead to a contradiction. We prove it by induction on the bound n. The base case is free: b at most 0 forces b to be 0, which clashes with b not zero.",
-      code: "theorem no_sqrt2_nat : \\u2200 n : \\u2115, \\u2200 a b : \\u2115, b \\u2264 n \\u2192 b \\u2260 0 \\u2192 a ^ 2 = 2 * b ^ 2 \\u2192 False := by\\n"
+      code: "theorem no_sqrt2_nat : \u2200 n : \u2115, \u2200 a b : \u2115, b \u2264 n \u2192 b \u2260 0 \u2192 a ^ 2 = 2 * b ^ 2 \u2192 False := by\\n"
         + "  intro n\\n"
         + "  induction n with\\n"
         + "  | zero =>\\n"
@@ -419,6 +421,18 @@ theorem sqrt_two_irrational&#x27; : Irrational&#x27; (Real.sqrt 2) := by
   var back = document.getElementById('st-back');
   var next = document.getElementById('st-next');
   var dots = document.getElementById('st-dots');
+  var TACTICS = ['exact_mod_cast','push_cast','norm_num','congrArg','linarith','rintro','obtain','intro','exact','decide','omega','rwa','ring','simp','have','rw','by'];
+  function hlLean(src) {
+    function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    var re = new RegExp('\\b(' + TACTICS.join('|') + ')\\b', 'g');
+    return src.split('\n').map(function (line) {
+      var ci = line.indexOf('--');
+      var codePart = ci >= 0 ? line.slice(0, ci) : line;
+      var comPart = ci >= 0 ? line.slice(ci) : '';
+      codePart = esc(codePart).replace(re, '<span class="tk-tac">$1</span>');
+      return codePart + (comPart ? '<span class="tk-com">' + esc(comPart) + '</span>' : '');
+    }).join('\n');
+  }
   for (var d = 0; d < steps.length; d++) {
     var s = document.createElement('span');
     dots.appendChild(s);
@@ -428,7 +442,8 @@ theorem sqrt_two_irrational&#x27; : Irrational&#x27; (Real.sqrt 2) := by
     kicker.textContent = 'Step ' + (i + 1) + ' of ' + steps.length;
     title.textContent = st.title;
     body.textContent = st.body;
-    code.textContent = st.code;
+    code.innerHTML = hlLean(st.code);
+    code.scrollLeft = 0;
     gloss.textContent = st.gloss;
     count.textContent = (i + 1) + ' / ' + steps.length;
     back.style.display = (i === 0) ? 'none' : '';

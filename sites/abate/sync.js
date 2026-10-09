@@ -124,6 +124,9 @@ function upsertProject(list, key, value){
     list.push(np);
     drainPending(np);
   }
+  /* P1-3: a corrupt remote project (missing clearance) must not brick the
+   * dashboard either. Normalized through the app's own guard when present. */
+  try{ if (window.__abate && window.__abate.normalizeProject) window.__abate.normalizeProject(ex || np); }catch(e){}
 }
 function upsertIntoState(DB, collection, key, value){
   DB.projects = DB.projects || []; DB.archived = DB.archived || [];
@@ -475,8 +478,18 @@ async function boot(){
   var fresh = !deviceKey;
   if (!deviceKey){
     try {
-      deviceKey = await register();
-      localStorage.setItem(LS_DEVICE, deviceKey);
+      /* P2-2: one registration per fresh boot. billing-ui.js shares this
+       * in-flight guard: whichever boot path runs first wins, the other
+       * awaits it. Cleared on failure so a retry is possible. */
+      if (!window.__abateDeviceReg){
+        var reg = register();
+        window.__abateDeviceReg = reg.then(function(k){
+          try { localStorage.setItem(LS_DEVICE, k); } catch(e){}
+          return k;
+        });
+        reg.then(null, function(){ if (window.__abateDeviceReg) window.__abateDeviceReg = null; });
+      }
+      deviceKey = await window.__abateDeviceReg;
     } catch(e){ updatePill(); return; } // offline: pill reports honestly, no false "Synced"
   }
 

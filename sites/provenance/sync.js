@@ -334,7 +334,7 @@ async function pull(){
     var changed = applyRecords(S, data.records || [], meta);
     if (changed){
       saveMeta();
-      window.__provenance.saveLocal(); // persist without triggering a push
+      window.__provenance.save(); // quota errors surface the blocking sheet, never fail silently
       window.__provenance.refresh();
       var cur = snapshot(stateToRecords(S));
       Object.keys(applied).forEach(function(mk){

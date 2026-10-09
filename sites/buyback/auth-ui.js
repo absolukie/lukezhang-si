@@ -328,10 +328,12 @@ function bindCard(box){
 }
 
 function oauthStart(provider){
-  var dk = getDeviceKey() || "";
+  /* The device key is deliberately NOT in this URL: query strings land in
+     browser history and server logs. The server ignores it at this step
+     anyway; the device is linked from the /exchange POST body after the
+     provider redirects back (see builds/backend/auth/oauth.js). */
   location.href = WORKER + "/v1/auth/oauth/" + provider +
-    "?app_slug=" + encodeURIComponent(SLUG) +
-    (dk ? "&device_key=" + encodeURIComponent(dk) : "");
+    "?app_slug=" + encodeURIComponent(SLUG);
 }
 
 /* ---------- boot: render card, validate any existing session ---------- */

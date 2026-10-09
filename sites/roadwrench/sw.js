@@ -1,5 +1,5 @@
 /* RoadWrench service worker: cache the app shell so it opens with no signal. */
-const CACHE = "roadwrench-v1";
+const CACHE = "roadwrench-v3"; /* bump when shipping app changes, or repeat visits keep the stale shell */
 const PRECACHE = [
   "app.html", "style.css", "app.js", "sync.js", "auth-ui.js",
   "manifest.json", "index.html", "icon-192.png", "icon-512.png"

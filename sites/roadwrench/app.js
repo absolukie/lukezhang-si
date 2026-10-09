@@ -43,7 +43,8 @@ const safeDataUrl = u => {
   return "";
 };
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-const money = n => "$" + (Number(n) || 0).toFixed(2);
+/* BR-1: every amount renders $X.XX; negatives render -$X.XX, never $-X.XX. */
+const money = n => { const v = Number(n) || 0; return (v < 0 ? "-$" : "$") + Math.abs(v).toFixed(2); };
 const fmtDate = iso => { if (!iso) return "Not provided"; const d = new Date(iso + (iso.length <= 10 ? "T12:00:00" : "")); return isNaN(d) ? "Not provided" : d.toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"}); };
 const fmtDT = ts => new Date(ts).toLocaleString("en-US", {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"});
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -151,6 +152,9 @@ function readEvents() {
   try { return JSON.parse(localStorage.getItem(EVENTS_KEY)) || []; } catch (e) { return []; }
 }
 function save(s) {
+  /* Every persisted state carries a revision so a stale tab can never
+   * silently overwrite a newer tab's data on unload (P2-10). */
+  try { s.rev = (s.rev || 0) + 1; } catch (e) {}
   let raw;  try { raw = JSON.stringify(s); } catch (e) { toast("Could not save: data error"); return; }
   lastSaveBytes = raw.length;
   window.__roadwrench.stateBytes = lastSaveBytes;
@@ -166,6 +170,28 @@ function save(s) {
   }
   updateStorageBanner();
   try { if (window.__roadwrenchSync) window.__roadwrenchSync.onSave(); } catch (e) {}
+}
+
+/* P1-3: keystroke autosave. Every form input feeds this; a 500ms debounce
+ * keeps typing smooth while guaranteeing no keystroke waits on a blur or a
+ * tab kill to reach localStorage. */
+let saveTimer = null;
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => save(S), 500);
+}
+/* P2-10: unload flush. Writes only when this tab's in-memory state is at
+ * least as new as what is in storage, so closing a stale tab can never
+ * clobber edits made in a newer tab. Registered once globally at boot,
+ * never per-view (older per-view listeners accumulated on every render). */
+function flushSave() {
+  clearTimeout(saveTimer); saveTimer = null;
+  let storedRev = 0;
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) storedRev = (JSON.parse(raw).rev) || 0;
+  } catch (e) {}
+  if ((S.rev || 0) >= storedRev) save(S);
 }
 
 /* Sync bridge (sync.js). Local-first: app works fully offline; sync is debounced and never blocks UI.
@@ -406,6 +432,27 @@ function viewJobForm() {
       <button class="btn block" id="save">${I.check}Create job</button>
     </div>`;
   $("#back").onclick = () => location.hash = "#/jobs";
+  /* P1-3: new-job draft autosave. A killed tab never eats an uncreated job:
+   * every keystroke is debounced into localStorage, restored on return,
+   * and cleared the moment the job is created. */
+  const DRAFT_KEY = "roadwrench.newjobdraft.v1";
+  const draftIds = ["f_customer", "f_phone", "f_date", "f_site", "f_year", "f_make", "f_model", "f_vin", "f_complaint"];
+  let draftTimer = null;
+  const saveDraft = () => {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(() => {
+      try {
+        const d = {};
+        draftIds.forEach(id => { const el = document.getElementById(id); if (el) d[id] = el.value; });
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+      } catch (e) {}
+    }, 500);
+  };
+  try {
+    const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
+    if (d) draftIds.forEach(id => { const el = document.getElementById(id); if (el && typeof d[id] === "string" && !el.value) el.value = d[id]; });
+  } catch (e) {}
+  draftIds.forEach(id => { const el = document.getElementById(id); if (el) el.addEventListener("input", saveDraft); });
   /* customer autocomplete: suggest past customers, prefill rig on tap */
   const custInput = $("#f_customer"), suggBox = $("#custSuggest");
   const pastCustomers = () => {
@@ -455,6 +502,7 @@ function viewJobForm() {
     };
     S.jobs.push(j);
     if (S.jobs.filter(x => !x.sample).length === 1 && S.jobs.some(x => x.sample)) S.samplePurgeOffered = true;
+    try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
     save(S); toast("Job created"); location.hash = "#/job/" + j.id;
   };
 }
@@ -566,7 +614,7 @@ function viewJobDetail(id) {
       <div class="f3">
         <div class="field"><label for="l_hours">Hours</label><input id="l_hours" maxlength="10" inputmode="decimal" placeholder="1.5"></div>
         <div class="field"><label for="l_rate">Rate $/hr</label><input id="l_rate" maxlength="12" inputmode="decimal" value="${esc(S.company.laborRate)}"></div>
-        <div class="field"><label>&nbsp;</label><button class="btn block" id="addLabor">${I.plus}Add</button></div>
+        <div class="field"><button class="btn block" id="addLabor" aria-label="Add labor line" style="margin-top:25px">${I.plus}Add</button></div>
       </div>
     </div>
 
@@ -590,7 +638,7 @@ function viewJobDetail(id) {
 
     <div class="card"><h2>Warranty / insurance claim</h2>
       <div class="f2">
-        <div class="field"><label>Insurer / warranty co.</label><input id="c_insurer" maxlength="80" value="${esc(j.claim.insurer)}" placeholder="Wholesale Warranties"></div>
+        <div class="field"><label for="c_insurer">Insurer / warranty co.</label><input id="c_insurer" maxlength="80" value="${esc(j.claim.insurer)}" placeholder="Wholesale Warranties"></div>
         <div class="field"><label for="c_claim">Claim number</label><input id="c_claim" maxlength="60" value="${esc(j.claim.claimNumber)}"></div>
       </div>
       <div class="f3">
@@ -624,8 +672,8 @@ function viewJobDetail(id) {
    "c_insurer", "c_claim", "c_auth", "c_authby", "c_authdate"].forEach(fid => {
     const el = document.getElementById(fid); if (el) el.addEventListener("change", upd);
   });
-  // live field binding
-  const bind = (fid, fn) => { const el = document.getElementById(fid); if (el) el.addEventListener("input", () => { fn(el.value); }); };
+  // live field binding with debounced keystroke autosave (P1-3)
+  const bind = (fid, fn) => { const el = document.getElementById(fid); if (el) el.addEventListener("input", () => { fn(el.value); scheduleSave(); }); };
   bind("d_customer", v => j.customer = v); bind("d_phone", v => j.phone = v);
   bind("d_site", v => {
     j.site = v;
@@ -654,14 +702,20 @@ function viewJobDetail(id) {
   bind("c_insurer", v => j.claim.insurer = v); bind("c_claim", v => j.claim.claimNumber = v);
   bind("c_auth", v => j.claim.authNumber = v); bind("c_authby", v => j.claim.authBy = v);
   bind("c_authdate", v => j.claim.authDate = v);
-  window.addEventListener("beforeunload", upd);
+  /* Unload flush is registered once globally at boot (P2-10); the old
+   * per-view beforeunload listener accumulated on every render. */
 
   /* parts */
   $("#addPart").onclick = () => {
     const name = $("#p_name").value.trim();
     if (!name) { toast("Enter a part name"); return; }
+    /* P2-2: negative quantities are nonsense input; reject instead of
+     * rendering a malformed negative line total. */
+    const qty = parseFloat($("#p_qty").value);
+    if (!qty || qty <= 0) { toast("Qty must be at least 1"); return; }
+    const unitCost = Math.max(0, parseFloat($("#p_cost").value) || 0);
     j.parts.push({ id: uid(), name, partNumber: $("#p_num").value.trim(),
-      qty: parseFloat($("#p_qty").value) || 1, unitCost: parseFloat($("#p_cost").value) || 0,
+      qty, unitCost,
       serial: $("#p_serial").value.trim(), st: "have" });
     save(S); toast("Part added"); viewJobDetail(j.id);
   };
@@ -728,10 +782,17 @@ function viewJobDetail(id) {
   document.querySelectorAll("[data-delphoto]").forEach(b => b.onclick = () => {
     j.photos = j.photos.filter(p => p.id !== b.dataset.delphoto); save(S); viewJobDetail(j.id);
   });
-  document.querySelectorAll("[data-cap]").forEach(inp => inp.addEventListener("change", () => {
-    const p = j.photos.find(x => x.id === inp.dataset.cap);
-    if (p) { p.caption = inp.value.trim(); save(S); toast("Caption saved"); }
-  }));
+  document.querySelectorAll("[data-cap]").forEach(inp => {
+    /* P1-3: captions autosave on every keystroke; blur trims + saves immediately. */
+    inp.addEventListener("input", () => {
+      const p = j.photos.find(x => x.id === inp.dataset.cap);
+      if (p) { p.caption = inp.value; scheduleSave(); }
+    });
+    inp.addEventListener("change", () => {
+      const p = j.photos.find(x => x.id === inp.dataset.cap);
+      if (p) { p.caption = inp.value.trim(); save(S); toast("Caption saved"); }
+    });
+  });
 
   /* finish */
   $("#buildPacket").onclick = () => { save(S); location.hash = "#/packet/" + j.id; };
@@ -1004,7 +1065,7 @@ function viewPacket(id) {
     </div>
 
     <div class="card noprint" style="margin-top:12px"><h2>Sign the packet</h2>
-      <div class="field"><label for="claimStatus">Customer signature: sign below</label>
+      <div class="field"><label>Customer signature: sign below</label>
         <div class="sigwrap"><canvas class="sigpad" id="sigCustomer" width="600" height="150"></canvas>
         <button class="btn small ghost clear" id="clearCSig">Clear</button></div></div>
       <div class="field"><label>Technician signature</label>
@@ -1522,6 +1583,17 @@ function viewSettings() {
     const tx = parseFloat($("#s_tax").value); c.taxRate = isNaN(tx) || tx < 0 ? 0 : tx;
     save(S); toast("Saved");
   };
+  /* P1-3: business form autosaves on every keystroke (debounced), so a tab
+   * kill never eats unsaved company details; the Save button stays for
+   * explicit validation and confirmation. */
+  const coBind = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener("input", () => { fn(el.value); scheduleSave(); }); };
+  coBind("s_name", v => { if (v.trim()) c.name = v; });
+  coBind("s_phone", v => { c.phone = v; });
+  coBind("s_email", v => { c.email = v; });
+  coBind("s_addr", v => { c.address = v; });
+  coBind("s_review", v => { c.reviewLink = v; });
+  coBind("s_rate", v => { const n = parseFloat(v); if (!isNaN(n) && n >= 0) c.laborRate = n; });
+  coBind("s_tax", v => { const n = parseFloat(v); if (!isNaN(n)) c.taxRate = Math.max(0, n); });
   $("#s_reqPhotos").onchange = e => { S.settings.requirePhotos = e.target.checked; save(S); toast("Saved"); };
   $("#exportBtn").onclick = () => {
     const blob = new Blob([JSON.stringify({ state: S, events: readEvents() }, null, 2)], { type: "application/json" });
@@ -1561,5 +1633,8 @@ try {
   window.addEventListener("resize", billBannerOffset);
   billBannerOffset();
 } catch (e) { /* observer unavailable: banner overlap is cosmetic only */ }
+/* P2-10: one global unload flush for the whole app, revision-guarded so a
+ * stale tab can never clobber a newer tab's edits. */
+window.addEventListener("beforeunload", flushSave);
 document.addEventListener("DOMContentLoaded", () => { route(); });
 if (document.readyState !== "loading") route();

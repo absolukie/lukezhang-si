@@ -7,9 +7,9 @@
 <title>Backfill, Waitlist backfill for dental practices</title>
 <style>
 :root{
-  --teal:#0d9488; --teal-dark:#0b6f66; --teal-50:#effaf9; --teal-100:#d7f2ef;
+  --teal:#0a7a70; --teal-dark:#0b6f66; --teal-50:#effaf9; --teal-100:#d7f2ef;
   --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f6f9f9; --card:#ffffff;
-  --red:#dc2626; --red-50:#fef2f2; --amber:#d97706; --amber-50:#fffbeb;
+  --red:#c81e1e; --red-50:#fef2f2; --amber:#d97706; --amber-50:#fffbeb;
   --green:#16a34a; --green-50:#f0fdf4;
   --radius:14px; --shadow:0 1px 3px rgba(15,40,38,.08),0 4px 14px rgba(15,40,38,.06);
   --bill-accent:var(--teal); --bill-bg:var(--card); --bill-text:var(--ink);
@@ -158,6 +158,7 @@ body:has(.bill-banner) .topbar{margin-top:var(--bill-h,72px);top:var(--bill-h,72
 .queue-chip.declined{opacity:.6}
 .factor{display:flex;gap:6px;font-size:13px;color:var(--muted);margin-top:6px}
 .factor svg{width:16px;height:16px;flex-shrink:0;color:var(--teal)}
+.factor .pts{font-weight:700;color:var(--teal-dark)}
 .short-card{align-items:flex-start;flex-wrap:wrap}
 .system-line{color:var(--muted);font-size:13px;max-width:100%;background:var(--bg)}
 #bf-msg{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;resize:vertical}
@@ -202,7 +203,8 @@ body:has(.bill-banner) .topbar{margin-top:var(--bill-h,72px);top:var(--bill-h,72
   border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;font-size:14px;color:#92400e}
 .demo-tip[hidden]{display:none}
 .demo-tip svg{width:20px;height:20px;flex-shrink:0;margin-top:1px}
-.demo-tip button{margin-left:auto;border:0;background:none;color:#92400e;font-size:16px;padding:2px 6px}
+.demo-tip button{margin-left:auto;border:0;background:none;color:#92400e;font-size:16px;padding:2px 6px;
+  min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;flex:none}
 .sched-grid{display:block}
 .side-panel{display:none}
 @media(min-width:900px){
@@ -299,6 +301,13 @@ body:has(.bill-banner) .topbar{margin-top:var(--bill-h,72px);top:var(--bill-h,72
   .big-stats{grid-template-columns:1fr}
   .appt{flex-wrap:wrap}
   .practice{display:none}
+  /* topbar must never overflow at narrow widths: compact chrome, let the
+     sim badge shrink with ellipsis, gear stays on screen and tappable */
+  .topbar-inner{padding:10px 12px;gap:8px}
+  .topbar-inner>*{min-width:0}
+  .logo{font-size:16px;flex:none}
+  .sim-badge{font-size:11px;padding:3px 8px;overflow:hidden;text-overflow:ellipsis}
+  .syncmini{font-size:10px;padding:2px 6px}
 }
 </style>
 </head>
@@ -307,7 +316,7 @@ body:has(.bill-banner) .topbar{margin-top:var(--bill-h,72px);top:var(--bill-h,72
 <header class="topbar">
   <div class="topbar-inner">
     <div class="logo">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#0d9488" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 014-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 01-4 4H3"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="#0a7a70" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 014-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 01-4 4H3"/></svg>
       Backfill
     </div>
     <span class="sim-badge"><span class="dot"></span>Demo simulation</span>
@@ -503,7 +512,7 @@ body:has(.bill-banner) .topbar{margin-top:var(--bill-h,72px);top:var(--bill-h,72
       <div class="queue" id="rc-queue"></div>
       <div class="thread" id="rc-thread"></div>
       <div class="result-banner" id="rc-result" aria-live="polite"></div>
-      <div id="rc-composer" class="field"><label>Message template</label>
+      <div id="rc-composer" class="field"><label for="rc-msg">Message template</label>
         <div class="seg" id="rc-langseg" role="group" aria-label="Preview language"><button type="button" data-lang="EN" class="on">English</button><button type="button" data-lang="ES">Español</button></div>
         <textarea id="rc-msg" rows="3" readonly></textarea>
         <button class="btn btn-primary" id="rc-send">Send campaign</button>
@@ -744,6 +753,7 @@ function renderWaitlist(){
         <details class="rank-why">
           <summary>Why rank ${i+1}?</summary>
           <ul>${baseFactors(w).map(f=>`<li>${esc(f.text)} <span class="pts">+${f.pts}</span></li>`).join("")}</ul>
+          <p class="fine" style="margin-top:6px">When this patient is shortlisted for an open slot, a procedure match adds +14 for the same procedure or +8 for the same category on top of this base score.</p>
         </details>
       </div>
       <div class="score">${baseScore(w)}</div>`;
@@ -1130,7 +1140,7 @@ function openShortlist(apptId){
   const body=$("sl-body"); body.innerHTML="";
   candidates.forEach(({w,score,factors},i)=>{
     const card=document.createElement("div"); card.className="wl-card short-card";
-    card.innerHTML=`<div class="wl-rank">${i+1}</div><div class="body"><div class="name">${esc(w.name)} <span class="score">${score}</span></div>${factors.sort((a,b)=>b.pts-a.pts).slice(0,2).map(f=>`<div class="factor"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m7 12 3 3 7-7"/></svg>${esc(f.text)}</div>`).join("")}</div>`;
+    card.innerHTML=`<div class="wl-rank">${i+1}</div><div class="body"><div class="name">${esc(w.name)} <span class="score">${score}</span></div>${factors.sort((a,b)=>b.pts-a.pts).slice(0,2).map(f=>`<div class="factor"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m7 12 3 3 7-7"/></svg>${esc(f.text)} <span class="pts">+${f.pts}</span></div>`).join("")}</div>`;
     const btn=document.createElement("button"); btn.className="btn btn-primary btn-sm"; btn.textContent="Text "+w.name.split(" ")[0]; btn.onclick=()=>startOutreach(apptId,w.id); card.appendChild(btn); body.appendChild(card);
   });
   if(all.length>5){
@@ -1139,7 +1149,15 @@ function openShortlist(apptId){
     body.appendChild(more);
   }
   if(!candidates.length) body.innerHTML=`<div class="empty">Nobody on the waitlist matches this slot yet. Add patients who need ${esc(appt.proc)} and are reachable by SMS, then try again.</div>`;
-  if(matched.skipped.length){ const why=document.createElement("div"); why.className="system-line"; why.innerHTML='<h4>Not texted</h4>'+matched.skipped.map(({w,reason})=>`<p>${esc(w.name)}, ${esc(reason)}</p>`).join(""); body.appendChild(why); }
+  if(matched.skipped.length){
+    const sk=matched.skipped.slice().sort((a,b)=>baseScore(b.w)-baseScore(a.w));
+    const top=sk[0];
+    const why=document.createElement("div"); why.className="system-line";
+    why.innerHTML='<h4>Not texted</h4>'+
+      `<p><strong>Highest-ranked skip:</strong> ${esc(top.w.name)}, score ${baseScore(top.w)}, ${esc(top.reason)}.</p>`+
+      sk.slice(1).map(({w,reason})=>`<p>${esc(w.name)}, ${esc(reason)}</p>`).join("");
+    body.appendChild(why);
+  }
   $("sl-back").classList.add("open"); document.body.style.overflow="hidden"; $("sl-close").focus();
 }
 function renderQueue(){
@@ -1384,7 +1402,8 @@ renderSchedule(); renderWaitlist(); renderActivity(); renderRecall();
   <div class="modal" id="sheet">
     <div class="modal-head"><h3>Settings</h3>
       <button class="btn btn-ghost btn-sm" id="billSheetClose">Close</button></div>
-    <div class="modal-body"><div id="syncBoxHost"></div></div>
+    <div class="modal-body"><div id="syncBoxHost"></div>
+      <p class="fine" style="text-align:center;margin:12px 0 4px"><a href="privacy.html" style="color:#0b6f66">Privacy policy</a></p></div>
   </div>
 </div>
 <script>
@@ -1392,6 +1411,45 @@ renderSchedule(); renderWaitlist(); renderActivity(); renderRecall();
   // Billing: shared module (see builds/shared/billing-ui.js). Trial = full
   // access for 14 days, no card. Paywall overlay when not entitled; data
   // untouched. Billing must never break the app: fail open, log loudly.
+
+  // Settings sheet wiring lives OUTSIDE the billing init promise, so the gear
+  // always opens settings, even when billing init fails (fail open). That is
+  // exactly when the device-sync box and subscription state matter most.
+  var wrap = document.getElementById("billSheetWrap");
+  var sb = document.getElementById("settingsBtn");
+  function closeSheet(){ if (wrap) wrap.classList.remove("open"); }
+  var cb = document.getElementById("billSheetClose");
+  if (cb) cb.addEventListener("click", closeSheet);
+  if (wrap) wrap.addEventListener("click", function(e){
+    if (e.target === wrap) closeSheet();
+  });
+  // Honest subscription line when billing cannot inject its own section.
+  function injectBillLine(line){
+    var sheet = document.getElementById("sheet");
+    if (!sheet || sheet.querySelector("[data-bill-settings]")) return;
+    var d = document.createElement("div");
+    d.className = "bill-set"; d.setAttribute("data-bill-settings", "");
+    d.innerHTML = '<div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;background:#fff;margin:12px 0;font-size:14px;color:#1e293b">'+
+      '<strong>Subscription</strong><br>'+
+      '<span style="color:#64748b;font-size:14px">' + line + '</span></div>';
+    var body = sheet.querySelector(".modal-body");
+    if (body) sheet.insertBefore(d, body); else sheet.appendChild(d);
+  }
+  if (sb) sb.addEventListener("click", function(){
+    setTimeout(function(){
+      try {
+        var b = window.__billing;
+        if (b && typeof b.injectSettings === "function") {
+          b.injectSettings();
+          if (b.unconfigured) injectBillLine("Payments are not switched on yet. Please check back soon.");
+        } else {
+          injectBillLine("Billing is unreachable right now. The app keeps working and your data stays on this device.");
+        }
+        if (wrap) wrap.classList.add("open");
+      } catch(e){}
+    }, 0);
+  });
+
   var PLANS = [
     { lookupKey: "price_backfill_location", name: "Per location", price: "$150/mo",
       blurb: "Waitlist texting, slot-fill automation, per-location dashboard. Cancel anytime." }
@@ -1424,19 +1482,6 @@ renderSchedule(); renderWaitlist(); renderActivity(); renderRecall();
         try { window.addEventListener("resize", function(){ var b=document.querySelector(".bill-banner"); if(b) measure(b); }); } catch(e){}
         armX();
       })();
-      var sb = document.getElementById("settingsBtn");
-      var wrap = document.getElementById("billSheetWrap");
-      function closeSheet(){ if (wrap) wrap.classList.remove("open"); }
-      var cb = document.getElementById("billSheetClose");
-      if (cb) cb.addEventListener("click", closeSheet);
-      if (wrap) wrap.addEventListener("click", function(e){
-        if (e.target === wrap) closeSheet();
-      });
-      if (sb) sb.addEventListener("click", function(){
-        setTimeout(function(){
-          try { b.injectSettings(); if (wrap) wrap.classList.add("open"); } catch(e){}
-        }, 0);
-      });
     }).catch(function(e){
       try { console.error("[billing] init failed:", e); } catch(_){}
     });

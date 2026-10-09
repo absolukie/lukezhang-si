@@ -395,6 +395,31 @@ function seedDemoPhotos(db){
   if("requestIdleCallback" in window) requestIdleCallback(run,{timeout:3000});
   else setTimeout(run,500);
 }
+/* P1-3: defensive normalization (the Luke-OS lesson: loosely-typed stored
+ * data must be guarded at every read entry point). A missing or malformed
+ * clearance object can never brick the dashboard again; unsafe values fall
+ * back to unsigned. */
+const CLEARANCE_KEYS=["visual","airClear","wasteShipped","manifestsBack","neshapFiled","areaReleased"];
+function normalizeProject(p){
+  if(!p||typeof p!=="object") return p;
+  if(!p.clearance||typeof p.clearance!=="object"||Array.isArray(p.clearance)) p.clearance={};
+  const cl=p.clearance;
+  CLEARANCE_KEYS.forEach(k=>{ if(typeof cl[k]!=="boolean") cl[k]=false; });
+  /* P1-1 legacy repair: a stored release that outlived a revoked prerequisite
+   * is invalid. Invalidate it with an audit event, never silently, so the
+   * printed dossier can never show an open prerequisite next to a signed
+   * release. */
+  const prior=[["visual","Visual inspection"],["airClear","Clearance air sampling"],["wasteShipped","Waste shipped"],["manifestsBack","Signed manifests received"],["neshapFiled","Notifications filed"]];
+  if(cl.areaReleased&&prior.some(r=>!cl[r[0]])){
+    cl.areaReleased=false; cl.areaReleasedBy=""; cl.areaReleasedDate="";
+    cl.areaReleasedHistory=cl.areaReleasedHistory||[];
+    cl.areaReleasedHistory.push({action:"revoked",by:"data repair",date:todayISO(),at:Date.now()});
+    p.events=p.events||[];
+    p.events.push({t:Date.now(),kind:"revocation",cls:"warn",what:"Area release auto-revoked on load: a prerequisite was revoked while the release was signed. The regulated area is no longer released until every item is signed again."});
+    p._repairedClearance=true;
+  }
+  return p;
+}
 function loadDb(){
   const raw=store.loadRaw();
   if(raw===null){ const db=seed(); store.save(db); seedDemoPhotos(db); return db; }
@@ -406,6 +431,10 @@ function loadDb(){
         /* Pass 3 fields: toolbox talks, per-manifest custody chains. */
         if(!Array.isArray(p.toolboxTalks)){ p.toolboxTalks=[]; dirty=true; }
         (p.manifests||[]).forEach(m=>{ if(!Array.isArray(m.custody)){ m.custody=[]; dirty=true; } });
+        /* P1-3: one corrupt project must never brick the dashboard. */
+        const before=JSON.stringify(p.clearance);
+        normalizeProject(p);
+        if(p._repairedClearance||JSON.stringify(p.clearance)!==before){ dirty=true; delete p._repairedClearance; }
       });
       if(dirty) store.save(db);
       seedDemoPhotos(db);
@@ -483,7 +512,8 @@ window.__abate = {
   getS(){ return DB; },
   getView(){ try{ return view.name; }catch(e){ return ""; } },
   saveLocal(){ store.save(DB); },
-  refresh(){ render(); }
+  refresh(){ render(); },
+  normalizeProject: normalizeProject
 };
 function proj(){ return DB.projects.find(p=>p.id===view.projectId); }
 function save(){ persist(); render(); }
@@ -752,7 +782,10 @@ const COACH_WASTE=[
   ["One tap to chase","The dashboard chase list has every unsigned manifest with the transporter and disposal site numbers attached."]
 ];
 function showCoach(key, steps){
-  if(!steps || !steps.length || localStorage.getItem(key)) return;
+  if(!steps || !steps.length) return;
+  /* P2-3: localStorage may be disabled. Guard the read; if the store is
+   * unreachable, skip the tour rather than throwing on every project view. */
+  try{ if(localStorage.getItem(key)) return; }catch(e){ return; }
   let i=0;
   const paint=()=>{
     /* Never paint the tour over a form the user is filling. The next
@@ -882,9 +915,12 @@ function vWaste(p){
     ((m.corrections&&m.corrections.length)?'<div class="small" style="margin:8px 0; border-top:1px solid var(--line); padding-top:8px"><b style="color:var(--blue)">Correction history: original preserved</b>'+
       m.corrections.map(c=>'<div class="small muted" style="margin-top:6px">'+esc(corrDiff(c.before,c.after))+' · '+esc(c.by)+' · '+fmtDT(c.at)+'<br>Reason: '+esc(c.reason)+'</div>').join("")+'</div>':"")+
     '<div class="row" style="margin-top:8px; flex-wrap:wrap; gap:8px">'+
+    /* P2-8: custody links follow the physical sequence. Departure is offered
+     * only after loading is recorded; delivery only after departure. The date
+     * field on each prompt allows honest backdating if a link was missed. */
     (hasStage(m,"loaded")?"":'<button class="btn dark sm" data-act="cust-loaded" data-id="'+m.id+'">Record loading</button>')+
-    (hasStage(m,"departed")?"":'<button class="btn dark sm" data-act="cust-departed" data-id="'+m.id+'">Record departure</button>')+
-    (hasStage(m,"delivered")?"":'<button class="btn dark sm" data-act="cust-delivered" data-id="'+m.id+'">Record delivery</button>')+
+    (hasStage(m,"loaded")&&!hasStage(m,"departed")?'<button class="btn dark sm" data-act="cust-departed" data-id="'+m.id+'">Record departure</button>':"")+
+    (hasStage(m,"departed")&&!hasStage(m,"delivered")?'<button class="btn dark sm" data-act="cust-delivered" data-id="'+m.id+'">Record delivery</button>':"")+
     '<button class="btn dark sm" data-act="edit-manifest" data-id="'+m.id+'">Correct</button>'+
     '<button class="btn ghost sm" data-act="sign-manifest" data-id="'+m.id+'">'+(m.signedCopyReceived?"Update signed copy":"Mark signed copy received")+'</button>'+
     '<button class="btn danger sm" data-act="del-manifest" data-id="'+m.id+'">Delete</button></div></div>'; }).join("");
@@ -896,7 +932,9 @@ function vPhotos(p){
   const cats=["All","Containment","Removal","Waste","Decon","Clearance","Other"];
   const f=view.photoCat||"All";
   const list=live(p.photos).filter(x=>f==="All"||x.category===f).sort((a,b)=>b.takenAt-a.takenAt);
-  const chips=cats.map(c=>'<button class="tab'+(f===c?" on":"")+'" data-pcat="'+c+'">'+c+'</button>').join("");
+  /* P2-9: the filter chips are real tabs now, with a tablist parent and
+   * aria-selected state, so screen readers announce the active filter. */
+  const chips=cats.map(c=>'<button class="tab'+(f===c?" on":"")+'" data-pcat="'+c+'" role="tab" aria-selected="'+(f===c)+'" aria-label="Filter photos: '+c+'">'+c+'</button>').join("");
   const grid=list.map(x=>'<div class="photo" data-photo="'+x.id+'"><img src="'+x.dataUrl+'" alt="'+esc(x.caption||"site photo")+'" loading="lazy">'+
     '<div class="ts">'+fmtDT(x.takenAt)+(x.lat!=null?" · GPS":"")+'</div><div class="cap">'+esc(x.caption||x.category)+'</div></div>').join("");
   /* Site coverage map: GPS-tagged photos plotted by relative position, so the
@@ -911,7 +949,7 @@ function vPhotos(p){
   return '<h2 class="stencil" style="font-size:15px; color:var(--muted); margin:4px 0 12px;">Photo documentation</h2>'+
     '<div class="small dim" style="margin-bottom:8px">Every photo is timestamped at capture and locked to the dossier. Photos with a GPS fix also carry coordinates, burned into the image. Courts and insurers trust timestamps; captions are free.</div>'+
     mapCard+
-    '<div class="tabs" style="position:static; margin:12px 0 10px; padding:0; border:none; background:none">'+chips+'</div>'+
+    '<div class="tabs" role="tablist" aria-label="Photo category filter" style="position:static; margin:12px 0 10px; padding:0; border:none; background:none">'+chips+'</div>'+
     (grid?'<div class="photogrid">'+grid+'</div>':'<div class="empty">No photos in this category yet.<br>Tap below to add timestamped site photos.<div style="margin-top:10px"><button class="btn" data-act="fab">Add a photo</button></div></div>');
 }
 function vClearance(p){
@@ -926,9 +964,9 @@ function vClearance(p){
     '<div class="small dim" style="margin-bottom:10px">The job cannot legally close until every item is evidenced. Each sign-off is stamped with who and when.</div>'+
     item("visual","Visual inspection passed","No visible residue, dust, or debris in the work area. Competent person walkthrough.")+
     item("airClear","Clearance air sampling passed","Aggressive sampling ≤ 0.01 f/cc. Log the samples under the Air tab.")+
-    item("wasteShipped","All waste shipped off-site","Every load has a manifest number recorded.")+
+    item("wasteShipped","All waste shipped off-site","Every load has a manifest number recorded. Self-attested: your signed name is the evidence.")+
     item("manifestsBack","All signed manifests received","35-day NESHAP loop closed on every shipment.")+
-    item("neshapFiled","Notifications filed","EPA / state / local NESHAP notices on record.")+
+    item("neshapFiled","Notifications filed","EPA / state / local NESHAP notices on record. Self-attested: your signed name is the evidence.")+
     item("areaReleased","Regulated area released","Signs down, barriers removed, area returned to owner.")+
     '<button class="btn dark block" data-act="close-project" style="margin-top:8px">Mark project closed</button>';
 }
@@ -995,34 +1033,52 @@ function openSheet(html){ $("#sheet").innerHTML=html; $("#sheetWrap").classList.
    * visible coach (its localStorage key is untouched, so the next render
    * re-arms the tour once the form is closed). */
   const cc=$("#coach"); if(cc) cc.remove(); }
-function closeSheet(){ $("#sheetWrap").classList.remove("open"); }
+function closeSheet(){
+  $("#sheetWrap").classList.remove("open");
+  /* P2-1: pending prompt promises must never be orphaned. Every open* prompt
+   * registers a settle-on-dismiss callback; closeSheet (button, Escape, or
+   * backdrop) drains them, resolving each with its cancel value. Button
+   * handlers settle their own promise BEFORE calling closeSheet, so the
+   * drain only fires for genuine dismissals. */
+  const pending=sheetPending; sheetPending=[];
+  pending.forEach(fn=>{ try{ fn(); }catch(e){} });
+}
+let sheetPending=[];
+function promptSettle(res, cancelVal){
+  let done=false;
+  const settle=v=>{ if(!done){ done=true; res(v); } };
+  sheetPending.push(()=>settle(cancelVal));
+  return settle;
+}
 let toastT=null;
 function toast(m){ let t=$("#toast"); if(!t){ t=document.createElement("div"); t.id="toast"; t.className="toast"; document.body.appendChild(t); }
   t.textContent=m; t.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove("show"),2400); }
 function openConfirm(title,body,okLabel,danger){
   return new Promise(res=>{
+    const settle=promptSettle(res,false);
     openSheet('<h2 class="stencil">'+esc(title)+'</h2><div class="small muted" style="margin-bottom:16px">'+body+'</div>'+
       '<div class="row"><button class="btn '+(danger?"danger":"")+' grow" id="cfOk">'+esc(okLabel||"Confirm")+'</button>'+
       '<button class="btn dark" id="cfNo">Cancel</button></div>');
-    $("#cfOk").onclick=()=>{ closeSheet(); res(true); };
-    $("#cfNo").onclick=()=>{ closeSheet(); res(false); };
+    $("#cfOk").onclick=()=>{ settle(true); closeSheet(); };
+    $("#cfNo").onclick=()=>{ settle(false); closeSheet(); };
   });
 }
 /* Soft delete: the record leaves every list but stays in the store with a
  * tombstone, and the deletion is logged with who, when, and why. */
 function openDeleteReason(title, whatLine){
   return new Promise(res=>{
+    const settle=promptSettle(res,null);
     openSheet('<h2 class="stencil">'+esc(title)+'</h2>'+
       '<div class="small muted" style="margin-bottom:12px">'+esc(whatLine)+'<br><br>The record leaves the lists but stays in the file as a tombstone, and this deletion is logged for the auditor.</div>'+
       '<form id="delForm"><label for="delWho">Your name *</label><input id="delWho" name="who" required autocomplete="off" placeholder="Who is deleting this?">'+
       '<label for="delReason">Reason *</label><textarea id="delReason" name="reason" rows="2" required placeholder="Why is this record being removed?"></textarea>'+
       '<div style="height:14px"></div><div class="row"><button class="btn danger grow" type="submit">Delete record</button>'+
       '<button class="btn dark" type="button" id="delNo">Cancel</button></div></form>');
-    $("#delNo").onclick=()=>{ closeSheet(); res(null); };
+    $("#delNo").onclick=()=>{ settle(null); closeSheet(); };
     $("#delForm").onsubmit=e=>{ e.preventDefault(); const d=collect(e.target);
       const who=String(d.who||"").trim(), reason=String(d.reason||"").trim();
       if(!who||!reason){ toast("Name and reason are required."); return; }
-      closeSheet(); res({who:who, reason:reason});
+      settle({who:who, reason:reason}); closeSheet();
     };
   });
 }
@@ -1040,39 +1096,42 @@ async function softDelete(p, arr, id, label, whatLine){
 }
 function openSignoff(title,sub,defName,okLabel){
   return new Promise(res=>{
+    const settle=promptSettle(res,null);
     openSheet('<h2 class="stencil">'+esc(title)+'</h2><div class="small dim" style="margin-bottom:6px">'+esc(sub||"Each sign-off is stamped with name and date.")+'</div>'+
       '<form id="soForm"><label for="soWho">Sign-off name</label><input id="soWho" name="who" required autocomplete="off" placeholder="Competent person name" value="'+esc(defName||"")+'">'+
       '<div style="height:14px"></div><div class="row"><button class="btn grow" type="submit">'+esc(okLabel||"Sign off")+'</button>'+
       '<button class="btn dark" type="button" id="soNo">Cancel</button></div></form>');
-    $("#soNo").onclick=()=>{ closeSheet(); res(null); };
-    $("#soForm").onsubmit=e=>{ e.preventDefault(); const v=e.target.who.value.trim(); closeSheet(); res(v||null); };
+    $("#soNo").onclick=()=>{ settle(null); closeSheet(); };
+    $("#soForm").onsubmit=e=>{ e.preventDefault(); const v=e.target.who.value.trim(); settle(v||null); closeSheet(); };
   });
 }
 function openDatePrompt(title){
   return new Promise(res=>{
+    const settle=promptSettle(res,null);
     openSheet('<h2 class="stencil">'+esc(title)+'</h2><form id="dtForm"><label for="dtD">Date signed copy received</label>'+
       '<input id="dtD" name="d" type="date" value="'+todayISO()+'" required>'+
       '<label for="dtBy">Recorded by</label><input id="dtBy" name="by" autocomplete="off" placeholder="Who recorded this?">'+
       '<div style="height:14px"></div><div class="row"><button class="btn grow" type="submit">Save</button>'+
       '<button class="btn dark" type="button" id="dtNo">Cancel</button></div></form>');
-    $("#dtNo").onclick=()=>{ closeSheet(); res(null); };
+    $("#dtNo").onclick=()=>{ settle(null); closeSheet(); };
     $("#dtForm").onsubmit=e=>{ e.preventDefault(); const d=collect(e.target); const v=d.d;
-      closeSheet(); res(v?{date:v, by:String(d.by||"").trim()}:null); };
+      settle(v?{date:v, by:String(d.by||"").trim()}:null); closeSheet(); };
   });
 }
 /* Custody handoff recorder: each link in the chain gets a date, a time, and
  * a name. Used by the Waste tab buttons for loading, departure, delivery. */
 function openCustodyPrompt(title, defName){
   return new Promise(res=>{
+    const settle=promptSettle(res,null);
     openSheet('<h2 class="stencil">'+esc(title)+'</h2><form id="cuForm">'+
       field("Date","d",todayISO(),"date","required")+
       field("Time","t",new Date().toTimeString().slice(0,5),"time")+
       field("Recorded by","by",defName||"","text placeholder='Who recorded this handoff'")+
       '<div style="height:14px"></div><div class="row"><button class="btn grow" type="submit">Record</button>'+
       '<button class="btn dark" type="button" id="cuNo">Cancel</button></div></form>');
-    $("#cuNo").onclick=()=>{ closeSheet(); res(null); };
-    $("#cuForm").onsubmit=e=>{ e.preventDefault(); const d=collect(e.target); closeSheet();
-      res({at:new Date(d.d+"T"+(d.t||"12:00")+":00").getTime(), by:String(d.by||"").trim()}); };
+    $("#cuNo").onclick=()=>{ settle(null); closeSheet(); };
+    $("#cuForm").onsubmit=e=>{ e.preventDefault(); const d=collect(e.target);
+      settle({at:new Date(d.d+"T"+(d.t||"12:00")+":00").getTime(), by:String(d.by||"").trim()}); closeSheet(); };
   });
 }
 $("#sheetWrap").addEventListener("click",e=>{ if(e.target.id==="sheetWrap") closeSheet(); });
@@ -1216,6 +1275,10 @@ function fDaily(p, existing){
     existing?"Record correction":"Log shift"));
   $("#sheetCancel").onclick=closeSheet;
   draftInit(p,"daily",!existing);
+  /* P2-4: the fat-finger warning is per-times-entry. Editing either time
+   * clears the confirmation, so a new fat-finger gets a fresh warning. */
+  const warnForm=$("#sheetForm");
+  warnForm.querySelectorAll('input[name="start"],input[name="end"]').forEach(el=>el.addEventListener("input",()=>{ warnForm.dataset.warned=""; }));
   /* Roster chips: tap to append "name, cred" as a new line. */
   const ta=$("#crewTa");
   document.querySelectorAll("#sheet [data-ros]").forEach(b=>b.onclick=()=>{
@@ -1351,6 +1414,9 @@ function fAir(p, existing){
   draftInit(p,"air",!existing);
   $("#sheetForm").onsubmit=e=>{ e.preventDefault(); const d=collect(e.target);
     const r=parseFloat(d.result);
+    /* P2-10: defense in depth. Never store a non-finite or negative result;
+     * native validation normally blocks this first. */
+    if(!isFinite(r)||r<0){ toast("Enter a valid sample result, a number at or above 0, like 0.042."); return; }
     const limit=d.type==="clearance"?0.01:(d.basis==="8hr"?0.1:d.basis==="exc"?1.0:0.01);
     if(existing){
       const by=String(d.corrBy||"").trim(), reason=String(d.corrReason||"").trim();
@@ -1381,7 +1447,7 @@ function fManifest(p, existing){
     field("Transporter phone","transporterPhone",M.transporterPhone||"","tel")+
     field("Disposal site *","disposalSite",M.disposalSite||"","text","required")+
     field("Disposal site phone","disposalPhone",M.disposalPhone||"","tel")+
-    '<label class="check" style="margin-top:12px"><input type="checkbox" name="certSigned"'+(M.certSigned===false?"":" checked")+'> Contents certified: properly described, packed, marked, and labeled for highway transport</label>'+
+    '<label class="check" style="margin-top:12px"><input type="checkbox" name="certSigned"'+(M.certSigned===true?" checked":"")+'> Contents certified: properly described, packed, marked, and labeled for highway transport</label>'+
     (existing?corrFields()+CORR_REASON:""),
     existing?"Record correction":"Record shipment"));
   $("#sheetCancel").onclick=closeSheet;
@@ -1520,25 +1586,62 @@ function bindActions(main,p){
         $("#vpGo").onclick=()=>{ closeSheet(); view.tab="photos"; save(); };
         return;
       }
-      /* Guard: manifests-back can only be checked when no manifest is pending.
-       * No "sign off anyway" escape hatch: each signed copy is recorded
-       * individually under the Waste tab. Checked before asking for the name. */
-      if(k==="manifestsBack"&&live(p.manifests).some(m=>!m.signedCopyReceived)){
-        const pend=live(p.manifests).filter(m=>!m.signedCopyReceived);
-        cb.checked=false;
-        openSheet('<h2 class="stencil">Signed copies still missing</h2>'+
-          '<div class="small muted" style="margin-bottom:12px">This sign-off can only be checked after <b>every</b> manifest has its own signed-copy date recorded. '+pend.length+' still pending:</div>'+
-          pend.map(m=>'<div class="kv"><div class="k mono">'+esc(m.manifestNo)+'</div><div><button class="btn ghost sm" data-mb-go="'+m.id+'">Record signed copy</button></div></div>').join("")+
-          '<div style="height:12px"></div><button class="btn dark block" id="mbBack">Back</button>');
-        $("#mbBack").onclick=closeSheet;
-        document.querySelectorAll("#sheet [data-mb-go]").forEach(b=>b.onclick=()=>{ closeSheet(); view.tab="waste"; save(); });
-        return;
+      /* Guard: manifests-back needs every manifest's signed copy recorded.
+       * P2-5: a vacuous sign-off ("signed copies received" with zero
+       * manifests on file) is refused. Record a shipment first. No "sign off
+       * anyway" escape hatch: each signed copy is recorded individually
+       * under the Waste tab. Checked before asking for the name. */
+      if(k==="manifestsBack"){
+        const manis=live(p.manifests);
+        if(!manis.length){
+          cb.checked=false;
+          openSheet('<h2 class="stencil">No waste shipments on file</h2>'+
+            '<div class="small muted" style="margin-bottom:14px">This sign-off asserts every signed manifest copy is back from the disposal site. Record at least one waste shipment under the Waste tab first; each signed copy is recorded on its own manifest.</div>'+
+            '<div class="row"><button class="btn grow" id="mbGoW">Record a shipment</button><button class="btn dark" id="mbBack0">Back</button></div>');
+          $("#mbBack0").onclick=closeSheet;
+          $("#mbGoW").onclick=()=>{ closeSheet(); view.tab="waste"; save(); };
+          return;
+        }
+        const pend=manis.filter(m=>!m.signedCopyReceived);
+        if(pend.length){
+          cb.checked=false;
+          openSheet('<h2 class="stencil">Signed copies still missing</h2>'+
+            '<div class="small muted" style="margin-bottom:12px">This sign-off can only be checked after <b>every</b> manifest has its own signed-copy date recorded. '+pend.length+' still pending:</div>'+
+            pend.map(m=>'<div class="kv"><div class="k mono">'+esc(m.manifestNo)+'</div><div><button class="btn ghost sm" data-mb-go="'+m.id+'">Record signed copy</button></div></div>').join("")+
+            '<div style="height:12px"></div><button class="btn dark block" id="mbBack">Back</button>');
+          $("#mbBack").onclick=closeSheet;
+          document.querySelectorAll("#sheet [data-mb-go]").forEach(b=>b.onclick=()=>{ closeSheet(); view.tab="waste"; save(); });
+          return;
+        }
       }
       /* Guard: clearance air needs a passing aggressive clearance sample.
        * Checked before asking for the name. */
       if(k==="airClear"&&!live(p.airSamples).some(s=>s.type==="clearance"&&s.pass)){
         cb.checked=false;
         if(await openConfirm("No passing clearance sample","Clearance sign-off needs an aggressive air sample at or below 0.01 f/cc. Add one now?","Add sample")){ view.tab="air"; save(); fAir(p); }
+        return;
+      }
+      /* P2-6: the two attestation items are honest about their evidence.
+       * wasteShipped needs at least one recorded manifest; neshapFiled needs
+       * the filed-notice flag from project setup. Their item subs label them
+       * self-attested: the typed name is the evidence on file. Checked before
+       * asking for the name. */
+      if(k==="wasteShipped"&&!live(p.manifests).length){
+        cb.checked=false;
+        openSheet('<h2 class="stencil">No waste shipments on file</h2>'+
+          '<div class="small muted" style="margin-bottom:14px">This sign-off asserts every load left the site under a manifest. Record at least one waste shipment under the Waste tab first.</div>'+
+          '<div class="row"><button class="btn grow" id="wsGoW">Record a shipment</button><button class="btn dark" id="wsBack">Back</button></div>');
+        $("#wsBack").onclick=closeSheet;
+        $("#wsGoW").onclick=()=>{ closeSheet(); view.tab="waste"; save(); };
+        return;
+      }
+      if(k==="neshapFiled"&&!p.neshapNotified){
+        cb.checked=false;
+        openSheet('<h2 class="stencil">NESHAP notice not flagged</h2>'+
+          '<div class="small muted" style="margin-bottom:14px">Before signing, flag the filed NESHAP notice in project setup. This sign-off is self-attested: your typed name is the evidence on file.</div>'+
+          '<div class="row"><button class="btn grow" id="nfGoP">Open project setup</button><button class="btn dark" id="nfBack">Back</button></div>');
+        $("#nfBack").onclick=closeSheet;
+        $("#nfGoP").onclick=()=>{ closeSheet(); fProject(p); };
         return;
       }
       /* Guard R-13: the regulated area cannot be released while any prior
@@ -1571,14 +1674,29 @@ function bindActions(main,p){
       toast("Signed off by "+who);
     } else {
       /* Revocation: never silent. The event and the history stay on the item. */
+      const releaseAtRisk=(k!=="areaReleased"&&cl.areaReleased);
       const who=await openSignoff("Revoke: "+label,
-        "Revoking removes this sign-off. The revocation is stamped into the record with your name and today's date.", cl[k+"By"]||"", "Revoke sign-off");
+        "Revoking removes this sign-off. The revocation is stamped into the record with your name and today's date."+
+        (releaseAtRisk?" The area release is currently signed: revoking this item also invalidates the area release.":""),
+        cl[k+"By"]||"", "Revoke sign-off");
       if(!who){ cb.checked=true; return; }
       cl[k]=false; cl[k+"By"]=""; cl[k+"Date"]="";
       cl[k+"History"]=cl[k+"History"]||[];
       cl[k+"History"].push({action:"revoked",by:who,date:todayISO(),at:Date.now()});
       logEvent(p,"revocation","warn","Clearance item '"+label+"' revoked by "+who+" on "+fmtD(todayISO()));
-      toast("Sign-off revoked. Logged.");
+      /* P1-1: a signed release cannot outlive a revoked prerequisite. Revoking
+       * any prerequisite while the area is released also revokes the release,
+       * with its own history entry and audit event, so the dossier never
+       * shows an open prerequisite next to a signed release. */
+      if(releaseAtRisk){
+        cl.areaReleased=false; cl.areaReleasedBy=""; cl.areaReleasedDate="";
+        cl.areaReleasedHistory=cl.areaReleasedHistory||[];
+        cl.areaReleasedHistory.push({action:"revoked",by:who,date:todayISO(),at:Date.now()});
+        logEvent(p,"revocation","warn","Area release auto-revoked: '"+label+"' was revoked by "+who+" on "+fmtD(todayISO())+". The regulated area is no longer released until every item is signed again.");
+        toast("Sign-off revoked. The area release was invalidated too.");
+      } else {
+        toast("Sign-off revoked. Logged.");
+      }
     }
     save();
   });

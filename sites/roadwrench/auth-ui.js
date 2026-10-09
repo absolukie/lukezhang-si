@@ -325,10 +325,11 @@ function bindCard(box){
   if (ph) ph.onclick = function(){ phoneState = { phone: "", sent: false }; cardMsg = ""; paintCard(); };
 }
 
-/* P2-7: never navigate into a dead page. Probe the backend first; when it is
- * unreachable the user stays in the working offline app with a friendly line
- * (fail open: local data is untouched). Any HTTP response counts as alive;
- * only a real network failure blocks the navigation. */
+/* P2-7 + red2 P2: never navigate into a dead page. Probe the backend first;
+ * only a healthy (2xx) health check may trigger the OAuth navigation. A
+ * degraded backend (DNS resolves but /v1/health 404s, e.g. after a bad
+ * deploy) keeps the user in the working offline app with a friendly line
+ * instead of ejecting them to a dead page (fail open: local data untouched). */
 function oauthStart(provider){
   var dk = getDeviceKey() || "";
   var url = WORKER + "/v1/auth/oauth/" + provider +
@@ -337,9 +338,9 @@ function oauthStart(provider){
   setMsg("Checking the sign-in server...");
   var signal = null;
   try { signal = AbortSignal.timeout(8000); } catch(e){}
-  fetch(WORKER + "/v1/health", { signal: signal, cache: "no-store" }).then(function(){
-    setMsg("");
-    location.href = url;
+  fetch(WORKER + "/v1/health", { signal: signal, cache: "no-store" }).then(function(res){
+    if (res && res.ok) { setMsg(""); location.href = url; return; }
+    setMsg("The sign-in server is not responding properly right now. Your jobs on this device are safe; try again in a bit.");
   }, function(){
     setMsg("Could not reach the sign-in server. Your jobs on this device are safe; try again when you have signal.");
   });

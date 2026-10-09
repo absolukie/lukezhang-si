@@ -216,6 +216,7 @@ svg.ic{width:20px;height:20px;flex:none}
 }
 /* ---- device sync (prototype) ---- */
 .micro{font-size:12px;color:var(--ink2,#8A8071)}
+.draftflag{font-size:11px;color:#755C13;background:#FFF3D6;border:1px solid #E8D9A8;border-radius:6px;padding:2px 8px;margin-top:4px;display:inline-block;font-weight:600}
 #syncBox{margin-top:12px}
 #syncBox h4{margin:0 0 8px}
 #syncBox .set-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0}
@@ -328,6 +329,16 @@ function currentArtPhotos(){
   const m=(location.hash||'').match(/^#\/art\/([^\/]+)/);
   return m?'/art/'+m[1]+'/photos':null;
 }
+function rollbackUnsaved(){
+  /* Drop every in-memory change that never reached the disk by re-reading the
+   * last persisted state. Called when the user explicitly discards a change
+   * from the storage-full sheet: without it the discarded mutation stays in
+   * memory and the record resurrects, generatable and emailable, until reload. */
+  let next={artworks:[]};
+  try{ const raw=localStorage.getItem(LSKEY); if(raw) next=JSON.parse(raw); }catch(e){}
+  if(!next.artworks) next.artworks=[];
+  DB=next;
+}
 function openStorageFullSheet(){
   openSheet(`<h3>Storage full</h3>
     <p style="color:var(--ink2)">This device is out of space, so your last change was <b>not saved</b>. Export a backup now, then free space by deleting photos you no longer need.</p>
@@ -338,7 +349,12 @@ function openStorageFullSheet(){
     </div>`);
   document.getElementById('st_export').onclick=()=>{ if(exportBackup()){ storageBlocked=false; failedBackup=null; closeSheet(); refreshStorageInfo(); } };
   document.getElementById('st_review').onclick=()=>{ storageBlocked=false; failedBackup=null; closeSheet(); nav(currentArtPhotos()||'/'); };
-  document.getElementById('st_dismiss').onclick=()=>{ storageBlocked=false; failedBackup=null; closeSheet(); };
+  document.getElementById('st_dismiss').onclick=()=>{
+    /* Explicit discard: the change was never persisted, so the in-memory
+     * mutation must go too, then re-render so the phantom cannot surface. */
+    rollbackUnsaved();
+    storageBlocked=false; failedBackup=null; closeSheet(); render();
+  };
 }
 
 /* ---------- device storage meter (Item 3) ---------- */
@@ -420,8 +436,9 @@ document.getElementById('scrim').addEventListener('click',()=>{ if(!storageBlock
 
 /* ---------- interruption-safe form drafts (artwork, custody, climate, loan) ----------
  * The pin editor already stashes on every keystroke; this extends the same safety
- * to the other forms. Drafts restore only into empty fields (never overwrites
- * saved values) and clear on Save or Cancel. */
+ * to the other forms. A stashed draft is newer unsaved intent, so it restores
+ * over prefilled values (marked with a "Draft restored" tag) and clears on
+ * Save or Cancel. */
 const FORM_DRAFTS='provenance.formdrafts.v1';
 function getDraft(key){ let d=null; try{ d=JSON.parse(localStorage.getItem(FORM_DRAFTS+':'+key)||'null'); }catch(e){} return d||{}; }
 function stashForm(key, ids){
@@ -433,7 +450,18 @@ function clearFormDraft(key){ try{ localStorage.removeItem(FORM_DRAFTS+':'+key);
 function wireFormDraft(key, ids){
   const d=getDraft(key);
   ids.forEach(id=>{ const el=document.getElementById(id);
-    if(el && el.value==='' && d[id]!=null && d[id]!=='') el.value=d[id]; });
+    if(el && d[id]!=null && d[id]!=='' && el.value!==d[id]){
+      /* A stashed draft is newer unsaved intent, so it wins over any
+       * prefilled value (history suggestions, or values from a saved
+       * record). The tag says so honestly: this text came from an
+       * interrupted session, not from saved data. */
+      el.value=d[id];
+      if(el.type!=='hidden'){
+        const tag=document.createElement('div');
+        tag.className='draftflag'; tag.textContent='Draft restored';
+        el.insertAdjacentElement('afterend', tag);
+      }
+    } });
   /* 'input' only (not 'change'): every wired field type fires input on user
    * edits, and a late change event must never re-stash after Cancel/Save
    * cleared the draft. */
@@ -1434,7 +1462,10 @@ async function buildLoanPacket(art){
   const findRows=art.photos.flatMap(p=>p.pins.map((pin,i)=>`<tr><td>${esc(p.caption)||'Photo'} · ${fmtDateShort(p.takenAt)}</td><td>${esc(pin.type)}</td><td>${SEV_LABEL[pin.severity]}</td><td>${esc(pin.note||'No note')}</td></tr>`)).join('');
   const custRows=art.custody.map(c=>`<tr><td>${fmtDate(c.at)}</td><td><b>${esc(c.action)}</b></td><td>${esc(c.handler||'Not recorded')}</td><td>${esc(c.location||'Not recorded')}</td><td>${esc(c.ack&&c.ack.name||'None')}</td></tr>`).join('');
   const climRows=art.climate.map(c=>`<tr><td>${fmtDate(c.at)}</td><td>${c.temp}°F</td><td>${c.humidity}% RH</td><td>${esc(c.location||'Not recorded')}</td></tr>`).join('');
-  const hash=await sha256(canonical({loanId,at,loan:L,evidence:await evidencePayload(art)}));
+  /* The hashed payload is deterministic: loan terms plus the evidence
+   * record. The packet ID and preparation date identify this document and
+   * are not hashed, so unchanged loan terms regenerate the same hash. */
+  const hash=await sha256(canonical({loan:L,evidence:await evidencePayload(art)}));
   const html=`<div class="dossier" id="loanDoc">
       <p class="rid">Exhibition Loan Packet · ${loanId}</p>
       <h1>${esc(art.title)||'Untitled'}</h1>
@@ -1461,7 +1492,7 @@ async function buildLoanPacket(art){
       <h3 class="serif">Climate history</h3>
       ${climRows?`<table><tr><th>When</th><th>Temp</th><th>RH</th><th>Location</th></tr>${climRows}</table>`:'<p>No climate readings logged.</p>'}
       <h3 class="serif">Integrity</h3>
-      <p style="font-size:13px;color:var(--ink2)">This SHA-256 hash covers the loan terms above, the full condition record (artwork details, condition pins, photo check-ins, SHA-256 digests of the photo image bytes computed from the data URLs, custody log, climate readings), and the examiner signature when captured. It is computed in the browser on this device when the packet is generated and records the evidence used for this document at that moment. The hash alone cannot prove that a printed document is unchanged. Loan and insurance details are declared by the lender; this packet is not an insurance binder or policy.${art.photos.some(p=>!p.dataUrl)?' Photos marked image bytes unavailable were captured on another device; their recorded values cover metadata only, not image bytes.':''}</p>
+      <p style="font-size:13px;color:var(--ink2)">This SHA-256 hash covers the loan terms above, the full condition record (artwork details, condition pins, photo check-ins, SHA-256 digests of the photo image bytes computed from the data URLs, custody log, climate readings), and the examiner signature when captured. It is computed in the browser on this device when the packet is generated and records the evidence used for this document at that moment. The packet ID and preparation date identify this copy and are not part of the hash, so unchanged loan terms always regenerate the same hash. The hash alone cannot prove that a printed document is unchanged. Loan and insurance details are declared by the lender; this packet is not an insurance binder or policy.${art.photos.some(p=>!p.dataUrl)?' Photos marked image bytes unavailable were captured on another device; their recorded values cover metadata only, not image bytes.':''}</p>
       <div class="hash">${hash}</div>
       <p class="disclaimer">This document is a working loan record, not an appraisal, a certificate of authenticity, or a legal determination of damage.</p>
     </div>
@@ -1549,7 +1580,11 @@ async function buildDossier(art){
   }).join('');
   const custRows=art.custody.map(c=>`<tr><td>${fmtDate(c.at)}</td><td><b>${esc(c.action)}</b></td><td>${esc(c.handler||'Not recorded')}</td><td>${esc(c.location||'Not recorded')}${c.note?'<br>'+esc(c.note):''}</td><td>${esc(c.ack?.name||'None')}</td></tr>`).join('');
   const climRows=art.climate.map(c=>`<tr><td>${fmtDate(c.at)}</td><td>${c.temp}°F</td><td>${c.humidity}% RH</td><td>${esc(c.location||'Not recorded')}</td></tr>`).join('');
-  const hash=await sha256(canonical({rid,at,evidence:await evidencePayload(art)}));
+  /* The hashed payload is the evidence record alone: the dossier ID and
+   * generation date identify this document and are not hashed, so
+   * regenerating an unchanged record always yields the same hash
+   * (PRD BR-3 worked example, R-13). */
+  const hash=await sha256(canonical(await evidencePayload(art)));
   return {html:`
     <div class="dossier" id="dossierDoc">
       <p class="rid">Condition Dossier · ${rid}</p>
@@ -1575,7 +1610,7 @@ async function buildDossier(art){
       <h3 class="serif">Climate history</h3>
       ${climRows?`<table><tr><th>When</th><th>Temp</th><th>RH</th><th>Location</th></tr>${climRows}</table>`:'<p>No climate readings logged.</p>'}
       <h3 class="serif">Integrity</h3>
-      <p style="font-size:13px;color:var(--ink2)">This SHA-256 hash covers artwork details, all condition pins, photo check-ins, SHA-256 digests of the photo image bytes (computed from the data URLs), the full custody log, all climate readings, and the examiner signature when captured. It is computed in the browser on this device when the dossier is generated and records the evidence used for this document at that moment. The hash alone cannot prove that a printed document is unchanged. It does not verify who took the photos or countersign custody.${art.photos.some(p=>!p.dataUrl)?' Photos marked image bytes unavailable were captured on another device; their recorded values cover metadata only, not image bytes.':''}</p>
+      <p style="font-size:13px;color:var(--ink2)">This SHA-256 hash covers artwork details, all condition pins, photo check-ins, SHA-256 digests of the photo image bytes (computed from the data URLs), the full custody log, all climate readings, and the examiner signature when captured. It is computed in the browser on this device when the dossier is generated and records the evidence used for this document at that moment. The dossier ID and generation date identify this copy and are not part of the hash, so an unchanged record always regenerates the same hash. The hash alone cannot prove that a printed document is unchanged. It does not verify who took the photos or countersign custody.${art.photos.some(p=>!p.dataUrl)?' Photos marked image bytes unavailable were captured on another device; their recorded values cover metadata only, not image bytes.':''}</p>
       <div class="hash">${hash}</div>
       <div class="signature-block">
         ${art.signature?`<img class="signature-image" src="${esc(art.signature.dataUrl)}" alt="Captured examiner signature">`:''}
@@ -1651,7 +1686,7 @@ ${custRows?`<table><tr><th>When</th><th>Action</th><th>Handler</th><th>Location<
 <h3>Climate history</h3>
 ${climRows?`<table><tr><th>When</th><th>Temp</th><th>RH</th><th>Location</th></tr>${climRows}</table>`:'<p>No climate readings logged.</p>'}
 <h3>Integrity</h3>
-<p class="integ">This SHA-256 hash covers artwork details, all condition pins, photo check-ins, SHA-256 digests of the photo image bytes (computed from the data URLs), the full custody log, all climate readings, and the examiner signature when captured. It is computed in the browser on this device when the dossier is generated and records the evidence used for this document at that moment. The hash alone cannot prove that a printed document is unchanged. It does not verify who took the photos or countersign custody.${art.photos.some(p=>!p.dataUrl)?' Photos marked image bytes unavailable were captured on another device; their recorded values cover metadata only, not image bytes.':''}</p>
+<p class="integ">This SHA-256 hash covers artwork details, all condition pins, photo check-ins, SHA-256 digests of the photo image bytes (computed from the data URLs), the full custody log, all climate readings, and the examiner signature when captured. It is computed in the browser on this device when the dossier is generated and records the evidence used for this document at that moment. The dossier ID and generation date identify this copy and are not part of the hash, so an unchanged record always regenerates the same hash. The hash alone cannot prove that a printed document is unchanged. It does not verify who took the photos or countersign custody.${art.photos.some(p=>!p.dataUrl)?' Photos marked image bytes unavailable were captured on another device; their recorded values cover metadata only, not image bytes.':''}</p>
 <div class="hash">${hash}</div>
 <div class="sig"><div>${art.signature?`<img src="${esc(art.signature.dataUrl)}" alt="Captured examiner signature">`:''}Examiner signature (captured on this device)<br>${art.signature?esc(art.signature.name):'Not signed'}</div><div>Date<br>${art.signature?fmtDate(art.signature.at):'Not signed'}</div></div>
 <p class="disclaimer">This document is a working condition report. It is not an appraisal, a certificate of authenticity, or a legal determination of damage.</p>
@@ -1791,7 +1826,9 @@ else if(loadWarning==='unavailable') toast('Device storage is unavailable. Recor
 /* ---- sync bridge (consumed by sync.js; local-first, sync never blocks UI) ---- */
 window.__provenance = {
   getS: () => DB,
-  saveLocal: () => { try{ localStorage.setItem(LSKEY, JSON.stringify(DB)); }catch(e){} },
+  /* Loud persist: on quota the blocking sheet opens, nothing fails silently.
+   * The old silent saveLocal() was removed; every write must be audible. */
+  save: () => save(),
   refresh: () => render()
 };
 

@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>epicycles | Luke Zhang</title>
+<style>
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; touch-action:manipulation;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;
+    background:linear-gradient(180deg,#f8f3ff 0%,#f6eefb 60%,#efe4fa 100%);
+    color:#3d3350; min-height:100dvh; display:flex; flex-direction:column; align-items:center;
+    padding:20px 12px 40px; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{width:100%; max-width:430px;}
+  .kicker{font-size:11px; letter-spacing:.32em; text-transform:uppercase; color:#9b8bb5; text-align:center; margin-bottom:6px;}
+  h1{font-size:26px; font-weight:700; text-align:center; letter-spacing:-.02em; margin-bottom:2px;}
+  .sub{text-align:center; font-size:14px; color:#9b8bb5; margin-bottom:12px; line-height:1.5; padding:0 8px;}
+  .stage{
+    position:relative; border-radius:20px; overflow:hidden; background:#fffdf7;
+    border:1px solid rgba(160,130,200,.35);
+    box-shadow:0 18px 44px rgba(140,110,190,.22), inset 0 2px 0 rgba(255,255,255,.8);
+  }
+  canvas{display:block; width:100%; height:auto;}
+  .nowdrawing{
+    margin-top:10px; text-align:center; font-size:13.5px; color:#7a6a92;
+    background:rgba(255,255,255,.65); border:1px solid rgba(160,130,200,.3);
+    border-radius:12px; padding:9px 12px;
+  }
+  .nowdrawing b{color:#3d3350;}
+  .ctl{margin-top:10px; background:rgba(255,255,255,.65); border:1px solid rgba(160,130,200,.3); border-radius:14px; padding:12px 14px;}
+  .ctl .lab{display:flex; justify-content:space-between; font-size:13px; font-weight:600; color:#5c4f73; margin-bottom:6px;}
+  .ctl .lab output{font-variant-numeric:tabular-nums; color:#8b5cf6;}
+  input[type=range]{width:100%; height:34px; font-size:16px; accent-color:#8b5cf6; cursor:pointer;}
+  .row{display:flex; gap:8px; margin-top:10px;}
+  .row button{
+    flex:1; border:none; border-radius:14px; padding:14px 6px; min-height:52px; cursor:pointer;
+    font-size:14px; font-weight:700; color:#fff; letter-spacing:.02em;
+  }
+  #playBtn{background:linear-gradient(180deg,#8b5cf6,#7350e0); box-shadow:0 4px 0 #5840a8;}
+  #replayBtn{background:linear-gradient(180deg,#f472b6,#db5a9e); box-shadow:0 4px 0 #b0447c;}
+  #circleBtn{background:linear-gradient(180deg,#94a3b8,#7488a3); box-shadow:0 4px 0 #5b6c84;}
+  .row button:active{transform:translateY(3px); box-shadow:0 1px 0 rgba(0,0,0,.2);}
+  .about{
+    margin-top:14px; background:rgba(255,255,255,.65); border-radius:16px; padding:12px 14px;
+    border:1px solid rgba(160,130,200,.35); font-size:13px; line-height:1.6; color:#6a5d84;
+  }
+  .about b{color:#3d3350;}
+  .foot{margin-top:22px; text-align:center; font-size:13px; color:#9b8bb5; line-height:1.7;}
+  .foot a{color:#3d3350; font-weight:600; text-decoration:none; border-bottom:1px solid #8b5cf6; padding:10px 4px; display:inline-block;}
+  input,textarea,select{font-size:16px;}
+  @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">Luke Zhang</div>
+  <h1>epicycles</h1>
+  <p class="sub">Sixty tiny circles conspiring to spell my name. Drag time yourself.</p>
+  <div class="stage" aria-label="Fourier epicycles drawing the name Luke.">
+    <canvas id="cv"></canvas>
+  </div>
+  <div class="nowdrawing" id="nowdrawing">warming up the circles&hellip;</div>
+  <div class="ctl">
+    <div class="lab"><span>time scrub</span><output id="timeOut">0%</output></div>
+    <input type="range" id="timeSlider" min="0" max="1000" value="0" step="1" aria-label="Scrub through time">
+    <div class="lab" style="margin-top:8px"><span>circles in the conspiracy</span><output id="circOut">48</output></div>
+    <input type="range" id="circSlider" min="4" max="72" value="48" step="1" aria-label="Number of epicycles">
+  </div>
+  <div class="row">
+    <button id="playBtn">pause</button>
+    <button id="replayBtn">replay</button>
+    <button id="circleBtn">circles: on</button>
+  </div>
+  <div class="about">
+    <b>The machinery:</b> the letters are sampled into 600 points, then a real discrete Fourier transform breaks the path into spinning circles. Each circle is one frequency, sized by its amplitude. Drop the count to 4 and watch my name melt into a blob, then crank it up and watch the math remember. Fewer circles, blurrier me.
+  </div>
+  <div class="foot"><a href="../">all the ways to say hi</a></div>
+</div>
+<script>
+(function(){
+  "use strict";
+  var reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var cv = document.getElementById("cv");
+  var ctx = cv.getContext("2d");
+  var nowdrawing = document.getElementById("nowdrawing");
+  var timeSlider = document.getElementById("timeSlider");
+  var timeOut = document.getElementById("timeOut");
+  var circSlider = document.getElementById("circSlider");
+  var circOut = document.getElementById("circOut");
+  var playBtn = document.getElementById("playBtn");
+  var replayBtn = document.getElementById("replayBtn");
+  var circleBtn = document.getElementById("circleBtn");
+
+  var W = 0, H = 0;
+  var trace = document.createElement("canvas");
+  var tctx = trace.getContext("2d");
+
+  /* The name, as pen strokes. Each stroke is a polyline with a letter tag. */
+  var STROKES = [
+    {tag:"L", pts:[[2,2],[2,30],[16,30]]},
+    {tag:"U", pts:[[22,2],[22,20],[23,25],[26,27.5],[30,27.5],[33,25],[34,20],[34,2]]},
+    {tag:"K", pts:[[40,2],[40,30]]},
+    {tag:"K", pts:[[54,2],[40,17],[54,30]]},
+    {tag:"E", pts:[[60,2],[60,30],[74,30]]},
+    {tag:"E", pts:[[60,2],[72,2]]},
+    {tag:"E", pts:[[60,16],[70,16]]}
+  ];
+  var BOX_W = 76, BOX_H = 32;
+
+  /* Sample every stroke proportionally to its length into N points. */
+  var N = 600;
+  var pts = [], tags = [];
+  (function(){
+    var lens = STROKES.map(function(st){
+      var L = 0;
+      for(var i=1;i<st.pts.length;i++) L += Math.hypot(st.pts[i][0]-st.pts[i-1][0], st.pts[i][1]-st.pts[i-1][1]);
+      return L;
+    });
+    var total = lens.reduce(function(a,b){return a+b;}, 0);
+    STROKES.forEach(function(st, si){
+      var count = Math.max(2, Math.round(N * lens[si]/total));
+      for(var k=0;k<count;k++){
+        var f = k/count * (st.pts.length-1);
+        var i0 = Math.floor(f), i1 = Math.min(st.pts.length-1, i0+1), fr = f-i0;
+        pts.push({
+          x: st.pts[i0][0] + (st.pts[i1][0]-st.pts[i0][0])*fr,
+          y: st.pts[i1][1] !== undefined ? st.pts[i0][1] + (st.pts[i1][1]-st.pts[i0][1])*fr : st.pts[i0][1]
+        });
+        tags.push(st.tag);
+      }
+    });
+    while(pts.length < N){ pts.push(pts[pts.length-1]); tags.push(tags[tags.length-1]); }
+    pts = pts.slice(0, N); tags = tags.slice(0, N);
+  })();
+
+  /* Real DFT: X[k] = sum_n p[n] e^{-i 2 pi k n / N}. Frequency f = k or k-N. */
+  var epis = [];
+  (function(){
+    var TWO_PI = Math.PI*2;
+    for(var k=0;k<N;k++){
+      var re=0, im=0;
+      for(var n=0;n<N;n++){
+        var a = TWO_PI*k*n/N;
+        re += pts[n].x*Math.cos(a) + pts[n].y*Math.sin(a);
+        im += -pts[n].x*Math.sin(a) + pts[n].y*Math.cos(a);
+      }
+      re/=N; im/=N;
+      var freq = k <= N/2 ? k : k-N;
+      epis.push({freq:freq, re:re, im:im, amp:Math.hypot(re,im)});
+    }
+    epis.sort(function(a,b){ return b.amp - a.amp; });
+  })();
+
+  function size(){
+    var DPR = Math.min(2, window.devicePixelRatio || 1);
+    W = cv.parentElement.clientWidth;
+    H = Math.round(W * 0.72);
+    cv.width = W*DPR; cv.height = H*DPR;
+    cv.style.height = H + "px";
+    trace.width = W*DPR; trace.height = H*DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    tctx.setTransform(DPR,0,0,DPR,0,0);
+    tctx.lineCap = "round"; tctx.lineJoin = "round";
+    redrawTrace();
+  }
+
+  var scale = 1, ox = 0, oy = 0;
+  function computeFit(){
+    scale = Math.min(W/(BOX_W+8), H/(BOX_H+14));
+    ox = (W - BOX_W*scale)/2;
+    oy = (H - BOX_H*scale)/2 + 4*scale;
+  }
+
+  var M = 48, showCircles = true, t = 0, playing = !reduced, prevPen = null;
+  var SPEED = 1/9; /* full loop in 9 seconds */
+
+  function penAt(tt){
+    var x=0, y=0;
+    for(var i=0;i<M;i++){
+      var e = epis[i];
+      var a = Math.PI*2*e.freq*tt;
+      x += e.re*Math.cos(a) - e.im*Math.sin(a);
+      y += e.re*Math.sin(a) + e.im*Math.cos(a);
+    }
+    return {x: ox + x*scale, y: oy + y*scale};
+  }
+
+  function redrawTrace(){
+    tctx.clearRect(0,0,W,H);
+    prevPen = null;
+    var steps = 400;
+    var px = null;
+    tctx.strokeStyle = "#3d3350";
+    tctx.lineWidth = 2.4;
+    for(var s=0;s<=steps;s++){
+      var p = penAt(s/steps);
+      if(px){ tctx.beginPath(); tctx.moveTo(px.x, px.y); tctx.lineTo(p.x, p.y); tctx.stroke(); }
+      px = p;
+    }
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    ctx.drawImage(trace, 0, 0, W, H);
+    var cx = W/2, cy = H/2; /* epicycle chain starts from path centroid, drawn from origin offset */
+    /* Chain: start at the DC component (average position). */
+    var dc = null;
+    for(var i=0;i<M;i++){ if(epis[i].freq===0){ dc = epis[i]; break; } }
+    var sx = dc ? ox + dc.re*scale : ox, sy = dc ? oy + dc.im*scale : oy;
+    var chain = [{x:sx, y:sy}];
+    /* Draw circles and spokes from the sorted epicycles (skip DC for the chain, add at end). */
+    if(showCircles){
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(139,92,246,0.35)";
+    }
+    var ordered = epis.slice(0, M).sort(function(a,b){ return b.amp - a.amp; });
+    var px = sx, py = sy;
+    for(var j=0;j<ordered.length;j++){
+      var e = ordered[j];
+      if(e.freq === 0) continue;
+      var r = e.amp*scale;
+      var a = Math.PI*2*e.freq*t;
+      var nx = px + (e.re*Math.cos(a) - e.im*Math.sin(a))*scale;
+      var ny = py + (e.re*Math.sin(a) + e.im*Math.cos(a))*scale;
+      if(showCircles && r > 0.6){
+        ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI*2); ctx.stroke();
+        ctx.strokeStyle = "rgba(139,92,246,0.55)";
+        ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(nx, ny); ctx.stroke();
+        ctx.strokeStyle = "rgba(139,92,246,0.35)";
+      }
+      px = nx; py = ny;
+    }
+    /* glowing pen tip */
+    var pen = penAt(t);
+    var glow = ctx.createRadialGradient(pen.x, pen.y, 0, pen.x, pen.y, 14);
+    glow.addColorStop(0, "rgba(244,114,182,0.9)");
+    glow.addColorStop(1, "rgba(244,114,182,0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(pen.x, pen.y, 14, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "#e0457b";
+    ctx.beginPath(); ctx.arc(pen.x, pen.y, 4.5, 0, Math.PI*2); ctx.fill();
+    /* current letter */
+    var idx = Math.min(N-1, Math.floor(t*N));
+    var tag = tags[idx] || "L";
+    nowdrawing.innerHTML = "now drawing: <b>" + tag + "</b> &middot; " + M + " circles in the conspiracy";
+  }
+
+  var last = performance.now();
+  function frame(now){
+    var dt = Math.min(0.05, (now-last)/1000);
+    last = now;
+    if(playing){
+      t += dt*SPEED;
+      if(t >= 1) t -= 1;
+      var sv = Math.round(t*1000);
+      if(document.activeElement !== timeSlider){ timeSlider.value = sv; }
+      timeOut.textContent = Math.round(t*100) + "%";
+    }
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  timeSlider.addEventListener("input", function(){
+    t = timeSlider.value/1000;
+    timeOut.textContent = Math.round(t*100) + "%";
+    if(playing){ playing = false; playBtn.textContent = "play"; }
+  });
+  circSlider.addEventListener("input", function(){
+    M = parseInt(circSlider.value, 10);
+    circOut.textContent = M;
+    redrawTrace();
+  });
+  playBtn.addEventListener("click", function(){
+    playing = !playing;
+    playBtn.textContent = playing ? "pause" : "play";
+  });
+  replayBtn.addEventListener("click", function(){
+    t = 0; prevPen = null;
+    timeSlider.value = 0; timeOut.textContent = "0%";
+    redrawTrace();
+  });
+  circleBtn.addEventListener("click", function(){
+    showCircles = !showCircles;
+    circleBtn.textContent = showCircles ? "circles: on" : "circles: off";
+  });
+
+  if(reduced) playBtn.textContent = "play";
+  computeFit();
+  size();
+  window.addEventListener("resize", function(){ computeFit(); size(); });
+  circOut.textContent = M;
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

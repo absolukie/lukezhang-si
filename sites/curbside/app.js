@@ -46,8 +46,9 @@ const I = {
   plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>'
 };
 function brandMark(el){ el.innerHTML = I.truck; }
-/* self-sizing icons: 1em of surrounding text; explicit CSS sizes still override */
-Object.keys(I).forEach(k => { I[k] = I[k].replace('<svg ', '<svg width="1em" height="1em" '); });
+/* self-sizing icons: 1em of surrounding text; explicit CSS sizes still override.
+   All decorative: buttons already carry text labels, so hide from screen readers. */
+Object.keys(I).forEach(k => { I[k] = I[k].replace('<svg ', '<svg aria-hidden="true" width="1em" height="1em" '); });
 
 /* ---------- permit data (researched 2026-10-07; fees typical, verify with agency) ---------- */
 /* applies: full = onboard cooking, limited = reheat/assembly, prepack = sealed only */
@@ -353,10 +354,22 @@ function renderAlerts(){
     if(d!==null&&d<=60) items.push({level:d<=14?'crit':'warn', text:'Commissary agreement renews in '+d+' days', tab:'permits'});
   }
   items.sort((a,b)=>ALERT_RANK[a.level]-ALERT_RANK[b.level]);
-  box.innerHTML=items.map((a,i)=>
+  /* Fresh installs used to show a wall of "Missing: ..." cards that buried the
+     Today card below the fold. Needed permits now collapse into one honest
+     summary card: the count is exact and names are shown, never silently
+     capped. Expired/crit/warn alerts still render one per permit. */
+  const needed=items.filter(a=>a.level==='needed'), others=items.filter(a=>a.level!=='needed');
+  let final=items;
+  if(needed.length>=3){
+    const names=needed.slice(0,2).map(a=>a.text.replace(/^Missing: /,''));
+    final=others.concat([{level:'needed',
+      text:needed.length+' permits still need setup: '+names.join(', ')+(needed.length>2?' +'+(needed.length-2)+' more':''),
+      tab:'permits'}]);
+  }
+  box.innerHTML=final.map((a,i)=>
     '<div class="alert '+(a.level==='needed'?'warn':a.level)+'">'+I.warn+'<span>'+esc(a.text)+'</span><button data-a="'+i+'">Fix</button></div>'
   ).join('');
-  box.querySelectorAll('button').forEach(b=>{ b.onclick=()=>switchTab(items[+b.dataset.a].tab); });
+  box.querySelectorAll('button').forEach(b=>{ b.onclick=()=>switchTab(final[+b.dataset.a].tab); });
 }
 function complianceScore(){
   const ps=allPermits(); if(!ps.length) return {good:0,total:0};
@@ -889,7 +902,9 @@ function revenueSheet(presetDate){
     '<button class="btn primary big" id="rvSave">Log it</button><button class="btn ghost" id="rvCancel">Cancel</button>', 'Log a selling shift');
   $('#rvCancel').onclick=closeSheet;
   $('#rvSave').onclick=()=>{
-    const amt=+$('#rvAmt').value; if(!amt||!$('#rvDate').value) return;
+    /* Negative amounts are never valid revenue: clamp to zero instead of
+       poisoning the week/month totals. */
+    const amt=Math.max(0,+$('#rvAmt').value); if(!amt||!$('#rvDate').value) return;
     S.revenue.push({id:uid(), date:$('#rvDate').value, amount:amt, spot:$('#rvSpot').value.trim()});
     save(); closeSheet(); renderRevenue(); renderHome();
   };
@@ -917,6 +932,104 @@ function csvSheet(){
   };
 }
 
+/* ---------- phone line (text/voice tier config) ---------- */
+/* The truck's own local number: customers text it for the menu, location,
+   hours, and pickup orders. These fields are what the auto-replies say.
+   GET/POST https://sync-proto.lukezhang.si/v1/phone/config with the same
+   device-key auth sync.js uses. 404/empty numbers = no line provisioned yet. */
+const PHONE_API='https://sync-proto.lukezhang.si';
+const PHONE_ICON='<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.9.6 2.9.7a2 2 0 0 1 1.7 2z"/></svg>';
+function phoneAuthKey(){
+  try{ return localStorage.getItem('curbside.session_token')||localStorage.getItem('curbside.device_key'); }
+  catch(e){ return null; }
+}
+async function phoneConfigGet(){
+  const k=phoneAuthKey();
+  if(!k) throw new Error('no device key yet');
+  const r=await fetch(PHONE_API+'/v1/phone/config',{headers:{'authorization':'Bearer '+k}});
+  if(r.status===404) return {numbers:[]};
+  if(!r.ok) throw new Error('http '+r.status);
+  return r.json();
+}
+function phoneFirstNumber(d){ const ns=(d&&d.numbers)||[]; return ns.length?ns[0]:null; }
+/* Read config defensively: the server nests fields under config, but a bare
+   object with the same keys is accepted too. */
+function phoneCfg(n){
+  if(!n) return {};
+  const c=n.config;
+  if(c&&typeof c==='object'&&!Array.isArray(c)) return c;
+  const o={};
+  ['truck_name','menu','hours','location','owner_mobile'].forEach(k=>{ if(n[k]!=null) o[k]=n[k]; });
+  return o;
+}
+function phoneDigits(n){ return (n&&(n.number||n.phone||n.e164))||''; }
+function phoneEmptyHTML(){
+  return '<h4>'+PHONE_ICON+' Phone line</h4>'+
+    '<p class="phone-empty"><strong>No phone line yet.</strong> It arrives with your text/voice tier: '+
+    'your own local number that answers customers by text or voice while you work the window.</p>'+
+    '<p class="phone-hint">When the tier is on, this is where you set what the text auto-replies say.</p>';
+}
+function phoneFormHTML(n){
+  const c=phoneCfg(n), num=phoneDigits(n);
+  return '<h4>'+PHONE_ICON+' Phone line</h4>'+
+    (num?'<div class="phone-num">'+esc(num)+'</div>':'')+
+    '<p class="phone-hint">These answers power the text auto-replies. Customers text your number and get these back, even mid-rush.</p>'+
+    '<label>Truck name<input type="text" id="phName" maxlength="60" value="'+esc(c.truck_name||'')+'" placeholder="7 Sisters Gourmet"></label>'+
+    '<p class="phone-hint">Used in greetings and every reply, so customers know it is you.</p>'+
+    '<label>Menu text<textarea id="phMenu" rows="3" maxlength="500" placeholder="Tacos $5, burritos $8, elote $4">'+esc(c.menu||'')+'</textarea></label>'+
+    '<p class="phone-hint">What customers get when they text <span class="phone-kbd">MENU</span>.</p>'+
+    '<label>Location text<input type="text" id="phLoc" maxlength="120" value="'+esc(c.location||'')+'" placeholder="Pioneer Park, 5th and Main, till 2pm"></label>'+
+    '<p class="phone-hint">What customers get when they text <span class="phone-kbd">WHERE</span>. Keep it current and regulars will find you.</p>'+
+    '<label>Hours<input type="text" id="phHours" maxlength="80" value="'+esc(c.hours||'')+'" placeholder="Tue to Sun, 11am to 8pm"></label>'+
+    '<p class="phone-hint">What customers get when they text <span class="phone-kbd">HOURS</span>.</p>'+
+    '<label>Owner mobile<input type="tel" id="phMobile" inputmode="tel" maxlength="20" value="'+esc(c.owner_mobile||'')+'" placeholder="(555) 123-4567"></label>'+
+    '<p class="phone-hint">Where pickup orders (<span class="phone-kbd">ORDER</span>) and call alerts go. Customers never see this number.</p>'+
+    '<div class="phone-err" id="phMsg" role="status" hidden></div>'+
+    '<button class="btn primary big" id="phSave">Save phone line</button>'+
+    '<p class="phone-hint">Test it: text <span class="phone-kbd">MENU</span> to '+(num?esc(num)+' ':'your number ')+'and see what your customers get.</p>';
+}
+function phoneBindForm(){
+  $('#phSave').onclick=async ()=>{
+    const btn=$('#phSave'), msg=$('#phMsg');
+    btn.disabled=true; msg.hidden=true;
+    const config={
+      truck_name:$('#phName').value.trim(),
+      menu:$('#phMenu').value.trim(),
+      hours:$('#phHours').value.trim(),
+      location:$('#phLoc').value.trim(),
+      owner_mobile:$('#phMobile').value.trim()
+    };
+    try{
+      const k=phoneAuthKey();
+      if(!k) throw new Error('no device key yet');
+      const r=await fetch(PHONE_API+'/v1/phone/config',{method:'POST',
+        headers:{'authorization':'Bearer '+k,'content-type':'application/json'},
+        body:JSON.stringify({config})});
+      if(r.status===404) throw new Error('no number on this device');
+      if(!r.ok) throw new Error('http '+r.status);
+      msg.className='phone-ok'; msg.textContent='Saved. Your text auto-replies use these answers now.'; msg.hidden=false;
+    }catch(e){
+      /* No raw backend strings reach the owner. */
+      msg.className='phone-err'; msg.textContent='Something went wrong. Please try again.'; msg.hidden=false;
+    }
+    btn.disabled=false;
+  };
+}
+function renderPhoneCard(){
+  const host=$('#phoneCard'); if(!host) return;
+  host.innerHTML='<h4>'+PHONE_ICON+' Phone line</h4><p class="muted" style="font-size:13px">Loading your phone line...</p>';
+  phoneConfigGet().then(d=>{
+    const n=phoneFirstNumber(d);
+    if(!n){ host.innerHTML=phoneEmptyHTML(); return; }
+    host.innerHTML=phoneFormHTML(n);
+    phoneBindForm();
+  }).catch(()=>{
+    host.innerHTML='<h4>'+PHONE_ICON+' Phone line</h4>'+
+      '<p class="muted" style="font-size:13px">Could not reach the phone server. '+
+      'Check your connection and reopen Settings. Nothing was changed.</p>';
+  });
+}
+
 /* ---------- settings ---------- */
 $('#settingsBtn').onclick=()=>{
   openSheet('<h3>Settings</h3>'+
@@ -924,12 +1037,14 @@ $('#settingsBtn').onclick=()=>{
     '<div class="set-row"><span>City</span><span class="muted">'+esc(CITIES[S.city]?CITIES[S.city].name:'Not set')+'</span></div>'+
     '<div class="set-row"><span>Operation</span><span class="muted">'+esc(TRUCK_TYPES[S.truckType]?TRUCK_TYPES[S.truckType].name:'Not set')+'</span></div>'+
     '<button class="btn primary big" id="stSave">Save</button>'+
+    '<div class="card" style="margin-top:12px" id="phoneCard"></div>'+
     '<div class="card" style="margin-top:12px"><h4>Backup</h4>'+
     '<p class="muted" style="font-size:13px">Download everything as a JSON file, or restore from one. Your backup never leaves your device unless you move the file.</p>'+
     '<div class="backup-row"><button class="btn small" id="bkExport">Export backup</button>'+
     '<label class="btn small" style="margin:0">Import backup<input type="file" id="bkImport" accept="application/json,.json" style="display:none"></label></div></div>'+
     '<div class="card" style="margin-top:12px"><h4>Revenue export</h4>'+
     '<button class="btn small" id="stCsv">Export revenue CSV</button></div>'+
+    '<div class="set-row"><span>Privacy</span><a class="link-btn" href="privacy.html" target="_blank" rel="noopener">Read the privacy policy</a></div>'+
     '<button class="danger" id="stReset">Erase all data and start over</button>'+
     '<button class="btn ghost" id="stCancel">Close</button>', 'Settings');
   $('#stCancel').onclick=closeSheet;
@@ -937,6 +1052,7 @@ $('#settingsBtn').onclick=()=>{
   $('#bkExport').onclick=exportBackup;
   $('#bkImport').onchange=e=>{ if(e.target.files[0]) importBackup(e.target.files[0]); };
   $('#stCsv').onclick=()=>{ closeSheet(); setTimeout(csvSheet,50); };
+  renderPhoneCard();
   try{ if(window.__curbsideSyncUI) window.__curbsideSyncUI(); }catch(e){}
   $('#stReset').onclick=()=>{ if(confirm('Erase everything and restart setup?')){ ['curbside.v1','curbside.device_key','curbside.syncmeta.v1','curbside.lastsync.v1','curbside.syncbase.v1','curbside.oversized.v1'].forEach(k=>{ try{localStorage.removeItem(k);}catch(e){} }); location.reload(); } };
 };
@@ -948,6 +1064,9 @@ function exportBackup(){
   document.body.appendChild(a); a.click();
   setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000);
 }
+/* Exposed for the billing paywall: the owner's data stays exportable even
+   when the trial has ended and the overlay blocks the app. */
+window.__exportBackup=exportBackup;
 function importBackup(file){
   const r=new FileReader();
   r.onload=()=>{
@@ -973,6 +1092,18 @@ function importBackup(file){
 /* ---------- init ---------- */
 load();
 if(S.onboarded && S.city){ enterMain(); } else { renderOnboard(); }
+/* Keep the shared billing trial banner (position:fixed;top:0) from covering the
+   topbar: measure the banner and expose its height as --bill-banner-h, which the
+   app-local :has() CSS rules use to offset the topbar. */
+function billBannerOffset(){
+  const b=document.querySelector('.bill-banner');
+  document.documentElement.style.setProperty('--bill-banner-h',(b?b.offsetHeight:0)+'px');
+}
+try{
+  new MutationObserver(billBannerOffset).observe(document.body,{childList:true});
+  window.addEventListener('resize',billBannerOffset);
+  billBannerOffset();
+}catch(e){ /* observer unavailable: banner overlap is cosmetic only */ }
 /* Recompute date-dependent UI when the app returns to the foreground and on
  * date rollover, not only after a sync pull. */
 let lastSeenDay=todayKey();

@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Zen Sandbox - rake it out</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;
+    background:#e8dcc4;color:#4a3b28;overflow:hidden;
+    display:flex;flex-direction:column;height:100dvh;
+    user-select:none;-webkit-user-select:none;
+  }
+  button{touch-action:manipulation}
+  header{padding:12px 16px 6px;text-align:center;z-index:5}
+  header h1{font-size:20px;font-weight:800;letter-spacing:-.02em}
+  header p{font-size:13px;color:#8a7554;margin-top:2px}
+  #tools{display:flex;gap:8px;justify-content:center;padding:4px 12px 8px;z-index:5}
+  .tool{
+    border:2px solid #c9b88f;background:#f4ecda;color:#4a3b28;border-radius:14px;
+    font-size:14px;font-weight:700;padding:10px 16px;min-height:48px;cursor:pointer;
+    display:flex;align-items:center;gap:8px;font-family:inherit;
+  }
+  .tool svg{width:18px;height:18px}
+  .tool.active{background:#4a3b28;color:#f4ecda;border-color:#4a3b28}
+  #pit{flex:1;position:relative;margin:0 12px 8px;border-radius:18px;overflow:hidden;
+    box-shadow:inset 0 4px 18px rgba(74,59,40,.25),0 2px 0 rgba(255,255,255,.5);
+    border:6px solid #6b5136;touch-action:none;background:#d9c9a3}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  #hint{
+    position:absolute;left:50%;top:14px;transform:translateX(-50%);
+    background:rgba(74,59,40,.82);color:#f4ecda;font-size:13px;font-weight:600;
+    padding:9px 16px;border-radius:999px;pointer-events:none;z-index:4;
+    transition:opacity .6s;max-width:86%;text-align:center;
+  }
+  footer{padding:2px 16px calc(10px + env(safe-area-inset-bottom));text-align:center;z-index:5}
+  footer a{color:#8a7554;font-size:13px;font-weight:700;text-decoration:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>Zen Sandbox</h1>
+  <p>Drag to rake. Move the rocks. Your garden saves itself.</p>
+</header>
+<div id="tools" role="toolbar" aria-label="sandbox tools">
+  <button class="tool active" id="toolRake" aria-pressed="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 20L14 10"/><path d="M13 4l7 7M10 6l2-2m4 4l2-2m-9 7l2-2m4 4l2-2"/></svg>
+    Rake
+  </button>
+  <button class="tool" id="toolSmooth" aria-pressed="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17c2-3 4-3 6 0s4 3 6 0 4-3 6 0"/><path d="M12 3v6"/></svg>
+    Smooth
+  </button>
+  <button class="tool" id="toolReset">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+    Reset
+  </button>
+</div>
+<div id="pit">
+  <canvas id="c"></canvas>
+  <div id="hint">rake in slow lines, the sand remembers</div>
+</div>
+<footer><a href="https://lukezhang.si">lukezhang.si</a></footer>
+<script>
+(function(){
+  "use strict";
+  var pit=document.getElementById("pit"), cv=document.getElementById("c"), ctx=cv.getContext("2d");
+  var hint=document.getElementById("hint");
+  var toolRake=document.getElementById("toolRake"), toolSmooth=document.getElementById("toolSmooth"),
+      toolReset=document.getElementById("toolReset");
+  var N=72; // heightfield resolution
+  var h=new Float32Array(N*N), hn=new Float32Array(N*N);
+  var W=0,H=0,DPR=1, cell=0;
+  var mode="rake";
+  var rocks=[];
+  var img=null;
+
+  function idx(x,y){ return y*N+x; }
+
+  function resize(){
+    DPR=Math.min(window.devicePixelRatio||1,2);
+    W=pit.clientWidth; H=pit.clientHeight;
+    cv.width=W*DPR; cv.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0);
+    cell=Math.max(W,H)/N;
+    img=ctx.createImageData(N,N);
+  }
+  window.addEventListener("resize",resize);
+
+  function defaultRocks(){
+    rocks=[
+      {x:W*0.28,y:H*0.32,r:26,a:0.4,drag:false},
+      {x:W*0.70,y:H*0.60,r:18,a:-0.3,drag:false},
+      {x:W*0.52,y:H*0.24,r:13,a:0.9,drag:false}
+    ];
+  }
+  function rockAt(px,py){
+    for(var i=rocks.length-1;i>=0;i--){
+      var r=rocks[i], dx=px-r.x, dy=py-r.y;
+      if(dx*dx+dy*dy < (r.r+8)*(r.r+8)) return i;
+    }
+    return -1;
+  }
+
+  // --- persistence ---
+  var KEY="zen_sandbox_v1", saveT=null;
+  function save(){
+    clearTimeout(saveT);
+    saveT=setTimeout(function(){
+      try{
+        var flat=Array.prototype.slice.call(h);
+        localStorage.setItem(KEY, JSON.stringify({h:flat, rocks:rocks.map(function(r){return {x:r.x/W,y:r.y/H,r:r.r,a:r.a};})}));
+      }catch(e){}
+    },800);
+  }
+  function load(){
+    var raw=null;
+    try{ raw=localStorage.getItem(KEY); }catch(e){}
+    if(!raw) return false;
+    try{
+      var d=JSON.parse(raw);
+      if(!d.h||d.h.length!==N*N) return false;
+      for(var i=0;i<N*N;i++) h[i]=d.h[i];
+      rocks=d.rocks.map(function(r){ return {x:r.x*W,y:r.y*H,r:r.r,a:r.a,drag:false}; });
+      return true;
+    }catch(e){ return false; }
+  }
+
+  // --- tools ---
+  function setMode(m){
+    mode=m;
+    toolRake.classList.toggle("active",m==="rake");
+    toolSmooth.classList.toggle("active",m==="smooth");
+    toolRake.setAttribute("aria-pressed",m==="rake");
+    toolSmooth.setAttribute("aria-pressed",m==="smooth");
+  }
+  toolRake.addEventListener("click",function(){ setMode("rake"); });
+  toolSmooth.addEventListener("click",function(){ setMode("smooth"); });
+  toolReset.addEventListener("click",function(){
+    h.fill(0); defaultRocks(); save(); render();
+  });
+
+  // --- raking ---
+  var drawing=false, lastPX=0, lastPY=0, dragRock=-1;
+  function toField(px,py){ return {fx:px/cell, fy:py/cell}; }
+  function point(e){ var r=cv.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; }
+
+  pit.addEventListener("pointerdown",function(e){
+    var p=point(e), ri=rockAt(p.x,p.y);
+    pit.setPointerCapture(e.pointerId);
+    if(ri>=0){ dragRock=ri; rocks[ri].drag=true; drawing=false; }
+    else { drawing=true; lastPX=p.x; lastPY=p.y; stroke(p.x,p.y,p.x,p.y); }
+    hideHint();
+  });
+  pit.addEventListener("pointermove",function(e){
+    var p=point(e);
+    if(dragRock>=0){
+      var r=rocks[dragRock];
+      r.x=Math.max(r.r,Math.min(W-r.r,p.x));
+      r.y=Math.max(r.r,Math.min(H-r.r,p.y));
+      moundUnderRock(r);
+      save(); return;
+    }
+    if(!drawing) return;
+    stroke(lastPX,lastPY,p.x,p.y);
+    lastPX=p.x; lastPY=p.y;
+  });
+  function endStroke(){ drawing=false; if(dragRock>=0){ rocks[dragRock].drag=false; dragRock=-1; } save(); }
+  pit.addEventListener("pointerup",endStroke);
+  pit.addEventListener("pointercancel",endStroke);
+
+  function hideHint(){ hint.style.opacity="0"; }
+
+  // carve rake grooves perpendicular to the stroke direction
+  function stroke(x0,y0,x1,y1){
+    var dx=x1-x0, dy=y1-y0;
+    var len=Math.sqrt(dx*dx+dy*dy);
+    if(len<1){ dx=1; dy=0; len=1; }
+    var nx=-dy/len, ny=dx/len; // perpendicular
+    var f0=toField(x0,y0), f1=toField(x1,y1);
+    var steps=Math.max(1,Math.ceil(len/cell));
+    var width=3.2, freq=1.9, amp=(mode==="smooth")?-0.5:1.0;
+    for(var s=0;s<=steps;s++){
+      var bx=f0.fx+(f1.fx-f0.fx)*s/steps, by=f0.fy+(f1.fy-f0.fy)*s/steps;
+      var xMin=Math.max(0,Math.floor(bx-width)), xMax=Math.min(N-1,Math.ceil(bx+width));
+      var yMin=Math.max(0,Math.floor(by-width)), yMax=Math.min(N-1,Math.ceil(by+width));
+      for(var gy=yMin;gy<=yMax;gy++){
+        for(var gx=xMin;gx<=xMax;gx++){
+          var ox=gx-bx, oy=gy-by;
+          var along=ox*dx/len+oy*dy/len;
+          var perp=ox*nx+oy*ny;
+          var dist=Math.sqrt(along*along+perp*perp);
+          if(dist>width) continue;
+          var fall=(1-dist/width); fall=fall*fall;
+          var i=idx(gx,gy);
+          if(mode==="rake"){
+            var groove=Math.sin(perp*freq)*amp*fall;
+            h[i]=h[i]*0.55 + groove*0.9;
+          }else{
+            h[i]*=(1-0.35*fall);
+          }
+        }
+      }
+    }
+  }
+
+  // raise a little mound under each rock so it sits in the sand
+  function moundUnderRock(r){
+    var f=toField(r.x,r.y), rad=r.r/cell+1;
+    var xMin=Math.max(0,Math.floor(f.fx-rad)), xMax=Math.min(N-1,Math.ceil(f.fx+rad));
+    var yMin=Math.max(0,Math.floor(f.fy-rad)), yMax=Math.min(N-1,Math.ceil(f.fy+rad));
+    for(var gy=yMin;gy<=yMax;gy++) for(var gx=xMin;gx<=xMax;gx++){
+      var d=Math.sqrt((gx-f.fx)*(gx-f.fx)+(gy-f.fy)*(gy-f.fy));
+      if(d<rad){ var i=idx(gx,gy); h[i]=Math.max(h[i], (1-d/rad)*0.8); }
+    }
+  }
+
+  // gentle diffusion so strokes settle like real sand
+  function relax(){
+    for(var y=1;y<N-1;y++) for(var x=1;x<N-1;x++){
+      var i=idx(x,y);
+      var lap=(h[i-1]+h[i+1]+h[i-N]+h[i+N])*0.25 - h[i];
+      hn[i]=h[i]+lap*0.05;
+    }
+    var tmp=h; h=hn; hn=tmp;
+  }
+
+  // --- render: shade the heightfield like raked sand ---
+  var SAND=[217,201,163], DARK=[168,146,104], LIGHT=[238,226,196];
+  function render(){
+    var d=img.data;
+    for(var y=0;y<N;y++){
+      for(var x=0;x<N;x++){
+        var i=idx(x,y);
+        var xm=h[idx(Math.max(0,x-1),y)], xp=h[idx(Math.min(N-1,x+1),y)];
+        var ym=h[idx(x,Math.max(0,y-1))], yp=h[idx(x,Math.min(N-1,y+1))];
+        var nx=(xm-xp)*1.6, ny=(ym-yp)*1.6, nz=1;
+        var il=1/Math.sqrt(nx*nx+ny*ny+nz*nz);
+        // light from top-left
+        var shade=(-nx*0.55 + -ny*0.55 + nz*0.72)*il;
+        var hv=Math.max(-1,Math.min(1,h[i]));
+        var o=(y*N+x)*4;
+        var base=hv>0?LIGHT:SAND, other=hv>0?SAND:DARK;
+        var mix=Math.abs(hv);
+        var r0=base[0]+(other[0]-base[0])*mix,
+            g0=base[1]+(other[1]-base[1])*mix,
+            b0=base[2]+(other[2]-base[2])*mix;
+        var s=0.62+shade*0.62;
+        d[o]=r0*s; d[o+1]=g0*s; d[o+2]=b0*s; d[o+3]=255;
+      }
+    }
+    ctx.imageSmoothingEnabled=true;
+    drawSand();
+    // rocks
+    for(var k=0;k<rocks.length;k++){
+      var r=rocks[k];
+      ctx.save();
+      ctx.shadowColor="rgba(74,59,40,.45)"; ctx.shadowBlur=10; ctx.shadowOffsetY=4;
+      ctx.translate(r.x,r.y); ctx.rotate(r.a);
+      var rg=ctx.createLinearGradient(-r.r, -r.r, r.r, r.r);
+      rg.addColorStop(0,"#9a938a"); rg.addColorStop(0.5,"#7d766d"); rg.addColorStop(1,"#5d5850");
+      ctx.fillStyle=rg;
+      ctx.beginPath(); ctx.ellipse(0,0,r.r,r.r*0.78,0,0,6.29); ctx.fill();
+      ctx.shadowColor="transparent";
+      ctx.strokeStyle="rgba(255,255,255,.25)"; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.ellipse(-r.r*0.25,-r.r*0.25,r.r*0.5,r.r*0.34,0,3.4,5.6); ctx.stroke();
+      ctx.restore();
+    }
+  }
+  var sandCv=document.createElement("canvas");
+  sandCv.width=N; sandCv.height=N;
+  var sandCtx=sandCv.getContext("2d");
+  function drawSand(){
+    sandCtx.putImageData(img,0,0);
+    ctx.imageSmoothingEnabled=true;
+    ctx.drawImage(sandCv,0,0,N,N,0,0,W,H);
+  }
+
+  resize();
+  if(!load()){ defaultRocks(); rocks.forEach(moundUnderRock); }
+  else { rocks.forEach(moundUnderRock); }
+  var frames=0;
+  (function loop(){
+    relax();
+    if(frames++%2===0) render();
+    requestAnimationFrame(loop);
+  })();
+  setTimeout(hideHint,6000);
+})();
+</script>
+</body>
+</html>

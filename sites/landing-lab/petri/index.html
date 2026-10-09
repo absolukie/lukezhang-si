@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>petri | Luke Zhang</title>
+<style>
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; touch-action:manipulation;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;
+    background:linear-gradient(180deg,#f2fbf0 0%,#ecf7ef 60%,#e3f0e8 100%);
+    color:#33402f; min-height:100dvh; display:flex; flex-direction:column; align-items:center;
+    padding:20px 12px 40px; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{width:100%; max-width:430px;}
+  .kicker{font-size:11px; letter-spacing:.32em; text-transform:uppercase; color:#8aa184; text-align:center; margin-bottom:6px;}
+  h1{font-size:26px; font-weight:700; text-align:center; letter-spacing:-.02em; margin-bottom:2px;}
+  .sub{text-align:center; font-size:14px; color:#8aa184; margin-bottom:12px; line-height:1.5; padding:0 8px;}
+  .dish{
+    position:relative; border-radius:20px; overflow:hidden;
+    border:1px solid rgba(120,160,120,.4);
+    box-shadow:0 18px 44px rgba(110,150,110,.25), inset 0 2px 0 rgba(255,255,255,.8);
+    touch-action:none; user-select:none; -webkit-user-select:none; cursor:crosshair;
+  }
+  canvas{display:block; width:100%; height:auto; touch-action:none;}
+  .stats{display:flex; gap:8px; margin-top:10px;}
+  .stat{
+    flex:1; text-align:center; background:rgba(255,255,255,.65); border:1px solid rgba(120,160,120,.35);
+    border-radius:12px; padding:9px 6px; font-size:12px; color:#8aa184;
+  }
+  .stat b{display:block; font-size:17px; color:#33402f; font-variant-numeric:tabular-nums;}
+  .toast{
+    margin-top:10px; min-height:52px; text-align:center; font-size:13.5px; line-height:1.5; color:#5c6b57;
+    background:rgba(255,255,255,.65); border:1px solid rgba(120,160,120,.35);
+    border-radius:12px; padding:10px 14px;
+  }
+  .toast b{color:#33402f;}
+  .stamps{margin-top:10px;}
+  .stamps h2{font-size:11px; letter-spacing:.24em; text-transform:uppercase; color:#8aa184; margin-bottom:8px;}
+  .stampgrid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;}
+  .stamp{
+    border:2px solid transparent; background:#fff; border-radius:12px; padding:10px 6px; min-height:60px;
+    cursor:pointer; font-size:12px; font-weight:700; color:#33402f;
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+  }
+  .stamp small{font-weight:400; color:#8aa184; font-size:10px; line-height:1.3;}
+  .stamp:active{transform:scale(.96);}
+  .row{display:flex; gap:8px; margin-top:10px;}
+  .row button{
+    flex:1; border:none; border-radius:14px; padding:14px 6px; min-height:52px; cursor:pointer;
+    font-size:14px; font-weight:700; color:#fff; letter-spacing:.02em;
+  }
+  #playBtn{background:linear-gradient(180deg,#65a30d,#4d7c0f); box-shadow:0 4px 0 #3a5f0b;}
+  #stepBtn{background:linear-gradient(180deg,#38bdf8,#0284c7); box-shadow:0 4px 0 #0369a1;}
+  #soupBtn{background:linear-gradient(180deg,#fbbf24,#d97706); box-shadow:0 4px 0 #92400e;}
+  #clearBtn{background:linear-gradient(180deg,#94a3b8,#7488a3); box-shadow:0 4px 0 #5b6c84;}
+  .row button:active{transform:translateY(3px); box-shadow:0 1px 0 rgba(0,0,0,.2);}
+  .about{
+    margin-top:14px; background:rgba(255,255,255,.65); border-radius:16px; padding:12px 14px;
+    border:1px solid rgba(120,160,120,.35); font-size:13px; line-height:1.6; color:#66755f;
+  }
+  .about b{color:#33402f;}
+  .foot{margin-top:22px; text-align:center; font-size:13px; color:#8aa184; line-height:1.7;}
+  .foot a{color:#33402f; font-weight:600; text-decoration:none; border-bottom:1px solid #65a30d; padding:10px 4px; display:inline-block;}
+  input,textarea,select{font-size:16px;}
+  @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">Luke Zhang</div>
+  <h1>petri</h1>
+  <p class="sub">My projects are still lifes. Tap the dish to seed cells, stamp a project, press play.</p>
+  <div class="dish" id="dish" aria-label="Petri dish. Tap cells to toggle them, press play to run the simulation.">
+    <canvas id="cv"></canvas>
+  </div>
+  <div class="stats">
+    <div class="stat"><b id="genOut">0</b>generation</div>
+    <div class="stat"><b id="popOut">0</b>cells alive</div>
+    <div class="stat"><b id="speedOut">normal</b>speed</div>
+  </div>
+  <div class="toast" id="toast">a still life never dies. stamp one below, or tap the dish to seed your own chaos.</div>
+  <div class="stamps">
+    <h2>stamp a project</h2>
+    <div class="stampgrid" id="stampgrid"></div>
+  </div>
+  <div class="row">
+    <button id="playBtn">play</button>
+    <button id="stepBtn">step</button>
+    <button id="soupBtn">soup</button>
+    <button id="clearBtn">clear</button>
+  </div>
+  <div class="about">
+    <b>The machinery:</b> real Conway rules, B3/S23, on a 30 by 30 dish: a live cell with two or three neighbors survives, a dead cell with exactly three is born, everything else dies. Still lifes like the block and beehive are immortal by construction. Some of my projects behave the same way.
+  </div>
+  <div class="foot"><a href="../">all the ways to say hi</a></div>
+</div>
+<script>
+(function(){
+  "use strict";
+  var reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var dish = document.getElementById("dish");
+  var cv = document.getElementById("cv");
+  var ctx = cv.getContext("2d");
+  var toast = document.getElementById("toast");
+  var genOut = document.getElementById("genOut");
+  var popOut = document.getElementById("popOut");
+  var speedOut = document.getElementById("speedOut");
+  var playBtn = document.getElementById("playBtn");
+
+  var COLS = 30, ROWS = 30;
+  var grid = new Uint8Array(COLS*ROWS);
+  var next = new Uint8Array(COLS*ROWS);
+  var born = new Int32Array(COLS*ROWS); /* generation a cell was born, for the pop animation */
+  var gen = 0;
+  var W = 0, cell = 0;
+
+  function size(){
+    var DPR = Math.min(2, window.devicePixelRatio || 1);
+    W = dish.clientWidth;
+    cell = W/COLS;
+    cv.width = W*DPR; cv.height = W*DPR;
+    cv.style.height = W + "px";
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  size();
+  window.addEventListener("resize", size);
+
+  function idx(c, r){ return r*COLS + c; }
+  function neighbors(c, r){
+    var n = 0;
+    for(var dr=-1;dr<=1;dr++) for(var dc=-1;dc<=1;dc++){
+      if(!dc && !dr) continue;
+      var cc = c+dc, rr = r+dr;
+      if(cc>=0 && cc<COLS && rr>=0 && rr<ROWS) n += grid[idx(cc,rr)];
+    }
+    return n;
+  }
+  function step(){
+    var pop = 0;
+    for(var r=0;r<ROWS;r++) for(var c=0;c<COLS;c++){
+      var n = neighbors(c,r), alive = grid[idx(c,r)], i = idx(c,r);
+      if(alive){ next[i] = (n===2 || n===3) ? 1 : 0; }
+      else { next[i] = (n===3) ? 1 : 0; if(next[i] && !alive) born[i] = gen+1; }
+      if(next[i]) pop++;
+    }
+    var tmp = grid; grid = next; next = tmp;
+    gen++;
+    return pop;
+  }
+
+  function draw(pop){
+    ctx.clearRect(0,0,W,W);
+    /* agar */
+    var g = ctx.createRadialGradient(W/2, W/2, W*0.1, W/2, W/2, W*0.72);
+    g.addColorStop(0, "#f4fbf3");
+    g.addColorStop(1, "#dcebdd");
+    ctx.fillStyle = "#e2efe2";
+    ctx.fillRect(0,0,W,W);
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,W,W);
+    /* grid dots */
+    ctx.fillStyle = "rgba(120,160,120,0.16)";
+    for(var r=0;r<ROWS;r++) for(var c=0;c<COLS;c++){
+      ctx.fillRect(c*cell+cell/2-0.5, r*cell+cell/2-0.5, 1, 1);
+    }
+    /* cells */
+    for(var r2=0;r2<ROWS;r2++) for(var c2=0;c2<COLS;c2++){
+      if(!grid[idx(c2,r2)]) continue;
+      var age = gen - born[idx(c2,r2)];
+      var pop2 = 1 + 0.55*Math.exp(-age/1.6);
+      var rad = cell*0.40*pop2;
+      var x = c2*cell + cell/2, y = r2*cell + cell/2;
+      ctx.fillStyle = age <= 1 ? "#84cc16" : "#4d7c0f";
+      ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI*2); ctx.fill();
+      if(age <= 1){
+        ctx.strokeStyle = "rgba(132,204,22,0.7)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(x, y, rad+2.5, 0, Math.PI*2); ctx.stroke();
+      }
+    }
+    genOut.textContent = gen;
+    popOut.textContent = pop;
+  }
+
+  var SPEEDS = [{name:"slow", ms:420},{name:"normal", ms:200},{name:"fast", ms:90}];
+  var speedIx = 1;
+  var playing = false, timer = null;
+  var pop = 0;
+
+  function tick(){
+    pop = step();
+    draw(pop);
+    if(pop === 0 && playing){ pause(); say("extinction. every cell is gone. stamp a survivor and try again."); }
+  }
+  function play(){
+    playing = true;
+    playBtn.textContent = "pause";
+    timer = setInterval(tick, SPEEDS[speedIx].ms);
+  }
+  function pause(){
+    playing = false;
+    playBtn.textContent = "play";
+    if(timer){ clearInterval(timer); timer = null; }
+  }
+  playBtn.addEventListener("click", function(){ playing ? pause() : play(); });
+  document.getElementById("stepBtn").addEventListener("click", function(){
+    if(playing) pause();
+    pop = step(); draw(pop);
+  });
+  document.getElementById("soupBtn").addEventListener("click", function(){
+    for(var i=0;i<grid.length;i++){ grid[i] = Math.random() < 0.22 ? 1 : 0; if(grid[i]) born[i] = gen; }
+    pop = 0; for(var j=0;j<grid.length;j++) pop += grid[j];
+    draw(pop);
+    say("primordial soup, served. press play and watch natural selection do its thing.");
+  });
+  document.getElementById("clearBtn").addEventListener("click", function(){
+    if(playing) pause();
+    grid.fill(0); born.fill(0); gen = 0; pop = 0;
+    draw(0);
+    say("sterile dish. tap to seed, or stamp a project below.");
+  });
+  speedOut.parentElement.style.cursor = "pointer";
+  speedOut.parentElement.addEventListener("click", function(){
+    speedIx = (speedIx+1)%SPEEDS.length;
+    speedOut.textContent = SPEEDS[speedIx].name;
+    if(playing){ pause(); play(); }
+  });
+
+  function say(html){ toast.innerHTML = html; }
+
+  /* Project stamps: famous patterns, each one a still life or traveler. */
+  var STAMPS = [
+    {name:"Liverpool Rummy", kind:"block", quip:"<b>Liverpool Rummy</b>, stamped as a block. A 2 by 2 square. It has never once died.", cells:[[0,0],[1,0],[0,1],[1,1]]},
+    {name:"Get Clocked", kind:"beehive", quip:"<b>Get Clocked</b>, stamped as a beehive. Six cells, perfectly balanced, going nowhere. Like a good timesheet.", cells:[[1,0],[2,0],[0,1],[3,1],[1,2],[2,2]]},
+    {name:"Curbside", kind:"loaf", quip:"<b>Curbside</b>, stamped as a loaf. Seven cells of pure stability. The food truck of still lifes.", cells:[[1,0],[2,0],[0,1],[3,1],[1,2],[3,2],[2,3]]},
+    {name:"Draw and Guess", kind:"tub", quip:"<b>Draw and Guess</b>, stamped as a tub. Four cells holding a perfect empty middle. Guess what is inside.", cells:[[1,0],[0,1],[2,1],[1,2]]},
+    {name:"How an LLM Works", kind:"blinker", quip:"<b>How an LLM Works</b>, stamped as a blinker. It flips forever and never goes anywhere. Attention is all you need.", cells:[[0,0],[1,0],[2,0]]},
+    {name:"Peggie", kind:"glider", quip:"<b>Peggie</b>, stamped as a glider. It surveys the whole dish and leaves. Classic.", cells:[[1,0],[2,1],[0,2],[1,2],[2,2]]}
+  ];
+  var stampgrid = document.getElementById("stampgrid");
+  STAMPS.forEach(function(st){
+    var b = document.createElement("button");
+    b.className = "stamp";
+    b.innerHTML = st.name + "<small>" + st.kind + "</small>";
+    b.setAttribute("aria-label", "Stamp " + st.name + " as a " + st.kind);
+    b.addEventListener("click", function(){ stamp(st); });
+    stampgrid.appendChild(b);
+  });
+  function stamp(st){
+    var w = 4, h = 4;
+    var c0 = 3 + Math.floor(Math.random()*(COLS-6-w));
+    var r0 = 3 + Math.floor(Math.random()*(ROWS-6-h));
+    st.cells.forEach(function(p){
+      var i = idx(c0+p[0], r0+p[1]);
+      grid[i] = 1; born[i] = gen;
+    });
+    pop = 0; for(var i2=0;i2<grid.length;i2++) pop += grid[i2];
+    draw(pop);
+    say(st.quip);
+  }
+
+  /* Tap and drag to seed or erase cells. */
+  var painting = false, paintVal = 1;
+  function cellAt(e){
+    var r = cv.getBoundingClientRect();
+    var c = Math.floor((e.clientX - r.left)/cell);
+    var rr = Math.floor((e.clientY - r.top)/cell);
+    if(c<0||c>=COLS||rr<0||rr>=ROWS) return -1;
+    return idx(c,rr);
+  }
+  function paintCell(e){
+    var i = cellAt(e);
+    if(i < 0) return;
+    grid[i] = paintVal;
+    if(paintVal) born[i] = gen;
+    pop = 0; for(var j=0;j<grid.length;j++) pop += grid[j];
+    draw(pop);
+  }
+  dish.addEventListener("pointerdown", function(e){
+    var i = cellAt(e);
+    if(i < 0) return;
+    paintVal = grid[i] ? 0 : 1;
+    painting = true;
+    dish.setPointerCapture(e.pointerId);
+    paintCell(e);
+  });
+  dish.addEventListener("pointermove", function(e){ if(painting) paintCell(e); });
+  dish.addEventListener("pointerup", function(){ painting = false; });
+  dish.addEventListener("pointercancel", function(){ painting = false; });
+
+  if(reduced){ say("motion is reduced, so the dish starts paused. press play when ready."); }
+  draw(0);
+})();
+</script>
+</body>
+</html>

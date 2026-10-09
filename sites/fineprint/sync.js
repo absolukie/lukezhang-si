@@ -143,6 +143,14 @@ function syncPaused(){
  * device-only (they are surfaced, never marked acknowledged). */
 function updatePill(){
   var n, s, label, cls, big;
+  // Paused wins over everything: while the user has sync off, the pill must
+  // keep reading "Sync paused" no matter how much local work piles up.
+  if (syncPaused()){
+    status = "paused";
+    var elp = document.querySelector("#syncStatus");
+    if (elp){ elp.textContent = "Sync paused"; elp.className = "syncpill"; }
+    return;
+  }
   try { n = diffOut().length; } catch(e){ n = 0; }
   try { big = Object.keys(oversized).length; } catch(e){ big = 0; }
   if (inflight > 0){ s = "syncing"; label = "Syncing..."; cls = "warn"; }
@@ -477,10 +485,13 @@ else boot();
 (function(){
   "use strict";
   try {
-    var SLUG = "";
-    try { SLUG = String(typeof LS_DEVICE === "string" ? LS_DEVICE : "").replace(/\.device_key$/, ""); } catch(e){}
+    // NOTE: this IIFE is separate from the sync IIFE above, so LS_DEVICE and
+    // WORKER from that scope are NOT visible here (they read as undefined,
+    // which used to leave SLUG empty and silently disable this reporter).
+    // The constants are declared locally instead.
+    var SLUG = "fineprint";
+    var LS_KEY = "fineprint.device_key";
     var BASE = "https://sync-proto.lukezhang.si";
-    try { if (typeof WORKER === "string" && WORKER) BASE = WORKER; } catch(e){}
     var ENDPOINT = BASE + "/v1/client-errors";
 
     function trunc(s, n){
@@ -504,7 +515,7 @@ else boot();
         var item = queue.shift();
         if (!item) return;
         var key = null;
-        try { key = localStorage.getItem(LS_DEVICE); } catch(e){}
+        try { key = localStorage.getItem(LS_KEY); } catch(e){}
         if (!key || !SLUG) { pump(); return; }
         busy = true;
         var page = "";

@@ -202,13 +202,13 @@ function paintCard(){
           ? '<p style="' + mutedStyle() + '">Enter the 6-digit code sent to ' +
             esc(phoneState.phone) + '</p>' +
             '<input id="authCode" inputmode="numeric" pattern="[0-9]*" maxlength="6" ' +
-            'placeholder="123456" autocomplete="one-time-code" style="' + inputStyle() + '">' +
+            'placeholder="123456" aria-label="6-digit verification code" autocomplete="one-time-code" style="' + inputStyle() + '">' +
             '<button id="authVerifyCode" style="' + btnStyle() + '">Verify code</button>' +
             '<p style="' + mutedStyle() + '">Demo mode: no text is sent yet. ' +
             'Phone verification goes live with Twilio.</p>'
           : '<p style="' + mutedStyle() + '">Enter your phone number</p>' +
             '<input id="authPhone" type="tel" inputmode="tel" placeholder="+1 555 010 2030" ' +
-            'autocomplete="tel" style="' + inputStyle() + '">' +
+            'aria-label="Phone number" autocomplete="tel" style="' + inputStyle() + '">' +
             '<button id="authSendCode" style="' + btnStyle() + '">Text me a code</button>') +
         '<p style="' + mutedStyle() + '" id="authMsg">' + esc(cardMsg) + '</p>' +
         '<button id="authPhoneBack" style="' + ghostStyle() + '">Back</button>' +
@@ -216,7 +216,7 @@ function paintCard(){
     } else {
       h += '<div id="authMain">' +
         '<input id="authEmail" type="email" inputmode="email" placeholder="you@example.com" ' +
-        'autocomplete="email" style="' + inputStyle() + '">' +
+        'aria-label="Email address" autocomplete="email" style="' + inputStyle() + '">' +
         '<button id="authEmailGo" style="' + btnStyle() + '">Email me a sign-in link</button>' +
         '<p style="' + mutedStyle() + '" id="authMsg">' + esc(cardMsg) + '</p>' +
         '<div style="text-align:center;font-size:12px;opacity:.55;margin:10px 0 2px;">' +

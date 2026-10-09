@@ -250,6 +250,20 @@ async function fetchAsset(request, env, path) {
   return res;
 }
 
+// First-party analytics beacon (Kit, 2026-10-09): injects a tiny cookieless
+// page-view ping into every HTML response. No cookies, no fingerprinting.
+const ANALYTICS_BEACON = `<script>!function(){try{var d={host:location.hostname,path:location.pathname+location.search,ref:document.referrer};if(navigator.sendBeacon){navigator.sendBeacon("https://sync-proto.lukezhang.si/v1/a/hit",JSON.stringify(d))}}catch(e){}}();</` + `script>`;
+async function withBeacon(res) {
+  const ct = res.headers.get("content-type") || "";
+  if (!ct.includes("text/html")) return res;
+  const text = await res.text();
+  if (!text.includes("</body>")) return res;
+  const headers = new Headers(res.headers);
+  headers.delete("content-length");
+  return new Response(text.replace("</body>", ANALYTICS_BEACON + "</body>"),
+    { status: res.status, headers });
+}
+
 // ---- TakeTemp API (inlined from absolukie/take-temp/worker-api.js) ----
 // Needs the TAKES_KV namespace binding on the Worker.
 function json(data, status) {
@@ -721,7 +735,7 @@ export default {
       if (segs.length === 0) {
         // Hub landing page.
         const landing = await fetchAsset(request, env, "/sites/index.html");
-        return landing.status === 404 ? notFound() : landing;
+        return landing.status === 404 ? notFound() : await withBeacon(landing);
       }
       site = segs[0].toLowerCase();
       if (!SITES.includes(site)) return notFound();
@@ -767,8 +781,8 @@ export default {
           headers.set("Cross-Origin-Embedder-Policy", "require-corp");
           return new Response(res.body, { status: res.status, headers });
         }
-        // Main domain and every other host: today's behavior, untouched.
-        return env.ASSETS.fetch(request);
+        // Main domain and every other host: today's behavior, plus beacon.
+        return withBeacon(await env.ASSETS.fetch(request));
       }
     }
 
@@ -782,6 +796,6 @@ export default {
 
     const res = await fetchAsset(request, env, finalPath);
     if (res.status === 404) return notFound();
-    return res;
+    return withBeacon(res);
   },
 };

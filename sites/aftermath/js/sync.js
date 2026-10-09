@@ -17,6 +17,17 @@ var LS_META = "aftermath.syncmeta.v1";
 var LS_LAST = "aftermath.lastsync.v1";
 var LS_BASE = "aftermath.syncbase.v1";
 var LS_BIG = "aftermath.oversized.v1";
+var LS_DEMOJOBS = "aftermath.demojobs.v1";
+/* Known demo job ids, persisted across pulls. A foreign demo job's
+ * checklist/line-item/event records can arrive in a LATER pull batch than
+ * the demo job record itself; without this set those later records match
+ * neither the same-batch filter nor the local filter, leak demo data to the
+ * server, and apply as orphans locally. Every demo job id ever seen (any
+ * batch, any pull) stays here. */
+var knownDemoJobs = {};
+try { knownDemoJobs = JSON.parse(localStorage.getItem(LS_DEMOJOBS) || "{}") || {}; } catch(e){ knownDemoJobs = {}; }
+function saveKnownDemoJobs(){ try{ localStorage.setItem(LS_DEMOJOBS, JSON.stringify(knownDemoJobs)); }catch(e){} }
+function rememberDemoJob(id){ if(id && !knownDemoJobs[id]){ knownDemoJobs[id] = 1; saveKnownDemoJobs(); } }
 /* Matches the server's /v1/sync/push cap. The server rejects the WHOLE batch
  * when any record exceeds this, so oversized records must be filtered
  * client-side and surfaced in the UI instead of being marked acknowledged. */
@@ -64,12 +75,42 @@ function demoJobIds(S){
   (S.jobs || []).forEach(function(j){ if (j && j.demo) ids[j.id] = true; });
   return ids;
 }
-function isDemoRecord(S, rec){
+/* Union of the local demo job ids and an extra set (the browser's persistent
+ * cross-batch set; node tests pass it explicitly). A foreign demo job's
+ * checklist/line-item/event records can arrive in a LATER pull batch than
+ * the demo job record itself (staggered sync), so the filter must consult
+ * ids seen across the whole pull history, not just this batch. */
+function allDemoJobIds(S, extraKnown){
+  var ids = demoJobIds(S);
+  if(extraKnown) Object.keys(extraKnown).forEach(function(k){ ids[k] = true; });
+  return ids;
+}
+function isDemoRecord(S, rec, extraKnown){
   var v = rec ? rec.value : null;
   if (!v) return false;
   if (v.demo || v.sample) return true;
-  var ids = demoJobIds(S);
+  var ids = allDemoJobIds(S, extraKnown);
   return !!(v.jobId && ids[v.jobId]);
+}
+
+/* Pure pull-batch filter. A batch's own demo job records seed the known set
+ * for the same batch; ids seen in earlier batches arrive via extraKnown.
+ * Returns {incoming, dropped, demoJobIds}: the browser persists demoJobIds
+ * and advances meta for dropped records so they are not re-pulled forever. */
+function filterPullBatch(S, batch, extraKnown){
+  var remoteDemoJobs = {};
+  batch.forEach(function(r){
+    if(r.collection === "jobs" && r.value && r.value.demo) remoteDemoJobs[r.key] = true;
+  });
+  var known = allDemoJobIds(S, extraKnown);
+  Object.keys(remoteDemoJobs).forEach(function(k){ known[k] = true; });
+  var incoming = [], dropped = [];
+  batch.forEach(function(r){
+    var v = r.value || {};
+    var demo = v.demo || v.sample || (v.jobId && known[v.jobId]);
+    (demo ? dropped : incoming).push(r);
+  });
+  return { incoming: incoming, dropped: dropped, demoJobIds: Object.keys(remoteDemoJobs) };
 }
 
 /* Apply pulled records to state. Last-writer-wins per item via meta timestamps.
@@ -134,7 +175,8 @@ if (typeof module !== "undefined" && module.exports){
   module.exports = { stateToRecords: stateToRecords, applyRecords: applyRecords,
     hashRecord: hashRecord, upsertIntoState: upsertIntoState,
     removeFromState: removeFromState, photoSyncValue: photoSyncValue,
-    isDemoRecord: isDemoRecord, demoJobIds: demoJobIds };
+    isDemoRecord: isDemoRecord, demoJobIds: demoJobIds,
+    allDemoJobIds: allDemoJobIds, filterPullBatch: filterPullBatch };
   return;
 }
 
@@ -258,13 +300,33 @@ function snapshot(records){
 function diffOut(){
   var S = window.__aftermath.getS();
   var records = stateToRecords(S);
-  /* Demo records never leave the device (privacy policy promise). */
+  var localDemo = demoJobIds(S);
+  /* Demo records never leave the device (privacy policy promise). The known
+   * set is consulted too, so staggered foreign demo-family records are
+   * filtered even when their demo job record arrived in an earlier batch. */
   var demoKeys = {};
-  records.forEach(function(r){ if (isDemoRecord(S, r)) demoKeys[r.collection + ":" + r.key] = true; });
+  records.forEach(function(r){ if (isDemoRecord(S, r, knownDemoJobs)) demoKeys[r.collection + ":" + r.key] = true; });
+  /* Scrub server rows we leaked before the multi-batch filter existed:
+   * foreign demo-family records previously pushed as real get a tombstone.
+   * The local demo job's own records are never scrubbed (they were never
+   * pushed; a tombstone would round-trip and delete them locally on the
+   * next pull). */
+  var scrub = [];
+  records.forEach(function(r){
+    var mk = r.collection + ":" + r.key;
+    if(!demoKeys[mk] || !(mk in lastPushed)) return;
+    var jid = r.value && r.value.jobId;
+    if(jid && knownDemoJobs[jid] && !localDemo[jid]) scrub.push(mk);
+  });
   records = records.filter(function(r){ return !demoKeys[r.collection + ":" + r.key]; });
   var now = Date.now();
   var cur = snapshot(records);
   var out = [];
+  scrub.forEach(function(mk){
+    var i = mk.indexOf(":");
+    out.push({ app_slug: APP, collection: mk.slice(0, i), key: mk.slice(i + 1),
+      value: null, updated_at: now, deleted: true });
+  });
   records.forEach(function(r){
     var mk = r.collection + ":" + r.key;
     if (lastPushed[mk] !== cur[mk]){
@@ -351,24 +413,18 @@ async function pull(){
     var metaDirty = false;
     /* Demo records never enter local state (privacy policy promise). Mark
      * their baseline so they are not re-pulled forever, then drop them.
-     * A demo job pushed by another device before this rule arrives with a
-     * foreign jobId, so its unflagged checklist/line-item/event records are
-     * dropped as part of the same family. */
+     * The filter works across batches: demo job ids seen in ANY earlier
+     * batch (persisted in knownDemoJobs) still match, so a foreign demo
+     * job's checklist/line-item/event records arriving in a later batch
+     * are dropped as part of the same family instead of being applied as
+     * orphans and re-pushed as real records. */
     var batch = data.records || [];
-    var remoteDemoJobs = {};
-    batch.forEach(function(r){
-      if (r.collection === "jobs" && r.value && r.value.demo) remoteDemoJobs[r.key] = true;
-    });
-    var localDemoIds = demoJobIds(S);
-    var incoming = batch.filter(function(r){
+    var f = filterPullBatch(S, batch, knownDemoJobs);
+    f.demoJobIds.forEach(rememberDemoJob);
+    var incoming = f.incoming;
+    f.dropped.forEach(function(r){
       var mk = r.collection + ":" + r.key;
-      var v = r.value || {};
-      var demo = v.demo || v.sample || (v.jobId && (remoteDemoJobs[v.jobId] || localDemoIds[v.jobId]));
-      if (demo){
-        if (r.updated_at > (meta[mk] || 0)){ meta[mk] = r.updated_at; metaDirty = true; }
-        return false;
-      }
-      return true;
+      if (r.updated_at > (meta[mk] || 0)){ meta[mk] = r.updated_at; metaDirty = true; }
     });
     incoming.forEach(function(r){
       var mk = r.collection + ":" + r.key;

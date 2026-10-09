@@ -47,7 +47,7 @@ function stateToRecords(S){
   (S.revenue || []).forEach(function(r){ put("revenue", r.id, r); });
   put("commissary", "main", S.commissary || {});
   put("settings", "main", { truckName: S.truckName, city: S.city,
-    truckType: S.truckType, onboarded: S.onboarded, extraCities: S.extraCities || [] });
+    truckType: S.truckType, onboarded: S.onboarded, extraCities: S.extraCities || [], paperworkTemplates: S.paperworkTemplates || [] });
   return R;
 }
 
@@ -94,6 +94,7 @@ function upsertIntoState(S, collection, key, value){
     S.truckName = value.truckName; S.city = value.city;
     S.truckType = value.truckType; S.onboarded = value.onboarded;
     if (Array.isArray(value.extraCities)) S.extraCities = value.extraCities;
+    if (Array.isArray(value.paperworkTemplates)) S.paperworkTemplates = value.paperworkTemplates;
   }
 }
 function removeFromState(S, collection, key){
@@ -322,6 +323,10 @@ async function pull(){
     applyingRemote = true;
     var changed = applyRecords(S, data.records || [], meta);
     if (changed){
+      /* P1-2 (red2): synced records take the same unguarded path as imports;
+       * clamp free-text fields so a long string from another device cannot
+       * blow out the phone layout. */
+      try { if (window.__curbside && window.__curbside.sanitizeState) window.__curbside.sanitizeState(S); } catch(se){}
       saveMeta();
       window.__curbside.saveLocal(); // persist without triggering a push
       window.__curbside.refresh();

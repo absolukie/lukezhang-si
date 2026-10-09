@@ -62,6 +62,16 @@
     try { localStorage.setItem(key, JSON.stringify(val)); return true; } catch (e) { return false; }
   }
 
+  /* ---------- analytics events (PRD 12): local-only, no beacons ---------- */
+  function trackEvent(name, props) {
+    try {
+      var log = loadJSON("staylegal.events", []);
+      log.push({ t: Date.now(), n: name, p: props || {} });
+      while (log.length > 200) log.shift();
+      saveJSON("staylegal.events", log);
+    } catch (e) {}
+  }
+
   function removeLocal(key) {
     try { localStorage.removeItem(key); } catch (e) {}
   }
@@ -179,8 +189,8 @@
     if (currentCity && repaint !== false) paintVerdict(currentCity, currentAddress, false);
   }
 
-  document.getElementById("segInvestor").addEventListener("click", function () { setPerspective("investor"); });
-  document.getElementById("segHosted").addEventListener("click", function () { setPerspective("hosted"); });
+  document.getElementById("segInvestor").addEventListener("click", function () { setPerspective("investor"); trackEvent("hosted_toggle", { city_id: currentCity ? currentCity.id : null, perspective: "investor" }); });
+  document.getElementById("segHosted").addEventListener("click", function () { setPerspective("hosted"); trackEvent("hosted_toggle", { city_id: currentCity ? currentCity.id : null, perspective: "hosted" }); });
 
   function paintVerdict(city, address, scroll) {
     var view = currentView(city);
@@ -234,6 +244,7 @@
 
     renderNeighborWarning(city);
     renderReminderUI();
+    renderNightTracker(city);
 
     resultSection.classList.remove("hidden");
     unknownSection.classList.add("hidden");
@@ -462,6 +473,36 @@
     renderNotifOptIn();
   }
 
+  /* ---------- night tracker (R-12): free, manual, on-device ---------- */
+  var nightStoreKey = null, nightCap = null;
+  function nightStored() {
+    if (!nightStoreKey) return 0;
+    return Math.max(0, parseInt(localStorage.getItem(nightStoreKey) || "0", 10) || 0);
+  }
+  function updateNightUI() {
+    if (!nightCap) return;
+    var used = nightStored();
+    document.getElementById("nightLine").textContent =
+      used + " of " + nightCap.value + " " + nightCap.unit + " tracked " + nightCap.period + ".";
+    document.getElementById("nightProgress").style.width =
+      Math.min(100, (used / nightCap.value) * 100) + "%";
+  }
+  function bumpNight(d) {
+    if (!nightStoreKey || !nightCap) return;
+    localStorage.setItem(nightStoreKey, String(Math.max(0, nightStored() + d)));
+    if (d > 0) trackEvent("night_count", { city_id: nightStoreKey.split(".")[1], used: nightStored() });
+    updateNightUI();
+  }
+  function renderNightTracker(city) {
+    var card = document.getElementById("nightCard");
+    nightCap = city.nightCap || null;
+    nightStoreKey = nightCap ? "staylegal.nights." + city.id + "." + perspective : null;
+    if (!nightCap) { card.classList.add("hidden"); return; }
+    card.classList.remove("hidden");
+    document.getElementById("nightNote").textContent = nightCap.note;
+    updateNightUI();
+  }
+
   function renderNotifOptIn() {
     var slot = document.getElementById("notifSlot");
     if (!slot) return;
@@ -562,15 +603,10 @@
     renderSaved();
   }
 
-  function renderUnknown(address) {
-    currentCity = null;
+  /* P1 (qa3): the coverage count and city chips must paint on first load,
+     not only after an unknown check, so the section never renders blank. */
+  function renderCoverageChips() {
     document.getElementById("coveredCount").textContent = DATA.cities.length;
-    var guess = "";
-    var parts = (address || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean);
-    if (parts.length >= 2) guess = parts[parts.length - 2];
-    else if (parts.length) guess = parts[parts.length - 1];
-    document.getElementById("reqCity").value = guess;
-    document.getElementById("reqOk").classList.add("hidden");
     var chips = document.getElementById("cityChips");
     chips.innerHTML = "";
     DATA.cities.forEach(function (c) {
@@ -585,6 +621,17 @@
       });
       chips.appendChild(b);
     });
+  }
+
+  function renderUnknown(address) {
+    currentCity = null;
+    renderCoverageChips();
+    var guess = "";
+    var parts = (address || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+    if (parts.length >= 2) guess = parts[parts.length - 2];
+    else if (parts.length) guess = parts[parts.length - 1];
+    document.getElementById("reqCity").value = guess;
+    document.getElementById("reqOk").classList.add("hidden");
     resultSection.classList.add("hidden");
     unknownSection.classList.remove("hidden");
     unknownSection.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -612,8 +659,10 @@
     var checks = savedChecks();
     var box = document.getElementById("savedList");
     box.innerHTML = "";
-    if (!checks.length) { savedSection.classList.add("hidden"); return; }
+    /* Section 8 bar: empty state is one line plus the button, never a blank section. */
+    document.getElementById("savedEmpty").classList.toggle("hidden", !!checks.length);
     savedSection.classList.remove("hidden");
+    if (!checks.length) return;
     checks.slice().reverse().forEach(function (c) {
       var city = DATA.cities.find(function (item) { return item.id === c.cityId; });
       var div = document.createElement("div");
@@ -731,6 +780,7 @@
     if (document.getElementById("includeAddress").checked && currentAddress) {
       url += "?address=" + encodeURIComponent(currentAddress);
     }
+    trackEvent("share_copy", { city_id: currentCity.id, include_address: document.getElementById("includeAddress").checked });
     function legacyCopy(ok, fail) {
       var ta = document.createElement("textarea");
       ta.value = url;
@@ -757,6 +807,7 @@
   document.getElementById("saveBtn").addEventListener("click", function () {
     if (!currentCity) return;
     saveCurrentCheck();
+    trackEvent("save_check", { city_id: currentCity.id, perspective: perspective });
     renderSteps(currentCity);
     renderReminderUI();
     renderSaved();
@@ -773,6 +824,7 @@
     var rems = getReminders();
     rems[c.id] = { date: date, label: currentView(currentCity).permit.name + " renewal" };
     saveJSON("staylegal.reminders", rems);
+    trackEvent("reminder_set", { city_id: currentCity.id });
     renderReminderUI();
     renderSaved();
   });
@@ -808,6 +860,8 @@
 
   function renderCompare() {
     var out = document.getElementById("cmpOut");
+    var _cmpIds = ["cmpA", "cmpB", "cmpC"].map(function (id) { return document.getElementById(id).value; }).filter(Boolean);
+    trackEvent("compare_run", { cities: _cmpIds.join(",") });
     out.innerHTML = "";
     var ids = ["cmpA", "cmpB", "cmpC"].map(function (id) { return document.getElementById(id).value; })
       .filter(Boolean);
@@ -983,6 +1037,7 @@
       ok.className = "hoa-note";
       ok.textContent = "No red flags from your answers. The CC&Rs still get the final word: read the use-restriction article end to end before you buy.";
       out.appendChild(ok);
+      trackEvent("hoa_triage_done", { answered: answered, flags: flags });
     }
   }
 
@@ -990,6 +1045,19 @@
   function initRequestForm() {
     var requestForm = document.getElementById("requestForm");
     if (!requestForm) return;
+    /* Section 8 bar: restart-safe draft. A field worker gets interrupted. */
+    var draftKey = "staylegal.reqDraft";
+    ["reqCity", "reqState", "reqEmail"].forEach(function (id) {
+      var f = document.getElementById(id);
+      if (!f) return;
+      var d = loadJSON(draftKey, {});
+      if (d && d[id] && !f.value) f.value = d[id];
+      f.addEventListener("input", function () {
+        var cur = loadJSON(draftKey, {});
+        cur[id] = f.value;
+        saveJSON(draftKey, cur);
+      });
+    });
     requestForm.addEventListener("submit", function (e) {
       e.preventDefault();
       var cityField = document.getElementById("reqCity");
@@ -1003,7 +1071,9 @@
         at: Date.now()
       });
       if (saveJSON("staylegal.requests", reqs)) {
+        trackEvent("request_city", { city: city });
         requestForm.reset();
+        try { localStorage.removeItem("staylegal.reqDraft"); } catch (e) {}
         document.getElementById("reqOk").classList.remove("hidden");
       }
     });
@@ -1025,6 +1095,7 @@
   /* ---------- search ---------- */
   function doCheck(address) {
     var city = matchCity(address);
+    trackEvent("check_run", { city_id: city ? city.id : null, matched: !!city, perspective: perspective });
     if (city) renderCity(city, address);
     else renderUnknown(address);
   }
@@ -1213,6 +1284,7 @@
     }
 
     function showOutcome() {
+      trackEvent("quiz_complete", { answers: Object.keys(answers).length });
       body.innerHTML = "";
       var wrap = el("div", "quiz-step");
       wrap.appendChild(el("p", "q", "Your situation, read back"));
@@ -1257,8 +1329,9 @@
         var req = el("button", "btn primary", "Request " + cityText);
         req.type = "button";
         req.addEventListener("click", function () {
-          document.getElementById("unknownSection").classList.remove("hidden");
-          document.getElementById("unknownSection").scrollIntoView({ behavior: "smooth" });
+          /* P2 (qa3): reuse renderUnknown so the request field is prefilled
+             with the quiz city and the coverage chips paint too. */
+          renderUnknown(cityText);
         });
         cta.appendChild(req);
       }
@@ -1293,14 +1366,65 @@
     showStep();
   }
 
+  /* ---------- bottom tabs (Section 8: 3-5 labeled items, mobile) ---------- */
+  function initTabs() {
+    var bar = document.getElementById("tabbar");
+    if (!bar) return;
+    var targets = { top: 0, saved: "savedSection", compare: "compareSection", changes: "changesSection" };
+    var btns = Array.prototype.slice.call(bar.querySelectorAll("button"));
+    btns.forEach(function (b) {
+      b.addEventListener("click", function () {
+        btns.forEach(function (x) { x.classList.toggle("on", x === b); });
+        var t = targets[b.getAttribute("data-tab")];
+        if (t === 0) {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          document.getElementById("addressInput").focus({ preventScroll: true });
+        } else {
+          var s = document.getElementById(t);
+          if (s) s.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      });
+    });
+  }
+
+  /* ---------- offline: subtle banner, never a blocking modal ---------- */
+  function initOffline() {
+    function updateOnline() {
+      var off = !navigator.onLine;
+      document.body.classList.toggle("is-offline", off);
+      var banner = document.getElementById("offlineBanner");
+      if (banner) banner.classList.toggle("hidden", !off);
+      if (off) trackEvent("offline_view", {});
+    }
+    window.addEventListener("online", updateOnline);
+    window.addEventListener("offline", updateOnline);
+    updateOnline();
+  }
+
   migrateStorage();
   renderSaved();
+  renderCoverageChips();
   initCompare();
   initRequestForm();
   renderHoa();
   checkDueReminders();
   initRuleChanges();
   renderQuiz();
+
+  document.getElementById("hoaCtaBtn").addEventListener("click", function () {
+    document.getElementById("hoa-check").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  document.getElementById("nightPlus").addEventListener("click", function () { bumpNight(1); });
+  document.getElementById("nightMinus").addEventListener("click", function () { bumpNight(-1); });
+  document.getElementById("nightReset").addEventListener("click", function () {
+    if (nightStoreKey) { localStorage.removeItem(nightStoreKey); updateNightUI(); }
+  });
+  document.getElementById("savedEmptyBtn").addEventListener("click", function () {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    document.getElementById("addressInput").focus();
+  });
+  initTabs();
+  initOffline();
 
   /* deep link: #/check/<city-id>?address=... */
   function applyDeepLink() {

@@ -31,8 +31,8 @@ h1,h2,h3,.serif{font-family:var(--serif);font-weight:500;letter-spacing:.01em}
 .topbar .brand{font-family:var(--serif);font-size:22px;letter-spacing:.14em}
 .topbar .sub{font-size:11px;color:var(--ink2);letter-spacing:.08em;text-transform:uppercase;margin-top:2px}
 .topbar .spacer{flex:1}
-.iconbtn{background:none;border:1px solid var(--line2);border-radius:999px;width:44px;height:44px;
-  display:inline-flex;align-items:center;justify-content:center;color:var(--ink);cursor:pointer}
+.iconbtn{background:none;border:1px solid var(--line2);border-radius:999px;width:44px;height:44px;flex:none;
+  display:inline-flex;align-items:center;justify-content:center;color:var(--ink);cursor:pointer;touch-action:manipulation}
 .iconbtn:active{background:var(--paper2)}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;border:1px solid var(--ink);
   background:var(--ink);color:var(--paper);padding:12px 20px;font-weight:600;cursor:pointer;min-height:56px}
@@ -120,10 +120,10 @@ main{max-width:760px;margin:0 auto;padding:16px 16px calc(40px + env(safe-area-i
 .field input,.field select,.field textarea{width:100%;border:1px solid var(--line2);border-radius:8px;padding:12px;background:#fff}
 .field textarea{min-height:80px;resize:vertical}
 .seg{display:flex;border:1px solid var(--line2);border-radius:999px;overflow:hidden}
-.seg button{flex:1;border:0;background:#fff;padding:12px 4px;font-size:14px;font-weight:600;color:var(--ink2);cursor:pointer}
+.seg button{flex:1;border:0;background:#fff;padding:13px 4px;font-size:14px;font-weight:600;color:var(--ink2);cursor:pointer;min-height:44px;touch-action:manipulation}
 .seg button.on{background:var(--ink);color:var(--paper)}
 .typegrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.typegrid button{border:1px solid var(--line2);background:#fff;border-radius:8px;padding:12px 6px;font-size:14px;cursor:pointer}
+.typegrid button{border:1px solid var(--line2);background:#fff;border-radius:8px;padding:13px 6px;font-size:14px;cursor:pointer;min-height:44px;touch-action:manipulation}
 .typegrid button.on{border-color:var(--ink);background:var(--ink);color:var(--paper)}
 .sheet .actions{display:flex;gap:10px;margin-top:16px}
 .sheet .actions .btn{flex:1}
@@ -162,6 +162,9 @@ main{max-width:760px;margin:0 auto;padding:16px 16px calc(40px + env(safe-area-i
 .dossier .signature-block .sig{margin-top:0}
 .dossier .disclaimer{font-size:11px;color:var(--ink2);margin-top:24px}
 .hash{font-family:ui-monospace,Menlo,monospace;font-size:11px;word-break:break-all;color:var(--ink2);background:var(--paper2);padding:8px;border-radius:6px}
+/* long unbroken text must wrap (PRD edge case: 500+ char notes wrap in list and dossier) */
+.pinlist .pn,.tl li,.tl .det,.newpin,.newpin span,.dossier td,.dossier th,.legend li,.climrow .lab,.photocard .cap{overflow-wrap:break-word;word-break:break-word}
+.pinlist li>span{flex:1;min-width:0}
 
 /* ---------- compare ---------- */
 .cmpsel{display:flex;gap:8px;margin-bottom:12px}
@@ -215,10 +218,10 @@ svg.ic{width:20px;height:20px;flex:none}
 #syncBox .set-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0}
 #syncBox .pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;background:#EFE9DC;color:#8A8071}
 #syncBox .pill.ok{background:#DFF0E2;color:#2C6E3F}
-#syncBox .pill.warn{background:#FFF3D6;color:#8A6D1A}
+#syncBox .pill.warn{background:#FFF3D6;color:#755C13}
 #syncBox .pill.crit{background:#FBDEDE;color:#A33B3B}
-#syncBox .link-btn{background:none;border:0;color:#2A6DF4;font-size:14px;font-weight:600;cursor:pointer;padding:4px 0;touch-action:manipulation}
-#syncBox input{width:100%;box-sizing:border-box;font-size:16px;padding:8px;border:1px solid var(--line2,#D8D2C4);border-radius:8px;margin-top:4px;background:#fff}
+#syncBox .link-btn{background:none;border:0;color:#2A6DF4;font-size:14px;font-weight:600;cursor:pointer;padding:10px 0;min-height:44px;touch-action:manipulation}
+#syncBox input{width:100%;box-sizing:border-box;font-size:16px;padding:10px;border:1px solid var(--line2,#D8D2C4);border-radius:8px;margin-top:4px;background:#fff;min-height:44px}
 /* ---- storage meter / zoom / banners / snapshot ---- */
 .meter{margin:12px 0}
 .meter .mrow{display:flex;justify-content:space-between;font-size:12px;color:var(--ink2);margin-bottom:4px}
@@ -342,14 +345,19 @@ function measureLocalBytes(){
   return bytes;
 }
 async function refreshStorageInfo(){
+  /* The app's actual store is localStorage, which navigator.storage.estimate()
+   * excludes in some browsers (it reported 0 B with records on device). Prefer
+   * the measured local bytes so the 70/90% warnings can actually fire. */
+  const local=measureLocalBytes();
   try{
     if(navigator.storage&&navigator.storage.estimate){
       const e=await navigator.storage.estimate();
-      storageInfo.usage=e.usage||0; storageInfo.quota=e.quota||0; storageInfo.estimated=false;
+      storageInfo.usage=Math.max(e.usage||0,local); storageInfo.quota=e.quota||0;
+      storageInfo.estimated=!(e.usage>0)&&local>0;
     }else{
-      storageInfo.usage=measureLocalBytes(); storageInfo.quota=5*1024*1024; storageInfo.estimated=true;
+      storageInfo.usage=local; storageInfo.quota=5*1024*1024; storageInfo.estimated=true;
     }
-  }catch(e){ storageInfo.usage=measureLocalBytes(); storageInfo.quota=5*1024*1024; storageInfo.estimated=true; }
+  }catch(e){ storageInfo.usage=local; storageInfo.quota=5*1024*1024; storageInfo.estimated=true; }
   storageInfo.ratio=storageInfo.quota>0?storageInfo.usage/storageInfo.quota:0;
   storageInfo.tight=storageInfo.ratio>=0.7;
   paintStorageMeter();
@@ -400,6 +408,31 @@ function openSheet(html){ const s=document.getElementById('sheet'); s.innerHTML=
 function closeSheet(){ document.getElementById('sheet').classList.remove('open');
   document.getElementById('scrim').classList.remove('open'); draftPin=null; }
 document.getElementById('scrim').addEventListener('click',()=>{ if(!storageBlocked) closeSheet(); });
+
+/* ---------- interruption-safe form drafts (artwork, custody, climate, loan) ----------
+ * The pin editor already stashes on every keystroke; this extends the same safety
+ * to the other forms. Drafts restore only into empty fields (never overwrites
+ * saved values) and clear on Save or Cancel. */
+const FORM_DRAFTS='provenance.formdrafts.v1';
+function getDraft(key){ let d=null; try{ d=JSON.parse(localStorage.getItem(FORM_DRAFTS+':'+key)||'null'); }catch(e){} return d||{}; }
+function stashForm(key, ids){
+  const d=getDraft(key);
+  ids.forEach(id=>{ const el=document.getElementById(id); if(el) d[id]=el.value; });
+  try{ localStorage.setItem(FORM_DRAFTS+':'+key, JSON.stringify(d)); }catch(e){}
+}
+function clearFormDraft(key){ try{ localStorage.removeItem(FORM_DRAFTS+':'+key); }catch(e){} }
+function wireFormDraft(key, ids){
+  const d=getDraft(key);
+  ids.forEach(id=>{ const el=document.getElementById(id);
+    if(el && el.value==='' && d[id]!=null && d[id]!=='') el.value=d[id]; });
+  /* 'input' only (not 'change'): every wired field type fires input on user
+   * edits, and a late change event must never re-stash after Cancel/Save
+   * cleared the draft. */
+  const h=()=>stashForm(key, ids);
+  ids.forEach(id=>{ const el=document.getElementById(id);
+    if(el) el.addEventListener('input', h); });
+  return d;
+}
 
 /* ================= image handling ================= */
 /* Best-effort capture location: photos are transaction data (id + timestamp +
@@ -627,7 +660,10 @@ function artworkForm(art){
       <button class="btn ghost" id="f_cancel">Cancel</button>
       <button class="btn" id="f_save">${IC.check} Save</button>
     </div>`);
-  document.getElementById('f_cancel').onclick=closeSheet;
+  const fdKey='art:'+(art?art.id:'new'),
+    fdIds=['f_title','f_artist','f_type','f_year','f_medium','f_dimensions','f_value','f_owner','f_notes'];
+  wireFormDraft(fdKey, fdIds);
+  document.getElementById('f_cancel').onclick=()=>{ clearFormDraft(fdKey); closeSheet(); };
   document.getElementById('f_save').onclick=()=>{
     const v=id=>document.getElementById(id).value.trim();
     if(art){ Object.assign(art,{title:v('f_title'),artist:v('f_artist'),type:v('f_type'),year:v('f_year'),
@@ -635,7 +671,7 @@ function artworkForm(art){
     else{ DB.artworks.unshift({id:uid(),title:v('f_title'),artist:v('f_artist'),type:v('f_type'),year:v('f_year'),
       medium:v('f_medium'),dimensions:v('f_dimensions'),value:v('f_value'),owner:v('f_owner'),notes:v('f_notes'),
       examiner:getExaminer(),condition:'Not assessed',createdAt:nowISO(),photos:[],custody:[],climate:[]}); }
-    save(); closeSheet(); render();
+    save(); clearFormDraft(fdKey); closeSheet(); render();
     toast(art?'Artwork updated':'Artwork registered');
   };
 }
@@ -702,7 +738,7 @@ function photosTab(art){
   const cards=art.photos.map((p,i)=>{
     const sev=p.pins.some(x=>x.severity==='severe');
     const lc=lastCheck(p);
-    const img=p.dataUrl?`<img src="${p.dataUrl}" alt="" data-act="annotate" data-pid="${p.id}" style="cursor:pointer">`
+    const img=p.dataUrl?`<img src="${p.dataUrl}" alt="${esc('Photo '+(i+1)+(p.caption?': '+p.caption:''))}" data-act="annotate" data-pid="${p.id}" style="cursor:pointer">`
       :`<div class="photomiss" style="margin-bottom:8px">Photo captured on another device; image bytes not on this device</div>`;
     return `<div class="photocard">
       ${img}
@@ -1012,7 +1048,7 @@ function pinEditor(art,p,pin,isNew){
       ${SEV.map(s=>`<button data-s="${s}" class="${s===edSev?'on':''}">${SEV_LABEL[s]}</button>`).join('')}
     </div></div>
     <div class="field"><label style="display:flex;align-items:center;justify-content:space-between">Note
-      <button class="iconbtn" id="edMic" title="Dictate note" aria-label="Dictate note" style="width:34px;height:34px">${IC.mic}</button></label>
+      <button class="iconbtn" id="edMic" title="Dictate note" aria-label="Dictate note" style="width:44px;height:44px">${IC.mic}</button></label>
       <textarea id="edNote" placeholder="Describe the damage precisely: size, depth, location…">${esc(pin._draftNote!=null?pin._draftNote:(pin.note||''))}</textarea></div>
     <div class="actions">
       ${isNew?'':`<button class="btn danger" id="edDel">${IC.trash}</button>`}
@@ -1130,7 +1166,7 @@ function buildSnapshot(art){
       <div class="snapcol"><div class="cap">${labB}</div><div class="n">${tb}</div>
         <div class="sevline">${sevLine(sb)}</div><div class="sevline" style="margin-top:6px">${esc(cap(pb))}</div></div>
     </div>
-    <h4 class="serif" style="margin:6px 0 4px;font-size:17px">New since ${labA.toLowerCase()} (${fresh.length})</h4>
+    <h4 class="serif" style="margin:6px 0 4px;font-size:17px">New since ${labA} (${fresh.length})</h4>
     <p class="micro">Matched by type, severity, and note text, not by pin position.</p>
     ${fresh.length?fresh.map(pin=>`<div class="newpin"><b>${esc(pin.type)}</b> · ${SEV_LABEL[pin.severity]||esc(pin.severity)}${pin.note?'<br><span style="color:var(--ink2)">'+esc(pin.note)+'</span>':''}</div>`).join('')
       :'<p style="font-size:14px;color:var(--ink2)">No new findings. The later photo shows the same documented condition.</p>'}
@@ -1140,7 +1176,7 @@ function buildSnapshot(art){
     'Condition snapshot: '+(art.title||'Untitled')+(art.artist?' by '+art.artist:''),
     labA+': '+cap(pa)+', '+ta+' findings ('+sevLine(sa)+')',
     labB+': '+cap(pb)+', '+tb+' findings ('+sevLine(sb)+')',
-    'New since '+labA.toLowerCase()+': '+fresh.length,
+    'New since '+labA+': '+fresh.length,
     ...fresh.map(pin=>'- '+pin.type+' ('+(SEV_LABEL[pin.severity]||pin.severity)+')'+(pin.note?': '+pin.note:''))
   ];
   document.getElementById('btnCopySnap').onclick=async()=>{
@@ -1214,7 +1250,9 @@ function wireCustody(art){
   const locations=[...new Set(DB.artworks.slice().reverse().flatMap(a=>a.custody.slice().reverse().map(c=>c.location)).filter(Boolean))].slice(0,12);
   b.onclick=()=>{
     let act='Received';
+    const cuDKey='custody:'+art.id, cuDIds=['cu_act','cu_h','cu_l','cu_ack','cu_n'];
     openSheet(`<h3>Log custody event</h3>
+      <input type="hidden" id="cu_act" value="Received">
       <div class="field"><label>Action</label><div class="typegrid" id="cuActs">
         ${CUSTODY_ACTIONS.map(a=>`<button data-a="${a}" class="${a===act?'on':''}">${a}</button>`).join('')}
       </div></div>
@@ -1225,14 +1263,18 @@ function wireCustody(art){
       <div class="field"><label for="cu_ack">Acknowledged by (counterparty)</label><input id="cu_ack" aria-describedby="cu_ack_help"><small id="cu_ack_help">Optional: name of the person receiving or confirming this handoff.</small></div>
       <div class="field"><label>Note</label><textarea id="cu_n" placeholder="Crate condition, seal numbers…"></textarea></div>
       <div class="actions"><button class="btn ghost" id="cu_no">Cancel</button><button class="btn" id="cu_yes">${IC.check} Log event</button></div>`);
+    const cuDraft=wireFormDraft(cuDKey, cuDIds);
+    if(cuDraft.cu_act&&CUSTODY_ACTIONS.includes(cuDraft.cu_act)){ act=cuDraft.cu_act;
+      document.querySelectorAll('#cuActs button').forEach(y=>y.classList.toggle('on', y.dataset.a===act)); }
     document.querySelectorAll('#cuActs button').forEach(x=>x.onclick=()=>{ act=x.dataset.a;
-      document.querySelectorAll('#cuActs button').forEach(y=>y.classList.remove('on')); x.classList.add('on'); });
-    document.getElementById('cu_no').onclick=closeSheet;
+      document.querySelectorAll('#cuActs button').forEach(y=>y.classList.remove('on')); x.classList.add('on');
+      document.getElementById('cu_act').value=act; stashForm(cuDKey, cuDIds); });
+    document.getElementById('cu_no').onclick=()=>{ clearFormDraft(cuDKey); closeSheet(); };
     document.getElementById('cu_yes').onclick=()=>{
       const ackName=document.getElementById('cu_ack').value.trim();
       art.custody.push({...(ackName?{ack:{name:ackName,at:nowISO()}}:{}),id:uid(),at:nowISO(),handler:document.getElementById('cu_h').value.trim(),
         action:act,location:document.getElementById('cu_l').value.trim(),note:document.getElementById('cu_n').value.trim()});
-      save(); closeSheet(); render(); toast('Custody event logged');
+      save(); clearFormDraft(cuDKey); closeSheet(); render(); toast('Custody event logged');
     };
   };
 }
@@ -1249,6 +1291,7 @@ function climateTab(art){
 function wireClimate(art){
   const b=document.getElementById('btnClim'); if(!b) return;
   b.onclick=()=>{
+    const clDKey='climate:'+art.id, clDIds=['cl_t','cl_h','cl_l','cl_n'];
     openSheet(`<h3>Climate reading</h3>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div class="field"><label>Temp (°F)</label><input id="cl_t" inputmode="decimal" placeholder="70"></div>
@@ -1256,14 +1299,15 @@ function wireClimate(art){
       <div class="field"><label>Location</label><input id="cl_l" placeholder="Storage vault B"></div>
       <div class="field"><label>Note</label><input id="cl_n" placeholder=""></div>
       <div class="actions"><button class="btn ghost" id="cl_no">Cancel</button><button class="btn" id="cl_yes">${IC.check} Save</button></div>`);
-    document.getElementById('cl_no').onclick=closeSheet;
+    wireFormDraft(clDKey, clDIds);
+    document.getElementById('cl_no').onclick=()=>{ clearFormDraft(clDKey); closeSheet(); };
     document.getElementById('cl_yes').onclick=()=>{
       const t=parseFloat(document.getElementById('cl_t').value), h=parseFloat(document.getElementById('cl_h').value);
       if(!isFinite(t)||!isFinite(h)){ toast('Enter temperature and humidity'); return; }
       const warn=(t<60||t>78||h<40||h>60);
       art.climate.push({id:uid(),at:nowISO(),temp:t,humidity:h,
         location:document.getElementById('cl_l').value.trim(),note:document.getElementById('cl_n').value.trim()});
-      save(); closeSheet(); render();
+      save(); clearFormDraft(clDKey); closeSheet(); render();
       toast(warn?'Saved, outside museum range (65–75°F, 40–60% RH)':'Reading saved');
     };
   };
@@ -1306,6 +1350,8 @@ function loanSection(art){
 function loanForm(art){
   const L=art.loan||{};
   const v=k=>(L[k]||'');
+  const lDKey='loan:'+art.id,
+    lDIds=['l_lender','l_borrower','l_venue','l_start','l_end','l_courier','l_carrier','l_policy','l_cond'];
   openSheet(`
     <h3>${art.loan?'Edit loan':'Record loan'}</h3>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -1329,16 +1375,17 @@ function loanForm(art){
       <button class="btn ghost" id="l_no">Cancel</button>
       <button class="btn" id="l_yes">${IC.check} Save loan</button>
     </div>`);
-  document.getElementById('l_no').onclick=closeSheet;
+  document.getElementById('l_no').onclick=()=>{ clearFormDraft(lDKey); closeSheet(); };
   const del=document.getElementById('l_del');
-  if(del) del.onclick=()=>{ art.loan=null; save(); closeSheet(); render(); toast('Loan removed'); };
+  if(del) del.onclick=()=>{ art.loan=null; save(); clearFormDraft(lDKey); closeSheet(); render(); toast('Loan removed'); };
+  wireFormDraft(lDKey, lDIds);
   document.getElementById('l_yes').onclick=()=>{
     const g=id=>document.getElementById(id).value.trim();
     if(!g('l_borrower')&&!g('l_venue')){ toast('Name the borrower or venue'); return; }
     art.loan={id:art.loan&&art.loan.id?art.loan.id:uid(), lender:g('l_lender'), borrower:g('l_borrower'),
       venue:g('l_venue'), loanStart:g('l_start'), loanEnd:g('l_end'), courier:g('l_courier'),
       carrier:g('l_carrier'), policyNo:g('l_policy'), conditions:g('l_cond'), recordedAt:nowISO()};
-    save(); closeSheet(); render(); toast('Loan terms recorded');
+    save(); clearFormDraft(lDKey); closeSheet(); render(); toast('Loan terms recorded');
   };
 }
 function wireLoan(art){
@@ -1480,7 +1527,7 @@ async function buildDossier(art){
     const legend=p.pins.map((pin,i)=>`<li><b>${i+1}.</b> ${esc(pin.type)}, ${SEV_LABEL[pin.severity]}${pin.note?': '+esc(pin.note):''}</li>`).join('');
     const overlay=p.pins.map((pin,i)=>`<span class="pin sev-${pin.severity}" style="left:${pin.x}%;top:${pin.y}%">${i+1}</span>`).join('');
     const lc=lastCheck(p);
-    const img=p.dataUrl?`<img src="${p.dataUrl}" alt="">`
+    const img=p.dataUrl?`<img src="${p.dataUrl}" alt="${esc(p.caption||('Photo '+(pi+1)))}">`
       :`<div class="photomiss">Photo captured on another device; image bytes not on this device</div>`;
     return `<div class="photofig"><div class="pwrap">${img}${overlay}</div>
       <p style="font-size:13px;color:var(--ink2);margin:6px 0">${esc(p.caption)||('Photo '+(pi+1))} · ${fmtDate(p.takenAt)}${lc?' · Last check: '+esc(verdictLabel(lc.verdict))+', '+fmtDate(lc.at):''}</p>
@@ -1734,7 +1781,8 @@ window.__provenance = {
 /* device sync entry point (topbar button) */
 document.getElementById('btnSync').innerHTML = IC.layers;
 document.getElementById('btnSync').onclick = () => {
-  openSheet('<h3>Device sync</h3><p class="micro">Same key on phone + laptop = same records.</p>'+storageMeter());
+  openSheet('<h3>Device sync</h3><p class="micro">Same key on phone + laptop = same records.</p>'+storageMeter()
+    +'<p class="micro" style="margin-top:14px"><a href="privacy.html">Privacy policy</a></p>');
   refreshStorageInfo();
   if (window.__provenanceSyncUI) window.__provenanceSyncUI();
 };
@@ -1751,7 +1799,7 @@ document.getElementById('btnSync').onclick = () => {
     { lookupKey: "price_provenance_solo", name: "Solo", price: "$80/mo",
       blurb: "1 handler: unlimited artworks, condition dossiers, chain of custody." },
     { lookupKey: "price_provenance_crew", name: "Crew", price: "$150/mo",
-      blurb: "Up to 5 handlers: before/after views, client-facing dossier links." }
+      blurb: "Up to 5 handlers: before/after views, printable client-ready dossiers." }
   ];
   function boot(){
     if (typeof initBilling !== "function") return;

@@ -191,7 +191,11 @@ BillingClient.prototype.refresh = async function(){
     }
   }
   this.renderBanner();
-  if (this.entitled) this.hidePaywall();
+  /* P1-1 (red2): every billing-state change re-renders the paywall. The old
+   * code only hid the overlay when entitled, so after a mid-session "Refresh
+   * status" flipped trialUsed to true, the stale fail-open overlay kept its
+   * X and the expired-trial block (PRD R-21) could be dismissed. */
+  this.ensurePaywall();
   return this.status;
 };
 
@@ -388,15 +392,13 @@ BillingClient.prototype.buildOverlay = function(){
 
   var errBox = ov.querySelector(".bill-err");
   function showErr(m){ errBox.textContent = m; errBox.hidden = false; }
-  // Never show raw backend codes or internal references to users.
-  // Anything that does not match is masked as well: backend strings are
-  // internal identifiers by default, and only the generic message ships.
+  /* Default-deny: nothing a backend, network, or SDK hands us reaches the
+   * screen. One generic line for every failure, whatever the cause. (The old
+   * blocklist let novel backend strings, like account refs, render raw.) */
   function friendlyErr(e){
     var code = e && e.code;
     if (code === "BILLING_NOT_CONFIGURED") return "Payments are not switched on yet. Please check back soon.";
-    var m = (e && e.message) || "";
-    if (/billing_|whsec|rk_test|rk_live|sk_test|sk_live|SECRETS\.md|Worker|price.*not found|no such price|unknown plan|lookup|failed to fetch|networkerror|load failed|ERR_|http\s*\d{3}|price_[a-z0-9_]+|device_key|session|bearer|token/i.test(m)) return "Something went wrong. Please try again.";
-    return m || "Something went wrong. Please try again.";
+    return "Something went wrong. Please try again.";
   }
   ov.querySelectorAll(".bill-plan").forEach(function(b){
     b.addEventListener("click", function(){
@@ -516,7 +518,22 @@ BillingClient.prototype.bindSettings = function(root){
       var act = b.getAttribute("data-act");
       if (act === "portal") self.portal();
       else if (act === "card") self.setupCard();
-      else if (act === "trial") { self.ensurePaywall(); }
+      else if (act === "trial") {
+        /* P2-2 (red2): the settings trial button re-probes billing before
+         * showing the overlay, so it works as a retry in every failure mode
+         * (including billing status failing at boot). Failure is reported
+         * honestly in the section line instead of failing silently. */
+        var rowEl = b.closest ? b.closest(".bs-row") : null;
+        var lineEl = rowEl ? rowEl.querySelector(".grow span") : null;
+        var prevLine = lineEl ? lineEl.textContent : "";
+        if (lineEl) lineEl.textContent = "Checking billing" + "\u2026";
+        self.refresh().then(function(){
+          if (lineEl) lineEl.textContent = prevLine;
+          self.ensurePaywall();
+        }, function(){
+          if (lineEl) lineEl.textContent = "Could not reach billing. Try again.";
+        });
+      }
     });
   });
 };

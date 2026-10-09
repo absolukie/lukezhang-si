@@ -11,6 +11,7 @@ const fmtKey = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'
 const parseKey = k => { const [y,m,d]=k.split('-').map(Number); return new Date(y,m-1,d); };
 const fmtDate = k => parseKey(k).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
 const money = n => '$'+Number(n||0).toLocaleString('en-US',{maximumFractionDigits:0});
+const moneySigned = n => (n<0?'-$':'+$')+Math.abs(Math.round(Number(n)||0)).toLocaleString('en-US');
 const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function daysUntil(k){ if(!k) return null; return Math.round((parseKey(k)-new Date(new Date().toDateString()))/86400000); }
 function addDaysKey(k,n){ const d=parseKey(k); d.setDate(d.getDate()+n); return fmtKey(d); }
@@ -180,7 +181,7 @@ const ATLANTA_ID_MAP = {'at-ga':'ga-health','at-street':'ga-street','at-biz':'ga
 /* ---------- state ---------- */
 const LS_KEY = 'curbside.v1';
 let S = null;
-function defaultState(){ return {v:1, truckName:'My Truck', city:null, truckType:null, permits:[], customDefs:[], extraCities:[], locations:{}, commissary:{name:'',cost:'',renews:'',days:[],notes:''}, events:[], revenue:[], onboarded:false}; }
+function defaultState(){ return {v:1, truckName:'My Truck', city:null, truckType:null, permits:[], customDefs:[], extraCities:[], locations:{}, commissary:{name:'',cost:'',renews:'',days:[],notes:''}, prepVisits:[], inspectionChecks:{}, events:[], revenue:[], onboarded:false}; }
 function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(e){} try{ if(window.__curbsideSync) window.__curbsideSync.onSave(); }catch(e){} }
 function load(){
   try{
@@ -190,8 +191,10 @@ function load(){
       if(!S.customDefs) S.customDefs=[];
       if(!S.extraCities){ S.extraCities=[]; }
       // backfill + Atlanta ID migration (records carry their own city).
-      // Persisted immediately so the stored state never keeps stale IDs.
+      // Persisted immediately so the stored state never keeps stale fields.
       let dirty=false;
+      if(!Array.isArray(S.prepVisits)){ S.prepVisits=[]; dirty=true; }
+      if(!S.inspectionChecks){ S.inspectionChecks={}; dirty=true; }
       (S.permits||[]).forEach(sp=>{
         if(!sp.city){ sp.city=S.city; dirty=true; }
         if(sp.city==='atlanta' && ATLANTA_ID_MAP[sp.id]){ sp.id=ATLANTA_ID_MAP[sp.id]; dirty=true; }
@@ -559,6 +562,47 @@ $('#addPermitBtn').onclick=()=>{
   };
 };
 
+/* ---------- inspection readiness ---------- */
+/* Auto-derived from live permit data + a short manual tick list. The physical
+ * items are general guidance, not jurisdiction requirements. */
+const INSPECT_PHYSICAL=[
+  {k:'handwash', label:'Handwash station: soap, paper towels, hot water'},
+  {k:'thermo', label:'Thermometer on board and calibrated'},
+  {k:'temps', label:'Food temperature log filled in for today'},
+  {k:'ext', label:'Fire extinguisher tag is current'},
+  {k:'coi', label:'Insurance COI saved on your phone'},
+  {k:'commletter', label:'Commissary agreement letter on board'},
+  {k:'cards', label:'Food handler cards for everyone working today'},
+  {k:'waste', label:'Water, waste, and ice plan for today'}
+];
+function inspectSheet(){
+  const paper=[];
+  allPermits().forEach(({def,sp,cityKey})=>{
+    const st=permitState(sp);
+    const cityBit=(cityKey&&cityKey!==S.city)?' ('+cityNameOf({city:cityKey})+')':'';
+    if(sp.status!=='active') paper.push({ok:false, name:def.name+cityBit, detail:'Not obtained yet'});
+    else if(st.level==='expired') paper.push({ok:false, name:def.name+cityBit, detail:'Expired '+(sp.expiresEst?'~':'')+Math.abs(st.days)+' days ago'});
+    else paper.push({ok:true, name:def.name+cityBit, detail:sp.expires?('Good through '+(sp.expiresEst?'~':'')+fmtDate(sp.expires)+(sp.expiresEst?' (estimated date)':' (from your document)')):'On file'});
+  });
+  const cr=S.commissary.renews?daysUntil(S.commissary.renews):null;
+  paper.push({ok:cr===null||cr>0, name:'Commissary agreement',
+    detail:cr===null?'No renewal date set':cr<0?'Expired '+Math.abs(cr)+' days ago':'Good through '+fmtDate(S.commissary.renews)});
+  const checks=S.inspectionChecks||{};
+  const physReady=INSPECT_PHYSICAL.filter(i=>checks[i.k]).length;
+  const paperReady=paper.filter(p=>p.ok).length;
+  openSheet('<h3>Inspection checklist</h3>'+
+    '<p class="muted">General readiness guide. Your city or county may require more. Verify with your health department.</p>'+
+    '<div class="check-count"><strong>'+(paperReady+physReady)+' of '+(paper.length+INSPECT_PHYSICAL.length)+' ready</strong></div>'+
+    '<h4>Paperwork</h4>'+
+    paper.map(p=>'<div class="paper-row '+(p.ok?'ok':'bad')+'"><span class="p-ico">'+(p.ok?I.check:I.warn)+'</span><div><strong>'+esc(p.name)+'</strong><span class="muted">'+esc(p.detail)+'</span></div></div>').join('')+
+    '<h4>On the truck</h4>'+
+    INSPECT_PHYSICAL.map(i=>'<button type="button" class="check-row'+(checks[i.k]?' on':'')+'" data-ic="'+i.k+'" aria-pressed="'+(!!checks[i.k])+'"><span class="p-check">'+(checks[i.k]?I.check:'')+'</span><span>'+esc(i.label)+'</span></button>').join('')+
+    '<button class="btn ghost" id="icClose">Close</button>', 'Inspection checklist');
+  $('#icClose').onclick=closeSheet;
+  $$('#sheet [data-ic]').forEach(b=>{ b.onclick=()=>{ const k=b.dataset.ic; S.inspectionChecks=S.inspectionChecks||{}; if(S.inspectionChecks[k]) delete S.inspectionChecks[k]; else S.inspectionChecks[k]=true; save(); inspectSheet(); }; });
+}
+$('#inspectBtn').onclick=inspectSheet;
+
 /* ---------- locations ---------- */
 let weekOffset=0;
 function renderLocations(){
@@ -613,13 +657,52 @@ function renderCommissary(){
     (cost?'<div class="muted" style="margin-top:6px">'+money(cost)+'/mo = '+money(cost*12)+'/yr</div>':'')+
     (c.days&&c.days.length?'<div class="muted" style="margin-top:4px">Usual days: '+c.days.join(', ')+'</div>':'')+
     (rd!==null?'<div style="margin-top:8px"><span class="pill '+(rd<=30?'crit':rd<=90?'warn':'ok')+'">Agreement '+(rd<0?'expired '+Math.abs(rd)+'d ago':'renews in '+rd+' days')+'</span></div>':'');
+  // prep visits: are you using what you pay for?
+  const V=S.prepVisits||[];
+  const mStart=todayKey().slice(0,7);
+  const inM=V.filter(v=>v.date&&v.date.slice(0,7)===mStart);
+  const mHrs=inM.reduce((a,v)=>a+(+v.hours||0),0);
+  const mExtra=inM.reduce((a,v)=>a+(+v.extra||0),0);
+  const cv=$('#comVisits');
+  if(cv){
+    cv.innerHTML='<div class="page-head"><h4>Prep visits</h4><button class="btn small" id="visitAdd">+ Log visit</button></div>'+
+      '<p class="muted" style="font-size:13px">This month: '+inM.length+' visit'+(inM.length===1?'':'s')+' · '+mHrs+' hrs · '+money(mExtra)+' overage</p>'+
+      (V.length?V.slice().sort((a,b)=>a.date<b.date?1:-1).slice(0,30).map(v=>
+        '<div class="rev-row"><div><strong>'+fmtDate(v.date)+'</strong><div class="muted" style="font-size:12px">'+
+        (v.hours?v.hours+' hrs':'No hours logged')+(v.extra?' · '+money(v.extra)+' overage':'')+(v.notes?' · '+esc(v.notes):'')+'</div></div>'+
+        '<button class="del" data-v="'+v.id+'" aria-label="Remove visit">×</button></div>'
+      ).join(''):'<div class="empty">No visits logged yet. Track every drop-off to see what the kitchen really costs you.</div>');
+    $('#visitAdd').onclick=visitSheet;
+    cv.querySelectorAll('[data-v]').forEach(b=>{ b.onclick=()=>{ S.prepVisits=S.prepVisits.filter(v=>v.id!==b.dataset.v); save(); renderCommissary(); }; });
+  }
+}
+function visitSheet(){
+  openSheet('<h3>Log prep visit</h3>'+
+    '<div class="row2"><label>Date<input type="date" id="cvDate" value="'+todayKey()+'"></label><label>Hours<input type="number" id="cvHrs" inputmode="decimal" min="0" placeholder="4"></label></div>'+
+    '<label>Extra cost ($)<input type="number" id="cvExtra" inputmode="decimal" min="0" placeholder="0"></label>'+
+    '<label>Notes<textarea id="cvNotes" rows="2" maxlength="200" placeholder="Prepped for Saturday, used the freezer bay…"></textarea></label>'+
+    '<p class="muted">Extra cost covers per-visit overages some commissaries charge above the monthly plan.</p>'+
+    '<button class="btn primary big" id="cvSave">Log visit</button><button class="btn ghost" id="cvCancel">Cancel</button>', 'Log prep visit');
+  $('#cvCancel').onclick=closeSheet;
+  $('#cvSave').onclick=()=>{
+    if(!$('#cvDate').value) return;
+    S.prepVisits.push({id:uid(), date:$('#cvDate').value, hours:+$('#cvHrs').value||0, extra:+$('#cvExtra').value||0, notes:$('#cvNotes').value.trim()});
+    save(); closeSheet(); renderCommissary();
+  };
 }
 $('#comSave').onclick=()=>{
   S.commissary={name:$('#comName').value.trim(), cost:$('#comCost').value, renews:$('#comRenews').value, days:S.commissary.days||[], notes:$('#comNotes').value.trim()};
   save(); renderCommissary();
 };
 
-/* ---------- events ---------- */
+/* ---------- events + ROI ---------- */
+/* Net = revenue taken minus fee paid. Both are owner-entered; the result is a
+ * personal record, never a tax document. */
+function eventNet(e){
+  if(!e.result || e.result.revenue===null || e.result.revenue===undefined) return null;
+  const fee=+e.result.fee||0, rev=+e.result.revenue||0;
+  return {fee, rev, net:rev-fee};
+}
 function renderEvents(){
   const box=$('#pipeline'); box.innerHTML='';
   EV_STATUSES.forEach(([key,label])=>{
@@ -628,19 +711,48 @@ function renderEvents(){
     col.innerHTML='<h4>'+label+' <span class="count">'+list.length+'</span></h4>';
     list.forEach(e=>{
       const d=document.createElement('div'); d.className='ev-card';
-      d.innerHTML='<strong>'+esc(e.name)+'</strong><span class="muted">'+fmtDate(e.date)+(e.fee?' · '+money(e.fee)+' fee':'')+(e.contact?' · '+esc(e.contact):'')+'</span>'+
+      const net=key==='done'?eventNet(e):null;
+      let roiLine='';
+      if(net) roiLine='<div class="roi-line"><span class="pill '+(net.net>=0?'ok':'crit')+'">Net '+moneySigned(net.net)+'</span><span class="muted">'+money(net.rev)+' taken · '+money(net.fee)+' fee'+(e.result.notes?' · '+esc(e.result.notes):'')+'</span></div>';
+      d.innerHTML='<strong>'+esc(e.name)+'</strong><span class="muted">'+fmtDate(e.date)+(e.fee?' · '+money(e.fee)+' fee':'')+(e.contact?' · '+esc(e.contact):'')+'</span>'+roiLine+
         '<div class="ev-foot">'+
         (key!=='lead'?'<button class="btn small" data-mv="'+e.id+'|lead">← Lead</button>':'')+
         (key!=='booked'?'<button class="btn small" data-mv="'+e.id+'|booked">'+(key==='lead'?'Book →':'← Booked')+'</button>':'')+
         (key!=='done'?'<button class="btn small" data-mv="'+e.id+'|done">Done →</button>':'')+
+        (key==='done'?'<button class="btn small" data-res="'+e.id+'">'+(e.result?'Edit result':'Log result')+'</button>':'')+
         '<button class="link-btn" data-del="'+e.id+'" style="margin-left:auto">Remove</button></div>';
       col.appendChild(d);
     });
     if(!list.length){ const em=document.createElement('div'); em.className='empty'; em.textContent='Nothing here.'; col.appendChild(em); }
     box.appendChild(col);
   });
-  box.querySelectorAll('[data-mv]').forEach(b=>{ b.onclick=()=>{ const [id,st]=b.dataset.mv.split('|'); S.events.find(e=>e.id===id).status=st; save(); renderEvents(); }; });
-  box.querySelectorAll('[data-del]').forEach(b=>{ b.onclick=()=>{ S.events=S.events.filter(e=>e.id!==b.dataset.del); save(); renderEvents(); }; });
+  // season totals across done events with logged results
+  const done=S.events.filter(e=>e.status==='done').map(e=>({e,net:eventNet(e)})).filter(x=>x.net);
+  const fees=done.reduce((a,x)=>a+x.net.fee,0), revs=done.reduce((a,x)=>a+x.net.rev,0);
+  const et=$('#eventTotals');
+  if(et) et.textContent=done.length
+    ? done.length+' done event'+(done.length>1?'s':'')+' with logged results · fees '+money(fees)+' · taken '+money(revs)+' · net '+moneySigned(revs-fees)
+    : 'Mark an event Done, then log its result to see which gigs paid.';
+  box.querySelectorAll('[data-mv]').forEach(b=>{ b.onclick=()=>{ const [id,st]=b.dataset.mv.split('|'); S.events.find(e=>e.id===id).status=st; save(); renderEvents(); renderHome(); }; });
+  box.querySelectorAll('[data-res]').forEach(b=>{ b.onclick=()=>resultSheet(b.dataset.res); });
+  box.querySelectorAll('[data-del]').forEach(b=>{ b.onclick=()=>{ S.events=S.events.filter(e=>e.id!==b.dataset.del); save(); renderEvents(); renderHome(); }; });
+}
+function resultSheet(id){
+  const e=S.events.find(x=>x.id===id); if(!e) return;
+  const r=e.result||{};
+  openSheet('<h3>Log event result</h3><p class="muted">'+esc(e.name)+' · '+fmtDate(e.date)+'</p>'+
+    '<div class="row2"><label>Fee paid ($)<input type="number" id="erFee" inputmode="decimal" min="0" placeholder="500" value="'+(r.fee!=null?r.fee:(e.fee||''))+'"></label>'+
+    '<label>Revenue taken ($)<input type="number" id="erRev" inputmode="decimal" min="0" placeholder="1800" value="'+(r.revenue!=null?r.revenue:'')+'"></label></div>'+
+    '<label>Notes<textarea id="erNotes" rows="2" maxlength="200" placeholder="Slow lunch, big dinner rush…">'+esc(r.notes||'')+'</textarea></label>'+
+    '<p class="muted">Net is revenue minus fee. This is your own record of the gig, not a tax document.</p>'+
+    '<button class="btn primary big" id="erSave">Save result</button><button class="btn ghost" id="erCancel">Cancel</button>', 'Log event result');
+  $('#erCancel').onclick=closeSheet;
+  $('#erSave').onclick=()=>{
+    const revTxt=$('#erRev').value;
+    const rev=(revTxt===''||revTxt==null)?null:+revTxt;
+    e.result={fee:+$('#erFee').value||0, revenue:rev, notes:$('#erNotes').value.trim(), on:todayKey()};
+    save(); closeSheet(); renderEvents(); renderHome();
+  };
 }
 $('#addEventBtn').onclick=()=>{
   openSheet('<h3>Add booking</h3>'+
@@ -679,6 +791,17 @@ function renderRevenue(){
   const lbl=document.createElement('div'); lbl.className='chart-labels';
   lbl.innerHTML=days.map(k=>'<span>'+parseKey(k).toLocaleDateString('en-US',{weekday:'narrow'})+'</span>').join('');
   $('#revChart').after(lbl);
+  // top spots: which corners pay, from the owner's own logged shifts
+  const bySpot={};
+  S.revenue.forEach(r=>{ const name=(r.spot||'').trim(); if(!name) return; const k=name.toLowerCase();
+    bySpot[k]=bySpot[k]||{name, n:0, tot:0}; bySpot[k].n++; bySpot[k].tot+=+r.amount; });
+  const ranked=Object.values(bySpot).sort((a,b)=>b.tot-a.tot).slice(0,8);
+  const oldTs=$('#topSpots'); if(oldTs) oldTs.remove();
+  const ts=document.createElement('div'); ts.className='card'; ts.id='topSpots'; ts.style.marginTop='12px';
+  ts.innerHTML='<h4>Top spots</h4>'+
+    (ranked.length?ranked.map(s=>'<div class="spot-row"><div class="s-info"><strong>'+esc(s.name)+'</strong><span>'+s.n+' shift'+(s.n>1?'s':'')+' · '+money(Math.round(s.tot/s.n))+' avg</span></div><strong>'+money(s.tot)+'</strong></div>').join('')
+    :'<div class="empty">Log shifts with a spot name to see which corners pay.</div>');
+  $('#revChart').closest('.card').after(ts);
   const list=S.revenue.slice().sort((a,b)=>a.date<b.date?1:-1).slice(0,60);
   $('#revList').innerHTML=list.length?list.map(r=>
     '<div class="rev-row"><div><strong>'+money(r.amount)+'</strong><div class="muted" style="font-size:12px">'+fmtDate(r.date)+(r.spot?' · '+esc(r.spot):'')+'</div></div><button class="del" data-r="'+r.id+'" aria-label="Remove revenue entry">×</button></div>'
@@ -762,6 +885,8 @@ function importBackup(file){
       S=st;
       if(!S.customDefs) S.customDefs=[];
       if(!S.extraCities) S.extraCities=[];
+      if(!Array.isArray(S.prepVisits)) S.prepVisits=[];
+      if(!S.inspectionChecks) S.inspectionChecks={};
       if(!S.locations) S.locations={};
       if(!S.commissary) S.commissary={name:'',cost:'',renews:'',days:[],notes:''};
       save(); closeSheet();

@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Where does the 35% off come from? A visual tour of cheaperinference.com</title>
+<meta name="description" content="An interactive explainer of the cheaperinference.com business model: a marketplace for idle AI inference capacity.">
+<style>
+:root{
+  --viz-bg:#141311; --viz-panel:#1d1b17; --viz-panel2:#26231d;
+  --viz-line:#3a362c; --viz-ink:#f2ede0; --viz-muted:#a39c88; --viz-faint:#6f695b;
+  --viz-accent:#e8a33d; --viz-danger:#e05252;
+  --viz-mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{margin:0; background:var(--viz-bg); color:var(--viz-ink);
+  font-family:system-ui,-apple-system,'Segoe UI',sans-serif; line-height:1.55;}
+.wrap{max-width:720px; margin:0 auto; padding:32px 20px 64px;}
+.kicker{font-family:var(--viz-mono); font-size:12px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--viz-accent); margin:0 0 12px;}
+h1{font-size:34px; line-height:1.15; margin:0 0 14px; letter-spacing:-.01em;}
+.lede{font-size:17px; color:var(--viz-muted); margin:0 0 8px;}
+.lede b{color:var(--viz-ink);}
+section{margin:44px 0 0;}
+h2{font-size:21px; margin:0 0 6px;}
+.sec-sub{font-size:15px; color:var(--viz-muted); margin:0 0 20px;}
+.sec-sub b{color:var(--viz-ink);}
+.foot-note{font-size:13px; color:var(--viz-faint); margin:14px 0 0;}
+.foot-note b{color:var(--viz-muted);}
+
+/* ---- flow diagram ---- */
+.flow{margin:6px 0 4px;}
+.flow svg{width:100%; height:auto; display:block;}
+.flow .node{fill:var(--viz-panel2); stroke:var(--viz-line); stroke-width:1.5;}
+.flow .nt{fill:var(--viz-ink); font-size:15px; font-weight:700; text-anchor:middle; font-family:system-ui,sans-serif;}
+.flow .ns{fill:var(--viz-muted); font-size:12px; text-anchor:middle; font-family:system-ui,sans-serif;}
+.flow .nsa{fill:var(--viz-accent); font-size:12px; text-anchor:middle; font-family:system-ui,sans-serif;}
+.flow .fl{fill:none; stroke-width:2.5;}
+.flow .fl.req{stroke:var(--viz-accent);}
+.flow .fl.money{stroke:var(--viz-danger);}
+.flow .fl.animated{stroke-dasharray:7 7; animation:dashmove 1s linear infinite;}
+.flow .flbl{font-size:11px; fill:var(--viz-faint); font-family:var(--viz-mono); letter-spacing:.08em; text-transform:uppercase;}
+@keyframes dashmove{to{stroke-dashoffset:-14;}}
+@media (prefers-reduced-motion:reduce){.flow .fl.animated{animation:none;}}
+
+/* ---- Pattern 1: zoom bars ---- */
+.vzb-row{margin:0 0 26px;}
+.vzb-lab{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; gap:10px;}
+.vzb-lab b{font-size:16px; color:var(--viz-ink);}
+.vzb-lab span{font-family:var(--viz-mono); font-size:13px; color:var(--viz-muted); font-variant-numeric:tabular-nums; white-space:nowrap;}
+.vzb-lab span b{color:var(--viz-accent); font-size:13px;}
+.vzb-bar{position:relative; height:26px; background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:8px; overflow:hidden;}
+.vzb-bar .vzb-fill{position:absolute; inset:0 auto 0 0; width:0; background:linear-gradient(90deg,#c98a2e,var(--viz-accent)); transition:width 1.1s cubic-bezier(.2,.7,.2,1);}
+.vzb-bar .vzb-sliver{position:absolute; top:0; bottom:0; right:0; width:0; background:var(--viz-danger); transition:width 1.1s cubic-bezier(.2,.7,.2,1);}
+.vzb-row.go .vzb-bar .vzb-fill{width:var(--w);}
+.vzb-row.go .vzb-bar .vzb-sliver{width:var(--t);}
+.vzb-zoom{margin-top:8px;}
+.vzb-zoomtag{font-family:var(--viz-mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--viz-faint); margin-bottom:6px;}
+.vzb-zbar{position:relative; height:20px; background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:7px; overflow:hidden;}
+.vzb-zbar .vzb-zfill{position:absolute; inset:0 auto 0 0; width:0; background:linear-gradient(90deg,#c98a2e,var(--viz-accent)); transition:width 1.1s cubic-bezier(.2,.7,.2,1);}
+.vzb-zbar .vzb-zsliver{position:absolute; top:0; bottom:0; right:0; width:0; background:var(--viz-danger); transition:width 1.1s cubic-bezier(.2,.7,.2,1);}
+.vzb-row.go .vzb-zbar .vzb-zfill{width:var(--zw);}
+.vzb-row.go .vzb-zbar .vzb-zsliver{width:var(--zt);}
+.vzb-zoomcap{font-size:13.5px; color:var(--viz-muted); margin-top:6px; font-variant-numeric:tabular-nums;}
+.vzb-zoomcap b{color:var(--viz-danger);}
+@media (prefers-reduced-motion:reduce){
+  .vzb-bar .vzb-fill,.vzb-bar .vzb-sliver,.vzb-zbar .vzb-zfill,.vzb-zbar .vzb-zsliver{transition:none;}
+}
+
+/* ---- spread axis ---- */
+.spread{position:relative; margin:26px 0 6px; padding:0 0 4px;}
+.spread-track{position:relative; height:34px; background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:8px; overflow:hidden;}
+.spread-paid{position:absolute; inset:0 auto 0 0; width:65%; background:linear-gradient(90deg,#c98a2e,var(--viz-accent)); opacity:.85;}
+.spread-mark{position:absolute; top:-6px; bottom:-6px; width:2px; background:var(--viz-ink);}
+.spread-tag{position:absolute; top:-30px; transform:translateX(-50%); font-family:var(--viz-mono); font-size:12px; color:var(--viz-ink); white-space:nowrap; font-variant-numeric:tabular-nums;}
+.spread-tag small{display:block; color:var(--viz-muted); font-size:11px; text-align:center;}
+.spread-scale{display:flex; justify-content:space-between; font-family:var(--viz-mono); font-size:11px; color:var(--viz-faint); margin-top:6px; font-variant-numeric:tabular-nums;}
+.spread-note{margin-top:30px; font-size:14px; color:var(--viz-muted); border-left:3px solid var(--viz-accent); padding-left:12px;}
+.spread-note b{color:var(--viz-accent);}
+
+/* ---- Pattern 3: live formula slider ---- */
+.vfs-slider{width:100%; height:34px; background:transparent; cursor:pointer; touch-action:pan-y; margin:4px 0 2px; -webkit-appearance:none; appearance:none;}
+.vfs-slider::-webkit-slider-runnable-track{height:4px; border-radius:3px; background:linear-gradient(90deg,var(--viz-danger),var(--viz-accent)); border:1px solid var(--viz-line);}
+.vfs-slider::-webkit-slider-thumb{-webkit-appearance:none; appearance:none; width:50px; height:50px; border-radius:50%; border:none; background:radial-gradient(circle,var(--viz-accent) 0 6px,#141311 6px 8px,rgba(0,0,0,0) 9px); margin-top:-23px; filter:drop-shadow(0 1px 3px rgba(0,0,0,.45));}
+.vfs-slider::-moz-range-track{height:4px; border-radius:3px; background:linear-gradient(90deg,var(--viz-danger),var(--viz-accent)); border:1px solid var(--viz-line);}
+.vfs-slider::-moz-range-thumb{width:50px; height:50px; border-radius:50%; border:none; background:radial-gradient(circle,var(--viz-accent) 0 6px,#141311 6px 8px,rgba(0,0,0,0) 9px); filter:drop-shadow(0 1px 3px rgba(0,0,0,.45));}
+.vfs-read{text-align:center; font-size:15px; color:var(--viz-muted); margin-bottom:16px;}
+.vfs-read .vfs-pct{font-family:var(--viz-mono); font-size:22px; color:var(--viz-ink); font-variant-numeric:tabular-nums;}
+.vfs-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
+.vfs-cell{background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:12px; padding:14px 8px; text-align:center;}
+.vfs-cell b{display:block; font-size:13px; color:var(--viz-ink); margin-bottom:4px;}
+.vfs-cell .vfs-num{display:block; font-family:var(--viz-mono); font-size:26px; color:var(--viz-accent); font-variant-numeric:tabular-nums; line-height:1.2;}
+.vfs-cell.save .vfs-num{color:var(--viz-danger);}
+.vfs-cell em{display:block; font-style:normal; font-size:11.5px; color:var(--viz-faint); margin-top:2px;}
+.vfs-insight{background:rgba(232,163,61,.08); border:1px solid rgba(232,163,61,.35); border-radius:12px; padding:14px 16px; margin:16px 0 4px; font-size:15px; color:var(--viz-ink); min-height:3.2em;}
+.vfs-insight b{color:var(--viz-accent);}
+@media (max-width:640px){ .vfs-cell .vfs-num{font-size:21px;} .vfs-grid{gap:8px;} }
+
+/* ---- Caveat card ---- */
+.ves-card{background:var(--viz-panel); border:1px solid var(--viz-line); border-radius:14px; padding:22px; margin:20px 0 4px;}
+.ves-card.warn{border-color:rgba(224,82,82,.45); background:rgba(224,82,82,.06);}
+.ves-card.warn > b{color:var(--viz-danger); font-size:16px;}
+.ves-card p{margin:8px 0 0; font-size:15px; color:var(--viz-muted);}
+
+/* ---- Pattern 5: source link-out cards ---- */
+.vsc-list{list-style:none; margin:12px 0 0; padding:0; display:grid; gap:10px;}
+.vsc-list a{display:block; background:var(--viz-panel2); border:1px solid var(--viz-line);
+  border-radius:14px; padding:16px; color:var(--viz-ink); text-decoration:none; touch-action:manipulation;}
+.vsc-list a:active{transform:scale(.99);}
+.vsc-head{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px;}
+.vsc-kind{display:inline-flex; align-items:center; gap:7px; font-family:var(--viz-mono); font-size:11px;
+  letter-spacing:.12em; text-transform:uppercase; color:var(--viz-accent);}
+.vsc-kind svg{width:15px; height:15px;}
+.vsc-head > svg{flex:none; width:15px; height:15px; color:var(--viz-muted);}
+.vsc-title{display:block; font-size:16.5px; font-weight:600; line-height:1.35;}
+.vsc-meta{display:block; margin-top:8px; font-size:13px; color:var(--viz-faint);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<p class="kicker">Business-model visualizer</p>
+<h1>Where does the 35% off come from?</h1>
+<p class="lede">cheaperinference.com is a <b>marketplace for idle AI compute</b>. On one side, GPU owners with spare capacity sell it cheap. On the other side, you buy it cheap through one OpenAI-compatible API. <b>The marketplace keeps the spread in the middle.</b> There is no separate fee, no subscription. The gap between wholesale and your price <b>is</b> the business.</p>
+
+<section>
+<h2>Three players, two flows</h2>
+<p class="sec-sub">Your requests flow <b>down</b> to whoever has spare GPUs right now. Money flows <b>up</b>, with the marketplace skimming the middle.</p>
+<div class="flow">
+<svg viewBox="0 0 360 470" role="img" aria-label="Flow diagram: you send requests down through the marketplace to capacity sellers; money flows back up">
+  <defs>
+    <marker id="ah" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#a39c88"/>
+    </marker>
+  </defs>
+  <rect class="node" x="80" y="8" width="200" height="66" rx="12"/>
+  <text class="nt" x="180" y="36">You</text>
+  <text class="ns" x="180" y="58">same requests, $5 to start</text>
+  <rect class="node" x="55" y="176" width="250" height="88" rx="12"/>
+  <text class="nt" x="180" y="204">cheaperinference.com</text>
+  <text class="ns" x="180" y="226">one API, routes to cheapest live capacity</text>
+  <text class="nsa" x="180" y="248">revenue = the spread</text>
+  <rect class="node" x="80" y="366" width="200" height="66" rx="12"/>
+  <text class="nt" x="180" y="394">Capacity sellers</text>
+  <text class="ns" x="180" y="416">idle GPUs turned into revenue</text>
+  <line class="fl req animated" x1="132" y1="80" x2="132" y2="168" marker-end="url(#ah)"/>
+  <text class="flbl" x="140" y="128">requests</text>
+  <line class="fl money animated" x1="228" y1="360" x2="228" y2="270" marker-end="url(#ah)"/>
+  <text class="flbl" x="236" y="318">money</text>
+</svg>
+</div>
+<p class="foot-note">Sellers apply with their spare capacity; the marketplace reviews the fit and settles supply directly with them. You never touch that side.</p>
+</section>
+
+<section>
+<h2>The discount, measured</h2>
+<p class="sec-sub">Live catalog rates, per million input tokens. The bar is the provider's list price; the red sliver is the part you never pay. Zoomed in so you can see it.</p>
+
+<div class="vzb-row" data-value="65" data-tail="35" data-window="40" data-cap="of every 100 list-price cents stay with you">
+  <div class="vzb-lab"><b>Claude Sonnet 4.5</b><span><b>$1.95</b> vs $3.00 / 1M</span></div>
+  <div class="vzb-bar"><div class="vzb-fill"></div><div class="vzb-sliver"></div></div>
+  <div class="vzb-zoom">
+    <div class="vzb-zoomtag"></div>
+    <div class="vzb-zbar"><div class="vzb-zfill"></div><div class="vzb-zsliver"></div></div>
+    <div class="vzb-zoomcap"></div>
+  </div>
+</div>
+
+<div class="vzb-row" data-value="46.7" data-tail="53.3" data-window="60" data-cap="of every 100 list-price cents stay with you">
+  <div class="vzb-lab"><b>DeepSeek V4.1 Flash</b><span><b>$0.07</b> vs $0.15 / 1M</span></div>
+  <div class="vzb-bar"><div class="vzb-fill"></div><div class="vzb-sliver"></div></div>
+  <div class="vzb-zoom">
+    <div class="vzb-zoomtag"></div>
+    <div class="vzb-zbar"><div class="vzb-zfill"></div><div class="vzb-zsliver"></div></div>
+    <div class="vzb-zoomcap"></div>
+  </div>
+</div>
+
+<div class="vzb-row" data-value="70" data-tail="30" data-window="40" data-cap="of every 100 list-price cents stay with you">
+  <div class="vzb-lab"><b>GPT-6 Luna</b><span><b>$0.07</b> vs $0.10 / 1M</span></div>
+  <div class="vzb-bar"><div class="vzb-fill"></div><div class="vzb-sliver"></div></div>
+  <div class="vzb-zoom">
+    <div class="vzb-zoomtag"></div>
+    <div class="vzb-zbar"><div class="vzb-zfill"></div><div class="vzb-zsliver"></div></div>
+    <div class="vzb-zoomcap"></div>
+  </div>
+</div>
+<p class="foot-note">Catalog rates from cheaperinference.com, 9 Oct 2026. Input tokens per million. Output tokens are discounted too (e.g. Sonnet 4.5 output $9.75 vs $15.00).</p>
+</section>
+
+<section>
+<h2>The spread is the business</h2>
+<p class="sec-sub">One token's journey, Claude Sonnet 4.5 input pricing. Two numbers are public. The third is the whole business model.</p>
+<div class="spread">
+  <div class="spread-tag" style="left:65%;"><b>$1.95</b><small>you pay</small></div>
+  <div class="spread-track">
+    <div class="spread-paid"></div>
+    <div class="spread-mark" style="left:65%;"></div>
+  </div>
+  <div class="spread-scale"><span>$0</span><span>$1.50</span><span>$3.00 list</span></div>
+  <div class="spread-note"><b>What the seller gets is not published.</b> Somewhere left of $1.95 sits the wholesale price of idle capacity. The gap between that number and your $1.95 is the marketplace's cut. They say there is no separate routing surcharge, so this gap is the entire revenue line.</div>
+</div>
+</section>
+
+<section>
+<h2>What it means for your bill</h2>
+<p class="sec-sub">Claude Sonnet 4.5 at a typical 75/25 input/output mix. Drag to your volume.</p>
+<div class="vfs" id="fs1">
+  <input type="range" class="vfs-slider" min="1" max="500" step="1" value="60" aria-label="Monthly tokens in millions">
+  <div class="vfs-read"><b class="vfs-pct">60M</b> tokens / month</div>
+  <div class="vfs-grid"></div>
+  <div class="vfs-insight" aria-live="polite"></div>
+</div>
+<p class="foot-note"><b>Illustrative.</b> Assumes a 75% input / 25% output mix and today's catalog rates. Real rates move with live capacity, and your mix will differ.</p>
+</section>
+
+<section>
+<div class="ves-card warn">
+  <b>A middleman discount is not free.</b>
+  <p>You pre-fund a balance with a young startup, and your prompts route through a third party. They say they never store prompt or response bodies (usage metadata only) and offer zero-retention routes, but check those routes before sending anything sensitive. Capacity comes from third-party sellers, so discounts and availability move around. "Always the cheapest" is marketing, not a contract. "Never above list price" is a cap, not a promise.</p>
+</div>
+</section>
+
+<section>
+<h2>Sources</h2>
+<ul class="vsc-list">
+  <li><a href="https://cheaperinference.com">
+    <span class="vsc-head">
+      <span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Website</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg>
+    </span>
+    <span class="vsc-title">cheaperinference.com</span>
+    <span class="vsc-meta">Live catalog rates, pricing model, and seller program &middot; verified 9 Oct 2026</span>
+  </a></li>
+  <li><a href="https://x.com/fabrice_mayrand/status/2106781083698425885">
+    <span class="vsc-head">
+      <span class="vsc-kind"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.451-6.231zm-1.161 17.52h1.833L7.084 4.126H5.117l11.966 15.644z"/></svg>X post</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg>
+    </span>
+    <span class="vsc-title">The post that started this</span>
+    <span class="vsc-meta">@fabrice_mayrand &middot; 4 Oct 2026</span>
+  </a></li>
+</ul>
+</section>
+
+</div>
+
+<script>
+(function(){
+  /* ---------- Pattern 1: zoom bars ---------- */
+  function vzbClamp(v){ return Math.min(100, Math.max(0, v)); }
+  function vzbMainWidths(value){
+    var v = vzbClamp(value);
+    return { fill: v, sliver: 100 - v };
+  }
+  function vzbZoomWidths(tail, win){
+    var w = win > 0 ? win : 5;
+    var t = Math.min(Math.max(tail, 0), w);
+    return { zfill: (w - t) / w * 100, zsliver: t / w * 100, factor: Math.round(100 / w) };
+  }
+  var rows = document.querySelectorAll('.vzb-row');
+  rows.forEach(function(row){
+    var value = parseFloat(row.getAttribute('data-value'));
+    var tail  = parseFloat(row.getAttribute('data-tail'));
+    var win   = parseFloat(row.getAttribute('data-window')) || 5;
+    var cap   = row.getAttribute('data-cap') || '';
+    if(!(value >= 0)) value = 0;
+    if(!(tail >= 0)) tail = 0;
+    var m = vzbMainWidths(value), z = vzbZoomWidths(tail, win);
+    row.style.setProperty('--w', m.fill + '%');
+    row.style.setProperty('--t', m.sliver + '%');
+    row.style.setProperty('--zw', z.zfill + '%');
+    row.style.setProperty('--zt', z.zsliver + '%');
+    var tag = row.querySelector('.vzb-zoomtag');
+    if(tag) tag.textContent = 'zoomed ' + z.factor + '× · the last ' + win + '%';
+    var zc = row.querySelector('.vzb-zoomcap');
+    if(zc) zc.innerHTML = '<b>' + tail.toFixed(1) + '</b> ' + cap.replace(/</g, '&lt;');
+  });
+  function vzbArm(){ rows.forEach(function(r){ r.classList.add('go'); }); }
+  if('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){ e.target.classList.add('go'); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.35 });
+    rows.forEach(function(r){ io.observe(r); });
+  } else { vzbArm(); }
+  window.__vzb = { main: vzbMainWidths, zoom: vzbZoomWidths };
+})();
+</script>
+
+<script>
+(function(){
+  /* ---------- Pattern 3: live formula slider ---------- */
+  var CFG = {
+    rootId: 'fs1',
+    inShare: 0.75,
+    listIn: 3.00, listOut: 15.00,
+    mktIn: 1.95, mktOut: 9.75,
+    readouts: [
+      { id: 'direct', label: 'Direct list bill', unit: 'per month',
+        compute: function(m){ return m * (CFG.inShare * CFG.listIn + (1 - CFG.inShare) * CFG.listOut); } },
+      { id: 'mkt', label: 'Via marketplace', unit: 'per month',
+        compute: function(m){ return m * (CFG.inShare * CFG.mktIn + (1 - CFG.inShare) * CFG.mktOut); } },
+      { id: 'save', label: 'Stays with you', unit: 'per month', danger: true,
+        compute: function(m){
+          return m * (CFG.inShare * (CFG.listIn - CFG.mktIn) + (1 - CFG.inShare) * (CFG.listOut - CFG.mktOut));
+        } }
+    ]
+  };
+  function fmt$(v){ return '$' + Math.round(v).toLocaleString('en-US'); }
+  var root = document.getElementById(CFG.rootId);
+  if(!root) return;
+  var slider = root.querySelector('.vfs-slider');
+  var pct = root.querySelector('.vfs-pct');
+  var grid = root.querySelector('.vfs-grid');
+  var insight = root.querySelector('.vfs-insight');
+  var nums = CFG.readouts.map(function(r){
+    var cell = document.createElement('div');
+    cell.className = 'vfs-cell' + (r.danger ? ' save' : '');
+    cell.innerHTML = '<b></b><span class="vfs-num"></span><em></em>';
+    cell.querySelector('b').textContent = r.label;
+    cell.querySelector('em').textContent = r.unit;
+    grid.appendChild(cell);
+    return cell.querySelector('.vfs-num');
+  });
+  function render(){
+    var m = parseInt(slider.value, 10);
+    pct.textContent = m + 'M';
+    var vals = CFG.readouts.map(function(r){ return r.compute(m); });
+    vals.forEach(function(v, i){ nums[i].textContent = fmt$(v); });
+    insight.innerHTML = 'At <b>' + m + 'M</b> tokens a month, <b>' + fmt$(vals[2]) +
+      '</b> of your <b>' + fmt$(vals[0]) + '</b> bill stays with you. Somewhere inside the ' + fmt$(vals[1]) +
+      ' you do pay sits the marketplace\u2019s spread.';
+  }
+  slider.addEventListener('input', render);
+  render();
+  window.__vfs = { at: function(m){ return CFG.readouts.map(function(r){ return r.compute(m); }); } };
+})();
+</script>
+</body>
+</html>

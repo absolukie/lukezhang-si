@@ -78,6 +78,16 @@
   @media (max-width: 480px) {
     .stepper .step-code { font-size: 12px; padding: 10px 12px; }
   }
+  .tactic-gloss { border: 1px solid rgba(43,43,43,0.15); border-radius: 12px;
+    padding: 4px 18px 8px; margin: 18px 0 4px; background: rgba(255,255,255,0.35); }
+  .tactic-gloss h3 { font-size: 16px; margin: 12px 0 4px; color: #2b2b2b; }
+  .tactic-gloss > p { font-size: 14px; color: rgba(43,43,43,0.7); margin: 0 0 4px; }
+  .tactic-gloss .tg-row { display: flex; gap: 12px; padding: 8px 0;
+    border-top: 1px solid rgba(43,43,43,0.08); font-size: 14px; line-height: 1.55;
+    align-items: baseline; }
+  .tactic-gloss code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 13px; background: #2b2b2b; color: #f6f1e3; border-radius: 6px;
+    padding: 2px 8px; white-space: nowrap; flex-shrink: 0; }
 
   /* Lean-in-the-browser lab */
   .leanlab { border: 1px solid rgba(179,53,43,0.35); border-radius: 16px;
@@ -174,9 +184,25 @@
       <div class="bar">
         <button id="st-back">&larr; Back</button>
         <button id="st-next" class="primary">Next &rarr;</button>
-        <span class="count" id="st-count">1 / 6</span>
+        <span class="count" id="st-count">1 / 8</span>
       </div>
       <div class="dots" id="st-dots"></div>
+    </div>
+    <div class="tactic-gloss">
+      <h3>Lean's little words</h3>
+      <p>The same few words close out almost every line above. Here is what they mean.</p>
+      <div class="tg-row"><code>by</code><span>Opens a tactic block: a short script that proves the goal. Read it as "proved by doing the following."</span></div>
+      <div class="tg-row"><code>exact</code><span>Hands Lean a proof that fits the goal perfectly. One move, done.</span></div>
+      <div class="tg-row"><code>have</code><span>Proves a helper fact right now and names it, so later lines can use it.</span></div>
+      <div class="tg-row"><code>intro</code><span>Takes the goal apart and names the pieces: the variables and assumptions you get to work with.</span></div>
+      <div class="tg-row"><code>obtain</code><span>Unpacks a fact into its contents. "2 divides a" becomes a real witness: some c with a = 2c.</span></div>
+      <div class="tg-row"><code>rw</code><span>Rewrites using an equation. <code>rw [h]</code> swaps one side of h for the other; the little arrow flips the direction.</span></div>
+      <div class="tg-row"><code>:=</code><span>Read as "is". Everything after it is the proof of everything before it.</span></div>
+      <div class="tg-row"><code>omega</code><span>The arithmetic robot. Closes any goal that is just adding, subtracting, and comparing numbers.</span></div>
+      <div class="tg-row"><code>ring</code><span>The algebra robot. Expands and rearranges: (2c)² becomes 4c², that kind of work.</span></div>
+      <div class="tg-row"><code>simp</code><span>The simplifier. Applies standard simplifications over and over until nothing changes.</span></div>
+      <div class="tg-row"><code>norm_num</code><span>Crunching concrete numbers, like checking that 0 ≤ 2.</span></div>
+      <div class="tg-row"><code>exact_mod_cast</code><span>Plumbing between number types. Moves a fact from integers to reals (or back) so the types line up. <code>push_cast</code> is its partner.</span></div>
     </div>
     <figcaption>Proof by contradiction: assume √2 is a fraction, then break that assumption.</figcaption>
   </figure>
@@ -299,6 +325,10 @@ theorem sqrt_two_irrational&#x27; : Irrational&#x27; (Real.sqrt 2) := by
 <script>
 (function () {
   var steps = [
+    { title: "First, what 'irrational' means",
+      body: "Lean has no idea what the word irrational means until we define it. Mathlib has its own version, but the browser build of Lean does not include it, so this file defines its own. A real number is irrational when no fraction of integers can equal it.",
+      code: "def Irrational' (x : \\u211d) : Prop := \\u2200 a b : \\u2124, b \\u2260 0 \\u2192 x \\u2260 a / b",
+      gloss: "def creates a new named thing. Irrational' is our own version: the apostrophe says so, since Mathlib's built-in one is missing here. It takes a real number x and says: for all integers a and b, if b is not zero, then x is not a divided by b. Prop means this is a statement, something that can be true or false." },
     { title: "Assume \u221a2 is a fraction",
       body: "The goal says: for any integers a and b, if b is not zero then \u221a2 is not a/b. To prove a \u201cnot\u201d, assume the opposite and break it. So suppose \u221a2 = a/b.",
       code: "intro a b hb h",
@@ -329,6 +359,18 @@ theorem sqrt_two_irrational&#x27; : Irrational&#x27; (Real.sqrt 2) := by
         + "  rintro hz\n"
         + "  exact hb (Int.natAbs_eq_zero.mp hz)",
       gloss: "Apply natAbs (absolute value) to both sides of a\u00b2 = 2b\u00b2; the library lemmas say it passes through powers and products, and rwa rewrites then closes the goal. hbN checks the denominator stays nonzero." },
+    { title: "The descent machine: induction on a bound",
+      body: "The helper theorem says: for every bound n, any naturals a and b with b at most n, b nonzero, and a squared equal to 2 times b squared, lead to a contradiction. We prove it by induction on the bound n. The base case is free: b at most 0 forces b to be 0, which clashes with b not zero.",
+      code: "theorem no_sqrt2_nat : \\u2200 n : \\u2115, \\u2200 a b : \\u2115, b \\u2264 n \\u2192 b \\u2260 0 \\u2192 a ^ 2 = 2 * b ^ 2 \\u2192 False := by\\n"
+        + "  intro n\\n"
+        + "  induction n with\\n"
+        + "  | zero =>\\n"
+        + "      intro a b hle hb _\\n"
+        + "      omega\\n"
+        + "  | succ n ih =>\\n"
+        + "      intro a b hle hb h\\n"
+        + "      -- the descent body (next step) goes here",
+      gloss: "theorem names the claim; ending in False marks it as a proof by contradiction. intro n pulls the bound into the proof. induction n with splits it into two cases. The zero case is closed by omega, which solves goals that are pure linear arithmetic: b at most 0 clashes with b not zero, so there is nothing left to prove. The succ case hands us ih, the induction hypothesis: any solution with a denominator up to n is already impossible. The next step's code lives inside that case." },
     { title: "Every solution has a smaller one",
       body: "The heart of the proof, inside the helper theorem no_sqrt2_nat (proved by induction on a bound). From a\u00b2 = 2b\u00b2: 2 divides a\u00b2, and 2 is prime, so 2 divides a; write a = 2c. Substituting gives b\u00b2 = 2c\u00b2, so 2 divides b too; write b = 2d. Then c\u00b2 = 2d\u00b2 with d smaller than b. A smaller solution always exists.",
       code: "-- 2 \u2223 a\u00b2, and 2 is prime, so 2 \u2223 a.\n"
@@ -362,8 +404,10 @@ theorem sqrt_two_irrational&#x27; : Irrational&#x27; (Real.sqrt 2) := by
         + "exact ih c d hdb hd0 hcd\n"
         + "\n"
         + "-- Main theorem, one line: no fraction a/b equals \u221a2.\n"
-        + "exact no_sqrt2_nat _ _ _ (le_refl _) hbN hN",
-      gloss: "hd0 and hdb verify the smaller pair is genuine, then exact hands it to the induction hypothesis ih, which rules out any solution that small. The last line applies the whole descent machine to the absolute values from step 4." }
+        + "exact no_sqrt2_nat _ _ _ (le_refl _) hbN hN"
+        + "\\n\\n-- Sanity line: ask Lean to print the theorem's full type.\\n"
+        + "#check @sqrt_two_irrational'",
+      gloss: "hd0 and hdb verify the smaller pair is genuine, then exact hands it to the induction hypothesis ih, which rules out any solution that small. The last line applies the whole descent machine to the absolute values from step 4. The final line is a sanity check: #check asks Lean to print the theorem's full type, so we can eyeball that what we proved really says the square root of 2 is irrational." }
   ];
   var i = 0;
   var kicker = document.getElementById('st-kicker');
@@ -387,8 +431,8 @@ theorem sqrt_two_irrational&#x27; : Irrational&#x27; (Real.sqrt 2) := by
     code.textContent = st.code;
     gloss.textContent = st.gloss;
     count.textContent = (i + 1) + ' / ' + steps.length;
-    back.disabled = (i === 0);
-    next.disabled = (i === steps.length - 1);
+    back.style.display = (i === 0) ? 'none' : '';
+    next.style.display = (i === steps.length - 1) ? 'none' : '';
     var ds = dots.children;
     for (var d = 0; d < ds.length; d++) {
       ds[d].className = (d === i) ? 'on' : '';

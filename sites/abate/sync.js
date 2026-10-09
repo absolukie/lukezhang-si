@@ -422,7 +422,7 @@ function renderSettingsUI(){
     'Full-size site photos stay on the device that took them; thumbnails sync. ' +
     'Anyone with the key can read your records.</div>' +
     '<div class="row" style="margin-top:10px"><button class="btn secondary grow" id="syncCopy">Copy device key</button></div>' +
-    '<div class="row" style="margin-top:8px"><input id="syncPaste" class="grow" type="text" placeholder="Paste a 64-char key from another device" maxlength="64" style="font-size:12px">' +
+    '<div class="row" style="margin-top:8px"><input id="syncPaste" class="grow" type="text" placeholder="Paste a 64-char key from another device" maxlength="64" style="font-size:16px">' +
     '<button class="btn secondary" id="syncUse">Use this key</button></div>';
   main.appendChild(box);
   updatePill();

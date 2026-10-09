@@ -523,6 +523,26 @@ function makeSamplePhoto(){
 /* ---------- tag modal ---------- */
 function openModal(id){ $(id).classList.add("open"); }
 function closeModals(){ document.querySelectorAll(".modal").forEach(function(m){ m.classList.remove("open"); }); pinMode=false; updatePinBtn(); }
+
+/* Restart-safe new-job draft (PRD section 5: every form survives abandonment
+ * mid-entry). The draft autosaves to localStorage on every keystroke, is
+ * restored when the modal opens, and is cleared once the job is created. */
+var JOB_DRAFT_KEY = "aftermath.jobdraft.v1";
+var JOB_DRAFT_FIELDS = ["job-name","job-client","job-address","job-claim","job-insurer","job-type","job-company"];
+function saveJobDraft(){
+  try{
+    var d = {};
+    JOB_DRAFT_FIELDS.forEach(function(id){ var el=$(id); if(el) d[id]=el.value; });
+    localStorage.setItem(JOB_DRAFT_KEY, JSON.stringify(d));
+  }catch(e){}
+}
+function restoreJobDraft(){
+  var d = null;
+  try{ d = JSON.parse(localStorage.getItem(JOB_DRAFT_KEY)||"null"); }catch(e){}
+  if(!d) return;
+  JOB_DRAFT_FIELDS.forEach(function(id){ var el=$(id); if(el && !el.value && d[id]) el.value=d[id]; });
+}
+function clearJobDraft(){ try{ localStorage.removeItem(JOB_DRAFT_KEY); }catch(e){} }
 var confirmCb = null;
 function askConfirm(title, body, okLabel, danger, cb){
   $("confirm-title").textContent = title;
@@ -702,8 +722,10 @@ function dossierScore(jobId){
   var done = items.filter(function(c){return c.done;}).length;
   var lis = jobItems(jobId);
   var parts = [];
-  var metaPts = (j.claim?7:0)+(j.insurer?6:0)+(j.client?4:0)+(j.address?4:0)+(j.lossDate?2:0)+(j.cause?2:0);
-  parts.push({label:"Claim details (claim #, insurer, client, address, date of loss, cause)", pts:metaPts, max:25});
+  /* claim-details bucket weights per PRD R-15: date of loss 7, claim # 6,
+   * insurer 4, client 4, cause of loss 2, adjuster contact 2 (max 25). */
+  var metaPts = (j.lossDate?7:0)+(j.claim?6:0)+(j.insurer?4:0)+(j.client?4:0)+(j.cause?2:0)+((j.adjName||j.adjPhone)?2:0);
+  parts.push({label:"Claim details (date of loss, claim #, insurer, client, cause of loss, adjuster contact)", pts:metaPts, max:25});
   var pc = phaseCounts(jobId);
   var photoPts = Math.round(25*(Math.min(pc.before,PHASE_MIN.before)/PHASE_MIN.before +
     Math.min(pc.during,PHASE_MIN.during)/PHASE_MIN.during +
@@ -719,10 +741,12 @@ function dossierScore(jobId){
 function scoreMissing(jobId, sc){
   var j = getJob(jobId);
   var out = [];
+  if(!j.lossDate) out.push({text:"Add the date of loss", target:"edit"});
   if(!j.claim) out.push({text:"Add the insurance claim number", target:"edit"});
   if(!j.insurer) out.push({text:"Add the insurer name", target:"edit"});
-  if(!j.lossDate) out.push({text:"Add the date of loss", target:"edit"});
+  if(!j.client) out.push({text:"Add the client name", target:"edit"});
   if(!j.cause) out.push({text:"Add the cause of loss", target:"edit"});
+  if(!j.adjName && !j.adjPhone) out.push({text:"Add the adjuster name or phone", target:"edit"});
   var photos = jobPhotos(jobId);
   var sampleCount = photos.filter(function(p){return p.sample;}).length;
   var pc = phaseCounts(jobId);
@@ -1023,12 +1047,15 @@ function buildDossierHTML(){
   var evs = jobEvents(currentJobId);
   var t = worklogTotals(currentJobId);
 
-  function photoCard(p, pi){
+  /* photoCard takes a 1-based photo number that matches the manifest CSV's
+   * "Photo #" column exactly (same jobPhotos() order), so the dossier and the
+   * manifest can never disagree about which photo is which. */
+  function photoCard(p, n){
     var pins = (p.pins||[]).map(function(pin,i){
       return '<span class="cap-tag">Marker '+(i+1)+(pin.label?": "+esc(pin.label):"")+'</span>';
     }).join("");
-    return '<div class="dz-photo"><img src="'+esc(p.dataUrl)+'" alt="Evidence photo '+(pi+1)+'">' +
-      '<div class="dz-photo-cap"><b>Photo '+(pi+1)+'</b>, captured '+esc(fmtTime(p.takenAt)) +
+    return '<div class="dz-photo"><img src="'+esc(p.dataUrl)+'" alt="Evidence photo '+n+'">' +
+      '<div class="dz-photo-cap"><b>Photo '+n+'</b>, captured '+esc(fmtTime(p.takenAt)) +
       (p.sample ? ' <span class="cap-tag">SAMPLE</span>' : '') +
       '<div class="cap-tags">' +
       (p.room?'<span class="cap-tag">'+esc(p.room)+'</span>':'') +
@@ -1045,12 +1072,11 @@ function buildDossierHTML(){
   } else {
     var groups = [["before","Before remediation"],["during","During remediation"],["after","After remediation"],["","Unclassified"]];
     photoHTML = "";
-    var n = 0;
     groups.forEach(function(g){
       var gp = photos.filter(function(p){ return (p.phase||"")===g[0]; });
       if(!gp.length) return;
       photoHTML += '<h3>'+esc(g[1])+' ('+esc(gp.length)+')</h3>';
-      gp.forEach(function(p){ n++; photoHTML += photoCard(p, n); });
+      gp.forEach(function(p){ photoHTML += photoCard(p, photos.indexOf(p)+1); });
     });
   }
 
@@ -1107,12 +1133,13 @@ function buildDossierHTML(){
     '<div><b>2 · Decontamination checklist</b>'+esc(doneSteps)+'/'+esc(items.length)+' steps completed</div>' +
     '<div><b>3 · Line-item work record</b>'+esc(lis.length)+' line items, '+esc(money(t.total))+', '+esc(linkedTotal)+' evidence photos linked</div>' +
     '<div><b>4 · Chain of custody</b>'+esc(evs.length)+' events</div>' +
+    '<div><b>5 · Signatures</b>technician and client / adjuster signatures</div>' +
     '</div></div>' +
     '<h2 class="dz-h2">1 · Photo evidence ('+esc(photos.length)+')</h2>' + photoHTML +
     '<h2 class="dz-h2 dz-h2-break">2 · Decontamination checklist</h2>' + checkHTML +
     '<h2 class="dz-h2 dz-h2-break">3 · Line-item work record</h2>' + liHTML +
     '<h2 class="dz-h2 dz-h2-break">4 · Chain of custody</h2>' + custHTML +
-    '<div class="dz-sign-wrap"><div class="dz-sign">' + signBlock(j.sigTech,"Technician signature") + signBlock(j.sigClient,"Client / adjuster signature") + '</div>' +
+    '<div class="dz-sign-wrap"><h2 class="dz-h2">5 · Signatures</h2><div class="dz-sign">' + signBlock(j.sigTech,"Technician signature") + signBlock(j.sigClient,"Client / adjuster signature") + '</div>' +
     '<div class="dz-footer">This dossier documents conditions observed and work performed. Timestamps are captured at the time of photo capture and checklist completion. GPS coordinates, when shown, are the device\'s best-effort location at photo capture and are approximate. Retain with claim file.</div></div>';
 }
 
@@ -1239,9 +1266,17 @@ document.addEventListener("DOMContentLoaded", function(){
     saveChecked("new job", "Job created");
     logEvent(id, "Job created");
     $("job-form").reset();
+    clearJobDraft();
     closeModals(); renderJobs();
     openJob(id);
   });
+
+  /* New-job draft: autosave every keystroke, restore on open. */
+  JOB_DRAFT_FIELDS.forEach(function(id){
+    var el = $(id);
+    if(el){ el.addEventListener("input", saveJobDraft); el.addEventListener("change", saveJobDraft); }
+  });
+  $("btn-new-job").addEventListener("click", function(){ restoreJobDraft(); });
 
   $("btn-edit-job").addEventListener("click", openJobEdit);
   $("job-edit-form").addEventListener("submit", function(e){

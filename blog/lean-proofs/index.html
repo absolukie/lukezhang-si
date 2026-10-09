@@ -80,6 +80,16 @@
   }
   .stepper .step-code .tk-tac { color: #f0b0a8; }
   .stepper .step-code .tk-com { color: rgba(246,241,227,0.42); font-style: italic; }
+  .stepper .step-code .tk-tac { cursor: pointer; touch-action: manipulation;
+    border-bottom: 1px dotted rgba(240,176,168,0.7); }
+  .tk-bubble { position: fixed; z-index: 60; background: #fffdf8; color: #2b2b2b;
+    border: 1px solid rgba(43,43,43,0.2); border-radius: 12px; padding: 10px 12px;
+    box-shadow: 0 8px 24px rgba(43,43,43,0.18); font-size: 14px; line-height: 1.5;
+    max-width: 280px; }
+  .tk-bubble[hidden] { display: none; }
+  .tk-bubble-name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 13px; background: #2b2b2b; color: #f6f1e3; border-radius: 6px;
+    padding: 2px 8px; margin-right: 8px; }
   .tactic-gloss { border: 1px solid rgba(43,43,43,0.15); border-radius: 12px;
     padding: 4px 18px 8px; margin: 18px 0 4px; background: rgba(255,255,255,0.35); }
   .tactic-gloss h3 { font-size: 16px; margin: 12px 0 4px; color: #2b2b2b; }
@@ -172,7 +182,7 @@
   <p>If the π result measures <em>how</em> irrational a number is, the √2 proof is where that road starts: the 2,500-year-old argument that some numbers simply are not fractions, now in a form a computer can check.</p>
 
   <h2>3. The proof, in six steps</h2>
-  <p>Tap through it. Each step is one move in the argument, with the real Lean code that makes it real.</p>
+  <p>Tap through it. Each step is one move in the argument, with the real Lean code that makes it real. Tap any highlighted word in the code to learn what it does.</p>
 
   <figure>
     <div class="stepper" id="stepper">
@@ -422,6 +432,53 @@ theorem sqrt_two_irrational&#x27; : Irrational&#x27; (Real.sqrt 2) := by
   var next = document.getElementById('st-next');
   var dots = document.getElementById('st-dots');
   var TACTICS = ['exact_mod_cast','push_cast','norm_num','congrArg','linarith','rintro','obtain','intro','exact','decide','omega','rwa','ring','simp','have','rw','by'];
+  var TAC_HELP = {
+    'by': 'Opens a tactic block: a short script that proves the goal. Read it as "proved by doing the following."',
+    'exact': 'Hands Lean a proof that fits the goal perfectly. One move, done.',
+    'have': 'Proves a helper fact right now and names it, so later lines can use it.',
+    'intro': 'Takes the goal apart and names the pieces: the variables and assumptions you get to work with.',
+    'obtain': 'Unpacks a fact into its contents. "2 divides a" becomes a real witness: some c with a = 2c.',
+    'rw': 'Rewrites using an equation. rw [h] swaps one side of h for the other; the little arrow flips the direction.',
+    'rwa': 'Rewrites, then closes the goal on the spot. Rewrite plus assumption in one move.',
+    'rintro': 'Like intro, but it can also unpack patterns while it introduces them.',
+    ':=': 'Read as "is". Everything after it is the proof of everything before it.',
+    'omega': 'The arithmetic robot. Closes any goal that is just adding, subtracting, and comparing numbers.',
+    'ring': 'The algebra robot. Expands and rearranges: (2c)² becomes 4c², that kind of work.',
+    'simp': 'The simplifier. Applies standard simplifications over and over until nothing changes.',
+    'norm_num': 'Crunching concrete numbers, like checking that 0 ≤ 2.',
+    'linarith': 'The linear arithmetic solver. Closes goals that follow from linear equations.',
+    'congrArg': 'Applies a function to both sides of an equation.',
+    'exact_mod_cast': 'Plumbing between number types. Moves a fact from integers to reals (or back) so the types line up.',
+    'push_cast': 'Its partner: shoves casts outward so the rest of the proof can work with them.'
+  };
+  var bubble = document.createElement('div');
+  bubble.className = 'tk-bubble';
+  bubble.setAttribute('hidden', '');
+  var bubbleName = document.createElement('span');
+  bubbleName.className = 'tk-bubble-name';
+  var bubbleText = document.createElement('span');
+  bubble.appendChild(bubbleName);
+  bubble.appendChild(bubbleText);
+  document.body.appendChild(bubble);
+  var bubbleTac = null, bubbleAnchor = null;
+  function hideBubble() { bubble.setAttribute('hidden', ''); bubbleTac = null; bubbleAnchor = null; }
+  function showBubble(anchor, tac) {
+    var help = TAC_HELP[tac];
+    if (!help) return;
+    bubbleName.textContent = tac;
+    bubbleText.textContent = help;
+    bubble.removeAttribute('hidden');
+    var r = anchor.getBoundingClientRect();
+    var bw = Math.min(280, window.innerWidth - 24);
+    bubble.style.maxWidth = bw + 'px';
+    var bh = bubble.offsetHeight;
+    var left = Math.max(12, Math.min(window.innerWidth - bw - 12, r.left + r.width / 2 - bw / 2));
+    var top = r.top - bh - 10;
+    if (top < 8) top = r.bottom + 10;
+    bubble.style.left = left + 'px';
+    bubble.style.top = top + 'px';
+    bubbleTac = tac; bubbleAnchor = anchor;
+  }
   function hlLean(src) {
     function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
     var re = new RegExp('\\b(' + TACTICS.join('|') + ')\\b', 'g');
@@ -429,10 +486,29 @@ theorem sqrt_two_irrational&#x27; : Irrational&#x27; (Real.sqrt 2) := by
       var ci = line.indexOf('--');
       var codePart = ci >= 0 ? line.slice(0, ci) : line;
       var comPart = ci >= 0 ? line.slice(ci) : '';
-      codePart = esc(codePart).replace(re, '<span class="tk-tac">$1</span>');
+      codePart = esc(codePart)
+        .replace(re, '<span class="tk-tac" data-tac="$1">$1</span>')
+        .replace(/:=/g, '<span class="tk-tac" data-tac=":=">:=</span>');
       return codePart + (comPart ? '<span class="tk-com">' + esc(comPart) + '</span>' : '');
     }).join('\n');
   }
+  code.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest ? e.target.closest('.tk-tac') : null;
+    if (!t) return;
+    e.stopPropagation();
+    var tac = t.getAttribute('data-tac');
+    if (bubbleTac === tac && bubbleAnchor === t && !bubble.hasAttribute('hidden')) {
+      hideBubble();
+      return;
+    }
+    showBubble(t, tac);
+  });
+  document.addEventListener('click', function (e) {
+    if (bubble.hasAttribute('hidden')) return;
+    if (bubble.contains(e.target)) return;
+    if (e.target && e.target.closest && e.target.closest('.tk-tac')) return;
+    hideBubble();
+  }, true);
   for (var d = 0; d < steps.length; d++) {
     var s = document.createElement('span');
     dots.appendChild(s);
@@ -444,6 +520,7 @@ theorem sqrt_two_irrational&#x27; : Irrational&#x27; (Real.sqrt 2) := by
     body.textContent = st.body;
     code.innerHTML = hlLean(st.code);
     code.scrollLeft = 0;
+    hideBubble();
     gloss.textContent = st.gloss;
     count.textContent = (i + 1) + ' / ' + steps.length;
     back.style.display = (i === 0) ? 'none' : '';

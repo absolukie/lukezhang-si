@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="tags" content="kubernetes, patterns">
+<meta name="description" content="A sidecar is a helper container riding in the same pod as your app. What that means, how it differs from init containers, DaemonSets, and plain services, and a 30-second test for picking the right one.">
+<title>Your Pod's Plus-One</title>
+<link rel="stylesheet" href="/blog/assets/highlight-theme.css">
+<script src="/blog/assets/highlight.min.js"></script>
+<style>
+/* Shared visualizer theme */
+:root{
+  --viz-bg:#141311; --viz-panel:#1d1b17; --viz-panel2:#26231d;
+  --viz-line:#3a362c; --viz-ink:#f2ede0; --viz-muted:#a39c88; --viz-faint:#6f695b;
+  --viz-accent:#e8a33d;
+  --viz-danger:#e05252;
+  --viz-blue:#7aaaff;
+  --viz-mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html{scroll-behavior:smooth;}
+body{
+  margin:0; background:var(--viz-bg); color:var(--viz-ink);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Helvetica,Arial,sans-serif;
+  font-size:17px; line-height:1.65;
+}
+article{max-width:700px; margin:0 auto; padding:28px 20px 60px;}
+.kicker{
+  font-family:var(--viz-mono); font-size:12px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--viz-accent); margin:0 0 14px;
+}
+h1{font-size:clamp(30px,7vw,44px); line-height:1.12; letter-spacing:-0.02em; margin:0 0 14px;}
+.standfirst{font-size:19px; color:var(--viz-muted); margin:0 0 8px; line-height:1.5;}
+.tip{font-size:13.5px; color:var(--viz-faint); margin:0 0 30px;}
+.tip a{color:var(--viz-muted);}
+h2{font-size:24px; letter-spacing:-0.01em; margin:44px 0 12px; line-height:1.25;}
+h2 .n{font-family:var(--viz-mono); font-size:14px; color:var(--viz-faint); display:block; letter-spacing:.1em; margin-bottom:6px;}
+p{margin:0 0 16px;}
+a{color:var(--viz-accent);}
+.verdict{
+  background:var(--viz-panel); border:1px solid var(--viz-line); border-radius:14px;
+  padding:20px 22px; margin:26px 0 8px;
+}
+.verdict h3{margin:0 0 10px; font-size:15px; letter-spacing:.06em; text-transform:uppercase;
+  font-family:var(--viz-mono); color:var(--viz-accent);}
+.verdict ul{margin:0; padding:0; list-style:none;}
+.verdict li{margin:0 0 12px; padding-left:22px; position:relative; font-size:16px;}
+.verdict li:last-child{margin-bottom:0;}
+.verdict li::before{content:""; position:absolute; left:2px; top:9px; width:8px; height:8px;
+  border-radius:50%; background:var(--viz-accent);}
+.verdict .src{font-size:13px; color:var(--viz-faint);}
+figure.viz{
+  margin:26px -20px; padding:26px 20px;
+  background:var(--viz-panel); border-top:1px solid var(--viz-line); border-bottom:1px solid var(--viz-line);
+}
+figure.viz figcaption{font-size:13.5px; color:var(--viz-muted); margin-top:14px; max-width:620px;}
+figure.viz figcaption b{color:var(--viz-ink);}
+/* Stepper (proven pattern) */
+.kc{background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:16px; padding:22px 20px;}
+.kc-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+.kc-count{font-family:var(--viz-mono); font-size:12.5px; letter-spacing:.08em; color:var(--viz-accent); text-transform:uppercase;}
+.kc-dots{display:flex; gap:7px;}
+.kc-dots i{width:9px; height:9px; border-radius:50%; background:var(--viz-line); transition:background 200ms;}
+.kc-dots i.on{background:var(--viz-accent);}
+.kc-title{font-size:21px; margin:0 0 10px; letter-spacing:-0.01em;}
+.kc-what{font-size:16px; color:var(--viz-ink); margin:0 0 14px;}
+.kc-lesson{background:rgba(232,163,61,.07); border:1px solid rgba(232,163,61,.35); border-radius:12px; padding:14px 16px; margin:0 0 18px;}
+.kc-lesson > b{display:block; font-family:var(--viz-mono); font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--viz-accent); margin-bottom:6px;}
+.kc-lesson p{margin:0; font-size:15.5px; color:var(--viz-ink);}
+.kc-body{overflow:hidden;}
+.kc-dia{margin:2px 0 16px;}
+.kc-nav{display:flex; justify-content:space-between; gap:12px;}
+.kc-nav .kc-next{margin-left:auto;}
+.kc-nav button{
+  font-family:inherit; font-size:16px; font-weight:650; color:var(--viz-ink);
+  background:var(--viz-panel); border:1px solid var(--viz-line); border-radius:999px;
+  padding:13px 26px; cursor:pointer; touch-action:manipulation; min-height:52px;
+}
+.kc-nav button:active{transform:scale(.97);}
+.kc-nav button[hidden]{display:none;}
+/* Pod diagrams */
+.pod{border:2px dashed var(--viz-line); border-radius:14px; padding:14px; background:rgba(232,163,61,.03);}
+.pod > .plab{font-family:var(--viz-mono); font-size:11.5px; letter-spacing:.08em; color:var(--viz-faint); text-transform:uppercase; margin-bottom:10px;}
+.ctr{background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:10px; padding:10px 14px; margin-bottom:8px;}
+.ctr:last-child{margin-bottom:0;}
+.ctr b{font-size:15px;}
+.ctr span{display:block; font-family:var(--viz-mono); font-size:12px; color:var(--viz-muted); margin-top:2px;}
+.ctr.app{border-color:rgba(232,163,61,.55);}
+.ctr.side{border-color:rgba(122,170,255,.5);}
+.share{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;}
+.share i{font-style:normal; font-family:var(--viz-mono); font-size:12px; background:var(--viz-panel); border:1px solid var(--viz-line); border-radius:999px; padding:5px 11px; color:var(--viz-muted);}
+/* Comparison tabs */
+.cmp-tabs{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 16px;}
+.cmp-tabs button{
+  font-family:inherit; font-size:14px; font-weight:600; background:var(--viz-panel2); color:var(--viz-ink);
+  border:1px solid var(--viz-line); border-radius:999px; padding:10px 16px; cursor:pointer; touch-action:manipulation;
+}
+.cmp-tabs button:active{transform:scale(.97);}
+.cmp-tabs button[aria-pressed="true"]{border-color:var(--viz-accent); color:var(--viz-accent);}
+.cmp-body{overflow:hidden;}
+.cmp-panel{background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:14px; padding:18px;}
+.cmp-panel[hidden]{display:none;}
+.cmp-panel .pod, .cmp-panel .nodes, .cmp-panel .svcs, .cmp-panel .tline{margin-bottom:14px;}
+.kv{display:grid; grid-template-columns:92px 1fr; gap:8px 12px; font-size:15px; margin:0;}
+.kv dt{font-family:var(--viz-mono); font-size:12px; color:var(--viz-faint); text-transform:uppercase; letter-spacing:.06em; padding-top:4px;}
+.kv dd{margin:0; color:var(--viz-ink);}
+.kv dd.ex{color:var(--viz-muted); font-size:14px;}
+.tline{display:flex; align-items:center; flex-wrap:wrap; gap:8px;}
+.tline .tstep{background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:10px; padding:8px 12px; font-size:13px; font-family:var(--viz-mono); white-space:nowrap;}
+.tline .tstep.done{border-color:rgba(122,170,255,.5); color:var(--viz-muted); text-decoration:line-through;}
+.tline .tarrow{color:var(--viz-faint); font-size:18px;}
+.nodes{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
+.node{background:rgba(232,163,61,.04); border:1px dashed var(--viz-line); border-radius:12px; padding:10px; text-align:center;}
+.node .nlab{font-family:var(--viz-mono); font-size:11px; color:var(--viz-faint); text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px;}
+.node .npod{background:var(--viz-panel2); border:1px solid rgba(122,170,255,.5); border-radius:8px; padding:8px 4px; font-size:13px;}
+.svcs{display:flex; align-items:stretch; gap:10px;}
+.svc{flex:1; background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:12px; padding:12px; text-align:center;}
+.svc.hl{border-color:rgba(232,163,61,.55);}
+.svc .slab{font-weight:700; font-size:14px;}
+.svc .ssub{font-family:var(--viz-mono); font-size:11.5px; color:var(--viz-muted); margin-top:4px;}
+.svc-link{align-self:center; color:var(--viz-faint); font-size:20px; flex:none;}
+/* Tap-to-reveal cards */
+.tg{display:grid; gap:12px; margin:18px 0 6px;}
+.tcard{background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:14px; overflow:hidden;}
+.tcard > button{
+  width:100%; display:block; text-align:left; background:none; border:none; color:inherit;
+  font:inherit; padding:16px 18px 14px; cursor:pointer; touch-action:manipulation; font-size:16px;
+}
+.tcard .tq{font-weight:600; font-size:16.5px;}
+.tcard .thint{display:block; font-size:12.5px; color:var(--viz-faint); margin-top:7px;}
+.tcard .tdet{display:none; padding:0 18px 16px; font-size:15px; color:var(--viz-muted);}
+.tcard .tdet p{margin:0 0 10px;}
+.tcard .tdet p:last-child{margin-bottom:0;}
+.tcard .tdet b.ans{color:var(--viz-accent);}
+.tcard.open .tdet{display:block;}
+.tcard.open{border-color:rgba(232,163,61,.4);}
+/* Family cards */
+.fam{display:grid; gap:12px; margin:18px 0 6px;}
+.fcard{background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:14px; padding:16px 18px;}
+.fcard b{font-size:16.5px; color:var(--viz-ink);}
+.fcard .fk{font-family:var(--viz-mono); font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--viz-accent); display:block; margin-bottom:6px;}
+.fcard p{margin:8px 0 0; font-size:15px; color:var(--viz-muted);}
+.fcard p b{color:var(--viz-ink); font-size:15px;}
+/* Code */
+pre{background:#100f0d; border:1px solid var(--viz-line); border-radius:12px; padding:16px 18px; overflow-x:auto; margin:18px 0;}
+pre code{font-family:var(--viz-mono); font-size:13.5px; line-height:1.6; background:none; padding:0;}
+/* Keep exploring */
+.explore{display:grid; gap:12px; margin:20px 0 6px;}
+.excard{
+  display:block; text-decoration:none; color:inherit; background:var(--viz-panel2);
+  border:1px solid var(--viz-line); border-radius:14px; padding:18px 20px;
+}
+.excard:active{transform:scale(.99);}
+.excard .t{font-weight:700; font-size:17px; color:var(--viz-ink); display:flex; align-items:center; gap:8px;}
+.excard .t svg{flex:none;}
+.excard .g{font-size:14.5px; color:var(--viz-muted); margin:6px 0 0;}
+.excard .u{font-family:var(--viz-mono); font-size:12px; color:var(--viz-faint); margin:8px 0 0;}
+/* Sources */
+.sources{font-size:14.5px; color:var(--viz-muted);}
+.sources li{margin-bottom:10px;}
+.sources .note{font-size:13.5px; color:var(--viz-faint);}
+.tagsline{font-family:var(--viz-mono); font-size:12.5px; color:var(--viz-faint); margin-top:34px;
+  letter-spacing:.08em;}
+footer.end{margin-top:40px; padding-top:18px; border-top:1px solid var(--viz-line);
+  font-size:13.5px; color:var(--viz-faint);}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  .kc-nav button:active{transform:none;}
+  .cmp-tabs button:active{transform:none;}
+  .excard:active{transform:none;}
+}
+</style>
+</head>
+<body>
+<article>
+<header>
+  <p class="kicker">Kubernetes, patterns</p>
+  <h1>Your Pod's Plus-One</h1>
+  <p class="standfirst">A sidecar is a helper container riding in the same pod as your app. Here is what that actually means, how it is different from init containers, DaemonSets, and plain microservices, and a 30-second test for picking the right one.</p>
+  <p class="tip">A visual explainer. Kubernetes facts verified against the official docs. Sources at the end.</p>
+</header>
+
+<section class="verdict">
+  <h3>The short version</h3>
+  <ul>
+    <li>A sidecar is a <b>second container inside the same pod</b> as your app. It shares the pod's network (so it talks to your app over localhost), its storage volumes, and its lifecycle.</li>
+    <li>The name comes from motorcycle sidecars: bolted to the bike, goes where the bike goes, never rides alone.</li>
+    <li>Kubernetes' own 2015 post named three multi-container patterns: the <b>sidecar</b> (extends the app), the <b>ambassador</b> (proxies localhost out to the world), and the <b>adapter</b> (translates the app's output into a standard shape).</li>
+    <li>Since Kubernetes 1.33, sidecars are first-class citizens: an init container with <b>restartPolicy: Always</b> starts before your app, shuts down after it, and finally works in Jobs. <span class="src">(KEP-753)</span></li>
+  </ul>
+</section>
+
+<section>
+  <h2><span class="n">01</span>The motorcycle</h2>
+  <p>A motorcycle sidecar is bolted to the bike. It goes where the bike goes, leans when the bike leans, and it never takes a trip on its own. The passenger gets the same view as the rider, the same wind, the same potholes.</p>
+  <p>A Kubernetes sidecar is the same deal. Your app is the motorcycle: the container with your code, serving traffic. The sidecar is a second container bolted to the same pod: a logging agent, a proxy, a metrics exporter. It sees the same network, reads the same files, and lives and dies on the app's schedule. Different vehicle, same physics.</p>
+  <p>Step through what that looks like inside a pod:</p>
+  <figure class="viz">
+    <div class="kc" id="kc1">
+      <div class="kc-top">
+        <span class="kc-count" id="kcCount">Step 1 of 4</span>
+        <span class="kc-dots" id="kcDots" aria-hidden="true"></span>
+      </div>
+      <div class="kc-body" id="kcBody">
+        <h3 class="kc-title" id="kcTitle"></h3>
+        <div class="kc-dia" id="kcDia"></div>
+        <p class="kc-what" id="kcWhat"></p>
+        <div class="kc-lesson"><b>The takeaway</b><p id="kcLesson"></p></div>
+      </div>
+      <div class="kc-nav">
+        <button type="button" class="kc-prev" id="kcPrev" aria-label="Previous step">&#8249; Back</button>
+        <button type="button" class="kc-next" id="kcNext" aria-label="Next step">Next &#8250;</button>
+      </div>
+    </div>
+    <figcaption>One pod, two containers, one shared everything. Use the arrows or your keyboard.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2><span class="n">02</span>Sidecar vs everything else</h2>
+  <p>People mix up four things that all put "a helper near my app." They differ in where the helper lives, when it runs, and how it talks to your app. Tap through:</p>
+  <figure class="viz">
+    <div class="cmp" id="cmp1">
+      <div class="cmp-tabs" role="group" aria-label="Compare primitives">
+        <button type="button" data-tab="sidecar" aria-pressed="true">Sidecar</button>
+        <button type="button" data-tab="init" aria-pressed="false">Init container</button>
+        <button type="button" data-tab="daemonset" aria-pressed="false">DaemonSet</button>
+        <button type="button" data-tab="service" aria-pressed="false">Separate service</button>
+        <button type="button" data-tab="samectr" aria-pressed="false">Same container</button>
+      </div>
+      <div class="cmp-body" id="cmpBody">
+        <div class="cmp-panel" data-panel="sidecar">
+          <div class="pod">
+            <div class="plab">pod &middot; 10.0.0.7</div>
+            <div class="ctr app"><b>app</b><span>your code :8080</span></div>
+            <div class="ctr side"><b>sidecar</b><span>helper, same pod</span></div>
+          </div>
+          <dl class="kv">
+            <dt>Lives</dt><dd>Inside your app's pod, as a second container.</dd>
+            <dt>Runs</dt><dd>The whole time the app runs.</dd>
+            <dt>Talks</dt><dd>Over localhost, plus shared volumes.</dd>
+            <dt>Scales</dt><dd>1:1 with the pod, always. Five replicas means five sidecars.</dd>
+            <dt>Reach for it</dt><dd class="ex">When the helper needs the app's network, files, or lifecycle. Proxies, log shippers, config reloaders.</dd>
+          </dl>
+        </div>
+        <div class="cmp-panel" data-panel="init" hidden>
+          <div class="tline">
+            <span class="tstep done">init container</span><span class="tarrow">&rarr;</span>
+            <span class="tstep">app starts</span><span class="tarrow">&rarr;</span>
+            <span class="tstep">init is gone</span>
+          </div>
+          <dl class="kv">
+            <dt>Lives</dt><dd>In the same pod.</dd>
+            <dt>Runs</dt><dd>Once, before the app starts. Must finish before anything else runs, then exits.</dd>
+            <dt>Talks</dt><dd>Leaves files in shared volumes for the app to find.</dd>
+            <dt>Reach for it</dt><dd class="ex">When the work is setup, not service. Waiting for the database, running migrations, fetching config.</dd>
+          </dl>
+        </div>
+        <div class="cmp-panel" data-panel="daemonset" hidden>
+          <div class="nodes">
+            <div class="node"><div class="nlab">node 1</div><div class="npod">agent pod</div></div>
+            <div class="node"><div class="nlab">node 2</div><div class="npod">agent pod</div></div>
+            <div class="node"><div class="nlab">node 3</div><div class="npod">agent pod</div></div>
+          </div>
+          <dl class="kv">
+            <dt>Lives</dt><dd>One pod on every node, whether your app is there or not.</dd>
+            <dt>Runs</dt><dd>Always. It answers to the machine, not to any app.</dd>
+            <dt>Talks</dt><dd>Over the node network.</dd>
+            <dt>Reach for it</dt><dd class="ex">When the job belongs to the machine. Log collectors, monitoring agents, storage drivers.</dd>
+          </dl>
+        </div>
+        <div class="cmp-panel" data-panel="service" hidden>
+          <div class="svcs">
+            <div class="svc hl"><div class="slab">your app</div><div class="sslab ssub">its own pods</div></div>
+            <div class="svc-link">&harr;</div>
+            <div class="svc"><div class="slab">helper</div><div class="ssub">its own pods</div></div>
+          </div>
+          <dl class="kv">
+            <dt>Lives</dt><dd>In its own pods, scheduled anywhere in the cluster.</dd>
+            <dt>Runs</dt><dd>On an independent lifecycle. Deploys and restarts alone.</dd>
+            <dt>Talks</dt><dd>Over the cluster network, through a Service name.</dd>
+            <dt>Scales</dt><dd>On its own, by its own load.</dd>
+            <dt>Reach for it</dt><dd class="ex">When many apps share it, or it scales differently from any one app. Thumbnail APIs, databases, queues.</dd>
+          </dl>
+        </div>
+        <div class="cmp-panel" data-panel="samectr" hidden>
+          <div class="pod">
+            <div class="plab">one container</div>
+            <div class="ctr"><b>app + helper</b><span>two processes, one image</span></div>
+          </div>
+          <dl class="kv">
+            <dt>Lives</dt><dd>In the same container image, as a second process.</dd>
+            <dt>Runs</dt><dd>In the same process tree, tangled together.</dd>
+            <dt>Talks</dt><dd>Local files and function calls.</dd>
+            <dt>Reach for it</dt><dd class="ex">Almost never. Logs mix together, signals get lost, and updating the helper means rebuilding the whole image. One main process per container is the model for a reason.</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+    <figcaption>The whole decision in one table: <b>where it lives, when it runs, how it talks</b>. If those three match your problem, you have your primitive.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2><span class="n">03</span>The three classic flavors</h2>
+  <p>Back in 2015, the Kubernetes team wrote the post that named the multi-container patterns. "Sidecar" is the family name, but it has two famous siblings. All three ride in the same pod; they differ in which direction they face:</p>
+  <div class="fam">
+    <div class="fcard">
+      <span class="fk">Sidecar</span>
+      <b>Extends the app.</b>
+      <p>Their example: pair nginx with a container that syncs a git repo into a shared volume, and you get push-to-deploy. Write the syncer once, reuse it with Apache, Tomcat, anything. The helper makes the main container better at being itself.</p>
+    </div>
+    <div class="fcard">
+      <span class="fk">Ambassador</span>
+      <b>Proxies localhost out to the world.</b>
+      <p>Their example: a Redis cluster with one write master and many read replicas. The app just connects to localhost:6379, and the ambassador splits reads and writes to the right servers. The app never learns the cluster exists. In dev, you skip the ambassador and point at a real local Redis. Nothing changes.</p>
+    </div>
+    <div class="fcard">
+      <span class="fk">Adapter</span>
+      <b>Translates the app's output into a standard shape.</b>
+      <p>Their example: ten apps export metrics ten different ways (JMX, StatsD, bespoke). One monitoring system wants one format. An adapter per pod reshapes each app's native output into the uniform model. Heterogeneous in, homogeneous out.</p>
+    </div>
+  </div>
+  <p>In practice, people call all three "sidecars." The purists will correct you, and now you know enough to nod along.</p>
+</section>
+
+<section>
+  <h2><span class="n">04</span>Sidecars in the wild</h2>
+  <p>The pattern is everywhere once you look. A few you have probably met:</p>
+  <div class="fam">
+    <div class="fcard">
+      <span class="fk">Service mesh</span>
+      <b>Istio and Linkerd inject an Envoy proxy next to every app container.</b>
+      <p>Your app talks plain HTTP to localhost; the proxy adds mutual TLS, retries, and telemetry. This is the ambassador flavor at planetary scale, and it is why native sidecars mattered so much: the old model could not guarantee the proxy started first or stopped last.</p>
+    </div>
+    <div class="fcard">
+      <span class="fk">Logging</span>
+      <b>Fluent Bit tails your app's log files from a shared volume and ships them off.</b>
+      <p>Your app just writes files like it is 2005. The sidecar handles parsing, buffering, and delivery to wherever logs go to retire.</p>
+    </div>
+    <div class="fcard">
+      <span class="fk">Config and secrets</span>
+      <b>Reloader sidecars watch mounted files and nudge the app when they change.</b>
+      <p>ConfigMap updated? The sidecar sees it and signals the app, no restart. Same pod, same files, zero downtime.</p>
+    </div>
+    <div class="fcard">
+      <span class="fk">Managed databases</span>
+      <b>Google's Cloud SQL Auth Proxy runs as a sidecar your app reaches at localhost.</b>
+      <p>Your code opens a plain database connection; the proxy handles IAM authentication and encryption to the real Cloud SQL instance. The app stays dumb about credentials, which is exactly how you want it.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">05</span>The 30-second test</h2>
+  <p>Five situations, five answers. Tap each card and check yourself:</p>
+  <div class="tg" id="tg1">
+    <div class="tcard">
+      <button type="button" aria-expanded="false">
+        <span class="tq">My app must not start until Postgres is reachable.</span>
+        <span class="thint">Tap for the answer</span>
+      </button>
+      <div class="tdet">
+        <p><b class="ans">Init container.</b> It runs first, polls the database, and blocks the app until Postgres answers. Then it exits. Setup with an exit is the whole job description of an init container.</p>
+      </div>
+    </div>
+    <div class="tcard">
+      <button type="button" aria-expanded="false">
+        <span class="tq">Add mutual TLS to my app without touching its code.</span>
+        <span class="thint">Tap for the answer</span>
+      </button>
+      <div class="tdet">
+        <p><b class="ans">Sidecar.</b> An Envoy proxy rides in the pod and terminates TLS on localhost. Your app keeps speaking plain HTTP and never knows the difference. This is the Istio and Linkerd move.</p>
+      </div>
+    </div>
+    <div class="tcard">
+      <button type="button" aria-expanded="false">
+        <span class="tq">Scrape hardware metrics from every node.</span>
+        <span class="thint">Tap for the answer</span>
+      </button>
+      <div class="tdet">
+        <p><b class="ans">DaemonSet.</b> The job is per machine, not per app. One pod per node, running whether your app is there or not.</p>
+      </div>
+    </div>
+    <div class="tcard">
+      <button type="button" aria-expanded="false">
+        <span class="tq">Five apps need thumbnails, and the thumbnailer scales on its own.</span>
+        <span class="thint">Tap for the answer</span>
+      </button>
+      <div class="tdet">
+        <p><b class="ans">Separate Deployment and Service.</b> It is shared by many and scaled by its own load. A sidecar would pointlessly copy it five times, once per app.</p>
+      </div>
+    </div>
+    <div class="tcard">
+      <button type="button" aria-expanded="false">
+        <span class="tq">Reload config when the ConfigMap changes, without restarting.</span>
+        <span class="thint">Tap for the answer</span>
+      </button>
+      <div class="tdet">
+        <p><b class="ans">Sidecar.</b> A tiny reloader watches the mounted files and nudges the app over localhost. Same pod, same files, zero downtime.</p>
+      </div>
+    </div>
+  </div>
+  <p>If you got all five, the mental model has landed: match where the helper lives and when it runs to the problem, and the primitive picks itself.</p>
+</section>
+
+<section>
+  <h2><span class="n">06</span>What it looks like in YAML</h2>
+  <p>The classic shape. Two containers, one pod, one shared volume. The app writes logs like it is 2005; the sidecar ships them:</p>
+  <pre><code class="language-yaml">spec:
+  containers:
+  - name: app
+    image: myapp:2.0
+    volumeMounts:
+    - name: logs
+      mountPath: /var/log/app
+  - name: log-shipper
+    image: fluent/fluent-bit:3.2
+    volumeMounts:
+    - name: logs
+      mountPath: /var/log/app
+      readOnly: true
+  volumes:
+  - name: logs
+    emptyDir: {}</code></pre>
+  <p>And the modern shape. Since Kubernetes 1.33, the officially blessed way to declare a sidecar is an init container with <span style="font-family:var(--viz-mono); font-size:15px;">restartPolicy: Always</span>. It starts before your app containers, shuts down after them, and unlike the old way, it no longer wedges Jobs open forever when the main work finishes:</p>
+  <pre><code class="language-yaml">spec:
+  initContainers:
+  - name: log-shipper
+    image: fluent/fluent-bit:3.2
+    restartPolicy: Always   # this line makes it a native sidecar
+    volumeMounts:
+    - name: logs
+      mountPath: /var/log/app
+  containers:
+  - name: app
+    image: myapp:2.0
+    volumeMounts:
+    - name: logs
+      mountPath: /var/log/app</code></pre>
+</section>
+
+<section>
+  <h2><span class="n">07</span>Keep exploring</h2>
+  <div class="explore">
+    <a class="excard" href="https://lukezhang.si/blog/">
+      <span class="t">More visual explainers <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M8 7h9v9"/></svg></span>
+      <span class="g">The full shelf, every post an interactive.</span>
+      <span class="u">lukezhang.si/blog/</span>
+    </a>
+    <a class="excard" href="https://lukezhang.si/lab/">
+      <span class="t">The lab <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M8 7h9v9"/></svg></span>
+      <span class="g">Interactive pieces live here now.</span>
+      <span class="u">lukezhang.si/lab/</span>
+    </a>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">08</span>Sources</h2>
+  <ul class="sources">
+    <li>Kubernetes blog, <a href="https://kubernetes.io/blog/2015/06/the-distributed-system-toolkit-patterns/">"The Distributed System ToolKit: Patterns for Composite Containers"</a> (2015). The original sidecar, ambassador, and adapter patterns, with the git-sync, Redis, and monitoring examples.</li>
+    <li>Kubernetes blog, <a href="https://v1-31.docs.kubernetes.io/blog/2023/08/25/native-sidecar-containers/">"Kubernetes v1.28: Introducing native sidecar containers"</a> (2023). The restartPolicy: Always mechanism, startup and shutdown ordering, and why sidecars no longer block pod termination.</li>
+    <li>KEP-753, <a href="https://github.com/kubernetes/enhancements/blob/master/keps/sig-node/753-sidecar-containers/README.md">"Sidecar containers"</a>. The full proposal: motivation (Jobs, log forwarding, service mesh), design, and the implementation history showing graduation to stable in 1.33.</li>
+    <li class="note">Kubernetes version numbers move fast; the 1.33 stable graduation is per the KEP's own implementation history. Pod networking and volume sharing semantics are per the core pods documentation.</li>
+  </ul>
+  <p class="tagsline">TAGS: KUBERNETES, PATTERNS</p>
+  <footer class="end">Code highlighting via vendored highlight.js, served from this domain. No third-party requests.</footer>
+</section>
+</article>
+<script>
+if(window.hljs){ hljs.highlightAll(); }
+
+/* Pod anatomy stepper */
+(function(){
+  var root = document.getElementById('kc1');
+  if(!root) return;
+  var podOpen = '<div class="pod"><div class="plab">pod &middot; 10.0.0.7</div>';
+  var podClose = '</div>';
+  function ctr(cls, name, sub){ return '<div class="ctr ' + cls + '"><b>' + name + '</b><span>' + sub + '</span></div>'; }
+  var steps = [
+    {
+      t: 'One pod, one address',
+      dia: podOpen + '<div class="ctr"><b>empty pod</b><span>one IP, one network, one set of volumes</span></div>' + podClose,
+      what: 'A pod is the smallest thing Kubernetes will deploy. It gets one IP address, one private network, and one set of storage volumes. Every container inside the pod shares all of it.',
+      lesson: 'If two containers need to talk like they are on the same machine, put them in one pod. That is the whole trick.'
+    },
+    {
+      t: 'Your app moves in',
+      dia: podOpen + ctr('app', 'app', 'your code :8080') + podClose,
+      what: 'The main container runs your code: the web server, the API, the thing you actually wrote. It serves traffic on its port and writes logs to its directory.',
+      lesson: 'The app container should do one job: your business logic. Everything else is a candidate for a plus-one.'
+    },
+    {
+      t: 'The plus-one arrives',
+      dia: podOpen + ctr('app', 'app', 'your code :8080') + ctr('side', 'sidecar', 'helper, same pod') + podClose,
+      what: 'A second container joins the same pod. Same IP, so it reaches your app at localhost. Same volumes, so it reads the same files. It was built, versioned, and can be updated completely separately from your app.',
+      lesson: 'Two teams can own two containers. The logging team ships the shipper, you ship the app, and neither waits for the other.'
+    },
+    {
+      t: 'Shared fate',
+      dia: podOpen + ctr('app', 'app', 'your code :8080') + ctr('side', 'sidecar', 'helper, same pod') + podClose +
+        '<div class="share"><i>localhost</i><i>shared volumes</i><i>born together</i><i>die together</i></div>',
+      what: 'They start together and die together. Scale the pod to five replicas and you get five apps and five sidecars, no extra config. Kubernetes 1.33 made this official: native sidecars are init containers with restartPolicy set to Always, so they start before the app and shut down after it.',
+      lesson: 'The 1:1 pairing is the point. If the helper needs its own scaling or its own life, it is not a sidecar. It is a service.'
+    }
+  ];
+  var i = 0;
+  var count = document.getElementById('kcCount');
+  var dots = document.getElementById('kcDots');
+  var title = document.getElementById('kcTitle');
+  var dia = document.getElementById('kcDia');
+  var what = document.getElementById('kcWhat');
+  var lesson = document.getElementById('kcLesson');
+  var prev = document.getElementById('kcPrev');
+  var next = document.getElementById('kcNext');
+  var body = document.getElementById('kcBody');
+  steps.forEach(function(){ var d = document.createElement('i'); dots.appendChild(d); });
+  var dotEls = dots.querySelectorAll('i');
+  function setContent(){
+    var s = steps[i];
+    count.textContent = 'Step ' + (i + 1) + ' of ' + steps.length;
+    title.textContent = s.t;
+    dia.innerHTML = s.dia;
+    what.textContent = s.what;
+    lesson.textContent = s.lesson;
+    dotEls.forEach(function(d, k){ d.classList.toggle('on', k === i); });
+  }
+  function render(){
+    setContent();
+    prev.hidden = (i === 0);
+    next.hidden = (i === steps.length - 1);
+  }
+  function fitHeight(){
+    var cur = i, max = 0;
+    body.style.minHeight = '';
+    for(var k = 0; k < steps.length; k++){ i = k; setContent(); max = Math.max(max, body.offsetHeight); }
+    i = cur; setContent();
+    body.style.minHeight = max + 'px';
+  }
+  prev.addEventListener('click', function(){ if(i > 0){ i--; render(); } });
+  next.addEventListener('click', function(){ if(i < steps.length - 1){ i++; render(); } });
+  document.addEventListener('keydown', function(e){
+    if(e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if(e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    var t = e.target, tag = t && t.tagName;
+    if(tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+    if(t && t.closest && t.closest('.step-code')) return;
+    var r = root.getBoundingClientRect();
+    if(r.bottom < 0 || r.top > window.innerHeight) return;
+    if(e.key === 'ArrowLeft' && i > 0){ i--; render(); e.preventDefault(); }
+    else if(e.key === 'ArrowRight' && i < steps.length - 1){ i++; render(); e.preventDefault(); }
+  });
+  render();
+  fitHeight();
+  if(document.fonts && document.fonts.ready){ document.fonts.ready.then(fitHeight); }
+  var rzT = null;
+  window.addEventListener('resize', function(){
+    if(rzT) clearTimeout(rzT);
+    rzT = setTimeout(fitHeight, 200);
+  });
+})();
+
+/* Comparison tabs */
+(function(){
+  var root = document.getElementById('cmp1');
+  if(!root) return;
+  var btns = root.querySelectorAll('.cmp-tabs button');
+  var panels = root.querySelectorAll('.cmp-panel');
+  var body = document.getElementById('cmpBody');
+  function show(id){
+    btns.forEach(function(b){ b.setAttribute('aria-pressed', b.getAttribute('data-tab') === id ? 'true' : 'false'); });
+    panels.forEach(function(p){ p.hidden = p.getAttribute('data-panel') !== id; });
+  }
+  function fitHeight(){
+    var active = root.querySelector('.cmp-tabs button[aria-pressed="true"]').getAttribute('data-tab');
+    var max = 0;
+    body.style.minHeight = '';
+    panels.forEach(function(p){ p.hidden = false; max = Math.max(max, p.offsetHeight); });
+    show(active);
+    body.style.minHeight = max + 'px';
+  }
+  root.querySelector('.cmp-tabs').addEventListener('click', function(e){
+    var b = e.target.closest('button');
+    if(b) show(b.getAttribute('data-tab'));
+  });
+  show('sidecar');
+  fitHeight();
+  if(document.fonts && document.fonts.ready){ document.fonts.ready.then(fitHeight); }
+  var rzT = null;
+  window.addEventListener('resize', function(){
+    if(rzT) clearTimeout(rzT);
+    rzT = setTimeout(fitHeight, 200);
+  });
+})();
+
+/* Tap-to-reveal cards */
+(function(){
+  var cards = document.querySelectorAll('#tg1 .tcard');
+  cards.forEach(function(card){
+    var btn = card.querySelector('button');
+    btn.addEventListener('click', function(){
+      var open = card.classList.toggle('open');
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+  });
+})();
+</script>
+</body>
+</html>

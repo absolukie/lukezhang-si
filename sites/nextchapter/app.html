@@ -99,6 +99,19 @@
         var origRefresh = b.refresh.bind(b);
         b.refresh = function(){ return origRefresh().then(function(s){ mount(true); return s; }); };
       } catch(e){}
+      // Banner/topbar coexistence (app-local): the shared .bill-banner is
+      // position:fixed;top:0 and would cover the sticky topbar. Measure it
+      // and offset the topbar (and offline banner) via --bill-h; CSS :has()
+      // applies the offset only while the banner exists.
+      function measureBanner(){
+        var bn = document.querySelector(".bill-banner");
+        try{ document.documentElement.style.setProperty("--bill-h", (bn ? bn.offsetHeight : 0) + "px"); }catch(e){}
+      }
+      try{
+        new MutationObserver(function(){ measureBanner(); }).observe(document.body, {childList:true});
+        window.addEventListener("resize", measureBanner);
+      }catch(e){}
+      measureBanner();
       try {
         new MutationObserver(function(){ mount(); }).observe(document.getElementById("view"), { childList: true });
       } catch(e){}

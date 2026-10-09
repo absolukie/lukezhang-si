@@ -83,13 +83,20 @@
       // the honest family-missing page (R-19); the overlay has no dismiss
       // and would trap them behind a failing trial CTA.
       function familyRoute(){ return /^#\/family\//.test(location.hash); }
-      if (!familyRoute()) b.ensurePaywall();
+      // Wave F P1-1: the recovery screen is never paywalled. A device with
+      // unreadable data must always be able to download the saved backup or
+      // start fresh. Data is never held hostage behind the paywall.
+      function recoveryActive(){ return !!window.__ncRecovery; }
+      function paywalledRoute(){ return !familyRoute() && !recoveryActive(); }
+      if (paywalledRoute()) b.ensurePaywall();
+      else { try{ b.hidePaywall(); }catch(e){} }
       window.addEventListener("hashchange", function(){
         try {
           // P1-3 fix: entering a family route must HIDE the overlay, not
           // just skip showing it, so warm navigation never traps a family
           // member behind the paywall.
           if (familyRoute()) b.hidePaywall();
+          else if (recoveryActive()) b.hidePaywall();
           else if (!b.isEntitled()) b.ensurePaywall();
         } catch(e){}
       });
@@ -98,7 +105,9 @@
       try{
         setInterval(function(){
           b.refresh().then(function(){
-            try{ if (!familyRoute() && !b.isEntitled()) b.ensurePaywall(); }catch(e){}
+            // Wave F P1-1: the 5-minute re-gate never fires while the
+            // recovery screen is up.
+            try{ if (paywalledRoute() && !b.isEntitled()) b.ensurePaywall(); }catch(e){}
           }).catch(function(){});
         }, 5*60*1000);
       }catch(e){}

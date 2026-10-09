@@ -36,6 +36,10 @@
         var hit;
         if (/^\d{3}$/.test(k)) {
           hit = zips.some(function (z) { return z.indexOf(k) === 0; });
+        } else if (/^[a-z]{1,3}$/.test(k)) {
+          // Short letter codes (e.g. "fl") match only as whole words, never as
+          // substrings (so "fl" never matches "floor").
+          hit = new RegExp("\\b" + k + "\\b").test(n);
         } else {
           hit = n.indexOf(k) !== -1;
         }
@@ -1048,12 +1052,255 @@
     demoBox.appendChild(b);
   });
 
+  /* ---------- rule-change feed ---------- */
+  function initRuleChanges() {
+    var list = document.getElementById("changeList");
+    if (!list) return;
+    var changes = (typeof STAYLEGAL_CHANGES !== "undefined") ? STAYLEGAL_CHANGES : [];
+    changes.forEach(function (ch) {
+      var wrap = document.createElement("article");
+      wrap.className = "change";
+      var meta = document.createElement("div");
+      meta.className = "meta";
+      var d = document.createElement("span");
+      d.className = "date"; d.textContent = ch.date;
+      var pill = document.createElement("span");
+      pill.className = "status-pill " + ch.status;
+      pill.textContent = ch.statusLabel;
+      meta.appendChild(d); meta.appendChild(pill);
+      var city = document.createElement("div");
+      city.className = "city"; city.textContent = ch.city;
+      var h = document.createElement("h3");
+      h.textContent = ch.title;
+      var p = document.createElement("p");
+      p.textContent = ch.detail;
+      var src = document.createElement("div");
+      src.className = "src";
+      var a = document.createElement("a");
+      a.href = ch.source.url; a.target = "_blank"; a.rel = "noopener";
+      a.textContent = ch.source.label;
+      src.appendChild(a);
+      var conf = document.createElement("span");
+      conf.textContent = " (" + ch.confidence + "-confidence research)";
+      src.appendChild(conf);
+      var guide = document.createElement("div");
+      guide.className = "src";
+      var ga = document.createElement("a");
+      ga.href = "cities/" + ch.guide + "/";
+      ga.textContent = "Read the " + ch.city + " guide";
+      guide.appendChild(ga);
+      wrap.appendChild(meta); wrap.appendChild(city); wrap.appendChild(h);
+      wrap.appendChild(p); wrap.appendChild(src); wrap.appendChild(guide);
+      list.appendChild(wrap);
+    });
+  }
+
+  /* ---------- "Am I legal here?" quiz ---------- */
+  var QUIZ = [
+    { id: "own", q: "Do you own the property?",
+      opts: [
+        { v: "own", label: "I own it" },
+        { v: "rent", label: "I rent it", sub: "Leases usually control first" },
+        { v: "buying", label: "I am buying it", sub: "Rules-first underwriting" }
+      ] },
+    { id: "present", q: "Will you live there during guest stays?",
+      opts: [
+        { v: "yes", label: "Yes, I will be there", sub: "This is called a hosted stay" },
+        { v: "no", label: "No, guests get the whole place" }
+      ] },
+    { id: "space", q: "What kind of space would guests get?",
+      opts: [
+        { v: "whole", label: "The whole home or apartment" },
+        { v: "room", label: "A private room", sub: "You stay in the home too" },
+        { v: "shared", label: "A shared room", sub: "Guests share space with you" }
+      ] },
+    { id: "hoa", q: "Is there an HOA, condo board, or landlord involved?",
+      opts: [
+        { v: "yes", label: "Yes" },
+        { v: "no", label: "No" },
+        { v: "unsure", label: "Not sure" }
+      ] },
+    { id: "city", q: "Which city is the property in?", text: true }
+  ];
+
+  function renderQuiz() {
+    var body = document.getElementById("quizBody");
+    if (!body) return;
+    var answers = {};
+    var step = 0;
+
+    function el(tag, cls, text) {
+      var e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text != null) e.textContent = text;
+      return e;
+    }
+
+    function startOver() {
+      answers = {}; step = 0; showStep();
+    }
+
+    function showStep() {
+      body.innerHTML = "";
+      var wrap = el("div", "quiz-step");
+      wrap.appendChild(el("div", "quiz-progress",
+        "Question " + (step + 1) + " of " + QUIZ.length));
+      wrap.appendChild(el("p", "q", QUIZ[step].q));
+      var q = QUIZ[step];
+      if (q.text) {
+        var cityBox = el("div", "quiz-city");
+        var inp = el("input");
+        inp.type = "text"; inp.id = "quizCity";
+        inp.placeholder = "e.g. Charleston, SC";
+        inp.setAttribute("aria-label", "Property city");
+        cityBox.appendChild(inp);
+        wrap.appendChild(cityBox);
+        var go = el("button", "btn primary", "See my read-back");
+        go.type = "button"; go.style.marginTop = "12px";
+        go.addEventListener("click", function () {
+          answers[q.id] = inp.value.trim();
+          showOutcome();
+        });
+        wrap.appendChild(go);
+      } else {
+        var opts = el("div", "quiz-opts");
+        q.opts.forEach(function (o) {
+          var b = el("button", "quiz-opt", o.label);
+          b.type = "button";
+          if (o.sub) {
+            var sub = el("span", "sub", o.sub);
+            b.appendChild(sub);
+          }
+          b.addEventListener("click", function () {
+            answers[q.id] = o.v;
+            step++;
+            if (step < QUIZ.length) showStep(); else showOutcome();
+          });
+          opts.appendChild(b);
+        });
+        wrap.appendChild(opts);
+      }
+      if (step > 0) {
+        var nav = el("div", "quiz-nav");
+        var back = el("button", "btn ghost", "Back");
+        back.type = "button";
+        back.addEventListener("click", function () { step--; showStep(); });
+        nav.appendChild(back);
+        wrap.appendChild(nav);
+      }
+      body.appendChild(wrap);
+      var first = wrap.querySelector("input");
+      if (first) first.focus();
+    }
+
+    function readBack() {
+      var lines = [];
+      var own = answers.own, present = answers.present, space = answers.space,
+          hoa = answers.hoa, city = answers.city;
+      if (own === "rent") lines.push("You rent the property, so your lease is the first gate.");
+      else if (own === "buying") lines.push("You are buying, so this is pre-purchase diligence.");
+      else lines.push("You own the property.");
+      if (present === "yes") lines.push("You will be there during stays (a hosted stay).");
+      else lines.push("Guests get the place without you there.");
+      if (space === "whole") lines.push("Guests get the whole home or apartment.");
+      else if (space === "room") lines.push("Guests get a private room while you stay too.");
+      else lines.push("Guests share a room with you.");
+      if (hoa === "yes") lines.push("An HOA, condo board, or landlord is involved.");
+      else if (hoa === "unsure") lines.push("You are not sure about HOA or board rules.");
+      else lines.push("No HOA, condo board, or landlord involved.");
+      if (city) lines.push("Property city: " + city + ".");
+      return lines;
+    }
+
+    function showOutcome() {
+      body.innerHTML = "";
+      var wrap = el("div", "quiz-step");
+      wrap.appendChild(el("p", "q", "Your situation, read back"));
+      var ul = el("ul", "quiz-readback");
+      readBack().forEach(function (t) {
+        var li = el("li", null, t);
+        ul.appendChild(li);
+      });
+      wrap.appendChild(ul);
+      var own = answers.own, present = answers.present, space = answers.space,
+          hoa = answers.hoa, cityText = answers.city || "";
+
+      function note(t) {
+        var n = el("div", "quiz-note", t);
+        wrap.appendChild(n);
+      }
+
+      if (own === "rent") {
+        note("Because you rent, the city verdict is only half the answer. Leases commonly ban subletting and short stays, and a lease ban beats a green city verdict. Read your lease first, then run the address check.");
+      }
+      if (hoa === "yes" || hoa === "unsure") {
+        note("Rule out the building rules first: an HOA or condo board is the number one surprise restriction. Use the HOA red-flag check below to see which documents to pull.");
+      }
+      if (present === "yes" || space !== "whole") {
+        note("Many cities treat hosted stays far more leniently than whole-home investor rentals. In the checker, switch to the \u201cI live there\u201d view: the same address can flip from banned to registrable.");
+      } else {
+        note("For a whole home you do not live in, the investor view is the one that applies. The permit cost and night caps are the numbers that matter for your math.");
+      }
+
+      var cta = el("div", "quiz-cta");
+      var matched = cityText ? matchCity(cityText) : null;
+      if (matched) {
+        var run = el("button", "btn primary", "Run the check for " + matched.city);
+        run.type = "button";
+        run.addEventListener("click", function () {
+          input.value = cityText;
+          doCheck(cityText);
+          document.getElementById("resultSection").scrollIntoView({ behavior: "smooth" });
+        });
+        cta.appendChild(run);
+      } else if (cityText) {
+        var req = el("button", "btn primary", "Request " + cityText);
+        req.type = "button";
+        req.addEventListener("click", function () {
+          document.getElementById("unknownSection").classList.remove("hidden");
+          document.getElementById("unknownSection").scrollIntoView({ behavior: "smooth" });
+        });
+        cta.appendChild(req);
+      }
+      var addr = el("button", "btn ghost", "Check an address");
+      addr.type = "button";
+      addr.addEventListener("click", function () {
+        document.getElementById("addressInput").focus();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+      var hoaBtn = el("button", "btn ghost", "HOA red-flag check");
+      hoaBtn.type = "button";
+      hoaBtn.addEventListener("click", function () {
+        document.getElementById("hoa-check").scrollIntoView({ behavior: "smooth" });
+      });
+      var gloss = el("button", "btn ghost", "Key terms");
+      gloss.type = "button";
+      gloss.addEventListener("click", function () {
+        document.getElementById("glossary").scrollIntoView({ behavior: "smooth" });
+      });
+      cta.appendChild(addr); cta.appendChild(hoaBtn); cta.appendChild(gloss);
+      wrap.appendChild(cta);
+      var foot = el("p", "empty", "This quiz is education, not legal advice. Rules vary by zoning, HOA, and building type.");
+      wrap.appendChild(foot);
+      var again = el("button", "btn ghost", "Start over");
+      again.type = "button"; again.style.marginTop = "8px";
+      again.addEventListener("click", startOver);
+      wrap.appendChild(again);
+      body.appendChild(wrap);
+      body.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    showStep();
+  }
+
   migrateStorage();
   renderSaved();
   initCompare();
   initRequestForm();
   renderHoa();
   checkDueReminders();
+  initRuleChanges();
+  renderQuiz();
 
   /* deep link: #/check/<city-id>?address=... */
   function applyDeepLink() {

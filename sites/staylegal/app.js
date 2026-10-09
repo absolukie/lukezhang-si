@@ -61,6 +61,15 @@
   function saveJSON(key, val) {
     try { localStorage.setItem(key, JSON.stringify(val)); return true; } catch (e) { return false; }
   }
+  // P2 (wave F): loadJSON guards unparseable JSON, but a key can hold valid
+  // JSON of the wrong type (e.g. the number 5, left by an extension, a manual
+  // edit, or a past bug). Assigning a property on a number throws in strict
+  // mode and the user's action silently does nothing. loadObj treats any
+  // non-plain-object value as missing.
+  function loadObj(key) {
+    var v = loadJSON(key, {});
+    return (v && typeof v === "object" && !Array.isArray(v)) ? v : {};
+  }
   /* Raw (non-JSON) localStorage access, all guarded: localStorage can be
      disabled or full, and every one of these paths must degrade silently
      (PRD section 10 edge table), never throw. */
@@ -100,10 +109,17 @@
     return "staylegal.checklist.live." + cityId + "." + p;
   }
 
+  /* ---------- per-property keying ---------- */
+  // P1 (wave F): the unsaved live key used to be "live.<cityId>.<perspective>",
+  // shared by every unsaved property in one city. Two unsaved properties in
+  // the same city shared checklist ticks and HOA answers, and saving the
+  // second property permanently stored the first property's ticks. The live
+  // key is now per property, using the same checkId hash the night tracker
+  // uses (PRD R-8: progress does not affect any other property).
   function propId(city) {
     var id = checkId(currentAddress, city.id, perspective);
     return savedChecks().some(function (c) { return c.id === id; })
-      ? id : "live." + city.id + "." + perspective;
+      ? id : "live." + id;
   }
 
   function checklistKey(city) {
@@ -288,9 +304,14 @@
       });
     });
     if (!found) {
+      // P2 (wave F): check longer state names first, so "west virginia" is
+      // found before the substring "virginia" can false-positive on it.
+      var abbrs = Object.keys(STATE_NAMES).sort(function (a, b) {
+        return STATE_NAMES[b].length - STATE_NAMES[a].length;
+      });
       tail.forEach(function (seg) {
         if (found) return;
-        Object.keys(STATE_NAMES).forEach(function (abbr) {
+        abbrs.forEach(function (abbr) {
           if (found) return;
           if (seg.indexOf(STATE_NAMES[abbr].toLowerCase()) !== -1) {
             found = { abbr: abbr.toUpperCase(), name: STATE_NAMES[abbr] };
@@ -363,7 +384,7 @@
       btn.innerHTML = '<span class="box"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">' +
         '<path d="M2.5 7.5l3.2 3.2L11.5 4" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg></span>';
       btn.addEventListener("click", function () {
-        var d = loadJSON(key, {});
+        var d = loadObj(key);
         d[s.id] = !d[s.id];
         saveJSON(key, d);
         renderSteps(city);
@@ -446,7 +467,7 @@
   }
 
   /* ---------- renewal reminders, local only (B3) ---------- */
-  function getReminders() { return loadJSON("staylegal.reminders", {}); }
+  function getReminders() { return loadObj("staylegal.reminders"); }
 
   function daysUntil(dateStr) {
     var parts = (dateStr || "").split("-");
@@ -592,10 +613,14 @@
       savedAt: Date.now()
     };
     checks.push(c);
-    var live = liveKey(currentCity.id, perspective);
+    // P1 (wave F): copy THIS property's own live keys (checklistKey/hoaKey
+    // resolve to the per-property live key for an unsaved check), never the
+    // old shared per-city keys. Computed before the checks write because
+    // propId reads savedChecks() from storage.
+    var live = checklistKey(currentCity);
+    var liveHoaKey = hoaKey(currentCity);
     if (saveJSON("staylegal.checks", checks)) {
       if (saveJSON("staylegal.checklist." + id, loadJSON(live, {}))) removeLocal(live);
-      var liveHoaKey = "staylegal.hoa.live." + currentCity.id + "." + perspective;
       var liveHoa = loadJSON(liveHoaKey, null);
       if (liveHoa) {
         saveJSON("staylegal.hoa." + id, liveHoa);
@@ -848,6 +873,7 @@
     rems[c.id] = { date: date, label: currentView(currentCity).permit.name + " renewal" };
     saveJSON("staylegal.reminders", rems);
     trackEvent("reminder_set", { city_id: currentCity.id });
+    renderSteps(currentCity); // re-key: saveCurrentCheck moved live ticks onto the saved id
     renderReminderUI();
     renderSaved();
   });
@@ -979,7 +1005,7 @@
   ];
 
   function hoaAnswers() {
-    return loadJSON(hoaKey(currentCity), {});
+    return loadObj(hoaKey(currentCity));
   }
 
   function renderHoa() {
@@ -987,7 +1013,7 @@
     if (!box) return;
     box.innerHTML = "";
     var key = hoaKey(currentCity);
-    var answers = loadJSON(key, null);
+    var answers = loadObj(key);
     if (currentCity && (!answers || Object.keys(answers).length === 0)) {
       // P1-1: answers given with no active check live under staylegal.hoa.general.
       // Carry them onto the new property key so they do not vanish from view.

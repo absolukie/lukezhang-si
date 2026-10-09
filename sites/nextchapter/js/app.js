@@ -167,14 +167,36 @@ function load(){
       const s = JSON.parse(raw);
       if(s && Array.isArray(s.moves)){
         let changed = false;
+        const kept = [];
         s.moves.forEach(m => {
-          (m.items || []).forEach(it => {
-            if(it.photo && !safePhoto(it.photo)){ it.photo = null; changed = true; }
-          });
-          const before = JSON.stringify(m.checklist);
-          ensureMoveFields(m);
-          if(JSON.stringify(m.checklist) !== before) changed = true;
+          // Wave F P2-2: one wrong-typed field on a single move no longer
+          // quarantines the whole device. Sanitize the field and keep the
+          // move; only a move that cannot be repaired at all is set aside.
+          try{
+            if(!m || typeof m !== "object" || Array.isArray(m)) throw new Error("bad move");
+            let mChanged = false;
+            ["items","vendors","donations","activity","rooms"].forEach(k => {
+              if(!Array.isArray(m[k])){ m[k] = []; mChanged = true; }
+            });
+            const fi = m.items.filter(it => it && typeof it === "object" && !Array.isArray(it));
+            if(fi.length !== m.items.length){ m.items = fi; mChanged = true; }
+            const fr = m.rooms.filter(r => typeof r === "string");
+            if(fr.length !== m.rooms.length){ m.rooms = fr; mChanged = true; }
+            if(m.floorNotes == null || typeof m.floorNotes !== "object" || Array.isArray(m.floorNotes)){ m.floorNotes = {}; mChanged = true; }
+            m.items.forEach(it => {
+              if(it.photo && !safePhoto(it.photo)){ it.photo = null; mChanged = true; }
+            });
+            const before = JSON.stringify(m.checklist);
+            ensureMoveFields(m);
+            if(JSON.stringify(m.checklist) !== before) mChanged = true;
+            if(mChanged) changed = true;
+            kept.push(m);
+          }catch(e){
+            try{ localStorage.setItem(CORRUPT_PREFIX + "move-" + new Date().toISOString().replace(/[:.]/g, "-"), JSON.stringify(m)); }catch(_){}
+            changed = true;
+          }
         });
+        s.moves = kept;
         if(!s.sampleMigrated){
           s.moves.forEach(m => { if(m.clientName === "Eleanor Vance" || m.clientName === "The Alvarez Estate") m.sample = true; });
           s.sampleMigrated = true; changed = true;
@@ -193,8 +215,13 @@ function load(){
     // show an honest recovery screen. KEY is not written until the user
     // explicitly chooses "Start fresh".
     try{
-      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-      localStorage.setItem(CORRUPT_PREFIX + stamp, corruptRaw);
+      // Wave F P2-1: one backup per corrupt blob, not one per boot. Skip the
+      // write when an identical backup already exists on this device.
+      const dup = corruptKeys().some(k => { try{ return localStorage.getItem(k) === corruptRaw; }catch(_){ return false; } });
+      if(!dup){
+        const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+        localStorage.setItem(CORRUPT_PREFIX + stamp, corruptRaw);
+      }
     }catch(_){}
     window.__ncRecovery = true;
     return seed();
@@ -380,7 +407,7 @@ function toast(msg){
  * text is user data and interruptions are common. Explicit saves clear the
  * draft. Photos cannot be restored programmatically, so the restore toast
  * says so honestly. */
-let sheetDraft = null;
+let sheetDrafts = {};
 let sheetCloseTimer = null;
 function captureSheetDraft(sheet){
   const vals = {};
@@ -389,19 +416,28 @@ function captureSheetDraft(sheet){
     if(el.type === "checkbox" || el.type === "radio") vals[el.id] = {checked: el.checked};
     else vals[el.id] = {value: el.value};
   });
-  return Object.keys(vals).length ? {vals: vals, ts: Date.now()} : null;
+  // Wave F P1-3: drafts are keyed by sheet + field id. A half-typed item
+  // never pre-fills a different form that happens to share an id, and a
+  // sheet with nothing typed never wipes another sheet's draft.
+  const key = sheet.getAttribute("data-sheet") || "";
+  const hasContent = Object.keys(vals).some(id => {
+    const d = vals[id];
+    return d.checked === true || (typeof d.value === "string" && d.value.trim() !== "");
+  });
+  if(hasContent) sheetDrafts[key] = {vals: vals, ts: Date.now()};
 }
-function restoreSheetDraft(root){
-  if(!sheetDraft) return 0;
+function restoreSheetDraft(root, title){
+  const draft = sheetDrafts[title || ""];
+  if(!draft) return 0;
   let restored = 0;
   root.querySelectorAll("input, select, textarea").forEach(el => {
-    if(!el.id || el.type === "file" || !sheetDraft.vals[el.id]) return;
-    const d = sheetDraft.vals[el.id];
+    if(!el.id || el.type === "file" || !draft.vals[el.id]) return;
+    const d = draft.vals[el.id];
     if(el.type === "checkbox" || el.type === "radio"){
       if(el.checked !== d.checked){ el.checked = d.checked; restored++; }
     } else if(el.value !== d.value){ el.value = d.value; restored++; }
   });
-  sheetDraft = null;
+  delete sheetDrafts[title || ""];
   return restored;
 }
 function openSheet(title, sub, bodyHTML, footHTML){
@@ -417,7 +453,11 @@ function openSheet(title, sub, bodyHTML, footHTML){
       '<div class="sheet-body">'+bodyHTML+'</div>' +
       (footHTML ? '<div style="margin-top:16px">'+footHTML+'</div>' : '') +
     '</div>';
-  const n = restoreSheetDraft(root);
+  const sheetEl = $(".sheet", root);
+  // Wave F P1-3: tag the sheet with its title so closeSheet captures the
+  // draft under the sheet it came from.
+  if(sheetEl) sheetEl.setAttribute("data-sheet", title);
+  const n = restoreSheetDraft(root, title);
   if(n) setTimeout(() => toast("Draft restored. Photos are not kept."), 400);
   requestAnimationFrame(() => requestAnimationFrame(() => {
     $(".sheet-scrim", root).classList.add("open");
@@ -430,7 +470,8 @@ function closeSheet(committed){
   const root = $("#sheet-root");
   const scrim = $(".sheet-scrim", root), sheet = $(".sheet", root);
   if(!sheet || sheetCloseTimer) return; // already closing: never double-capture
-  sheetDraft = committed ? null : captureSheetDraft(sheet);
+  if(committed) delete sheetDrafts[sheet.getAttribute("data-sheet") || ""];
+  else captureSheetDraft(sheet);
   scrim.classList.remove("open"); sheet.classList.remove("open");
   sheetCloseTimer = setTimeout(() => { root.innerHTML = ""; sheetCloseTimer = null; }, 300);
 }
@@ -497,7 +538,11 @@ function digestSections(move, interactive){
   const decidedHTML = decided.map(it => {
     const photo = safePhoto(itemPhoto(it));
     const disp = DISP[it.disposition] || DISP.ask, fam = FAM[it.familyStatus] || FAM.pending;
-    const comment = (it.comments || []).reduce((latest,c) => !latest || (Number(c.ts)||0) >= (Number(latest.ts)||0) ? c : latest, null);
+    // Wave F P1-4: comments may be any truthy non-array in damaged local
+    // state. Only arrays of objects are reduced; everything else counts as
+    // no comments instead of crashing the whole digest view.
+    const commentList = Array.isArray(it.comments) ? it.comments.filter(c => c && typeof c === "object") : [];
+    const comment = commentList.reduce((latest,c) => !latest || (Number(c.ts)||0) >= (Number(latest.ts)||0) ? c : latest, null);
     return '<article class="card digest-card">'+(photo?'<img class="digest-photo" src="'+esc(photo)+'" alt="'+esc(it.name)+'">':'') +
       '<h3>'+esc(it.name)+'</h3><div class="digest-pills"><span class="disp '+disp.cls+'">'+esc(disp.label)+'</span> '+
       '<span class="disp '+fam.cls+'">'+esc(fam.label)+'</span></div>' +
@@ -1324,6 +1369,9 @@ const Actions = {
     try{ corruptKeys().forEach(k => localStorage.removeItem(k)); }catch(e){}
     window.__ncRecovery = false;
     state = seed(); save(); route();
+    // Wave F P1-2 side effect: pull right away so records that arrived
+    // before recovery merge back in without waiting for the next interval.
+    try{ const p = window.__nextchapterSyncPull && window.__nextchapterSyncPull(); if(p && p.catch) p.catch(function(){}); }catch(e){}
     toast("Started fresh. Your moves are safe to rebuild.");
   },
   "print-digest": () => window.print(),
@@ -1720,7 +1768,9 @@ function coachDone(){ try{ localStorage.setItem("nc_coach","1"); }catch(e){} }
 /* ---- sync bridge (consumed by sync.js; local-first, sync never blocks UI) ---- */
 window.__nextchapter = {
   getS: () => state,
-  saveLocal: (s) => { try{ localStorage.setItem(KEY, JSON.stringify(s || state)); }catch(e){} },
+  // Wave F P1-2: while the recovery screen is up, KEY holds quarantined
+  // data. Sync (and everything else) must never write it.
+  saveLocal: (s) => { if(window.__ncRecovery) return; try{ localStorage.setItem(KEY, JSON.stringify(s || state)); }catch(e){} },
   refresh: () => route()
 };
 })();

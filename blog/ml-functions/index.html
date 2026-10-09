@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The functions that run the machine: luke's blog</title>
+<meta name="description" content="Six mathematical functions do almost all the work inside ML models, LLMs, and agents: sigmoid, tanh, softmax, ReLU, GELU, SiLU, LayerNorm, RMSNorm, cosine similarity, cross-entropy. Each one gets a plain-language analogy and an interactive toy.">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    min-height: 100%;
+    background: #f6f1e3;
+    color: #2b2b2b;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.7;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 56px 22px 80px; }
+  nav.top { margin-bottom: 40px; font-size: 14px; }
+  nav.top a { color: rgba(43,43,43,0.55); text-decoration: none; }
+  nav.top a:hover { color: #b3352b; }
+  h1 { font-size: 32px; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 8px; }
+  .meta { color: rgba(43,43,43,0.5); font-size: 14px; margin-bottom: 24px; }
+  .verdict { font-size: 17px; color: #2b2b2b; border-left: 3px solid #b3352b;
+    padding: 4px 0 4px 18px; margin: 0 0 28px; line-height: 1.65; }
+  p { margin-bottom: 16px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  p strong, li strong { color: #2b2b2b; }
+  h2 { font-size: 23px; color: #2b2b2b; margin: 44px 0 10px; letter-spacing: -0.01em; }
+  ul { margin: 0 0 16px 20px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  li { margin-bottom: 8px; }
+  a { color: #b3352b; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px;
+    background: rgba(43,43,43,0.07); padding: 1px 6px; border-radius: 5px; }
+  footer { margin-top: 60px; font-size: 13px; color: rgba(43,43,43,0.35); }
+  footer a { color: rgba(43,43,43,0.6); }
+  .kicker-close { font-size: 19px; font-weight: 700; color: #2b2b2b;
+    border-top: 1px solid rgba(43,43,43,0.15); padding-top: 28px; margin-top: 48px; }
+
+  /* visualizer cards */
+  .viz { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 16px; padding: 20px; margin: 24px 0; }
+  .viz h3 { font-size: 17px; margin-bottom: 4px; color: #2b2b2b; }
+  .viz .sub { font-size: 14px; color: rgba(43,43,43,0.62); margin-bottom: 12px; line-height: 1.55; }
+  .viz label { font-size: 15px; font-weight: 600; display: block; margin: 14px 0 2px; color: #2b2b2b; }
+  .viz input[type=range] { width: 100%; height: 44px; background: transparent;
+    cursor: pointer; touch-action: pan-y; margin: 6px 0 2px;
+    -webkit-appearance: none; appearance: none; }
+  .viz input[type=range]::-webkit-slider-runnable-track { height: 10px; border-radius: 6px;
+    background: rgba(43,43,43,0.18); }
+  .viz input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none;
+    width: 42px; height: 42px; border-radius: 50%; background: #b3352b;
+    border: 3px solid #2b2b2b; margin-top: -16px; box-shadow: 0 2px 8px rgba(0,0,0,0.35); }
+  .viz input[type=range]::-moz-range-track { height: 10px; border-radius: 6px;
+    background: rgba(43,43,43,0.18); }
+  .viz input[type=range]::-moz-range-thumb { width: 36px; height: 36px; border-radius: 50%;
+    background: #b3352b; border: 3px solid #2b2b2b; }
+  /* taylor toy: slim slider, small knob / big grab (16px visible, 50px hit box) */
+  #toy-taylor input[type=range] { height: 34px; }
+  #toy-taylor input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px;
+    background: rgba(43,43,43,0.18); }
+  #toy-taylor input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none;
+    width: 50px; height: 50px; border-radius: 50%; border: none;
+    background: radial-gradient(circle, #b3352b 0 6px, #2b2b2b 6px 8px, rgba(0,0,0,0) 9px);
+    margin-top: -23px; box-shadow: none; filter: drop-shadow(0 1px 4px rgba(0,0,0,0.35)); }
+  #toy-taylor input[type=range]::-moz-range-track { height: 4px; border-radius: 2px;
+    background: rgba(43,43,43,0.18); }
+  #toy-taylor input[type=range]::-moz-range-thumb { width: 50px; height: 50px; border-radius: 50%;
+    border: none;
+    background: radial-gradient(circle, #b3352b 0 6px, #2b2b2b 6px 8px, rgba(0,0,0,0) 9px);
+    box-shadow: none; filter: drop-shadow(0 1px 4px rgba(0,0,0,0.35)); }
+  .ts-explain h4 { font-size: 15px; margin: 18px 0 6px; color: #2b2b2b; }
+  .ts-explain p { font-size: 14.5px; line-height: 1.6; color: rgba(43,43,43,0.85); margin: 8px 0; }
+  .ts-explain p strong { color: #2b2b2b; }
+  .ts-cycle { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 8px 0 2px; }
+  .ts-cycle .chip { padding: 8px 12px; }
+  .ts-cycle > span { color: rgba(43,43,43,0.4); font-size: 14px; }
+  .ts-legend { display: flex; gap: 16px; font-size: 13px; color: rgba(43,43,43,0.65); margin: 2px 0 4px; }
+  .ts-legend i { display: inline-block; width: 14px; height: 4px; border-radius: 2px;
+    margin-right: 6px; vertical-align: middle; }
+  .ts-formula { text-align: center; font-size: 17px; margin: 8px 0 2px; min-height: 44px; color: #2b2b2b; }
+  .viz input[type=text], .viz textarea { width: 100%; font-size: 16px; padding: 12px 14px;
+    border: 1px solid rgba(43,43,43,0.25); border-radius: 10px; background: #fff;
+    font-family: inherit; color: #2b2b2b; }
+  .viz input[type=text]:focus, .viz textarea:focus { outline: none; border-color: #b3352b; }
+
+  /* keep-exploring link cards */
+  .xlinks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0 8px; }
+  @media (max-width: 520px) { .xlinks { grid-template-columns: 1fr; } }
+  .xlink { display: block; background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 14px; padding: 16px; text-decoration: none; color: #2b2b2b;
+    touch-action: manipulation; }
+  .xlink:active { transform: scale(0.98); }
+  .xlink b { display: block; font-size: 15px; margin-bottom: 4px; color: #b3352b; }
+  .xlink span { font-size: 13.5px; color: rgba(43,43,43,0.62); line-height: 1.5; }
+  .xicon { width: 14px; height: 14px; vertical-align: -2px; margin-left: 7px; flex: none; }
+  .btn { touch-action: manipulation; border: none; background: #b3352b; color: #f6f1e3;
+    border-radius: 10px; padding: 12px 22px; font-size: 15px; font-weight: 700;
+    cursor: pointer; font-family: inherit; margin: 6px 8px 6px 0; }
+  .btn:active { transform: scale(0.97); }
+  .btn.ghost { background: transparent; color: #2b2b2b; border: 2px solid rgba(43,43,43,0.25); }
+  .btn:disabled { opacity: 0.4; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  .chip { touch-action: manipulation; border: 2px solid rgba(43,43,43,0.2); background: transparent;
+    border-radius: 999px; padding: 8px 16px; font-size: 14px; font-weight: 600;
+    cursor: pointer; color: #2b2b2b; font-family: inherit; }
+  .chip.on { border-color: #b3352b; color: #b3352b; background: rgba(179,53,43,0.07); }
+  .chip:active { transform: scale(0.96); }
+  .ladder { display: grid; gap: 10px; margin: 12px 0 4px; }
+  .rung { touch-action: manipulation; display: flex; align-items: center; gap: 12px;
+    min-height: 60px; padding: 10px 16px; font-size: 17px; font-weight: 700; font-family: inherit;
+    color: #2b2b2b; background: transparent; border: 2px solid rgba(43,43,43,0.2);
+    border-radius: 14px; cursor: pointer; text-align: left; }
+  .rung .rs { display: inline-flex; align-items: center; justify-content: center;
+    width: 40px; height: 40px; border-radius: 50%; background: rgba(43,43,43,0.08);
+    font-size: 20px; font-weight: 800; flex: none; }
+  .rung.on { border-color: #b3352b; color: #b3352b; background: rgba(179,53,43,0.07); }
+  .rung.on .rs { background: #b3352b; color: #fff; }
+  .rung:active { transform: scale(0.98); }
+  .readout { display: flex; justify-content: space-between; align-items: baseline; margin: 8px 0; gap: 10px; }
+  .big { font-size: 30px; font-weight: 800; color: #b3352b; font-variant-numeric: tabular-nums; }
+  .cap { font-size: 13.5px; color: rgba(43,43,43,0.6); margin-top: 10px; line-height: 1.55; }
+  .insight { background: rgba(179,53,43,0.07); border: 1px solid rgba(179,53,43,0.25);
+    border-radius: 12px; padding: 12px 16px; margin-top: 14px; font-size: 15px;
+    color: #2b2b2b; min-height: 54px; line-height: 1.55; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin: 7px 0; }
+  .bar-row .w { width: 92px; font-size: 14px; text-align: right; flex: none;
+    font-family: ui-monospace, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; }
+  .bar-track { flex: 1; height: 22px; background: rgba(43,43,43,0.08); border-radius: 6px;
+    overflow: hidden; }
+  .bar-fill { height: 100%; background: #b3352b; border-radius: 6px;
+    transition: width 320ms cubic-bezier(.2,.7,.2,1); }
+  .bar-fill.dim { background: rgba(43,43,43,0.25); }
+  .bar-fill.alt { background: #3b82c4; }
+  .bar-pct { width: 56px; font-size: 13px; font-variant-numeric: tabular-nums;
+    color: rgba(43,43,43,0.7); flex: none; text-align: right; }
+  .sm-row { display: flex; align-items: center; gap: 10px; margin: 2px 0; }
+  .sm-row .w { width: 64px; font-size: 14px; font-family: ui-monospace, Menlo, monospace; flex: none; }
+  .sm-row .v { width: 48px; font-size: 13px; text-align: right; font-variant-numeric: tabular-nums;
+    color: rgba(43,43,43,0.7); flex: none; }
+  .sm-row input[type=range] { flex: 1 1 auto; width: auto; min-width: 0; }
+  svg.curve { width: 100%; height: 230px; display: block; background: #fff;
+    border: 1px solid rgba(43,43,43,0.12); border-radius: 10px; touch-action: none;
+    margin: 10px 0 4px; }
+  svg.dial { width: 100%; height: 190px; display: block; background: #fff;
+    border: 1px solid rgba(43,43,43,0.12); border-radius: 10px; margin: 10px 0 4px; }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+  .stat-cell { background: rgba(43,43,43,0.045); border-radius: 10px; padding: 10px 12px; }
+  .stat-cell .n { font-size: 20px; font-weight: 800; color: #2b2b2b; font-variant-numeric: tabular-nums; }
+  .stat-cell .l { font-size: 12.5px; color: rgba(43,43,43,0.6); }
+  .hist { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; min-height: 34px; }
+  .hist-chip { font-family: ui-monospace, Menlo, monospace; font-size: 13px; padding: 4px 10px;
+    border-radius: 8px; background: rgba(43,43,43,0.07); border: 1px solid rgba(43,43,43,0.12); }
+  @media (prefers-reduced-motion: reduce) {
+    .bar-fill { transition: none; }
+  }
+</style>
+  <link rel="stylesheet" href="katex/katex.min.css">
+</head>
+<body>
+<div class="wrap">
+  <nav class="top"><a href="/blog/">&larr; blog</a></nav>
+
+  <h1>The functions that run the machine</h1>
+  <div class="meta">October 8, 2026 &middot; math &middot; llms</div>
+
+  <p class="verdict">Every AI model you have ever used is, underneath the hype, about ten math functions applied a few billion times. Squash a number here. Split a pie there. Measure how surprised you were. That is the whole game, and this post makes each function something you can touch.</p>
+
+  <p>People talk about neural networks like they are mysterious. They are not. A network is a long chain of very ordinary operations, and the interesting parts are just a handful of functions with funny names: sigmoid, softmax, ReLU, GELU, LayerNorm, cosine similarity. Learn these six families and you can read any model paper without flinching.</p>
+  <p>Each section below gives you one analogy and one toy, and we start at section zero, because one idea underpins half of what follows: the logarithm. Drag the sliders, spin the dials, and watch what each function actually does. By the end you will know exactly what is happening inside a transformer block, an embedding search, and a game-playing agent.</p>
+
+  <h2>0. Logarithms, from scratch</h2>
+  <p>Before any of the functions below, you need one idea: the logarithm. It is older than calculus and older than the steam engine. A Scottish astronomer invented it in 1614 because he was sick of multiplying big numbers by hand. Four hundred years later it is the reason your chatbot can learn at all. Here is the whole thing, built up from zero.</p>
+
+  <p><strong>A logarithm is just a counter.</strong> log10(1000) = 3 means: multiply 10 by itself 3 times and you get 1000. That is all it is. The log asks one question: <strong>how many multiplications deep are you?</strong></p>
+
+  <div class="viz">
+    <h3>The multiplication counter</h3>
+    <p class="sub">Pick a base, then step the counter. The step count IS the logarithm.</p>
+    <div class="chips" id="lg-base">
+      <button class="chip on" data-b="2">base 2</button>
+      <button class="chip" data-b="10">base 10</button>
+      <button class="chip" data-b="e">base e</button>
+    </div>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Multiplications</span>
+      <span>
+        <button class="chip" id="lg-minus" aria-label="Fewer multiplications">&minus;</button>
+        <span class="big" id="lg-n" style="margin:0 10px;">3</span>
+        <button class="chip" id="lg-plus" aria-label="More multiplications">+</button>
+      </span>
+    </div>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);" id="lg-chain"></span>
+      <span class="big" id="lg-log" style="font-size:22px;"></span>
+    </div>
+    <div class="insight" id="lg-insight"></div>
+  </div>
+
+  <p><strong>How Napier discovered it.</strong> In 1614, John Napier was an astronomer drowning in arithmetic. Multiplying two 7-digit numbers by hand took all afternoon, and one slip ruined everything. Then he noticed something: if you write numbers as powers of a base, multiplication becomes addition. 10&sup2; &times; 10&sup3; = 10&#8309;. So instead of multiplying the numbers, you add the exponents and look the answer up. He published tables of these exponents, logarithms, and cut calculation time to a fraction. It was a machine that turned hard multiplications into easy additions.</p>
+
+  <div class="viz">
+    <h3>Napier's machine</h3>
+    <p class="sub">Drag A and B. The machine multiplies them the painful way and the Napier way: add the logs, then un-log. Same answer.</p>
+    <label for="np-a">A <span id="np-a-v" style="font-weight:400;">37</span></label>
+    <input type="range" id="np-a" min="2" max="200" step="1" value="37" aria-label="First number">
+    <label for="np-b">B <span id="np-b-v" style="font-weight:400;">42</span></label>
+    <input type="range" id="np-b" min="2" max="200" step="1" value="42" aria-label="Second number">
+    <div class="stat-grid">
+      <div class="stat-cell"><div class="n" id="np-direct">1,554</div><div class="l">A &times; B, the painful way</div></div>
+      <div class="stat-cell"><div class="n" id="np-back">1554.00</div><div class="l">e^(ln A + ln B), the Napier way</div></div>
+    </div>
+    <p class="cap" id="np-work"></p>
+  </div>
+
+  <p><strong>Logs compress ridiculous ranges.</strong> An earthquake's energy, a sound's loudness, a solution's acidity: all of them span so many zeros that raw numbers are useless. So we invented the Richter scale, decibels, and pH, and all three are just logarithms in disguise. A magnitude 9 quake is not a little stronger than a magnitude 5. It is about a million times stronger, and the log scale is what lets you say that in one syllable. Language models live in the same world: the token probabilities below span twelve orders of magnitude. Flip the scale and watch the linear view crush everything to zero.</p>
+
+  <div class="viz">
+    <h3>The scale zoomer</h3>
+    <p class="sub">One row of token probabilities, from certain down to one in a trillion. Toggle the scale.</p>
+    <div class="chips" id="zm-mode">
+      <button class="chip on" data-m="lin">Linear scale</button>
+      <button class="chip" data-m="log">Log scale</button>
+    </div>
+    <div id="zm-bars"></div>
+    <p class="cap">On the linear scale, six of the seven bars are invisible. They are not zero, your eyes just cannot see twelve orders of magnitude at once. The log scale gives every value its fair share of pixels.</p>
+  </div>
+
+  <p><strong>Why base e?</strong> Because e is what continuous growth converges to. Put <span class="nokatex">$1</span> in a bank at 100% interest. Compounded once a year you get <span class="nokatex">$2</span>. Compounded every day you get about <span class="nokatex">$2.71</span>. Compounded every single instant, you approach <span class="nokatex">$2.71828</span> and never pass it. That number is e: the speed limit of growth. Whenever something grows or decays continuously, e shows up, and calculus is cleanest in base e, because the derivative of $e^x$ is just $e^x$ again. So in ML, a log with no base written always means natural log. It is not a fashion choice. It is the base the math wants.</p>
+
+  <div class="viz">
+    <h3>The speed limit of growth</h3>
+    <p class="sub">Step up how often the bank compounds your <span class="nokatex">$1</span>. Watch the total stall out at e.</p>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Compounds per year</span>
+      <span>
+        <button class="chip" id="eul-minus" aria-label="Compound less often">&minus;</button>
+        <span class="big" id="eul-n" style="margin:0 10px; font-size:22px;">1</span>
+        <button class="chip" id="eul-plus" aria-label="Compound more often">+</button>
+      </span>
+    </div>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Your <span class="nokatex">$1</span> becomes</span>
+      <span class="big" id="eul-val"><span class="nokatex">$2.00000</span></span>
+    </div>
+    <div class="insight" id="eul-insight"></div>
+  </div>
+
+  <div class="viz">
+    <h3>Build e, term by term</h3>
+    <p class="sub">Add one term at a time. Each new term is one over n factorial.</p>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Terms added</span>
+      <span>
+        <button class="chip" id="ty-minus" aria-label="Remove a term">&minus;</button>
+        <span class="big" id="ty-n" style="margin:0 10px; font-size:22px;">1</span>
+        <button class="chip" id="ty-plus" aria-label="Add a term">+</button>
+      </span>
+    </div>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Latest term</span>
+      <span class="big" id="ty-term" style="font-size:22px;"></span>
+    </div>
+    <div id="ty-chain" style="font-size:14px; color:rgba(43,43,43,0.65); margin:2px 0 6px; line-height:1.8;"></div>
+    <div class="stat-grid">
+      <div class="stat-cell"><div class="n" id="ty-total" style="font-size:20px;">1.0000000000</div><div class="l">running total</div></div>
+      <div class="stat-cell"><div class="n" id="ty-dec">0</div><div class="l">correct decimals</div></div>
+    </div>
+    <div class="insight" id="ty-insight"></div>
+    <p class="cap">$e^x$ is the one function that equals its own derivative and equals 1 at x = 0. Force a power series to obey that, term by term, and every coefficient gets pinned to $1/n!$. The series is not a trick. It is what "derivative equals itself" demands. The compound-interest limit $(1 + 1/n)^n$ also reaches e from first principles, but it crawls. Computers use the series.</p>
+  </div>
+
+  <div class="viz" id="toy-taylor">
+    <h3>Taylor series: fake the function</h3>
+    <p class="sub">Pick a function. Drag the terms. The polynomial hugs the curve near zero and wanders off far away.</p>
+    <div class="chips" id="ts-chips">
+      <button class="chip on" data-f="sin" aria-pressed="true">sin x</button>
+      <button class="chip" data-f="cos" aria-pressed="false">cos x</button>
+      <button class="chip" data-f="exp" aria-pressed="false">$e^x$</button>
+    </div>
+    <div class="ts-formula" id="ts-formula"></div>
+    <div class="ts-legend"><span><i style="background:#2b2b2b;"></i>true curve</span><span><i style="background:#b3352b;"></i>taylor polynomial</span></div>
+    <svg class="curve" id="ts-plot" viewBox="0 0 360 220" role="img" aria-label="True function versus its Taylor polynomial"></svg>
+    <label for="ts-n">Terms <span id="ts-n-v" style="font-weight:400;">6</span></label>
+    <input type="range" id="ts-n" min="1" max="12" step="1" value="6" aria-label="Number of Taylor terms">
+    <div class="stat-grid">
+      <div class="stat-cell"><div class="n" id="ts-near" style="font-size:20px;">~0</div><div class="l">worst miss near center (|x| &lt; 1)</div></div>
+      <div class="stat-cell"><div class="n" id="ts-far" style="font-size:20px;">0</div><div class="l">worst miss far away (|x| &gt; 4)</div></div>
+    </div>
+    <div class="insight" id="ts-insight"></div>
+<p class="cap"><strong>Wait, what IS a Taylor series?</strong></p>
+<div class="ts-explain">
+<p><strong>It is a translation.</strong> $\sin x$ looks impossible to compute: no plus, no times, just a wave. A Taylor series rewrites it using only plus and times: $a_0 + a_1 x + a_2 x^2 + a_3 x^3 + \cdots$. Those are the only two operations a computer does easily. The series is sin, translated into plain arithmetic.</p>
+<p><strong>How it was found.</strong> Brook Taylor published it in 1715, building on Newton and Gregory. The question: if you know EVERYTHING about a function at ONE point, its value, its slope, how its slope is changing, and onward, can you rebuild the function nearby? Yes. Each fact pins one coefficient: $a_0$ matches the value, $a_1$ matches the slope, $a_2$ matches the curvature. The $/n!$ shows up because differentiating $x^n$ exactly $n$ times spits out $n!$, so you divide it back out to keep each coefficient honest.</p>
+<p><strong>The road trip.</strong> Imagine describing a drive from a single instant: where you are (position), how fast you are going (velocity), whether you are speeding up (acceleration), and onward. Know all of that at one moment and you can predict a moment later. More terms, accurate further out. A Taylor series is that snapshot, written in algebra.</p>
+<h4>Why sin and cos fall out of it</h4>
+<p>The derivatives of sin run in a cycle. Tap through it:</p>
+<div class="ts-cycle" id="ts-cycle">
+<button class="chip on" data-i="0" aria-pressed="true">$\sin x$</button><span aria-hidden="true">&#8594;</span>
+<button class="chip" data-i="1" aria-pressed="false">$\cos x$</button><span aria-hidden="true">&#8594;</span>
+<button class="chip" data-i="2" aria-pressed="false">$-\sin x$</button><span aria-hidden="true">&#8594;</span>
+<button class="chip" data-i="3" aria-pressed="false">$-\cos x$</button><span aria-hidden="true">&#8635;</span>
+</div>
+<p class="cap" id="ts-cycle-cap" style="margin-top:6px;"></p>
+<p>At $x = 0$ that cycle reads 0, 1, 0, $-1$, 0, 1, and on. So the coefficients become $0, 1, 0, -1/3!, 0, 1/5!, \ldots$ and the sine series is just that cycle written down: $\sin x = x - x^3/3! + x^5/5! - \cdots$. Same story for cos. The series does not invent sin. It reveals what sin is. This is also why $e^{i\theta}$ splits into cos and sin: feed $i\theta$ into the $e^x$ series, sort the pile with $i$ from the pile without it, and the two piles are exactly the sin and cos series.</p>
+<h4>Other Lego sets</h4>
+<p>Taylor builds with polynomials, which are great near one point. <strong>Fourier series</strong> build ANY repeating pattern out of sines and cosines. That is how JPEG squeezes your photos and MP3 squeezes your music: keep the big waves, drop the tiny ones. (The Fourier transform behind your camera, from the day-in-the-life post, is this idea at work.) <strong>Geometric series:</strong> $1 + x + x^2 + \cdots = 1/(1-x)$, the simplest Lego set of all. The kicker: there is no single best set. Pick the right Lego for the job.</p>
+</div>
+  </div>
+
+  <p><strong>The money demo: why log-softmax, not probabilities.</strong> A language model writes one token at a time, and the probability of a whole sentence is every token's probability multiplied together. Each one is small. Multiply enough small numbers and the computer surrenders: the product rounds to exactly zero, and training dies on the spot. Logs fix it, because adding logs is the same as multiplying the originals, and addition never underflows. Slide N up and watch the left column die while the right column cruises.</p>
+
+  <div class="viz">
+    <h3>Watch a probability die</h3>
+    <p class="sub">Each token gets the same small probability p. The left column multiplies them, the way probabilities do. The right column adds their logs, the way training does.</p>
+    <label for="ud-n">Token positions (N) <span id="ud-n-v" style="font-weight:400;">200</span></label>
+    <input type="range" id="ud-n" min="1" max="200" step="1" value="200" aria-label="Number of token positions">
+    <label for="ud-p">Probability per token (p) <span id="ud-p-v" style="font-weight:400;">0.01</span></label>
+    <input type="range" id="ud-p" min="0" max="100" step="1" value="33" aria-label="Probability per token">
+    <div class="stat-grid">
+      <div class="stat-cell">
+        <div class="n" id="ud-left" style="font-size:17px; word-break:break-all;">0</div>
+        <div class="l">p multiplied N times <span id="ud-badge" style="background:#b3352b; color:#fff; font-size:11px; font-weight:700; border-radius:6px; padding:1px 8px; margin-left:6px;">UNDERFLOW</span></div>
+        <div class="bar-track" style="margin-top:8px;"><div class="bar-fill" id="ud-leftbar" style="width:0%"></div></div>
+      </div>
+      <div class="stat-cell">
+        <div class="n" id="ud-right" style="font-size:17px;">-921.0</div>
+        <div class="l">log-probabilities added N times</div>
+        <div class="bar-track" style="margin-top:8px;"><div class="bar-fill alt" id="ud-rightbar" style="width:8%"></div></div>
+      </div>
+    </div>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Honest answer</span>
+      <span class="big" style="font-size:22px;" id="ud-true">10<sup>-400</sup></span>
+    </div>
+    <div class="insight" id="ud-insight"></div>
+  </div>
+
+  <div class="viz">
+    <h3>The ladder</h3>
+    <p class="sub">Tap a rung. Every operation has a "how many deep" question, and the answer is always one rung down.</p>
+    <div class="ladder" id="ld-rungs">
+      <button class="rung on" data-r="0" aria-pressed="true"><span class="rs">+</span> addition</button>
+      <button class="rung" data-r="1" aria-pressed="false"><span class="rs">&times;</span> multiplication</button>
+      <button class="rung" data-r="2" aria-pressed="false"><span class="rs">^</span> exponentiation</button>
+      <button class="rung" data-r="3" aria-pressed="false"><span class="rs">&uarr;&uarr;</span> power towers</button>
+    </div>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Repeat it and you build</span>
+      <span class="big" id="ld-builds" style="font-size:18px;">multiplication</span>
+    </div>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">"How many deep?"</span>
+      <span class="big" id="ld-deep" style="font-size:18px;">division</span>
+    </div>
+    <div class="insight" id="ld-insight"></div>
+    <p class="cap">Division is log's analog for addition: "how many +b steps to reach x" is x / b, the same way "how many &times;b steps" is the log. Climb one rung and the log steps exponentiation down to multiplication too. At the top, power towers get the super-logarithm, which asks "how many exponentiations deep." The pattern never breaks.</p>
+  </div>
+
+  <p><strong>Now that logs make sense, here is why softmax wears a log coat.</strong></p>
+
+  <h2>1. The squashers: sigmoid and tanh</h2>
+  <p>Neural nets pass huge wild numbers around, and sometimes they need to calm one down. That is what the squashers do. <strong>Sigmoid</strong> takes any number and squeezes it into a 0-to-1 range. Think of a <strong>dimmer switch</strong>: any input becomes a brightness level between off and fully on. <strong>Tanh</strong> is the same idea but for a <strong>tug of war</strong>: any input becomes a pull between -1 and 1, negative one way, positive the other.</p>
+  <p>Where they live: inside LSTM memory cells, where sigmoid acts as a gate that decides how much old memory to keep, and in older networks as plain on/off switches. Modern transformers mostly replaced them, but the gate idea never left.</p>
+
+  <div class="viz">
+    <h3>The dimmer and the tug of war</h3>
+    <p class="sub">Drag the input. The red dot rides the sigmoid curve, the blue dot rides tanh. Same input, two different squeezes.</p>
+    <label for="sq-in">Input value <span id="sq-in-v" style="font-weight:400;">0.0</span></label>
+    <input type="range" id="sq-in" min="-8" max="8" step="0.1" value="0" aria-label="Input to sigmoid and tanh">
+    <svg class="curve" id="sq-svg" viewBox="0 0 600 230" role="img" aria-label="Sigmoid and tanh curves"></svg>
+    <div class="stat-grid">
+      <div class="stat-cell"><div class="n" id="sq-sig">0.50</div><div class="l">sigmoid: dimmer brightness</div></div>
+      <div class="stat-cell"><div class="n" id="sq-tanh">0.00</div><div class="l">tanh: tug-of-war pull</div></div>
+    </div>
+    <p class="cap">Notice how both flatten out at the extremes. Push the input to 8 and more input barely changes anything. That flat zone is called saturation, and it is why training can stall: no change in output means no signal to learn from.</p>
+  </div>
+
+  <div class="viz">
+    <h3>One curve becomes the other</h3>
+    <p class="sub">Drag the morph. At 0 you have pure sigmoid, 0 to 1. At 100 you have pure tanh, -1 to 1. The exact link is $\tanh(x) = 2\,\sigma(2x) - 1$.</p>
+    <label for="mp-t">Morph <span id="mp-t-v" style="font-weight:400;">0%</span></label>
+    <input type="range" id="mp-t" min="0" max="100" step="1" value="0" aria-label="Morph from sigmoid to tanh">
+    <svg class="curve" id="mp-svg" viewBox="0 0 600 230" role="img" aria-label="Curve morphing from sigmoid to tanh"></svg>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Formula in use</span>
+      <span class="big" id="mp-f" style="font-size:16px;">sigmoid(x)</span>
+    </div>
+    <p class="cap">Same rope, different markings: sigmoid measures off-to-on, tanh measures full-left to full-right with zero in the middle. Zero-centered matters for training. Sigmoid outputs are always positive, so gradients zigzag instead of heading straight downhill. Tanh averages to zero and converges faster. That is why old RNNs used tanh.</p>
+  </div>
+
+  <div class="viz">
+    <h3>Undo buttons</h3>
+    <p class="sub">Drag the input. Sigmoid squashes it into 0 to 1, logit stretches it right back. Watch the round trip land home.</p>
+    <label for="rt-x">Input value <span id="rt-x-v" style="font-weight:400;">1.5</span></label>
+    <input type="range" id="rt-x" min="-8" max="8" step="0.1" value="1.5" aria-label="Input for the sigmoid logit round trip">
+    <div class="stat-grid">
+      <div class="stat-cell"><div class="n" id="rt-sig">0.82</div><div class="l">sigmoid(x): squashed to 0-1</div></div>
+      <div class="stat-cell"><div class="n" id="rt-logit">1.50</div><div class="l">logit of that: stretched back</div></div>
+    </div>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Round-trip error</span>
+      <span class="big" id="rt-err" style="font-size:16px;">0</span>
+    </div>
+    <p class="cap">They are undo buttons for each other. $\operatorname{logit}(p) = \log\left(\frac{p}{1 - p}\right)$ is the exact inverse of sigmoid. Log-softmax is this same idea grown up for many choices instead of two.</p>
+  </div>
+
+  <div class="viz">
+    <h3>Paint the bell</h3>
+    <p class="sub">Drag the dot along the bell curve. The red paint is everyone at or below your x. That painted fraction is the CDF.</p>
+    <svg class="curve" id="cdf-svg" viewBox="0 0 600 230" role="img" aria-label="Bell curve with draggable CDF point"></svg>
+    <div class="stat-grid">
+      <div class="stat-cell"><div class="n" id="cdf-phi">0.500</div><div class="l">CDF: fraction painted so far</div></div>
+      <div class="stat-cell"><div class="n" id="cdf-erf">0.000</div><div class="l">$\operatorname{erf}\!\left(x / \sqrt{2}\right)$: the same area, renamed</div></div>
+    </div>
+    <p class="cap">CDF answers "what fraction is at or below x." Erf is that same area wearing a costume: the bell's area cannot be written with normal algebra, so it earned a name. The link is $\Phi(x) = \frac{1}{2}\left(1 + \operatorname{erf}\!\left(\frac{x}{\sqrt{2}}\right)\right)$. And look at the shape: erf is an S-curve from -1 to 1, just like tanh. That is why the GELU tanh approximation works. Tanh is erf's stunt double.</p>
+  </div>
+
+  <h2>2. The chooser: the softmax family</h2>
+  <p>Often the model must pick: which word comes next, which word to attend to, which action to take. Raw scores are messy, so <strong>softmax</strong> turns them into a clean split of a pie. Think of <strong>splitting a pie where the loudest voice gets the biggest slice</strong>: bigger score, bigger slice, and the slices always add to 100%.</p>
+  <p>Two knobs matter. <strong>Temperature</strong> is the randomness dial: cold temperature makes the winner take almost everything, hot temperature hands everyone a similar slice. And <strong>log-softmax</strong> is the Richter scale version of the same split: same information, but measured in logs so the math never underflows when probabilities get microscopic. There is also <strong>gumbel-softmax</strong>, which is softmax you can learn through, used for agents that sample an action and then improve from the result.</p>
+  <p>Where it lives: next-token probabilities, attention weights, and anywhere a model must choose.</p>
+
+  <div class="viz">
+    <h3>Split the pie</h3>
+    <p class="sub">Drag the scores. The bars show each candidate's slice. Drop the temperature for a ruthless winner, raise it to share the pie.</p>
+    <div id="sm-sliders"></div>
+    <label for="sm-temp">Temperature <span id="sm-temp-v" style="font-weight:400;">1.0</span></label>
+    <input type="range" id="sm-temp" min="0.2" max="4" step="0.1" value="1" aria-label="Softmax temperature">
+    <div class="chips" id="sm-mode">
+      <button class="chip on" data-m="prob">Probabilities</button>
+      <button class="chip" data-m="log">Log-softmax</button>
+    </div>
+    <div id="sm-bars"></div>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Slices add to</span>
+      <span class="big" id="sm-total">100.0%</span>
+    </div>
+    <p class="cap">Temperature 0.2 is a dictatorship: the top score takes nearly everything. Temperature 4 is a commune: almost equal slices no matter the scores. Sampling with high temperature is why the same prompt gives different answers each time.</p>
+  </div>
+
+  <h2>3. The spark: ReLU, GELU, SiLU</h2>
+  <p>After all the careful mixing, each neuron needs a moment of nonlinear mischief, or the whole network collapses into one big boring linear function. That mischief is the <strong>activation function</strong>. Think of them as <strong>bouncers at a club door</strong>. <strong>ReLU</strong> is the strict bouncer: negative numbers get bounced outright, positives walk straight in. <strong>GELU</strong> and <strong>SiLU</strong> are velvet-rope bouncers: entry is smooth, small negatives get a little slack instead of a hard no.</p>
+  <p>Where they live: inside every transformer block, right after the attention and MLP layers. GPT models use GELU. Llama models use SiLU (also called Swish). The smooth ones train a little better, which is why the strict bouncer mostly retired.</p>
+
+  <div class="viz">
+    <h3>Meet the bouncers</h3>
+    <p class="sub">Pick a bouncer, then drag the dot along the curve. Negatives on the left, positives on the right.</p>
+    <div class="chips" id="ac-chips">
+      <button class="chip on" data-a="relu">ReLU</button>
+      <button class="chip" data-a="gelu">GELU</button>
+      <button class="chip" data-a="silu">SiLU</button>
+    </div>
+    <svg class="curve" id="ac-svg" viewBox="0 0 600 230" role="img" aria-label="Activation function curve, draggable input point"></svg>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Input <span id="ac-x" style="font-weight:700;">0.0</span></span>
+      <span class="big" id="ac-y">0.00</span>
+    </div>
+    <p class="cap">Drag into the negatives with ReLU: flat zero, hard bounce. Switch to GELU or SiLU and the curve dips slightly below zero before recovering. That tiny dip is the velvet rope, and it gives the optimizer a gradient to follow where ReLU gives it nothing.</p>
+  </div>
+
+  <h2>4. The stabilizers: LayerNorm and RMSNorm</h2>
+  <p>Stack a hundred layers and the numbers drift: some explode, some vanish, and training falls over. <strong>Normalization</strong> is the fix. Think of a <strong>sound mixer resetting every instrument's volume</strong> before each song so no single guitar drowns the band. <strong>LayerNorm</strong> centers the values (subtract the mean) and rescales them (divide by the spread). <strong>RMSNorm</strong> skips the centering and just rescales, which is cheaper and works just as well.</p>
+  <p>Where they live: between every sub-layer of every modern model. Transformers without normalization do not train. Full stop.</p>
+
+  <div class="viz">
+    <h3>Reset the mixer</h3>
+    <p class="sub">Eight wild input values. Hit normalize and watch the mixer pull them into a sane range.</p>
+    <div class="chips" id="nm-chips">
+      <button class="chip on" data-n="layer">LayerNorm</button>
+      <button class="chip" data-n="rms">RMSNorm</button>
+    </div>
+    <div id="nm-bars"></div>
+    <div class="stat-grid">
+      <div class="stat-cell"><div class="n" id="nm-mean">-</div><div class="l">mean</div></div>
+      <div class="stat-cell"><div class="n" id="nm-std">-</div><div class="l">spread (std)</div></div>
+    </div>
+    <button class="btn" id="nm-go">Normalize</button>
+    <button class="btn ghost" id="nm-reset">New wild values</button>
+    <p class="cap">LayerNorm lands the mean at 0. RMSNorm leaves the mean alone and only tames the spread. Either way the next layer receives numbers it can actually work with.</p>
+  </div>
+
+  <h2>5. The measurers: cosine similarity and cross-entropy</h2>
+  <p>Two questions come up constantly. First: <strong>how alike are these two things?</strong> Embeddings turn words, images, and sentences into arrows in meaning-space, and <strong>cosine similarity</strong> asks <strong>do these two arrows point the same way</strong>. 1 means same direction, 0 means unrelated, -1 means opposite. This is the entire engine behind search-by-meaning.</p>
+  <p>Second: <strong>how wrong was the guess?</strong> <strong>Cross-entropy</strong> asks <strong>how surprised you were by the right answer</strong>. The model gave the correct word 90% probability? Barely surprised, tiny loss. Gave it 2%? Deeply surprised, huge loss. Training is just the long project of being less surprised.</p>
+  <p>Where they live: cosine similarity powers embedding search and retrieval; cross-entropy is the loss function behind almost all LLM training.</p>
+
+  <div class="viz">
+    <h3>Point the arrows</h3>
+    <p class="sub">Rotate each arrow with its slider. The readout is the cosine similarity: 1 when they align, 0 when they are perpendicular.</p>
+    <svg class="dial" id="cos-svg" viewBox="0 0 600 190" role="img" aria-label="Two rotatable arrows"></svg>
+    <label for="cos-a">Arrow A angle <span id="cos-a-v" style="font-weight:400;">20 deg</span></label>
+    <input type="range" id="cos-a" min="0" max="360" step="1" value="20" aria-label="Arrow A angle">
+    <label for="cos-b">Arrow B angle <span id="cos-b-v" style="font-weight:400;">80 deg</span></label>
+    <input type="range" id="cos-b" min="0" max="360" step="1" value="80" aria-label="Arrow B angle">
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Cosine similarity</span>
+      <span class="big" id="cos-sim">0.50</span>
+    </div>
+  </div>
+
+  <div class="viz">
+    <h3>The surprise dial</h3>
+    <p class="sub">The model gave the correct answer some probability. Drag it down and feel the loss explode.</p>
+    <label for="ce-p">Probability on the right answer <span id="ce-p-v" style="font-weight:400;">70%</span></label>
+    <input type="range" id="ce-p" min="1" max="99" step="1" value="70" aria-label="Probability on correct answer">
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Cross-entropy loss (nats)</span>
+      <span class="big" id="ce-loss">0.36</span>
+    </div>
+    <div class="insight" id="ce-insight"></div>
+    <p class="cap">Loss is negative log probability. At 99% the loss is nearly zero. At 1% it is 4.6 nats of pure surprise. Every training step is the model trying to push this number down across billions of guesses.</p>
+  </div>
+
+  <h2>6. The agent corner: softmax over actions</h2>
+  <p>An agent is a model with a to-do list. At every step it scores its options, what to click, which tool to call, which move to play, and then it must commit. That commit is <strong>softmax over actions</strong>: the same pie-splitting from section 2, but the slices are things to do. Think of it as <strong>the agent's gut feeling, written as probabilities</strong>.</p>
+  <p>Temperature is the personality dial here. Cold agent: always picks its best guess, reliable but predictable. Hot agent: explores, tries weird moves, sometimes discovers something brilliant, sometimes faceplants. Game-playing agents and tool-using agents live on this dial.</p>
+
+  <div class="viz">
+    <h3>Be the agent</h3>
+    <p class="sub">Set the scores, pick a temperature, then press Act. The agent samples an action from its gut feeling. Run it twenty times and watch the history.</p>
+    <div id="ag-sliders"></div>
+    <label for="ag-temp">Temperature <span id="ag-temp-v" style="font-weight:400;">1.0</span></label>
+    <input type="range" id="ag-temp" min="0.2" max="4" step="0.1" value="1" aria-label="Agent temperature">
+    <div>
+      <button class="btn" id="ag-act">Act</button>
+      <button class="btn ghost" id="ag-clear">Clear history</button>
+    </div>
+    <div class="readout">
+      <span style="font-size:14px; color:rgba(43,43,43,0.65);">Last action</span>
+      <span class="big" id="ag-last" style="font-size:24px;">-</span>
+    </div>
+    <div class="hist" id="ag-hist"></div>
+    <p class="cap">With temperature at 0.2 the history is a boring column of the top action. Crank it to 4 and every action shows up. Real agents often start hot to explore, then cool down to exploit what they learned.</p>
+  </div>
+
+  <p class="kicker-close">Six functions, and you now know what each one feels like. Next time a paper says "we apply RMSNorm before a SiLU MLP with softmax attention," you will hear: reset the mixer, velvet-rope bouncer, split the pie.</p>
+
+  <h2>Keep exploring</h2>
+  <p>These functions do not live alone. See them running inside real training, fine-tuning, and retrieval.</p>
+  <div class="xlinks">
+    <a class="xlink" href="https://lukezhang.si/blog/llm-training/"><b>How an LLM learns, step by step<svg class="xicon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4L10.5 13.5"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg></b><span>Softmax, cross-entropy, and gradient descent running inside a full training pipeline.</span></a>
+    <a class="xlink" href="https://lukezhang.si/blog/how-fine-tuning-works/"><b>How fine-tuning works<svg class="xicon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4L10.5 13.5"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg></b><span>What changes after pretraining, when the model learns to follow instructions.</span></a>
+    <a class="xlink" href="https://lukezhang.si/blog/rag/"><b>RAG, explained<svg class="xicon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4L10.5 13.5"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg></b><span>Cosine similarity doing its day job: finding the right document by meaning.</span></a>
+    <a class="xlink" href="https://projects.lukezhang.si/model-atlas/"><b>Model Atlas<svg class="xicon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4L10.5 13.5"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg></b><span>A visual map of 56 models: what kind each one is, who made it, what it costs.</span></a>
+  </div>
+
+  <footer>Draft. Interactive visualizers run entirely in your browser.</footer>
+</div>
+
+<script>
+(function(){
+"use strict";
+function $(id){ return document.getElementById(id); }
+function chips(id, fn){
+  var box = $(id);
+  box.addEventListener("click", function(ev){
+    var t = ev.target.closest("button"); if (!t) return;
+    Array.prototype.forEach.call(box.querySelectorAll("button"), function(b){ b.classList.remove("on"); });
+    t.classList.add("on"); fn(t);
+  });
+}
+
+/* ---------- 0a. multiplication counter: log is a counter ---------- */
+var lgBaseKey = "2", lgN = 3, LG_MAXN = 12;
+function lgBaseVal(){ return lgBaseKey === "e" ? Math.E : parseInt(lgBaseKey, 10); }
+function lgProdStr(v){
+  if (lgBaseKey === "e") return v.toFixed(2);
+  return Math.round(v).toLocaleString("en-US");
+}
+function lgRender(){
+  var b = lgBaseVal(), v = Math.pow(b, lgN);
+  var sym = lgBaseKey === "e" ? "e" : lgBaseKey, chain;
+  if (lgN === 0) chain = "1 (the empty product)";
+  else if (lgN <= 5) {
+    var parts = []; for (var i = 0; i < lgN; i++) parts.push(sym);
+    chain = parts.join(" \u00d7 ") + " = " + lgProdStr(v);
+  } else {
+    chain = sym + " \u00d7 " + sym + " \u00d7 ... \u00d7 " + sym + " (" + lgN + " times) = " + lgProdStr(v);
+  }
+  $("lg-chain").textContent = chain;
+  var lab = lgBaseKey === "e" ? "ln" : "log" + (lgBaseKey === "2" ? "\u2082" : "\u2081\u2080");
+  $("lg-log").textContent = lab + "(" + lgProdStr(v) + ") = " + lgN;
+  $("lg-n").textContent = lgN;
+  var note = lgBaseKey === "2"
+    ? "Base 2 logs count doublings. It is the native language of computers: every extra bit doubles what you can say."
+    : lgBaseKey === "10"
+    ? "Base 10 logs count digits minus one. 1,000 has four digits, so its log is 3. That is why scientists love it."
+    : "Base e logs count continuous growth. This is the one machine learning uses, always. More on why below.";
+  $("lg-insight").textContent = "Log asks: how many multiplications deep are you? Right now the answer is " + lgN + ". " + note;
+}
+chips("lg-base", function(t){ lgBaseKey = t.getAttribute("data-b"); lgRender(); });
+$("lg-minus").addEventListener("click", function(){ if (lgN > 0) { lgN--; lgRender(); } });
+$("lg-plus").addEventListener("click", function(){ if (lgN < LG_MAXN) { lgN++; lgRender(); } });
+lgRender();
+
+/* ---------- 0b. Napier's machine ---------- */
+function npRender(){
+  var a = +$("np-a").value, b = +$("np-b").value;
+  $("np-a-v").textContent = a; $("np-b-v").textContent = b;
+  var direct = a * b, la = Math.log(a), lb = Math.log(b), s = la + lb, back = Math.exp(s);
+  $("np-direct").textContent = direct.toLocaleString("en-US");
+  $("np-back").textContent = back.toFixed(2);
+  $("np-work").textContent = "ln(" + a + ") + ln(" + b + ") = " + la.toFixed(2) + " + " + lb.toFixed(2) +
+    " = " + s.toFixed(2) + ", then e^" + s.toFixed(2) + " = " + back.toFixed(1) + ". Same answer, no long multiplication.";
+}
+$("np-a").addEventListener("input", npRender);
+$("np-b").addEventListener("input", npRender);
+npRender();
+
+/* ---------- 0c. the scale zoomer ---------- */
+var ZM_P = [1, 0.1, 0.01, 1e-3, 1e-6, 1e-9, 1e-12], zmMode = "lin";
+function zmRender(){
+  var h = "";
+  ZM_P.forEach(function(p){
+    var w = zmMode === "lin" ? p * 100 : Math.max(0.8, (12 + Math.log10(p)) / 12 * 100);
+    var lab = p === 1 ? "1" : "10<sup>" + Math.round(Math.log10(p)) + "</sup>";
+    h += '<div class="bar-row"><div class="w">' + lab + '</div>' +
+      '<div class="bar-track"><div class="bar-fill' + (zmMode === "log" ? " alt" : "") +
+      '" style="width:' + Math.min(w, 100).toFixed(1) + '%"></div></div></div>';
+  });
+  $("zm-bars").innerHTML = h;
+}
+chips("zm-mode", function(t){ zmMode = t.getAttribute("data-m"); zmRender(); });
+zmRender();
+
+/* ---------- 0d. the speed limit of growth (why base e) ---------- */
+var EUL_NS = [1, 2, 4, 12, 52, 365, 8760, 31536000], eulI = 0;
+function eulRender(){
+  var n = EUL_NS[eulI], v = Math.pow(1 + 1 / n, n);
+  $("eul-n").textContent = n.toLocaleString("en-US");
+  $("eul-val").textContent = "$" + v.toFixed(5);
+  $("eul-insight").textContent = eulI === EUL_NS.length - 1
+    ? "Compounding every second of the year and you still land on 2.71828. That ceiling is e. Whenever growth never pauses, e is hiding inside, which is why ML does all of its logs in base e."
+    : "Bigger total, but watch it slow down. It is homing in on a ceiling it can never cross. Keep stepping.";
+}
+$("eul-minus").addEventListener("click", function(){ if (eulI > 0) { eulI--; eulRender(); } });
+$("eul-plus").addEventListener("click", function(){ if (eulI < EUL_NS.length - 1) { eulI++; eulRender(); } });
+eulRender();
+
+/* ---------- 0e. watch a probability die (why log-softmax) ---------- */
+function udP(){ return Math.pow(10, -3 + (+$("ud-p").value) * 3 / 100); }
+function udPStr(p){ return String(parseFloat(p.toPrecision(3))); }
+function udRender(){
+  var N = +$("ud-n").value, p = udP(), ps = udPStr(p);
+  $("ud-n-v").textContent = N; $("ud-p-v").textContent = ps;
+  var L = Math.pow(p, N), R = N * Math.log(p), E = N * Math.log10(p);
+  var leftEl = $("ud-left"), dead = (L === 0);
+  if (dead) {
+    leftEl.textContent = "0";
+    leftEl.style.color = "#b3352b";
+    $("ud-badge").style.display = "inline-block";
+  } else {
+    leftEl.textContent = L.toExponential(2);
+    leftEl.style.color = "";
+    $("ud-badge").style.display = "none";
+  }
+  $("ud-right").textContent = R.toFixed(1);
+  $("ud-true").innerHTML = "10<sup>" + Math.round(E) + "</sup>";
+  var lw = dead ? 0 : Math.max(0, Math.min(100, (324 + E) / 324 * 100));
+  var rw = Math.max(0, Math.min(100, (1400 + R) / 1400 * 100));
+  $("ud-leftbar").style.width = lw.toFixed(1) + "%";
+  $("ud-rightbar").style.width = rw.toFixed(1) + "%";
+  $("ud-insight").textContent = dead
+    ? "At N=" + N + " with p=" + ps + ", the honest answer is 10^" + Math.round(E) + ", but 64-bit floats bottom out near 10^-324. The left column reports 0 and training would die right here. The right column just says " + R.toFixed(1) + " and keeps going."
+    : "Left column still alive at " + L.toExponential(1) + ". Push N higher or p lower and watch it flatline to exactly 0. The right column does not care how far you go.";
+}
+$("ud-n").addEventListener("input", udRender);
+$("ud-p").addEventListener("input", udRender);
+udRender();
+
+/* ---------- 0d2. build e term by term (Taylor series) ---------- */
+var TY_MAX = 12, tyN = 0;
+function tyFact(n){ var f = 1; for (var i = 2; i <= n; i++) f *= i; return f; }
+function tyTotal(){
+  var s = 0;
+  for (var n = 0; n <= tyN; n++) s += 1 / tyFact(n);
+  return s;
+}
+function tyDecimals(total){
+  var a = total.toPrecision(17).replace(".", ""), b = String(Math.E).replace(".", ""), c = 0;
+  for (var i = 1; i < Math.min(a.length, b.length); i++) { if (a[i] === b[i]) c++; else break; }
+  return c;
+}
+function tyRenderTerm(){
+  var el = $("ty-term");
+  el.innerHTML = "$\\frac{1}{" + tyN + "!}$";
+  if (window.renderMathInElement) {
+    try {
+      renderMathInElement(el, { delimiters: [
+        {left: "$$", right: "$$", display: true},
+        {left: "$", right: "$", display: false}
+      ], throwOnError: false, ignoredClasses: ["nokatex"] });
+    } catch (e) {}
+  }
+}
+function tyRender(){
+  var total = tyTotal(), dec = tyDecimals(total);
+  $("ty-n").textContent = tyN + 1;
+  tyRenderTerm();
+  var chain = [];
+  for (var n = 0; n <= tyN; n++) chain.push("1/" + n + "!");
+  $("ty-chain").textContent = chain.join(" + ");
+  $("ty-total").textContent = total.toFixed(10);
+  $("ty-dec").textContent = dec;
+  $("ty-insight").textContent = tyN === TY_MAX
+    ? "13 terms, " + dec + " correct decimals. Factorials crush the tail so fast that each new term barely matters. This is why computers compute e with the series."
+    : (dec === 0
+      ? "Only " + (tyN + 1) + " term" + (tyN === 0 ? "" : "s") + " in: " + total.toFixed(4) + ". Not close to e yet. Keep adding."
+      : (tyN + 1) + " terms and you already match e to " + dec + " decimal" + (dec === 1 ? "" : "s") + ". The factorials are doing the heavy lifting.");
+}
+$("ty-minus").addEventListener("click", function(){ if (tyN > 0) { tyN--; tyRender(); } });
+$("ty-plus").addEventListener("click", function(){ if (tyN < TY_MAX) { tyN++; tyRender(); } });
+tyRender();
+
+/* ---------- 0f. the ladder (how-many-deep, one rung down) ---------- */
+var LD = [
+  { builds: "multiplication", deep: "division",
+    q: "How many +b steps to reach x? That is x / b.",
+    note: "Division counts additions the way a log counts multiplications. It is log's analog for addition." },
+  { builds: "exponentiation", deep: "logarithm",
+    q: "How many \u00d7b steps to reach x? That is the log.",
+    note: "The log asks how many multiplications deep you are. Same question, one rung up." },
+  { builds: "power towers", deep: "super-logarithm",
+    q: "How many ^ steps to reach x? That is the super-log.",
+    note: "The log also steps exponentiation down to multiplication. One tool, two rungs." },
+  { builds: "pentation (rarely used)", deep: "no standard name",
+    q: "How many tower levels? Mathematicians mostly stop here.",
+    note: "The pattern would keep going one rung down, but nobody needs it. This is where the names run out." }
+];
+function ldRender(r){
+  $("ld-builds").textContent = LD[r].builds;
+  $("ld-deep").textContent = LD[r].deep;
+  $("ld-insight").textContent = LD[r].q + " " + LD[r].note;
+  $("ld-rungs").querySelectorAll(".rung").forEach(function(b){
+    var on = +b.getAttribute("data-r") === r;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+}
+$("ld-rungs").addEventListener("click", function(e){
+  var b = e.target.closest(".rung");
+  if (b) ldRender(+b.getAttribute("data-r"));
+});
+ldRender(0);
+
+/* ---------- 0e2. taylor series: fake the function ---------- */
+var tsF = "sin", tsN = 6;
+var TS_F = {
+  sin: { name: "sin x",
+    formula: "$\\sin x = x - \\frac{x^3}{3!} + \\frac{x^5}{5!} - \\cdots$",
+    y0: -1.4, y1: 1.4,
+    f: function(x){ return Math.sin(x); },
+    p: function(x, n){ var s = 0, t = x; for (var k = 0; k < n; k++){ s += t; t = -t * x * x / ((2*k+2)*(2*k+3)); } return s; } },
+  cos: { name: "cos x",
+    formula: "$\\cos x = 1 - \\frac{x^2}{2!} + \\frac{x^4}{4!} - \\cdots$",
+    y0: -1.4, y1: 1.4,
+    f: function(x){ return Math.cos(x); },
+    p: function(x, n){ var s = 0, t = 1; for (var k = 0; k < n; k++){ s += t; t = -t * x * x / ((2*k+1)*(2*k+2)); } return s; } },
+  exp: { name: "e^x",
+    formula: "$e^x = 1 + x + \\frac{x^2}{2!} + \\frac{x^3}{3!} + \\cdots$",
+    y0: -3, y1: 15,
+    f: function(x){ return Math.exp(x); },
+    p: function(x, n){ var s = 0, t = 1; for (var k = 0; k < n; k++){ s += t; t = t * x / (k+1); } return s; } }
+};
+var TS_W = 360, TS_H = 220, TS_PX0 = 16, TS_PX1 = 344, TS_PY0 = 12, TS_PY1 = 206;
+function tsPx(x){ return TS_PX0 + (x + 6) / 12 * (TS_PX1 - TS_PX0); }
+function tsPy(y, y0, y1){ return TS_PY1 - (y - y0) / (y1 - y0) * (TS_PY1 - TS_PY0); }
+function tsPath(fn, y0, y1){
+  var d = "", N = 160, x, y;
+  for (var i = 0; i <= N; i++){
+    x = -6 + 12 * i / N; y = fn(x);
+    d += (i === 0 ? "M" : "L") + tsPx(x).toFixed(1) + " " + tsPy(y, y0, y1).toFixed(1);
+  }
+  return d;
+}
+function tsMaxErr(F, n, xa, xb){
+  var m = 0, N = 60, x, e;
+  for (var i = 0; i <= N; i++){
+    x = xa + (xb - xa) * i / N;
+    e = Math.abs(F.p(x, n) - F.f(x));
+    if (e > m) m = e;
+  }
+  return m;
+}
+function tsFmt(e){
+  if (!(e >= 0)) return "?";
+  if (e < 5e-10) return "~0";
+  if (e >= 10000) return e.toExponential(1);
+  if (e >= 100) return String(Math.round(e));
+  if (e >= 1) return e.toFixed(1);
+  return e.toPrecision(2);
+}
+function tsFormula(){
+  var el = $("ts-formula");
+  el.innerHTML = TS_F[tsF].formula;
+  if (window.renderMathInElement){
+    try { renderMathInElement(el, { delimiters: [{left:"$$",right:"$$",display:true},{left:"$",right:"$",display:false}], throwOnError:false, ignoredClasses:["nokatex"] }); } catch(e){}
+  }
+}
+function tsRender(){
+  var F = TS_F[tsF], y0 = F.y0, y1 = F.y1, s = "", i, x;
+  s += '<defs><clipPath id="ts-clip"><rect x="' + TS_PX0 + '" y="' + TS_PY0 + '" width="' + (TS_PX1-TS_PX0) + '" height="' + (TS_PY1-TS_PY0) + '"/></clipPath></defs>';
+  if (y0 < 0 && y1 > 0)
+    s += '<line x1="' + TS_PX0 + '" y1="' + tsPy(0,y0,y1).toFixed(1) + '" x2="' + TS_PX1 + '" y2="' + tsPy(0,y0,y1).toFixed(1) + '" stroke="rgba(43,43,43,0.25)" stroke-width="1"/>';
+  s += '<line x1="' + tsPx(0).toFixed(1) + '" y1="' + TS_PY0 + '" x2="' + tsPx(0).toFixed(1) + '" y2="' + TS_PY1 + '" stroke="rgba(43,43,43,0.25)" stroke-width="1"/>';
+  for (i = 0; i < 3; i++){
+    x = [-6, 0, 6][i];
+    s += '<text x="' + tsPx(x).toFixed(1) + '" y="' + (TS_H - 4) + '" font-size="10" text-anchor="middle" fill="rgba(43,43,43,0.5)">' + x + '</text>';
+  }
+  s += '<g clip-path="url(#ts-clip)">';
+  s += '<path d="' + tsPath(F.f, y0, y1) + '" fill="none" stroke="#2b2b2b" stroke-width="2.5"/>';
+  s += '<path d="' + tsPath(function(xx){ return F.p(xx, tsN); }, y0, y1) + '" fill="none" stroke="#b3352b" stroke-width="2.5"/>';
+  s += '</g>';
+  $("ts-plot").innerHTML = s;
+  var near = tsMaxErr(F, tsN, -1, 1);
+  var far = Math.max(tsMaxErr(F, tsN, 4, 6), tsMaxErr(F, tsN, -6, -4));
+  $("ts-near").textContent = tsFmt(near);
+  $("ts-far").textContent = tsFmt(far);
+  $("ts-n-v").textContent = tsN;
+  $("ts-insight").textContent = "With " + tsN + " term" + (tsN === 1 ? "" : "s") + ", the fake's worst miss on " + F.name + " is " + tsFmt(near) + " near the center, but " + tsFmt(far) + " out past |x| = 4.";
+}
+$("ts-chips").addEventListener("click", function(e){
+  var b = e.target.closest(".chip");
+  if (!b) return;
+  tsF = b.getAttribute("data-f");
+  $("ts-chips").querySelectorAll(".chip").forEach(function(c){
+    var on = c === b;
+    c.classList.toggle("on", on);
+    c.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  tsFormula(); tsRender();
+});
+$("ts-n").addEventListener("input", function(){ tsN = +$("ts-n").value; tsRender(); });
+var TS_CYC = [
+  "The derivative of $\sin x$ is $\cos x$.",
+  "The derivative of $\cos x$ is $-\sin x$.",
+  "The derivative of $-\sin x$ is $-\cos x$.",
+  "The derivative of $-\cos x$ is $\sin x$: the cycle closes."
+];
+function tsCycleRender(el){
+  if (window.renderMathInElement){
+    try { renderMathInElement(el, { delimiters: [{left:"$$",right:"$$",display:true},{left:"$",right:"$",display:false}], throwOnError:false, ignoredClasses:["nokatex"] }); } catch(e){}
+  }
+}
+function tsCycle(i){
+  $("ts-cycle").querySelectorAll(".chip").forEach(function(b, j){
+    var on = j === i;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  var cap = $("ts-cycle-cap");
+  cap.innerHTML = TS_CYC[i];
+  tsCycleRender(cap);
+}
+$("ts-cycle").addEventListener("click", function(e){
+  var b = e.target.closest(".chip");
+  if (!b) return;
+  tsCycle(+b.getAttribute("data-i"));
+});
+tsCycle(0);
+tsFormula(); tsRender();
+})();
+</script>
+
+<script>
+(function(){
+"use strict";
+function $(id){ return document.getElementById(id); }
+function fmt(x, d){ return Number(x).toFixed(d); }
+
+/* ---------- shared curve helper ---------- */
+function drawCurve(svg, fns, x0, x1, y0, y1, dots){
+  var W=600, H=230, PL=40, PR=20, PT=14, PB=24;
+  function X(x){ return PL + (x-x0)/(x1-x0)*(W-PL-PR); }
+  function Y(y){ return H-PB - (y-y0)/(y1-y0)*(H-PT-PB); }
+  var s = "";
+  // gridlines at nice y values
+  var step = (y1-y0) > 4 ? 1 : 0.25;
+  for (var gy = Math.ceil(y0/step)*step; gy <= y1; gy += step){
+    var py = Y(gy);
+    s += '<line x1="'+PL+'" y1="'+py+'" x2="'+(W-PR)+'" y2="'+py+'" stroke="rgba(43,43,43,0.1)" stroke-width="1"/>';
+    s += '<text x="'+(PL-8)+'" y="'+(py+4)+'" font-size="11" fill="rgba(43,43,43,0.5)" text-anchor="end">'+gy+'</text>';
+  }
+  // zero axes
+  if (y0 < 0 && y1 > 0){
+    var zy = Y(0);
+    s += '<line x1="'+PL+'" y1="'+zy+'" x2="'+(W-PR)+'" y2="'+zy+'" stroke="rgba(43,43,43,0.35)" stroke-width="1.5"/>';
+  }
+  if (x0 < 0 && x1 > 0){
+    var zx = X(0);
+    s += '<line x1="'+zx+'" y1="'+PT+'" x2="'+zx+'" y2="'+(H-PB)+'" stroke="rgba(43,43,43,0.2)" stroke-width="1"/>';
+  }
+  fns.forEach(function(fn){
+    var d = "";
+    for (var i=0;i<=120;i++){
+      var x = x0 + (x1-x0)*i/120, y = fn.f(x);
+      if (y < y0) y = y0; if (y > y1) y = y1;
+      d += (i===0?"M":"L") + X(x).toFixed(1) + " " + Y(y).toFixed(1);
+    }
+    s += '<path d="'+d+'" fill="none" stroke="'+fn.color+'" stroke-width="2.5"/>';
+  });
+  (dots||[]).forEach(function(dt){
+    var y = dt.f(dt.x); if (y < y0) y = y0; if (y > y1) y = y1;
+    s += '<circle cx="'+X(dt.x).toFixed(1)+'" cy="'+Y(y).toFixed(1)+'" r="9" fill="'+dt.color+'" stroke="#fff" stroke-width="3"/>';
+  });
+  svg.innerHTML = s;
+  return {X:X, Y:Y, x0:x0, x1:x1};
+}
+
+/* ---------- 1. squashers ---------- */
+(function(){
+  var svg = $("sq-svg"), inp = $("sq-in");
+  function sig(x){ return 1/(1+Math.exp(-x)); }
+  function render(){
+    var x = parseFloat(inp.value);
+    $("sq-in-v").textContent = fmt(x,1);
+    var s = sig(x), t = Math.tanh(x);
+    $("sq-sig").textContent = fmt(s,2);
+    $("sq-tanh").textContent = fmt(t,2);
+    drawCurve(svg, [
+      {f:sig, color:"#b3352b"},
+      {f:Math.tanh, color:"#3b82c4"}
+    ], -8, 8, -1.1, 1.1, [
+      {x:x, f:sig, color:"#b3352b"},
+      {x:x, f:Math.tanh, color:"#3b82c4"}
+    ]);
+  }
+  inp.addEventListener("input", render);
+  render();
+})();
+
+/* ---------- 2. softmax family ---------- */
+(function(){
+  var names = ["Red","Blue","Green","Gold"];
+  var colors = ["#b3352b","#3b82c4","#2e7d32","#e07b2a"];
+  var scores = [2.2, 1.0, 0.2, -0.6];
+  var temp = 1.0, mode = "prob";
+  var sWrap = $("sm-sliders"), bWrap = $("sm-bars");
+  names.forEach(function(n,i){
+    var row = document.createElement("div");
+    row.className = "sm-row";
+    row.innerHTML = '<span class="w">'+n+'</span>' +
+      '<input type="range" min="-3" max="6" step="0.1" value="'+scores[i]+'" aria-label="'+n+' score">' +
+      '<span class="v"></span>';
+    sWrap.appendChild(row);
+    var r = row.querySelector("input"), v = row.querySelector(".v");
+    r.addEventListener("input", function(){ scores[i]=parseFloat(r.value); v.textContent=fmt(scores[i],1); render(); });
+    v.textContent = fmt(scores[i],1);
+  });
+  names.forEach(function(n,i){
+    var row = document.createElement("div");
+    row.className = "bar-row";
+    row.innerHTML = '<span class="w">'+n+'</span><div class="bar-track"><div class="bar-fill" style="background:'+colors[i]+'"></div></div><span class="bar-pct"></span>';
+    bWrap.appendChild(row);
+  });
+  var bars = bWrap.querySelectorAll(".bar-fill"), pcts = bWrap.querySelectorAll(".bar-pct");
+  $("sm-temp").addEventListener("input", function(){
+    temp = parseFloat(this.value);
+    $("sm-temp-v").textContent = fmt(temp,1);
+    render();
+  });
+  $("sm-mode").querySelectorAll(".chip").forEach(function(c){
+    c.addEventListener("click", function(){
+      $("sm-mode").querySelectorAll(".chip").forEach(function(x){ x.classList.remove("on"); });
+      c.classList.add("on"); mode = c.getAttribute("data-m"); render();
+    });
+  });
+  function render(){
+    var mx = Math.max.apply(null, scores);
+    var ex = scores.map(function(s){ return Math.exp((s-mx)/temp); });
+    var sum = ex.reduce(function(a,b){ return a+b; }, 0);
+    var probs = ex.map(function(e){ return e/sum; });
+    probs.forEach(function(p,i){
+      bars[i].style.width = (p*100).toFixed(1) + "%";
+      pcts[i].textContent = mode === "prob" ? (p*100).toFixed(1)+"%" : fmt(Math.log(p),2);
+    });
+    if (mode === "prob"){
+      $("sm-total").textContent = "100.0%";
+    } else {
+      var top = Math.max.apply(null, probs.map(function(p){ return Math.log(p); }));
+      $("sm-total").textContent = fmt(top,2) + " nats";
+    }
+  }
+  render();
+})();
+
+/* ---------- 1b. sigmoid -> tanh morph ---------- */
+(function(){
+  var svg = $("mp-svg"), inp = $("mp-t");
+  function sig(x){ return 1/(1+Math.exp(-x)); }
+  function render(){
+    var t = parseFloat(inp.value)/100;
+    $("mp-t-v").textContent = inp.value + "%";
+    function f(x){ return (1-t)*sig(x) + t*Math.tanh(x); }
+    $("mp-f").textContent = t === 0 ? "sigmoid(x)" :
+      (t === 1 ? "tanh(x)" : "(1-t)*sigmoid(x) + t*tanh(x), t = " + fmt(t,2));
+    drawCurve(svg, [{f:f, color:"#b3352b"}], -8, 8, -1.2, 1.2, null);
+  }
+  inp.addEventListener("input", render);
+  render();
+})();
+
+/* ---------- 1c. sigmoid / logit round trip ---------- */
+(function(){
+  var inp = $("rt-x");
+  function sig(x){ return 1/(1+Math.exp(-x)); }
+  function render(){
+    var x = parseFloat(inp.value);
+    $("rt-x-v").textContent = fmt(x,1);
+    var p = sig(x);
+    var back = Math.log(p/(1-p));
+    $("rt-sig").textContent = fmt(p,4);
+    $("rt-logit").textContent = fmt(back,2);
+    $("rt-err").textContent = Math.abs(back-x).toExponential(1);
+  }
+  inp.addEventListener("input", render);
+  render();
+})();
+
+/* ---------- 1d. CDF / erf: paint the bell ---------- */
+(function(){
+  var svg = $("cdf-svg");
+  var x = 0;
+  var X0 = -3.5, X1 = 3.5, YMAX = 0.45;
+  var W = 600, H = 230, PL = 44, PR = 20, PT = 14, PB = 26;
+  function pdf(v){ return Math.exp(-v*v/2)/Math.sqrt(2*Math.PI); }
+  function erfA(v){
+    var s = v < 0 ? -1 : 1; v = Math.abs(v);
+    var t = 1/(1+0.3275911*v);
+    var y = 1 - (((((1.061405429*t - 1.453152027)*t) + 1.421413741)*t - 0.284496736)*t + 0.254829592)*t*Math.exp(-v*v);
+    return s*y;
+  }
+  function Phi(v){ return 0.5*(1+erfA(v/Math.SQRT2)); }
+  function X(v){ return PL + (v-X0)/(X1-X0)*(W-PL-PR); }
+  function Y(v){ return H-PB - v/YMAX*(H-PT-PB); }
+  function drawStatic(){
+    var s = "";
+    [-3,-2,-1,0,1,2,3].forEach(function(gx){
+      var px = X(gx);
+      s += '<line x1="'+px+'" y1="'+PT+'" x2="'+px+'" y2="'+(H-PB)+'" stroke="rgba(43,43,43,0.08)"/>';
+      s += '<text x="'+px+'" y="'+(H-PB+16)+'" font-size="11" fill="rgba(43,43,43,0.5)" text-anchor="middle">'+gx+'</text>';
+    });
+    var d = "";
+    for (var i=0;i<=140;i++){
+      var vx = X0+(X1-X0)*i/140, vy = pdf(vx);
+      d += (i===0?"M":"L")+X(vx).toFixed(1)+" "+Y(vy).toFixed(1);
+    }
+    s += '<path d="'+d+'" fill="none" stroke="#2b2b2b" stroke-width="2.5"/>';
+    s += '<line x1="'+PL+'" y1="'+Y(0)+'" x2="'+(W-PR)+'" y2="'+Y(0)+'" stroke="rgba(43,43,43,0.25)"/>';
+    s += '<path id="cdf-shade" fill="rgba(179,53,43,0.25)" stroke="none"/>';
+    s += '<line id="cdf-line" stroke="#b3352b" stroke-width="2" stroke-dasharray="5 4"/>';
+    s += '<rect id="cdf-hit" x="'+PL+'" y="'+PT+'" width="'+(W-PL-PR)+'" height="'+(H-PT-PB)+'" fill="transparent"/>';
+    s += '<circle id="cdf-halo" r="30" fill="transparent" style="cursor:grab"/>';
+    s += '<circle id="cdf-dot" r="15" fill="#b3352b" stroke="#fff" stroke-width="3" style="cursor:grab"/>';
+    svg.innerHTML = s;
+  }
+  function move(){
+    var px = X(x), py = Y(pdf(x));
+    var d = "M"+X(X0).toFixed(1)+" "+Y(0).toFixed(1);
+    var n = 80, i, vx;
+    for (i=0;i<=n;i++){
+      vx = X0 + (x-X0)*i/n;
+      d += "L"+X(vx).toFixed(1)+" "+Y(pdf(vx)).toFixed(1);
+    }
+    d += "L"+px.toFixed(1)+" "+Y(0).toFixed(1)+"Z";
+    $("cdf-shade").setAttribute("d", d);
+    var ln = $("cdf-line");
+    ln.setAttribute("x1", px.toFixed(1)); ln.setAttribute("y1", PT);
+    ln.setAttribute("x2", px.toFixed(1)); ln.setAttribute("y2", (H-PB).toFixed(1));
+    $("cdf-dot").setAttribute("cx", px.toFixed(1));
+    $("cdf-dot").setAttribute("cy", py.toFixed(1));
+    $("cdf-halo").setAttribute("cx", px.toFixed(1));
+    $("cdf-halo").setAttribute("cy", py.toFixed(1));
+    $("cdf-phi").textContent = fmt(Phi(x),3);
+    $("cdf-erf").textContent = fmt(erfA(x/Math.SQRT2),3);
+  }
+  drawStatic();
+  (function(){
+    var dragging = false;
+    function setFromEvent(e){
+      var r = svg.getBoundingClientRect();
+      var pxv = (e.clientX - r.left)/r.width*W;
+      var vx = X0 + (pxv-PL)/(W-PL-PR)*(X1-X0);
+      x = Math.max(X0, Math.min(X1, vx));
+      move();
+    }
+    svg.addEventListener("pointerdown", function(e){
+      dragging = true;
+      try { svg.setPointerCapture(e.pointerId); } catch(err){}
+      setFromEvent(e);
+    });
+    svg.addEventListener("pointermove", function(e){ if (dragging) setFromEvent(e); });
+    svg.addEventListener("pointerup", function(){ dragging = false; });
+    svg.addEventListener("pointercancel", function(){ dragging = false; });
+  })();
+  move();
+})();
+})();
+</script>
+
+<script>
+(function(){
+"use strict";
+function $(id){ return document.getElementById(id); }
+function fmt(x, d){ return Number(x).toFixed(d); }
+
+/* ---------- 3. bouncers: ReLU / GELU / SiLU ---------- */
+(function(){
+  var svg = $("ac-svg");
+  var act = "relu", x = 1.5;
+  function erf(v){
+    var s = v < 0 ? -1 : 1; v = Math.abs(v);
+    var t = 1/(1+0.3275911*v);
+    var y = 1 - (((((1.061405429*t - 1.453152027)*t) + 1.421413741)*t - 0.284496736)*t + 0.254829592)*t*Math.exp(-v*v);
+    return s*y;
+  }
+  var fns = {
+    relu: function(v){ return Math.max(0, v); },
+    gelu: function(v){ return 0.5*v*(1+erf(v/Math.SQRT2)); },
+    silu: function(v){ return v/(1+Math.exp(-v)); }
+  };
+  function drawStatic(f){
+    var W=600,H=230,PL=44,PR=20,PT=14,PB=26;
+    function X(v){ return PL + (v+6)/12*(W-PL-PR); }
+    function Y(v){ return H-PB - (v+2)/8*(H-PT-PB); }
+    var s = "";
+    [-2,-1,0,1,2,3,4,5,6].forEach(function(gy){
+      var py=Y(gy);
+      s += '<line x1="'+PL+'" y1="'+py+'" x2="'+(W-PR)+'" y2="'+py+'" stroke="rgba(43,43,43,0.1)"/>';
+      s += '<text x="'+(PL-8)+'" y="'+(py+4)+'" font-size="11" fill="rgba(43,43,43,0.5)" text-anchor="end">'+gy+'</text>';
+    });
+    var zy=Y(0), zx=X(0);
+    s += '<line x1="'+PL+'" y1="'+zy+'" x2="'+(W-PR)+'" y2="'+zy+'" stroke="rgba(43,43,43,0.35)" stroke-width="1.5"/>';
+    s += '<line x1="'+zx+'" y1="'+PT+'" x2="'+zx+'" y2="'+(H-PB)+'" stroke="rgba(43,43,43,0.2)"/>';
+    var d="";
+    for (var i=0;i<=140;i++){
+      var vx=-6+12*i/140, vy=f(vx);
+      if (vy<-2) vy=-2; if (vy>6) vy=6;
+      d += (i===0?"M":"L")+X(vx).toFixed(1)+" "+Y(vy).toFixed(1);
+    }
+    s += '<path d="'+d+'" fill="none" stroke="#b3352b" stroke-width="2.5"/>';
+    s += '<rect id="ac-hit" x="'+PL+'" y="'+PT+'" width="'+(W-PL-PR)+'" height="'+(H-PT-PB)+'" fill="transparent"/>';
+    s += '<circle id="ac-hitc" r="26" fill="transparent" style="cursor:grab"/>'; /* invisible grab halo */
+    s += '<circle id="ac-dot" r="14" fill="#b3352b" stroke="#fff" stroke-width="3" style="cursor:grab"/>';
+    svg.innerHTML = s;
+  }
+  function moveDot(){
+    var f = fns[act];
+    var W=600,H=230,PL=44,PR=20,PT=14,PB=26;
+    function X(v){ return PL + (v+6)/12*(W-PL-PR); }
+    function Y(v){ return H-PB - (v+2)/8*(H-PT-PB); }
+    var y = f(x); if (y<-2) y=-2; if (y>6) y=6;
+    var dot = $("ac-dot");
+    if (dot){ dot.setAttribute("cx", X(x).toFixed(1)); dot.setAttribute("cy", Y(y).toFixed(1)); }
+    var halo = $("ac-hitc");
+    if (halo){ halo.setAttribute("cx", X(x).toFixed(1)); halo.setAttribute("cy", Y(y).toFixed(1)); }
+    $("ac-x").textContent = fmt(x,1);
+    $("ac-y").textContent = fmt(f(x),2);
+  }
+  function render(){
+    drawStatic(fns[act]);
+    moveDot();
+  }
+  // drag handlers attach once to the svg element (never re-created)
+  (function(){
+    var dragging = false;
+    function setFromEvent(e){
+      var r = svg.getBoundingClientRect();
+      var px = (e.clientX - r.left)/r.width*600;
+      var vx = -6 + (px-44)/(600-44-20)*12;
+      x = Math.max(-6, Math.min(6, vx));
+      moveDot();
+    }
+    svg.addEventListener("pointerdown", function(e){
+      dragging = true;
+      try { svg.setPointerCapture(e.pointerId); } catch(err){}
+      setFromEvent(e);
+    });
+    svg.addEventListener("pointermove", function(e){ if (dragging) setFromEvent(e); });
+    svg.addEventListener("pointerup", function(){ dragging = false; });
+    svg.addEventListener("pointercancel", function(){ dragging = false; });
+  })();
+  $("ac-chips").querySelectorAll(".chip").forEach(function(c){
+    c.addEventListener("click", function(){
+      $("ac-chips").querySelectorAll(".chip").forEach(function(z){ z.classList.remove("on"); });
+      c.classList.add("on"); act = c.getAttribute("data-a"); render();
+    });
+  });
+  render();
+})();
+
+/* ---------- 4. stabilizers: LayerNorm / RMSNorm ---------- */
+(function(){
+  var vals = [], mode = "layer";
+  var wrap = $("nm-bars");
+  function wild(){
+    vals = [];
+    for (var i=0;i<8;i++) vals.push(Math.round((Math.random()*100-45)*10)/10);
+  }
+  function stats(v){
+    var mean = v.reduce(function(a,b){return a+b;},0)/v.length;
+    var sd = Math.sqrt(v.reduce(function(a,b){return a+(b-mean)*(b-mean);},0)/v.length);
+    return {mean:mean, sd:sd};
+  }
+  function render(list){
+    wrap.innerHTML = "";
+    var mx = Math.max.apply(null, list.map(function(v){ return Math.abs(v); })) || 1;
+    list.forEach(function(v,i){
+      var row = document.createElement("div");
+      row.className = "bar-row";
+      var pct = Math.min(100, Math.abs(v)/mx*100);
+      var cls = v < 0 ? "bar-fill dim" : "bar-fill";
+      row.innerHTML = '<span class="w">v'+(i+1)+'</span><div class="bar-track"><div class="'+cls+'" style="width:'+pct.toFixed(1)+'%"></div></div><span class="bar-pct">'+fmt(v,2)+'</span>';
+      wrap.appendChild(row);
+    });
+    var s = stats(list);
+    $("nm-mean").textContent = fmt(s.mean,2);
+    $("nm-std").textContent = fmt(s.sd,2);
+  }
+  $("nm-chips").querySelectorAll(".chip").forEach(function(c){
+    c.addEventListener("click", function(){
+      $("nm-chips").querySelectorAll(".chip").forEach(function(z){ z.classList.remove("on"); });
+      c.classList.add("on"); mode = c.getAttribute("data-n");
+    });
+  });
+  $("nm-go").addEventListener("click", function(){
+    var s = stats(vals), eps = 1e-6, out;
+    if (mode === "layer"){
+      out = vals.map(function(v){ return (v-s.mean)/Math.sqrt(s.sd*s.sd+eps); });
+    } else {
+      var rms = Math.sqrt(vals.reduce(function(a,b){return a+b*b;},0)/vals.length + eps);
+      out = vals.map(function(v){ return v/rms; });
+    }
+    render(out);
+  });
+  $("nm-reset").addEventListener("click", function(){ wild(); render(vals); });
+  wild(); render(vals);
+})();
+
+/* ---------- 5a. cosine similarity dial ---------- */
+(function(){
+  var svg = $("cos-svg");
+  function render(){
+    var a = parseFloat($("cos-a").value), b = parseFloat($("cos-b").value);
+    $("cos-a-v").textContent = a + " deg";
+    $("cos-b-v").textContent = b + " deg";
+    var cx=300, cy=95, r=62;
+    function pt(deg){
+      var rad = deg*Math.PI/180;
+      return [cx + r*Math.cos(rad), cy - r*Math.sin(rad)];
+    }
+    function arrow(deg, color){
+      var p = pt(deg), rad = deg*Math.PI/180;
+      var dx = Math.cos(rad), dy = -Math.sin(rad);
+      var bx = p[0]-dx*16, by = p[1]-dy*16;
+      var nx = -dy, ny = dx;
+      var s = '<line x1="'+cx+'" y1="'+cy+'" x2="'+p[0].toFixed(1)+'" y2="'+p[1].toFixed(1)+'" stroke="'+color+'" stroke-width="4" stroke-linecap="round"/>';
+      s += '<polygon points="'+p[0].toFixed(1)+","+p[1].toFixed(1)+" "+(bx+nx*8).toFixed(1)+","+(by+ny*8).toFixed(1)+" "+(bx-nx*8).toFixed(1)+","+(by-ny*8).toFixed(1)+'" fill="'+color+'"/>';
+      s += '<circle cx="'+cx+'" cy="'+cy+'" r="5" fill="#2b2b2b"/>';
+      return s;
+    }
+    var s = '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="rgba(43,43,43,0.15)" stroke-dasharray="4 4"/>';
+    s += '<text x="'+(cx+r+8)+'" y="'+(cy+4)+'" font-size="12" fill="rgba(43,43,43,0.5)">0 deg</text>';
+    s += arrow(a, "#b3352b") + arrow(b, "#3b82c4");
+    s += '<text x="'+(cx-64)+'" y="'+(cy-r-10)+'" font-size="13" font-weight="700" fill="#b3352b">A</text>';
+    s += '<text x="'+(cx+52)+'" y="'+(cy-r-10)+'" font-size="13" font-weight="700" fill="#3b82c4">B</text>';
+    svg.innerHTML = s;
+    var sim = Math.cos((a-b)*Math.PI/180);
+    $("cos-sim").textContent = fmt(sim,2);
+  }
+  $("cos-a").addEventListener("input", render);
+  $("cos-b").addEventListener("input", render);
+  render();
+})();
+
+/* ---------- 5b. surprise dial: cross-entropy ---------- */
+(function(){
+  var inp = $("ce-p");
+  function render(){
+    var p = parseFloat(inp.value);
+    $("ce-p-v").textContent = p + "%";
+    var loss = -Math.log(p/100);
+    $("ce-loss").textContent = fmt(loss,2);
+    var el = $("ce-insight"), msg;
+    if (p >= 90) msg = "Barely a shrug. The model was confident and right, so this guess teaches it almost nothing.";
+    else if (p >= 50) msg = "Mild surprise. A decent guess, but the model still has something to learn here.";
+    else if (p >= 20) msg = "Real surprise. The model spread its bets and mostly missed. This one moves the weights.";
+    else msg = "Maximum embarrassment. The model was sure about everything except the truth. Huge gradient incoming.";
+    el.textContent = msg;
+  }
+  inp.addEventListener("input", render);
+  render();
+})();
+
+/* ---------- 6. agent corner: softmax over actions ---------- */
+(function(){
+  var names = ["search","click","type","wait"];
+  var colors = ["#b3352b","#3b82c4","#2e7d32","#e07b2a"];
+  var scores = [1.6, 0.8, 0.2, -0.5];
+  var temp = 1.0, hist = [];
+  var sWrap = $("ag-sliders"), hWrap = $("ag-hist");
+  names.forEach(function(n,i){
+    var row = document.createElement("div");
+    row.className = "sm-row";
+    row.innerHTML = '<span class="w">'+n+'</span>' +
+      '<input type="range" min="-3" max="6" step="0.1" value="'+scores[i]+'" aria-label="'+n+' score">' +
+      '<span class="v"></span>';
+    sWrap.appendChild(row);
+    var r = row.querySelector("input"), v = row.querySelector(".v");
+    v.textContent = fmt(scores[i],1);
+    r.addEventListener("input", function(){ scores[i]=parseFloat(r.value); v.textContent=fmt(scores[i],1); });
+  });
+  $("ag-temp").addEventListener("input", function(){
+    temp = parseFloat(this.value);
+    $("ag-temp-v").textContent = fmt(temp,1);
+  });
+  function probs(){
+    var mx = Math.max.apply(null, scores);
+    var ex = scores.map(function(s){ return Math.exp((s-mx)/temp); });
+    var sum = ex.reduce(function(a,b){ return a+b; }, 0);
+    return ex.map(function(e){ return e/sum; });
+  }
+  function renderHist(){
+    hWrap.innerHTML = "";
+    hist.slice(-14).forEach(function(h){
+      var c = document.createElement("span");
+      c.className = "hist-chip";
+      c.textContent = names[h];
+      c.style.borderLeft = "4px solid " + colors[h];
+      hWrap.appendChild(c);
+    });
+  }
+  $("ag-act").addEventListener("click", function(){
+    var p = probs(), r = Math.random(), acc = 0, pick = 0;
+    for (var i=0;i<p.length;i++){ acc += p[i]; if (r <= acc){ pick = i; break; } }
+    hist.push(pick);
+    $("ag-last").textContent = names[pick];
+    renderHist();
+  });
+  $("ag-clear").addEventListener("click", function(){
+    hist = []; $("ag-last").textContent = "-"; renderHist();
+  });
+  renderHist();
+})();
+})();
+</script>
+<script src="katex/katex.min.js"></script>
+<script src="katex/contrib/auto-render.min.js"></script>
+<script>
+renderMathInElement(document.body, {
+  delimiters: [
+    {left: "$$", right: "$$", display: true},
+    {left: "$", right: "$", display: false}
+  ],
+  throwOnError: false,
+  ignoredClasses: ["nokatex"]
+});
+</script>
+</body>
+</html>

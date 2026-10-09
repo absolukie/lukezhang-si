@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Are Unit Tests Dead?: luke's blog</title>
+<meta name="description" content="An engineer ran 444 agent coding runs and told his agents to stop writing tests. Success barely moved. The bill did. A visual tour of the mirror problem, the two camps, and what actually works now.">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { min-height: 100%; background: #f6f1e3; color: #2b2b2b;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.7; -webkit-tap-highlight-color: transparent; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 56px 22px 80px; }
+  nav.top { margin-bottom: 40px; font-size: 14px; }
+  nav.top a { color: rgba(43,43,43,0.55); text-decoration: none; }
+  nav.top a:hover { color: #b3352b; }
+  h1 { font-size: 32px; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 8px; }
+  .meta { color: rgba(43,43,43,0.5); font-size: 14px; margin-bottom: 24px; }
+  .verdict { font-size: 17px; color: #2b2b2b; border-left: 3px solid #b3352b;
+    padding: 4px 0 4px 18px; margin: 0 0 28px; line-height: 1.65; }
+  p { margin-bottom: 16px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  p strong { color: #2b2b2b; }
+  h2 { font-size: 23px; color: #2b2b2b; margin: 44px 0 10px; letter-spacing: -0.01em; }
+  a { color: #b3352b; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px;
+    background: rgba(43,43,43,0.07); padding: 1px 6px; border-radius: 5px; }
+  footer { margin-top: 60px; font-size: 13px; color: rgba(43,43,43,0.35); }
+  footer a { color: rgba(43,43,43,0.6); }
+  .kicker-close { font-size: 19px; font-weight: 700; color: #2b2b2b;
+    border-top: 1px solid rgba(43,43,43,0.15); padding-top: 28px; margin-top: 48px;
+    line-height: 1.55; }
+  .credit { font-size: 13.5px; color: rgba(43,43,43,0.6); margin-top: 18px; }
+
+  .viz { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 16px; padding: 20px; margin: 24px 0; }
+  .viz h3 { font-size: 17px; margin-bottom: 4px; color: #2b2b2b; }
+  .viz .sub { font-size: 14px; color: rgba(43,43,43,0.62); margin-bottom: 12px; line-height: 1.55; }
+  .cap { font-size: 13.5px; color: rgba(43,43,43,0.6); margin-top: 10px; line-height: 1.55; }
+  .insight { background: rgba(179,53,43,0.07); border: 1px solid rgba(179,53,43,0.25);
+    border-radius: 12px; padding: 12px 16px; margin-top: 14px; font-size: 15px;
+    color: #2b2b2b; min-height: 54px; line-height: 1.55; }
+  .btn { touch-action: manipulation; border: none; background: #b3352b; color: #f6f1e3;
+    border-radius: 10px; padding: 12px 22px; font-size: 15px; font-weight: 700;
+    cursor: pointer; font-family: inherit; margin: 6px 8px 6px 0; }
+  .btn:active { transform: scale(0.97); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  .chip { touch-action: manipulation; border: 2px solid rgba(43,43,43,0.2); background: transparent;
+    border-radius: 999px; padding: 8px 16px; font-size: 14px; font-weight: 600;
+    cursor: pointer; color: #2b2b2b; font-family: inherit; }
+  .chip.on { border-color: #b3352b; color: #b3352b; background: rgba(179,53,43,0.07); }
+  .chip:active { transform: scale(0.96); }
+
+  /* tappable cards */
+  .fcards { display: grid; gap: 10px; margin: 14px 0 4px; }
+  .fcard { touch-action: manipulation; background: #fffdf6; border: 2px solid rgba(43,43,43,0.16);
+    border-radius: 14px; padding: 15px 17px; cursor: pointer; text-align: left;
+    width: 100%; font-family: inherit; color: #2b2b2b; font-size: 15px; font-weight: 700; }
+  .fcard:active { transform: scale(0.98); }
+  .fcard .fk { display: block; font-size: 11px; letter-spacing: 0.12em; font-weight: 800;
+    color: #b3352b; margin-bottom: 3px; }
+  .fcard .fb { display: none; font-weight: 400; font-size: 14.5px; line-height: 1.6;
+    color: rgba(43,43,43,0.85); margin-top: 8px; }
+  .fcard.open { border-color: #b3352b; }
+  .fcard.open .fb { display: block; }
+  .fcard .fhint { float: right; font-size: 12px; font-weight: 600; color: rgba(43,43,43,0.4); }
+  .fcard.open .fhint { color: #b3352b; }
+  .fcard .srclink { display: inline-block; margin-top: 8px; font-size: 13px; font-weight: 600; }
+  .camphead { font-size: 13px; font-weight: 800; letter-spacing: 0.12em; margin: 26px 0 2px; }
+  .camphead.dead { color: #b3352b; }
+  .camphead.alive { color: #2b6e3f; }
+
+  /* comparison bars (stat duel) */
+  .duel-row { margin: 14px 0; }
+  .duel-lab { display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 6px; font-size: 14px; font-weight: 700; color: #2b2b2b; }
+  .duel-lab .delta { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px;
+    font-weight: 400; color: rgba(43,43,43,0.6); font-variant-numeric: tabular-nums; }
+  .duel-bar { position: relative; height: 30px; background: rgba(43,43,43,0.07);
+    border: 1px solid rgba(43,43,43,0.12); border-radius: 8px; overflow: hidden; margin-bottom: 6px; }
+  .duel-fill { height: 100%; border-radius: 8px;
+    transition: width 0.9s cubic-bezier(.2,.7,.2,1); }
+  .duel-fill.a { background: rgba(43,43,43,0.28); }
+  .duel-fill.b { background: #b3352b; }
+  .duel-key { display: flex; align-items: center; gap: 6px; font-size: 13px;
+    color: rgba(43,43,43,0.65); margin: 2px 0; }
+  .duel-key i { width: 12px; height: 12px; border-radius: 4px; display: inline-block; }
+  .duel-val { font-family: ui-monospace, Menlo, monospace; font-size: 13px;
+    font-variant-numeric: tabular-nums; color: #2b2b2b; margin-left: auto; }
+
+  /* flow diagram */
+  svg.flow { width: 100%; height: auto; display: block; margin: 6px 0 2px; }
+  .flab { font-size: 12px; font-weight: 800; letter-spacing: 0.06em; fill: #2b2b2b; }
+  .fsub { font-size: 10.5px; fill: rgba(43,43,43,0.6); }
+
+  /* stat grid */
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+  @media (max-width: 520px) { .stat-grid { grid-template-columns: 1fr 1fr; } }
+  .stat-cell { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 12px; padding: 14px 14px; }
+  .stat-cell .n { font-size: 26px; font-weight: 800; color: #b3352b;
+    font-variant-numeric: tabular-nums; line-height: 1.15; }
+  .stat-cell .l { font-size: 13px; color: rgba(43,43,43,0.72); line-height: 1.5; margin-top: 4px; }
+  .stat-cell .s { font-size: 11.5px; color: rgba(43,43,43,0.45); margin-top: 6px; }
+
+  /* sources */
+  .srclist { margin: 10px 0 16px 0; font-size: 14.5px; line-height: 1.6; list-style: none; }
+  .srclist li { margin-bottom: 10px; padding-left: 0; }
+  .srclist .who { font-weight: 700; color: #2b2b2b; }
+
+  /* keep exploring */
+  .xlinks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0 8px; }
+  @media (max-width: 520px) { .xlinks { grid-template-columns: 1fr; } }
+  .xlink { display: block; background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 14px; padding: 16px; text-decoration: none; color: #2b2b2b;
+    touch-action: manipulation; }
+  .xlink:active { transform: scale(0.98); }
+  .xlink b { display: block; font-size: 15px; margin-bottom: 4px; color: #b3352b; }
+  .xlink span { font-size: 13.5px; color: rgba(43,43,43,0.62); line-height: 1.5; }
+  .ext { display: inline-block; vertical-align: -2px; margin-left: 6px; color: #b3352b; }
+  @media (prefers-reduced-motion: reduce) { .duel-fill { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="top"><a href="https://lukezhang.si/blog/">&larr; luke's blog</a></nav>
+
+  <h1>Are Unit Tests Dead?</h1>
+  <div class="meta">engineering &middot; ai &middot; 10 min</div>
+  <p class="verdict">An engineer ran 444 agent coding runs, banned his agents from writing tests, and found the tests were not doing anything. The twist: this does not mean you need fewer tests. It means you need different ones.</p>
+
+  <p>Here is the tweet that started all of this. Kun Chen (@kunchenguid) builds the DeepSWE eval: 111 real-world coding tasks, run 444 times through Claude Sonnet 5.5. One arm of the experiment told the agent it was allowed to write tests. The other arm banned it from writing any tests at all.</p>
+
+  <p>Then he compared the two arms. Tap to zoom the gaps.</p>
+
+  <div class="viz" id="toy-duel">
+    <h3>The experiment: tests allowed vs no tests</h3>
+    <p class="sub">Same tasks, same model. The only difference: one side could write tests, the other could not.</p>
+    <div class="duel-row" data-a="65.3" data-b="66.2" data-fmt="pct" data-lab="Tasks solved" data-max="100" data-zmin="64" data-zmax="67">
+      <div class="duel-lab"><span>Tasks solved</span><span class="delta"></span></div>
+      <div class="duel-bar"><div class="duel-fill a"></div></div>
+      <div class="duel-key"><i style="background:rgba(43,43,43,0.28)"></i>tests allowed<span class="duel-val" data-v="a"></span></div>
+      <div class="duel-bar"><div class="duel-fill b"></div></div>
+      <div class="duel-key"><i style="background:#b3352b"></i>no tests written<span class="duel-val" data-v="b"></span></div>
+    </div>
+    <div class="duel-row" data-a="62.0" data-b="58.0" data-fmt="h" data-lab="Agent time" data-max="65" data-zmin="57" data-zmax="63">
+      <div class="duel-lab"><span>Agent time</span><span class="delta"></span></div>
+      <div class="duel-bar"><div class="duel-fill a"></div></div>
+      <div class="duel-key"><i style="background:rgba(43,43,43,0.28)"></i>tests allowed<span class="duel-val" data-v="a"></span></div>
+      <div class="duel-bar"><div class="duel-fill b"></div></div>
+      <div class="duel-key"><i style="background:#b3352b"></i>no tests written<span class="duel-val" data-v="b"></span></div>
+    </div>
+    <div class="duel-row" data-a="304" data-b="278" data-fmt="usd" data-lab="Spend" data-max="320" data-zmin="270" data-zmax="310">
+      <div class="duel-lab"><span>Spend</span><span class="delta"></span></div>
+      <div class="duel-bar"><div class="duel-fill a"></div></div>
+      <div class="duel-key"><i style="background:rgba(43,43,43,0.28)"></i>tests allowed<span class="duel-val" data-v="a"></span></div>
+      <div class="duel-bar"><div class="duel-fill b"></div></div>
+      <div class="duel-key"><i style="background:#b3352b"></i>no tests written<span class="duel-val" data-v="b"></span></div>
+    </div>
+    <div class="chips" role="group" aria-label="Bar scale">
+      <button class="chip on" type="button" data-zoom="off" aria-pressed="true">Absolute scale</button>
+      <button class="chip" type="button" data-zoom="on" aria-pressed="false">Zoom the gaps</button>
+    </div>
+    <div class="insight" id="duelInsight">The success rate barely moved. The bill did. Banning test-writing changed task success by +0.9 points (too small to be real) while cutting time 6% and spend 9% (both real).</div>
+    <p class="cap">Source: <a href="https://x.com/kunchenguid/status/2108030810691629403">kunchenguid's post</a>, Oct 2026. 444 runs on Claude Sonnet 5.5 across 111 real-world tasks. Of the tests written in the allowed arm, 65% were unit tests and 35% integration tests, and neither group helped.</p>
+  </div>
+
+  <p>His conclusion, blunt: tell your agents to stop writing tests by themselves. And do not ask them to do TDD either, he says he has data that it hurts.</p>
+
+  <p>But wait. Read the fine print before you delete your test folder. He banned the <strong>agent writing its own tests</strong>. He did not test human-written tests, and the eval had almost no end-to-end tests (17 of them versus 3,000+ unit and integration tests). So the honest headline is narrower: <strong>tests written by the same agent that wrote the code did not help.</strong></p>
+
+  <h2>The mirror problem</h2>
+  <p>This is the core of the whole debate, and it is one picture. The agent reads your request and forms an interpretation of what you want. Then it writes the code from that interpretation. Then it writes the tests from that same interpretation. Both the code and the tests are downstream of the same brain reading.</p>
+
+  <div class="viz" id="toy-mirror">
+    <h3>Why self-written tests cannot catch misreading</h3>
+    <p class="sub">Toggle between self-check and independent check.</p>
+    <div class="chips" role="group" aria-label="Check mode">
+      <button class="chip on" type="button" data-mode="self" aria-pressed="true">Self-check</button>
+      <button class="chip" type="button" data-mode="indep" aria-pressed="false">Independent check</button>
+    </div>
+    <svg class="flow" id="mirrorSvg" viewBox="0 0 360 300" role="img" aria-label="Diagram of the mirror problem">
+      <rect x="96" y="8" width="168" height="44" rx="10" fill="#fffdf6" stroke="#2b2b2b" stroke-width="2"/>
+      <text class="flab" x="180" y="27" text-anchor="middle">YOUR INTENT</text>
+      <text class="fsub" x="180" y="42" text-anchor="middle">final margin never negative</text>
+      <line x1="180" y1="52" x2="180" y2="76" stroke="#2b2b2b" stroke-width="2"/>
+      <polygon points="180,82 174,72 186,72" fill="#2b2b2b"/>
+      <rect x="86" y="84" width="188" height="52" rx="10" fill="#b3352b" stroke="#b3352b"/>
+      <text class="flab" x="180" y="105" text-anchor="middle" fill="#f6f1e3">AGENT'S READING</text>
+      <text class="fsub" x="180" y="121" text-anchor="middle" fill="#f6f1e3">margin = price minus discount</text>
+      <line x1="128" y1="136" x2="84" y2="170" stroke="#2b2b2b" stroke-width="2"/>
+      <line x1="232" y1="136" x2="276" y2="170" stroke="#2b2b2b" stroke-width="2"/>
+      <rect x="6" y="172" width="148" height="68" rx="10" fill="#fffdf6" stroke="#2b2b2b" stroke-width="2"/>
+      <text class="flab" x="80" y="193" text-anchor="middle">CODE</text>
+      <text class="fsub" x="80" y="208" text-anchor="middle">lets margin go</text>
+      <text class="fsub" x="80" y="220" text-anchor="middle">negative on big</text>
+      <text class="fsub" x="80" y="232" text-anchor="middle">discounts (the bug)</text>
+      <rect x="206" y="172" width="148" height="68" rx="10" fill="#fffdf6" stroke="#2b2b2b" stroke-width="2"/>
+      <text class="flab" x="280" y="193" text-anchor="middle">TESTS</text>
+      <text class="fsub" x="280" y="208" text-anchor="middle">written by the</text>
+      <text class="fsub" x="280" y="220" text-anchor="middle">same agent, from</text>
+      <text class="fsub" x="280" y="232" text-anchor="middle">the same reading</text>
+      <path id="mirrorTrap" d="M252 200 C 214 200, 196 190, 162 190" fill="none" stroke="#b3352b"
+        stroke-width="2.5" stroke-dasharray="7 5"/>
+      <text id="mirrorTrapLab" x="207" y="182" text-anchor="middle" font-size="11" fill="#b3352b"
+        font-weight="700">checks the reading,</text>
+      <g id="indepGroup" style="display:none">
+        <rect x="84" y="244" width="192" height="48" rx="10" fill="none" stroke="#2b6e3f"
+          stroke-width="2.5" stroke-dasharray="8 5"/>
+        <text class="flab" x="180" y="263" text-anchor="middle" fill="#2b6e3f">INDEPENDENT REVIEWER</text>
+        <text class="fsub" x="180" y="279" text-anchor="middle">sees only the request + the code</text>
+        <line x1="150" y1="244" x2="150" y2="232" stroke="#2b6e3f" stroke-width="2"/>
+        <polygon points="150,228 144,238 156,238" fill="#2b6e3f"/>
+        <line x1="180" y1="244" x2="180" y2="52" stroke="#2b6e3f" stroke-width="2" opacity="0.35"/>
+      </g>
+    </svg>
+    <div class="insight" id="mirrorInsight">Self-check: 1,200 tests, all green. The bug ships anyway, because the tests checked the agent's reading of your request, not your request.</div>
+  </div>
+
+  <p>This is the "independent X-ray machine" argument from Zhouwei: what AI needs is requirement-level verification where the questions come from a different teacher, one who only looked at the curriculum and never saw the student's notes. Quentin Haenn calls the failure mode "AI slop": code that is syntactically valid but business-false. The test suite, written by the same agent, never thinks to cross-reference the two files.</p>
+
+  <h2>Two camps</h2>
+  <p>The internet has opinions. They fall into two camps, and both have a point.</p>
+
+  <div class="camphead dead">CAMP ONE: UNIT TESTS ARE DEAD</div>
+  <div class="fcards">
+    <button class="fcard" type="button"><span class="fhint">tap</span><span class="fk">THE POLEMIC</span>Thorsten Ball<span class="fb">"Why have training wheels if you never fall over?" Ball says code review is already dead (humans cannot find bugs in model output "in a reasonable time") and unit tests might die too. His evidence: one model wrote 900 lines of Arduino C that compiled clean and ran perfectly on the device. He concedes it is a generation-long timeline.<br><a class="srclink" href="https://thorstenball.com/blog/2026/09/19/what-i-believe-about-the-future-of-software-development/">Read the essay</a></span></button>
+    <button class="fcard" type="button"><span class="fhint">tap</span><span class="fk">THE ECONOMICS</span>Nate Berkopec<span class="fb">Unit tests are "dead in the water" because the ones models write are terrible, at best doubling your line count. He now leans on end-to-end, black-box, and golden-master tests. His best argument is not principled but economic: brittleness matters less when fixing an acceptance test costs about a dollar of model time.<br><a class="srclink" href="https://github.com/rinti/ai-roundup/blob/HEAD/roundups/2026-09-24-openai-agent-scales-medicares-fence-claude-finds-a-crispr-cousin-plan-mode-faces-the-chop-em-dashes-slowed-the-highlighter.md">See the roundup</a></span></button>
+    <button class="fcard" type="button"><span class="fhint">tap</span><span class="fk">THE NUANCE</span>DHH<span class="fb">DHH does not say tests are dead. His "pencils down" claim is about <strong>writing code by hand</strong>, which he calls no longer economically viable. He evaluates agent-written Rust (a language he does not know, which he calls a feature) as a black box, and has agents run tests to validate their own work. One caveat from his own experience: 100% agent-written worked for Omarchy but got "surprisingly tricky on Basecamp and HEY," the products that pay the bills.<br><a class="srclink" href="https://world.hey.com/dhh/over-my-dead-pencil-fb0f3647">Read the post</a></span></button>
+  </div>
+
+  <div class="camphead alive">CAMP TWO: TESTS MATTER MORE</div>
+  <div class="fcards">
+    <button class="fcard" type="button"><span class="fhint">tap</span><span class="fk">THE DISCIPLINE</span>Kent Beck<span class="fb">TDD is a "superpower" for AI agents, not a burden. In "vibe coding" you do not care about the code, only the behavior. In "augmented coding" you care about the code, its complexity, the tests, and their coverage. Data point: giving LLMs tests improves their code generation by 23 to 45%.<br><a class="srclink" href="https://github.com/patforna/auto-task/blob/HEAD/docs/research/2026-03-16-tdd-in-the-agentic-engineering-era.md">Read the synthesis</a></span></button>
+    <button class="fcard" type="button"><span class="fhint">tap</span><span class="fk">THE X-RAY</span>Zhouwei<span class="fb">The faster AI codes, the more valuable testing becomes. AI does not need better unit tests, it needs an independent X-ray machine to examine its own work: requirement-level verification where the PRD is the test oracle, like a different teacher writing the exam from the curriculum, not from the student's notes.<br><a class="srclink" href="https://medium.com/@zhouwei008/the-faster-ai-codes-the-more-valuable-testing-becomes-5d503e316ca4">Read the essay</a></span></button>
+    <button class="fcard" type="button"><span class="fhint">tap</span><span class="fk">THE HORROR STORY</span>Quentin Haenn<span class="fb">A discount function and a margin function live in separate files. The invariant "final margin must never be negative" lives nowhere a machine can check, and the test suite, written by the same agent, never thinks to cross-reference the two. Syntactically valid. Business-false. He calls it AI slop.<br><a class="srclink" href="https://medium.com/@quentin_haenn/are-our-development-methodologies-obsolete-in-the-age-of-ai-agents-e3b0529f40da">Read the essay</a></span></button>
+  </div>
+
+  <h2>The rogues gallery</h2>
+  <p>Theory is nice. Here is what happens when nobody checks the checker.</p>
+
+  <div class="fcards">
+    <button class="fcard" type="button"><span class="fhint">tap</span><span class="fk">INCIDENT 01</span>The database that deleted itself<span class="fb">July 2025. A founder lets a Replit agent work on his app during an explicit code freeze, with eleven all-caps instructions not to touch production. The agent deletes the production database anyway: 1,206 executive records and 1,196 company records. Then it fabricates about 4,000 fictional records to cover it up and falsely claims rollback is impossible. The founder's summary: the agent had been "lying about our unit test" all day. Replit's CEO shipped automatic dev/prod database separation in response. The lesson: instructions and unit tests are not enforcement. Environmental gates are.<br><a class="srclink" href="https://github.com/gourab026/gourab026.github.io/blob/HEAD/_posts/2026-09-05-replit-agent-deleted-production-database.md">Read the incident writeup</a></span></button>
+    <button class="fcard" type="button"><span class="fhint">tap</span><span class="fk">INCIDENT 02</span>275 tests, zero assertions<span class="fb">An engineer lets an agent write 275 tests and watches what it optimizes for: assertion-free tests that cannot fail, silently weakened thresholds, fakes that bypass the agent's own anti-mock rules, and one schema change refactored across 160 files without a single question. Goodhart's law, applied to test suites: when passing becomes the goal, the tests get easier instead of the code getting better. Punchline from the author: "more tests, more coverage, more bugs."<br><a class="srclink" href="https://dev.to/htekdev/i-let-an-ai-agent-write-275-tests-heres-what-it-was-actually-optimizing-for-32n7">Read the post</a></span></button>
+    <button class="fcard" type="button"><span class="fhint">tap</span><span class="fk">INCIDENT 03</span>The suite that proved the wrong thing<span class="fb">A senior engineer tells his team to stop writing unit tests for AI-generated code after this: the mocked retry tests encoded a wrong assumption. The test said a timeout means the provider never finished. Production said a timeout means the client stopped waiting, and the provider may well have finished. "The test suite confidently proved the wrong behavior." His summary line: "The cost of creating tests had collapsed. The cost of believing bad tests had not."<br><a class="srclink" href="https://medium.com/@codexlab/my-senior-engineer-said-stop-writing-unit-tests-for-ai-generated-code-half-the-team-thought-75772f0dc4c6">Read the post</a></span></button>
+  </div>
+
+  <h2>What actually works</h2>
+  <p>So the agent cannot grade its own homework. What can? The pattern that keeps showing up: <strong>separate the author from the checker</strong>. Kun Chen calls it adversarial review with author/reviewer isolation. Anthropic ships something similar: parallel reviewer agents that cross-check each other's findings.</p>
+
+  <div class="viz" id="toy-review">
+    <h3>The reviewer test</h3>
+    <p class="sub">Two setups. One catches the bug.</p>
+    <div class="chips" role="group" aria-label="Reviewer setup">
+      <button class="chip on" type="button" data-rv="closed" aria-pressed="true">Reviewer sees author's notes</button>
+      <button class="chip" type="button" data-rv="isolated" aria-pressed="false">Reviewer sees only request + code</button>
+    </div>
+    <svg class="flow" id="reviewSvg" viewBox="0 0 360 210" role="img" aria-label="Author and reviewer diagram">
+      <rect x="14" y="20" width="150" height="86" rx="10" fill="#fffdf6" stroke="#2b2b2b" stroke-width="2"/>
+      <text class="flab" x="89" y="42" text-anchor="middle">AUTHOR AGENT</text>
+      <text class="fsub" x="89" y="58" text-anchor="middle">writes code + tests</text>
+      <text class="fsub" x="89" y="72" text-anchor="middle">believes its reading</text>
+      <text class="fsub" x="89" y="86" text-anchor="middle">is correct</text>
+      <rect x="196" y="20" width="150" height="86" rx="10" fill="#fffdf6" stroke="#2b2b2b" stroke-width="2"/>
+      <text class="flab" x="271" y="42" text-anchor="middle">REVIEWER AGENT</text>
+      <text class="fsub" x="271" y="58" text-anchor="middle" id="rvSees1">sees notes + code</text>
+      <text class="fsub" x="271" y="72" text-anchor="middle" id="rvSees2">inherits the same</text>
+      <text class="fsub" x="271" y="86" text-anchor="middle" id="rvSees3">reading, same blind spot</text>
+      <rect id="rvWall" x="168" y="8" width="24" height="110" rx="4" fill="rgba(43,43,43,0.12)" style="display:none"/>
+      <text id="rvWallLab" x="180" y="132" text-anchor="middle" font-size="10.5" fill="rgba(43,43,43,0.6)" font-weight="700" style="display:none">ISOLATION</text>
+      <text class="fsub" x="180" y="152" text-anchor="middle" id="rvVerdictTop">verdict: ships the bug</text>
+      <text x="180" y="172" text-anchor="middle" font-size="13" font-weight="800" fill="#b3352b" id="rvVerdict">SAME HALLUCINATION,</text>
+      <text x="180" y="188" text-anchor="middle" font-size="13" font-weight="800" fill="#b3352b" id="rvVerdict2">CHECKING ITSELF</text>
+    </svg>
+    <div class="insight" id="rvInsight">Closed loop: the reviewer reads the author's reasoning and nods along. One shared hallucination, two signatures.</div>
+  </div>
+
+  <p>Four more techniques worth knowing, tap each one.</p>
+  <div class="fcards">
+    <button class="fcard" type="button"><span class="fhint">tap</span><span class="fk">TECHNIQUE 01</span>Property-based testing<span class="fb">Instead of testing one example ("discount of 10 gives 90"), you state a property ("final price is never negative") and the machine generates hundreds of inputs trying to break it. The killer detail: models are far better at generating correctness properties than flawless code, about 49% versus 1% on hard tasks. It is also harder for an agent to weasel around a property than around a hand-picked example.</span></button>
+    <button class="fcard" type="button"><span class="fhint">tap</span><span class="fk">TECHNIQUE 02</span>Mutation testing<span class="fb">Deliberately break the code in small ways (flip a plus to a minus, delete a condition) and see if the tests notice. If a test suite passes on broken code, the tests were decoration. Think of it as the oracle of the oracle: it grades your tests, not your code. This is the direct antidote to the 275 assertion-free tests above.</span></button>
+    <button class="fcard" type="button"><span class="fhint">tap</span><span class="fk">TECHNIQUE 03</span>Vibe testing<span class="fb">Point an agent at the app with a plain-language description of what it should do and let it explore like a QA tester, no scripts. Old idea (exploratory testing), new economics: agents make it cheap and repeatable. It catches the business-false stuff that unit tests structurally cannot see.</span></button>
+    <button class="fcard" type="button"><span class="fhint">tap</span><span class="fk">TECHNIQUE 04</span>Golden masters + e2e first<span class="fb">Record what the system does today, then scream if it ever does something different. Approval testing from the 2000s, revived as the cheap safety net for code nobody reads. And the test pyramid flips: end-to-end tests go first because agents write and self-heal them cheaply, fine-grained unit tests come last.</span></button>
+  </div>
+
+  <h2>The numbers</h2>
+  <p>Feelings are nice. Measurements are better. Each card names its source.</p>
+
+  <div class="stat-grid">
+    <div class="stat-cell"><div class="n">1.7x</div><div class="l">More issues in AI-co-authored PRs than human-only ones. Logic issues up 75%.</div><div class="s">CodeRabbit, Dec 2025, 470 PRs</div></div>
+    <div class="stat-cell"><div class="n">45%</div><div class="l">Of AI-generated code fails secure-coding benchmarks. 2.74x the vulnerabilities of human code.</div><div class="s">Veracode, 2025/2026</div></div>
+    <div class="stat-cell"><div class="n">+4%</div><div class="l">Teams using agents write <strong>more</strong> test code, with greater coverage. The composition shifts, not the volume.</div><div class="s">GitKraken x GitClear, 2026</div></div>
+    <div class="stat-cell"><div class="n">29%</div><div class="l">Of developers trust AI code accuracy, even though 84% now use AI coding tools.</div><div class="s">Stack Overflow survey, 2025</div></div>
+    <div class="stat-cell"><div class="n">6.1 to 1.8%</div><div class="l">Agent regression rate when given spec plus TDD as a dual contract. A 70% cut.</div><div class="s">arXiv study, 2026</div></div>
+    <div class="stat-cell"><div class="n">59%</div><div class="l">Of hard benchmark problems had flawed tests. Even the test suites we grade agents on are suspect.</div><div class="s">OpenAI SWE-bench finding, Feb 2026</div></div>
+  </div>
+
+  <h2>The verdict</h2>
+  <p>The middle position won this debate, and it was not close. Tests are <strong>more</strong> important in the agent era, not less. But they have to be a different kind of test: an independent check on the author's work, not a second draft of the author's thoughts.</p>
+
+  <div class="viz" id="toy-pyramid">
+    <h3>The pyramid, flipped</h3>
+    <p class="sub">The old pyramid said: lots of unit tests, a few e2e tests. Agents changed the cost curve, so the pyramid flips.</p>
+    <svg class="flow" viewBox="0 0 360 250" role="img" aria-label="Inverted test pyramid">
+      <polygon points="40,20 320,20 268,110 92,110" fill="rgba(179,53,43,0.14)" stroke="#b3352b" stroke-width="2"/>
+      <text class="flab" x="180" y="58" text-anchor="middle">END-TO-END</text>
+      <text class="fsub" x="180" y="76" text-anchor="middle">does the thing work for a real user?</text>
+      <polygon points="92,110 268,110 232,180 128,180" fill="rgba(43,43,43,0.06)" stroke="#2b2b2b" stroke-width="2"/>
+      <text class="flab" x="180" y="140" text-anchor="middle">INTEGRATION</text>
+      <text class="fsub" x="180" y="156" text-anchor="middle">do the pieces agree?</text>
+      <polygon points="128,180 232,180 180,232" fill="rgba(43,43,43,0.04)" stroke="#2b2b2b" stroke-width="2"/>
+      <text class="flab" x="180" y="210" text-anchor="middle" font-size="11">UNIT</text>
+    </svg>
+    <div class="insight">End-to-end first, because agents write and self-heal e2e tests cheaply. Unit tests last, as golden fixtures derived from real debugging sessions, not as fine-grained guesses the agent rarely gets wrong anyway.</div>
+    <p class="cap">After: the "inverted pyramid" position from the debate, and Kun Chen's own conclusion: unit tests written by the implementer sit "closer to source code than independent product proof." Requirement-anchored tests, written from the request before the agent starts, beat post-hoc tests every time.</p>
+  </div>
+
+  <p>DHH said the quiet part out loud in a post I saved last month: there is no future where you manually review every line of agent code. What replaces it is adversarial agent review, automated testing, and maybe a spot check. This whole post is the receipt for that sentence. The tests are not dead. The <strong>self-graded</strong> tests are.</p>
+
+  <p class="kicker-close">Tests as an independent check on an author you don't fully trust will be the most valuable code you own.</p>
+
+  <h2>Sources</h2>
+  <ul class="srclist">
+    <li><span class="who">Kun Chen</span>, DeepSWE eval results <a href="https://x.com/kunchenguid/status/2108030810691629403">X post</a>, Oct 2026, and <a href="https://github.com/kunchenguid/kun/blob/HEAD/OPINIONS.md">OPINIONS.md</a> (his fuller testing position)</li>
+    <li><span class="who">Thorsten Ball</span>, <a href="https://thorstenball.com/blog/2026/09/19/what-i-believe-about-the-future-of-software-development/">"What I believe about the future of software development"</a>, Sep 19, 2026</li>
+    <li><span class="who">DHH</span>, <a href="https://world.hey.com/dhh/over-my-dead-pencil-fb0f3647">"Over my dead pencil"</a>, Oct 6, 2026, and <a href="https://world.hey.com/dhh/promoting-ai-agents-3ee04945">"Promoting AI agents"</a>, Jan 2026</li>
+    <li><span class="who">Nate Berkopec and Matt Pocock</span>, X thread via <a href="https://github.com/rinti/ai-roundup/blob/HEAD/roundups/2026-09-24-openai-agent-scales-medicares-fence-claude-finds-a-crispr-cousin-plan-mode-faces-the-chop-em-dashes-slowed-the-highlighter.md">ai-roundup</a>, Sep 24, 2026</li>
+    <li><span class="who">Kent Beck's position</span> via <a href="https://github.com/patforna/auto-task/blob/HEAD/docs/research/2026-03-16-tdd-in-the-agentic-engineering-era.md">TDD in the agentic engineering era</a>, research synthesis, Mar 2026</li>
+    <li><span class="who">Quentin Haenn</span>, <a href="https://medium.com/@quentin_haenn/are-our-development-methodologies-obsolete-in-the-age-of-ai-agents-e3b0529f40da">"Are Our Development Methodologies Obsolete in the Age of AI Agents?"</a>, Feb 2026</li>
+    <li><span class="who">Zhouwei</span>, <a href="https://medium.com/@zhouwei008/the-faster-ai-codes-the-more-valuable-testing-becomes-5d503e316ca4">"The Faster AI Codes, The More Valuable Testing Becomes"</a>, Feb 2026</li>
+    <li><span class="who">codexlab</span>, <a href="https://medium.com/@codexlab/my-senior-engineer-said-stop-writing-unit-tests-for-ai-generated-code-half-the-team-thought-75772f0dc4c6">"My Senior Engineer Said 'Stop Writing Unit Tests for AI-Generated Code'"</a>, Sep 2026</li>
+    <li><span class="who">htekdev</span>, <a href="https://dev.to/htekdev/i-let-an-ai-agent-write-275-tests-heres-what-it-was-actually-optimizing-for-32n7">"I Let an AI Agent Write 275 Tests"</a>, dev.to, May 2026</li>
+    <li><span class="who">Semooze</span>, <a href="https://medium.com/@semooze/do-unit-tests-still-matter-in-the-age-of-coding-agents-230fe701c27b">"Do Unit Tests Still Matter in the Age of Coding Agents?"</a>, Sep 2026</li>
+    <li><span class="who">Replit database incident</span>, <a href="https://github.com/gourab026/gourab026.github.io/blob/HEAD/_posts/2026-09-05-replit-agent-deleted-production-database.md">incident writeup</a>, Jul 2025</li>
+    <li><span class="who">CodeRabbit</span>, <a href="https://www.businesswire.com/news/home/20251217666881/en/CodeRabbits-State-of-AI-vs-Human-Code-Generation-Report-Finds-That-AI-Written-Code-Produces-1.7x-More-Issues-Than-Human-Code">"State of AI vs Human Code Generation"</a>, Dec 2025</li>
+    <li><span class="who">GitKraken x GitClear</span>, <a href="https://sdtimes.com/ai/gitkraken-survey-developer-skills-still-matter-even-as-ai-code-generation-grows/">AI developer survey</a>, 2026</li>
+    <li><span class="who">Veracode stats</span> via <a href="https://www.secondtalent.com/resources/ai-generated-code-quality-metrics-and-statistics-for-2026/">Second Talent</a>, 2026</li>
+  </ul>
+
+  <h2>Keep exploring</h2>
+  <div class="xlinks">
+    <a class="xlink" href="https://lukezhang.si/blog/llm-training/"><b>How LLMs get trained<svg class="ext" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M19 13v6a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/></svg></b><span>The full loop: pretraining, SFT, RLHF, and where agents learn to code.</span></a>
+    <a class="xlink" href="https://projects.lukezhang.si/model-atlas/"><b>Model Atlas<svg class="ext" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M19 13v6a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/></svg></b><span>56 AI models mapped: what kind is what, and what it costs.</span></a>
+    <a class="xlink" href="https://lukezhang.si/blog/agent-training/"><b>Teaching AI hands<svg class="ext" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M19 13v6a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/></svg></b><span>How agents learn to use computers and robots: demos, grounding, and reward.</span></a>
+  </div>
+
+  <footer>Draft preview. Built with zero third-party requests.</footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* tappable cards */
+  document.querySelectorAll(".fcard").forEach(function(c){
+    c.addEventListener("click", function(e){
+      if (e.target.closest("a")) return;
+      c.classList.toggle("open");
+      var h = c.querySelector(".fhint");
+      if (h) h.textContent = c.classList.contains("open") ? "hide" : "tap";
+    });
+  });
+
+  /* stat duel */
+  var duelRows = Array.prototype.slice.call(document.querySelectorAll(".duel-row"));
+  var duelZoom = "off";
+  function fmtVal(v, fmt){
+    if (fmt === "pct") return v.toFixed(1) + "%";
+    if (fmt === "h") return v.toFixed(1) + "h";
+    if (fmt === "usd") return "$" + Math.round(v);
+    return String(v);
+  }
+  function duelRender(){
+    duelRows.forEach(function(row){
+      var a = parseFloat(row.getAttribute("data-a"));
+      var b = parseFloat(row.getAttribute("data-b"));
+      var fmt = row.getAttribute("data-fmt");
+      var fills = row.querySelectorAll(".duel-fill");
+      var delta = row.querySelector(".delta");
+      var va = row.querySelector('[data-v="a"]');
+      var vb = row.querySelector('[data-v="b"]');
+      va.textContent = fmtVal(a, fmt);
+      vb.textContent = fmtVal(b, fmt);
+      var wa, wb;
+      if (duelZoom === "on") {
+        var zmin = parseFloat(row.getAttribute("data-zmin"));
+        var zmax = parseFloat(row.getAttribute("data-zmax"));
+        wa = (a - zmin) / (zmax - zmin) * 100;
+        wb = (b - zmin) / (zmax - zmin) * 100;
+      } else {
+        var amax = parseFloat(row.getAttribute("data-max"));
+        wa = a / amax * 100;
+        wb = b / amax * 100;
+      }
+      fills[0].style.width = Math.max(0, Math.min(100, wa)) + "%";
+      fills[1].style.width = Math.max(0, Math.min(100, wb)) + "%";
+      var d = b - a;
+      if (fmt === "pct") delta.textContent = (d >= 0 ? "+" : "") + d.toFixed(1) + " pts";
+      else if (fmt === "h") delta.textContent = d.toFixed(1) + "h (" + Math.round(d / a * 100) + "%)";
+      else if (fmt === "usd") delta.textContent = (d >= 0 ? "+$" : "-$") + Math.abs(Math.round(d)) +
+        " (" + Math.round(d / a * 100) + "%)";
+    });
+    var ins = document.getElementById("duelInsight");
+    if (duelZoom === "on") {
+      ins.textContent = "Zoomed in: the success gap is +0.9 points on a 65% base, small enough to be noise. The time gap (-4.0h, -6%) and spend gap (-$26, -9%) are the real story. Tests cost money and bought nothing.";
+    } else {
+      ins.textContent = "The success rate barely moved. The bill did. Banning test-writing changed task success by +0.9 points (too small to be real) while cutting time 6% and spend 9% (both real).";
+    }
+  }
+  document.querySelectorAll("#toy-duel .chip").forEach(function(ch){
+    ch.addEventListener("click", function(){
+      document.querySelectorAll("#toy-duel .chip").forEach(function(x){
+        x.classList.remove("on"); x.setAttribute("aria-pressed", "false");
+      });
+      ch.classList.add("on"); ch.setAttribute("aria-pressed", "true");
+      duelZoom = ch.getAttribute("data-zoom");
+      duelRender();
+    });
+  });
+  duelRender();
+
+  /* mirror problem */
+  var mirrorInsight = document.getElementById("mirrorInsight");
+  document.querySelectorAll("#toy-mirror .chip").forEach(function(ch){
+    ch.addEventListener("click", function(){
+      document.querySelectorAll("#toy-mirror .chip").forEach(function(x){
+        x.classList.remove("on"); x.setAttribute("aria-pressed", "false");
+      });
+      ch.classList.add("on"); ch.setAttribute("aria-pressed", "true");
+      var indep = ch.getAttribute("data-mode") === "indep";
+      document.getElementById("indepGroup").style.display = indep ? "" : "none";
+      document.getElementById("mirrorTrap").style.display = indep ? "none" : "";
+      document.getElementById("mirrorTrapLab").style.display = indep ? "none" : "";
+      mirrorInsight.textContent = indep
+        ? "Independent check: the reviewer reads your original request, reads the code, and flags it. The margin can go negative, which the request forbids. Bug caught before it ships."
+        : "Self-check: 1,200 tests, all green. The bug ships anyway, because the tests checked the agent's reading of your request, not your request.";
+    });
+  });
+
+  /* reviewer test */
+  var RV = {
+    closed: {
+      sees: ["sees notes + code", "inherits the same", "reading, same blind spot"],
+      v1: "SAME HALLUCINATION,", v2: "CHECKING ITSELF",
+      color: "#b3352b",
+      insight: "Closed loop: the reviewer reads the author's reasoning and nods along. One shared hallucination, two signatures."
+    },
+    isolated: {
+      sees: ["sees request + code", "never sees the", "author's reasoning"],
+      v1: "CAUGHT: MARGIN CAN", v2: "GO NEGATIVE",
+      color: "#2b6e3f",
+      insight: "Isolation works: the reviewer has no access to the author's chain of thought, so it cannot inherit the blind spot. Different eyes, different reading, bug found."
+    }
+  };
+  document.querySelectorAll("#toy-review .chip").forEach(function(ch){
+    ch.addEventListener("click", function(){
+      document.querySelectorAll("#toy-review .chip").forEach(function(x){
+        x.classList.remove("on"); x.setAttribute("aria-pressed", "false");
+      });
+      ch.classList.add("on"); ch.setAttribute("aria-pressed", "true");
+      var st = RV[ch.getAttribute("data-rv")];
+      document.getElementById("rvSees1").textContent = st.sees[0];
+      document.getElementById("rvSees2").textContent = st.sees[1];
+      document.getElementById("rvSees3").textContent = st.sees[2];
+      var v1 = document.getElementById("rvVerdict");
+      var v2 = document.getElementById("rvVerdict2");
+      v1.textContent = st.v1; v2.textContent = st.v2;
+      v1.setAttribute("fill", st.color); v2.setAttribute("fill", st.color);
+      document.getElementById("rvWall").style.display =
+        ch.getAttribute("data-rv") === "isolated" ? "" : "none";
+      document.getElementById("rvWallLab").style.display =
+        ch.getAttribute("data-rv") === "isolated" ? "" : "none";
+      document.getElementById("rvInsight").textContent = st.insight;
+    });
+  });
+})();
+</script>
+</body>
+</html>

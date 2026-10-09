@@ -201,22 +201,24 @@ function paintCard(){
         (phoneState.sent
           ? '<p style="' + mutedStyle() + '">Enter the 6-digit code sent to ' +
             esc(phoneState.phone) + '</p>' +
+            '<label style="' + mutedStyle() + '" for="authCode">Verification code</label>' +
             '<input id="authCode" inputmode="numeric" pattern="[0-9]*" maxlength="6" ' +
-            'placeholder="123456" autocomplete="one-time-code" style="' + inputStyle() + '">' +
+            'placeholder="123456" autocomplete="one-time-code" aria-label="Verification code" style="' + inputStyle() + '">' +
             '<button id="authVerifyCode" style="' + btnStyle() + '">Verify code</button>' +
             '<p style="' + mutedStyle() + '">Demo mode: no text is sent yet. ' +
             'Phone verification goes live with Twilio.</p>'
-          : '<p style="' + mutedStyle() + '">Enter your phone number</p>' +
+          : '<label style="' + mutedStyle() + '" for="authPhone">Phone number</label>' +
             '<input id="authPhone" type="tel" inputmode="tel" placeholder="+1 555 010 2030" ' +
-            'autocomplete="tel" style="' + inputStyle() + '">' +
+            'autocomplete="tel" aria-label="Phone number" style="' + inputStyle() + '">' +
             '<button id="authSendCode" style="' + btnStyle() + '">Text me a code</button>') +
         '<p style="' + mutedStyle() + '" id="authMsg">' + esc(cardMsg) + '</p>' +
         '<button id="authPhoneBack" style="' + ghostStyle() + '">Back</button>' +
         '</div>';
     } else {
       h += '<div id="authMain">' +
+        '<label style="' + mutedStyle() + '" for="authEmail">Email address</label>' +
         '<input id="authEmail" type="email" inputmode="email" placeholder="you@example.com" ' +
-        'autocomplete="email" style="' + inputStyle() + '">' +
+        'autocomplete="email" aria-label="Email address" style="' + inputStyle() + '">' +
         '<button id="authEmailGo" style="' + btnStyle() + '">Email me a sign-in link</button>' +
         '<p style="' + mutedStyle() + '" id="authMsg">' + esc(cardMsg) + '</p>' +
         '<div style="text-align:center;font-size:12px;opacity:.55;margin:10px 0 2px;">' +
@@ -324,10 +326,12 @@ function bindCard(box){
 }
 
 function oauthStart(provider){
-  var dk = getDeviceKey() || "";
+  /* P2-15: the device key is never placed in a URL. The backend's OAuth
+   * start endpoint ignores request-time device claims anyway; the device is
+   * linked from the device_key in the POST /v1/auth/oauth/exchange body
+   * after the provider redirects back. */
   location.href = WORKER + "/v1/auth/oauth/" + provider +
-    "?app_slug=" + encodeURIComponent(SLUG) +
-    (dk ? "&device_key=" + encodeURIComponent(dk) : "");
+    "?app_slug=" + encodeURIComponent(SLUG);
 }
 
 /* ---------- boot: render card, validate any existing session ---------- */

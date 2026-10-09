@@ -105,6 +105,7 @@ const SITES = ["america-gov-render", "leetcode-games", "ergosphere", "illusion-b
   "deep-reader",
   "dlss-lab",
   "hangtime",
+  "hermes",
   "how-well-do-we-match",
   "how-x-algorithm-works",
   "musk-emails",

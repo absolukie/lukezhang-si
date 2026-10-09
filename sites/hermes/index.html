@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Build your own harness: a visual tour of HERMES</title>
+<meta name="description" content="Interactive visualizer for the HERMES paper: why the harness around an AI coding agent matters more than the model inside it.">
+<style>
+:root{
+  --viz-bg:#141311; --viz-panel:#1d1b17; --viz-panel2:#26231d;
+  --viz-line:#3a362c; --viz-ink:#f2ede0; --viz-muted:#a39c88; --viz-faint:#6f695b;
+  --viz-accent:#e8a33d; --viz-danger:#e05252;
+  --viz-mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{margin:0; background:var(--viz-bg); color:var(--viz-ink);
+  font-family:system-ui,-apple-system,'Segoe UI',sans-serif; line-height:1.55;}
+.wrap{max-width:720px; margin:0 auto; padding:32px 20px 64px;}
+.kicker{font-family:var(--viz-mono); font-size:12px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--viz-accent); margin:0 0 12px;}
+h1{font-size:34px; line-height:1.15; margin:0 0 14px; letter-spacing:-.01em;}
+.lede{font-size:17px; color:var(--viz-muted); margin:0 0 8px;}
+.lede b{color:var(--viz-ink);}
+section{margin:44px 0 0;}
+h2{font-size:21px; margin:0 0 6px;}
+.sec-sub{font-size:15px; color:var(--viz-muted); margin:0 0 20px;}
+.sec-sub b{color:var(--viz-ink);}
+.foot-note{font-size:13px; color:var(--viz-faint); margin:14px 0 0;}
+.foot-note b{color:var(--viz-muted);}
+
+/* ---- Pattern 1: zoom bars ---- */
+.vzb-row{margin:0 0 26px;}
+.vzb-lab{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; gap:10px;}
+.vzb-lab b{font-size:16px; color:var(--viz-ink);}
+.vzb-lab span{font-family:var(--viz-mono); font-size:13px; color:var(--viz-muted); font-variant-numeric:tabular-nums; white-space:nowrap;}
+.vzb-lab span b{color:var(--viz-accent); font-size:13px;}
+.vzb-bar{position:relative; height:26px; background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:8px; overflow:hidden;}
+.vzb-bar .vzb-fill{position:absolute; inset:0 auto 0 0; width:0; background:linear-gradient(90deg,#c98a2e,var(--viz-accent)); transition:width 1.1s cubic-bezier(.2,.7,.2,1);}
+.vzb-bar .vzb-sliver{position:absolute; top:0; bottom:0; right:0; width:0; background:var(--viz-danger); transition:width 1.1s cubic-bezier(.2,.7,.2,1);}
+.vzb-row.go .vzb-bar .vzb-fill{width:var(--w);}
+.vzb-row.go .vzb-bar .vzb-sliver{width:var(--t);}
+.vzb-zoom{margin-top:8px;}
+.vzb-zoomtag{font-family:var(--viz-mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--viz-faint); margin-bottom:6px;}
+.vzb-zbar{position:relative; height:20px; background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:7px; overflow:hidden;}
+.vzb-zbar .vzb-zfill{position:absolute; inset:0 auto 0 0; width:0; background:linear-gradient(90deg,#c98a2e,var(--viz-accent)); transition:width 1.1s cubic-bezier(.2,.7,.2,1);}
+.vzb-zbar .vzb-zsliver{position:absolute; top:0; bottom:0; right:0; width:0; background:var(--viz-danger); transition:width 1.1s cubic-bezier(.2,.7,.2,1);}
+.vzb-row.go .vzb-zbar .vzb-zfill{width:var(--zw);}
+.vzb-row.go .vzb-zbar .vzb-zsliver{width:var(--zt);}
+.vzb-zoomcap{font-size:13.5px; color:var(--viz-muted); margin-top:6px; font-variant-numeric:tabular-nums;}
+.vzb-zoomcap b{color:var(--viz-danger);}
+@media (prefers-reduced-motion:reduce){
+  .vzb-bar .vzb-fill,.vzb-bar .vzb-sliver,.vzb-zbar .vzb-zfill,.vzb-zbar .vzb-zsliver{transition:none;}
+}
+
+/* ---- Pattern 2: dot grid ---- */
+.vdg-btns{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 16px;}
+.vdg-btns button{font-family:inherit; font-size:14px; font-weight:600; background:var(--viz-panel2); color:var(--viz-ink); border:1px solid var(--viz-line); border-radius:10px; padding:9px 14px; cursor:pointer; touch-action:manipulation;}
+.vdg-btns button:active{transform:scale(.97);}
+.vdg-btns button[aria-pressed="true"]{border-color:var(--viz-accent); color:var(--viz-accent);}
+.vdg-grid{display:grid; grid-template-columns:repeat(10,1fr); gap:7px; max-width:420px; margin:4px auto 6px;}
+.vdg-dot{aspect-ratio:1; border-radius:50%; background:#333832; transition:background 160ms, box-shadow 160ms, opacity 160ms;}
+.vdg-dot.blocked{background:var(--viz-accent); opacity:.75;}
+.vdg-dot.through{background:var(--viz-danger); box-shadow:0 0 10px rgba(224,82,82,.9);}
+.vdg-legend{display:flex; justify-content:center; gap:18px; font-size:13px; color:var(--viz-muted); margin:10px 0 2px;}
+.vdg-legend i{display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:6px; vertical-align:-1px;}
+.vdg-legend .lb{background:var(--viz-accent); opacity:.75;}
+.vdg-legend .lt{background:var(--viz-danger); box-shadow:0 0 8px rgba(224,82,82,.9);}
+.vdg-cap{font-family:var(--viz-mono); font-size:13px; color:var(--viz-muted); margin:14px 0 0; font-variant-numeric:tabular-nums; min-height:2.4em;}
+.vdg-cap b{color:var(--viz-ink);}
+@media (max-width:640px){ .vdg-grid{gap:5px;} }
+@media (prefers-reduced-motion:reduce){ .vdg-dot{transition:none;} }
+
+/* ---- Pattern 3: live formula slider ---- */
+.vfs-slider{width:100%; height:34px; background:transparent; cursor:pointer; touch-action:pan-y; margin:4px 0 2px; -webkit-appearance:none; appearance:none;}
+.vfs-slider::-webkit-slider-runnable-track{height:4px; border-radius:3px; background:linear-gradient(90deg,var(--viz-danger),var(--viz-accent)); border:1px solid var(--viz-line);}
+.vfs-slider::-webkit-slider-thumb{-webkit-appearance:none; appearance:none; width:50px; height:50px; border-radius:50%; border:none; background:radial-gradient(circle,var(--viz-accent) 0 6px,#141311 6px 8px,rgba(0,0,0,0) 9px); margin-top:-23px; filter:drop-shadow(0 1px 3px rgba(0,0,0,.45));}
+.vfs-slider::-moz-range-track{height:4px; border-radius:3px; background:linear-gradient(90deg,var(--viz-danger),var(--viz-accent)); border:1px solid var(--viz-line);}
+.vfs-slider::-moz-range-thumb{width:50px; height:50px; border-radius:50%; border:none; background:radial-gradient(circle,var(--viz-accent) 0 6px,#141311 6px 8px,rgba(0,0,0,0) 9px); filter:drop-shadow(0 1px 3px rgba(0,0,0,.45));}
+.vfs-read{text-align:center; font-size:15px; color:var(--viz-muted); margin-bottom:16px;}
+.vfs-read .vfs-pct{font-family:var(--viz-mono); font-size:22px; color:var(--viz-ink); font-variant-numeric:tabular-nums;}
+.vfs-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:10px;}
+.vfs-cell{background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:12px; padding:14px 8px; text-align:center;}
+.vfs-cell b{display:block; font-size:14px; color:var(--viz-ink); margin-bottom:4px;}
+.vfs-cell .vfs-num{display:block; font-family:var(--viz-mono); font-size:30px; color:var(--viz-accent); font-variant-numeric:tabular-nums; line-height:1.2;}
+.vfs-cell em{display:block; font-style:normal; font-size:11.5px; color:var(--viz-faint); margin-top:2px;}
+.vfs-insight{background:rgba(232,163,61,.08); border:1px solid rgba(232,163,61,.35); border-radius:12px; padding:14px 16px; margin:16px 0 4px; font-size:15px; color:var(--viz-ink); min-height:3.2em;}
+.vfs-insight b{color:var(--viz-accent);}
+@media (max-width:640px){ .vfs-cell .vfs-num{font-size:24px;} }
+
+/* ---- Caveat card ---- */
+.ves-card{background:var(--viz-panel); border:1px solid var(--viz-line); border-radius:14px; padding:22px; margin:20px 0 4px;}
+.ves-card.warn{border-color:rgba(224,82,82,.45); background:rgba(224,82,82,.06);}
+.ves-card.warn > b{color:var(--viz-danger); font-size:16px;}
+.ves-card p{margin:8px 0 0; font-size:15px; color:var(--viz-muted);}
+
+/* ---- Sources ---- */
+.src-list{list-style:none; margin:12px 0 0; padding:0; display:grid; gap:10px;}
+.src-list a{display:flex; align-items:center; gap:10px; background:var(--viz-panel2); border:1px solid var(--viz-line);
+  border-radius:12px; padding:13px 16px; color:var(--viz-ink); text-decoration:none; font-size:15px; touch-action:manipulation;}
+.src-list a:active{transform:scale(.99);}
+.src-list a small{display:block; color:var(--viz-faint); font-size:12.5px;}
+.src-list svg{flex:none; width:15px; height:15px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<p class="kicker">Paper visualizer</p>
+<h1>Build your own harness</h1>
+<p class="lede">Most AI coding agents are one big model plus a thin wrapper. <b>HERMES</b> flips that: it turns every part of a code repo into a small agent of its own, a <b>dev-primitive</b>, each with a resident LLM that knows its own code and dependencies. A dependency-aware step wakes only the parts a task needs, and a diagnosis step traces test failures back to the parts that must change. The headline result: <b>the harness does the heavy lifting, not the model</b>.</p>
+
+<section>
+<h2>Same score, smaller bill</h2>
+<p class="sec-sub">On Terminal-Bench 4.0, running the dev-primitives on the small <b>Qwen3-8B</b> model keeps performance within <b>4.5 points</b> of the all-GPT-5.6-Sol setup, while cutting inference cost <b>26.2%</b>. The red sliver is money never spent.</p>
+
+<div class="vzb-row" data-value="100" data-tail="0" data-window="30" data-cap="nothing saved. this is the all-big-model baseline.">
+  <div class="vzb-lab"><b>All GPT-5.6 Sol</b><span><b>100</b> cost units</span></div>
+  <div class="vzb-bar"><div class="vzb-fill"></div><div class="vzb-sliver"></div></div>
+  <div class="vzb-zoom">
+    <div class="vzb-zoomtag"></div>
+    <div class="vzb-zbar"><div class="vzb-zfill"></div><div class="vzb-zsliver"></div></div>
+    <div class="vzb-zoomcap"></div>
+  </div>
+</div>
+
+<div class="vzb-row" data-value="73.8" data-tail="26.2" data-window="30" data-cap="of every 100 cost-units never spent">
+  <div class="vzb-lab"><b>Qwen3-8B dev-primitives</b><span><b>73.8</b> cost units</span></div>
+  <div class="vzb-bar"><div class="vzb-fill"></div><div class="vzb-sliver"></div></div>
+  <div class="vzb-zoom">
+    <div class="vzb-zoomtag"></div>
+    <div class="vzb-zbar"><div class="vzb-zfill"></div><div class="vzb-zsliver"></div></div>
+    <div class="vzb-zoomcap"></div>
+  </div>
+</div>
+<p class="foot-note">Paper numbers: 26.2% inference-cost reduction on Terminal-Bench 4.0, performance within 4.5 points of the homogeneous GPT-5.6 Sol configuration.</p>
+</section>
+
+<section>
+<h2>Wake only what the task touches</h2>
+<p class="sec-sub">Each dot is a component in a repo. A naive harness wakes <b>everything</b> for every task, which is how context explodes. HERMES wakes only the components the task's dependencies touch.</p>
+<div class="vdg" id="dg1">
+  <div class="vdg-btns" role="group" aria-label="Scenarios"></div>
+  <div class="vdg-grid" aria-hidden="true"></div>
+  <div class="vdg-legend"><span><i class="lb"></i>asleep</span><span><i class="lt"></i>awake for this task</span></div>
+  <p class="vdg-cap"></p>
+</div>
+<p class="foot-note"><b>Illustrative simulation</b> of the dependency-aware activation mechanism, not paper data. The paper reports the mechanism and its benchmark gains, not a per-task component count.</p>
+</section>
+
+<section>
+<h2>Same model, better harness</h2>
+<p class="sec-sub">On whole-repository migration with <b>GPT-5.6 Sol</b>, swapping the Codex harness for HERMES took success from <b>6.5%</b> to <b>31.0%</b>. Same model, same effort setting. Drag the slider to walk between the two harnesses.</p>
+<div class="vfs" id="fs1">
+  <input type="range" class="vfs-slider" min="0" max="100" step="1" value="100" aria-label="Harness: from Codex harness to HERMES">
+  <div class="vfs-read"><b class="vfs-pct">100%</b> of the way from the Codex harness to HERMES</div>
+  <div class="vfs-grid"></div>
+  <div class="vfs-insight" aria-live="polite"></div>
+</div>
+<p class="foot-note"><b>Illustrative interpolation</b> between the paper's two reported endpoints (6.5% and 31.0%). The paper measured the endpoints, not the points in between.</p>
+</section>
+
+<section>
+<div class="ves-card warn">
+  <b>Benchmarks are not the real world.</b>
+  <p>These are the paper's reported numbers on four software-engineering benchmarks, with matched baseline harnesses and fixed effort settings. A better harness helps most on long-horizon work where context explodes; on short tasks the model still matters. Read the paper before citing the numbers.</p>
+</div>
+</section>
+
+<section>
+<h2>Sources</h2>
+<ul class="src-list">
+  <li><a href="https://arxiv.org/abs/2610.07832">Harness Engineering for Software Engineering via Modular Executable Dev-Primitives
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg>
+    <small>Jin et al., UIUC / Penn State, arXiv:2610.07832, submitted 6 Oct 2026</small></a></li>
+  <li><a href="https://x.com/omarsar0/status/2108360049848717588">The X post that surfaced it
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg>
+    <small>@omarsar0, 8 Oct 2026</small></a></li>
+</ul>
+</section>
+
+</div>
+
+<script>
+(function(){
+  /* ---------- Pattern 1: zoom bars ---------- */
+  function vzbClamp(v){ return Math.min(100, Math.max(0, v)); }
+  function vzbMainWidths(value){
+    var v = vzbClamp(value);
+    return { fill: v, sliver: 100 - v };
+  }
+  function vzbZoomWidths(tail, win){
+    var w = win > 0 ? win : 5;
+    var t = Math.min(Math.max(tail, 0), w);
+    return { zfill: (w - t) / w * 100, zsliver: t / w * 100, factor: Math.round(100 / w) };
+  }
+  var rows = document.querySelectorAll('.vzb-row');
+  rows.forEach(function(row){
+    var value = parseFloat(row.getAttribute('data-value'));
+    var tail  = parseFloat(row.getAttribute('data-tail'));
+    var win   = parseFloat(row.getAttribute('data-window')) || 5;
+    var cap   = row.getAttribute('data-cap') || '';
+    if(!(value >= 0)) value = 0;
+    if(!(tail >= 0)) tail = 0;
+    var m = vzbMainWidths(value), z = vzbZoomWidths(tail, win);
+    row.style.setProperty('--w', m.fill + '%');
+    row.style.setProperty('--t', m.sliver + '%');
+    row.style.setProperty('--zw', z.zfill + '%');
+    row.style.setProperty('--zt', z.zsliver + '%');
+    var tag = row.querySelector('.vzb-zoomtag');
+    if(tag) tag.textContent = 'zoomed ' + z.factor + '× · the last ' + win + '%';
+    var zc = row.querySelector('.vzb-zoomcap');
+    if(zc){
+      zc.innerHTML = tail > 0
+        ? '<b>' + tail.toFixed(1) + '</b> ' + cap.replace(/</g, '&lt;')
+        : '<b>0.0</b> ' + cap.replace(/</g, '&lt;');
+    }
+  });
+  function vzbArm(){ rows.forEach(function(r){ r.classList.add('go'); }); }
+  if('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){ e.target.classList.add('go'); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.35 });
+    rows.forEach(function(r){ io.observe(r); });
+  } else { vzbArm(); }
+  window.__vzb = { main: vzbMainWidths, zoom: vzbZoomWidths };
+})();
+</script>
+
+<script>
+(function(){
+  /* ---------- Pattern 2: dot grid ---------- */
+  var CFG = {
+    rootId: 'dg1',
+    count: 100,
+    staggerBase: 60,
+    staggerStep: 7,
+    scenarios: [
+      { id: 'naive',  label: 'Naive harness', through: 100 },
+      { id: 'hermes', label: 'HERMES',        through: 14 }
+    ],
+    caption: function(sc, through, total){
+      if(sc.id === 'naive')
+        return 'All <b>' + total + ' of ' + total + '</b> components wake. Every task pays for the whole repo.';
+      return 'Only <b>' + through + ' of ' + total + '</b> components wake. The rest stay asleep.';
+    }
+  };
+  function vdgAssign(through, count){
+    var t = Math.min(Math.max(Math.round(through), 0), count);
+    var out = [];
+    for(var i = 0; i < count; i++) out.push(i < t ? 'through' : 'blocked');
+    return out;
+  }
+  var root = document.getElementById(CFG.rootId);
+  if(!root) return;
+  var btnWrap = root.querySelector('.vdg-btns');
+  var grid = root.querySelector('.vdg-grid');
+  var cap = root.querySelector('.vdg-cap');
+  var dots = [];
+  for(var i = 0; i < CFG.count; i++){
+    var d = document.createElement('span');
+    d.className = 'vdg-dot';
+    grid.appendChild(d);
+    dots.push(d);
+  }
+  var timers = [];
+  function run(id){
+    var sc = null;
+    CFG.scenarios.forEach(function(s){ if(s.id === id) sc = s; });
+    if(!sc) sc = CFG.scenarios[0];
+    timers.forEach(clearTimeout); timers = [];
+    var classes = vdgAssign(sc.through, CFG.count);
+    dots.forEach(function(d){ d.className = 'vdg-dot'; });
+    for(var i = 0; i < dots.length; i++){
+      (function(i){
+        timers.push(setTimeout(function(){
+          dots[i].classList.add(classes[i]);
+        }, CFG.staggerBase + i * CFG.staggerStep));
+      })(i);
+    }
+    var through = classes.filter(function(c){ return c === 'through'; }).length;
+    cap.innerHTML = CFG.caption(sc, through, CFG.count);
+    btnWrap.querySelectorAll('button').forEach(function(b){
+      b.setAttribute('aria-pressed', b.getAttribute('data-id') === sc.id ? 'true' : 'false');
+    });
+  }
+  CFG.scenarios.forEach(function(s){
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = s.label;
+    b.setAttribute('data-id', s.id);
+    b.setAttribute('aria-pressed', 'false');
+    btnWrap.appendChild(b);
+  });
+  btnWrap.addEventListener('click', function(e){
+    var b = e.target.closest('button');
+    if(b) run(b.getAttribute('data-id'));
+  });
+  btnWrap.addEventListener('pointerdown', function(e){
+    var b = e.target.closest('button');
+    if(b) b.style.transform = 'scale(.97)';
+  });
+  run(CFG.scenarios[1].id);
+  window.__vdg = { assign: vdgAssign };
+})();
+</script>
+
+<script>
+(function(){
+  /* ---------- Pattern 3: live formula slider ---------- */
+  var CFG = {
+    rootId: 'fs1',
+    lo: 6.5, hi: 31.0,
+    readouts: [
+      { id: 'succ', label: 'Migration success', unit: '% of repos migrated',
+        compute: function(f){ return CFG.lo + (CFG.hi - CFG.lo) * f; }, fmt: function(v){ return v.toFixed(1) + '%'; } },
+      { id: 'mult', label: 'Improvement', unit: '× the Codex-harness baseline',
+        compute: function(f){ return (CFG.lo + (CFG.hi - CFG.lo) * f) / CFG.lo; }, fmt: function(v){ return v.toFixed(1) + '×'; } }
+    ],
+    insight: function(frac){
+      var pct = Math.round(frac * 100);
+      if(frac >= 0.999)
+        return 'At 100%: the model never changed. Only the harness did, and success went from <b>6.5%</b> to <b>31.0%</b>.';
+      if(frac <= 0.001)
+        return 'At 0%: this is the Codex-harness baseline. Same GPT-5.6 Sol, <b>6.5%</b> success.';
+      var v = (CFG.lo + (CFG.hi - CFG.lo) * frac);
+      return 'At ' + pct + '% of the way there: <b>' + v.toFixed(1) + '%</b> success. Every point of it comes from harness engineering, not a bigger model.';
+    }
+  };
+  var root = document.getElementById(CFG.rootId);
+  if(!root) return;
+  var slider = root.querySelector('.vfs-slider');
+  var pct = root.querySelector('.vfs-pct');
+  var grid = root.querySelector('.vfs-grid');
+  var insight = root.querySelector('.vfs-insight');
+  var nums = CFG.readouts.map(function(r){
+    var cell = document.createElement('div');
+    cell.className = 'vfs-cell';
+    cell.innerHTML = '<b></b><span class="vfs-num"></span><em></em>';
+    cell.querySelector('b').textContent = r.label;
+    cell.querySelector('em').textContent = r.unit;
+    grid.appendChild(cell);
+    return cell.querySelector('.vfs-num');
+  });
+  function render(){
+    var frac = parseInt(slider.value, 10) / 100;
+    pct.textContent = slider.value + '%';
+    CFG.readouts.forEach(function(r, i){
+      nums[i].textContent = r.fmt(r.compute(frac));
+    });
+    insight.innerHTML = CFG.insight(frac);
+  }
+  slider.addEventListener('input', render);
+  render();
+  window.__vfs = { at: function(f){ return CFG.readouts.map(function(r){ return r.compute(f); }); } };
+})();
+</script>
+</body>
+</html>

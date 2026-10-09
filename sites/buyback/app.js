@@ -224,10 +224,78 @@ const CONSENT_TEXT = "I agree that a participating lemon law attorney may contac
 
 /* ---- storage ---- */
 const KEY = "buyback.v1";
-function load() {
-  try { return JSON.parse(localStorage.getItem(KEY)) || null; } catch (e) { return null; }
+/* Probe once at boot: in private mode (or with storage blocked) every
+   localStorage access throws, so the app must run in honest in-memory mode
+   instead of pretending to save. */
+function storageAvailable() {
+  try { localStorage.setItem("__bb_probe__", "1"); localStorage.removeItem("__bb_probe__"); return true; }
+  catch (e) { return false; }
 }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { /* quota: drop photos */ } try { if (window.__buybackSync) window.__buybackSync.onSave(); } catch (e) { /* sync optional */ } }
+const STORAGE_OK = storageAvailable();
+let corruptBoot = false;
+function load() {
+  var raw = null;
+  try { raw = localStorage.getItem(KEY); } catch (e) { return null; }
+  if (raw == null) return null;
+  try { return JSON.parse(raw); }
+  catch (e) {
+    /* Corrupt blob: stash a backup so the next save can never silently
+       destroy it, then boot fresh with an honest notice. */
+    try { localStorage.setItem(KEY + ".corrupt", raw); } catch (_e) {}
+    corruptBoot = true;
+    return null;
+  }
+}
+/* Raw write, no side effects. Returns true on success. */
+function writeDb() {
+  try { localStorage.setItem(KEY, JSON.stringify(db)); return true; }
+  catch (e) { return false; }
+}
+/* Photos are the bulky payload (base64 JPEGs). Text fields are never dropped:
+   on quota failure the photos go and the text retries. Returns the count
+   of photos removed. */
+function stripPhotos() {
+  var n = 0;
+  (db.repairs || []).forEach(function (r) { if (r && r.photo) { r.photo = null; n++; } });
+  return n;
+}
+/* Dismissible storage notice (quota / corrupt / disabled). Calm, factual,
+   never jargon. */
+function showStorageNote(kind) {
+  if (document.getElementById("bbStorageNote")) return;
+  var box = document.createElement("div");
+  box.id = "bbStorageNote";
+  box.className = "storage-note";
+  box.setAttribute("role", "alert");
+  var msg;
+  if (kind === "photos-dropped")
+    msg = "<strong>Storage is nearly full.</strong><p>Repair photos were removed so your text entries keep saving. All visit details, dates, and notes are kept.</p>";
+  else if (kind === "corrupt")
+    msg = "<strong>Your saved case could not be read.</strong><p>A backup of the unreadable data was kept on this device. You are starting fresh; nothing has been overwritten.</p>";
+  else if (kind === "disabled")
+    msg = "<strong>Browser storage is blocked.</strong><p>Everything works, but nothing is saved: your entries will be lost if you leave or reload this page.</p>";
+  else
+    msg = "<strong>Could not save.</strong><p>Your entries are kept on this page, but reloading may lose them. Free up device storage and try again.</p>";
+  box.innerHTML = msg + '<button type="button" class="note-x">Dismiss</button>';
+  box.querySelector(".note-x").addEventListener("click", function () { box.remove(); });
+  var main = document.querySelector("main");
+  if (main) main.prepend(box); else document.body.prepend(box);
+}
+function save() {
+  var ok = STORAGE_OK && writeDb();
+  if (!ok && STORAGE_OK) {
+    /* Quota: drop photos and retry once. Text is never sacrificed. */
+    if (stripPhotos()) {
+      ok = writeDb();
+      if (ok) showStorageNote("photos-dropped");
+      else showStorageNote("save-failed");
+    } else {
+      showStorageNote("save-failed");
+    }
+  }
+  try { if (window.__buybackSync) window.__buybackSync.onSave(); } catch (e) { /* sync optional */ }
+  return ok;
+}
 let db = load() || { state: null, car: null, repairs: [], intake: null };
 /* Backward-compatible normalization for fields added after first save. */
 function normalizeDb() {
@@ -1189,11 +1257,28 @@ renderStateGrid();
 renderStateCards();
 if (db.state && db.car) { goStep("case"); renderCase(); }
 else if (db.state) { goStep("car"); prefillCar(); }
+/* Storage health: say what is true. Disabled storage gets a persistent
+   notice plus corrected copy (the static line assumes storage works);
+   a corrupt blob gets the recovery notice from load(). */
+if (!STORAGE_OK) {
+  showStorageNote("disabled");
+  var appSub = document.querySelector(".app-sub");
+  if (appSub) appSub.textContent = "Browser storage is blocked, so entries are kept in memory only and will be lost on reload. Nothing is synced.";
+} else if (corruptBoot) {
+  showStorageNote("corrupt");
+}
 
 /* ---- sync bridge (consumed by sync.js; local-first, sync never blocks UI) ---- */
 window.__buyback = {
   getS: () => db,
-  saveLocal: () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {} },
+  /* Pull-path persist: same honest rules as save() (photos may be dropped
+     before text), but no user banner from this background path. */
+  saveLocal: () => {
+    if (!STORAGE_OK) return false;
+    if (writeDb()) return true;
+    if (stripPhotos()) return writeDb();
+    return false;
+  },
   refresh: () => {
     if (db.state && db.car) { goStep("case"); renderCase(); }
     else if (db.state) { goStep("car"); prefillCar(); }

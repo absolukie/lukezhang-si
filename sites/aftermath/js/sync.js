@@ -404,14 +404,32 @@ function renderSettingsUI(){
   };
 }
 
+var regPromise = null; // in-flight device registration, shared with billing-ui.js
+
 async function boot(){
   try{ if (typeof renderSettingsUI === "function") renderSettingsUI(); }catch(e){}
   deviceKey = null;
   try { deviceKey = localStorage.getItem(LS_DEVICE) || null; } catch(e){}
+  updatePill();
+  /* Network bootstrap waits for idle so device registration and the first
+   * sync never compete with first paint. The pill already reports the honest
+   * local state; pushDirty/onSave no-op safely until a key exists. */
+  var go = function(){ netBoot(); };
+  if ("requestIdleCallback" in window) requestIdleCallback(go, {timeout: 5000});
+  else setTimeout(go, 1500);
+}
+
+async function netBoot(){
+  /* Billing may have registered the same key first; re-read before posting. */
+  if (!deviceKey){ try { deviceKey = localStorage.getItem(LS_DEVICE) || null; } catch(e){} }
   var fresh = !deviceKey;
   if (!deviceKey){
     try {
-      deviceKey = await register();
+      if (!regPromise) regPromise = register();
+      /* One registration per load: billing's ensureIdentity awaits this
+       * promise instead of firing a second identical POST to /v1/devices. */
+      window.__aftermathDeviceKeyPromise = regPromise;
+      deviceKey = await regPromise;
       localStorage.setItem(LS_DEVICE, deviceKey);
     } catch(e){ updatePill(); return; } // offline: pill reports honestly, no false "Synced"
   }

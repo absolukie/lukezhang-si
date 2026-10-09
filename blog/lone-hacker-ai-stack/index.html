@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="tags" content="ai, engineering">
+<title>One guy, one AI stack, several banks</title>
+<style>
+/* Shared visualizer theme */
+:root{
+  --viz-bg:#141311; --viz-panel:#1d1b17; --viz-panel2:#26231d;
+  --viz-line:#3a362c; --viz-ink:#f2ede0; --viz-muted:#a39c88; --viz-faint:#6f695b;
+  --viz-accent:#e8a33d; --viz-danger:#e05252;
+  --viz-mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html{scroll-behavior:smooth;}
+body{
+  margin:0; background:var(--viz-bg); color:var(--viz-ink);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Helvetica,Arial,sans-serif;
+  font-size:17px; line-height:1.65;
+}
+article{max-width:700px; margin:0 auto; padding:28px 20px 60px;}
+.kicker{
+  font-family:var(--viz-mono); font-size:12px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--viz-accent); margin:0 0 14px;
+}
+h1{font-size:clamp(30px,7vw,44px); line-height:1.12; letter-spacing:-0.02em; margin:0 0 14px;}
+.standfirst{font-size:19px; color:var(--viz-muted); margin:0 0 8px; line-height:1.5;}
+.tip{font-size:13.5px; color:var(--viz-faint); margin:0 0 30px;}
+.tip a{color:var(--viz-muted);}
+h2{font-size:24px; letter-spacing:-0.01em; margin:44px 0 12px; line-height:1.25;}
+h2 .n{font-family:var(--viz-mono); font-size:14px; color:var(--viz-faint); display:block; letter-spacing:.1em; margin-bottom:6px;}
+p{margin:0 0 16px;}
+a{color:var(--viz-accent);}
+.defang{font-family:var(--viz-mono); font-size:.92em; background:var(--viz-panel2);
+  border:1px solid var(--viz-line); border-radius:6px; padding:1px 7px; white-space:nowrap;}
+.jargon{border-bottom:1px dotted var(--viz-faint); cursor:help;}
+.verdict{
+  background:var(--viz-panel); border:1px solid var(--viz-line); border-radius:14px;
+  padding:20px 22px; margin:26px 0 8px;
+}
+.verdict h3{margin:0 0 10px; font-size:15px; letter-spacing:.06em; text-transform:uppercase;
+  font-family:var(--viz-mono); color:var(--viz-accent);}
+.verdict ul{margin:0; padding:0; list-style:none;}
+.verdict li{margin:0 0 12px; padding-left:22px; position:relative; font-size:16px;}
+.verdict li:last-child{margin-bottom:0;}
+.verdict li::before{content:""; position:absolute; left:2px; top:9px; width:8px; height:8px;
+  border-radius:50%; background:var(--viz-accent);}
+.verdict .src{font-size:13px; color:var(--viz-faint);}
+figure.viz{
+  margin:26px -20px; padding:26px 20px;
+  background:var(--viz-panel); border-top:1px solid var(--viz-line); border-bottom:1px solid var(--viz-line);
+}
+figure.viz figcaption{font-size:13.5px; color:var(--viz-muted); margin-top:14px; max-width:620px;}
+figure.viz figcaption b{color:var(--viz-ink);}
+/* V1 timeline */
+.tl{list-style:none; margin:0; padding:0;}
+.tl li{margin:0; padding:0;}
+.tl button{
+  width:100%; text-align:left; background:none; border:none; color:inherit; font:inherit;
+  padding:14px 4px 14px 34px; position:relative; cursor:pointer; touch-action:manipulation;
+  border-bottom:1px solid var(--viz-line);
+}
+.tl button::before{
+  content:""; position:absolute; left:8px; top:20px; width:11px; height:11px; border-radius:50%;
+  background:var(--viz-panel2); border:2px solid var(--viz-accent);
+}
+.tl button::after{
+  content:""; position:absolute; left:13px; top:35px; bottom:-6px; width:2px; background:var(--viz-line);
+}
+.tl li:last-child button::after{display:none;}
+.tl .tl-date{font-family:var(--viz-mono); font-size:12.5px; color:var(--viz-accent); letter-spacing:.06em;}
+.tl .tl-title{font-weight:700; font-size:16.5px; margin:2px 0;}
+.tl .tl-hint{font-size:13px; color:var(--viz-faint);}
+.tl .tl-detail{display:none; font-size:15px; color:var(--viz-muted); padding:2px 0 6px;}
+.tl li.open .tl-detail{display:block;}
+.tl li.open button::before{background:var(--viz-accent);}
+/* V2 stack diagram */
+.stack{display:flex; flex-direction:column; gap:0; max-width:460px; margin:0 auto;}
+.stack button{
+  font:inherit; color:inherit; text-align:left; cursor:pointer; touch-action:manipulation;
+  background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:12px;
+  padding:14px 16px; margin:0; position:relative; width:100%;
+}
+.stack button + button{margin-top:22px;}
+.stack button + button::before{
+  content:""; position:absolute; top:-23px; left:50%; width:2px; height:22px;
+  background:var(--viz-line); transform:translateX(-50%);
+}
+.stack button .role{font-family:var(--viz-mono); font-size:11.5px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--viz-accent); display:block; margin-bottom:4px;}
+.stack button .nm{font-weight:700; font-size:17px; display:block;}
+.stack button .one{font-size:13.5px; color:var(--viz-muted); display:block; margin-top:2px;}
+.stack button[aria-pressed="true"]{border-color:var(--viz-accent); box-shadow:0 0 0 1px var(--viz-accent);}
+.stack button:active{transform:scale(.985);}
+.stackdetail{
+  margin-top:18px; background:var(--viz-bg); border:1px solid var(--viz-line); border-radius:12px;
+  padding:16px 18px; font-size:15px; color:var(--viz-muted); min-height:96px;
+}
+.stackdetail b{color:var(--viz-ink);}
+/* V3 architecture flow */
+.arch svg{width:100%; height:auto; display:block;}
+.arch .node{fill:var(--viz-panel2); stroke:var(--viz-line);}
+.arch .node.hot{stroke:var(--viz-accent);}
+.arch .nlabel{fill:var(--viz-ink); font-size:12px; font-weight:700; text-anchor:middle;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;}
+.arch .nsub{fill:var(--viz-muted); font-size:9px; text-anchor:middle;
+  font-family:var(--viz-mono);}
+.arch .flowpath{fill:none; stroke:var(--viz-line); stroke-width:2;}
+.arch .flowdot{fill:var(--viz-accent);}
+.archchips{display:flex; flex-wrap:wrap; gap:8px; margin:16px 0 0; justify-content:center;}
+.archchips button{
+  font:inherit; font-size:14px; font-weight:600; cursor:pointer; touch-action:manipulation;
+  background:var(--viz-panel2); color:var(--viz-ink); border:1px solid var(--viz-line);
+  border-radius:10px; padding:9px 14px;
+}
+.archchips button:active{transform:scale(.97);}
+.archchips button[aria-pressed="true"]{border-color:var(--viz-accent); color:var(--viz-accent);}
+.archdetail{
+  margin-top:14px; background:var(--viz-bg); border:1px solid var(--viz-line); border-radius:12px;
+  padding:14px 16px; font-size:14.5px; color:var(--viz-muted); min-height:76px;
+}
+.archdetail b{color:var(--viz-ink);}
+/* V4 scale collapse */
+.vs2{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:0 0 6px;}
+@media (max-width:560px){ .vs2{grid-template-columns:1fr;} }
+.vs-card{background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:14px; padding:18px;}
+.vs-card h4{margin:0 0 10px; font-size:15px; letter-spacing:.05em; text-transform:uppercase;
+  font-family:var(--viz-mono);}
+.vs-card.old h4{color:var(--viz-muted);}
+.vs-card.new{border-color:rgba(232,163,61,.5);}
+.vs-card.new h4{color:var(--viz-accent);}
+.vs-card ul{margin:0; padding:0; list-style:none; font-size:14.5px; color:var(--viz-muted);}
+.vs-card ul li{margin-bottom:8px; padding-left:18px; position:relative;}
+.vs-card ul li::before{content:""; position:absolute; left:0; top:8px; width:7px; height:7px;
+  border-radius:50%; background:var(--viz-faint);}
+.vs-card.new ul li::before{background:var(--viz-accent);}
+.caveat{
+  background:rgba(224,82,82,.06); border:1px solid rgba(224,82,82,.45); border-radius:14px;
+  padding:20px 22px; margin:18px 0 4px;
+}
+.caveat > b{color:var(--viz-danger); font-size:16px;}
+.caveat p{margin:8px 0 0; font-size:15px; color:var(--viz-muted);}
+.caveat ul{margin:8px 0 0; padding:0; list-style:none; font-size:15px; color:var(--viz-muted);}
+.caveat li{margin-bottom:8px; padding-left:20px; position:relative;}
+.caveat li::before{content:"?"; position:absolute; left:0; color:var(--viz-danger); font-weight:700;}
+/* Keep exploring */
+.explore{display:grid; gap:12px; margin:20px 0 6px;}
+.excard{
+  display:block; text-decoration:none; color:inherit; background:var(--viz-panel2);
+  border:1px solid var(--viz-line); border-radius:14px; padding:18px 20px;
+}
+.excard:active{transform:scale(.99);}
+.excard .t{font-weight:700; font-size:17px; color:var(--viz-ink); display:flex; align-items:center; gap:8px;}
+.excard .t svg{flex:none;}
+.excard .g{font-size:14.5px; color:var(--viz-muted); margin:6px 0 0;}
+.excard .u{font-family:var(--viz-mono); font-size:12px; color:var(--viz-faint); margin:8px 0 0;}
+/* Sources */
+.sources{font-size:14.5px; color:var(--viz-muted);}
+.sources li{margin-bottom:10px;}
+.sources .note{font-size:13.5px; color:var(--viz-faint);}
+.tagsline{font-family:var(--viz-mono); font-size:12.5px; color:var(--viz-faint); margin-top:34px;
+  letter-spacing:.08em;}
+footer.end{margin-top:40px; padding-top:18px; border-top:1px solid var(--viz-line);
+  font-size:13.5px; color:var(--viz-faint);}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  .stack button:active,.archchips button:active,.excard:active{transform:none;}
+}
+</style>
+</head>
+<body>
+<article>
+<header>
+  <p class="kicker">AI, security</p>
+  <h1>One guy, one AI stack, several banks</h1>
+  <p class="standfirst">CrowdStrike traced a bank-hacking campaign to its servers and found the attacker's own notes. Read them end to end and the whole operation looks like the work of one person with AI agents.</p>
+  <p class="tip">A visual breakdown. Tip via <a href="https://x.com/andrewcurran_/status/2108108695876092323">@AndrewCurran_ on X</a>.</p>
+</header>
+
+<section class="verdict">
+  <h3>The short version</h3>
+  <ul>
+    <li>Someone used an open-source AI hacking tool called ARTEX, driven by several AI models, to break into South Korean financial firms and steal data. <span class="src">(CrowdStrike report)</span></li>
+    <li>CrowdStrike's assessment: likely one Chinese-speaking operator, in it for the money. Moderate confidence. Not confirmed, not attributed to anyone named. <span class="src">(CrowdStrike report)</span></li>
+    <li>The stack: Claude Code to orchestrate, ARTEX to do the hands-on breaking in, DeepSeek v4.1-flash as the main engine, with GLM-5.3 and Grok 4.6 in supporting roles. <span class="src">(CrowdStrike report)</span></li>
+    <li>The part everyone shared: the operator asked Claude where criminals sell stolen Korean data. <span class="src">(CrowdStrike report)</span></li>
+  </ul>
+</section>
+
+<section>
+  <h2><span class="n">01</span>What happened</h2>
+  <p>In late September 2026, several South Korean financial firms found someone had been inside their systems and taken customer data. At one bank, the intruder got into a loan inquiry service used by financial brokers. At another, they compromised an employee work-support system for phones.</p>
+  <p>The twist came from the attacker's own infrastructure. CrowdStrike found open directories on the attack servers holding Claude Code session logs, ARTEX configuration files, and Claude memory files. The campaign's diary, left in the open.</p>
+  <figure class="viz" style="margin-left:0;margin-right:0;padding-left:20px;padding-right:20px;border-left:1px solid var(--viz-line);border-right:1px solid var(--viz-line);border-radius:14px;">
+    <ul class="tl" id="tl1">
+      <li>
+        <button type="button" aria-expanded="false">
+          <span class="tl-date">LATE SEPT 2026</span>
+          <span class="tl-title">Breaches begin</span>
+          <span class="tl-hint">Tap for detail</span>
+          <span class="tl-detail">Industry reports describe data breaches at South Korean financial firms: a loan progress inquiry service at one bank, an employee mobile work-support system at another. CrowdStrike notes the total number of affected organizations is still unconfirmed.</span>
+        </button>
+      </li>
+      <li>
+        <button type="button" aria-expanded="false">
+          <span class="tl-date">LATE SEPT TO EARLY OCT 2026</span>
+          <span class="tl-title">The campaign runs</span>
+          <span class="tl-hint">Tap for detail</span>
+          <span class="tl-detail">Session logs show extensive activity across the window: ARTEX probing targets, Claude Code sessions planning and assisting, all routed through the two-server setup described below.</span>
+        </button>
+      </li>
+      <li>
+        <button type="button" aria-expanded="false">
+          <span class="tl-date">DURING THE CAMPAIGN</span>
+          <span class="tl-title">The diary is left open</span>
+          <span class="tl-hint">Tap for detail</span>
+          <span class="tl-detail">The attack servers expose open directories: Claude Code session histories, ARTEX configs, Claude memory files. This is how investigators reconstruct the whole operation, tool by tool, prompt by prompt.</span>
+        </button>
+      </li>
+      <li>
+        <button type="button" aria-expanded="false">
+          <span class="tl-date">OCT 7, 2026</span>
+          <span class="tl-title">CrowdStrike publishes</span>
+          <span class="tl-hint">Tap for detail</span>
+          <span class="tl-detail">"Unknown Threat Actor Uses AI-Driven ARTEX to Target South Korean Finance." Assessment: likely a Chinese-speaking, financially motivated operator, held with moderate confidence. No named adversary.</span>
+        </button>
+      </li>
+    </ul>
+    <figcaption><b>How we know.</b> Every beat above comes from the CrowdStrike report or the industry reporting it cites. Dates are the campaign window the report gives: late September to early October 2026.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2><span class="n">02</span>The stack</h2>
+  <p>Five pieces, one operator. Tap each to see what it did.</p>
+  <p>A quick glossary, since the names pile up. <span class="jargon" title="Hired hacking: breaking into your own systems to find the holes before criminals do.">Pentesting</span> is hired hacking. <span class="jargon" title="Software that does not just answer questions but takes actions: running commands, trying things, adjusting course.">Agentic</span> means the software takes actions, not just answers questions. An <span class="jargon" title="The AI behind chatbots, trained on enormous piles of text.">LLM</span> is the AI behind chatbots.</p>
+  <figure class="viz" style="margin-left:0;margin-right:0;padding-left:20px;padding-right:20px;border-left:1px solid var(--viz-line);border-right:1px solid var(--viz-line);border-radius:14px;">
+    <div class="stack" id="stack1">
+      <button type="button" data-k="op" aria-pressed="true">
+        <span class="role">The operator</span>
+        <span class="nm">One person (assessed)</span>
+        <span class="one">Gave the orders, asked the questions</span>
+      </button>
+      <button type="button" data-k="cc" aria-pressed="false">
+        <span class="role">The orchestrator</span>
+        <span class="nm">Claude Code</span>
+        <span class="one">Planned and ran the operation</span>
+      </button>
+      <button type="button" data-k="art" aria-pressed="false">
+        <span class="role">The hands</span>
+        <span class="nm">ARTEX</span>
+        <span class="one">Open-source AI pentesting tool</span>
+      </button>
+      <button type="button" data-k="ds" aria-pressed="false">
+        <span class="role">The engine</span>
+        <span class="nm">DeepSeek v4.1-flash</span>
+        <span class="one">ARTEX's primary model backend</span>
+      </button>
+      <button type="button" data-k="helpers" aria-pressed="false">
+        <span class="role">The helpers</span>
+        <span class="nm">GLM-5.3 + Grok 4.6</span>
+        <span class="one">Extra Claude Code sessions</span>
+      </button>
+    </div>
+    <div class="stackdetail" id="stackdetail" aria-live="polite"></div>
+    <figcaption><b>Read it top to bottom.</b> The operator talked to Claude Code, which orchestrated the campaign. ARTEX did the hands-on breaking in, powered mainly by DeepSeek, reached through a reseller proxy. Two more models filled in on side sessions.</figcaption>
+  </figure>
+  <p>The detail that sticks with me: ARTEX is not some secret government cyberweapon. It is an open-source tool anyone can download, built for defensive testing, pointed here at banks. The barrier was never the tool. It was knowing which buttons to push, and the AI knew.</p>
+</section>
+
+<section>
+  <h2><span class="n">03</span>Two servers</h2>
+  <p>The session logs describe a simple setup. A Hong Kong-based IP served as the primary attacker-controlled infrastructure, the operator's home base. A second box, <span class="defang">38.244.50[.]120</span>, hosted the ARTEX instance that did the attacking. Ten more proxy IPs provided cover along the way.</p>
+  <figure class="viz" style="margin-left:0;margin-right:0;padding-left:20px;padding-right:20px;border-left:1px solid var(--viz-line);border-right:1px solid var(--viz-line);border-radius:14px;">
+    <div class="arch" id="arch1">
+      <svg viewBox="0 0 360 200" role="img" aria-label="Attack flow: Hong Kong infrastructure to ARTEX host to bank targets">
+        <path class="flowpath" id="fp1" d="M102,100 C112,100 122,100 132,100" />
+        <path class="flowpath" id="fp2" d="M228,100 C238,100 248,100 258,100" />
+        <circle class="flowdot" r="4" data-p="fp1" data-off="0.0"></circle>
+        <circle class="flowdot" r="4" data-p="fp1" data-off="0.5"></circle>
+        <circle class="flowdot" r="4" data-p="fp2" data-off="0.25"></circle>
+        <circle class="flowdot" r="4" data-p="fp2" data-off="0.75"></circle>
+        <g>
+          <rect class="node hot" x="10" y="72" width="92" height="56" rx="10"></rect>
+          <text class="nlabel" x="56" y="96">HQ</text>
+          <text class="nsub" x="56" y="112">Hong Kong IP</text>
+        </g>
+        <g>
+          <rect class="node hot" x="132" y="72" width="96" height="56" rx="10"></rect>
+          <text class="nlabel" x="180" y="96">ARTEX</text>
+          <text class="nsub" x="180" y="112">38.244.50[.]120</text>
+        </g>
+        <g>
+          <rect class="node" x="258" y="72" width="92" height="56" rx="10"></rect>
+          <text class="nlabel" x="304" y="96">Banks</text>
+          <text class="nsub" x="304" y="112">KR finance</text>
+        </g>
+      </svg>
+      <div class="archchips" role="group" aria-label="Infrastructure details">
+        <button type="button" data-k="hk" aria-pressed="true">Hong Kong IP</button>
+        <button type="button" data-k="artex" aria-pressed="false">ARTEX host</button>
+        <button type="button" data-k="banks" aria-pressed="false">Targets</button>
+      </div>
+      <div class="archdetail" id="archdetail" aria-live="polite"></div>
+    </div>
+    <figcaption><b>Follow the dots.</b> Commands and tooling flowed from the Hong Kong infrastructure to the ARTEX box, which did the hands-on work against the banks. IPs are defanged here so they are not clickable.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2><span class="n">04</span>The scale collapse</h2>
+  <p>This is the part that should rearrange your priors. Side by side:</p>
+  <figure class="viz" style="margin-left:0;margin-right:0;padding-left:20px;padding-right:20px;border-left:1px solid var(--viz-line);border-right:1px solid var(--viz-line);border-radius:14px;">
+    <div class="vs2">
+      <div class="vs-card old">
+        <h4>The old way</h4>
+        <ul>
+          <li>A crew of specialists: recon, exploits, infrastructure</li>
+          <li>Weeks of manual work per target</li>
+          <li>Expensive, rare, usually state-backed</li>
+        </ul>
+      </div>
+      <div class="vs-card new">
+        <h4>This time (assessed)</h4>
+        <ul>
+          <li>One operator plus an agent stack</li>
+          <li>Multiple intrusions in a short span</li>
+          <li>Built from open-source parts anyone can download</li>
+        </ul>
+      </div>
+    </div>
+    <figcaption><b>The quote that matters.</b> CrowdStrike's own summary: the activity "demonstrates how AI tooling can enable a financially motivated threat actor to conduct multiple intrusions within a short time span." The left column is the historical norm; the right column is their assessment of this case, not confirmed fact.</figcaption>
+    <div class="caveat">
+      <b>What we do not know</b>
+      <ul>
+        <li>How many organizations were hit. The report says the count is unconfirmed.</li>
+        <li>Who exactly did it. The resume details "cannot definitively" be tied to the operator, per the report.</li>
+        <li>Whether it was truly one person. "Lone operator" is the assessment the evidence points to, not a proven fact.</li>
+        <li>How much the AI mattered versus ordinary tooling. An open question, not a settled one.</li>
+      </ul>
+    </div>
+  </figure>
+</section>
+
+<section>
+  <h2><span class="n">05</span>The kicker</h2>
+  <p>Buried in the session logs is the detail that made this story travel. The operator asked Claude where threat actors typically sell Korean data-breach information, and asked for help finding Korean Telegram data-sales groups.</p>
+  <p>Read that again. The AI was the break-in crew, and then it was asked to moonlight as the guy who knows a guy. Somewhere there is a safety eval that did not include "help me fence the data," and now there will be.</p>
+  <p>There is a second one. In another session, the operator had Claude draft a security researcher resume, complete with the hacking results as bullet points, plus personal details: age 26, a university in Guangdong, a city, a phone number, a Telegram handle. CrowdStrike says those details likely belong to the operator but cautions they cannot be definitively tied to them. I am not printing the number or the handle here. The report already did, and the person on the other end of that phone number told Reuters they knew nothing about it.</p>
+</section>
+
+<section>
+  <h2><span class="n">06</span>The hard part</h2>
+  <p>Here is the uncomfortable bit. ARTEX is open source. The models are accessible. Nothing in this stack required a lab, a clearance, or a budget. That is exactly why it worked, and exactly why it will happen again.</p>
+  <p>The other side of it: attacker use of open models is real, but since tools like Claude Code can orchestrate an attack either way, open models are also what lets defense spread. Lock everything down and you do not disarm the attackers. You disarm the defenders. It is a genuinely difficult balance, and anyone selling you a clean answer is selling something.</p>
+</section>
+
+<section>
+  <h2><span class="n">07</span>Keep exploring</h2>
+  <div class="explore">
+    <a class="excard" href="https://lukezhang.si/blog/llm-training/">
+      <span class="t">How an LLM is trained <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M8 7h9v9"/></svg></span>
+      <span class="g">The explainer this story assumes: what these models are and how they learn to do things.</span>
+      <span class="u">lukezhang.si/blog/llm-training/</span>
+    </a>
+    <a class="excard" href="https://projects.lukezhang.si/model-atlas/">
+      <span class="t">Model Atlas <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M8 7h9v9"/></svg></span>
+      <span class="g">A map of the model landscape the attacker shopped in: DeepSeek, GLM, Grok, Claude.</span>
+      <span class="u">projects.lukezhang.si/model-atlas/</span>
+    </a>
+    <a class="excard" href="https://lukezhang.si/blog/">
+      <span class="t">More visual explainers <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M8 7h9v9"/></svg></span>
+      <span class="g">The full shelf, every post an interactive.</span>
+      <span class="u">lukezhang.si/blog/</span>
+    </a>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">08</span>Sources</h2>
+  <ul class="sources">
+    <li>CrowdStrike, <a href="https://www.crowdstrike.com/en-us/blog/unknown-threat-actor-uses-artex-to-target-south-korean-finance/">"Unknown Threat Actor Uses AI-Driven ARTEX to Target South Korean Finance"</a> (Oct 7, 2026). The primary source. Every factual claim about the attack above traces to it.</li>
+    <li><a href="https://x.com/andrewcurran_/status/2108108695876092323">@AndrewCurran_ on X</a> (Oct 8, 2026). Where I first saw the story.</li>
+    <li class="note">Secondary reporting (Reuters, industry press) filled in context like the 26-year-old detail and the phone-call denial. I used it sparingly and the draft above leans on the CrowdStrike report wherever the two differ.</li>
+  </ul>
+  <p class="tagsline">TAGS: AI, ENGINEERING</p>
+  <footer class="end">Self-contained: no external requests, everything inline.</footer>
+</section>
+</article>
+<script>
+/* V1: timeline toggles */
+(function(){
+  var items = document.querySelectorAll('#tl1 > li');
+  items.forEach(function(li){
+    var btn = li.querySelector('button');
+    btn.addEventListener('click', function(){
+      var open = li.classList.toggle('open');
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+  });
+})();
+
+/* V2: AI stack diagram */
+(function(){
+  var root = document.getElementById('stack1');
+  if(!root) return;
+  var detail = document.getElementById('stackdetail');
+  var copy = {
+    op: '<b>The operator.</b> Everything CrowdStrike recovered points one way: one set of session logs, one resume, one Telegram handle. Their assessment is a single, likely Chinese-speaking, financially motivated operator, held with moderate confidence. Assessment, not proof.',
+    cc: '<b>Claude Code.</b> The coding agent from Anthropic, used here as the mission planner. The session logs show it orchestrating the campaign. It is also where the operator asked for crime tips and drafted the resume.',
+    art: '<b>ARTEX.</b> A recently released open-source AI pentesting tool developed in China. The agent framework that did the hands-on breaking in, driven by the models below.',
+    ds: '<b>DeepSeek v4.1-flash.</b> The primary model behind the ARTEX instance, reached through <span class="defang">xcai[.]pro</span>, which CrowdStrike describes as a likely LLM API proxy or reseller.',
+    helpers: '<b>GLM-5.3 and Grok 4.6.</b> Used in additional Claude Code sessions alongside the main effort. GLM is from Zhipu AI.'
+  };
+  var btns = root.querySelectorAll('button');
+  function select(btn){
+    btns.forEach(function(b){ b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'); });
+    detail.innerHTML = copy[btn.getAttribute('data-k')] || '';
+  }
+  btns.forEach(function(b){ b.addEventListener('click', function(){ select(b); }); });
+  select(btns[0]);
+})();
+
+/* V3: two-server animated flow */
+(function(){
+  var root = document.getElementById('arch1');
+  if(!root) return;
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var dots = Array.prototype.slice.call(root.querySelectorAll('.flowdot'));
+  var paths = {};
+  dots.forEach(function(d){
+    var p = document.getElementById(d.getAttribute('data-p'));
+    if(p) paths[d.getAttribute('data-p')] = p;
+  });
+  function place(d, t){
+    var p = paths[d.getAttribute('data-p')];
+    if(!p) return;
+    var len = p.getTotalLength();
+    var pt = p.getPointAtLength(((t % 1) + 1) % 1 * len);
+    d.setAttribute('cx', pt.x);
+    d.setAttribute('cy', pt.y);
+  }
+  if(reduce){
+    dots.forEach(function(d){ place(d, 0.5); });
+  } else {
+    var speed = 0.00022;
+    function frame(now){
+      dots.forEach(function(d){
+        var off = parseFloat(d.getAttribute('data-off')) || 0;
+        place(d, now * speed + off);
+      });
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+  var detail = document.getElementById('archdetail');
+  var copy = {
+    hk: '<b>Hong Kong-based IP.</b> The primary attacker-controlled infrastructure: the home base. Its open directories held the session logs, ARTEX configs, and memory files that gave the game away.',
+    artex: '<b><span class="defang">38.244.50[.]120</span>.</b> The box hosting the ARTEX instance behind the Korean attacks. Its open directory even served a Chinese-language pentesting prompt on port 18899.',
+    banks: '<b>South Korean financial firms.</b> Hit where it hurt but not where it kills: a loan inquiry service, an employee work-support system. The full count of affected organizations is unconfirmed.'
+  };
+  var chips = root.querySelectorAll('.archchips button');
+  function select(btn){
+    chips.forEach(function(b){ b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'); });
+    detail.innerHTML = copy[btn.getAttribute('data-k')] || '';
+  }
+  chips.forEach(function(b){ b.addEventListener('click', function(){ select(b); }); });
+  select(chips[0]);
+})();
+</script>
+</body>
+</html>

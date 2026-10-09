@@ -540,13 +540,186 @@ function renderRefundCard(text){
   update();
 }
 
+/* ---------- Company name extraction + reputation deep-links (pass 3) ----------
+   The checklist used to say "[company name]". The name is usually in the
+   contract's first line or in an "X LLC" phrasing, so we pull it out and turn
+   the checklist chores into one-tap pre-filled searches. */
+function extractCompany(text){
+  const m = text.match(/([A-Z][\w&'\u2019.\- ]{2,60}?)\s+(LLC|Inc\.?|Corp\.?|Corporation|Ltd\.?|Holdings?|Warranty\sServices\sInc\.?)/);
+  if(m) return m[1].replace(/^[\s"'“”'‘]+|[\s"'“”'‘]+$/g,"").trim() || null;
+  const lines = text.split(/\n/).map(function(l){return l.trim();}).filter(Boolean);
+  const first = lines[0] || "";
+  if(first.length > 3 && first.length < 64 && !/(contract|plan|policy|coverage|agreement|protection)/i.test(first)) return first;
+  return null;
+}
+function checklistLinks(i, company){
+  if(!company) return [];
+  const q = encodeURIComponent(company);
+  if(i===0) return [{href:"https://www.google.com/search?q=" + q + "+complaints", text:"Search complaints"}];
+  if(i===1) return [{href:"https://www.google.com/search?q=" + q + "+scam+OR+lawsuit", text:"Search scam / lawsuit"}];
+  if(i===2) return [{href:"https://www.bbb.org/search?find_text=" + q, text:"Search BBB"}];
+  return [];
+}
+
+/* ---------- Claim-denial fight kit (pass 3) ----------
+   The post-purchase pain point: "my claim was denied, now what?" Maps the
+   denial reason to the exact clause in YOUR contract, explains why the
+   company leans on it, gives a phone script, and builds a template appeal
+   letter. Pure template logic over existing engine data. Zero LLM calls. */
+const FIGHT_REASONS = [
+ {id:"wear-tear", label:"They said it was wear and tear", ruleIds:["wear-tear"],
+  script:"I need the specific inspection that showed this was wear rather than a mechanical breakdown. I have my maintenance records here. Point me to the sentence in the contract that lets you make that call."},
+ {id:"pre-existing", label:"They said it was a pre-existing condition", ruleIds:["pre-existing"],
+  script:"What inspection did you complete before my coverage started? I can show a dated inspection report from the week before enrollment that documents this part as sound."},
+ {id:"maint-records", label:"They said I lack maintenance records", ruleIds:["maint-records"],
+  script:"I have receipts for every service interval the contract requires. I will send them today. What is the email for the review team, and when will you reopen the claim?"},
+ {id:"seals-gaskets", label:"They said seals and gaskets are excluded", ruleIds:["seals-gaskets"],
+  script:"I understand seals are listed as excluded. Confirm in writing whether the resulting damage to the covered part is being denied because of the seal exclusion, and on what inspection."},
+ {id:"overheat", label:"They said I kept driving while overheating", ruleIds:["overheat"],
+  script:"I stopped the vehicle as soon as the gauge rose. Tell me what evidence you have that driving continued after overheating, and send the denial with the exact clause cited."},
+ {id:"prior-auth", label:"They said I never got prior authorization", ruleIds:["prior-auth"],
+  script:"I have the name, date, and time of the person who authorized this repair. I need the denial in writing with the exact clause that voids the authorization."}
+];
+const FIGHT_GENERIC_SCRIPT = "Please cite the exact sentence in my contract that supports this denial, and the evidence you relied on. I need this in writing, not over the phone.";
+
+function renderFightKit(text, hits, company){
+  const box = $("fight-kit");
+  box.hidden = false;
+  const hasArb = hits.some(function(h){return h.rule.id === "arbitration";});
+  box.innerHTML = '<h2>Claim denied? Fight it with the contract.</h2>' +
+    '<p class="sub">Tap the reason they gave you, or paste the denial letter. FinePrint pulls the exact clause from your contract, shows why the company leans on it, and drafts your appeal letter. Template text, not legal advice.</p>' +
+    '<div class="chip-row">' + FIGHT_REASONS.map(function(r){
+      return '<button class="denial-chip" data-reason="' + r.id + '" aria-pressed="false">' + esc(r.label) + '</button>';
+    }).join("") + '</div>' +
+    '<details class="denial-paste"><summary>Or paste the denial letter</summary>' +
+    '<textarea id="denial-letter" aria-label="Denial letter text" placeholder="Paste the denial letter or email text here..."></textarea>' +
+    '<div class="input-actions" style="margin-top:8px"><button class="btn btn-ghost btn-small" id="denial-scan">Scan the denial letter</button></div>' +
+    '<div id="denial-detected"></div></details>' +
+    '<div id="denial-out"></div>' +
+    '<div class="escalate"><strong>The escalation ladder</strong><ol>' +
+    '<li>Get the denial in writing, with the exact clause cited. A phone "no" is not a denial.</li>' +
+    '<li>Send the appeal letter below. Keep a copy and the tracking number.</li>' +
+    '<li>File with your state attorney general\u2019s consumer protection office and the BBB (<a href="https://www.bbb.org/search" target="_blank" rel="noopener">search BBB</a>).</li>' +
+    (hasArb
+      ? '<li>This contract has binding arbitration, so small claims court may not be available. Check whether the 30-day opt-out window is still open, then talk to a consumer attorney.</li>'
+      : '<li>Last step: small claims court. Bring the contract, the denial letter, and your maintenance records.</li>') +
+    '</ol></div>';
+  box.querySelectorAll(".denial-chip").forEach(function(chip){
+    chip.addEventListener("click", function(){
+      box.querySelectorAll(".denial-chip").forEach(function(c){c.setAttribute("aria-pressed","false");});
+      chip.setAttribute("aria-pressed","true");
+      const r = FIGHT_REASONS.filter(function(x){return x.id === chip.dataset.reason;})[0];
+      showFightCase(r.ruleIds, r.label, r.script, text, hits, company);
+      $("denial-out").scrollIntoView({behavior:"smooth", block:"nearest"});
+    });
+  });
+  $("denial-scan").addEventListener("click", function(){
+    const t = $("denial-letter").value.trim();
+    if(t.length < 60){ toast("Paste a bit more of the denial letter first."); return; }
+    const dh = analyze(t).filter(function(h){return !h.question && h.rule.sev !== "pos";});
+    const det = $("denial-detected");
+    if(!dh.length){
+      det.innerHTML = '<p style="font-size:14px;color:var(--ink2)">No known denial phrases matched this letter. That is common: denial letters are written to sound final without citing the contract. Try the reason chips above, or ask the company for the exact clause.</p>';
+      return;
+    }
+    det.innerHTML = '<p style="font-size:14px;font-weight:700">Detected reasons in the letter:</p><div class="chip-row">' +
+      dh.map(function(h, i){ return '<button class="denial-chip" data-dhi="' + i + '">' + esc(h.rule.title) + '</button>'; }).join("") + '</div>';
+    det.querySelectorAll("[data-dhi]").forEach(function(chip){
+      chip.addEventListener("click", function(){
+        const h = dh[parseInt(chip.dataset.dhi, 10)];
+        const fr = FIGHT_REASONS.filter(function(x){return x.id === h.rule.id;})[0];
+        showFightCase([h.rule.id], 'They said: "' + h.rule.title + '"', fr ? fr.script : FIGHT_GENERIC_SCRIPT, text, hits, company);
+        $("denial-out").scrollIntoView({behavior:"smooth", block:"nearest"});
+      });
+    });
+  });
+}
+
+function showFightCase(ruleIds, reasonLabel, script, text, hits, company){
+  const out = $("denial-out");
+  const rules = RULES.filter(function(r){return ruleIds.indexOf(r.id) >= 0;});
+  const contractHits = hits.filter(function(h){return ruleIds.indexOf(h.rule.id) >= 0 && !h.question;});
+  const sentences = [];
+  contractHits.forEach(function(h){
+    h.matches.forEach(function(mt){
+      const s = sentenceAround(text, mt.start).trim().replace(/\s+/g," ");
+      if(s && sentences.indexOf(s) < 0) sentences.push(s);
+    });
+  });
+  const clauseHtml = sentences.length
+    ? sentences.slice(0,3).map(function(s){
+        return '<div class="fight-clause">"' + esc(s.length > 280 ? s.slice(0,280) + "..." : s) + '"</div>';
+      }).join("")
+    : '<p style="font-size:14px">Your contract does not contain this language, which weakens their argument. Ask them to cite the exact sentence in your contract that supports the denial.</p>';
+  out.innerHTML = '<div class="fight-case"><h3>' + esc(reasonLabel) + '</h3>' +
+    '<p class="fight-label">The clause they are leaning on</p>' + clauseHtml +
+    '<p class="fight-label">Why this works for them</p>' +
+    '<p style="font-size:14px">' + esc(rules.map(function(r){return r.explain;}).join(" ")) + '</p>' +
+    '<div class="tip"><strong>What to say on the phone</strong><br>"' + esc(script) + '"</div>' +
+    '<div class="input-actions" style="margin-top:10px"><button class="btn btn-ghost btn-small" id="ap-toggle">Build my appeal letter</button></div>' +
+    '<div id="ap-form" hidden></div></div>';
+  $("ap-toggle").addEventListener("click", function(){ renderAppealForm(company, reasonLabel); });
+}
+
+function renderAppealForm(company, reasonLabel){
+  const f = $("ap-form");
+  f.hidden = false;
+  f.innerHTML = '<div class="appeal-form">' +
+    '<label>Your name<input id="ap-name" autocomplete="name"></label>' +
+    '<label>Phone<input id="ap-phone" autocomplete="tel"></label>' +
+    '<label>Email<input id="ap-email" autocomplete="email"></label>' +
+    '<label>Company<input id="ap-company" value="' + esc(company || "") + '"></label>' +
+    '<label>Claim number<input id="ap-claim" autocomplete="off"></label>' +
+    '<label>Repair denied<input id="ap-repair" placeholder="e.g. transmission replacement"></label>' +
+    '<label>Denial date<input id="ap-date" type="date"></label>' +
+    '<label class="full">Reason they gave<input id="ap-reason" value="' + esc(reasonLabel) + '"></label>' +
+    '<label class="full">Your evidence, one per line<textarea id="ap-evidence" rows="3" placeholder="Complete oil-change receipts, every interval"></textarea></label>' +
+    '</div>' +
+    '<div class="input-actions" style="margin-top:10px"><button class="btn btn-primary btn-small" id="ap-generate">Generate letter</button></div>' +
+    '<div class="appeal-preview" id="ap-preview" hidden></div>';
+  $("ap-generate").addEventListener("click", generateAppeal);
+  f.scrollIntoView({behavior:"smooth", block:"nearest"});
+}
+
+function generateAppeal(){
+  const v = function(id){ return $(id).value.trim(); };
+  const name = v("ap-name"), phone = v("ap-phone"), email = v("ap-email"),
+        company = v("ap-company"), claim = v("ap-claim"), repair = v("ap-repair"),
+        date = v("ap-date"), reason = v("ap-reason"), evidence = v("ap-evidence");
+  if(!company || !claim || !repair){ toast("Fill in company, claim number, and repair first."); return; }
+  const evLines = evidence.split(/\n/).map(function(l){return l.trim();}).filter(Boolean);
+  const letter =
+    "Subject: Appeal of denied claim " + claim + "\n\n" +
+    "Dear " + company + " claims department,\n\n" +
+    "On " + (date || "[date of denial]") + ", you denied my claim " + claim + " for " + repair + ". Your letter cited: " + (reason || "[reason]") + ".\n\n" +
+    "I ask you to reconsider:\n" +
+    (evLines.length ? evLines.map(function(l){return "- " + l;}).join("\n") : "- [your evidence, e.g. complete maintenance receipts]") + "\n\n" +
+    "Please respond in writing within 14 days with the exact contract language you are relying on. If I do not hear back, I will file complaints with my state attorney general's consumer protection office and the Better Business Bureau, and I will consider small claims court.\n\n" +
+    "Sincerely,\n" + (name || "[your name]") + ((phone || email) ? "\n" + [phone, email].filter(Boolean).join(" | ") : "");
+  const pv = $("ap-preview");
+  pv.innerHTML = "";
+  pv.hidden = false;
+  const pre = document.createElement("div");
+  pre.style.whiteSpace = "pre-wrap";
+  pre.textContent = letter;
+  pv.appendChild(pre);
+  const btn = document.createElement("button");
+  btn.className = "btn btn-ghost btn-small";
+  btn.style.marginTop = "10px";
+  btn.textContent = "Copy appeal letter";
+  btn.addEventListener("click", function(){ copyText(letter, "Appeal letter copied."); });
+  pv.appendChild(btn);
+  pv.scrollIntoView({behavior:"smooth", block:"nearest"});
+}
+
 function renderResults(text, name, opts){
   opts = opts || {};
   const hits = analyze(text);
   const score = scoreOf(hits);
   const v = verdictFor(score);
   const id = opts.id || ("a" + Date.now().toString(36) + Math.floor(Math.random()*1e6).toString(36));
-  currentAnalysis = {id:id, text:text, name:name, score:score, rv:RULESET_V, hits:hits.map(function(h){
+  const company = extractCompany(text);
+  currentAnalysis = {id:id, text:text, name:name, score:score, rv:RULESET_V, company:company, hits:hits.map(function(h){
     return {title:h.rule.title, sev:h.rule.sev, count:h.matches.length};
   }), date:new Date().toISOString()};
 
@@ -633,7 +806,8 @@ function renderResults(text, name, opts){
 
   renderDoc(text, hits);
   renderFlags(hits);
-  renderChecklist(id);
+  renderChecklist(id, company);
+  renderFightKit(text, hits, company);
   if(opts.save !== false) saveAnalysis(currentAnalysis); // render != create: reopening a saved analysis must not duplicate it
   renderSaved();
   $("results").scrollIntoView({behavior:"smooth", block:"start"});
@@ -710,7 +884,7 @@ function renderFlags(hits){
   }).join("");
 }
 
-function renderChecklist(analysisId){
+function renderChecklist(analysisId, company){
   const box = $("check-items");
   // checklist state is scoped to the analyzed contract, not global
   const ckey = "fineprint_checklist_" + (analysisId || "none");
@@ -721,7 +895,7 @@ function renderChecklist(analysisId){
     label.className = "check-item" + (done.indexOf(i) >= 0 ? " done" : "");
     const cb = document.createElement("input");
     cb.type = "checkbox"; cb.checked = done.indexOf(i) >= 0;
-    cb.setAttribute("aria-label", item);
+    cb.setAttribute("aria-label", item.replace("[company name]", company || "the company"));
     cb.addEventListener("change", function(){
       let d = storeGet(ckey, []);
       if(cb.checked && d.indexOf(i) < 0) d.push(i);
@@ -729,9 +903,37 @@ function renderChecklist(analysisId){
       if(!storeSet(ckey, d)) storageWarning("checklist change not saved");
       label.classList.toggle("done", cb.checked);
     });
-    const sp = document.createElement("span"); sp.className = "txt"; sp.textContent = item;
+    const sp = document.createElement("span"); sp.className = "txt";
+    if(company && item.indexOf("[company name]") >= 0){
+      const parts = item.split("[company name]");
+      sp.appendChild(document.createTextNode(parts[0]));
+      const b = document.createElement("strong"); b.textContent = company; sp.appendChild(b);
+      sp.appendChild(document.createTextNode(parts[1] || ""));
+    } else {
+      sp.textContent = item;
+    }
+    checklistLinks(i, company).forEach(function(l){
+      sp.appendChild(document.createTextNode(" "));
+      const a = document.createElement("a");
+      a.href = l.href; a.target = "_blank"; a.rel = "noopener"; a.className = "check-link";
+      a.textContent = l.text + " ";
+      a.appendChild(extIcon());
+      sp.appendChild(a);
+    });
     label.appendChild(cb); label.appendChild(sp); box.appendChild(label);
   });
+}
+function extIcon(){
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("width", "12"); svg.setAttribute("height", "12");
+  svg.setAttribute("fill", "none"); svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "1.9"); svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round"); svg.setAttribute("aria-hidden", "true");
+  const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  p.setAttribute("d", "M14 4h6v6M20 4l-9 9M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5");
+  svg.appendChild(p);
+  return svg;
 }
 
 function saveAnalysis(a){
@@ -848,6 +1050,7 @@ $("analyze").addEventListener("click", function(){
 $("clear").addEventListener("click", function(){
   $("contract").value = "";
   $("results").style.display = "none";
+  $("fight-kit").hidden = true;
   // reset the print closure so Ctrl+P agrees with the print button: nothing to print
   currentAnalysis = null;
   window.onbeforeprint = null;

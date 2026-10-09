@@ -1,4 +1,4 @@
-/* Backfill sync — PROTOTYPE.
+/* Backfill sync: PROTOTYPE.
  * Local-first sync to sprint-backend-proto (https://sync-proto.lukezhang.si).
  * Additive: the app works fully offline; sync never blocks the UI.
  * Prototype-grade auth: a random per-device key stored in localStorage.
@@ -128,7 +128,7 @@ var status = "starting"; // starting|syncing|offline|pending|synced (see updateP
 try { meta = JSON.parse(localStorage.getItem(LS_META) || "{}") || {}; } catch(e){ meta = {}; }
 try { lastSync = +localStorage.getItem(LS_LAST) || 0; } catch(e){}
 /* Outbox durability: the acknowledged baseline survives reloads. Never snapshot
- * the live state as acknowledged here — anything differing from the baseline is
+ * the live state as acknowledged here; anything differing from the baseline is
  * unpushed work that must stay visible in the pill and go up on the next push. */
 try { lastPushed = JSON.parse(localStorage.getItem(LS_BASE) || "{}") || {}; } catch(e){ lastPushed = {}; }
 function saveMeta(){ try{ localStorage.setItem(LS_META, JSON.stringify(meta)); }catch(e){} }
@@ -287,7 +287,7 @@ function diffOut(){
 
 /* Push locally-changed records. Diffed against the persisted lastPushed
  * baseline; deletions become tombstones automatically. Idempotent by key;
- * safe to retry. The baseline only advances on success — a failed push keeps
+ * safe to retry. The baseline only advances on success; a failed push keeps
  * the work visible in the pill instead of claiming "Synced". */
 async function pushDirty(){
   if (!deviceKey || applyingRemote){ updatePill(); return; }
@@ -313,7 +313,7 @@ async function pushDirty(){
 /* Pull remote changes since lastSync; apply newer-wins; re-render. */
 /* Pull remote changes since lastSync; apply newer-wins; re-render.
  * Applied records merge into the persisted baseline WITHOUT snapshotting the
- * whole state — local-only work stays unacknowledged and keeps its pill. */
+ * whole state; local-only work stays unacknowledged and keeps its pill. */
 async function pull(){
   if (!deviceKey || applyingRemote) return;
   inflight++; updatePill();
@@ -464,94 +464,3 @@ else boot();
 })();
 
 
-/* Client error reporter (v1).
- * Reports window errors and unhandled promise rejections to the sync backend
- * so crashes can be triaged from the status dashboard. Fire and forget:
- * it never throws, never blocks the app, and skips silently when the backend
- * is unreachable or no device key exists yet. PII patterns are scrubbed
- * client-side before sending (the server scrubs again).
- */
-(function(){
-  "use strict";
-  try {
-    var SLUG = "";
-    try { SLUG = String(typeof LS_DEVICE === "string" ? LS_DEVICE : "").replace(/\.device_key$/, ""); } catch(e){}
-    var BASE = "https://sync-proto.lukezhang.si";
-    try { if (typeof WORKER === "string" && WORKER) BASE = WORKER; } catch(e){}
-    var ENDPOINT = BASE + "/v1/client-errors";
-
-    function trunc(s, n){
-      s = String(s === null || s === undefined ? "" : s);
-      return s.length > n ? s.slice(0, n) : s;
-    }
-    function scrub(s){
-      s = String(s === null || s === undefined ? "" : s);
-      s = s.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[email]");
-      s = s.replace(/\+?\d[\d][\d\s().-]{6,}\d/g, "[phone]");
-      s = s.replace(/(bearer[ :]+)[A-Za-z0-9\-._~+/=]{8,}/gi, "$1[token]");
-      s = s.replace(/(api[_-]?key|device[_-]?key|token|secret|password|passwd|auth)\s*[:=]\s*["']?[^"'\s,}]{6,}/gi, "$1=[redacted]");
-      return s;
-    }
-
-    var busy = false;
-    var queue = [];
-    function pump(){
-      try {
-        if (busy) return;
-        var item = queue.shift();
-        if (!item) return;
-        var key = null;
-        try { key = localStorage.getItem(LS_DEVICE); } catch(e){}
-        if (!key || !SLUG) { pump(); return; }
-        busy = true;
-        var page = "";
-        try { page = location.href.split("#")[0]; } catch(e){}
-        var body = JSON.stringify({
-          app_slug: SLUG,
-          message: trunc(scrub(item.message), 500),
-          stack: trunc(scrub(item.stack), 4000),
-          page_url: trunc(page, 500)
-        });
-        fetch(ENDPOINT, {
-          method: "POST",
-          headers: {"Content-Type": "application/json", "Authorization": "Bearer " + key},
-          body: body,
-          keepalive: true
-        }).then(function(){ busy = false; pump(); }, function(){ busy = false; pump(); });
-      } catch(e){ busy = false; }
-    }
-    function send(message, stack){
-      try {
-        if (!SLUG) return;
-        queue.push({message: message, stack: stack});
-        if (queue.length > 5) queue.shift();
-        pump();
-      } catch(e){}
-    }
-
-    window.addEventListener("error", function(ev){
-      try {
-        var msg = ev && ev.message ? ev.message : "window.onerror";
-        try {
-          if (ev && ev.filename) msg += " @ " + ev.filename + ":" + (ev.lineno || 0) + ":" + (ev.colno || 0);
-        } catch(e){}
-        var stack = "";
-        try { stack = (ev && ev.error && ev.error.stack) ? ev.error.stack : ""; } catch(e){}
-        send(msg, stack);
-      } catch(e){}
-    });
-    window.addEventListener("unhandledrejection", function(ev){
-      try {
-        var r = ev ? ev.reason : null;
-        var msg = "unhandledrejection";
-        var stack = "";
-        try {
-          if (r instanceof Error) { msg = r.message || msg; stack = r.stack || ""; }
-          else if (typeof r === "string") { msg = r; }
-          else { msg = trunc(JSON.stringify(r), 500); }
-        } catch(e){}
-        send(msg, stack);
-      } catch(e){}
-    });
-  } catch(e){}
-})();

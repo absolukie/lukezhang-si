@@ -90,6 +90,8 @@
   .tk-bubble-name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 13px; background: #2b2b2b; color: #f6f1e3; border-radius: 6px;
     padding: 2px 8px; margin-right: 8px; }
+  .tk-bubble-count { font-size: 11px; color: rgba(43,43,43,0.45); margin-right: 8px;
+    white-space: nowrap; }
   .tactic-gloss { border: 1px solid rgba(43,43,43,0.15); border-radius: 12px;
     padding: 4px 18px 8px; margin: 18px 0 4px; background: rgba(255,255,255,0.35); }
   .tactic-gloss h3 { font-size: 16px; margin: 12px 0 4px; color: #2b2b2b; }
@@ -433,41 +435,120 @@ theorem sqrt_two_irrational&#x27; : Irrational&#x27; (Real.sqrt 2) := by
   var next = document.getElementById('st-next');
   var dots = document.getElementById('st-dots');
   var TACTICS = ['exact_mod_cast','push_cast','norm_num','congrArg','linarith','rintro','obtain','intro','exact','decide','omega','rwa','ring','simp','have','rw','by'];
+  /* Each keyword carries a rotating set of tips: every hover or tap shows the
+     next one, so re-visiting a keyword teaches something new. Tips[0] is the
+     plain definition; later tips go one level deeper. */
   var TAC_HELP = {
-    'by': 'Opens a tactic block: a short script that proves the goal. Read it as "proved by doing the following."',
-    'exact': 'Hands Lean a proof that fits the goal perfectly. One move, done.',
-    'have': 'Proves a helper fact right now and names it, so later lines can use it.',
-    'intro': 'Takes the goal apart and names the pieces: the variables and assumptions you get to work with.',
-    'obtain': 'Unpacks a fact into its contents. "2 divides a" becomes a real witness: some c with a = 2c.',
-    'rw': 'Rewrites using an equation. rw [h] swaps one side of h for the other; the little arrow flips the direction.',
-    'rwa': 'Rewrites, then closes the goal on the spot. Rewrite plus assumption in one move.',
-    'rintro': 'Like intro, but it can also unpack patterns while it introduces them.',
-    ':=': 'Read as "is". Everything after it is the proof of everything before it.',
-    'omega': 'The arithmetic robot. Closes any goal that is just adding, subtracting, and comparing numbers.',
-    'ring': 'The algebra robot. Expands and rearranges: (2c)² becomes 4c², that kind of work.',
-    'simp': 'The simplifier. Applies standard simplifications over and over until nothing changes.',
-    'norm_num': 'Crunching concrete numbers, like checking that 0 ≤ 2.',
-    'linarith': 'The linear arithmetic solver. Closes goals that follow from linear equations.',
-    'congrArg': 'Applies a function to both sides of an equation.',
-    'exact_mod_cast': 'Plumbing between number types. Moves a fact from integers to reals (or back) so the types line up.',
-    'push_cast': 'Its partner: shoves casts outward so the rest of the proof can work with them.'
+    'by': [
+      'Opens a tactic block: a short script that proves the goal. Read it as "proved by doing the following."',
+      'Tactics inside a by block run top to bottom, each one transforming the goal. Indentation is what groups them.',
+      'A by block can sit anywhere a proof is expected, even inside another by block. have h : P := by ... is everywhere in real proofs.'
+    ],
+    'exact': [
+      'Hands Lean a proof that fits the goal perfectly. One move, done.',
+      'The proof you hand it must match the goal up to definitional equality. Close enough is not enough; exact is picky.',
+      'If exact fails, read the error: it shows what Lean expected versus what you gave, and the mismatch is the lesson.'
+    ],
+    'have': [
+      'Proves a helper fact right now and names it, so later lines can use it.',
+      'You can skip the name: have : P := ... still proves the fact, handy for one-off stepping stones.',
+      'have is how long proofs stay readable: name each stepping stone, and the final line stays short.'
+    ],
+    'intro': [
+      'Takes the goal apart and names the pieces: the variables and assumptions you get to work with.',
+      'intro works on arrows and for-alls alike: on "A implies B" it says "assume A, now prove B".',
+      'Name several at once: intro a b hb handles a goal starting "for all a b, ..." in a single move.'
+    ],
+    'obtain': [
+      'Unpacks a fact into its contents. "2 divides a" becomes a real witness: some c with a = 2c.',
+      'The angle brackets are the pattern: obtain ⟨c, hc⟩ := h2a pulls the witness and its proof out together.',
+      'obtain clears the original hypothesis after unpacking, so the context stays tidy.'
+    ],
+    'rw': [
+      'Rewrites using an equation. rw [h] swaps one side of h for the other; the little arrow flips the direction.',
+      'rw [← h] rewrites backwards: it replaces the right-hand side of h with the left-hand side.',
+      'After rewriting, Lean tries rfl on its own: if both sides became identical, the goal closes itself.'
+    ],
+    'rwa': [
+      'Rewrites, then closes the goal on the spot. Rewrite plus assumption in one move.',
+      'Think of rwa [h] as rw [h] followed by assumption: it finishes using something already in context.'
+    ],
+    'rintro': [
+      'Like intro, but it can also unpack patterns while it introduces them.',
+      'rintro ⟨a, b⟩ introduces a pair and splits it in one step; plain intro cannot do that.'
+    ],
+    ':=': [
+      'Read as "is". Everything after it is the proof of everything before it.',
+      'After := comes either a direct proof term or a by block. Both are just "the proof".',
+      'In theorems := separates the statement from its proof; in have, it separates the name from the argument.'
+    ],
+    'omega': [
+      'The arithmetic robot. Closes any goal that is just adding, subtracting, and comparing numbers.',
+      'omega handles ≤, <, = and divisibility by constants over integers and naturals.',
+      'It cannot do nonlinear goals: something like x ^ 2 = 4 needs ring or manual work, not omega.'
+    ],
+    'ring': [
+      'The algebra robot. Expands and rearranges: (2c)² becomes 4c², that kind of work.',
+      'ring proves equalities in commutative rings: integers, rationals, reals, and polynomials over them.',
+      'Its sibling ring_nf puts both sides in normal form first, handy when ring alone stalls.'
+    ],
+    'simp': [
+      'The simplifier. Applies standard simplifications over and over until nothing changes.',
+      'simp only uses lemmas tagged @[simp], plus any you hand it: simp [h] simplifies with h too.',
+      'If simp closes a goal you expected to be hard, take the win: the goal was simpler than it looked.'
+    ],
+    'norm_num': [
+      'Crunching concrete numbers, like checking that 0 ≤ 2.',
+      'norm_num evaluates numeric expressions: (3 + 4) * 2 becomes 14 with no manual steps.',
+      'It also discharges side goals about numerals, like 2 ≠ 0 or 0 < 5.'
+    ],
+    'linarith': [
+      'The linear arithmetic solver. Closes goals that follow from linear equations.',
+      'Hand it the facts to combine: linarith [h1, h2] finds the linear combination that proves the goal.',
+      'Unlike omega, linarith also works over ordered fields like the rationals and reals.'
+    ],
+    'congrArg': [
+      'Applies a function to both sides of an equation.',
+      'From h : a = b, congrArg f h proves f a = f b. The workhorse for "do this to both sides".'
+    ],
+    'decide': [
+      'Decides a goal by computation: Lean just evaluates it and checks the answer.',
+      'decide only works on decidable propositions, things a computer can check by running them.',
+      'If decide is slow, the computation is too big. That is your cue to prove it by hand instead.'
+    ],
+    'exact_mod_cast': [
+      'Plumbing between number types. Moves a fact from integers to reals (or back) so the types line up.',
+      'You need it because Lean treats ↑a over ℤ and ↑a over ℝ as different things; casts never happen silently.',
+      'Its partner push_cast shoves casts outward so the rest of the proof can work with them.'
+    ],
+    'push_cast': [
+      'Its partner: shoves casts outward so the rest of the proof can work with them.',
+      'push_cast turns ↑(a + b) into ↑a + ↑b, moving the cast out of the way of the real argument.'
+    ]
   };
+  var tacSeen = {};
   var bubble = document.createElement('div');
   bubble.className = 'tk-bubble';
   bubble.setAttribute('hidden', '');
   var bubbleName = document.createElement('span');
   bubbleName.className = 'tk-bubble-name';
+  var bubbleCount = document.createElement('span');
+  bubbleCount.className = 'tk-bubble-count';
   var bubbleText = document.createElement('span');
   bubble.appendChild(bubbleName);
+  bubble.appendChild(bubbleCount);
   bubble.appendChild(bubbleText);
   document.body.appendChild(bubble);
   var bubbleTac = null, bubbleAnchor = null, bubbleMode = null;
   function hideBubble() { bubble.setAttribute('hidden', ''); bubbleTac = null; bubbleAnchor = null; bubbleMode = null; }
   function showBubble(anchor, tac) {
-    var help = TAC_HELP[tac];
-    if (!help) return;
+    var tips = TAC_HELP[tac];
+    if (!tips) return;
+    var n = tacSeen[tac] || 0;
     bubbleName.textContent = tac;
-    bubbleText.textContent = help;
+    bubbleText.textContent = tips[n % tips.length];
+    bubbleCount.textContent = (n % tips.length + 1) + ' of ' + tips.length;
+    tacSeen[tac] = n + 1;
     bubble.removeAttribute('hidden');
     var r = anchor.getBoundingClientRect();
     var bw = Math.min(280, window.innerWidth - 24);

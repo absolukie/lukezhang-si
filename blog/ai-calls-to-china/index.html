@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="tags" content="ai, engineering">
+<meta name="description" content="Twilio cannot call mainland China, so I built a second lane: a Mandarin-speaking AI agent, a SIP trunk, and a Telnyx number. The full pipeline, the code, and two real restaurant calls transcribed in Chinese and English.">
+<title>My AI Calls Restaurants in China</title>
+<link rel="stylesheet" href="/blog/assets/highlight-theme.css">
+<style>
+/* Shared visualizer theme */
+:root{
+  --viz-bg:#141311; --viz-panel:#1d1b17; --viz-panel2:#26231d;
+  --viz-line:#3a362c; --viz-ink:#f2ede0; --viz-muted:#a39c88; --viz-faint:#6f695b;
+  --viz-accent:#e8a33d;
+  --viz-green:#7bc96f;
+  --viz-danger:#e05252;
+  --viz-mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html{scroll-behavior:smooth;}
+body{
+  margin:0; background:var(--viz-bg); color:var(--viz-ink);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Helvetica,Arial,sans-serif;
+  font-size:17px; line-height:1.65;
+}
+article{max-width:700px; margin:0 auto; padding:28px 20px 60px;}
+.kicker{
+  font-family:var(--viz-mono); font-size:12px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--viz-accent); margin:0 0 14px;
+}
+h1{font-size:clamp(30px,7vw,44px); line-height:1.12; letter-spacing:-0.02em; margin:0 0 14px;}
+.standfirst{font-size:19px; color:var(--viz-muted); margin:0 0 8px; line-height:1.5;}
+.tip{font-size:13.5px; color:var(--viz-faint); margin:0 0 30px;}
+.tip a{color:var(--viz-muted);}
+h2{font-size:24px; letter-spacing:-0.01em; margin:44px 0 12px; line-height:1.25;}
+h2 .n{font-family:var(--viz-mono); font-size:14px; color:var(--viz-faint); display:block; letter-spacing:.1em; margin-bottom:6px;}
+p{margin:0 0 16px;}
+a{color:var(--viz-accent);}
+.jargon{border-bottom:1px dotted var(--viz-faint); cursor:help;}
+.verdict{
+  background:var(--viz-panel); border:1px solid var(--viz-line); border-radius:14px;
+  padding:20px 22px; margin:26px 0 8px;
+}
+.verdict h3{margin:0 0 10px; font-size:15px; letter-spacing:.06em; text-transform:uppercase;
+  font-family:var(--viz-mono); color:var(--viz-accent);}
+.verdict ul{margin:0; padding:0; list-style:none;}
+.verdict li{margin:0 0 12px; padding-left:22px; position:relative; font-size:16px;}
+.verdict li:last-child{margin-bottom:0;}
+.verdict li::before{content:""; position:absolute; left:2px; top:9px; width:8px; height:8px;
+  border-radius:50%; background:var(--viz-accent);}
+.verdict .src{font-size:13px; color:var(--viz-faint);}
+figure.viz{
+  margin:26px -20px; padding:26px 20px;
+  background:var(--viz-panel); border-top:1px solid var(--viz-line); border-bottom:1px solid var(--viz-line);
+}
+figure.viz figcaption{font-size:13.5px; color:var(--viz-muted); margin-top:14px; max-width:620px;}
+figure.viz figcaption b{color:var(--viz-ink);}
+/* Hop stepper */
+.kc{background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:16px; padding:22px 20px;}
+.kc-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+.kc-count{font-family:var(--viz-mono); font-size:12.5px; letter-spacing:.08em; color:var(--viz-accent); text-transform:uppercase;}
+.kc-dots{display:flex; gap:7px;}
+.kc-dots i{width:9px; height:9px; border-radius:50%; background:var(--viz-line); transition:background 200ms;}
+.kc-dots i.on{background:var(--viz-accent);}
+.kc-title{font-size:21px; margin:0 0 10px; letter-spacing:-0.01em;}
+.kc-what{font-size:16px; color:var(--viz-ink); margin:0 0 14px;}
+.kc-lesson{background:rgba(232,163,61,.07); border:1px solid rgba(232,163,61,.35); border-radius:12px; padding:14px 16px; margin:0 0 18px;}
+.kc-lesson > b{display:block; font-family:var(--viz-mono); font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--viz-accent); margin-bottom:6px;}
+.kc-lesson p{margin:0; font-size:15.5px; color:var(--viz-ink);}
+.kc-body{overflow:hidden;}
+.kc-nav{display:flex; justify-content:space-between; gap:12px;}
+.kc-nav .kc-next{margin-left:auto;}
+.kc-nav button{
+  font-family:inherit; font-size:16px; font-weight:650; color:var(--viz-ink);
+  background:var(--viz-panel); border:1px solid var(--viz-line); border-radius:999px;
+  padding:13px 26px; cursor:pointer; touch-action:manipulation; min-height:52px;
+}
+.kc-nav button:active{transform:scale(.97);}
+.kc-nav button[hidden]{display:none;}
+/* Lane comparison cards */
+.lanes{display:grid; gap:12px; margin:18px 0 6px;}
+@media(min-width:560px){ .lanes{grid-template-columns:1fr 1fr;} }
+.lane{background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:14px; padding:18px 20px;}
+.lane h3{margin:0 0 4px; font-size:17px;}
+.lane .tag{font-family:var(--viz-mono); font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--viz-muted); display:block; margin-bottom:10px;}
+.lane ul{margin:0; padding:0; list-style:none; font-size:15px; color:var(--viz-muted);}
+.lane li{margin:0 0 8px; padding-left:20px; position:relative;}
+.lane li::before{content:""; position:absolute; left:2px; top:8px; width:7px; height:7px; border-radius:50%; background:var(--viz-faint);}
+.lane.good{border-color:rgba(123,201,111,.4);}
+.lane.good .tag{color:var(--viz-green);}
+.lane.good li::before{background:var(--viz-green);}
+/* Transcript cards */
+.tg{display:grid; gap:12px; margin:18px 0 6px;}
+.tcard{background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:14px; overflow:hidden;}
+.tcard > button{
+  width:100%; display:block; text-align:left; background:none; border:none; color:inherit;
+  font:inherit; padding:16px 18px 14px; cursor:pointer; touch-action:manipulation;
+}
+.tcard .tname{font-weight:700; font-size:16.5px;}
+.tcard .trec{display:block; font-family:var(--viz-mono); font-size:13px; color:var(--viz-accent); margin-top:5px;}
+.tcard .thint{display:block; font-size:12.5px; color:var(--viz-faint); margin-top:7px;}
+.tcard .tdet{display:none; padding:0 18px 16px; font-size:15px; color:var(--viz-muted);}
+.tcard.open .tdet{display:block;}
+.tcard.open{border-color:rgba(232,163,61,.4);}
+.tline{margin:0 0 12px; line-height:1.6;}
+.tline .who{font-family:var(--viz-mono); font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--viz-accent); display:block; margin-bottom:2px;}
+.tline.staff .who{color:var(--viz-green);}
+.tline .cn{color:var(--viz-ink);}
+.tline .en{color:var(--viz-muted); font-size:14.5px; display:block; margin-top:3px; border-left:2px solid var(--viz-line); padding-left:10px;}
+.tnote{font-size:13px; color:var(--viz-faint); margin:4px 0 0;}
+.redact{font-family:var(--viz-mono); font-size:13px; color:var(--viz-faint); background:rgba(255,255,255,.04); border:1px dashed var(--viz-line); border-radius:6px; padding:1px 7px; white-space:nowrap;}
+/* Code */
+.step-code{margin:18px 0 6px;}
+.step-code pre{margin:0; border-radius:14px; overflow:auto; border:1px solid var(--viz-line);}
+.step-code pre code{font-size:14px; line-height:1.6;}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  .kc-nav button:active{transform:none;}
+}
+/* Keep exploring */
+.explore{display:grid; gap:12px; margin:20px 0 6px;}
+.excard{
+  display:block; text-decoration:none; color:inherit; background:var(--viz-panel2);
+  border:1px solid var(--viz-line); border-radius:14px; padding:18px 20px;
+}
+.excard:active{transform:scale(.99);}
+.excard .t{font-weight:700; font-size:17px; color:var(--viz-ink); display:flex; align-items:center; gap:8px;}
+.excard .t svg{flex:none;}
+.excard .g{font-size:14.5px; color:var(--viz-muted); margin:6px 0 0;}
+.excard .u{font-family:var(--viz-mono); font-size:12px; color:var(--viz-faint); margin:8px 0 0;}
+/* Sources */
+.sources{font-size:14.5px; color:var(--viz-muted);}
+.sources li{margin-bottom:10px;}
+.sources .note{font-size:13.5px; color:var(--viz-faint);}
+.tagsline{font-family:var(--viz-mono); font-size:12.5px; color:var(--viz-faint); margin-top:34px;
+  letter-spacing:.08em;}
+footer.end{margin-top:40px; padding-top:18px; border-top:1px solid var(--viz-line);
+  font-size:13.5px; color:var(--viz-faint);}
+</style>
+</head>
+<body>
+<article>
+<header>
+  <p class="kicker">AI, engineering</p>
+  <h1>My AI Calls Restaurants in China</h1>
+  <p class="standfirst">Twilio cannot call mainland China, full stop. So I built a second lane: a Mandarin-speaking AI agent, a SIP trunk, and a Telnyx number. Here is the whole pipeline, the code that places a call, and two real conversations with a Shanghai restaurant, transcribed in Chinese and English.</p>
+  <p class="tip">A build log with real call transcripts. The guest name, phone number, and restaurant name are redacted. Everything else is exactly what happened.</p>
+</header>
+
+<section class="verdict">
+  <h3>The short version</h3>
+  <ul>
+    <li>Twilio is my US voice provider, but it does not support outbound voice calls to mainland China. So it stays the US/Canada lane: domestic voice, SMS, one-time codes, alerts.</li>
+    <li>The China lane: <b>ElevenLabs Conversational AI</b> (a Mandarin voice agent) &rarr; a <b>SIP trunk</b> ("ElevenLabs AI Voice": sip.rtc.elevenlabs.io:5060, TCP) &rarr; <b>Telnyx</b> &rarr; the phone network &rarr; the restaurant.</li>
+    <li>Telnyx needed an ID verification (<span class="jargon" title="Know Your Customer: the identity check phone carriers run before selling you service">KYC</span>) to unlock China (+86). Setup cost: $5 of account credit plus a US number (+1 213 727 0940, $1 upfront + $1/month) that shows up as the caller ID.</li>
+    <li>Two real calls, both transcribed below: a booking (7:30 and 8:00 were full, took 9:30 PM for 4, &yen;500 per person minimum spend) and a confirmation (booking on file, name and number verified, no deposit needed).</li>
+    <li>A two minute call burns roughly 700 to 850 ElevenLabs credits. If the restaurant's line is busy (the network answers <span class="jargon" title="Session Initiation Protocol, the internet standard for starting voice calls">SIP</span> 486), the system retries automatically, 20 minutes apart.</li>
+  </ul>
+</section>
+
+<section>
+  <h2><span class="n">01</span>The problem</h2>
+  <p>Twilio is my US voice provider. Calls, texts, one-time codes, build alerts. Rock solid. One problem: it does not do outbound voice calls to mainland China. Not "it's expensive." Not "it's in beta." It just doesn't.</p>
+  <p>I needed to phone restaurants in Shanghai and Beijing to book dinner tables, in Mandarin, while I sat in California. The restaurant industry there still runs on phone calls. No online booking, no email, just a landline and a person who answers it.</p>
+  <p>So I built a second lane, China-only, with an AI doing the talking. Here is exactly how a call travels.</p>
+</section>
+
+<section>
+  <h2><span class="n">02</span>Follow a call, hop by hop</h2>
+  <p>Every booking is five hops. Tap through and watch a call travel from a prompt to a landline in Shanghai. Use the arrows or your keyboard.</p>
+  <figure class="viz">
+    <div class="kc" id="hop1">
+      <div class="kc-top">
+        <span class="kc-count" id="hopCount">Hop 1 of 5</span>
+        <span class="kc-dots" id="hopDots" aria-hidden="true"></span>
+      </div>
+      <div class="kc-body" id="hopBody">
+        <h3 class="kc-title" id="hopTitle"></h3>
+        <p class="kc-what" id="hopWhat"></p>
+        <div class="kc-lesson"><b>Hop detail</b><p id="hopNote"></p></div>
+      </div>
+      <div class="kc-nav">
+        <button type="button" class="kc-prev" id="hopPrev" aria-label="Previous hop">&#8249; Back</button>
+        <button type="button" class="kc-next" id="hopNext" aria-label="Next hop">Next &#8250;</button>
+      </div>
+    </div>
+    <figcaption>Five hops, about two minutes, one dinner table. <b>Hop detail</b> is the cost or the config at each step.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2><span class="n">03</span>Two lanes</h2>
+  <p>Twilio didn't get fired. It just doesn't go to China. So now there are two lanes, each doing what it's good at:</p>
+  <div class="lanes">
+    <div class="lane">
+      <h3>Twilio</h3>
+      <span class="tag">The home lane &middot; US + Canada</span>
+      <ul>
+        <li>Domestic voice calls</li>
+        <li>SMS and one-time codes</li>
+        <li>Build and alert notifications</li>
+        <li>Cannot call mainland China, at any price</li>
+      </ul>
+    </div>
+    <div class="lane good">
+      <h3>Telnyx</h3>
+      <span class="tag">The China lane &middot; +86 unlocked</span>
+      <ul>
+        <li>Outbound voice to mainland China</li>
+        <li>SIP trunk friendly, plays nice with ElevenLabs</li>
+        <li>Needed ID verification (KYC) to unlock the +86 country</li>
+        <li>$5 credit to start, $1 number ($1/month)</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">04</span>Placing a call</h2>
+  <p>One API call starts everything. You hand ElevenLabs three things: which agent talks, which phone identity it calls from (the SIP trunk), and the destination number. ElevenLabs opens the trunk to Telnyx, Telnyx dials out, and the agent starts talking when a human picks up.</p>
+  <div class="step-code">
+  <pre><code class="language-javascript">const res = await fetch(
+  "https://api.elevenlabs.io/v1/convai/sip-trunk/outbound-call",
+  {
+    method: "POST",
+    headers: {
+      // placeholder: use a real key from your ElevenLabs dashboard
+      "xi-api-key": "ELEVENLABS_API_KEY",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      agent_id: "agent_xxxx",              // the Mandarin booking agent
+      agent_phone_number_id: "phnum_xxxx", // the SIP trunk identity
+      to_number: "+8621xxxxxxxx"           // the restaurant, E.164 format
+    })
+  }
+);
+const call = await res.json();
+// poll GET /v1/convai/conversations/{conversation_id}
+// until the call completes, then read the transcript</code></pre>
+  </div>
+  <p>If the line is busy, the network answers with SIP 486 and the API reports a failure. The fix is boring and effective: schedule retries 20 minutes apart and try again. One Beijing restaurant's line came back busy twice in a row, so the retry job just waits and redials.</p>
+</section>
+
+<section>
+  <h2><span class="n">05</span>The prompt is the product</h2>
+  <p>The voice is ElevenLabs. The manners are a prompt. The agent opens with one neutral line: <span class="cn">&ldquo;您好，请问是&hellip;餐厅吗？我想订个位子。&rdquo;</span> (Hello, is this &hellip; restaurant? I'd like to book a table.) That's the whole introduction. It never claims to be the guest. It never says the word AI. If the restaurant asks who is calling, it says it's the guest's assistant, and only then. It gives the guest's name only when asked for the booking name.</p>
+  <p>Honest footnote: the first version of the prompt had the agent introduce itself as "an AI assistant." You can hear it in the first transcript below, because that is what actually happened. It was rewritten to the neutral version right after that call. The lesson stuck: the prompt is the product. Nobody on the other end of a restaurant line needs a vocabulary lesson about artificial intelligence. They need a table for four.</p>
+</section>
+
+<section>
+  <h2><span class="n">06</span>The two calls</h2>
+  <p>Both calls below are real, placed through the pipeline above and transcribed word for word. Each line shows the original Chinese first, then the English. Redactions: <span class="redact">[guest name]</span>, <span class="redact">[phone number]</span>, and <span class="redact">[restaurant]</span> stand in for the real values. Everything else is exactly what was said.</p>
+  <div class="tg" id="tg1">
+    <div class="tcard">
+      <button type="button" aria-expanded="false">
+        <span class="tname">Call 1: the booking</span>
+        <span class="trec">That evening &middot; about 2 minutes &middot; booked</span>
+        <span class="thint">Tap for the full transcript, Chinese and English</span>
+      </button>
+      <div class="tdet">
+        <p><b>What happened:</b> the agent asked for 7:30 PM (full), then 8:00 PM (full). The restaurant said tables free up after 9 PM, so the agent took 9:30 PM for 4. The restaurant stated a &yen;500 per person minimum spend, took the phone number, and confirmed with &ldquo;确认了&rdquo; (confirmed). No deposit.</p>
+        <div class="tline"><span class="who">Agent</span><span class="cn">您好，请问是<span class="redact">[restaurant]</span>餐厅吗？我是<span class="redact">[guest name]</span>先生的一位AI助手，我帮他打电话来订位。</span><span class="en">Hello, is this <span class="redact">[restaurant]</span>? I'm <span class="redact">[guest name]</span>'s AI assistant, calling to book a table for him.</span></div>
+        <div class="tline staff"><span class="who">Restaurant</span><span class="cn">你好。</span><span class="en">Hello.</span></div>
+        <div class="tline"><span class="who">Agent</span><span class="cn">您好，我想帮<span class="redact">[guest name]</span>先生预订本周日，也就是十二月六号晚上七点半的晚餐位置，一共四位。请问这个时间还有空位吗？</span><span class="en">Hi, I'd like to book dinner for <span class="redact">[guest name]</span> this Sunday, December 6th, at 7:30 PM, party of 4. Do you have any tables at that time?</span></div>
+        <div class="tline staff"><span class="who">Restaurant</span><span class="cn">没有了。</span><span class="en">No more.</span></div>
+        <div class="tline"><span class="who">Agent</span><span class="cn">没关系，那请问晚上八点还有空位吗？如果八点也没有，麻烦您告诉我周日晚上还有哪些时间段可以预订。</span><span class="en">No problem. What about 8:00 PM? If 8 is also full, could you tell me what times are still available Sunday evening?</span></div>
+        <div class="tline staff"><span class="who">Restaurant</span><span class="cn">几位？</span><span class="en">How many people?</span></div>
+        <div class="tline"><span class="who">Agent</span><span class="cn">一共是四位客人。请问周日晚上八&hellip;</span><span class="en">Four guests total. Do you have anything Sunday evening at 8&hellip;</span></div>
+        <div class="tline staff"><span class="who">Restaurant</span><span class="cn">九点钟以后。</span><span class="en">After 9 o'clock.</span></div>
+        <div class="tline"><span class="who">Agent</span><span class="cn">好的，明白了，那就是九点以后才有空位。那麻烦您帮我们要一个九点整的四人桌，还是九点半比较合适呢？</span><span class="en">Got it, so tables only after 9. Should I book a table for 4 at 9:00 sharp, or is 9:30 better?</span></div>
+        <div class="tline staff"><span class="who">Restaurant</span><span class="cn">九点半。</span><span class="en">9:30.</span></div>
+        <div class="tline"><span class="who">Agent</span><span class="cn">好的，那就预订本周日十二月六号晚上九点半，四位，名字是<span class="redact">[guest name]</span>。请问您能确认一下预订成功了吗？有没有预订编号或者需要我们注意的事项？</span><span class="en">OK, then: this Sunday, December 6th, 9:30 PM, 4 people, name is <span class="redact">[guest name]</span>. Could you confirm the booking went through? Is there a confirmation number or anything we should know?</span></div>
+        <div class="tline staff"><span class="who">Restaurant</span><span class="cn">最低消费是500块一位，然后手机号码麻烦你提供。</span><span class="en">Minimum spend is 500 per person, and please give me a mobile number.</span></div>
+        <div class="tline"><span class="who">Agent</span><span class="cn">好的，我记下了每位最低消费五百元的规定。关于联系电话，号码是<span class="redact">[phone number]</span>。请问预订确认了吗？</span><span class="en">Noted, 500 minimum per person. For the contact number: <span class="redact">[phone number]</span>. Is the booking confirmed?</span></div>
+        <div class="tline staff"><span class="who">Restaurant</span><span class="cn">确认了。</span><span class="en">Confirmed.</span></div>
+        <div class="tline"><span class="who">Agent</span><span class="cn">太好了，非常感谢您的确认。我会把最低消费标准和预订时间转告给<span class="redact">[guest name]</span>先生。如果后续需要支付定金，请告诉我们具体的支付方式，<span class="redact">[guest name]</span>先生会亲自安排。再次感谢您的帮助，祝您晚上愉快！</span><span class="en">Wonderful, thank you for confirming. I'll pass the minimum spend and the booking time to <span class="redact">[guest name]</span>. If a deposit is needed later, tell us the payment method and <span class="redact">[guest name]</span> will arrange it himself. Thanks again for your help, have a great evening!</span></div>
+        <p class="tnote">One agent turn was truncated in the call log and is shown as it appears. This call used the original prompt, which is why the agent introduces itself as an AI assistant. See section 05.</p>
+      </div>
+    </div>
+    <div class="tcard">
+      <button type="button" aria-expanded="false">
+        <span class="tname">Call 2: the confirmation</span>
+        <span class="trec">Later that night &middot; about 2 minutes &middot; verified</span>
+        <span class="thint">Tap for the full transcript, Chinese and English</span>
+      </button>
+      <div class="tdet">
+        <p><b>What happened:</b> the agent called back to verify the booking is in the restaurant's system, confirmed the name and phone number on file are correct, and asked if the restaurant needs anything else. Answer: no deposit needed (&ldquo;不用，不用付定金&rdquo;).</p>
+        <div class="tline"><span class="who">Agent</span><span class="cn">您好，请问是<span class="redact">[restaurant]</span>吗？我想确认一下之前订的位子。</span><span class="en">Hello, is this <span class="redact">[restaurant]</span>? I'd like to confirm a reservation I made earlier.</span></div>
+        <div class="tline staff"><span class="who">Restaurant</span><span class="cn">你好。</span><span class="en">Hello.</span></div>
+        <div class="tline"><span class="who">Agent</span><span class="cn">您好，我是<span class="redact">[guest name]</span>先生的助理，打电话来确认一下他预订的位子。预订信息是2026年12月6日星期日，晚上9点半，一共4位，姓名是<span class="redact">[guest name]</span>。麻烦您帮我在系统里查一下，顺便核对一下预留的联系电话是否正确，号码是<span class="redact">[phone number]</span>。</span><span class="en">Hi, I'm <span class="redact">[guest name]</span>'s assistant, calling to confirm his reservation. The booking is for Sunday, December 6, 2026, at 9:30 PM, party of 4, under the name <span class="redact">[guest name]</span>. Could you please check your system and also verify the contact phone number on file? The number is <span class="redact">[phone number]</span>.</span></div>
+        <div class="tline staff"><span class="who">Restaurant</span><span class="cn">麻烦你再重复一下日期。</span><span class="en">Could you repeat the date, please?</span></div>
+        <div class="tline"><span class="who">Agent</span><span class="cn">没问题，我再重复一遍日期。预订时间是2026年12月6日，星期日，晚上9点半。</span><span class="en">Of course, the date again: December 6, 2026, Sunday, 9:30 PM.</span></div>
+        <div class="tline staff"><span class="who">Restaurant</span><span class="cn">是的。</span><span class="en">Yes.</span></div>
+        <div class="tline"><span class="who">Agent</span><span class="cn">好的，那麻烦您确认一下系统里是否有这个预订，姓名和刚才报的电话号码是否正确？另外请问还需要我们提供什么信息吗，比如定金或者具体的到店时间？</span><span class="en">Great. Could you confirm the reservation is in your system, and that the name and phone number I just gave are correct? Also, is there anything else you need from us, like a deposit or a specific arrival time?</span></div>
+        <div class="tline staff"><span class="who">Restaurant</span><span class="cn">麻烦你再重复一下客人的名字。</span><span class="en">Could you repeat the guest's name, please?</span></div>
+        <div class="tline"><span class="who">Agent</span><span class="cn">好的，客人的名字是<span class="redact">[guest name]</span>，<span class="redact">[spells out the guest's name character by character]</span>。麻烦您再核对一下系统里的记录。</span><span class="en">Sure. The guest's name is <span class="redact">[guest name]</span> <span class="redact">[spells out the guest's name character by character]</span>. Please double-check it against your records.</span></div>
+        <div class="tline staff"><span class="who">Restaurant</span><span class="cn">有的。</span><span class="en">We have it.</span></div>
+        <div class="tline"><span class="who">Agent</span><span class="cn">太好了，确认有预订我们就放心了。那请问预留的联系电话<span class="redact">[phone number]</span>在系统里也是正确的吗？</span><span class="en">Wonderful, glad to hear the reservation is confirmed. Is the phone number on file, <span class="redact">[phone number]</span>, also correct?</span></div>
+        <div class="tline staff"><span class="who">Restaurant</span><span class="cn">正确的。</span><span class="en">Correct.</span></div>
+        <div class="tline"><span class="who">Agent</span><span class="cn">太好了，信息都核对无误，非常感谢您的配合。请问还需要我们提前准备什么吗，比如支付定金或者注意具体的到店时间？</span><span class="en">Perfect, everything checks out. Thank you so much for your help. Is there anything we should prepare in advance, like paying a deposit or a specific arrival time to keep in mind?</span></div>
+        <div class="tline staff"><span class="who">Restaurant</span><span class="cn">不用，不用付定金。</span><span class="en">No need, no deposit required.</span></div>
+        <div class="tline"><span class="who">Agent</span><span class="cn">好的，明白了，不需要付定金。那我们到时候会准时带客人过去，再次感谢您的确认，祝您生意兴隆，再见。</span><span class="en">Understood, no deposit needed. We'll bring our guests on time. Thanks again for confirming, wishing you great business, goodbye.</span></div>
+        <p class="tnote">This call used the rewritten neutral prompt: no AI mention, no self-introduction, just the booking.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">07</span>What it costs</h2>
+  <p>The full bill for a China-capable calling lane:</p>
+  <div class="lanes">
+    <div class="lane">
+      <h3>Per call</h3>
+      <span class="tag">ElevenLabs</span>
+      <ul>
+        <li>Roughly 700 to 850 credits for a two minute call</li>
+        <li>That covers the voice, the language model, and the phone time</li>
+      </ul>
+    </div>
+    <div class="lane">
+      <h3>One time setup</h3>
+      <span class="tag">Telnyx</span>
+      <ul>
+        <li>$5 of account credit to fund the account</li>
+        <li>$1 for the US number, then $1/month</li>
+        <li>ID verification (KYC): free, just paperwork</li>
+      </ul>
+    </div>
+  </div>
+  <p>The alternative was me calling in my beginner Mandarin, which would have cost nothing and accomplished less. For about seven dollars plus AI credits, I now have a Mandarin-speaking assistant that books tables across the Pacific while I sleep. That is a trade I will make every time.</p>
+</section>
+
+<section>
+  <h2><span class="n">08</span>Keep exploring</h2>
+  <div class="explore">
+    <a class="excard" href="https://lukezhang.si/blog/lone-hacker-ai-stack/">
+      <span class="t">One guy, one AI stack, several banks <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M8 7h9v9"/></svg></span>
+      <span class="g">The other side of the agent coin: the AI stack behind the October 2026 bank heists, server by server.</span>
+      <span class="u">lukezhang.si/blog/lone-hacker-ai-stack/</span>
+    </a>
+    <a class="excard" href="https://lukezhang.si/blog/ai-bank-heist/">
+      <span class="t">One Guy, Seven Banks <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M8 7h9v9"/></svg></span>
+      <span class="g">One operator, one AI agent, seven South Korean banks. The kill chain step by step.</span>
+      <span class="u">lukezhang.si/blog/ai-bank-heist/</span>
+    </a>
+    <a class="excard" href="https://lukezhang.si/blog/llm-training/">
+      <span class="t">How an LLM Learns, Step by Step <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M8 7h9v9"/></svg></span>
+      <span class="g">What the voice agent is actually made of: tokens, attention, gradient descent, RLHF, every step visualized.</span>
+      <span class="u">lukezhang.si/blog/llm-training/</span>
+    </a>
+    <a class="excard" href="https://lukezhang.si/blog/">
+      <span class="t">More visual explainers <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M8 7h9v9"/></svg></span>
+      <span class="g">The full shelf, every post an interactive.</span>
+      <span class="u">lukezhang.si/blog/</span>
+    </a>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">09</span>Built with</h2>
+  <ul class="sources">
+    <li><a href="https://elevenlabs.io/docs/conversational-ai/overview">ElevenLabs Conversational AI</a>, the voice agent platform: speech, language model, and telephony in one place.</li>
+    <li><a href="https://telnyx.com/products/voice-api">Telnyx Voice</a>, the SIP carrier that handles outbound voice to mainland China after KYC verification.</li>
+    <li><a href="https://www.twilio.com/docs/voice">Twilio Voice</a>, still the US/Canada lane for domestic calls, SMS, and one-time codes.</li>
+    <li class="note">Both call transcripts are real calls placed through this pipeline and transcribed from the ElevenLabs call logs. Guest name, phone number, and restaurant name are redacted. The booking details (date, time, party size, minimum spend) are published as they happened.</li>
+  </ul>
+  <p class="tagsline">TAGS: AI, ENGINEERING</p>
+  <footer class="end">Self-contained: no external requests, everything inline. Syntax highlighting via vendored highlight.js.</footer>
+</section>
+</article>
+<script src="/blog/assets/highlight.min.js"></script>
+<script>
+/* Hop stepper: follow a call through the pipeline */
+(function(){
+  var root = document.getElementById('hop1');
+  if(!root) return;
+  var steps = [
+    {
+      t: 'The agent thinks and talks',
+      what: 'ElevenLabs Conversational AI runs a Mandarin-speaking voice agent. Its prompt carries the whole booking: the date, the time, the party size, what to do when the requested time is full, and the deposit rule, which is simple: never pay a deposit on the call, only write down the amount and how to pay. The agent opens the conversation, handles the negotiation, and confirms the details.',
+      note: 'Cost: roughly 700 to 850 ElevenLabs credits for a two minute call. The voice, the timing, the manners: all prompt.'
+    },
+    {
+      t: 'The SIP trunk bridges to the phone world',
+      what: 'The agent cannot dial a phone number by itself. It hands the call to a SIP trunk named "ElevenLabs AI Voice." SIP is the internet standard for starting voice calls, and a SIP trunk is the bridge between internet voice traffic and a real phone carrier. Ours points at sip.rtc.elevenlabs.io on port 5060, talks TCP, and dials E.164 numbers, the international format with the plus sign.',
+      note: 'Detail: E.164 just means numbers look like +8621xxxxxxxx. Plus, country code, number. No dashes, no spaces.'
+    },
+    {
+      t: 'Telnyx carries it toward China',
+      what: 'Telnyx is the phone carrier on the other side of the trunk, and this is the lane Twilio cannot run: Telnyx supports outbound voice to mainland China. Getting there took an ID verification, the KYC check that unlocks the +86 country on the outbound voice profile. On the restaurant\u2019s caller ID, the call shows up as a US number: +1 213 727 0940.',
+      note: 'Cost: $5 of account credit to start, plus $1 for the number, then $1 per month.'
+    },
+    {
+      t: 'The phone network does the last mile',
+      what: 'From Telnyx the call drops onto the PSTN, the regular global phone network, the same one your grandma uses. It routes across the Pacific and rings a landline in Shanghai. Nothing about this leg knows an AI is calling. As far as the network is concerned, it is just a phone call.',
+      note: 'Detail: PSTN stands for public switched telephone network. The boring, reliable backbone under every phone call.'
+    },
+    {
+      t: 'A human picks up',
+      what: 'Someone at the restaurant answers, and the agent does its one job in Mandarin: book the table. It asks for the time it wants, takes the closest alternative when that is full, gives the guest\u2019s name and phone number only when asked, and confirms everything before hanging up. If the line is busy, the network answers SIP 486, and the system tries again automatically, 20 minutes apart.',
+      note: 'Result: two real calls, both transcribed above. A table for four, confirmed twice.'
+    }
+  ];
+  var i = 0;
+  var count = document.getElementById('hopCount');
+  var dots = document.getElementById('hopDots');
+  var title = document.getElementById('hopTitle');
+  var what = document.getElementById('hopWhat');
+  var note = document.getElementById('hopNote');
+  var prev = document.getElementById('hopPrev');
+  var next = document.getElementById('hopNext');
+  var body = document.getElementById('hopBody');
+  steps.forEach(function(){ var d = document.createElement('i'); dots.appendChild(d); });
+  var dotEls = dots.querySelectorAll('i');
+  function setContent(){
+    var s = steps[i];
+    count.textContent = 'Hop ' + (i + 1) + ' of ' + steps.length;
+    title.textContent = s.t;
+    what.textContent = s.what;
+    note.textContent = s.note;
+    dotEls.forEach(function(d, k){ d.classList.toggle('on', k === i); });
+  }
+  function render(){
+    setContent();
+    prev.hidden = (i === 0);
+    next.hidden = (i === steps.length - 1);
+  }
+  function fitHeight(){
+    var cur = i, max = 0;
+    body.style.minHeight = '';
+    for(var k = 0; k < steps.length; k++){ i = k; setContent(); max = Math.max(max, body.offsetHeight); }
+    i = cur; setContent();
+    body.style.minHeight = max + 'px';
+  }
+  prev.addEventListener('click', function(){ if(i > 0){ i--; render(); } });
+  next.addEventListener('click', function(){ if(i < steps.length - 1){ i++; render(); } });
+  document.addEventListener('keydown', function(e){
+    if(e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if(e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    var t = e.target, tag = t && t.tagName;
+    if(tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+    if(t && t.closest && t.closest('.step-code')) return;
+    var r = root.getBoundingClientRect();
+    if(r.bottom < 0 || r.top > window.innerHeight) return;
+    if(e.key === 'ArrowLeft' && i > 0){ i--; render(); e.preventDefault(); }
+    else if(e.key === 'ArrowRight' && i < steps.length - 1){ i++; render(); e.preventDefault(); }
+  });
+  render();
+  fitHeight();
+  if(document.fonts && document.fonts.ready){ document.fonts.ready.then(fitHeight); }
+  var rzT = null;
+  window.addEventListener('resize', function(){
+    if(rzT) clearTimeout(rzT);
+    rzT = setTimeout(fitHeight, 200);
+  });
+})();
+
+/* Transcript cards */
+(function(){
+  var cards = document.querySelectorAll('#tg1 .tcard');
+  cards.forEach(function(card){
+    var btn = card.querySelector('button');
+    btn.addEventListener('click', function(){
+      var open = card.classList.toggle('open');
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+  });
+})();
+
+/* Syntax highlighting (vendored, same-origin) */
+(function(){
+  if(window.hljs){ hljs.highlightAll(); }
+})();
+</script>
+</body>
+</html>

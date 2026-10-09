@@ -202,19 +202,21 @@ function paintCard(){
           ? '<p style="' + mutedStyle() + '">Enter the 6-digit code sent to ' +
             esc(phoneState.phone) + '</p>' +
             '<input id="authCode" inputmode="numeric" pattern="[0-9]*" maxlength="6" ' +
-            'placeholder="123456" autocomplete="one-time-code" style="' + inputStyle() + '">' +
+            'placeholder="123456" autocomplete="one-time-code" aria-label="6-digit verification code" style="' + inputStyle() + '">' +
             '<button id="authVerifyCode" style="' + btnStyle() + '">Verify code</button>' +
             '<p style="' + mutedStyle() + '">Demo mode: no text is sent yet. ' +
             'Phone verification goes live with Twilio.</p>'
           : '<p style="' + mutedStyle() + '">Enter your phone number</p>' +
             '<input id="authPhone" type="tel" inputmode="tel" placeholder="+1 555 010 2030" ' +
-            'autocomplete="tel" style="' + inputStyle() + '">' +
+            'autocomplete="tel" aria-label="Phone number" style="' + inputStyle() + '">' +
             '<button id="authSendCode" style="' + btnStyle() + '">Text me a code</button>') +
         '<p style="' + mutedStyle() + '" id="authMsg">' + esc(cardMsg) + '</p>' +
         '<button id="authPhoneBack" style="' + ghostStyle() + '">Back</button>' +
         '</div>';
     } else {
       h += '<div id="authMain">' +
+        /* P2-6: the email field gets a real label, not placeholder-only. */
+        '<label for="authEmail" style="font-size:13px;font-weight:700;opacity:.85">Email</label>' +
         '<input id="authEmail" type="email" inputmode="email" placeholder="you@example.com" ' +
         'autocomplete="email" style="' + inputStyle() + '">' +
         '<button id="authEmailGo" style="' + btnStyle() + '">Email me a sign-in link</button>' +
@@ -323,11 +325,24 @@ function bindCard(box){
   if (ph) ph.onclick = function(){ phoneState = { phone: "", sent: false }; cardMsg = ""; paintCard(); };
 }
 
+/* P2-7: never navigate into a dead page. Probe the backend first; when it is
+ * unreachable the user stays in the working offline app with a friendly line
+ * (fail open: local data is untouched). Any HTTP response counts as alive;
+ * only a real network failure blocks the navigation. */
 function oauthStart(provider){
   var dk = getDeviceKey() || "";
-  location.href = WORKER + "/v1/auth/oauth/" + provider +
+  var url = WORKER + "/v1/auth/oauth/" + provider +
     "?app_slug=" + encodeURIComponent(SLUG) +
     (dk ? "&device_key=" + encodeURIComponent(dk) : "");
+  setMsg("Checking the sign-in server...");
+  var signal = null;
+  try { signal = AbortSignal.timeout(8000); } catch(e){}
+  fetch(WORKER + "/v1/health", { signal: signal, cache: "no-store" }).then(function(){
+    setMsg("");
+    location.href = url;
+  }, function(){
+    setMsg("Could not reach the sign-in server. Your jobs on this device are safe; try again when you have signal.");
+  });
 }
 
 /* ---------- boot: render card, validate any existing session ---------- */

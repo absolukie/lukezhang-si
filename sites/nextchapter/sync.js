@@ -387,6 +387,10 @@ async function pushDirty(){
  * whole state. Local-only work stays unacknowledged and keeps its pill. */
 async function pull(){
   if (!deviceKey || applyingRemote) return;
+  /* Wave F P1-2: while the recovery screen is up, KEY holds quarantined
+   * data. Sync must never write it, so the whole pull is skipped until
+   * recovery resolves. */
+  if (window.__ncRecovery) return;
   inflight++; updatePill();
   try {
     var data = await api("/v1/sync/pull?app=" + APP + "&since=" + lastSync);

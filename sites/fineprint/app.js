@@ -184,12 +184,38 @@ function sentenceAround(text, idx){
   return text.slice(s, e);
 }
 
+// Rule regexes, compiled once and reused across analyses. A /g/ regex keeps
+// lastIndex state between exec() calls, so it is reset before every use.
+function ruleRes(rule){
+  if(!rule._res) rule._res = rule.pats.map(function(p){ return new RegExp(p, "gi"); });
+  return rule._res;
+}
+// First-run warmup (pass 5): compile every rule regex and JIT the analysis
+// path while the page is idle AFTER load, so the user's first tap doesn't pay
+// the cold-start cost. Pure computation, no DOM, no network, no side effects.
+// Scheduled post-load so it can never inflate loadEventEnd.
+function warmEngine(){
+  try {
+    RULES.forEach(ruleRes);
+    analyze(SAMPLES.car.text);
+  } catch(e){}
+}
+(function scheduleWarm(){
+  if(typeof window === "undefined") return;
+  var run = function(){
+    if(window.requestIdleCallback) window.requestIdleCallback(warmEngine, {timeout:5000});
+    else setTimeout(warmEngine, 1500);
+  };
+  if(document.readyState === "complete") run();
+  else window.addEventListener("load", run);
+})();
+
 function analyze(text){
   const hits = [];
   RULES.forEach(function(rule, ri){
     const matches = [];
-    rule.pats.forEach(function(p){
-      const re = new RegExp(p, "gi");
+    ruleRes(rule).forEach(function(re){
+      re.lastIndex = 0;
       let m;
       while((m = re.exec(text)) !== null){
         if(m[0].length < 3) continue;
@@ -198,11 +224,18 @@ function analyze(text){
       }
     });
     if(matches.length){
-      // dedupe near-identical spans
+      // dedupe near-identical spans. matches is start-sorted, so only kept
+      // spans starting within 12 chars can satisfy the near-identical test:
+      // walk back from the end instead of scanning the whole list.
       const uniq = [];
       matches.sort(function(a,b){return a.start-b.start;});
       matches.forEach(function(mt){
-        if(!uniq.some(function(u){return Math.abs(u.start-mt.start) < 12 && Math.abs(u.end-mt.end) < 12;})) uniq.push(mt);
+        let dup = false;
+        for(let i = uniq.length - 1; i >= 0 && uniq[i].start > mt.start - 12; i--){
+          const u = uniq[i];
+          if(Math.abs(u.start-mt.start) < 12 && Math.abs(u.end-mt.end) < 12){ dup = true; break; }
+        }
+        if(!dup) uniq.push(mt);
       });
       const hit = {rule:rule, ri:ri, matches:uniq.slice(0,12)};
       // negation check: if every match sits in coverage-positive language,
@@ -236,7 +269,7 @@ function scoreOf(hits){
 
 function verdictFor(score){
   if(score >= 80) return ["Looks reasonable","Few major traps detected. Still read the exclusions yourself before signing.","#1e7a34"];
-  if(score >= 60) return ["Proceed with caution","Real traps found. Price them into your decision or negotiate.","#b97e0c"];
+  if(score >= 60) return ["Proceed with caution","Real traps found. Price them into your decision or negotiate.","#8a5a00"];
   if(score >= 40) return ["Trap-heavy","Multiple dealbreakers. This contract protects the company more than you.","#c25a1e"];
   return ["Walk away","This contract is engineered to deny claims. Do not sign it in a finance office.","#c92a1e"];
 }
@@ -367,7 +400,7 @@ async function shareScore(a, hits){
     text(v[0].toUpperCase(),94,510,54,v[2],900);
     wrap(v[1],94,566,1600,30);
     text("Top traps",94,674,36,ink,800);
-    const colors = {high:"#c92a1e",med:"#b97e0c",low:"#1a5fa8",pos:"#1e7a34"};
+    const colors = {high:"#c92a1e",med:"#8a5a00",low:"#1a5fa8",pos:"#1e7a34"};
     const top = rankedHits(hits).slice(0,3);
     top.forEach(function(h,i){
       const y = 706+i*84;
@@ -796,7 +829,7 @@ function renderResults(text, name, opts){
   $("top3").innerHTML = top3.length
     ? "<h4>Top traps at a glance</h4><ol>" + top3.map(function(h){
         return "<li><span class='t-sev' style='color:" +
-          (h.rule.sev==="high"?"var(--red)":h.rule.sev==="med"?"var(--amber)":h.rule.sev==="pos"?"var(--green)":"var(--blue)") +
+          (h.rule.sev==="high"?"var(--red)":h.rule.sev==="med"?"var(--amber-ink)":h.rule.sev==="pos"?"var(--green)":"var(--blue)") +
           "'>"+SEV_LABEL[h.rule.sev]+"</span>: "+esc(h.rule.title)+"</li>";
       }).join("") + "</ol>"
     : "";
@@ -842,8 +875,15 @@ function renderDoc(text, hits){
   });
   spans.sort(function(a,b){ return a.start - b.start || b.end - a.end; });
   const kept = [];
+  // spans is start-sorted, so a new span can only overlap kept spans that end
+  // after its start: walk back from the end instead of scanning the list.
   spans.forEach(function(s){
-    if(!kept.some(function(k){ return s.start < k.end && s.end > k.start; })) kept.push(s);
+    let overlap = false;
+    for(let i = kept.length - 1; i >= 0 && kept[i].end > s.start; i--){
+      const k = kept[i];
+      if(s.start < k.end && s.end > k.start){ overlap = true; break; }
+    }
+    if(!overlap) kept.push(s);
   });
   kept.sort(function(a,b){return a.start-b.start;});
   let out = "", pos = 0;
@@ -987,7 +1027,7 @@ function renderSaved(){
   all.forEach(function(a){
     const row = document.createElement("div"); row.className = "saved-item";
     const nm = document.createElement("span"); nm.className = "nm";
-    nm.textContent = a.name + " · " + new Date(a.date).toLocaleDateString();
+    nm.textContent = a.name + " · " + new Date(a.date).toLocaleDateString() + (a.rv ? " · v" + a.rv : "");
     const sc = document.createElement("span"); sc.className = "sc"; sc.textContent = a.score;
     const open = document.createElement("button"); open.textContent = "Open";
     // render != create: reopening must not save a duplicate
@@ -1110,7 +1150,8 @@ function paySheet(){
       } else if(/test mode/i.test(m) || /price not found/i.test(m)){
         freeBuyFallback("Payments are not switched on yet, so this review is on the house.");
       } else {
-        errBox.textContent = m || "Something went wrong. Please try again.";
+        // Never raw backend text or fetch TypeErrors on the money surface.
+        errBox.textContent = (b.friendlyErr ? b.friendlyErr(e) : (m || "Something went wrong. Please try again."));
         errBox.hidden = false; btn.disabled = false;
       }
     });

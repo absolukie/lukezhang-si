@@ -43,6 +43,23 @@
   .tagfilter button .n { opacity: .6; font-weight: 400; }
   .tagcount { font-size: 13px; color: rgba(243,226,205,0.45); margin: 0 0 4px; min-height: 20px; }
   .post[hidden], .month[hidden] { display: none; }
+  .tagsub { display: flex; flex-wrap: wrap; gap: 8px; overflow: hidden;
+    max-height: 0; opacity: 0; margin: 0; pointer-events: none;
+    transition: max-height 380ms cubic-bezier(.2,.7,.2,1), opacity 280ms ease, margin 280ms ease; }
+  .tagsub.open { max-height: 560px; opacity: 1; margin: 0 0 10px; pointer-events: auto; }
+  .tagsub button { font-family: inherit; font-size: 13px; font-weight: 600;
+    color: rgba(243,226,205,0.75); background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(232,161,92,0.25); border-radius: 999px;
+    padding: 8px 14px; cursor: pointer; touch-action: manipulation; }
+  .tagsub button:active { transform: scale(.96); }
+  .tagsub button[aria-pressed="true"] { background: #e8a15c; border-color: #e8a15c; color: #1c130e; }
+  .tagsub button .n { opacity: .6; font-weight: 400; }
+  .tagsub.open button { animation: chipIn 280ms cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(var(--i,0) * 28ms); }
+  @keyframes chipIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .tagsub { transition: none; }
+    .tagsub.open button { animation: none; }
+  }
 </style>
 </head>
 <body>
@@ -51,6 +68,7 @@
   <h1>blog</h1>
   <p class="sub">Short explainers on things I find interesting. Verdict first, reasons second.</p>
   <div class="tagfilter" id="tagfilter" role="group" aria-label="Filter by tag"></div>
+  <div class="tagsub" id="tagsub" role="group" aria-label="More tags"></div>
   <p class="tagcount" id="tagcount" aria-live="polite"></p>
 
   <p class="month">October 2026</p>
@@ -296,8 +314,9 @@
 <script>
 (function(){
   var wrap = document.getElementById('tagfilter');
+  var sub = document.getElementById('tagsub');
   var countLine = document.getElementById('tagcount');
-  if(!wrap || !countLine) return;
+  if(!wrap || !sub || !countLine) return;
   var posts = Array.prototype.slice.call(document.querySelectorAll('a.post'));
   function tagsOf(post){
     var m = post.querySelector('.meta');
@@ -308,17 +327,42 @@
   posts.forEach(function(p){
     tagsOf(p).forEach(function(t){ counts[t] = (counts[t] || 0) + 1; });
   });
-  var tags = Object.keys(counts).sort(function(a, b){ return a.localeCompare(b); });
+  var MAIN_MIN = 2;
+  var main = Object.keys(counts).filter(function(t){ return counts[t] >= MAIN_MIN; })
+    .sort(function(a, b){ return a.localeCompare(b); });
+  var rest = Object.keys(counts).filter(function(t){ return counts[t] < MAIN_MIN; })
+    .sort(function(a, b){ return a.localeCompare(b); });
+
+  var activeTag = '';
+  var trayOpen = false;
+
   function setCount(n, tag){
     countLine.textContent = tag
       ? n + (n === 1 ? ' post' : ' posts') + ' tagged \u201c' + tag + '\u201d'
       : n + (n === 1 ? ' post' : ' posts');
   }
-  function apply(tag){
+
+  function paint(){
+    var i, b;
+    var btns = wrap.querySelectorAll('button');
+    for(i = 0; i < btns.length; i++){
+      b = btns[i];
+      var dt = b.getAttribute('data-tag');
+      var pressed = dt === '__other__' ? trayOpen : dt === activeTag;
+      b.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+      if(dt === '__other__') b.setAttribute('aria-expanded', trayOpen ? 'true' : 'false');
+    }
+    var sbtns = sub.querySelectorAll('button');
+    for(i = 0; i < sbtns.length; i++){
+      sbtns[i].setAttribute('aria-pressed', sbtns[i].getAttribute('data-tag') === activeTag ? 'true' : 'false');
+    }
+  }
+
+  function apply(){
     var visible = 0, i, p;
     for(i = 0; i < posts.length; i++){
       p = posts[i];
-      var show = !tag || tagsOf(p).indexOf(tag) !== -1;
+      var show = !activeTag || tagsOf(p).indexOf(activeTag) !== -1;
       p.hidden = !show;
       if(show) visible++;
     }
@@ -331,30 +375,56 @@
       }
       months[i].hidden = !any;
     }
-    setCount(visible, tag);
-    var btns = wrap.querySelectorAll('button');
-    for(i = 0; i < btns.length; i++){
-      btns[i].setAttribute('aria-pressed', btns[i].getAttribute('data-tag') === tag ? 'true' : 'false');
-    }
+    sub.classList.toggle('open', trayOpen);
+    setCount(visible, activeTag);
+    paint();
   }
-  function chip(tag, n, pressed){
+
+  function chip(tag, n, idx){
     var b = document.createElement('button');
     b.type = 'button';
     b.setAttribute('data-tag', tag);
-    b.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+    b.setAttribute('aria-pressed', 'false');
     var label = document.createElement('span');
-    label.textContent = tag === '' ? 'All' : tag;
+    label.textContent = tag;
     var c = document.createElement('span');
     c.className = 'n';
     c.textContent = '\u00a0' + n;
     b.appendChild(label);
     b.appendChild(c);
-    b.addEventListener('click', function(){ apply(tag); });
+    if(typeof idx === 'number') b.style.setProperty('--i', idx);
     return b;
   }
-  wrap.appendChild(chip('', posts.length, true));
-  tags.forEach(function(t){ wrap.appendChild(chip(t, counts[t], false)); });
-  setCount(posts.length, '');
+
+  var allChip = chip('', posts.length);
+  allChip.querySelector('span').textContent = 'All';
+  allChip.addEventListener('click', function(){ activeTag = ''; trayOpen = false; apply(); });
+  wrap.appendChild(allChip);
+
+  main.forEach(function(t){
+    var b = chip(t, counts[t]);
+    b.addEventListener('click', function(){ activeTag = t; trayOpen = false; apply(); });
+    wrap.appendChild(b);
+  });
+
+  if(rest.length){
+    var other = chip('__other__', rest.length);
+    other.querySelector('span').textContent = 'Other';
+    other.setAttribute('aria-expanded', 'false');
+    other.addEventListener('click', function(){
+      if(trayOpen){ trayOpen = false; activeTag = ''; }
+      else { trayOpen = true; activeTag = ''; }
+      apply();
+    });
+    wrap.appendChild(other);
+    rest.forEach(function(t, i){
+      var b = chip(t, counts[t], i);
+      b.addEventListener('click', function(){ activeTag = t; apply(); });
+      sub.appendChild(b);
+    });
+  }
+
+  apply();
 })();
 </script>
 </body>

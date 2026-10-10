@@ -68,6 +68,28 @@
   .boss-stage{position:relative; width:100%; height:100%;}
   .boss-ghost{position:absolute; inset:0; width:100%; height:100%;}
   .boss-video{position:absolute; inset:0; width:100%; height:100%; mix-blend-mode:multiply;}
+  /* boss battle intro */
+  .boss-intro{position:absolute; inset:0; z-index:20; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; background:rgba(20,12,8,.92);
+    opacity:0; pointer-events:none; transition:opacity .3s;}
+  .boss-intro.show{opacity:1; pointer-events:auto;}
+  .boss-title{font-size:42px; font-weight:900; color:#e8b33c; letter-spacing:4px;
+    text-shadow:0 0 20px rgba(232,179,60,.6), 0 4px 0 rgba(0,0,0,.5);
+    animation:bossPulse 1s ease-in-out infinite;}
+  @keyframes bossPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+  .boss-sub{font-size:16px; color:#fff; margin-top:12px; letter-spacing:2px; opacity:.8;}
+  .boss-hpwrap{position:absolute; top:12px; left:16px; right:16px; z-index:15;
+    display:none;}
+  .boss-hpwrap.show{display:block;}
+  .boss-hplabel{font-size:11px; color:var(--ink); letter-spacing:2px; margin-bottom:4px;
+    display:flex; justify-content:space-between;}
+  .boss-hpbar{height:10px; background:rgba(0,0,0,.15); border-radius:5px; overflow:hidden;
+    border:1px solid var(--line);}
+  .boss-hpfill{height:100%; width:100%; background:linear-gradient(90deg,#c93a2e,#e8b33c);
+    border-radius:5px; transition:width .3s ease;}
+  .boss-hit{animation:bossHit .3s;}
+  @keyframes bossHit{0%{transform:scale(1)}30%{transform:scale(1.02)}100%{transform:scale(1)}}
+
 
   .stamp{
     position:absolute; right:18px; bottom:14px;
@@ -362,7 +384,7 @@ function tapDiff(which){
    tiny shake, subtle enough to feel like nothing, suspicious enough to keep
    tapping. */
 let hardTapTimes = [];
-function onHardTap(){
+async function onHardTap(){
   const b = $("dHard");
   b.classList.remove("tremble"); void b.offsetWidth; b.classList.add("tremble");
   const now = Date.now();
@@ -371,7 +393,17 @@ function onHardTap(){
   if(hardTapTimes.length >= 5){
     hardTapTimes = [];
     const bi = CHARS.findIndex(ch => ch.boss);
-    if(bi >= 0){ cur = bi; nextStroke = 0; misses = 0; renderChar(); }
+    if(bi >= 0){
+      /* preload boss stroke data for SVG drawing */
+      if(!data["\u30ede"]){
+        try{ await fetchChar("\u30ede"); }catch(e){}
+      }
+      cur = bi; nextStroke = 0; misses = 0;
+      /* reset boss intro so it plays each time */
+      const st = document.getElementById("stage");
+      if(st) st._bossSeen = false;
+      renderChar();
+    }
   }
   tapDiff("hard");
 }
@@ -436,16 +468,38 @@ function renderChar(){
   stamp.classList.remove("show");
 
   if(ch.boss){
-    /* boss uses video frames from the true stroke-order animation, not SVG paths.
-       Ghost is the faded full character; the video (multiply blend) draws each stroke. */
+    /* boss: SVG-based, one stroke per tap (immediate, no video seek lag).
+       Strokes are in correct standard order. Boss intro plays on entry. */
+    const bstrokes = data["\u30ede"] || data[ch.c] || [];
     stage.innerHTML =
       '<div class="boss-stage">' +
-      '<img class="boss-ghost" src="biang_ghost.png" alt="biang outline">' +
-      '<video class="boss-video" src="biang_anim.mp4" muted playsinline preload="auto"></video>' +
+      '<div class="boss-hpwrap" id="bosshp"><div class="boss-hplabel"><span>BOSS</span><span id="bosshpnum">58</span></div>' +
+      '<div class="boss-hpbar"><div class="boss-hpfill" id="bosshpfill"></div></div></div>' +
+      '<svg id="charsvg" viewBox="0 0 1024 1024" aria-label="biang boss">' +
+      '<g '+FLIP+'><g class="tight"><g stroke="#ddcda6">' + bstrokes.map(d=>path(d, 48)).join("") + "</g>" +
+      '<g id="filled" stroke="#2b2118"></g></g></g>' +
+      "</svg>" +
+      '<div class="boss-intro" id="bossintro"><div class="boss-title">BOSS BATTLE</div>' +
+      '<div class="boss-sub">58 STROKES &middot; ONE TAP AT A TIME</div></div>' +
       '</div>';
-    const v = stage.querySelector('.boss-video');
-    v.currentTime = 0;
-    stage._bossVideo = v;
+    stage._bossStrokes = bstrokes;
+    fitViewBox(stage.querySelector("#charsvg"));
+    /* boss intro: dramatic entrance */
+    const intro = stage.querySelector("#bossintro");
+    const hpwrap = stage.querySelector("#bosshp");
+    if(intro && !stage._bossSeen){
+      stage._bossSeen = true;
+      requestAnimationFrame(()=>intro.classList.add("show"));
+      stageCard.classList.add("boss-hit");
+      setTimeout(()=>{
+        intro.classList.remove("show");
+        hpwrap.classList.add("show");
+        stageCard.classList.remove("boss-hit");
+      }, 1800);
+    } else if(hpwrap){
+      hpwrap.classList.add("show");
+    }
+    updateBossHp();
     refreshKeys();
     return;
   }
@@ -485,22 +539,32 @@ function refreshKeys(){
   });
 }
 
+function updateBossHp(){
+  const left = 58 - nextStroke;
+  const num = document.getElementById("bosshpnum");
+  const fill = document.getElementById("bosshpfill");
+  if(num) num.textContent = left;
+  if(fill) fill.style.width = (left / 58 * 100) + "%";
+}
+
 function tapKey(btn, type){
   const ch = CHARS[cur];
   const n = ch.boss ? ch.t.length : data[ch.c].length;
   if(type === ch.t[nextStroke]){
     if(ch.boss){
-      /* animate the true stroke drawing via video seek */
-      const v = stage._bossVideo;
-      if(v && v.duration){
-        const seg = v.duration / 58;
-        const t0 = nextStroke * seg, t1 = (nextStroke + 1) * seg;
-        try{
-          v.currentTime = t0;
-          v.play();
-          setTimeout(()=>{ v.pause(); try{ v.currentTime = t1; }catch(e){} }, 240);
-        }catch(e){}
+      /* boss: draw one SVG stroke immediately (no video lag) */
+      const bstrokes = stage._bossStrokes || [];
+      const g = stage.querySelector("#filled");
+      if(g && bstrokes[nextStroke]){
+        const tmp = document.createElementNS("http://www.w3.org/2000/svg","g");
+        tmp.innerHTML = path(bstrokes[nextStroke], 48).replace("<path", '<path pathLength="1" class="drawn"');
+        g.appendChild(tmp.firstChild);
+        /* hit effect */
+        stageCard.classList.remove("boss-hit"); void stageCard.offsetWidth;
+        stageCard.classList.add("boss-hit");
+        setTimeout(()=>stageCard.classList.remove("boss-hit"), 320);
       }
+      updateBossHp();
     } else {
       const strokes = data[ch.c];
       const g = stage.querySelector("#filled");

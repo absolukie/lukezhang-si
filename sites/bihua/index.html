@@ -68,6 +68,8 @@
   .boss-stage{position:relative; width:100%; height:100%;}
   .boss-ghost{position:absolute; inset:0; width:100%; height:100%;}
   .boss-video{position:absolute; inset:0; width:100%; height:100%; mix-blend-mode:multiply;}
+  .boss-loading{position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    color:var(--viz-muted); font-size:15px; letter-spacing:2px;}
 
   .stamp{
     position:absolute; right:18px; bottom:14px;
@@ -436,16 +438,33 @@ function renderChar(){
   stamp.classList.remove("show");
 
   if(ch.boss){
-    /* boss: video-based stroke animation (refined seeking). */
+    /* boss: video-based stroke animation (refined seeking).
+       Keys stay disabled until video metadata loads, otherwise seeks
+       silently fail (v.duration is NaN) and the game desyncs from the video. */
     stage.innerHTML =
       '<div class="boss-stage">' +
       '<img class="boss-ghost" src="biang_ghost.png" alt="biang outline">' +
       '<video class="boss-video" src="biang_anim.mp4" muted playsinline preload="auto"></video>' +
+      '<div class="boss-loading" id="bossloading">loading boss&hellip;</div>' +
       '</div>';
     const v = stage.querySelector('.boss-video');
+    const loading = stage.querySelector('#bossloading');
     v.currentTime = 0;
     stage._bossVideo = v;
-    refreshKeys();
+    stage._bossReady = false;
+    /* disable keys until we know the duration */
+    keysEl.querySelectorAll(".key").forEach(k=>{ k.classList.add("off"); k.disabled = true; });
+    const onMeta = ()=>{
+      stage._bossReady = true;
+      if(loading) loading.remove();
+      refreshKeys();
+    };
+    if(v.readyState >= 1){ onMeta(); }
+    else {
+      v.addEventListener('loadedmetadata', onMeta, {once:true});
+      /* fallback: if metadata takes >8s, enable anyway (seeks may still work) */
+      setTimeout(()=>{ if(!stage._bossReady) onMeta(); }, 8000);
+    }
     return;
   }
 
@@ -489,7 +508,9 @@ function tapKey(btn, type){
   const n = ch.boss ? ch.t.length : data[ch.c].length;
   if(type === ch.t[nextStroke]){
     if(ch.boss){
-      /* boss: refined video seek - jump to end frame, wait for seeked */
+      /* boss: refined video seek - jump to end frame, wait for seeked.
+         Ignore taps until metadata is ready (keys are disabled, but double-guard). */
+      if(!stage._bossReady) return;
       const v = stage._bossVideo;
       if(v && v.duration){
         const seg = v.duration / 58;

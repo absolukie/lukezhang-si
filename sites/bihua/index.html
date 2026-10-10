@@ -65,7 +65,7 @@
   .stamp.show{animation:stampIn .45s cubic-bezier(.2,2.4,.4,1) forwards;}
   @keyframes stampIn{to{transform:rotate(-8deg) scale(1); opacity:.92;}}
 
-  /* the stroke keyboard: small fixed-size keys in a centered wrapping row */
+  /* the stroke keyboard: same keys every time, only the word's strokes enabled */
   #keys{display:flex; flex-wrap:wrap; justify-content:center; gap:10px;}
   .key{
     width:64px; height:64px; flex:none;
@@ -75,13 +75,16 @@
     display:flex; align-items:center; justify-content:center;
     cursor:pointer;
     box-shadow:0 4px 0 rgba(120,95,60,.20);
-    transition:transform .08s, box-shadow .08s, border-color .15s, opacity .2s;
+    transition:transform .08s, box-shadow .08s, border-color .15s, opacity .25s;
     touch-action:manipulation;
     padding:7px;
+    color:var(--ink);
   }
   .key:active{transform:translateY(3px); box-shadow:0 1px 0 rgba(120,95,60,.20);}
   .key svg{width:100%; height:100%; display:block; pointer-events:none;}
-  .key.used{opacity:.22; pointer-events:none; transform:none; box-shadow:none;}
+  .key.off{opacity:.28; box-shadow:none;}
+  .key:disabled{cursor:default;}
+  .key:disabled:active{transform:none;}
   .key.hintpulse{animation:hpulse .8s ease 2;}
   @keyframes hpulse{0%,100%{border-color:var(--btn-line)}50%{border-color:var(--accent); box-shadow:0 0 0 4px rgba(201,58,46,.25);}}
 
@@ -114,31 +117,47 @@
 
 <script>
 "use strict";
-/* Bihua: a keyboard of stroke buttons under an outline-only character.
-   Tap the strokes in the correct stroke order. Wrong tap shakes.
-   3 misses on one stroke pulses the right key. Finish one, get the next word. */
+/* Bihua: a fixed keyboard of stroke types under an outline-only character.
+   The keyboard is the same every word; only the types in the word are enabled.
+   Tap the types in stroke order. Wrong tap shakes. 3 misses pulses the right key.
+   Finish one word, get the next, forever. */
 
 const CHARS = [
-  {c:"木", py:"mu", en:"tree"},
-  {c:"人", py:"ren", en:"person"},
-  {c:"大", py:"da", en:"big"},
-  {c:"小", py:"xiao", en:"small"},
-  {c:"十", py:"shi", en:"ten"},
-  {c:"王", py:"wang", en:"king"},
-  {c:"天", py:"tian", en:"sky"},
-  {c:"日", py:"ri", en:"sun"},
-  {c:"月", py:"yue", en:"moon"},
-  {c:"山", py:"shan", en:"mountain"},
-  {c:"水", py:"shui", en:"water"},
-  {c:"火", py:"huo", en:"fire"},
-  {c:"田", py:"tian", en:"field"},
-  {c:"白", py:"bai", en:"white"},
-  {c:"目", py:"mu", en:"eye"},
-  {c:"石", py:"shi", en:"stone"},
-  {c:"立", py:"li", en:"stand"},
-  {c:"生", py:"sheng", en:"life"},
-  {c:"好", py:"hao", en:"good"},
-  {c:"一", py:"yi", en:"one"},
+  {c:"木", py:"mu", en:"tree", t:["heng","shu","pie","na"]},
+  {c:"人", py:"ren", en:"person", t:["pie","na"]},
+  {c:"大", py:"da", en:"big", t:["heng","pie","na"]},
+  {c:"小", py:"xiao", en:"small", t:["shugou","pie","dian"]},
+  {c:"十", py:"shi", en:"ten", t:["heng","shu"]},
+  {c:"王", py:"wang", en:"king", t:["heng","heng","shu","heng"]},
+  {c:"天", py:"tian", en:"sky", t:["heng","heng","pie","na"]},
+  {c:"日", py:"ri", en:"sun", t:["shu","hengzhe","heng","heng"]},
+  {c:"月", py:"yue", en:"moon", t:["shu","hengzhegou","heng","heng"]},
+  {c:"山", py:"shan", en:"mountain", t:["shu","shuzhe","shu"]},
+  {c:"水", py:"shui", en:"water", t:["shugou","hengpie","pie","na"]},
+  {c:"火", py:"huo", en:"fire", t:["dian","pie","pie","na"]},
+  {c:"田", py:"tian", en:"field", t:["shu","hengzhe","heng","shu","heng"]},
+  {c:"白", py:"bai", en:"white", t:["pie","shu","hengzhe","heng","heng"]},
+  {c:"目", py:"mu", en:"eye", t:["shu","hengzhe","heng","heng","heng"]},
+  {c:"石", py:"shi", en:"stone", t:["heng","pie","shu","hengzhe","heng"]},
+  {c:"立", py:"li", en:"stand", t:["dian","heng","dian","pie","heng"]},
+  {c:"生", py:"sheng", en:"life", t:["pie","heng","heng","shu","heng"]},
+  {c:"好", py:"hao", en:"good", t:["piezhe","pie","heng","hengpie","shugou","heng"]},
+  {c:"一", py:"yi", en:"one", t:["heng"]},
+];
+
+/* fixed keyboard: one key per stroke type, canonical shape from real data */
+const TYPES = [
+  {id:"heng",       c:"一", i:0},
+  {id:"shu",        c:"十", i:1},
+  {id:"pie",        c:"人", i:0},
+  {id:"na",         c:"人", i:1},
+  {id:"dian",       c:"火", i:0},
+  {id:"hengzhe",    c:"日", i:1},
+  {id:"hengpie",    c:"水", i:1},
+  {id:"shugou",     c:"水", i:0},
+  {id:"shuzhe",     c:"山", i:1},
+  {id:"piezhe",     c:"好", i:0},
+  {id:"hengzhegou", c:"月", i:1},
 ];
 
 const $ = id => document.getElementById(id);
@@ -150,6 +169,7 @@ let cur = 0;
 let nextStroke = 0;
 let misses = 0;
 let roundMistakes = 0;
+let remaining = {};   // type -> unfilled strokes of that type left
 let doneSet = new Set(JSON.parse(localStorage.getItem("bihua.done")||"[]"));
 let streak = +(localStorage.getItem("bihua.streak")||0);
 
@@ -158,15 +178,13 @@ function path(d){
 }
 /* hanzi-writer-data uses a y-up coordinate space: flip vertically for screen */
 const FLIP = 'transform="translate(0,1024) scale(1,-1)"';
-function strokeSVG(d){
-  return '<svg viewBox="0 0 1024 1024" aria-hidden="true"><g '+FLIP+' stroke="#2b2118">'+path(d)+"</g></svg>";
-}
 
 async function loadData(){
   for(const ch of CHARS){
     const r = await fetch("data/"+ch.c+".json");
     data[ch.c] = (await r.json()).strokes;
   }
+  for(const ty of TYPES) ty.d = data[ty.c][ty.i];
 }
 
 function updateStats(){
@@ -174,48 +192,62 @@ function updateStats(){
   $("streakN").textContent = streak;
 }
 
-function shuffled(n){
-  const a = Array.from({length:n}, (_,i)=>i);
-  for(let i=a.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]]; }
-  if(n>1 && a.every((v,i)=>v===i)){ [a[0],a[1]]=[a[1],a[0]]; }
-  return a;
+/* frame the svg tightly on its content so the character is centered, never cut */
+function fitViewBox(svg){
+  const b = svg.querySelector("g.tight").getBBox();
+  const pad = 95; /* covers half the 90-unit stroke width + margin */
+  const vx = b.x - pad, vy = 1024 - (b.y + b.height) - pad;
+  svg.setAttribute("viewBox", vx+" "+vy+" "+(b.width+pad*2)+" "+(b.height+pad*2));
 }
 
 function renderChar(){
   const ch = CHARS[cur], strokes = data[ch.c], n = strokes.length;
   nextStroke = 0; misses = 0; roundMistakes = 0;
+  remaining = {};
+  ch.t.forEach(t => remaining[t] = (remaining[t]||0)+1);
   $("pinyin").textContent = ch.py;
   $("meaning").textContent = ch.en;
   $("nstr").textContent = n + (n===1?" stroke":" strokes");
   stamp.classList.remove("show");
 
   stage.innerHTML =
-    '<svg viewBox="0 0 1024 1024" aria-label="'+ch.c+' outline">' +
-    '<g '+FLIP+'><g stroke="#ddcda6">' + strokes.map(path).join("") + "</g>" +
-    '<g id="filled" stroke="#2b2118"></g></g>' +
+    '<svg id="charsvg" viewBox="0 0 1024 1024" aria-label="'+ch.c+' outline">' +
+    '<g '+FLIP+'><g class="tight"><g stroke="#ddcda6">' + strokes.map(path).join("") + "</g>" +
+    '<g id="filled" stroke="#2b2118"></g></g></g>' +
     "</svg>";
+  fitViewBox($("charsvg"));
 
   keysEl.innerHTML = "";
-  for(const si of shuffled(n)){
+  for(const ty of TYPES){
     const b = document.createElement("button");
     b.className = "key";
-    b.dataset.stroke = si;
-    b.setAttribute("aria-label", "stroke");
-    b.innerHTML = strokeSVG(strokes[si]);
-    b.addEventListener("click", ()=>tapStroke(b, si));
+    b.dataset.type = ty.id;
+    b.setAttribute("aria-label", ty.id);
+    b.innerHTML = '<svg viewBox="0 0 1024 1024" aria-hidden="true"><g '+FLIP+'><g class="tight" stroke="#2b2118">'+path(ty.d)+"</g></g></svg>";
+    b.addEventListener("click", ()=>tapKey(b, ty.id));
     keysEl.appendChild(b);
+    fitViewBox(b.querySelector("svg"));
   }
+  refreshKeys();
 }
 
-function tapStroke(btn, si){
+function refreshKeys(){
+  keysEl.querySelectorAll(".key").forEach(k=>{
+    const on = (remaining[k.dataset.type]||0) > 0;
+    k.classList.toggle("off", !on);
+    k.disabled = !on;
+  });
+}
+
+function tapKey(btn, type){
   const ch = CHARS[cur], strokes = data[ch.c], n = strokes.length;
-  if(si === nextStroke){
-    btn.classList.add("used");
+  if(type === ch.t[nextStroke]){
     const g = stage.querySelector("#filled");
     const tmp = document.createElementNS("http://www.w3.org/2000/svg","g");
-    tmp.innerHTML = path(strokes[si]).replace("<path", '<path pathLength="1" class="drawn"');
+    tmp.innerHTML = path(strokes[nextStroke]).replace("<path", '<path pathLength="1" class="drawn"');
     g.appendChild(tmp.firstChild);
-    nextStroke++; misses = 0;
+    remaining[type]--; nextStroke++; misses = 0;
+    refreshKeys();
     if(nextStroke === n) complete();
   } else {
     misses++; roundMistakes++;
@@ -223,8 +255,8 @@ function tapStroke(btn, si){
     stageCard.classList.add("shake");
     if(misses >= 3){
       misses = 0;
-      const right = keysEl.querySelector('[data-stroke="'+nextStroke+'"]');
-      if(right && !right.classList.contains("used")){
+      const right = keysEl.querySelector('[data-type="'+ch.t[nextStroke]+'"]');
+      if(right){
         right.classList.remove("hintpulse"); void right.offsetWidth;
         right.classList.add("hintpulse");
       }

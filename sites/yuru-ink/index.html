@@ -11,7 +11,11 @@
   body{display:flex;flex-direction:column;align-items:center;justify-content:center;
     min-height:100dvh;padding:20px;}
   #stage{width:min(92vmin,560px);}
-  #stage canvas{display:block;width:100%!important;height:auto!important;border-radius:6px;}
+  #stage canvas{display:block;width:100%!important;height:auto!important;border-radius:6px;
+    touch-action:none;user-select:none;-webkit-user-select:none;}
+  .hint{margin-top:12px;font-size:12px;color:#4d4d4d;letter-spacing:.04em;
+    transition:opacity .8s;}
+  .hint.gone{opacity:0;}
   .cap{margin-top:18px;text-align:center;font-size:12.5px;line-height:1.7;max-width:560px;}
   .cap a{color:#b5b5b5;text-decoration:none;border-bottom:1px solid #3a3a3a;}
   .cap a:hover{color:#fff;}
@@ -26,6 +30,7 @@
 </head>
 <body>
 <div id="stage"></div>
+<div class="hint" id="hint">touch and drag to stir the ink</div>
 <div class="cap">
   a recreation of <a href="https://x.com/yuruyurau/status/2108944867930132499">a つぶやきProcessing sketch by @yuruyurau</a><br>
   the entire artwork is one tweet of code &mdash; 10,000 points per frame
@@ -41,8 +46,12 @@ t=0,draw=$=&gt;{t||createCanvas(w=400,w);background(9).stroke(w,166);
 </div>
 <script src="p5.min.js"></script>
 <script>
-/* Verbatim recreation of @yuruyurau's sketch, only reformatted. */
+/* Verbatim recreation of @yuruyurau's sketch, only reformatted,
+   plus one addition: each active finger (or pressed mouse) becomes a
+   well that parts the ink. Untouched, it is the original piece. */
 var a, t, i, w, q, c, k, e, d, y;
+var wells = [];
+var R = 110, R2 = R * R, PUSH = 90;
 a = function(yy){
   y = yy;
   k = (4 + Math.cos(y)) * Math.cos(i / 7);
@@ -51,14 +60,38 @@ a = function(yy){
   q = 99 + Math.sin(t*2+e)*9 + 3*Math.sin(k*2) + d*d*Math.sin(t*2-d)
       + y/23*k*(e+Math.sin(-d*4));
   c = d/4 - t/4 + (i % 2) * 9;
-  point(q * Math.sin(c) + 200, q * Math.cos(c) + 200);
+  var px = q * Math.sin(c) + 200, py = q * Math.cos(c) + 200;
+  for (var n = 0; n < wells.length; n++) {
+    var dx = px - wells[n].x, dy = py - wells[n].y;
+    var d2 = dx*dx + dy*dy;
+    if (d2 < R2 && d2 > 0.01) {
+      var dist = Math.sqrt(d2), push = (1 - dist / R) * PUSH;
+      px += dx / dist * push;
+      py += dy / dist * push;
+    }
+  }
+  point(px, py);
 };
 t = 0;
 function setup(){ /* created lazily in draw, like the original */ }
+function touchStarted(){ hideHint(); }
+function mousePressed(){ hideHint(); }
+function hideHint(){
+  var h = document.getElementById('hint');
+  if (h) h.classList.add('gone');
+}
 function draw(){
   if (!t) createCanvas(w = 400, w).parent('stage');
   background(9);
   stroke(w, 166);
+  wells = [];
+  if (typeof touches !== 'undefined' && touches.length) {
+    for (var m = 0; m < touches.length && m < 4; m++)
+      wells.push(touches[m]);
+  } else if (mouseIsPressed && mouseX >= 0 && mouseX <= 400 &&
+             mouseY >= 0 && mouseY <= 400) {
+    wells.push({x: mouseX, y: mouseY});
+  }
   for (t += Math.PI/60, i = 1e4; i--;) a(i/299);
 }
 </script>

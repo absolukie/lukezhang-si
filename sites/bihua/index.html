@@ -362,7 +362,7 @@ function tapDiff(which){
    tiny shake, subtle enough to feel like nothing, suspicious enough to keep
    tapping. */
 let hardTapTimes = [];
-async function onHardTap(){
+function onHardTap(){
   const b = $("dHard");
   b.classList.remove("tremble"); void b.offsetWidth; b.classList.add("tremble");
   const now = Date.now();
@@ -371,13 +371,7 @@ async function onHardTap(){
   if(hardTapTimes.length >= 5){
     hardTapTimes = [];
     const bi = CHARS.findIndex(ch => ch.boss);
-    if(bi >= 0){
-      /* preload boss stroke data for SVG drawing */
-      if(!data["\u30ede"]){
-        try{ await fetchChar("\u30ede"); }catch(e){}
-      }
-      cur = bi; nextStroke = 0; misses = 0; renderChar();
-    }
+    if(bi >= 0){ cur = bi; nextStroke = 0; misses = 0; renderChar(); }
   }
   tapDiff("hard");
 }
@@ -442,16 +436,15 @@ function renderChar(){
   stamp.classList.remove("show");
 
   if(ch.boss){
-    /* boss: SVG-based, one stroke per tap (immediate, no video lag).
-       Strokes are in correct standard order. */
-    const bstrokes = data["\u30ede"] || data[ch.c] || [];
+    /* boss: video-based stroke animation (refined seeking). */
     stage.innerHTML =
-      '<svg id="charsvg" viewBox="0 0 1024 1024" aria-label="biang boss">' +
-      '<g '+FLIP+'><g class="tight"><g stroke="#ddcda6">' + bstrokes.map(d=>path(d, 48)).join("") + "</g>" +
-      '<g id="filled" stroke="#2b2118"></g></g></g>' +
-      "</svg>";
-    stage._bossStrokes = bstrokes;
-    fitViewBox(stage.querySelector("#charsvg"));
+      '<div class="boss-stage">' +
+      '<img class="boss-ghost" src="biang_ghost.png" alt="biang outline">' +
+      '<video class="boss-video" src="biang_anim.mp4" muted playsinline preload="auto"></video>' +
+      '</div>';
+    const v = stage.querySelector('.boss-video');
+    v.currentTime = 0;
+    stage._bossVideo = v;
     refreshKeys();
     return;
   }
@@ -496,13 +489,18 @@ function tapKey(btn, type){
   const n = ch.boss ? ch.t.length : data[ch.c].length;
   if(type === ch.t[nextStroke]){
     if(ch.boss){
-      /* boss: fill in one stroke instantly, no animation */
-      const bstrokes = stage._bossStrokes || [];
-      const g = stage.querySelector("#filled");
-      if(g && bstrokes[nextStroke]){
-        const tmp = document.createElementNS("http://www.w3.org/2000/svg","g");
-        tmp.innerHTML = path(bstrokes[nextStroke], 48);
-        g.appendChild(tmp.firstChild);
+      /* boss: refined video seek - jump to end frame, wait for seeked */
+      const v = stage._bossVideo;
+      if(v && v.duration){
+        const seg = v.duration / 58;
+        const t1 = (nextStroke + 1) * seg;
+        try{
+          const onSeeked = ()=>{
+            v.removeEventListener('seeked', onSeeked);
+          };
+          v.addEventListener('seeked', onSeeked);
+          v.currentTime = t1;
+        }catch(e){}
       }
     } else {
       const strokes = data[ch.c];

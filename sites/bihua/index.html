@@ -28,8 +28,7 @@
   .wrap{width:100%; max-width:520px; display:flex; flex-direction:column; gap:14px; padding-top:calc(14px + env(safe-area-inset-top));}
 
   header{display:flex; align-items:flex-end; justify-content:space-between; gap:12px;}
-  .hright{display:flex; flex-direction:column; align-items:flex-end; gap:8px;}
-  .diff{display:flex; gap:6px;}
+  .diff{display:flex; gap:6px; justify-content:center;}
   .diff button{
     font-family:inherit; font-size:12px; font-weight:700; letter-spacing:.04em;
     padding:6px 13px; border-radius:999px; cursor:pointer; touch-action:manipulation;
@@ -171,17 +170,16 @@
         <p>STROKE ORDER GAME</p>
       </div>
     </div>
-    <div class="hright">
-      <div class="diff" role="group" aria-label="Difficulty">
-        <button type="button" id="dEasy" class="on" aria-pressed="true">easy</button><button type="button" id="dHard" class="on" aria-pressed="true">hard</button>
-      </div>
-      <div class="stats"><span><b id="doneN">0</b> done</span><span><b id="streakN">0</b> streak</span></div>
-    </div>
+    <div class="stats"><span><b id="doneN">0</b> done</span><span><b id="streakN">0</b> streak</span></div>
   </header>
 
   <div class="charhead">
     <div class="py" id="pinyin">mu</div>
     <div class="en"><span id="meaning">tree</span> · <span class="n" id="nstr">4 strokes</span></div>
+  </div>
+
+  <div class="diff" role="group" aria-label="Difficulty">
+    <button type="button" id="dEasy" class="on" aria-pressed="true">easy</button><button type="button" id="dHard" class="on" aria-pressed="true">hard</button>
   </div>
 
   <div class="card" id="stageCard">
@@ -314,8 +312,8 @@ let doneSet = new Set(JSON.parse(localStorage.getItem("bihua.done")||"[]"));
 let streak = +(localStorage.getItem("bihua.streak")||0);
 
 /* difficulty filter: easy = 4 strokes or fewer (40 chars), hard = 5+ (38).
-   Both start on. From both-on, tapping one isolates the other.
-   From single-select, tapping EITHER button swaps the isolation. */
+   Normal toggles with one guard: the last remaining ON button swaps instead
+   of leaving nothing selected, so both-on is always reachable again. */
 let diffState = JSON.parse(localStorage.getItem("bihua.diff")||'{"easy":true,"hard":true}');
 let easyOn = diffState.easy !== false, hardOn = diffState.hard !== false;
 if(!easyOn && !hardOn){ easyOn = hardOn = true; } /* never both off */
@@ -337,11 +335,13 @@ function paintDiff(){
   h.classList.toggle("on", hardOn); h.setAttribute("aria-pressed", hardOn);
 }
 function tapDiff(which){
-  if(easyOn && hardOn){
-    if(which === "easy") easyOn = false; else hardOn = false;
-  } else {
-    easyOn = !easyOn; hardOn = !hardOn; /* swap the isolation */
-  }
+  const onlyThis = which === "easy" ? (easyOn && !hardOn) : (hardOn && !easyOn);
+  if(onlyThis){
+    /* last one on: swap instead of selecting nothing */
+    if(which === "easy"){ easyOn = false; hardOn = true; }
+    else { hardOn = false; easyOn = true; }
+  } else if(which === "easy"){ easyOn = !easyOn; }
+  else { hardOn = !hardOn; }
   localStorage.setItem("bihua.diff", JSON.stringify({easy:easyOn, hard:hardOn}));
   paintDiff();
   if(!charAllowed(CHARS[cur])){ advanceCur(); renderChar(); }

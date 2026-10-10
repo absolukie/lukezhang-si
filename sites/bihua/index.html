@@ -7,7 +7,7 @@
 <style>
   :root{
     --paper:#f6efdd; --paper2:#fbf7ea; --ink:#2b2118; --ink-soft:#6b5d4c;
-    --line:#d9c9a4; --accent:#c93a2e; --accent-deep:#a52a20;
+    --line:#d9c9a4; --accent:#c93a2e;
     --btn:#fdfaf0; --btn-line:#d9c9a4;
     --shadow:0 10px 30px rgba(90,70,40,.12), 0 2px 6px rgba(90,70,40,.10);
   }
@@ -65,52 +65,25 @@
   .stamp.show{animation:stampIn .45s cubic-bezier(.2,2.4,.4,1) forwards;}
   @keyframes stampIn{to{transform:rotate(-8deg) scale(1); opacity:.92;}}
 
-  .prog{text-align:center; font-size:13px; letter-spacing:.28em; text-indent:.28em; color:var(--ink-soft); font-weight:600; font-variant-numeric:tabular-nums;}
-
-  #strokes{display:grid; gap:10px;}
-  #strokes.cols2{grid-template-columns:repeat(2,1fr);}
-  #strokes.cols3{grid-template-columns:repeat(3,1fr);}
-  #strokes.cols4{grid-template-columns:repeat(4,1fr);}
-  #strokes.cols6{grid-template-columns:repeat(6,1fr);}
-  .sbtn{
+  /* the stroke keyboard */
+  #keys{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
+  .key{
     background:var(--btn);
     border:2px solid var(--btn-line);
-    border-radius:18px;
+    border-radius:16px;
     aspect-ratio:1/1;
     display:flex; align-items:center; justify-content:center;
     cursor:pointer;
-    box-shadow:0 3px 0 rgba(120,95,60,.18);
+    box-shadow:0 4px 0 rgba(120,95,60,.20);
     transition:transform .08s, box-shadow .08s, border-color .15s, opacity .2s;
     touch-action:manipulation;
-    padding:8%;
+    padding:10%;
   }
-  .sbtn:active{transform:translateY(2px); box-shadow:0 1px 0 rgba(120,95,60,.18);}
-  .sbtn svg{width:100%; height:100%; display:block; pointer-events:none;}
-  .sbtn.used{opacity:.25; pointer-events:none; transform:none; box-shadow:none;}
-  .sbtn.hintpulse{animation:hpulse .8s ease 2;}
+  .key:active{transform:translateY(3px); box-shadow:0 1px 0 rgba(120,95,60,.20);}
+  .key svg{width:100%; height:100%; display:block; pointer-events:none;}
+  .key.used{opacity:.22; pointer-events:none; transform:none; box-shadow:none;}
+  .key.hintpulse{animation:hpulse .8s ease 2;}
   @keyframes hpulse{0%,100%{border-color:var(--btn-line)}50%{border-color:var(--accent); box-shadow:0 0 0 4px rgba(201,58,46,.25);}}
-
-  .levels{margin-top:6px;}
-  .levels h2{font-size:12px; letter-spacing:.4em; text-indent:.4em; color:var(--ink-soft); margin:0 0 10px; font-weight:700;}
-  .lvl{margin-bottom:12px;}
-  .lvl .lt{font-size:11px; letter-spacing:.24em; color:var(--ink-soft); margin-bottom:6px; font-weight:600;}
-  .lvl .grid{display:flex; flex-wrap:wrap; gap:8px;}
-  .cbtn{
-    width:52px; height:52px; border-radius:14px;
-    border:2px solid var(--btn-line); background:var(--btn);
-    font-size:26px; color:var(--ink); cursor:pointer;
-    display:flex; align-items:center; justify-content:center;
-    font-family:"Hiragino Sans GB","PingFang SC","Microsoft YaHei",sans-serif;
-    touch-action:manipulation;
-    box-shadow:0 2px 0 rgba(120,95,60,.15);
-    transition:transform .08s;
-  }
-  .cbtn:active{transform:translateY(1px);}
-  .cbtn.cur{border-color:var(--accent); box-shadow:0 0 0 3px rgba(201,58,46,.22);}
-  .cbtn.done{background:#e9f3e2; border-color:#9db98a;}
-
-  footer{margin-top:10px; text-align:center; font-size:11px; color:var(--ink-soft); line-height:1.7;}
-  footer a{color:var(--accent-deep);}
 
   .drawn{stroke-dasharray:1; stroke-dashoffset:1; animation:drawin .55s ease-out forwards;}
   @keyframes drawin{to{stroke-dashoffset:0;}}
@@ -127,8 +100,8 @@
   </header>
 
   <div class="charhead">
-    <div class="py" id="pinyin">yi</div>
-    <div class="en"><span id="meaning">one</span> · <span class="n" id="nstr">1 stroke</span></div>
+    <div class="py" id="pinyin">mu</div>
+    <div class="en"><span id="meaning">tree</span> · <span class="n" id="nstr">4 strokes</span></div>
   </div>
 
   <div class="card" id="stageCard">
@@ -136,34 +109,21 @@
     <div class="stamp" id="stamp">好</div>
   </div>
 
-  <div class="prog" id="prog">TAP THE STROKES IN ORDER</div>
-
-  <div id="strokes" class="cols2"></div>
-
-  <div class="levels">
-    <h2>CHARACTERS</h2>
-    <div id="levels"></div>
-  </div>
-
-  <footer>
-    Tap the stroke buttons in the correct stroke order.<br>
-    Stroke data: <a href="https://github.com/chanind/hanzi-writer-data" target="_blank" rel="noopener">hanzi-writer-data</a> (MIT)
-  </footer>
+  <div id="keys"></div>
 </div>
 
 <script>
 "use strict";
-/* Bihua: tap the stroke buttons in the correct stroke order.
-   Canvas starts as outline only. A correct tap draws that stroke in.
-   A wrong tap shakes. 3 misses on one stroke pulses the right button. */
+/* Bihua: a keyboard of stroke buttons under an outline-only character.
+   Tap the strokes in the correct stroke order. Wrong tap shakes.
+   3 misses on one stroke pulses the right key. Finish one, get the next word. */
 
 const CHARS = [
-  {c:"一", py:"yi", en:"one"},
+  {c:"木", py:"mu", en:"tree"},
   {c:"人", py:"ren", en:"person"},
   {c:"大", py:"da", en:"big"},
   {c:"小", py:"xiao", en:"small"},
   {c:"十", py:"shi", en:"ten"},
-  {c:"木", py:"mu", en:"tree"},
   {c:"王", py:"wang", en:"king"},
   {c:"天", py:"tian", en:"sky"},
   {c:"日", py:"ri", en:"sun"},
@@ -178,17 +138,18 @@ const CHARS = [
   {c:"立", py:"li", en:"stand"},
   {c:"生", py:"sheng", en:"life"},
   {c:"好", py:"hao", en:"good"},
+  {c:"一", py:"yi", en:"one"},
 ];
 
 const $ = id => document.getElementById(id);
 const stage = $("stage"), stageCard = $("stageCard"), stamp = $("stamp");
-const strokesEl = $("strokes"), prog = $("prog");
+const keysEl = $("keys");
 
-let data = {};        // char -> strokes array of path strings
-let cur = 0;         // index into CHARS
-let nextStroke = 0;  // which stroke index the player must tap next
-let misses = 0;      // consecutive misses on the current stroke
-let roundMistakes = 0; // total misses this round (for streak)
+let data = {};
+let cur = 0;
+let nextStroke = 0;
+let misses = 0;
+let roundMistakes = 0;
 let doneSet = new Set(JSON.parse(localStorage.getItem("bihua.done")||"[]"));
 let streak = +(localStorage.getItem("bihua.streak")||0);
 
@@ -214,7 +175,6 @@ function updateStats(){
 function shuffled(n){
   const a = Array.from({length:n}, (_,i)=>i);
   for(let i=a.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]]; }
-  // never deal the already-correct order for n>1
   if(n>1 && a.every((v,i)=>v===i)){ [a[0],a[1]]=[a[1],a[0]]; }
   return a;
 }
@@ -225,51 +185,43 @@ function renderChar(){
   $("pinyin").textContent = ch.py;
   $("meaning").textContent = ch.en;
   $("nstr").textContent = n + (n===1?" stroke":" strokes");
-  prog.textContent = n===1 ? "TAP THE STROKE" : "TAP THE STROKES IN ORDER";
   stamp.classList.remove("show");
 
-  // canvas: outline only, no strokes filled in
   stage.innerHTML =
     '<svg viewBox="0 0 1024 1024" aria-label="'+ch.c+' outline">' +
     '<g stroke="#ddcda6">' + strokes.map(path).join("") + "</g>" +
     '<g id="filled" stroke="#2b2118"></g>' +
     "</svg>";
 
-  // stroke buttons: shuffled order, shapes only, no numbers
-  strokesEl.className = "cols" + Math.min(6, Math.max(2, n));
-  strokesEl.innerHTML = "";
+  keysEl.innerHTML = "";
   for(const si of shuffled(n)){
     const b = document.createElement("button");
-    b.className = "sbtn";
+    b.className = "key";
     b.dataset.stroke = si;
     b.setAttribute("aria-label", "stroke");
     b.innerHTML = strokeSVG(strokes[si]);
     b.addEventListener("click", ()=>tapStroke(b, si));
-    strokesEl.appendChild(b);
+    keysEl.appendChild(b);
   }
-  renderLevels();
 }
 
 function tapStroke(btn, si){
   const ch = CHARS[cur], strokes = data[ch.c], n = strokes.length;
   if(si === nextStroke){
-    // correct: draw the stroke onto the canvas
     btn.classList.add("used");
     const g = stage.querySelector("#filled");
     const tmp = document.createElementNS("http://www.w3.org/2000/svg","g");
     tmp.innerHTML = path(strokes[si]).replace("<path", '<path pathLength="1" class="drawn"');
     g.appendChild(tmp.firstChild);
     nextStroke++; misses = 0;
-    prog.textContent = nextStroke+" / "+n;
     if(nextStroke === n) complete();
   } else {
-    // wrong: shake, count the miss
     misses++; roundMistakes++;
     stageCard.classList.remove("shake"); void stageCard.offsetWidth;
     stageCard.classList.add("shake");
     if(misses >= 3){
       misses = 0;
-      const right = strokesEl.querySelector('[data-stroke="'+nextStroke+'"]');
+      const right = keysEl.querySelector('[data-stroke="'+nextStroke+'"]');
       if(right && !right.classList.contains("used")){
         right.classList.remove("hintpulse"); void right.offsetWidth;
         right.classList.add("hintpulse");
@@ -280,37 +232,18 @@ function tapStroke(btn, si){
 
 function complete(){
   const ch = CHARS[cur];
-  const first = !doneSet.has(ch.c);
   doneSet.add(ch.c);
   localStorage.setItem("bihua.done", JSON.stringify([...doneSet]));
   streak = (roundMistakes===0) ? streak+1 : 0;
   localStorage.setItem("bihua.streak", streak);
   updateStats();
   stamp.classList.add("show");
-  renderLevels();
-  if(cur < CHARS.length-1 && first){
-    setTimeout(()=>{ cur++; renderChar(); window.scrollTo({top:0,behavior:"smooth"}); }, 1400);
-  }
-}
-
-function renderLevels(){
-  const host = $("levels"); host.innerHTML = "";
-  const groups = {};
-  CHARS.forEach((ch,i)=>{ const n=data[ch.c].length; (groups[n]=groups[n]||[]).push(i); });
-  Object.keys(groups).sort((a,b)=>a-b).forEach(k=>{
-    const div = document.createElement("div"); div.className="lvl";
-    div.innerHTML = '<div class="lt">'+k+(k==="1"?" STROKE":" STROKES")+"</div>";
-    const grid = document.createElement("div"); grid.className="grid";
-    groups[k].forEach(i=>{
-      const b=document.createElement("button");
-      b.className="cbtn"+(i===cur?" cur":"")+(doneSet.has(CHARS[i].c)?" done":"");
-      b.textContent=CHARS[i].c;
-      b.setAttribute("aria-label",CHARS[i].c+" "+CHARS[i].en);
-      b.addEventListener("click",()=>{ cur=i; renderChar(); window.scrollTo({top:0,behavior:"smooth"}); });
-      grid.appendChild(b);
-    });
-    div.appendChild(grid); host.appendChild(div);
-  });
+  // next word, forever
+  setTimeout(()=>{
+    cur = (cur+1) % CHARS.length;
+    renderChar();
+    window.scrollTo({top:0,behavior:"smooth"});
+  }, 1400);
 }
 
 (async function boot(){

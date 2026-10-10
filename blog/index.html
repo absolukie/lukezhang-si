@@ -33,6 +33,16 @@
   .post .meta { font-size: 13px; color: rgba(243,226,205,0.5); margin-bottom: 10px; }
   .post p { font-size: 15px; color: rgba(243,226,205,0.85); }
   footer { margin-top: 60px; font-size: 13px; color: rgba(243,226,205,0.35); }
+  .tagfilter { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
+  .tagfilter button { font-family: inherit; font-size: 13px; font-weight: 600;
+    color: rgba(243,226,205,0.75); background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(232,161,92,0.25); border-radius: 999px;
+    padding: 8px 14px; cursor: pointer; touch-action: manipulation; }
+  .tagfilter button:active { transform: scale(.96); }
+  .tagfilter button[aria-pressed="true"] { background: #e8a15c; border-color: #e8a15c; color: #1c130e; }
+  .tagfilter button .n { opacity: .6; font-weight: 400; }
+  .tagcount { font-size: 13px; color: rgba(243,226,205,0.45); margin: 0 0 4px; min-height: 20px; }
+  .post[hidden], .month[hidden] { display: none; }
 </style>
 </head>
 <body>
@@ -40,7 +50,8 @@
   <nav class="top"><a href="/">← lukezhang.si</a></nav>
   <h1>blog</h1>
   <p class="sub">Short explainers on things I find interesting. Verdict first, reasons second.</p>
-  <p class="sub" style="margin-top:-28px">Interactive pieces moved to <a href="/lab/" style="color:#e8a15c">the lab</a>.</p>
+  <div class="tagfilter" id="tagfilter" role="group" aria-label="Filter by tag"></div>
+  <p class="tagcount" id="tagcount" aria-live="polite"></p>
 
   <p class="month">October 2026</p>
   <a class="post" href="/blog/my-ai-has-its-own-computer/">
@@ -282,5 +293,69 @@
 
   <footer>© lukezhang.si</footer>
 </div>
+<script>
+(function(){
+  var wrap = document.getElementById('tagfilter');
+  var countLine = document.getElementById('tagcount');
+  if(!wrap || !countLine) return;
+  var posts = Array.prototype.slice.call(document.querySelectorAll('a.post'));
+  function tagsOf(post){
+    var m = post.querySelector('.meta');
+    if(!m) return [];
+    return m.textContent.split('\u00b7').slice(1).map(function(t){ return t.trim(); }).filter(Boolean);
+  }
+  var counts = {};
+  posts.forEach(function(p){
+    tagsOf(p).forEach(function(t){ counts[t] = (counts[t] || 0) + 1; });
+  });
+  var tags = Object.keys(counts).sort(function(a, b){ return a.localeCompare(b); });
+  function setCount(n, tag){
+    countLine.textContent = tag
+      ? n + (n === 1 ? ' post' : ' posts') + ' tagged \u201c' + tag + '\u201d'
+      : n + (n === 1 ? ' post' : ' posts');
+  }
+  function apply(tag){
+    var visible = 0, i, p;
+    for(i = 0; i < posts.length; i++){
+      p = posts[i];
+      var show = !tag || tagsOf(p).indexOf(tag) !== -1;
+      p.hidden = !show;
+      if(show) visible++;
+    }
+    var months = document.querySelectorAll('.month');
+    for(i = 0; i < months.length; i++){
+      var el = months[i].nextElementSibling, any = false;
+      while(el && !el.classList.contains('month')){
+        if(el.classList.contains('post') && !el.hidden){ any = true; break; }
+        el = el.nextElementSibling;
+      }
+      months[i].hidden = !any;
+    }
+    setCount(visible, tag);
+    var btns = wrap.querySelectorAll('button');
+    for(i = 0; i < btns.length; i++){
+      btns[i].setAttribute('aria-pressed', btns[i].getAttribute('data-tag') === tag ? 'true' : 'false');
+    }
+  }
+  function chip(tag, n, pressed){
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('data-tag', tag);
+    b.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+    var label = document.createElement('span');
+    label.textContent = tag === '' ? 'All' : tag;
+    var c = document.createElement('span');
+    c.className = 'n';
+    c.textContent = '\u00a0' + n;
+    b.appendChild(label);
+    b.appendChild(c);
+    b.addEventListener('click', function(){ apply(tag); });
+    return b;
+  }
+  wrap.appendChild(chip('', posts.length, true));
+  tags.forEach(function(t){ wrap.appendChild(chip(t, counts[t], false)); });
+  setCount(posts.length, '');
+})();
+</script>
 </body>
 </html>

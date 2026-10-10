@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="tags" content="ai, engineering">
+<meta name="description" content="Every AI agent I used before lived on my laptop. Muse lives on its own computer, and I talk to it from my phone. That one architectural difference changes everything about when and where work gets done.">
+<title>My AI Has Its Own Computer</title>
+<style>
+:root{
+  --viz-bg:#141311; --viz-panel:#1d1b17; --viz-panel2:#26231d;
+  --viz-line:#3a362c; --viz-ink:#f2ede0; --viz-muted:#a39c88; --viz-faint:#6f695b;
+  --viz-accent:#e8a33d;
+  --viz-green:#7bc96f;
+  --viz-danger:#e05252;
+  --viz-mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html{scroll-behavior:smooth;}
+body{
+  margin:0; background:var(--viz-bg); color:var(--viz-ink);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Helvetica,Arial,sans-serif;
+  font-size:17px; line-height:1.65;
+}
+article{max-width:700px; margin:0 auto; padding:28px 20px 60px;}
+.kicker{
+  font-family:var(--viz-mono); font-size:12px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--viz-accent); margin:0 0 14px;
+}
+h1{font-size:clamp(30px,7vw,44px); line-height:1.12; letter-spacing:-0.02em; margin:0 0 14px;}
+.standfirst{font-size:19px; color:var(--viz-muted); margin:0 0 8px; line-height:1.5;}
+.tip{font-size:13.5px; color:var(--viz-faint); margin:0 0 30px;}
+.tip a{color:var(--viz-muted);}
+h2{font-size:24px; letter-spacing:-0.01em; margin:44px 0 12px; line-height:1.25;}
+h2 .n{font-family:var(--viz-mono); font-size:14px; color:var(--viz-faint); display:block; letter-spacing:.1em; margin-bottom:6px;}
+p{margin:0 0 16px;}
+a{color:var(--viz-accent);}
+ul.tight{margin:0 0 16px; padding-left:22px;}
+ul.tight li{margin-bottom:10px;}
+.verdict{
+  background:var(--viz-panel); border:1px solid var(--viz-line); border-radius:14px;
+  padding:20px 22px; margin:26px 0 8px;
+}
+.verdict h3{margin:0 0 10px; font-size:15px; letter-spacing:.06em; text-transform:uppercase;
+  font-family:var(--viz-mono); color:var(--viz-accent);}
+.verdict ul{margin:0; padding:0; list-style:none;}
+.verdict li{margin:0 0 12px; padding-left:22px; position:relative; font-size:16px;}
+.verdict li:last-child{margin-bottom:0;}
+.verdict li::before{content:""; position:absolute; left:2px; top:9px; width:8px; height:8px;
+  border-radius:50%; background:var(--viz-accent);}
+figure.viz{
+  margin:26px -20px; padding:26px 20px;
+  background:var(--viz-panel); border-top:1px solid var(--viz-line); border-bottom:1px solid var(--viz-line);
+}
+figure.viz figcaption{font-size:13.5px; color:var(--viz-muted); margin-top:14px; max-width:620px;}
+figure.viz figcaption b{color:var(--viz-ink);}
+.sources{margin-top:40px; font-size:14.5px; color:var(--viz-muted);}
+.sources h3{font-family:var(--viz-mono); font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--viz-faint); margin:0 0 10px;}
+.sources ul{margin:0; padding-left:20px;}
+.sources li{margin-bottom:8px;}
+p.tagsline{font-family:var(--viz-mono); font-size:12px; letter-spacing:.12em; color:var(--viz-faint); margin-top:36px; text-transform:uppercase;}
+footer.end{margin-top:18px; font-size:13px; color:var(--viz-faint); border-top:1px solid var(--viz-line); padding-top:18px;}
+/* Pocket test: two-lane race */
+.scen{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 6px;}
+.scen button{font-family:inherit; font-size:14px; font-weight:600; background:var(--viz-panel2); color:var(--viz-ink); border:1px solid var(--viz-line); border-radius:10px; padding:9px 14px; cursor:pointer; touch-action:manipulation;}
+.scen button:active{transform:scale(.97);}
+.scen button[aria-pressed="true"]{border-color:var(--viz-accent); color:var(--viz-accent);}
+.lane{background:var(--viz-panel2); border:1px solid var(--viz-line); border-radius:14px; padding:18px 18px 14px; margin:14px 0;}
+.lane h4{margin:0 0 2px; font-size:16px;}
+.lane .lane-sub{font-family:var(--viz-mono); font-size:11.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--viz-faint); margin:0 0 6px;}
+.race{position:relative; margin:30px 6px 8px;}
+.race-line{position:absolute; top:17px; left:24px; right:24px; height:2px; background:var(--viz-line); border-radius:2px;}
+.race-fill{position:absolute; top:17px; left:24px; height:2px; width:0; background:var(--viz-accent); border-radius:2px; transition:width 700ms cubic-bezier(.2,.7,.2,1); max-width:calc(100% - 48px);}
+.race-fill.bad{background:var(--viz-danger);}
+.race-nodes{position:relative; display:flex; justify-content:space-between;}
+.rnode{width:48px; text-align:center; position:relative;}
+.rdot{width:36px; height:36px; border-radius:50%; background:var(--viz-panel); border:2px solid var(--viz-line); margin:0 auto; display:flex; align-items:center; justify-content:center; font-family:var(--viz-mono); font-size:13px; color:var(--viz-faint); transition:border-color 300ms, color 300ms, box-shadow 300ms; position:relative; z-index:1;}
+.rnode .rlab{font-size:11px; line-height:1.35; color:var(--viz-faint); margin-top:8px; display:block; min-height:44px;}
+.rnode.active .rdot{border-color:var(--viz-accent); color:var(--viz-accent); box-shadow:0 0 12px rgba(232,163,61,.5);}
+.rnode.active .rlab{color:var(--viz-ink);}
+.rnode.done .rdot{border-color:var(--viz-green); color:var(--viz-green);}
+.rnode.done .rlab{color:var(--viz-muted);}
+.rnode.stalled .rdot{border-color:var(--viz-danger); color:var(--viz-danger); animation:pulse 1.2s ease-in-out infinite;}
+.rnode.stalled .rlab{color:var(--viz-danger);}
+.rnode.dead{opacity:.35;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 rgba(224,82,82,0);}50%{box-shadow:0 0 14px rgba(224,82,82,.7);}}
+.race-status{font-size:14px; color:var(--viz-muted); margin:10px 0 0; min-height:24px;}
+.race-status b{color:var(--viz-ink);}
+.race-status .win{color:var(--viz-green);}
+.race-status .lose{color:var(--viz-danger);}
+.runrow{display:flex; align-items:center; gap:12px; margin:16px 0 4px;}
+#runBtn{font-family:inherit; font-size:16px; font-weight:700; color:#141311; background:var(--viz-accent); border:none; border-radius:999px; padding:13px 30px; cursor:pointer; touch-action:manipulation; min-height:52px;}
+#runBtn:active{transform:scale(.97);}
+#runBtn[disabled]{opacity:.45; cursor:default;}
+.score{font-family:var(--viz-mono); font-size:12.5px; color:var(--viz-muted); letter-spacing:.04em;}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  .race-fill{transition:none;}
+  .rnode.stalled .rdot{animation:none;}
+  #runBtn:active{transform:none;}
+  .scen button:active{transform:none;}
+}
+</style>
+</head>
+<body>
+<article>
+<p class="kicker">AI</p>
+<h1>My AI Has Its Own Computer</h1>
+<p class="standfirst">Every AI agent I used before lived on my laptop. Muse lives on its own computer, and I talk to it from my phone. That one architectural difference changes everything about when and where work gets done.</p>
+<p class="tip">Everything in this post was assigned, built, and shipped from my iPhone. Including this sentence.</p>
+
+<section>
+<h2><span class="n">01</span>My whole setup fits in my pocket</h2>
+<p>I barely open my laptop anymore. Here is a normal day, all from my phone:</p>
+<ul class="tight">
+<li>I sent a screenshot of my blog and wrote "update this with the new carousel." Twenty minutes later it was live.</li>
+<li>I pasted a tweet and wrote "add this to my design skill." New skill, saved and searchable.</li>
+<li>I pasted a YouTube link and wrote "make a blog post with a visualizer." An hour later: a published post with an interactive card deck.</li>
+<li>I told it to keep retrying a restaurant booking in Beijing at 8pm tonight. It will make the calls while I sleep.</li>
+</ul>
+<p>That is not a chat app. That is a computer I talk to.</p>
+</section>
+
+<section>
+<h2><span class="n">02</span>Where the work actually happens</h2>
+<p>Here is the difference, and it is the whole game.</p>
+<p>Most AI agents run on <b>your</b> computer. You open a terminal, the agent lives in that terminal, and when you close the laptop the agent goes to sleep with it. Some of them have phone apps, but the moment real work starts, running code, testing, deploying, it needs your machine awake and nearby. Your phone is a second-class citizen: fine for chatting, useless for shipping.</p>
+<p>Muse flipped it around. The agent runs on its own dedicated computer. It has a terminal, a browser, and a filesystem, and it keeps all of them between conversations. My phone is not a companion to that computer. It is a complete remote control for it.</p>
+<p>So the work doesn't happen on my phone. It doesn't happen on my laptop either. It happens on Muse's computer, and the phone is enough to drive all of it.</p>
+</section>
+
+<section>
+<h2><span class="n">03</span>What that unlocks</h2>
+<div class="verdict">
+<h3>Three things the other setup can't do</h3>
+<ul>
+<li><b>Fire and forget.</b> I assign work, put the phone down, and get a link back. No watching a terminal scroll. No "don't close this tab."</li>
+<li><b>It works while I sleep.</b> Scheduled jobs run on its computer, not mine. The restaurant retry fires at 8pm. My laptop will be closed. It doesn't matter.</li>
+<li><b>Dictation becomes the interface.</b> I talk in short bursts from the couch; it does the long quiet work. The phone was always great at input and terrible at output. Now the output happens somewhere else.</li>
+</ul>
+</div>
+</section>
+
+<section>
+<h2><span class="n">04</span>The pocket test</h2>
+<p>Pick a task, then run it through both setups and watch what happens. The top lane is Muse. The bottom lane is a terminal-based agent, the kind that lives on your laptop.</p>
+<figure class="viz">
+<div class="scen" role="group" aria-label="Pick a task" id="scenRow"></div>
+<div class="runrow">
+<button type="button" id="runBtn">Run the test</button>
+<span class="score" id="scoreLine">Muse 0 · Terminal agent 0</span>
+</div>
+<div class="lane" id="laneMuse">
+<h4>Muse</h4>
+<p class="lane-sub">Agent has its own computer · you have your phone</p>
+<div class="race" id="raceMuse"></div>
+<p class="race-status" id="statusMuse" aria-live="polite"></p>
+</div>
+<div class="lane" id="laneTerm">
+<h4>Terminal-based agent</h4>
+<p class="lane-sub">Agent lives on your laptop</p>
+<div class="race" id="raceTerm"></div>
+<p class="race-status" id="statusTerm" aria-live="polite"></p>
+</div>
+<figcaption><b>Watch the lanes.</b> Muse's work happens on its own computer, so your phone is enough. The terminal agent needs your laptop awake, so your phone can only watch.</figcaption>
+</figure>
+</section>
+
+<section>
+<h2><span class="n">05</span>The verdict</h2>
+<p>The phone was never the limitation. The limitation was that every agent needed my computer to do the work, and my computer needed me sitting next to it. Give the agent its own computer and suddenly the phone is enough.</p>
+<p>My laptop is now a very expensive Netflix machine. It has never been happier.</p>
+</section>
+
+<div class="sources">
+<h3>Sources</h3>
+<ul>
+<li><a href="https://muse.ai">muse.ai</a>: Muse is Meta's personal AI agent; every user gets an agent running on its own dedicated computer; iOS and Android apps available in the US and Canada.</li>
+<li>Every task in section 01 happened on October 9, 2026, assigned from the iOS app and completed without opening a laptop.</li>
+</ul>
+</div>
+
+<p class="tagsline">Tags: ai, engineering</p>
+<footer class="end">Self-contained: no external requests, everything inline.</footer>
+</article>
+<script>
+/* Pocket test: two-lane race */
+(function(){
+  var scenRow = document.getElementById('scenRow');
+  var runBtn = document.getElementById('runBtn');
+  var scoreLine = document.getElementById('scoreLine');
+  if(!scenRow || !runBtn) return;
+
+  var SCEN = [
+    {
+      label: 'Ship a blog post',
+      muse: [
+        'You dictate: "update the carousel"',
+        "Muse's computer rewrites the code",
+        "Muse's computer click-tests it",
+        'Your phone gets the live link'
+      ],
+      term: [
+        'You type the request on your phone',
+        'Agent needs your terminal',
+        'Your laptop is asleep on your desk',
+        'Stuck: open the laptop to continue'
+      ]
+    },
+    {
+      label: 'Book a restaurant in China',
+      muse: [
+        'You dictate: "retry at 8pm"',
+        "Muse's computer schedules the calls",
+        "Muse's computer calls at 8pm",
+        'Your phone: table confirmed'
+      ],
+      term: [
+        'You set a reminder on your phone',
+        'Agent cannot run scheduled calls',
+        'Your laptop is closed',
+        'Stuck: you make the call yourself'
+      ]
+    },
+    {
+      label: 'Turn a tweet into a skill',
+      muse: [
+        'You paste the link: "save this"',
+        "Muse's computer reads the post",
+        "Muse's computer writes the skill",
+        'Your phone: done, it is searchable'
+      ],
+      term: [
+        'You paste the link on your phone',
+        'Agent needs your machine',
+        'Your laptop is in another room',
+        'Stuck: do it at your desk later'
+      ]
+    }
+  ];
+  var sIdx = 0, museWins = 0, termWins = 0, running = false;
+  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function buildLane(raceEl, steps){
+    raceEl.innerHTML = '<div class="race-line"></div><div class="race-fill"></div><div class="race-nodes"></div>';
+    var nodes = raceEl.querySelector('.race-nodes');
+    steps.forEach(function(s, i){
+      var d = document.createElement('div');
+      d.className = 'rnode';
+      d.innerHTML = '<div class="rdot">' + (i + 1) + '</div><span class="rlab">' + s + '</span>';
+      nodes.appendChild(d);
+    });
+    return {
+      el: raceEl,
+      fill: raceEl.querySelector('.race-fill'),
+      nodes: Array.prototype.slice.call(nodes.querySelectorAll('.rnode'))
+    };
+  }
+
+  var raceMuse = buildLane(document.getElementById('raceMuse'), SCEN[0].muse);
+  var raceTerm = buildLane(document.getElementById('raceTerm'), SCEN[0].term);
+  var statusMuse = document.getElementById('statusMuse');
+  var statusTerm = document.getElementById('statusTerm');
+
+  function resetLane(lane, steps){
+    lane.fill.style.width = '0';
+    lane.fill.classList.remove('bad');
+    lane.nodes.forEach(function(nd, i){
+      nd.className = 'rnode';
+      nd.querySelector('.rlab').textContent = steps[i];
+    });
+  }
+
+  function renderScen(){
+    SCEN.forEach(function(s, i){
+      var b = scenRow.querySelectorAll('button')[i];
+      b.setAttribute('aria-pressed', i === sIdx ? 'true' : 'false');
+    });
+    resetLane(raceMuse, SCEN[sIdx].muse);
+    resetLane(raceTerm, SCEN[sIdx].term);
+    statusMuse.textContent = '';
+    statusTerm.textContent = '';
+  }
+
+  SCEN.forEach(function(s, i){
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = s.label;
+    b.setAttribute('aria-pressed', i === 0 ? 'true' : 'false');
+    b.addEventListener('click', function(){
+      if(running) return;
+      sIdx = i;
+      renderScen();
+    });
+    scenRow.appendChild(b);
+  });
+
+  function setNode(lane, i, cls){
+    lane.nodes[i].className = 'rnode ' + cls;
+    lane.fill.style.width = (i / (lane.nodes.length - 1) * 100) + '%';
+  }
+
+  function run(){
+    if(running) return;
+    running = true;
+    runBtn.disabled = true;
+    var M = SCEN[sIdx].muse, T = SCEN[sIdx].term;
+    resetLane(raceMuse, M);
+    resetLane(raceTerm, T);
+    statusMuse.textContent = '';
+    statusTerm.textContent = '';
+    var step = reduced ? 999 : 850;
+
+    function museStep(i){
+      if(i > 0) setNode(raceMuse, i - 1, 'done');
+      if(i < M.length){
+        setNode(raceMuse, i, 'active');
+        statusMuse.innerHTML = '<b>Step ' + (i + 1) + ':</b> ' + M[i];
+        setTimeout(function(){ museStep(i + 1); }, step);
+      } else {
+        statusMuse.innerHTML = '<span class="win"><b>Done.</b> Shipped from your phone.</span>';
+        museWins++;
+        scoreLine.textContent = 'Muse ' + museWins + ' · Terminal agent ' + termWins;
+        running = false;
+        runBtn.disabled = false;
+      }
+    }
+
+    function termStep(i){
+      if(i === 0){
+        setNode(raceTerm, 0, 'active');
+        statusTerm.innerHTML = '<b>Step 1:</b> ' + T[0];
+        setTimeout(function(){ termStep(1); }, step);
+      } else if(i === 1){
+        setNode(raceTerm, 0, 'done');
+        setNode(raceTerm, 1, 'active');
+        statusTerm.innerHTML = '<b>Step 2:</b> ' + T[1];
+        setTimeout(function(){ termStep(2); }, step);
+      } else {
+        setNode(raceTerm, 1, 'done');
+        setNode(raceTerm, 2, 'stalled');
+        raceTerm.nodes[3].className = 'rnode dead';
+        raceTerm.fill.classList.add('bad');
+        raceTerm.fill.style.width = (2 / 3 * 100) + '%';
+        statusTerm.innerHTML = '<span class="lose"><b>Stalled.</b> ' + T[3] + '</span>';
+      }
+    }
+
+    if(reduced){
+      for(var i = 0; i < M.length; i++) setNode(raceMuse, i, 'done');
+      statusMuse.innerHTML = '<span class="win"><b>Done.</b> Shipped from your phone.</span>';
+      setNode(raceTerm, 0, 'done');
+      setNode(raceTerm, 1, 'done');
+      setNode(raceTerm, 2, 'stalled');
+      raceTerm.nodes[3].className = 'rnode dead';
+      raceTerm.fill.classList.add('bad');
+      raceTerm.fill.style.width = (2 / 3 * 100) + '%';
+      statusTerm.innerHTML = '<span class="lose"><b>Stalled.</b> ' + T[3] + '</span>';
+      museWins++;
+      scoreLine.textContent = 'Muse ' + museWins + ' · Terminal agent ' + termWins;
+      running = false;
+      runBtn.disabled = false;
+      return;
+    }
+    museStep(0);
+    termStep(0);
+  }
+
+  runBtn.addEventListener('click', run);
+})();
+</script>
+</body>
+</html>

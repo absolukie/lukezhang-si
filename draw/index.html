@@ -35,6 +35,7 @@
   }
   .row { display: flex; align-items: center; gap: 10px; }
   .row + .row { margin-top: 10px; }
+  #bar .row:last-child { gap: 8px; }
   #home {
     flex: 0 0 auto;
     color: var(--ink);
@@ -95,7 +96,7 @@
   @media (prefers-reduced-motion: reduce) {
     #dlBtn { transition: none; }
   }
-  #sizes { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; }
+  #sizes { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
   .sizebtn {
     flex: 0 0 auto;
     width: 44px; height: 44px; border-radius: 14px;
@@ -106,14 +107,10 @@
   .sizebtn.sel { border-color: var(--ink); }
   .sizebtn span { display: block; border-radius: 50%; background: var(--ink); }
   #clearBtn {
-    width: auto; padding: 0 16px; height: 44px;
+    width: auto; padding: 0 12px; height: 44px;
     font-weight: 700; font-size: 15px; gap: 8px;
   }
   #clearBtn.armed { background: #d43a2e; color: #fff; border-color: #d43a2e; }
-  #photoBtn {
-    width: auto; padding: 0 14px; height: 44px;
-    font-weight: 700; font-size: 15px; gap: 8px;
-  }
   #photoBtn.armed { background: #d43a2e; color: #fff; border-color: #d43a2e; }
   #photoBtn.hasphoto { border-color: var(--ink); }
 
@@ -155,6 +152,20 @@
     z-index: 2;
   }
   #saved.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ---------- magnifier loupe ---------- */
+  #loupe {
+    position: absolute; z-index: 5;
+    width: 132px; height: 132px;
+    border-radius: 50%;
+    border: 2px solid var(--ink);
+    box-shadow: 0 6px 24px rgba(0,0,0,.25);
+    background: var(--paper);
+    pointer-events: none;
+    display: none;
+    overflow: hidden;
+  }
+  #loupe canvas { width: 100%; height: 100%; display: block; }
 </style>
 </head>
 <body>
@@ -164,17 +175,19 @@
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
       </a>
       <div id="colors" role="radiogroup" aria-label="colors"></div>
+      <div id="sizes" role="radiogroup" aria-label="brush sizes"></div>
     </div>
     <div class="row">
-      <div id="sizes" role="radiogroup" aria-label="brush sizes"></div>
       <button class="toolbtn" id="eraserBtn" aria-label="eraser" title="eraser">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 15l8.5-8.5a2.1 2.1 0 013 3L11 15H8l-3-3z"/><path d="M5 15l3 3h9a2 2 0 002-2v-1l-2-2"/><path d="M13.5 6.5l3 3"/></svg>
       </button>
       <button class="toolbtn" id="photoBtn" aria-label="add photo" title="add photo">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M3.5 17.5l5-4.5 3.5 3 3-2.5 5.5 4"/></svg>
-        <span id="photoLabel">photo</span>
       </button>
       <input type="file" id="photoInput" accept="image/*" hidden>
+      <button class="toolbtn" id="lockBtn" aria-label="stay inside colors" title="stay inside colors">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="5" stroke-dasharray="3.5 3"/><path d="M8.5 15.5l7-7"/><circle cx="16.6" cy="7.4" r="1.5"/></svg>
+      </button>
       <button class="toolbtn" id="undoBtn" aria-label="undo" title="undo" disabled>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5L3 10l5 5"/><path d="M3 10h11a6 6 0 016 6v1"/></svg>
       </button>
@@ -193,6 +206,7 @@
     <canvas id="pad"></canvas>
     <div id="hint">draw anything, or tap photo to mark up a picture</div>
     <div id="saved">saved</div>
+    <div id="loupe"><canvas id="loupeCanvas"></canvas></div>
   </div>
 
 <script>
@@ -218,7 +232,6 @@
   var bgCanvas = document.getElementById("bg");
   var bgCtx = bgCanvas.getContext("2d");
   var photoBtn = document.getElementById("photoBtn");
-  var photoLabel = document.getElementById("photoLabel");
   var photoInput = document.getElementById("photoInput");
   var photo = null;   // {img} — drawn contain-fit on the bg canvas under the strokes
 
@@ -237,7 +250,8 @@
       if (!raw) return;
       var arr = JSON.parse(raw);
       if (Array.isArray(arr)) strokes = arr.filter(function (s) {
-        return s && Array.isArray(s.p) && s.p.length > 0;
+        return s && (Array.isArray(s.p) && s.p.length > 0) ||
+               (typeof s.r === "string" && Array.isArray(s.b) && s.b.length === 4);
       });
     } catch (e) { /* corrupted or unavailable — start blank */ }
   }
@@ -263,6 +277,8 @@
     bgCanvas.width = canvas.width;
     bgCanvas.height = canvas.height;
     bgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    sizeOverlay();
+    sizeLoupe();
     drawPhoto();
     redrawAll();
   }
@@ -270,38 +286,55 @@
   window.addEventListener("orientationchange", function () { setTimeout(resize, 120); });
 
   /* ---------- drawing ---------- */
-  function strokeStyle(s) {
-    ctx.strokeStyle = s.e ? "#000" : s.c;
-    ctx.lineWidth = s.s;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.globalCompositeOperation = s.e ? "destination-out" : "source-over";
+  function strokeStyle(s, t) {
+    t = t || ctx;
+    t.strokeStyle = s.e ? "#000" : s.c;
+    t.lineWidth = s.s;
+    t.lineCap = "round";
+    t.lineJoin = "round";
+    t.globalCompositeOperation = s.e ? "destination-out" : "source-over";
   }
-  function drawStroke(s) {
-    var pts = s.p;
-    if (pts.length === 1) {
-      strokeStyle(s);
-      ctx.beginPath();
-      ctx.arc(pts[0][0] * W, pts[0][1] * H, s.s / 2, 0, Math.PI * 2);
-      ctx.globalCompositeOperation = s.e ? "destination-out" : "source-over";
-      ctx.fillStyle = s.e ? "#000" : s.c;
-      ctx.fill();
-      ctx.globalCompositeOperation = "source-over";
+  var rasterCache = {};
+  function rasterImg(s) {
+    var im = rasterCache[s.r];
+    if (im) return (im.complete && im.naturalWidth) ? im : null;
+    im = new Image();
+    im.onload = function () { redrawAll(); };
+    im.src = s.r;
+    rasterCache[s.r] = im;
+    return null;
+  }
+  function drawStroke(s, t) {
+    t = t || ctx;
+    if (s.r) {  // stay-inside stroke, stored as a cropped raster stamp
+      var im = rasterImg(s);
+      if (im) t.drawImage(im, s.b[0] * W, s.b[1] * H, s.b[2] * W, s.b[3] * H);
       return;
     }
-    strokeStyle(s);
-    ctx.beginPath();
+    var pts = s.p;
+    if (pts.length === 1) {
+      strokeStyle(s, t);
+      t.beginPath();
+      t.arc(pts[0][0] * W, pts[0][1] * H, s.s / 2, 0, Math.PI * 2);
+      t.globalCompositeOperation = s.e ? "destination-out" : "source-over";
+      t.fillStyle = s.e ? "#000" : s.c;
+      t.fill();
+      t.globalCompositeOperation = "source-over";
+      return;
+    }
+    strokeStyle(s, t);
+    t.beginPath();
     var x0 = pts[0][0] * W, y0 = pts[0][1] * H;
-    ctx.moveTo(x0, y0);
+    t.moveTo(x0, y0);
     for (var i = 1; i < pts.length - 1; i++) {
       var xc = (pts[i][0] * W + pts[i + 1][0] * W) / 2;
       var yc = (pts[i][1] * H + pts[i + 1][1] * H) / 2;
-      ctx.quadraticCurveTo(pts[i][0] * W, pts[i][1] * H, xc, yc);
+      t.quadraticCurveTo(pts[i][0] * W, pts[i][1] * H, xc, yc);
     }
     var last = pts[pts.length - 1];
-    ctx.lineTo(last[0] * W, last[1] * H);
-    ctx.stroke();
-    ctx.globalCompositeOperation = "source-over";
+    t.lineTo(last[0] * W, last[1] * H);
+    t.stroke();
+    t.globalCompositeOperation = "source-over";
   }
   function redrawAll() {
     ctx.clearRect(0, 0, W, H);
@@ -346,7 +379,9 @@
     disarmPhoto();
     setShareMode(false);   // drawing changed — back to copy
     drawing = { c: curColor, s: curSize, e: erasing, p: [pos(e)], id: e.pointerId };
-    drawLiveSegment(drawing);
+    if (lockMode && !erasing) { drawing.lock = true; beginLockStroke(drawing.p[0]); }
+    else drawLiveSegment(drawing);
+    showLoupe(drawing.p[0]);
     hideHint();
   });
   canvas.addEventListener("pointermove", function (e) {
@@ -356,16 +391,21 @@
     var dx = (p[0] - last[0]) * W, dy = (p[1] - last[1]) * H;
     if (dx * dx + dy * dy < 1.2) return;        // skip sub-pixel jitter
     drawing.p.push(p);
-    drawLiveSegment(drawing);
+    if (drawing.lock) paintLockOverlay(); else drawLiveSegment(drawing);
+    paintLoupe(p);
   });
   function endStroke(e) {
     if (!drawing || (e && e.pointerId !== drawing.id)) return;
     if (drawing.p.length > 0) {
-      strokes.push({ c: drawing.c, s: drawing.s, e: drawing.e, p: drawing.p });
-      clearedBackup = null;   // a new stroke discards the clear backup
-      updateUndo();
-      scheduleSave();
+      if (drawing.lock) commitLockStroke();
+      else {
+        strokes.push({ c: drawing.c, s: drawing.s, e: drawing.e, p: drawing.p });
+        clearedBackup = null;   // a new stroke discards the clear backup
+        updateUndo();
+        scheduleSave();
+      }
     }
+    hideLoupe();
     drawing = null;
   }
   canvas.addEventListener("pointerup", endStroke);
@@ -427,9 +467,8 @@
   }
   function paintPhotoBtn() {
     photoBtn.classList.toggle("hasphoto", !!photo);
-    photoBtn.title = photo ? "remove photo" : "add photo";
-    photoBtn.setAttribute("aria-label", photo ? "remove photo" : "add photo");
-    if (!photoArmed) photoLabel.textContent = "photo";
+    photoBtn.title = photo ? "tap again to remove photo" : "add photo";
+    photoBtn.setAttribute("aria-label", photo ? "tap again to remove photo" : "add photo");
   }
   var photoArmed = false, photoTimer = null;
   function disarmPhoto() {
@@ -444,7 +483,6 @@
     if (!photoArmed) {
       photoArmed = true;
       photoBtn.classList.add("armed");
-      photoLabel.textContent = "remove?";
       photoTimer = setTimeout(disarmPhoto, 2600);
       return;
     }
@@ -457,6 +495,194 @@
     photoInput.value = "";
     if (f) setPhotoFromBlob(f);
   });
+
+  /* ---------- stay-inside (coloring-book) brush ----------
+     When enabled, a stroke is clipped to the contiguous region of similar
+     color under the touch point: other colors act as borders. The mask is
+     flood-filled at pointerdown from the flattened composite (paper + photo
+     + existing strokes). The live stroke renders on an overlay canvas; on
+     release it is stamped onto the pad canvas and stored as a cropped raster
+     stamp so redraw, undo, export and persistence keep working. */
+  var lockBtn = document.getElementById("lockBtn");
+  var lockMode = false;
+  var overlayEl = document.createElement("canvas");
+  overlayEl.style.cssText = "position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;touch-action:none;display:none;";
+  wrap.insertBefore(overlayEl, hint);
+  var octx = overlayEl.getContext("2d");
+  var lockMask = null;          // mask canvas, white = paintable
+  var lockLayer = null, lctx = null;  // full-res layer holding the raw stroke
+  var LOCK_TOL = 48;            // color-distance tolerance for the region
+
+  function sizeOverlay() {
+    overlayEl.width = canvas.width;
+    overlayEl.height = canvas.height;
+    octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function buildLockMask(sx, sy) {
+    // sx, sy in CSS px. Flood fill at a capped resolution for speed.
+    var maxDim = 900;
+    var k = Math.min(1, maxDim / Math.max(canvas.width, canvas.height));
+    var mw = Math.max(1, Math.round(canvas.width * k));
+    var mh = Math.max(1, Math.round(canvas.height * k));
+    var off = document.createElement("canvas");
+    off.width = mw; off.height = mh;
+    var o = off.getContext("2d", { willReadFrequently: true });
+    o.fillStyle = PAPER; o.fillRect(0, 0, mw, mh);
+    o.drawImage(bgCanvas, 0, 0, mw, mh);
+    o.drawImage(canvas, 0, 0, mw, mh);
+    var img = o.getImageData(0, 0, mw, mh), d = img.data;
+    var px = Math.min(mw - 1, Math.max(0, Math.round(sx * dpr * k)));
+    var py = Math.min(mh - 1, Math.max(0, Math.round(sy * dpr * k)));
+    var si = (py * mw + px) * 4;
+    var tr = d[si], tg = d[si + 1], tb = d[si + 2];
+    var tol2 = LOCK_TOL * LOCK_TOL;
+    var seen = new Uint8Array(mw * mh);
+    var stack = new Int32Array(mw * mh);
+    var sp = 0;
+    function tryAdd(j) {
+      if (seen[j]) return;
+      var q = j * 4;
+      var dr = d[q] - tr, dg = d[q + 1] - tg, db = d[q + 2] - tb;
+      if (dr * dr + dg * dg + db * db <= tol2) { seen[j] = 1; stack[sp++] = j; }
+    }
+    var start = py * mw + px;
+    seen[start] = 1; stack[sp++] = start;
+    while (sp > 0) {
+      var i = stack[--sp];
+      var x = i % mw, y = (i / mw) | 0;
+      if (x > 0) tryAdd(i - 1);
+      if (x < mw - 1) tryAdd(i + 1);
+      if (y > 0) tryAdd(i - mw);
+      if (y < mh - 1) tryAdd(i + mw);
+    }
+    var mc = document.createElement("canvas");
+    mc.width = mw; mc.height = mh;
+    var mcctx = mc.getContext("2d");
+    var out = mcctx.createImageData(mw, mh);
+    var od = out.data;
+    for (var n = 0; n < mw * mh; n++) {
+      od[n * 4] = od[n * 4 + 1] = od[n * 4 + 2] = 255;
+      od[n * 4 + 3] = seen[n] * 255;
+    }
+    mcctx.putImageData(out, 0, 0);
+    lockMask = mc;
+  }
+
+  function paintLockOverlay() {
+    lctx.clearRect(0, 0, W, H);
+    drawStroke(drawing, lctx);
+    octx.clearRect(0, 0, W, H);
+    octx.drawImage(lockLayer, 0, 0, W, H);
+    octx.globalCompositeOperation = "destination-in";
+    octx.drawImage(lockMask, 0, 0, W, H);
+    octx.globalCompositeOperation = "source-over";
+  }
+
+  function beginLockStroke(pt) {
+    var r = canvas.getBoundingClientRect();
+    buildLockMask(pt[0] * r.width, pt[1] * r.height);
+    lockLayer = document.createElement("canvas");
+    lockLayer.width = canvas.width; lockLayer.height = canvas.height;
+    lctx = lockLayer.getContext("2d");
+    lctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    overlayEl.style.display = "block";
+    paintLockOverlay();
+  }
+
+  function commitLockStroke() {
+    // stamp the clipped overlay onto the pad, store as a cropped raster
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(overlayEl, 0, 0);
+    ctx.restore();
+    var pts = drawing.p, padR = drawing.s / 2 + 2;
+    var minx = 1, miny = 1, maxx = 0, maxy = 0, i, qx, qy;
+    for (i = 0; i < pts.length; i++) {
+      qx = pts[i][0]; qy = pts[i][1];
+      if (qx < minx) minx = qx; if (qx > maxx) maxx = qx;
+      if (qy < miny) miny = qy; if (qy > maxy) maxy = qy;
+    }
+    var bx = Math.max(0, minx - padR / W), by = Math.max(0, miny - padR / H);
+    var bw = Math.min(1, maxx + padR / W) - bx, bh = Math.min(1, maxy + padR / H) - by;
+    var cw = Math.max(1, Math.round(bw * W * dpr)), ch = Math.max(1, Math.round(bh * H * dpr));
+    var crop = document.createElement("canvas");
+    crop.width = cw; crop.height = ch;
+    var cc = crop.getContext("2d");
+    cc.drawImage(overlayEl, Math.round(bx * W * dpr), Math.round(by * H * dpr), cw, ch, 0, 0, cw, ch);
+    strokes.push({ r: crop.toDataURL("image/png"), b: [bx, by, bw, bh] });
+    octx.clearRect(0, 0, W, H);
+    overlayEl.style.display = "none";
+    lockLayer = null; lctx = null; lockMask = null;
+    clearedBackup = null;
+    updateUndo();
+    scheduleSave();
+    setShareMode(false);
+  }
+
+  lockBtn.addEventListener("click", function () {
+    lockMode = !lockMode;
+    lockBtn.classList.toggle("sel", lockMode);
+    if (lockMode) { erasing = false; eraserBtn.classList.remove("sel"); }
+  });
+
+  /* ---------- magnifier loupe ----------
+     While a stroke is active, a circular loupe shows a 2x zoom of the
+     canvas around the touch point, with a crosshair on the exact point.
+     Position is chosen at pointerdown (above the touch, or below when
+     there is no room above) and stays fixed until the stroke ends. */
+  var loupeEl = document.getElementById("loupe");
+  var loupeCanvas = document.getElementById("loupeCanvas");
+  var lqctx = loupeCanvas.getContext("2d");
+  var LOUPE_D = 132, LOUPE_ZOOM = 2, LOUPE_GAP = 56;
+  var loupeOn = false;
+  function sizeLoupe() {
+    loupeCanvas.width = Math.round(LOUPE_D * dpr);
+    loupeCanvas.height = Math.round(LOUPE_D * dpr);
+  }
+  function showLoupe(pt) {
+    // pt: normalized touch point. Position is fixed for this stroke.
+    var tx = pt[0] * W, ty = pt[1] * H;
+    var cy = ty - LOUPE_D / 2 - LOUPE_GAP;
+    if (cy - LOUPE_D / 2 < 0) cy = ty + LOUPE_D / 2 + LOUPE_GAP;  // no room above: go below
+    var cx = Math.min(Math.max(tx, LOUPE_D / 2 + 4), W - LOUPE_D / 2 - 4);
+    cy = Math.min(Math.max(cy, LOUPE_D / 2 + 4), H - LOUPE_D / 2 - 4);
+    loupeEl.style.left = (cx - LOUPE_D / 2) + "px";
+    loupeEl.style.top = (cy - LOUPE_D / 2) + "px";
+    loupeEl.style.display = "block";
+    loupeOn = true;
+    paintLoupe(pt);
+  }
+  function paintLoupe(pt) {
+    if (!loupeOn) return;
+    var S = loupeCanvas.width;
+    var src = S / LOUPE_ZOOM;   // source size in device px
+    var sx = pt[0] * canvas.width - src / 2;
+    var sy = pt[1] * canvas.height - src / 2;
+    lqctx.clearRect(0, 0, S, S);
+    lqctx.save();
+    lqctx.beginPath();
+    lqctx.arc(S / 2, S / 2, S / 2, 0, Math.PI * 2);
+    lqctx.clip();
+    lqctx.fillStyle = PAPER;
+    lqctx.fillRect(0, 0, S, S);
+    lqctx.drawImage(bgCanvas, sx, sy, src, src, 0, 0, S, S);
+    lqctx.drawImage(canvas, sx, sy, src, src, 0, 0, S, S);
+    if (drawing && drawing.lock && overlayEl.style.display === "block") {
+      lqctx.drawImage(overlayEl, sx, sy, src, src, 0, 0, S, S);
+    }
+    lqctx.strokeStyle = "rgba(0,0,0,.6)";
+    lqctx.lineWidth = Math.max(1, S / 120);
+    lqctx.beginPath();
+    lqctx.moveTo(S / 2 - S * 0.07, S / 2); lqctx.lineTo(S / 2 + S * 0.07, S / 2);
+    lqctx.moveTo(S / 2, S / 2 - S * 0.07); lqctx.lineTo(S / 2, S / 2 + S * 0.07);
+    lqctx.stroke();
+    lqctx.restore();
+  }
+  function hideLoupe() {
+    loupeOn = false;
+    loupeEl.style.display = "none";
+  }
 
   /* ---------- toolbar ---------- */
   var colorsEl = document.getElementById("colors");
@@ -509,6 +735,7 @@
   eraserBtn.addEventListener("click", function () {
     erasing = !erasing;
     eraserBtn.classList.toggle("sel", erasing);
+    if (erasing && lockMode) { lockMode = false; lockBtn.classList.remove("sel"); }
   });
 
   function updateUndo() {

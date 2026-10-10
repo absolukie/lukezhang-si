@@ -60,7 +60,7 @@ figure.viz figcaption b{color:var(--viz-ink);}
 .sources li{margin-bottom:8px;}
 p.tagsline{font-family:var(--viz-mono); font-size:12px; letter-spacing:.12em; color:var(--viz-faint); margin-top:36px; text-transform:uppercase;}
 footer.end{margin-top:18px; font-size:13px; color:var(--viz-faint); border-top:1px solid var(--viz-line); padding-top:18px;}
-/* Pocket test: two-lane race */
+/* Pocket test: two-lane race, click-per-step */
 .scen{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 6px;}
 .scen button{font-family:inherit; font-size:14px; font-weight:600; background:var(--viz-panel2); color:var(--viz-ink); border:1px solid var(--viz-line); border-radius:10px; padding:9px 14px; cursor:pointer; touch-action:manipulation;}
 .scen button:active{transform:scale(.97);}
@@ -89,15 +89,14 @@ footer.end{margin-top:18px; font-size:13px; color:var(--viz-faint); border-top:1
 .race-status .win{color:var(--viz-green);}
 .race-status .lose{color:var(--viz-danger);}
 .runrow{display:flex; align-items:center; gap:12px; margin:16px 0 4px;}
-#runBtn{font-family:inherit; font-size:16px; font-weight:700; color:#141311; background:var(--viz-accent); border:none; border-radius:999px; padding:13px 30px; cursor:pointer; touch-action:manipulation; min-height:52px;}
-#runBtn:active{transform:scale(.97);}
-#runBtn[disabled]{opacity:.45; cursor:default;}
+#nextBtn{font-family:inherit; font-size:16px; font-weight:700; color:#141311; background:var(--viz-accent); border:none; border-radius:999px; padding:13px 30px; cursor:pointer; touch-action:manipulation; min-height:52px;}
+#nextBtn:active{transform:scale(.97);}
 .score{font-family:var(--viz-mono); font-size:12.5px; color:var(--viz-muted); letter-spacing:.04em;}
 @media (prefers-reduced-motion:reduce){
   html{scroll-behavior:auto;}
   .race-fill{transition:none;}
   .rnode.stalled .rdot{animation:none;}
-  #runBtn:active{transform:none;}
+  #nextBtn:active{transform:none;}
   .scen button:active{transform:none;}
 }
 </style>
@@ -143,12 +142,12 @@ footer.end{margin-top:18px; font-size:13px; color:var(--viz-faint); border-top:1
 
 <section>
 <h2><span class="n">04</span>The pocket test</h2>
-<p>Pick a task, then run it through both setups and watch what happens. The top lane is Muse. The bottom lane is a terminal-based agent, the kind that lives on your laptop.</p>
+<p>Pick a task, then tap through both setups step by step and watch what happens. The top lane is Muse. The bottom lane is a terminal-based agent, the kind that lives on your laptop.</p>
 <figure class="viz">
 <div class="scen" role="group" aria-label="Pick a task" id="scenRow"></div>
 <div class="runrow">
-<button type="button" id="runBtn">Run the test</button>
-<span class="score" id="scoreLine">Muse 0 · Terminal agent 0</span>
+<button type="button" id="nextBtn">Next step</button>
+<span class="score" id="stepLine">Step 0 of 4 · tap to advance</span>
 </div>
 <div class="lane" id="laneMuse">
 <h4>Muse</h4>
@@ -162,7 +161,7 @@ footer.end{margin-top:18px; font-size:13px; color:var(--viz-faint); border-top:1
 <div class="race" id="raceTerm"></div>
 <p class="race-status" id="statusTerm" aria-live="polite"></p>
 </div>
-<figcaption><b>Watch the lanes.</b> Muse's work happens on its own computer, so your phone is enough. The terminal agent needs your laptop awake, so your phone can only watch.</figcaption>
+<figcaption><b>Tap Next step.</b> Every tap advances both lanes one step. Muse's work happens on its own computer, so your phone is enough. The terminal agent needs your laptop awake, so its lane stalls out.</figcaption>
 </figure>
 </section>
 
@@ -184,12 +183,12 @@ footer.end{margin-top:18px; font-size:13px; color:var(--viz-faint); border-top:1
 <footer class="end">Self-contained: no external requests, everything inline.</footer>
 </article>
 <script>
-/* Pocket test: two-lane race */
+/* Pocket test: two-lane race, click-per-step */
 (function(){
   var scenRow = document.getElementById('scenRow');
-  var runBtn = document.getElementById('runBtn');
-  var scoreLine = document.getElementById('scoreLine');
-  if(!scenRow || !runBtn) return;
+  var nextBtn = document.getElementById('nextBtn');
+  var stepLine = document.getElementById('stepLine');
+  if(!scenRow || !nextBtn) return;
 
   var SCEN = [
     {
@@ -238,10 +237,11 @@ footer.end{margin-top:18px; font-size:13px; color:var(--viz-faint); border-top:1
       ]
     }
   ];
-  var sIdx = 0, museWins = 0, termWins = 0, running = false;
-  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var STEPS = 4, LAST = STEPS - 1, STALL_AT = 2;
+  var sIdx = 0, step = -1;
 
-  function buildLane(raceEl, steps){
+  function buildLane(raceId, steps){
+    var raceEl = document.getElementById(raceId);
     raceEl.innerHTML = '<div class="race-line"></div><div class="race-fill"></div><div class="race-nodes"></div>';
     var nodes = raceEl.querySelector('.race-nodes');
     steps.forEach(function(s, i){
@@ -251,36 +251,62 @@ footer.end{margin-top:18px; font-size:13px; color:var(--viz-faint); border-top:1
       nodes.appendChild(d);
     });
     return {
-      el: raceEl,
       fill: raceEl.querySelector('.race-fill'),
       nodes: Array.prototype.slice.call(nodes.querySelectorAll('.rnode'))
     };
   }
 
-  var raceMuse = buildLane(document.getElementById('raceMuse'), SCEN[0].muse);
-  var raceTerm = buildLane(document.getElementById('raceTerm'), SCEN[0].term);
+  var raceMuse = buildLane('raceMuse', SCEN[0].muse);
+  var raceTerm = buildLane('raceTerm', SCEN[0].term);
   var statusMuse = document.getElementById('statusMuse');
   var statusTerm = document.getElementById('statusTerm');
 
-  function resetLane(lane, steps){
-    lane.fill.style.width = '0';
-    lane.fill.classList.remove('bad');
-    lane.nodes.forEach(function(nd, i){
-      nd.className = 'rnode';
-      nd.querySelector('.rlab').textContent = steps[i];
-    });
+  function render(){
+    var M = SCEN[sIdx].muse, T = SCEN[sIdx].term;
+    var i;
+    for(i = 0; i < STEPS; i++){
+      raceMuse.nodes[i].className = 'rnode ' + (i < step ? 'done' : (i === step ? 'active' : ''));
+      raceMuse.nodes[i].querySelector('.rlab').textContent = M[i];
+    }
+    raceMuse.fill.classList.remove('bad');
+    raceMuse.fill.style.width = step < 0 ? '0' : (step / LAST * 100) + '%';
+    for(i = 0; i < STEPS; i++){
+      var cls;
+      if(step >= STALL_AT && i >= STALL_AT){ cls = i === STALL_AT ? 'stalled' : 'dead'; }
+      else { cls = i < step ? 'done' : (i === step ? 'active' : ''); }
+      raceTerm.nodes[i].className = 'rnode ' + cls;
+      raceTerm.nodes[i].querySelector('.rlab').textContent = T[i];
+    }
+    raceTerm.fill.classList.toggle('bad', step >= STALL_AT);
+    raceTerm.fill.style.width = step < 0 ? '0' : (Math.min(step, STALL_AT) / LAST * 100) + '%';
+
+    if(step < 0){
+      statusMuse.textContent = '';
+      statusTerm.textContent = '';
+      stepLine.textContent = 'Step 0 of ' + STEPS + ' · tap to advance';
+      nextBtn.textContent = 'Next step';
+    } else if(step < LAST){
+      statusMuse.innerHTML = '<b>Step ' + (step + 1) + ':</b> ' + M[step];
+      statusTerm.innerHTML = step < STALL_AT
+        ? '<b>Step ' + (step + 1) + ':</b> ' + T[step]
+        : '<span class="lose"><b>Stalled.</b> ' + T[LAST] + '</span>';
+      stepLine.textContent = 'Step ' + (step + 1) + ' of ' + STEPS;
+      nextBtn.textContent = 'Next step';
+    } else {
+      statusMuse.innerHTML = '<span class="win"><b>Done.</b> Shipped from your phone.</span>';
+      statusTerm.innerHTML = '<span class="lose"><b>Stalled.</b> ' + T[LAST] + '</span>';
+      stepLine.textContent = 'Step ' + STEPS + ' of ' + STEPS + ' · finished';
+      nextBtn.textContent = 'Replay';
+    }
   }
 
-  function renderScen(){
-    SCEN.forEach(function(s, i){
-      var b = scenRow.querySelectorAll('button')[i];
-      b.setAttribute('aria-pressed', i === sIdx ? 'true' : 'false');
-    });
-    resetLane(raceMuse, SCEN[sIdx].muse);
-    resetLane(raceTerm, SCEN[sIdx].term);
-    statusMuse.textContent = '';
-    statusTerm.textContent = '';
+  function advance(d){
+    if(step >= LAST && d > 0){ step = -1; }
+    else { step = Math.max(-1, Math.min(LAST, step + d)); }
+    render();
   }
+
+  nextBtn.addEventListener('click', function(){ advance(1); });
 
   SCEN.forEach(function(s, i){
     var b = document.createElement('button');
@@ -288,85 +314,27 @@ footer.end{margin-top:18px; font-size:13px; color:var(--viz-faint); border-top:1
     b.textContent = s.label;
     b.setAttribute('aria-pressed', i === 0 ? 'true' : 'false');
     b.addEventListener('click', function(){
-      if(running) return;
-      sIdx = i;
-      renderScen();
+      sIdx = i; step = -1;
+      var btns = scenRow.querySelectorAll('button');
+      for(var k = 0; k < btns.length; k++){ btns[k].setAttribute('aria-pressed', k === i ? 'true' : 'false'); }
+      render();
     });
     scenRow.appendChild(b);
   });
 
-  function setNode(lane, i, cls){
-    lane.nodes[i].className = 'rnode ' + cls;
-    lane.fill.style.width = (i / (lane.nodes.length - 1) * 100) + '%';
-  }
+  document.addEventListener('keydown', function(e){
+    if(e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if(e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    var t = e.target, tag = t && t.tagName;
+    if(tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+    var fig = nextBtn.closest('figure');
+    var r = fig.getBoundingClientRect();
+    if(r.bottom < 0 || r.top > window.innerHeight) return;
+    if(e.key === 'ArrowRight'){ advance(1); e.preventDefault(); }
+    else { advance(-1); e.preventDefault(); }
+  });
 
-  function run(){
-    if(running) return;
-    running = true;
-    runBtn.disabled = true;
-    var M = SCEN[sIdx].muse, T = SCEN[sIdx].term;
-    resetLane(raceMuse, M);
-    resetLane(raceTerm, T);
-    statusMuse.textContent = '';
-    statusTerm.textContent = '';
-    var step = reduced ? 999 : 850;
-
-    function museStep(i){
-      if(i > 0) setNode(raceMuse, i - 1, 'done');
-      if(i < M.length){
-        setNode(raceMuse, i, 'active');
-        statusMuse.innerHTML = '<b>Step ' + (i + 1) + ':</b> ' + M[i];
-        setTimeout(function(){ museStep(i + 1); }, step);
-      } else {
-        statusMuse.innerHTML = '<span class="win"><b>Done.</b> Shipped from your phone.</span>';
-        museWins++;
-        scoreLine.textContent = 'Muse ' + museWins + ' · Terminal agent ' + termWins;
-        running = false;
-        runBtn.disabled = false;
-      }
-    }
-
-    function termStep(i){
-      if(i === 0){
-        setNode(raceTerm, 0, 'active');
-        statusTerm.innerHTML = '<b>Step 1:</b> ' + T[0];
-        setTimeout(function(){ termStep(1); }, step);
-      } else if(i === 1){
-        setNode(raceTerm, 0, 'done');
-        setNode(raceTerm, 1, 'active');
-        statusTerm.innerHTML = '<b>Step 2:</b> ' + T[1];
-        setTimeout(function(){ termStep(2); }, step);
-      } else {
-        setNode(raceTerm, 1, 'done');
-        setNode(raceTerm, 2, 'stalled');
-        raceTerm.nodes[3].className = 'rnode dead';
-        raceTerm.fill.classList.add('bad');
-        raceTerm.fill.style.width = (2 / 3 * 100) + '%';
-        statusTerm.innerHTML = '<span class="lose"><b>Stalled.</b> ' + T[3] + '</span>';
-      }
-    }
-
-    if(reduced){
-      for(var i = 0; i < M.length; i++) setNode(raceMuse, i, 'done');
-      statusMuse.innerHTML = '<span class="win"><b>Done.</b> Shipped from your phone.</span>';
-      setNode(raceTerm, 0, 'done');
-      setNode(raceTerm, 1, 'done');
-      setNode(raceTerm, 2, 'stalled');
-      raceTerm.nodes[3].className = 'rnode dead';
-      raceTerm.fill.classList.add('bad');
-      raceTerm.fill.style.width = (2 / 3 * 100) + '%';
-      statusTerm.innerHTML = '<span class="lose"><b>Stalled.</b> ' + T[3] + '</span>';
-      museWins++;
-      scoreLine.textContent = 'Muse ' + museWins + ' · Terminal agent ' + termWins;
-      running = false;
-      runBtn.disabled = false;
-      return;
-    }
-    museStep(0);
-    termStep(0);
-  }
-
-  runBtn.addEventListener('click', run);
+  render();
 })();
 </script>
 </body>

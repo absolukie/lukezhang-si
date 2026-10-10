@@ -54,7 +54,7 @@
   .tagsub button:active { transform: scale(.96); }
   .tagsub button[aria-pressed="true"] { background: #e8a15c; border-color: #e8a15c; color: #1c130e; }
   .tagsub button .n { opacity: .6; font-weight: 400; }
-  .tagsub.open button { animation: chipIn 280ms cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(var(--i,0) * 28ms); }
+  .tagsub.open button { animation: chipIn 260ms cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(var(--i,0) * 90ms); }
   @keyframes chipIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) {
     .tagsub { transition: none; }
@@ -328,10 +328,12 @@
     tagsOf(p).forEach(function(t){ counts[t] = (counts[t] || 0) + 1; });
   });
   var MAIN_MIN = 2;
-  var main = Object.keys(counts).filter(function(t){ return counts[t] >= MAIN_MIN; })
-    .sort(function(a, b){ return a.localeCompare(b); });
-  var rest = Object.keys(counts).filter(function(t){ return counts[t] < MAIN_MIN; })
-    .sort(function(a, b){ return a.localeCompare(b); });
+  function byCountThenAlpha(a, b){
+    if(counts[b] !== counts[a]) return counts[b] - counts[a];
+    return a.localeCompare(b);
+  }
+  var main = Object.keys(counts).filter(function(t){ return counts[t] >= MAIN_MIN; }).sort(byCountThenAlpha);
+  var rest = Object.keys(counts).filter(function(t){ return counts[t] < MAIN_MIN; }).sort(byCountThenAlpha);
 
   var activeTag = '';
   var trayOpen = false;
@@ -376,11 +378,27 @@
       months[i].hidden = !any;
     }
     sub.classList.toggle('open', trayOpen);
+    if(trayOpen) assignRows();
     setCount(visible, activeTag);
     paint();
   }
 
-  function chip(tag, n, idx){
+  function assignRows(){
+    var btns = sub.querySelectorAll('button');
+    var row = -1, lastTop = null, i;
+    for(i = 0; i < btns.length; i++){
+      var t = btns[i].offsetTop;
+      if(t !== lastTop){ row++; lastTop = t; }
+      btns[i].style.setProperty('--i', row);
+    }
+  }
+  var rzT = null;
+  window.addEventListener('resize', function(){
+    if(rzT) clearTimeout(rzT);
+    rzT = setTimeout(function(){ if(trayOpen) assignRows(); }, 200);
+  });
+
+  function chip(tag, n){
     var b = document.createElement('button');
     b.type = 'button';
     b.setAttribute('data-tag', tag);
@@ -392,7 +410,6 @@
     c.textContent = '\u00a0' + n;
     b.appendChild(label);
     b.appendChild(c);
-    if(typeof idx === 'number') b.style.setProperty('--i', idx);
     return b;
   }
 
@@ -409,7 +426,7 @@
 
   if(rest.length){
     var other = chip('__other__', rest.length);
-    other.querySelector('span').textContent = 'Other';
+    other.querySelector('span').textContent = 'other';
     other.setAttribute('aria-expanded', 'false');
     other.addEventListener('click', function(){
       if(trayOpen){ trayOpen = false; activeTag = ''; }
@@ -417,8 +434,8 @@
       apply();
     });
     wrap.appendChild(other);
-    rest.forEach(function(t, i){
-      var b = chip(t, counts[t], i);
+    rest.forEach(function(t){
+      var b = chip(t, counts[t]);
       b.addEventListener('click', function(){ activeTag = t; apply(); });
       sub.appendChild(b);
     });

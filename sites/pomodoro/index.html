@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pomodoro</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: linear-gradient(160deg, #1a1b2e, #2d1b4e); color: #f4f1ff;
+  }
+  .card {
+    width: min(420px, 92vw); background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 24px; padding: 32px 28px; text-align: center; backdrop-filter: blur(8px);
+  }
+  .phase { font-size: 15px; letter-spacing: 2px; text-transform: uppercase; opacity: 0.75; margin-bottom: 6px; }
+  .time { font-size: 84px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .dots { display: flex; gap: 10px; justify-content: center; margin: 14px 0 4px; }
+  .dot { width: 14px; height: 14px; border-radius: 50%; background: rgba(255,255,255,0.18); transition: background 0.2s; }
+  .dot.done { background: #7ee2a8; }
+  .controls { display: flex; gap: 10px; justify-content: center; margin: 20px 0 6px; flex-wrap: wrap; }
+  button {
+    font-size: 16px; padding: 12px 22px; border-radius: 999px; border: none; cursor: pointer;
+    background: #7c6cf0; color: white; font-weight: 600; touch-action: manipulation;
+  }
+  button.secondary { background: rgba(255,255,255,0.14); }
+  button:active { transform: scale(0.97); }
+  .stats { font-size: 14px; opacity: 0.8; margin-top: 10px; }
+  .settings { margin-top: 22px; border-top: 1px solid rgba(255,255,255,0.14); padding-top: 18px; text-align: left; }
+  .settings h3 { font-size: 14px; margin: 0 0 12px; letter-spacing: 1px; text-transform: uppercase; opacity: 0.7; }
+  .row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-size: 15px; }
+  .row input {
+    width: 90px; font-size: 16px; padding: 8px 10px; border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.25); color: white;
+  }
+  .rowline { display: flex; gap: 10px; align-items: center; justify-content: space-between; margin-top: 14px; }
+  .hint { font-size: 12px; opacity: 0.55; margin-top: 10px; }
+  .mute { background: none; border: none; font-size: 14px; opacity: 0.7; padding: 6px; }
+  .flash { animation: flash 0.6s; }
+  @keyframes flash { 0% { background: rgba(126,226,168,0.25); } 100% { background: rgba(255,255,255,0.07); } }
+</style>
+</head>
+<body>
+  <div class="card" id="card">
+    <div class="phase" id="phase">Focus</div>
+    <div class="time" id="time">25:00</div>
+    <div class="dots" id="dots"></div>
+    <div class="controls">
+      <button id="startPause">Start</button>
+      <button id="reset" class="secondary">Reset</button>
+      <button id="skip" class="secondary">Skip</button>
+    </div>
+    <div class="stats"><span id="total">0</span> pomodoros today <button id="mute" class="mute" aria-label="toggle sound">sound on</button></div>
+    <div class="settings">
+      <h3>Settings</h3>
+      <div class="row"><label for="workMin">Focus (min)</label><input id="workMin" type="number" min="1" max="120" value="25"></div>
+      <div class="row"><label for="shortMin">Short break (min)</label><input id="shortMin" type="number" min="1" max="60" value="5"></div>
+      <div class="row"><label for="longMin">Long break (min)</label><input id="longMin" type="number" min="1" max="60" value="15"></div>
+      <div class="row"><label for="cycles">Sessions per cycle</label><input id="cycles" type="number" min="1" max="12" value="4"></div>
+      <div class="rowline"><button id="save">Save settings</button><span class="hint">Saving resets the timer.</span></div>
+      <div class="hint">Tip: open with ?work=3&amp;short=2&amp;long=4&amp;cycles=2 (seconds) to try short rounds.</div>
+    </div>
+  </div>
+<script>
+"use strict";
+const PHASE_LABEL = { work: "Focus", short: "Short break", long: "Long break" };
+const LS_SETTINGS = "pomo.settings.v1";
+const LS_DAY = "pomo.day.v1";
+
+function todayKey() {
+  const d = new Date();
+  return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+}
+
+function loadSettings() {
+  let s = { work: 25 * 60, short: 5 * 60, long: 15 * 60, cycles: 4 };
+  try {
+    const raw = localStorage.getItem(LS_SETTINGS);
+    if (raw) s = Object.assign(s, JSON.parse(raw));
+  } catch (e) {}
+  const q = new URLSearchParams(location.search);
+  const secs = k => { const v = parseInt(q.get(k), 10); return Number.isFinite(v) && v > 0 ? v : null; };
+  const w = secs("work"), sh = secs("short"), lo = secs("long"), cy = secs("cycles");
+  if (w) s.work = w;
+  if (sh) s.short = sh;
+  if (lo) s.long = lo;
+  if (cy) s.cycles = cy;
+  return s;
+}
+
+function loadDay() {
+  let d = { date: todayKey(), total: 0, cycleDone: 0 };
+  try {
+    const raw = localStorage.getItem(LS_DAY);
+    if (raw) d = Object.assign(d, JSON.parse(raw));
+  } catch (e) {}
+  if (d.date !== todayKey()) d = { date: todayKey(), total: 0, cycleDone: 0 };
+  return d;
+}
+
+const settings = loadSettings();
+const day = loadDay();
+
+const state = {
+  phase: "work",
+  status: "idle",
+  remaining: settings.work,
+  endsAt: 0,
+  muted: false
+};
+try { state.muted = localStorage.getItem("pomo.muted") === "1"; } catch (e) {}
+
+const el = id => document.getElementById(id);
+const timeEl = el("time"), phaseEl = el("phase"), dotsEl = el("dots"),
+      totalEl = el("total"), startPauseBtn = el("startPause"), cardEl = el("card");
+
+function fmt(s) {
+  const m = Math.floor(s / 60), r = s % 60;
+  return String(m).padStart(2, "0") + ":" + String(r).padStart(2, "0");
+}
+
+function persist() {
+  try { localStorage.setItem(LS_DAY, JSON.stringify(day)); } catch (e) {}
+}
+
+function render() {
+  timeEl.textContent = fmt(state.remaining);
+  phaseEl.textContent = PHASE_LABEL[state.phase];
+  document.title = fmt(state.remaining) + " - " + PHASE_LABEL[state.phase];
+  totalEl.textContent = day.total;
+  startPauseBtn.textContent = state.status === "running" ? "Pause" : (state.status === "paused" ? "Resume" : "Start");
+  dotsEl.innerHTML = "";
+  for (let i = 0; i < settings.cycles; i++) {
+    const d = document.createElement("div");
+    d.className = "dot" + (i < day.cycleDone ? " done" : "");
+    dotsEl.appendChild(d);
+  }
+}
+
+function beep() {
+  if (state.muted) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.25, 0.5].forEach(t => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value = 880;
+      g.gain.setValueAtTime(0.001, ctx.currentTime + t);
+      g.gain.exponentialRampToValueAtTime(0.4, ctx.currentTime + t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.2);
+      o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.22);
+    });
+  } catch (e) {}
+}
+
+function flash() {
+  cardEl.classList.remove("flash");
+  void cardEl.offsetWidth;
+  cardEl.classList.add("flash");
+}
+
+function completePhase() {
+  beep();
+  flash();
+  if (state.phase === "work") {
+    day.total += 1;
+    day.cycleDone += 1;
+    state.phase = (day.cycleDone % settings.cycles === 0) ? "long" : "short";
+  } else {
+    if (state.phase === "long") day.cycleDone = 0;
+    state.phase = "work";
+  }
+  persist();
+  state.remaining = settings[state.phase];
+}
+
+function tick() {
+  if (state.status !== "running") return;
+  state.remaining = Math.max(0, Math.round((state.endsAt - Date.now()) / 1000));
+  if (state.remaining <= 0) {
+    completePhase();
+    state.endsAt = Date.now() + state.remaining * 1000;
+  }
+  render();
+}
+
+function start() {
+  if (state.status === "running") return;
+  state.status = "running";
+  state.endsAt = Date.now() + state.remaining * 1000;
+  render();
+}
+
+function pause() {
+  if (state.status !== "running") return;
+  state.remaining = Math.max(0, Math.round((state.endsAt - Date.now()) / 1000));
+  state.status = "paused";
+  render();
+}
+
+function reset() {
+  state.status = "idle";
+  state.phase = "work";
+  state.remaining = settings.work;
+  day.cycleDone = 0;
+  persist();
+  render();
+}
+
+function skip() {
+  if (state.status === "idle") return;
+  const wasRunning = state.status === "running";
+  if (state.phase === "long") day.cycleDone = 0;
+  state.phase = state.phase === "work" ? "short" : "work";
+  if (state.phase === "short" && day.cycleDone % settings.cycles === 0 && day.cycleDone > 0) state.phase = "long";
+  state.remaining = settings[state.phase];
+  state.status = wasRunning ? "running" : "paused";
+  if (wasRunning) state.endsAt = Date.now() + state.remaining * 1000;
+  persist();
+  render();
+}
+
+startPauseBtn.addEventListener("click", () => {
+  if (state.status === "running") pause(); else start();
+});
+el("reset").addEventListener("click", reset);
+el("skip").addEventListener("click", skip);
+
+document.addEventListener("keydown", e => {
+  if (e.code === "Space" && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) {
+    e.preventDefault();
+    if (state.status === "running") pause(); else start();
+  }
+});
+
+el("mute").addEventListener("click", () => {
+  state.muted = !state.muted;
+  el("mute").textContent = state.muted ? "sound off" : "sound on";
+  try { localStorage.setItem("pomo.muted", state.muted ? "1" : "0"); } catch (e) {}
+});
+
+el("save").addEventListener("click", () => {
+  const num = (id, lo, hi, fb) => {
+    const v = parseInt(el(id).value, 10);
+    return Number.isFinite(v) && v >= lo && v <= hi ? v : fb;
+  };
+  settings.work = num("workMin", 1, 120, 25) * 60;
+  settings.short = num("shortMin", 1, 60, 5) * 60;
+  settings.long = num("longMin", 1, 60, 15) * 60;
+  settings.cycles = num("cycles", 1, 12, 4);
+  try { localStorage.setItem(LS_SETTINGS, JSON.stringify(settings)); } catch (e) {}
+  el("workMin").value = settings.work / 60;
+  el("shortMin").value = settings.short / 60;
+  el("longMin").value = settings.long / 60;
+  el("cycles").value = settings.cycles;
+  reset();
+});
+
+el("workMin").value = settings.work / 60;
+el("shortMin").value = settings.short / 60;
+el("longMin").value = settings.long / 60;
+el("cycles").value = settings.cycles;
+if (state.muted) el("mute").textContent = "sound off";
+render();
+setInterval(tick, 250);
+</script>
+</body>
+</html>

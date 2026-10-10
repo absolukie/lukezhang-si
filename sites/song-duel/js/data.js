@@ -27,8 +27,8 @@ HT.SEED_SONGS = [
   ["Don't Stop Me Now","Queen"],["Viva La Vida","Coldplay"]
 ];
 
-/* ---------------- Gabrielle's playlist (50 songs, Sep 2026) ---------------- */
-HT.GABRIELLE_SONGS = [
+/* ---------------- Partner's playlist (50 songs, Sep 2026) ---------------- */
+HT.PARTNER_SONGS = [
   ["All In","SEU Worship, David Ryan Cook"],["Better Things","aespa"],
   ["Firm Foundation (He Won't)","Maverick City Music, Cody Carnes, Chandler Moore"],
   ["Gone","Switchfoot"],["3D (Alternate Ver.)","Jung Kook"],

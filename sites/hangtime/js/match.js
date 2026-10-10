@@ -34,7 +34,7 @@ HT.Match = (function () {
       d.appendChild(i); el.appendChild(d); return i;
     }
     var n1 = field("Player 1 name", "m-p1", "e.g. Luke");
-    var n2 = field("Player 2 name", "m-p2", "e.g. Gabrielle");
+    var n2 = field("Player 2 name", "m-p2", "e.g. Sam");
     var rl = document.createElement("div"); rl.className = "field";
     rl.innerHTML = "<label>Relationship type</label>";
     var chips = document.createElement("div"); chips.className = "chip-row match";

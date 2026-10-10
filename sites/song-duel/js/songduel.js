@@ -23,15 +23,15 @@ HT.Duel = (function () {
     return '<div><a href="' + HT.esc(song.link) + '" target="_blank" rel="noopener" class="btn small ghost" style="margin-top:6px">▶ Listen</a></div>';
   }
 
-  // "Gabrielle's playlist" fill button — sits next to each Randomize button
-  function gabrielleBtn(fill) {
+  // "Partner's playlist" fill button — sits next to each Randomize button
+  function partnerBtn(fill) {
     var b = document.createElement("button");
-    b.className = "btn ghost"; b.textContent = "💛 Gabrielle's playlist";
+    b.className = "btn ghost"; b.textContent = "💛 Partner's playlist";
     b.style.marginTop = "8px";
     b.onclick = function () {
       HT.sfx.tap();
-      fill(HT.shuffle(HT.GABRIELLE_SONGS));
-      HT.toast("Gabrielle's picks loaded 💛");
+      fill(HT.shuffle(HT.PARTNER_SONGS));
+      HT.toast("Partner's picks loaded 💛");
     };
     return b;
   }
@@ -90,7 +90,7 @@ HT.Duel = (function () {
       HT.toast("Songs randomized 🎲");
     };
     el.appendChild(rnd);
-    el.appendChild(gabrielleBtn(function (p) {
+    el.appendChild(partnerBtn(function (p) {
       fA.t.value = p[0][0]; fA.a.value = p[0][1];
       fB.t.value = p[1][0]; fB.a.value = p[1][1];
     }));
@@ -229,7 +229,7 @@ HT.Duel = (function () {
       HT.toast("Bracket fuel loaded 🎲");
     };
     el.appendChild(rnd);
-    el.appendChild(gabrielleBtn(function (p) {
+    el.appendChild(partnerBtn(function (p) {
       forms.forEach(function (f, i) { f.t.value = p[i][0]; f.a.value = p[i][1]; });
     }));
     var go = document.createElement("button");
@@ -371,7 +371,7 @@ HT.Duel = (function () {
       fA.t.value = p[0][0]; fA.a.value = p[0][1]; fB.t.value = p[1][0]; fB.a.value = p[1][1];
     };
     el.appendChild(rnd);
-    el.appendChild(gabrielleBtn(function (p) {
+    el.appendChild(partnerBtn(function (p) {
       fA.t.value = p[0][0]; fA.a.value = p[0][1]; fB.t.value = p[1][0]; fB.a.value = p[1][1];
     }));
     var go = document.createElement("button");

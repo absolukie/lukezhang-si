@@ -33,7 +33,7 @@ function defState(){return {
   seen:{}, recent:[], fav:[], hidden:[],
   stats:{answered:0, perCat:{}, perMode:{}, days:{}, streak:0, lastDay:null,
          likely:{a:0,b:0,both:0}, debates:{a:0,b:0,tie:0}, guess:{a:0,b:0}, totRuns:0},
-  profile:{names:'Luke & Gabrielle', anniv:'', upcoming:'China and Korea — December 2026',
+  profile:{names:'Luke & partner', anniv:'', upcoming:'China and Korea — December 2026',
            traveled:'', foods:'', hobbies:'', goals:''},
   daily:{}, theme:'auto', lastTpl:-1, lastGen:-1
 };}
@@ -44,9 +44,9 @@ function load(){ try{ S = Object.assign(defState(), JSON.parse(localStorage.getI
 function save(){ try{ localStorage.setItem(SKEY, JSON.stringify(S)); }catch(e){} }
 load();
 
-function names(){ const raw=(S.profile.names||'Luke & Gabrielle').trim();
+function names(){ const raw=(S.profile.names||'Luke & partner').trim();
   const parts = raw.split(/\s*(?:&|and|,|\+)\s*/i).filter(Boolean);
-  return [parts[0]||'Luke', parts[1]||parts[0]||'Gabrielle']; }
+  return [parts[0]||'Luke', parts[1]||parts[0]||'partner']; }
 
 /* ---------- utils ---------- */
 function toast(msg){ const t=$('toast'); t.textContent=msg; t.hidden=false;
@@ -252,7 +252,7 @@ const GAMES=[
   {k:'guess', e:'🔮', n:'Guess Your Partner', d:'Lock in your answer, pass the phone, see if they really know you.'},
   {k:'thisorthat', e:'⚡', n:'This or That', d:'Rapid-fire choices. Tap or swipe. How in sync are you two?'},
   {k:'rank', e:'🏅', n:'Rank It', d:'Put date nights, foods, cities and more in order. Defend your ranking.'},
-  {k:'likely', e:'👑', n:'Who Is More Likely', d:'Vote Luke, Gabrielle, or both. Tally the chaos.'},
+  {k:'likely', e:'👑', n:'Who Is More Likely', d:'Vote Luke, partner, or both. Tally the chaos.'},
   {k:'debate', e:'🎙️', n:'Debate Mode', d:'Harmless topics, 60 seconds each. Settle it once and for all.'},
   {k:'trip', e:'✈️', n:'Build Our Trip', d:'Random destination, budget, and one ridiculous restriction.'},
 ];

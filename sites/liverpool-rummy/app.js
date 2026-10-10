@@ -157,7 +157,7 @@ $("btn-restore").addEventListener("click", function () {
 $("setup-back").addEventListener("click", function () { show("screen-home"); });
 
 /* ---------- setup ---------- */
-var setupNames = ["Luke", "Gabrielle"];
+var setupNames = ["Luke", "Player 2"];
 function openSetup(mode) {
   app.mode = mode;
   $("setup-online").classList.toggle("hidden", mode !== "online");

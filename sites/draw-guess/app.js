@@ -84,7 +84,7 @@ async function ensureFirebaseConfig() {
 }
 
 const state = {
-  names: ["Luke", "Gabrielle"],
+  names: ["Luke", "Player 2"],
   rounds: 6,
   timeLimit: 60,
   cats: [],

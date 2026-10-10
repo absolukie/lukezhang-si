@@ -1,5 +1,5 @@
 // data/games.js — Game-mode content for "What Should We Talk About?"
-// For Luke & Gabrielle. Both partners lock in an answer, then reveal.
+// For two partners. Both lock in an answer, then reveal.
 (function(){
   window.WSTA = window.WSTA || {};
   WSTA.games = {

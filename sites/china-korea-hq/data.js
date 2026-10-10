@@ -190,7 +190,7 @@ HQ.PHRASES_MANDARIN = [
   { p: "再见", py: "zai jian", en: "Goodbye", use: "Leaving shops, hotels, new friends." },
   { p: "对不起", py: "dui bu qi", en: "Sorry / excuse me", use: "Bumping through crowds, getting attention politely." },
   { p: "没关系", py: "mei guan xi", en: "No problem / you're welcome", use: "The gracious reply to everything." },
-  { p: "我爱你", py: "wo ai ni", en: "I love you", use: "For Gabrielle. Obviously." },
+  { p: "我爱你", py: "wo ai ni", en: "I love you", use: "For my wife. Obviously." },
   { p: "很好吃", py: "hen hao chi", en: "Really delicious", use: "Level up from 好吃 when it's exceptional." },
   { p: "救命", py: "jiu ming", en: "Help!", use: "Emergency only. Hope you never need it." },
   { p: "我迷路了", py: "wo mi lu le", en: "I'm lost", use: "Show a local your hotel name on your phone too." },
@@ -211,7 +211,7 @@ HQ.PHRASES_KOREAN = [
   { p: "맛있어요", py: "masisseoyo", en: "It's delicious", use: "Say it mid-bite at KBBQ." },
   { p: "화장실 어디예요?", py: "hwajangsil eodiyeyo", en: "Where is the bathroom?", use: "Memorize this one." },
   { p: "계산서 주세요", py: "gyesanseo juseyo", en: "Check, please", use: "Restaurants — or pay at the counter." },
-  { p: "사랑해", py: "saranghae", en: "I love you", use: "For Gabrielle. Obviously." },
+  { p: "사랑해", py: "saranghae", en: "I love you", use: "For my wife. Obviously." },
   { p: "건배", py: "geonbae", en: "Cheers!", use: "Pour with two hands for elders." },
   { p: "도와주세요", py: "dowajuseyo", en: "Please help me", use: "Emergency phrase." },
   { p: "이거 주세요", py: "igeo juseyo", en: "Please give me this", use: "Point at the menu + this = dinner solved." },
@@ -269,7 +269,7 @@ HQ.PREP_MISSIONS = [
 /* Daily pre-trip missions — one small prep action per day.
    (In-trip and post-trip features were removed; this app is pre-trip only.) */
 HQ.DAILY_PREP = [
-  "Learn 3 new characters and teach them to Gabrielle ✍️",
+  "Learn 3 new characters and teach them to my wife ✍️",
   "Watch a 10-min video about one of the four cities 🎬",
   "Practice ordering food in Mandarin out loud 🥟",
   "Find one restaurant in each city you'd love to try 🍜",

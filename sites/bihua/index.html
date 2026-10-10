@@ -28,7 +28,7 @@
   .wrap{width:100%; max-width:520px; display:flex; flex-direction:column; gap:14px; padding-top:calc(14px + env(safe-area-inset-top));}
 
   header{display:flex; align-items:flex-end; justify-content:space-between; gap:12px;}
-  .diff{display:flex; gap:6px; justify-content:center;}
+  .diff{display:flex; gap:6px; justify-content:flex-end;}
   .diff button{
     font-family:inherit; font-size:12px; font-weight:700; letter-spacing:.04em;
     padding:6px 13px; border-radius:999px; cursor:pointer; touch-action:manipulation;
@@ -38,6 +38,33 @@
   .diff button:active{transform:scale(.94);}
   .diff button.on{background:var(--ink); border-color:var(--ink); color:var(--paper);}
   .diff button:not(.on){opacity:.5;}
+  .diff button.tremble{animation:tremble .22s;}
+  @keyframes tremble{0%,100%{transform:translateX(0)}30%{transform:translateX(-2px) rotate(-1deg)}70%{transform:translateX(2px) rotate(1deg)}}
+
+  /* easter egg: the hardest character */
+  #boss{
+    position:fixed; inset:0; z-index:40;
+    background:var(--paper);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:6px; padding:32px 24px; text-align:center;
+    transition:opacity .35s ease;
+    background-image:radial-gradient(rgba(120,95,60,.10) 1px, transparent 1.4px);
+    background-size:22px 22px;
+  }
+  #boss.hide{opacity:0; pointer-events:none;}
+  #boss img{width:min(62vw,280px); height:auto; margin-bottom:6px;
+    animation:bossIn .5s cubic-bezier(.2,1.6,.4,1);}
+  @keyframes bossIn{from{transform:scale(.6); opacity:0;}to{transform:scale(1); opacity:1;}}
+  #boss .bpy{color:var(--accent); font-size:24px; letter-spacing:.35em; text-indent:.35em; font-weight:600;}
+  #boss .ben{color:var(--ink-soft); font-size:16px; margin-top:2px;}
+  #boss .bcap{color:var(--ink-soft); font-size:14px; margin-top:10px; line-height:1.6;}
+  #bossBack{
+    margin-top:18px; font-family:inherit; font-size:15px; font-weight:700;
+    padding:12px 28px; border-radius:999px; cursor:pointer; touch-action:manipulation;
+    border:2px solid var(--ink); background:var(--ink); color:var(--paper);
+    transition:transform .08s;
+  }
+  #bossBack:active{transform:scale(.95);}
   .brand h1{margin:0; font-size:30px; letter-spacing:.02em; font-weight:800;}
   .brand h1 .cn{color:var(--accent);}
   .brand p{margin:2px 0 0; font-size:11px; letter-spacing:.42em; color:var(--ink-soft); font-weight:600;}
@@ -159,6 +186,14 @@
           fill="none" stroke="#2b2118" stroke-width="11" stroke-linecap="round"/>
   </svg>
   <div class="loadtext"><span class="cn">磨墨</span> · CRUSHING INK</div>
+</div>
+
+<div id="boss" class="hide" role="dialog" aria-label="Easter egg">
+  <img src="biang.png" alt="The character biang">
+  <div class="bpy">biang</div>
+  <div class="ben">biangbiang noodles · 56 strokes</div>
+  <div class="bcap">the hardest Chinese character.<br>good luck out there.</div>
+  <button id="bossBack" type="button">back to practice</button>
 </div>
 
 <div class="wrap">
@@ -347,6 +382,25 @@ function tapDiff(which){
   if(!charAllowed(CHARS[cur])){ advanceCur(); renderChar(); }
 }
 
+/* easter egg: spam the hard button 5 times within 2.5s and meet biang,
+   the hardest Chinese character. Each tap gives the button a tiny shake,
+   subtle enough to feel like nothing, suspicious enough to keep tapping. */
+let hardTapTimes = [];
+function onHardTap(){
+  const b = $("dHard");
+  b.classList.remove("tremble"); void b.offsetWidth; b.classList.add("tremble");
+  const now = Date.now();
+  hardTapTimes = hardTapTimes.filter(t => now - t < 2500);
+  hardTapTimes.push(now);
+  if(hardTapTimes.length >= 5){
+    hardTapTimes = [];
+    const img = $("boss").querySelector("img");
+    img.style.animation = "none"; void img.offsetWidth; img.style.animation = "";
+    $("boss").classList.remove("hide");
+  }
+  tapDiff("hard");
+}
+
 function path(d){
   return '<path d="'+d+'" fill="none" stroke-width="90" stroke-linecap="round" stroke-linejoin="round"/>';
 }
@@ -494,7 +548,8 @@ function complete(){
   buildKeyboard();
   paintDiff();
   $("dEasy").addEventListener("click", ()=>tapDiff("easy"));
-  $("dHard").addEventListener("click", ()=>tapDiff("hard"));
+  $("dHard").addEventListener("click", onHardTap);
+  $("bossBack").addEventListener("click", ()=>$("boss").classList.add("hide"));
   updateStats();
   renderChar();
   $("loader").classList.add("hide");

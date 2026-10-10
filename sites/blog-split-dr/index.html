@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Blog vs Explainer Split - Design Review</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    min-height: 100%;
+    background: radial-gradient(circle at 50% 0%, #3a2718 0%, #1c130e 45%, #0d0a09 100%);
+    background-attachment: fixed;
+    color: #f3e2cd;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.7;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 24px 20px 140px; }
+  nav.top { margin-bottom: 24px; font-size: 14px; }
+  nav.top a { color: rgba(243,226,205,0.55); text-decoration: none; }
+  h1 { font-size: 28px; margin-bottom: 6px; color: #ffd9a8; }
+  .sub { color: rgba(243,226,205,0.6); margin-bottom: 32px; font-size: 15px; }
+  .step { display: none; }
+  .step.active { display: block; animation: fadeIn 200ms ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .card {
+    border: 1px solid rgba(232,161,92,0.25); border-radius: 14px;
+    padding: 24px; margin-bottom: 16px; background: rgba(255,255,255,0.02);
+  }
+  .card .kicker { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(232,161,92,0.7); margin-bottom: 8px; }
+  .card h2 { font-size: 20px; margin-bottom: 6px; color: #ffd9a8; }
+  .card .meta { font-size: 13px; color: rgba(243,226,205,0.5); margin-bottom: 12px; }
+  .card .desc { font-size: 15px; color: rgba(243,226,205,0.85); margin-bottom: 16px; }
+  .card .kittake { font-size: 14px; color: rgba(243,226,205,0.65); background: rgba(232,161,92,0.08); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; }
+  .card .kittake strong { color: #e8a15c; }
+  .q { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #f3e2cd; }
+  .opts { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+  .opt {
+    font-family: inherit; font-size: 16px; text-align: left;
+    color: #f3e2cd; background: rgba(255,255,255,0.03);
+    border: 2px solid rgba(232,161,92,0.25); border-radius: 12px;
+    padding: 14px 16px; cursor: pointer; touch-action: manipulation;
+    transition: border-color 150ms, background 150ms;
+  }
+  .opt:active { transform: scale(0.98); }
+  .opt.selected { border-color: #e8a15c; background: rgba(232,161,92,0.15); }
+  .opt .label { font-weight: 700; color: #e8a15c; display: block; margin-bottom: 2px; }
+  .opt .detail { font-size: 14px; color: rgba(243,226,205,0.7); }
+  textarea.notes {
+    width: 100%; font-family: inherit; font-size: 16px;
+    color: #f3e2cd; background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(232,161,92,0.25); border-radius: 10px;
+    padding: 12px 14px; min-height: 60px; resize: vertical;
+  }
+  textarea.notes:focus { outline: none; border-color: #e8a15c; }
+  .clearbtn { display: block; text-align: right; font-size: 13px; color: rgba(243,226,205,0.4); background: none; border: none; cursor: pointer; margin-top: 4px; width: 100%; }
+  .stepbar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: rgba(28,19,14,0.97); backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(232,161,92,0.2);
+    padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
+  }
+  .stepbar .prog { height: 4px; background: rgba(232,161,92,0.2); border-radius: 2px; margin-bottom: 10px; overflow: hidden; }
+  .stepbar .prog .fill { height: 100%; background: #e8a15c; border-radius: 2px; transition: width 200ms; }
+  .stepbar .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .stepbar .count { font-size: 13px; color: rgba(243,226,205,0.6); }
+  .stepbar .btns { display: flex; gap: 10px; }
+  .stepbar button.nav {
+    font-family: inherit; font-size: 16px; font-weight: 600;
+    padding: 12px 24px; border-radius: 10px; cursor: pointer;
+    touch-action: manipulation; border: none;
+  }
+  .stepbar button.nav.back { background: rgba(255,255,255,0.08); color: #f3e2cd; }
+  .stepbar button.nav.back:disabled { opacity: 0.3; }
+  .stepbar button.nav.next { background: #e8a15c; color: #1c130e; }
+  .stepbar button.nav.next:active { transform: scale(0.96); }
+  .dots { display: flex; gap: 6px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
+  .dots .dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(232,161,92,0.25); cursor: pointer; border: 2px solid transparent; }
+  .dots .dot.answered { background: #4caf50; }
+  .dots .dot.current { border-color: #e8a15c; }
+  .savepill { font-size: 12px; color: rgba(243,226,205,0.5); display: flex; align-items: center; gap: 6px; }
+  .savepill .pulse { width: 8px; height: 8px; border-radius: 50%; background: #4caf50; }
+  .savepill.saving .pulse { background: #e8a15c; animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .toast {
+    position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: #2a1f16; color: #ffd9a8; padding: 12px 20px; border-radius: 10px;
+    border: 1px solid rgba(232,161,92,0.4); font-size: 14px;
+    opacity: 0; pointer-events: none; transition: all 200ms; z-index: 100;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .summary { font-size: 15px; }
+  .summary .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(232,161,92,0.15); }
+  .summary .row .cat { font-weight: 700; }
+  .summary .row .cat.blog { color: #7fc4c9; }
+  .summary .row .cat.explainer { color: #e8a15c; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="top"><a href="../design-docs/">← design docs</a></nav>
+  <div id="steps"></div>
+</div>
+<div class="stepbar">
+  <div class="prog"><div class="fill" id="progfill"></div></div>
+  <div class="row">
+    <div>
+      <div class="count" id="stepcount"></div>
+      <div class="savepill" id="savepill"><span class="pulse"></span><span id="savetext">Autosaved</span></div>
+    </div>
+    <div class="btns">
+      <button class="nav back" id="btnback">Back</button>
+      <button class="nav next" id="btnnext">Next</button>
+    </div>
+  </div>
+  <div class="dots" id="dots"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const POSTS = [
+  {slug:"gps-mindset", title:"The GPS Mindset", meta:"Oct 10 · faith · life", desc:"Miss a turn and your GPS does not call you an idiot. It says recalculating and finds the next best route.", proposed:"explainer", take:"Explains the GPS mindset concept from George Mack's framing. Not about something you built."},
+  {slug:"my-ai-has-its-own-computer", title:"My AI Has Its Own Computer", meta:"Oct 9 · ai · engineering", desc:"Muse lives on its own computer, I talk to it from my phone. That architectural difference changes everything.", proposed:"blog", take:"About YOUR setup and what you built. Classic blog."},
+  {slug:"swe-interviews-vs-agents", title:"Hire the Reviewer, Not the Typer", meta:"Oct 9 · ai · engineering", desc:"Lauren Tan proposed cutting software interviews to two rounds: system design and building with agents.", proposed:"explainer", take:"About Lauren Tan's proposal. You're explaining her idea."},
+  {slug:"be-bad-for-a-long-time", title:"Be Bad at It for a Long Time", meta:"Oct 9 · faith · life", desc:"A viral post says most people fail because they won't be bad at something for a long time. The Bible agrees.", proposed:"explainer", take:"Explains a viral concept + biblical parallel. Not your build."},
+  {slug:"pretend-i-didnt-hear-that", title:"I'm Going to Pretend I Didn't Hear That", meta:"Oct 9 · faith · life", desc:"My pastor preached on toxic self-talk. Includes 6 lie-vs-truth flip cards.", proposed:"explainer", take:"About your pastor's sermon. You're explaining his message."},
+  {slug:"sidecar-explained", title:"Your Pod's Plus-One", meta:"Oct 9 · infrastructure", desc:"A sidecar is a helper container riding in the same pod as your app.", proposed:"explainer", take:"Pure technical explainer. No personal build."},
+  {slug:"ai-calls-to-china", title:"My AI Calls Restaurants in China", meta:"Oct 9 · ai · engineering", desc:"Twilio can't call mainland China, so I built a second lane: a Mandarin-speaking AI agent.", proposed:"blog", take:"About what YOU built. Classic blog."},
+  {slug:"ai-bank-heist", title:"One Guy, Seven Banks", meta:"Oct 9 · ai · engineering", desc:"One operator, one AI agent, seven South Korean banks. The kill chain step by step.", proposed:"explainer", take:"About what the hacker did. You're explaining his operation."},
+  {slug:"llm-training", title:"How an LLM Learns, Step by Step", meta:"Oct 8 · llms · ai", desc:"Training a model is just next-token prediction at absurd scale.", proposed:"explainer", take:"Technical explainer. Not your build."},
+  {slug:"unit-tests", title:"Are Unit Tests Dead?", meta:"Oct 8 · engineering · ai", desc:"An engineer ran 444 agent coding runs and told his agents to skip the tests.", proposed:"explainer", take:"About another engineer's experiment. You're explaining his findings."},
+  {slug:"ml-functions", title:"The functions that run the machine", meta:"Oct 8 · math · llms", desc:"Six functions do almost all the work inside every model.", proposed:"explainer", take:"Math explainer. Not your build."},
+  {slug:"agent-training", title:"Teaching AI hands", meta:"Oct 8 · ai · engineering", desc:"How agents learn to use computers and do chores.", proposed:"explainer", take:"Technical explainer about VLA models."},
+  {slug:"high-agency", title:"High Agency", meta:"Oct 8 · culture · business", desc:"The people who happen to life. The jail cell test, the three wheels.", proposed:"explainer", take:"About George Mack's essay. You're explaining his framework."},
+  {slug:"math-curiosity", title:"The math you called useless is running your life", meta:"Oct 8 · math · culture", desc:"School taught math as computation. What is left is math as a way of thinking.", proposed:"explainer", take:"Math philosophy explainer."},
+  {slug:"derivatives", title:"Derivatives, the mastery sheet", meta:"Oct 8 · math · llms", desc:"The one idea, four from-scratch derivations, flashcards.", proposed:"explainer", take:"Math tutorial. Not your build."},
+  {slug:"taylor-mastery", title:"Taylor series, the mastery sheet", meta:"Oct 8 · math · llms", desc:"The one idea, the big five series, why the factorials show up.", proposed:"explainer", take:"Math tutorial."},
+  {slug:"waves", title:"Sines all the way down", meta:"Oct 8 · math · llms", desc:"Sine and cosine are the atoms of repetition: sound, JPEG, MRI.", proposed:"explainer", take:"Math explainer."},
+  {slug:"poteto-tracker", title:"Poteto Tracker", meta:"Oct 8 · engineering · tools", desc:"One engineer burned 1.5T Cursor tokens in 30 days. I built a tracker.", proposed:"blog", take:"About what YOU built (the tracker site). Blog."},
+  {slug:"ci-speed-tips", title:"Two CI speedups, both free", meta:"Oct 8 · engineering · tools", desc:"Replace ESLint with Oxlint and run GitHub Actions steps in parallel.", proposed:"explainer", take:"Tips explainer. Borderline, but it's instructional not personal."},
+  {slug:"how-fine-tuning-works", title:"How fine-tuning works", meta:"Oct 6 · ai · llms", desc:"Train a simulated model yourself, play with learning rate.", proposed:"explainer", take:"Interactive explainer."},
+  {slug:"inner-outer-loop", title:"The Loop That Watches the Loop", meta:"Oct 6 · ai · engineering", desc:"Ben Holmes splits engineering into two loops: inner and outer.", proposed:"explainer", take:"About Ben Holmes' concept."},
+  {slug:"lean-proofs", title:"OpenAI Proved 722 Theorems. I Proved One.", meta:"Oct 6 · math", desc:"OpenAI released 722 math manuscripts. The proofs are... I proved one.", proposed:"blog", take:"The title says 'I Proved One' - it's about YOUR proof. Blog."},
+  {slug:"meta-rebalancer", title:"Meta Open-Sourced Their Scheduler", meta:"Oct 6 · infrastructure", desc:"Meta just open-sourced Rebalancer.", proposed:"explainer", take:"About what Meta did."},
+  {slug:"skill-tree-app-design", title:"My Skills, Painted in Ink", meta:"Oct 6 · design", desc:"I am building a skill tree app for my real life. Five visual styles.", proposed:"blog", take:"About YOUR app design process. Blog."},
+  {slug:"excalidraw-share-links", title:"Excalidraw share links are just an ID and a key", meta:"Oct 6 · engineering · tools", desc:"I reverse-engineered the Excalidraw share protocol.", proposed:"blog", take:"About YOUR reverse-engineering. Blog."},
+  {slug:"black-hole-disk-animation", title:"The black hole's rings are a bug", meta:"Oct 5 · engineering", desc:"The striations on my black hole page are a shader artifact I kept.", proposed:"blog", take:"About YOUR project. Blog."},
+  {slug:"school-of-hard-knocks", title:"46 pieces of advice from 12 billionaires", meta:"Oct 5 · business", desc:"The sharpest advice from 12 billionaire founders.", proposed:"explainer", take:"About what billionaires said."},
+  {slug:"build-log", title:"Build log", meta:"Living document · engineering", desc:"Everything I've built with Muse, day by day.", proposed:"blog", take:"About YOUR builds. Blog."},
+  {slug:"rag", title:"RAG, explained", meta:"Oct 4 · ai · llms", desc:"The open-book exam for AI: retrieve, paste, answer.", proposed:"explainer", take:"Technical explainer."},
+  {slug:"recursive-language-models", title:"Recursive language models, explained", meta:"Oct 4 · ai · llms", desc:"Your prompt is a file, not a sentence.", proposed:"explainer", take:"Technical explainer."},
+  {slug:"why-richard-is-dick", title:"Why Richard gets shortened to Dick", meta:"Oct 4 · language", desc:"Medieval England's rhyming nicknames.", proposed:"explainer", take:"Etymology explainer."},
+  {slug:"what-is-an-eval", title:"Evals, explained", meta:"Oct 3 · ai · engineering", desc:"A standardized test for AI models.", proposed:"explainer", take:"Technical explainer."},
+  {slug:"uber-mcp-gateway", title:"Uber's MCP Gateway, explained", meta:"Oct 3 · ai · infrastructure", desc:"One gateway in front of 800+ MCP servers.", proposed:"explainer", take:"About what Uber built."},
+  {slug:"green-line-meme", title:"The green line meme, explained", meta:"Oct 1 · culture", desc:"Autism Capital's 'He knows about the green lines'.", proposed:"explainer", take:"Meme explainer."},
+  {slug:"fastapi", title:"FastAPI, explained", meta:"Oct 1 · engineering", desc:"Type hints in, validated JSON API out.", proposed:"explainer", take:"Technical explainer."},
+  {slug:"two-brains", title:"Your brain is two organs", meta:"Oct 1 · science", desc:"500 million neurons in your gut.", proposed:"explainer", take:"Science explainer."},
+  {slug:"kill-localhost-oauth", title:"Kill the localhost redirect", meta:"Oct 1 · engineering", desc:"Why the localhost OAuth flow is brittle.", proposed:"explainer", take:"Technical opinion/explainer."},
+  {slug:"tailscale", title:"Tailscale, explained", meta:"Oct 1 · infrastructure", desc:"A mesh VPN built on WireGuard.", proposed:"explainer", take:"Technical explainer."},
+];
+
+const KEY = "blog-split-dr-v1";
+let state = { picks: {}, notes: {}, otherNotes: "", current: 0 };
+
+try {
+  const saved = localStorage.getItem(KEY);
+  if (saved) state = {...state, ...JSON.parse(saved)};
+} catch(e) {}
+
+let saveTimer = null;
+function save() {
+  clearTimeout(saveTimer);
+  const pill = document.getElementById("savepill");
+  const txt = document.getElementById("savetext");
+  saveTimer = setTimeout(() => {
+    pill.classList.add("saving");
+    txt.textContent = "Saving...";
+    setTimeout(() => {
+      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e) {}
+      pill.classList.remove("saving");
+      txt.textContent = "Autosaved " + new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+    }, 400);
+  }, 1200);
+}
+
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2000);
+}
+
+function render() {
+  const container = document.getElementById("steps");
+  container.innerHTML = "";
+
+  // Intro step
+  const intro = document.createElement("div");
+  intro.className = "step" + (state.current === 0 ? " active" : "");
+  intro.innerHTML = `
+    <div class="card">
+      <div class="kicker">Design Review</div>
+      <h1>Blog vs Explainer Split</h1>
+      <p class="sub" style="margin-bottom:16px">38 posts. My proposed split: <strong style="color:#7fc4c9">8 blogs</strong> (things you did) and <strong style="color:#e8a15c">30 explainers</strong> (things others did).</p>
+      <p style="font-size:15px; color:rgba(243,226,205,0.8)">Tap through each post. Confirm my category or flip it. Add notes where you disagree with my reasoning.</p>
+      <p style="font-size:15px; color:rgba(243,226,205,0.8); margin-top:12px">At the end you'll see the full split and make the final call.</p>
+    </div>`;
+  container.appendChild(intro);
+
+  // Post steps
+  POSTS.forEach((p, i) => {
+    const step = document.createElement("div");
+    step.className = "step" + (state.current === i+1 ? " active" : "");
+    const pick = state.picks[p.slug];
+    step.innerHTML = `
+      <div class="card">
+        <div class="kicker">Post ${i+1} of ${POSTS.length}</div>
+        <h2>${p.title}</h2>
+        <div class="meta">${p.meta} · /blog/${p.slug}/</div>
+        <p class="desc">${p.desc}</p>
+        <div class="kittake"><strong>Kit's take:</strong> ${p.take} My call: <strong>${p.proposed === 'blog' ? 'Blog' : 'Explainer'}</strong>.</div>
+        <div class="q">Your call: which bucket?</div>
+        <div class="opts">
+          <button class="opt ${pick === 'blog' ? 'selected' : ''}" data-slug="${p.slug}" data-val="blog">
+            <span class="label">Blog</span>
+            <span class="detail">About things I did. Personal builds, my projects, my experiences.</span>
+          </button>
+          <button class="opt ${pick === 'explainer' ? 'selected' : ''}" data-slug="${p.slug}" data-val="explainer">
+            <span class="label">Explainer</span>
+            <span class="detail">About what others did. Concepts, papers, other people's work.</span>
+          </button>
+        </div>
+        <textarea class="notes" data-slug="${p.slug}" placeholder="Notes on this one (optional)">${state.notes[p.slug] || ''}</textarea>
+        <button class="clearbtn" data-slug="${p.slug}">Clear notes</button>
+      </div>`;
+    container.appendChild(step);
+  });
+
+  // Other notes step
+  const otherIdx = POSTS.length + 1;
+  const otherStep = document.createElement("div");
+  otherStep.className = "step" + (state.current === otherIdx ? " active" : "");
+  otherStep.innerHTML = `
+    <div class="card">
+      <div class="kicker">Other notes</div>
+      <h2>Anything else?</h2>
+      <p class="desc">Naming, URL structure, anything about the split I should know.</p>
+      <textarea class="notes" id="othernotes" placeholder="Other notes...">${state.otherNotes || ''}</textarea>
+      <button class="clearbtn" id="clearother">Clear notes</button>
+    </div>`;
+  container.appendChild(otherStep);
+
+  // Final step
+  const finalIdx = POSTS.length + 2;
+  const finalStep = document.createElement("div");
+  finalStep.className = "step" + (state.current === finalIdx ? " active" : "");
+  
+  const blogs = POSTS.filter(p => (state.picks[p.slug] || p.proposed) === 'blog');
+  const explainers = POSTS.filter(p => (state.picks[p.slug] || p.proposed) === 'explainer');
+  
+  finalStep.innerHTML = `
+    <div class="card">
+      <div class="kicker">Final call</div>
+      <h2>The split</h2>
+      <div class="summary">
+        <div class="row"><span><strong style="color:#7fc4c9">${blogs.length} blogs</strong></span><span></span></div>
+        ${blogs.map(p => `<div class="row"><span>${p.title}</span><span class="cat blog">blog</span></div>`).join('')}
+        <div class="row" style="margin-top:16px"><span><strong style="color:#e8a15c">${explainers.length} explainers</strong></span><span></span></div>
+        ${explainers.map(p => `<div class="row"><span>${p.title}</span><span class="cat explainer">explainer</span></div>`).join('')}
+      </div>
+      <div class="q" style="margin-top:20px">Ship this split?</div>
+      <div class="opts">
+        <button class="opt ${state.picks['_final'] === 'ship' ? 'selected' : ''}" data-slug="_final" data-val="ship">
+          <span class="label">Ship it</span>
+          <span class="detail">Split the blog index into /blog/ and /explainers/ with these assignments.</span>
+        </button>
+        <button class="opt ${state.picks['_final'] === 'revise' ? 'selected' : ''}" data-slug="_final" data-val="revise">
+          <span class="label">Revise first</span>
+          <span class="detail">I'll adjust based on your notes above, then re-verify.</span>
+        </button>
+      </div>
+    </div>`;
+  container.appendChild(finalStep);
+
+  // Wire up options
+  container.querySelectorAll(".opt").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const slug = btn.dataset.slug;
+      const val = btn.dataset.val;
+      if (state.picks[slug] === val) {
+        delete state.picks[slug];
+      } else {
+        state.picks[slug] = val;
+      }
+      save();
+      render();
+      updateChrome();
+    });
+  });
+
+  // Wire up notes
+  container.querySelectorAll("textarea.notes[data-slug]").forEach(ta => {
+    ta.addEventListener("input", () => {
+      state.notes[ta.dataset.slug] = ta.value;
+      save();
+    });
+  });
+  const otherTA = document.getElementById("othernotes");
+  if (otherTA) {
+    otherTA.addEventListener("input", () => {
+      state.otherNotes = otherTA.value;
+      save();
+    });
+  }
+
+  // Wire up clear buttons
+  container.querySelectorAll(".clearbtn[data-slug]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const slug = btn.dataset.slug;
+      const old = state.notes[slug] || "";
+      state.notes[slug] = "";
+      save(); render(); updateChrome();
+      toast("Notes cleared");
+    });
+  });
+  const clearOther = document.getElementById("clearother");
+  if (clearOther) {
+    clearOther.addEventListener("click", () => {
+      state.otherNotes = "";
+      save(); render(); updateChrome();
+      toast("Notes cleared");
+    });
+  }
+
+  updateChrome();
+}
+
+function updateChrome() {
+  const total = POSTS.length + 3; // intro + posts + other + final
+  const pct = ((state.current + 1) / total) * 100;
+  document.getElementById("progfill").style.width = pct + "%";
+  
+  const labels = ["Intro", ...POSTS.map((p,i) => `Post ${i+1}`), "Notes", "Final"];
+  document.getElementById("stepcount").textContent = 
+    `Step ${state.current + 1} of ${total} · ${labels[state.current]}`;
+  
+  document.getElementById("btnback").disabled = state.current === 0;
+  document.getElementById("btnnext").textContent = 
+    state.current === total - 1 ? "Submit" : "Next";
+
+  // Dots
+  const dots = document.getElementById("dots");
+  dots.innerHTML = "";
+  for (let i = 0; i < total; i++) {
+    const d = document.createElement("div");
+    d.className = "dot";
+    if (i === state.current) d.classList.add("current");
+    // Mark answered
+    if (i === 0) d.classList.add("answered");
+    else if (i >= 1 && i <= POSTS.length) {
+      const p = POSTS[i-1];
+      if (state.picks[p.slug]) d.classList.add("answered");
+    } else if (i === POSTS.length + 1 && state.otherNotes) {
+      d.classList.add("answered");
+    } else if (i === POSTS.length + 2 && state.picks['_final']) {
+      d.classList.add("answered");
+    }
+    d.addEventListener("click", () => {
+      state.current = i;
+      save(); render();
+      window.scrollTo(0, 0);
+    });
+    dots.appendChild(d);
+  }
+}
+
+document.getElementById("btnback").addEventListener("click", () => {
+  if (state.current > 0) {
+    state.current--;
+    save(); render();
+    window.scrollTo(0, 0);
+  }
+});
+
+document.getElementById("btnnext").addEventListener("click", () => {
+  const total = POSTS.length + 3;
+  if (state.current < total - 1) {
+    state.current++;
+    save(); render();
+    window.scrollTo(0, 0);
+  } else {
+    // Submit
+    const btn = document.getElementById("btnnext");
+    btn.textContent = "Submitting...";
+    btn.disabled = true;
+    
+    const picks = {};
+    const notes = {};
+    POSTS.forEach(p => {
+      picks[p.slug] = state.picks[p.slug] || p.proposed;
+      if (state.notes[p.slug]) notes[p.slug] = state.notes[p.slug];
+    });
+    
+    fetch("/api/decision/submit", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        slug: "blog-split-dr",
+        picks: picks,
+        notes: notes,
+        final: state.picks['_final'] || 'undecided',
+        otherNotes: state.otherNotes || ''
+      })
+    }).then(r => r.json()).then(data => {
+      toast("Submitted!");
+      btn.textContent = "Submit";
+      btn.disabled = false;
+    }).catch(e => {
+      toast("Saved locally (server unreachable)");
+      btn.textContent = "Submit";
+      btn.disabled = false;
+    });
+  }
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return;
+  if (e.key === "ArrowRight") document.getElementById("btnnext").click();
+  if (e.key === "ArrowLeft") document.getElementById("btnback").click();
+});
+
+render();
+</script>
+</body>
+</html>

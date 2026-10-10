@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Bihua: draw it in order</title>
+<meta name="description" content="Learn Chinese stroke order by drawing. Study each stroke, then draw the character in the right order.">
+<style>
+:root{
+  --paper:#f4eddc; --paper2:#ece2c8; --card:#faf5e8; --line:#d8c9a4;
+  --ink:#2b2118; --muted:#8a7a5c; --faint:#b3a37e;
+  --red:#c8402a; --gold:#d9a441; --green:#4d7c43;
+  --mono:ui-monospace,'SF Mono',SFMono-Regular,Consolas,monospace;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Helvetica,Arial,'Songti SC','SimSun',serif;
+  background-image:radial-gradient(rgba(120,90,40,.06) 1px, transparent 1px);
+  background-size:22px 22px;
+  overscroll-behavior:none;}
+.wrap{max-width:480px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;padding:0 18px 40px;}
+header{display:flex;align-items:center;justify-content:space-between;padding:20px 2px 6px;}
+.brand{font-size:22px;font-weight:800;letter-spacing:.02em;}
+.brand .zh{color:var(--red);}
+.brand small{font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--muted);display:block;font-weight:400;}
+.stats{display:flex;gap:14px;font-family:var(--mono);font-size:13px;color:var(--muted);}
+.stats b{color:var(--ink);font-size:16px;}
+#charhead{text-align:center;margin:8px 0 4px;}
+#charhead .py{font-family:var(--mono);font-size:14px;letter-spacing:.18em;color:var(--red);text-transform:lowercase;}
+#charhead .en{font-size:15px;color:var(--muted);margin-top:2px;}
+#stage{position:relative;background:var(--card);border:2px solid var(--line);border-radius:20px;
+  margin:12px 0;box-shadow:0 4px 0 rgba(120,90,40,.12);overflow:hidden;}
+#writer{width:100%;aspect-ratio:1/1;}
+#writer svg{touch-action:none;display:block;width:100%;height:auto;}
+#stage.shake{animation:shake .35s;}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-9px)}50%{transform:translateX(7px)}75%{transform:translateX(-4px)}}
+#stamp{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;
+  opacity:0;transform:scale(2.4) rotate(-14deg);transition:opacity .18s, transform .18s;}
+#stamp.show{opacity:1;transform:scale(1) rotate(-14deg);}
+#stamp span{font-size:74px;font-weight:900;color:var(--red);border:6px solid var(--red);border-radius:14px;
+  padding:2px 22px;background:rgba(250,245,232,.88);box-shadow:0 6px 24px rgba(200,64,42,.3);}
+#modeline{display:flex;background:var(--paper2);border:2px solid var(--line);border-radius:14px;padding:4px;margin:2px 0 12px;}
+#modeline button{flex:1;border:none;background:none;font-family:var(--mono);font-size:14px;letter-spacing:.14em;
+  padding:12px;border-radius:10px;color:var(--muted);cursor:pointer;touch-action:manipulation;text-transform:uppercase;}
+#modeline button.on{background:var(--card);color:var(--ink);font-weight:700;box-shadow:0 2px 0 rgba(120,90,40,.15);}
+#studybar,#quizbar{margin-bottom:6px;}
+#studybar .rowlabel,#quizbar .rowlabel{font-family:var(--mono);font-size:11px;letter-spacing:.18em;color:var(--muted);
+  text-transform:uppercase;margin:0 2px 8px;}
+#strokes{display:flex;flex-wrap:wrap;gap:8px;}
+.sbtn{width:58px;height:68px;border:2px solid var(--line);border-radius:12px;background:var(--card);
+  cursor:pointer;touch-action:manipulation;padding:2px;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;}
+.sbtn svg{width:40px;height:40px;}
+.sbtn .n{font-family:var(--mono);font-size:10px;color:var(--faint);line-height:1;}
+.sbtn.done{border-color:var(--green);}
+.sbtn.done .n{color:var(--green);}
+.sbtn:active{transform:scale(.93);}
+.sbtn.cur{border-color:var(--red);box-shadow:0 0 0 2px rgba(200,64,42,.25);}
+.widebtn{width:100%;margin-top:10px;border:2px solid var(--ink);background:var(--ink);color:var(--paper);
+  font-family:var(--mono);font-size:14px;letter-spacing:.14em;padding:14px;border-radius:14px;cursor:pointer;
+  touch-action:manipulation;text-transform:uppercase;}
+.widebtn:active{transform:scale(.98);}
+.widebtn.ghost{background:none;color:var(--ink);border-color:var(--line);}
+#quizprog{font-family:var(--mono);font-size:13px;letter-spacing:.1em;color:var(--muted);text-align:center;margin:2px 0 10px;}
+#quizprog b{color:var(--red);font-size:15px;}
+#levels{margin-top:18px;}
+#levels h3{font-family:var(--mono);font-size:11px;letter-spacing:.2em;color:var(--muted);text-transform:uppercase;margin:0 2px 8px;font-weight:400;}
+.lvlgroup{margin-bottom:12px;}
+.lvlgrid{display:flex;flex-wrap:wrap;gap:8px;}
+.lbtn{width:56px;height:56px;border:2px solid var(--line);border-radius:12px;background:var(--card);
+  font-size:26px;cursor:pointer;touch-action:manipulation;position:relative;color:var(--ink);
+  font-family:'Songti SC','SimSun',serif;}
+.lbtn:active{transform:scale(.93);}
+.lbtn.on{border-color:var(--red);box-shadow:0 0 0 2px rgba(200,64,42,.25);}
+.lbtn .chk{position:absolute;top:-7px;right:-7px;width:20px;height:20px;border-radius:50%;background:var(--green);
+  color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);}
+footer{margin-top:26px;text-align:center;font-size:12px;color:var(--faint);font-family:var(--mono);letter-spacing:.06em;}
+@media (prefers-reduced-motion:reduce){
+  #stage.shake{animation:none;}
+  #stamp{transition:none;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><span class="zh">笔画</span> Bihua<small>STROKE ORDER GAME</small></div>
+    <div class="stats"><span><b id="stDone">0</b> done</span><span><b id="stStreak">0</b> streak</span></div>
+  </header>
+
+  <div id="charhead">
+    <div class="py" id="chPy">hao</div>
+    <div class="en" id="chEn">good &middot; 6 strokes</div>
+  </div>
+
+  <div id="stage">
+    <div id="writer"></div>
+    <div id="stamp"><span>好!</span></div>
+  </div>
+
+  <div id="modeline" role="tablist" aria-label="Mode">
+    <button id="mStudy" class="on" role="tab" aria-selected="true">Study</button>
+    <button id="mQuiz" role="tab" aria-selected="false">Quiz</button>
+  </div>
+
+  <div id="studybar">
+    <p class="rowlabel">Tap a stroke to see it &middot; draw along</p>
+    <div id="strokes"></div>
+    <button class="widebtn" id="playAll">&#9654; Play all in order</button>
+  </div>
+
+  <div id="quizbar" hidden>
+    <p class="rowlabel">Draw each stroke in the right order</p>
+    <div id="quizprog">Stroke <b id="qCur">1</b> of <b id="qTot">6</b></div>
+    <button class="widebtn ghost" id="hintBtn">Show me this stroke</button>
+    <button class="widebtn ghost" id="clearBtn" style="margin-top:8px">Clear my drawing</button>
+  </div>
+
+  <div id="levels">
+    <h3>Characters</h3>
+    <div id="lvlgroups"></div>
+  </div>
+
+  <footer>stroke data: hanzi-writer (MIT) &middot; draw with your finger</footer>
+</div>
+
+<script src="vendor/hanzi-writer.min.js"></script>
+<script>
+(function(){
+"use strict";
+var CHARS = [
+  {c:"一", py:"yi", en:"one"},
+  {c:"人", py:"ren", en:"person"},
+  {c:"大", py:"da", en:"big"},
+  {c:"小", py:"xiao", en:"small"},
+  {c:"女", py:"nv", en:"woman"},
+  {c:"子", py:"zi", en:"child"},
+  {c:"日", py:"ri", en:"sun, day"},
+  {c:"月", py:"yue", en:"moon"},
+  {c:"天", py:"tian", en:"sky"},
+  {c:"中", py:"zhong", en:"middle"},
+  {c:"木", py:"mu", en:"wood"},
+  {c:"王", py:"wang", en:"king"},
+  {c:"本", py:"ben", en:"root, book"},
+  {c:"生", py:"sheng", en:"life, birth"},
+  {c:"白", py:"bai", en:"white"},
+  {c:"目", py:"mu", en:"eye"},
+  {c:"田", py:"tian", en:"field"},
+  {c:"古", py:"gu", en:"ancient"},
+  {c:"石", py:"shi", en:"stone"},
+  {c:"好", py:"hao", en:"good"}
+];
+var DATA = {};
+var store = { done: {}, streak: 0 };
+try{
+  var s = JSON.parse(localStorage.getItem("bihua") || "{}");
+  if(s.done) store.done = s.done;
+  if(s.streak) store.streak = s.streak;
+}catch(e){}
+function save(){ try{ localStorage.setItem("bihua", JSON.stringify(store)); }catch(e){} }
+
+var cur = 0, mode = "study", writer = null, strokeCount = 0, quizStroke = 0, misses = 0;
+var $ = function(id){ return document.getElementById(id); };
+var stage = $("stage"), stamp = $("stamp");
+
+function strokeSVG(d, color){
+  return '<svg viewBox="0 0 1024 1024" aria-hidden="true"><path d="' + d +
+    '" fill="none" stroke="' + (color || "#2b2118") + '" stroke-width="90" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+}
+
+function charDataLoader(char, onComplete){
+  if(DATA[char]){ onComplete(DATA[char]); return; }
+  fetch("data/" + encodeURIComponent(char) + ".json").then(function(r){ return r.json(); })
+    .then(function(d){ DATA[char] = d; onComplete(d); });
+}
+
+function buildWriter(){
+  $("writer").innerHTML = "";
+  var ch = CHARS[cur];
+  writer = HanziWriter.create($("writer"), ch.c, {
+    width: 340, height: 340, padding: 18,
+    strokeColor: "#2b2118",
+    radicalColor: "#2b2118",
+    highlightColor: "#c8402a",
+    outlineColor: "#d8c9a4",
+    showCharacter: true,
+    showOutline: true,
+    charDataLoader: charDataLoader,
+    renderer: "svg"
+  });
+  // load data to know stroke count + build buttons
+  charDataLoader(ch.c, function(d){
+    strokeCount = d.strokes.length;
+    buildStrokeButtons(d);
+    $("chPy").textContent = ch.py;
+    $("chEn").innerHTML = ch.en + " &middot; " + strokeCount + (strokeCount === 1 ? " stroke" : " strokes");
+    $("qTot").textContent = strokeCount;
+    if(mode === "quiz") startQuiz();
+  });
+}
+
+function buildStrokeButtons(d){
+  var box = $("strokes");
+  box.innerHTML = "";
+  d.strokes.forEach(function(path, i){
+    var b = document.createElement("button");
+    b.className = "sbtn";
+    b.setAttribute("aria-label", "Stroke " + (i+1));
+    b.innerHTML = strokeSVG(path) + '<span class="n">' + (i+1) + "</span>";
+    b.addEventListener("click", function(){
+      if(mode !== "study" || !writer) return;
+      markCur(i);
+      writer.animateStroke(i, {
+        strokeColor: "#c8402a",
+        onComplete: function(){ setTimeout(function(){ writer.updateColor("strokeColor", "#2b2118"); }, 350); }
+      });
+    });
+    box.appendChild(b);
+  });
+}
+function markCur(i){
+  var btns = $("strokes").children;
+  for(var k = 0; k < btns.length; k++) btns[k].classList.toggle("cur", k === i);
+}
+function markDone(i){
+  var b = $("strokes").children[i];
+  if(b) b.classList.add("done");
+}
+
+function setMode(m){
+  mode = m;
+  $("mStudy").classList.toggle("on", m === "study");
+  $("mQuiz").classList.toggle("on", m === "quiz");
+  $("mStudy").setAttribute("aria-selected", m === "study" ? "true" : "false");
+  $("mQuiz").setAttribute("aria-selected", m === "quiz" ? "true" : "false");
+  $("studybar").hidden = (m !== "study");
+  $("quizbar").hidden = (m !== "quiz");
+  stamp.classList.remove("show");
+  if(!writer) return;
+  if(m === "quiz"){ startQuiz(); }
+  else {
+    writer.cancelQuiz();
+    var btns = $("strokes").children;
+    for(var k = 0; k < btns.length; k++){ btns[k].classList.remove("done"); btns[k].classList.remove("cur"); }
+  }
+}
+
+function startQuiz(){
+  if(!writer || strokeCount === 0) return;
+  quizStroke = 0; misses = 0;
+  $("qCur").textContent = "1";
+  var btns = $("strokes").children;
+  for(var k = 0; k < btns.length; k++){ btns[k].classList.remove("done"); btns[k].classList.remove("cur"); }
+  writer.quiz({
+    quizStartStrokeNum: 0,
+    leniency: 1.15,
+    showHintAfterMisses: 2,
+    highlightOnComplete: true,
+    onCorrectStroke: function(strokeData){
+      markDone(strokeData.strokeNum);
+      quizStroke = strokeData.strokeNum + 1;
+      if(quizStroke < strokeCount) $("qCur").textContent = (quizStroke + 1);
+    },
+    onMistake: function(){
+      misses++;
+      stage.classList.remove("shake");
+      void stage.offsetWidth;
+      stage.classList.add("shake");
+    },
+    onComplete: function(){
+      stamp.classList.remove("show");
+      void stamp.offsetWidth;
+      stamp.classList.add("show");
+      var key = CHARS[cur].c;
+      var first = !store.done[key];
+      store.done[key] = true;
+      store.streak = (misses === 0) ? store.streak + 1 : 0;
+      save(); renderStats(); renderLevels();
+      setTimeout(function(){
+        if(cur < CHARS.length - 1 && first){ selectChar(cur + 1); }
+      }, 1400);
+    }
+  });
+}
+
+function selectChar(i){
+  cur = i;
+  stamp.classList.remove("show");
+  buildWriter();
+  renderLevels();
+  window.scrollTo({top: 0, behavior: "smooth"});
+}
+
+function renderStats(){
+  $("stDone").textContent = Object.keys(store.done).length;
+  $("stStreak").textContent = store.streak;
+}
+
+function renderLevels(){
+  var g = $("lvlgroups");
+  g.innerHTML = "";
+  var groups = {};
+  CHARS.forEach(function(ch, i){
+    var n = (DATA[ch.c] && DATA[ch.c].strokes.length) || "?";
+    (groups[n] = groups[n] || []).push(i);
+  });
+  Object.keys(groups).sort(function(a,b){ return (parseInt(a)||99) - (parseInt(b)||99); }).forEach(function(n){
+    var div = document.createElement("div");
+    div.className = "lvlgroup";
+    var h = document.createElement("h3");
+    h.textContent = n + (n === "1" ? " stroke" : " strokes");
+    div.appendChild(h);
+    var grid = document.createElement("div");
+    grid.className = "lvlgrid";
+    groups[n].forEach(function(i){
+      var b = document.createElement("button");
+      b.className = "lbtn" + (i === cur ? " on" : "");
+      b.textContent = CHARS[i].c;
+      b.setAttribute("aria-label", CHARS[i].c + ", " + CHARS[i].en);
+      if(store.done[CHARS[i].c]){
+        var chk = document.createElement("span");
+        chk.className = "chk";
+        chk.textContent = "✓";
+        b.appendChild(chk);
+      }
+      b.addEventListener("click", function(){ selectChar(i); });
+      grid.appendChild(b);
+    });
+    div.appendChild(grid);
+    g.appendChild(div);
+  });
+}
+
+$("mStudy").addEventListener("click", function(){ setMode("study"); });
+$("mQuiz").addEventListener("click", function(){ setMode("quiz"); });
+$("playAll").addEventListener("click", function(){
+  if(mode !== "study" || !writer) return;
+  writer.animateCharacter({
+    onComplete: function(){ markCur(-1); }
+  });
+});
+$("hintBtn").addEventListener("click", function(){
+  if(mode !== "quiz" || !writer || quizStroke >= strokeCount) return;
+  writer.animateStroke(quizStroke, { strokeColor: "#c8402a" });
+});
+$("clearBtn").addEventListener("click", function(){
+  if(mode !== "quiz" || !writer) return;
+  startQuiz();
+});
+
+// preload all data, then build
+var loaded = 0;
+CHARS.forEach(function(ch){
+  fetch("data/" + encodeURIComponent(ch.c) + ".json").then(function(r){ return r.json(); }).then(function(d){
+    DATA[ch.c] = d;
+    if(++loaded === CHARS.length){ renderStats(); renderLevels(); buildWriter(); }
+  });
+});
+})();
+</script>
+</body>
+</html>

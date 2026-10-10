@@ -114,7 +114,10 @@
   footer a { color: var(--ink-dim); text-decoration: none; }
   footer a:hover { color: var(--acc-soft); }
   footer .badge { margin-left: auto; font-size: 12px; letter-spacing: 0.04em; }
-</style>
+
+    .spotlight-label { font-size: 1.1rem; margin: 2rem 0 1rem; opacity: 0.7; }
+    .loading { opacity: 0.5; font-style: italic; }
+  </style>
 </head>
 <body>
 
@@ -241,38 +244,83 @@
 
   <!-- BEST OF BLOG -->
   <section class="block">
-    <p class="kicker">From the blog</p>
-    <h2>Best pieces</h2>
-    <p class="section-sub">The posts I'm proudest of. Visual, interactive, and built to be poked at.</p>
-    <div class="grid cols3">
-      <a class="card" href="/blog/skill-tree-app-design/">
-        <h3>My Skills, Painted in Ink</h3>
-        <p>I'm building a skill tree app for my real life. I tried five visual styles, picked the Chinese ink wash one, and prototyped four phone screens in Penpot.</p>
-        <span class="go">Read →</span>
-      </a>
-      <a class="card" href="/blog/black-hole-disk-animation/">
-        <h3>Black Holes Are Buggy</h3>
-        <p>The thin rings on my black hole page are a famous graphics bug. I kept them on purpose. Here's everything I learned.</p>
-        <span class="go">Read →</span>
-      </a>
-      <a class="card" href="/blog/my-ai-has-its-own-computer/">
-        <h3>My AI Has Its Own Computer</h3>
-        <p>Every AI agent I used before lived on my laptop. Muse lives on its own computer, and I talk to it from my phone.</p>
-        <span class="go">Read →</span>
-      </a>
-      <a class="card" href="/blog/excalidraw-share-links/">
-        <h3>Excalidraw Share Links Are Just an ID and a Key</h3>
-        <p>An Excalidraw share link doesn't contain your drawing. It holds a scene ID and a decryption key. I rebuilt the whole encrypted upload pipeline in Python.</p>
-        <span class="go">Read →</span>
-      </a>
-      <a class="card" href="/blog/ai-calls-to-china/">
-        <h3>My AI Calls Restaurants in China</h3>
-        <p>Twilio cannot call mainland China, full stop. So I built a second lane: a Mandarin-speaking AI agent, a SIP trunk, and a Telnyx number.</p>
-        <span class="go">Read →</span>
-      </a>
+    <div class="wrap">
+    <p class="kicker">Fresh off the press</p>
+    <h2>Recent pieces</h2>
+    <p class="section-sub">The latest blogs and primers. Visual, interactive, and built to be poked at.</p>
+    
+    <h3 class="spotlight-label">Latest blogs</h3>
+    <div class="grid cols3" id="recent-blogs">
+      <p class="loading">Loading...</p>
     </div>
+    
+    <h3 class="spotlight-label">Latest primers</h3>
+    <div class="grid cols3" id="recent-primers">
+      <p class="loading">Loading...</p>
+    </div>
+    
     <p class="more"><a class="go" href="/blog/">All blogs →</a> &nbsp; <a class="go" href="/primers/">All primers →</a></p>
+    </div>
   </section>
+
+  <script>
+  (function() {
+    function parsePosts(html) {
+      var doc = new DOMParser().parseFromString(html, 'text/html');
+      var posts = [];
+      doc.querySelectorAll('a.post').forEach(function(a) {
+        var h2 = a.querySelector('h2');
+        var p = a.querySelector('p');
+        var meta = a.querySelector('.meta');
+        if (h2 && a.href) {
+          posts.push({
+            url: a.getAttribute('href'),
+            title: h2.textContent.trim(),
+            desc: p ? p.textContent.trim() : '',
+            meta: meta ? meta.textContent.trim() : ''
+          });
+        }
+      });
+      return posts;
+    }
+    
+    function renderPosts(containerId, posts, count) {
+      var container = document.getElementById(containerId);
+      if (!container) return;
+      container.innerHTML = '';
+      posts.slice(0, count).forEach(function(post) {
+        var a = document.createElement('a');
+        a.className = 'card';
+        a.href = post.url;
+        a.innerHTML = '<h3></h3><p></p><span class="go">Read →</span>';
+        a.querySelector('h3').textContent = post.title;
+        a.querySelector('p').textContent = post.desc;
+        container.appendChild(a);
+      });
+    }
+    
+    function loadSpotlight() {
+      Promise.all([
+        fetch('/blog/').then(function(r) { return r.text(); }),
+        fetch('/primers/').then(function(r) { return r.text(); })
+      ]).then(function(results) {
+        var blogs = parsePosts(results[0]);
+        var primers = parsePosts(results[1]);
+        renderPosts('recent-blogs', blogs, 3);
+        renderPosts('recent-primers', primers, 3);
+      }).catch(function(err) {
+        document.getElementById('recent-blogs').innerHTML = '<p>Could not load posts.</p>';
+        document.getElementById('recent-primers').innerHTML = '<p>Could not load posts.</p>';
+      });
+    }
+    
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', loadSpotlight);
+    } else {
+      loadSpotlight();
+    }
+  })();
+  </script>
 
   <!-- WRITING -->
   <section class="block">

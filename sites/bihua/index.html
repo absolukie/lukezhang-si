@@ -64,6 +64,10 @@
   #stage svg{width:100%; height:100%; display:block; touch-action:none;}
   #stage.shake{animation:shk .4s;}
   @keyframes shk{0%,100%{transform:translateX(0)}20%{transform:translateX(-9px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(4px)}}
+  /* boss: video-based stroke animation */
+  .boss-stage{position:relative; width:100%; height:100%;}
+  .boss-ghost{position:absolute; inset:0; width:100%; height:100%;}
+  .boss-video{position:absolute; inset:0; width:100%; height:100%; mix-blend-mode:multiply;}
 
   .stamp{
     position:absolute; right:18px; bottom:14px;
@@ -367,17 +371,7 @@ function onHardTap(){
   if(hardTapTimes.length >= 5){
     hardTapTimes = [];
     const bi = CHARS.findIndex(ch => ch.boss);
-    if(bi >= 0){
-      (async ()=>{
-        cur = bi; nextStroke = 0; misses = 0;
-        if(!data[CHARS[cur].c]){
-          $("loader").classList.remove("hide");
-          try{ await fetchChar(CHARS[cur].c); }catch(e){}
-          $("loader").classList.add("hide");
-        }
-        if(data[CHARS[cur].c]) renderChar();
-      })();
-    }
+    if(bi >= 0){ cur = bi; nextStroke = 0; misses = 0; renderChar(); }
   }
   tapDiff("hard");
 }
@@ -431,7 +425,8 @@ function fitViewBox(svg){
 }
 
 function renderChar(){
-  const ch = CHARS[cur], strokes = data[ch.c], n = strokes.length;
+  const ch = CHARS[cur];
+  const n = ch.boss ? ch.t.length : data[ch.c].length;
   nextStroke = 0; misses = 0; roundMistakes = 0;
   remaining = {};
   ch.t.forEach(t => remaining[t] = (remaining[t]||0)+1);
@@ -440,6 +435,22 @@ function renderChar(){
   $("nstr").textContent = n + (n===1?" stroke":" strokes");
   stamp.classList.remove("show");
 
+  if(ch.boss){
+    /* boss uses video frames from the true stroke-order animation, not SVG paths.
+       Ghost is the faded full character; the video (multiply blend) draws each stroke. */
+    stage.innerHTML =
+      '<div class="boss-stage">' +
+      '<img class="boss-ghost" src="biang_ghost.png" alt="biang outline">' +
+      '<video class="boss-video" src="biang_anim.mp4" muted playsinline preload="auto"></video>' +
+      '</div>';
+    const v = stage.querySelector('.boss-video');
+    v.currentTime = 0;
+    stage._bossVideo = v;
+    refreshKeys();
+    return;
+  }
+
+  const strokes = data[ch.c];
   stage.innerHTML =
     '<svg id="charsvg" viewBox="0 0 1024 1024" aria-label="'+ch.c+' outline">' +
     '<g '+FLIP+'><g class="tight"><g stroke="#ddcda6">' + strokes.map(d=>path(d, ch.w)).join("") + "</g>" +
@@ -475,12 +486,28 @@ function refreshKeys(){
 }
 
 function tapKey(btn, type){
-  const ch = CHARS[cur], strokes = data[ch.c], n = strokes.length;
+  const ch = CHARS[cur];
+  const n = ch.boss ? ch.t.length : data[ch.c].length;
   if(type === ch.t[nextStroke]){
-    const g = stage.querySelector("#filled");
-    const tmp = document.createElementNS("http://www.w3.org/2000/svg","g");
-    tmp.innerHTML = path(strokes[nextStroke], ch.w).replace("<path", '<path pathLength="1" class="drawn"');
-    g.appendChild(tmp.firstChild);
+    if(ch.boss){
+      /* animate the true stroke drawing via video seek */
+      const v = stage._bossVideo;
+      if(v){
+        const seg = 12 / 58; /* 12s video, 58 strokes */
+        const t0 = nextStroke * seg, t1 = (nextStroke + 1) * seg;
+        try{
+          v.currentTime = t0;
+          v.play();
+          setTimeout(()=>{ v.pause(); try{ v.currentTime = t1; }catch(e){} }, 230);
+        }catch(e){}
+      }
+    } else {
+      const strokes = data[ch.c];
+      const g = stage.querySelector("#filled");
+      const tmp = document.createElementNS("http://www.w3.org/2000/svg","g");
+      tmp.innerHTML = path(strokes[nextStroke], ch.w).replace("<path", '<path pathLength="1" class="drawn"');
+      g.appendChild(tmp.firstChild);
+    }
     remaining[type]--; nextStroke++; misses = 0;
     refreshKeys();
     if(nextStroke === n) complete();
@@ -534,6 +561,11 @@ function complete(){
   renderChar();
   $("loader").classList.add("hide");
   loadRest(); /* the rest streams in behind the scenes */
+  /* preload boss assets in the background */
+  try{
+    const bv = document.createElement('video'); bv.src = 'biang_anim.mp4'; bv.preload = 'auto'; bv.load();
+    const bg = new Image(); bg.src = 'biang_ghost.png';
+  }catch(e){}
 })();
 </script>
 </body>

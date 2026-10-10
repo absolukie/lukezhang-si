@@ -90,14 +90,75 @@
 
   .drawn{stroke-dasharray:1; stroke-dashoffset:1; animation:drawin .55s ease-out forwards;}
   @keyframes drawin{to{stroke-dashoffset:0;}}
+
+  /* subtle ancient-China backdrop: pale sun, ink-wash mountains, mist */
+  #bgart{position:fixed; inset:0; z-index:-1; pointer-events:none; overflow:hidden;}
+  #bgart svg{position:absolute; bottom:0; left:0; width:100%; height:62%;}
+
+  /* red seal stamp */
+  .seal{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:34px; height:34px; border-radius:7px;
+    background:#c0392b; color:#fdf6e8;
+    font-size:17px; font-weight:800; line-height:1;
+    font-family:"Hiragino Sans GB","PingFang SC","Microsoft YaHei",serif;
+    transform:rotate(-6deg);
+    box-shadow:0 2px 5px rgba(120,40,25,.25);
+    flex:none;
+  }
+  .brand{display:flex; align-items:center; gap:10px;}
+
+  /* cute loading overlay: an ink brush draws a heng, over and over */
+  #loader{
+    position:fixed; inset:0; z-index:50;
+    background:var(--paper);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+    transition:opacity .45s ease;
+  }
+  #loader.hide{opacity:0; pointer-events:none;}
+  #loader svg{width:190px; height:110px; overflow:visible;}
+  #loadstroke{
+    stroke-dasharray:1; stroke-dashoffset:1;
+    animation:inkdraw 1.7s ease-in-out infinite;
+  }
+  @keyframes inkdraw{
+    0%{stroke-dashoffset:1; opacity:0;}
+    12%{opacity:1;}
+    62%{stroke-dashoffset:0; opacity:1;}
+    82%{stroke-dashoffset:0; opacity:0;}
+    100%{stroke-dashoffset:1; opacity:0;}
+  }
+  .loadtext{font-size:14px; letter-spacing:.28em; text-indent:.28em; color:var(--ink-soft); font-weight:600;}
+  .loadtext .cn{color:var(--accent);}
 </style>
 </head>
 <body>
+<div id="bgart" aria-hidden="true">
+<svg preserveAspectRatio="xMidYMax slice" viewBox="0 0 400 500">
+  <circle cx="316" cy="90" r="34" fill="#c0392b" opacity="0.10"/>
+  <path d="M0,380 L60,300 L110,350 L180,270 L250,360 L310,310 L360,360 L400,330 L400,500 L0,500 Z" fill="#b3a78d" opacity="0.16"/>
+  <path d="M0,430 L50,370 L105,410 L170,350 L235,420 L300,380 L355,420 L400,395 L400,500 L0,500 Z" fill="#9d9178" opacity="0.20"/>
+  <rect x="0" y="360" width="400" height="46" fill="#f6efdd" opacity="0.55"/>
+  <rect x="0" y="410" width="400" height="30" fill="#f6efdd" opacity="0.35"/>
+</svg>
+</div>
+
+<div id="loader" role="status" aria-label="Loading">
+  <svg viewBox="0 0 200 110">
+    <path id="loadstroke" d="M28,62 C70,54 130,68 172,58" pathLength="1"
+          fill="none" stroke="#2b2118" stroke-width="11" stroke-linecap="round"/>
+  </svg>
+  <div class="loadtext"><span class="cn">磨墨</span> · GRINDING INK</div>
+</div>
+
 <div class="wrap">
   <header>
     <div class="brand">
-      <h1><span class="cn">笔画</span> Bihua</h1>
-      <p>STROKE ORDER GAME</p>
+      <span class="seal">笔画</span>
+      <div>
+        <h1><span class="cn">笔画</span> Bihua</h1>
+        <p>STROKE ORDER GAME</p>
+      </div>
     </div>
     <div class="stats"><span><b id="doneN">0</b> done</span><span><b id="streakN">0</b> streak</span></div>
   </header>
@@ -242,12 +303,33 @@ function path(d){
 /* hanzi-writer-data uses a y-up coordinate space: flip vertically for screen */
 const FLIP = 'transform="translate(0,1024) scale(1,-1)"';
 
-async function loadData(){
-  for(const ch of CHARS){
-    const r = await fetch("data/"+ch.c+".json");
-    data[ch.c] = (await r.json()).strokes;
-  }
+/* lazy loading: the first word + the 14 keyboard source characters up front,
+   everything else streams in quietly in the background, nearest words first */
+const KEY_CHARS = ["一","十","人","火","手","日","水","山","儿","好","云","月","说","鸟"];
+
+async function fetchChar(c){
+  const r = await fetch("data/"+c+".json");
+  data[c] = (await r.json()).strokes;
+}
+
+async function loadEssential(first){
+  const need = [first, ...KEY_CHARS.filter(c => c !== first)];
+  for(const c of need) if(!data[c]) await fetchChar(c);
   for(const ty of TYPES) ty.d = data[ty.c][ty.i];
+}
+
+let bgLoading = false;
+async function loadRest(){
+  if(bgLoading) return;
+  bgLoading = true;
+  const n = CHARS.length;
+  for(let k=1; k<n; k++){
+    const c = CHARS[(cur+k)%n].c;
+    if(!data[c]){
+      try{ await fetchChar(c); }catch(e){ /* retry on demand */ }
+    }
+    await new Promise(r=>setTimeout(r,0)); /* yield so taps stay snappy */
+  }
 }
 
 function updateStats(){
@@ -341,22 +423,29 @@ function complete(){
   updateStats();
   stamp.classList.add("show");
   // next word, forever (leave the scroll point alone)
-  setTimeout(()=>{
+  setTimeout(async ()=>{
     cur = (cur+1) % CHARS.length;
+    if(!data[CHARS[cur].c]){
+      $("loader").classList.remove("hide");
+      try{ await fetchChar(CHARS[cur].c); }catch(e){}
+      $("loader").classList.add("hide");
+    }
     renderChar();
   }, 1400);
 }
 
 (async function boot(){
-  await loadData();
-  updateStats();
-  buildKeyboard();
   const q = new URLSearchParams(location.search).get("c");
   if(q){
     const qi = CHARS.findIndex(ch => ch.c === q);
     if(qi >= 0) cur = qi;
   }
+  await loadEssential(CHARS[cur].c);
+  buildKeyboard();
+  updateStats();
   renderChar();
+  $("loader").classList.add("hide");
+  loadRest(); /* the rest streams in behind the scenes */
 })();
 </script>
 </body>

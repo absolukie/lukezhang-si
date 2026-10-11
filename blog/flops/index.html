@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What Is a FLOP?: luke's blog</title>
+<meta name="description" content="The unit underneath every AI number: one FLOP is one piece of arithmetic. FLOP vs FLOP/s, the 6ND training rule, the 2x inference rule, a powers-of-ten zoom from your phone's GPU to a frontier training run, and why compute became the strategic resource. Researched October 2026.">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    min-height: 100%;
+    background: #f6f1e3;
+    color: #2b2b2b;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.7;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 56px 22px 80px; }
+  nav.top { margin-bottom: 40px; font-size: 14px; }
+  nav.top a { color: rgba(43,43,43,0.55); text-decoration: none; }
+  nav.top a:hover { color: #b3352b; }
+  h1 { font-size: 32px; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 8px; }
+  .meta { color: rgba(43,43,43,0.5); font-size: 14px; margin-bottom: 24px; }
+  .meta .tag { display: inline-block; border: 1px solid rgba(43,43,43,0.25); border-radius: 999px;
+    padding: 2px 10px; font-size: 12.5px; margin-right: 6px; color: rgba(43,43,43,0.65); }
+  .meta .researched { display: inline-block; margin-left: 6px; font-size: 12.5px;
+    color: #b3352b; font-weight: 700; }
+  .verdict { font-size: 17px; color: #2b2b2b; border-left: 3px solid #b3352b;
+    padding: 4px 0 4px 18px; margin: 0 0 28px; line-height: 1.65; }
+  p { margin-bottom: 16px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  p strong, li strong { color: #2b2b2b; }
+  h2 { font-size: 23px; color: #2b2b2b; margin: 44px 0 10px; letter-spacing: -0.01em; }
+  h2 .n { color: #b3352b; }
+  ul { margin: 0 0 16px 20px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  li { margin-bottom: 8px; }
+  a { color: #b3352b; }
+  footer { margin-top: 60px; font-size: 13px; color: rgba(43,43,43,0.35); }
+  footer a { color: rgba(43,43,43,0.6); }
+  .kicker-close { font-size: 19px; font-weight: 700; color: #2b2b2b;
+    border-top: 1px solid rgba(43,43,43,0.15); padding-top: 28px; margin-top: 48px; }
+
+  /* visualizer cards */
+  .viz { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 16px; padding: 20px; margin: 24px 0; }
+  .viz h3 { font-size: 17px; margin-bottom: 4px; color: #2b2b2b; }
+  .viz .sub { font-size: 14px; color: rgba(43,43,43,0.62); margin-bottom: 12px; line-height: 1.55; }
+  .cap { font-size: 13.5px; color: rgba(43,43,43,0.6); margin-top: 10px; line-height: 1.55; }
+
+  /* tappable mechanism cards */
+  .mech { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin: 16px 0; }
+  .fcard { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 18px; touch-action: manipulation; cursor: pointer; font-family: inherit;
+    text-align: left; width: 100%; max-width: 100%; min-width: 0; overflow: hidden; color: #2b2b2b; }
+  .fcard:active { transform: scale(0.99); }
+  .fcard .fname { font-size: 17px; font-weight: 800; }
+  .fcard .fnum { display: inline-block; font-size: 12.5px; font-weight: 700; margin: 6px 8px 2px 0;
+    padding: 3px 10px; border-radius: 999px; background: rgba(179,53,43,0.1); color: #b3352b; }
+  .fcard .fbody { display: none; margin-top: 8px; font-size: 15.5px; line-height: 1.65;
+    color: rgba(43,43,43,0.88); }
+  .fcard.open .fbody { display: block; }
+  .fcard .hint { font-size: 13px; color: rgba(43,43,43,0.5); }
+  .fcard .fbody .ex { background: rgba(179,53,43,0.06); border-left: 3px solid #b3352b;
+    padding: 8px 12px; margin: 10px 0; font-size: 14.5px; }
+  .fcard .fbody .chg { font-size: 14.5px; color: rgba(43,43,43,0.75); }
+  .fcard .fbody .chg b { color: #2b2b2b; }
+
+  /* steppers: edge-straddling circle arrows */
+  .stepper { position: relative; margin: 20px 0; }
+  .step-card { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 16px;
+    padding: 24px 28px 18px; margin: 0 32px; }
+  .step-card .sdate { font-size: 13px; font-weight: 800; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #b3352b; margin-bottom: 6px; }
+  .step-card .sname { font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+  .step-card .swhat { font-size: 15.5px; color: rgba(43,43,43,0.88); line-height: 1.6; margin-bottom: 0; }
+  .step-card .swhat b { color: #2b2b2b; }
+  .car-arrow { position: absolute; top: 34px; width: 46px; height: 46px; border-radius: 50%;
+    background: rgba(43,43,43,0.85); border: 1px solid rgba(43,43,43,0.9); color: #f6f1e3;
+    cursor: pointer; touch-action: manipulation; display: flex; align-items: center;
+    justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.25); z-index: 2; }
+  .car-arrow:active { transform: scale(0.94); }
+  .car-arrow svg { width: 22px; height: 22px; }
+  .car-arrow.prev { left: 9px; }
+  .car-arrow.next { right: 9px; }
+  .step-dots { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  .step-count { font-size: 14px; font-weight: 700; color: rgba(43,43,43,0.55);
+    font-variant-numeric: tabular-nums; margin-right: 4px; }
+  .step-dots .dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(43,43,43,0.2);
+    border: none; padding: 0; cursor: pointer; touch-action: manipulation; }
+  .step-dots .dot.on { background: #b3352b; }
+  .step-dots button.dot { width: 26px; height: 26px; background: transparent; display: inline-flex;
+    align-items: center; justify-content: center; }
+  .step-dots button.dot::after { content: ""; width: 7px; height: 7px; border-radius: 50%;
+    background: rgba(43,43,43,0.2); }
+  .step-dots button.dot.on::after { background: #b3352b; }
+
+  /* powers-of-ten zoom stepper internals */
+  .zoom-exp { text-align: center; font-size: 46px; font-weight: 800; color: #b3352b;
+    font-variant-numeric: tabular-nums; line-height: 1.15; margin: 2px 0 2px; }
+  .zoom-exp sup { font-size: 0.5em; }
+  .zoom-val { text-align: center; font-size: 15px; font-weight: 700; color: #2b2b2b; }
+  .zoom-unit { text-align: center; font-size: 12.5px; color: rgba(43,43,43,0.55); margin-bottom: 8px; }
+  .zoom-scale { height: 8px; background: rgba(43,43,43,0.1); border-radius: 999px;
+    margin: 12px 0 4px; overflow: hidden; }
+  .zoom-fill { height: 100%; width: 0; border-radius: 999px;
+    background: linear-gradient(90deg, rgba(179,53,43,0.45), #b3352b);
+    transition: width 450ms cubic-bezier(.2,.7,.2,1); }
+  .zoom-ends { display: flex; justify-content: space-between; font-size: 11.5px;
+    color: rgba(43,43,43,0.45); font-variant-numeric: tabular-nums; margin-bottom: 10px; }
+  .zoom-pill { display: inline-block; font-size: 12px; font-weight: 800; letter-spacing: 0.05em;
+    padding: 3px 10px; border-radius: 999px; background: rgba(179,53,43,0.1);
+    color: #b3352b; margin-bottom: 8px; }
+  .zoom-note { font-size: 13px; color: rgba(43,43,43,0.62); background: rgba(179,53,43,0.05);
+    border: 1px solid rgba(179,53,43,0.25); border-radius: 10px; padding: 10px 12px;
+    margin-top: 10px; line-height: 1.55; }
+  .zoom-note b { color: #b3352b; }
+
+  /* buttons */
+  .btn { display: inline-block; font-family: inherit; font-size: 15px; font-weight: 700;
+    background: #b3352b; color: #fffdf6; border: none; border-radius: 12px; padding: 12px 20px;
+    cursor: pointer; touch-action: manipulation; text-decoration: none; }
+  .btn:active { transform: scale(0.97); }
+  .btn.ghost { background: transparent; color: #b3352b; border: 2px solid rgba(179,53,43,0.4); }
+  .center { text-align: center; margin-top: 14px; }
+
+  /* confidence markers */
+  .conf { display: inline-block; font-size: 11.5px; font-weight: 800; letter-spacing: 0.06em;
+    text-transform: uppercase; padding: 2px 9px; border-radius: 999px; margin-left: 8px;
+    vertical-align: 2px; white-space: nowrap; }
+  .conf.consensus { background: rgba(46,125,50,0.12); color: #2e7d32; }
+  .conf.contested { background: rgba(179,53,43,0.1); color: #b3352b; }
+  .conf.speculative { background: rgba(43,43,43,0.08); color: rgba(43,43,43,0.65); }
+  .pred { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 16px 18px; margin: 12px 0; }
+  .pred .pwho { font-size: 15px; font-weight: 800; }
+  .pred .pwhat { font-size: 15px; color: rgba(43,43,43,0.88); margin-top: 4px; line-height: 1.6; }
+  .pred .psaid { font-size: 13px; color: rgba(43,43,43,0.55); margin-top: 6px; }
+
+  /* flashcards */
+  .fgrid { display: grid; gap: 12px; margin: 16px 0; }
+  .flash { perspective: 900px; touch-action: manipulation; cursor: pointer; }
+  .flash .inner { position: relative; min-height: 150px; transform-style: preserve-3d;
+    transition: transform 0.45s cubic-bezier(.2,.7,.2,1); display: grid; }
+  .flash.flipped .inner { transform: rotateY(180deg); }
+  .flash .face { backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 20px; grid-area: 1 / 1; display: flex; flex-direction: column;
+    justify-content: center; min-width: 0; }
+  .flash .back { transform: rotateY(180deg); border-color: rgba(179,53,43,0.4); }
+  .flash .q { font-size: 16px; font-weight: 700; }
+  .flash .a { font-size: 15.5px; line-height: 1.6; color: rgba(43,43,43,0.88); }
+  .flash .tap { font-size: 12.5px; color: rgba(43,43,43,0.45); margin-top: 6px; }
+  .flash .score-row { display: flex; gap: 8px; margin-top: 10px; }
+  .flash .score-row button { touch-action: manipulation; flex: 1; border-radius: 10px;
+    padding: 10px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .flash .knew { border: 2px solid #2e7d32; background: rgba(46,125,50,0.08); color: #2e7d32; }
+  .flash .learning { border: 2px solid rgba(43,43,43,0.25); background: transparent; color: #2b2b2b; }
+  .flash.done .front { border-color: rgba(46,125,50,0.5); }
+  .scorebar { display: flex; align-items: center; gap: 10px; margin: 6px 0 2px; }
+  .scorebar .n { font-size: 22px; font-weight: 800; color: #b3352b; font-variant-numeric: tabular-nums; }
+
+  /* keep-exploring link cards */
+  .xlinks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0 8px; }
+  @media (max-width: 520px) { .xlinks { grid-template-columns: 1fr; } }
+  .xlink { display: block; background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 14px; padding: 16px; text-decoration: none; color: #2b2b2b;
+    touch-action: manipulation; }
+  .xlink:active { transform: scale(0.98); }
+  .xlink b { display: block; font-size: 15px; margin-bottom: 4px; color: #b3352b; }
+  .xlink span { font-size: 13.5px; color: rgba(43,43,43,0.62); line-height: 1.5; }
+  .xicon { width: 14px; height: 14px; vertical-align: -2px; margin-left: 7px; flex: none; }
+
+  /* source link-out cards */
+  .vsc-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+  .vsc-list a { display: block; background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 14px; padding: 16px; color: #2b2b2b; text-decoration: none;
+    touch-action: manipulation; }
+  .vsc-list a:active { transform: scale(0.99); }
+  .vsc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .vsc-kind { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase; color: #b3352b; }
+  .vsc-kind svg { width: 15px; height: 15px; }
+  .vsc-head > svg { flex: none; width: 15px; height: 15px; color: rgba(43,43,43,0.4); }
+  .vsc-title { display: block; font-size: 16px; font-weight: 600; line-height: 1.35; }
+  .vsc-meta { display: block; margin-top: 8px; font-size: 13px; color: rgba(43,43,43,0.55); }
+
+  .warn-card { background: rgba(179,53,43,0.05); border: 1px solid rgba(179,53,43,0.3);
+    border-radius: 14px; padding: 18px; margin: 20px 0; }
+  .warn-card b { color: #b3352b; font-size: 15.5px; }
+  .warn-card p { font-size: 14.5px; margin: 8px 0 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flash .inner { transition: none; }
+    .zoom-fill { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="top"><a href="/blog/">&larr; blog</a></nav>
+  <h1>What Is a FLOP?</h1>
+  <div class="meta"><span class="tag">ai</span><span class="tag">engineering</span><span class="researched">Researched October 2026</span></div>
+  <p class="verdict">Every AI number you hear, training cost, chip speed, API prices, is the same unit wearing different clothes: the FLOP. One FLOP is one floating-point operation, a single piece of arithmetic. This primer covers what a FLOP is, why training is billed in hundreds of sextillions of them, why your phone does trillions per second without noticing, and why the whole industry is an argument about who gets to do the most of them. The sentence to remember: <strong>a FLOP counts the work done, FLOP/s measures how fast, and AI runs on both.</strong></p>
+
+  <h2><span class="n">1.</span> The brief</h2>
+  <p>Open a GPU spec sheet and you will see TFLOPS. Read an AI paper and you will see training FLOPs. Listen to a lab CEO and you will hear about compute. All three are the same unit. A FLOP is one floating-point operation: one piece of arithmetic on numbers with decimal points, like multiplying 2.5 by 3.7. Neural networks are, underneath everything, enormous piles of exactly this kind of arithmetic, so the FLOP became the industry's unit of account.</p>
+  <p>Chip speed is measured in <strong>FLOP/s</strong> (operations per second). A training run's total bill is measured in <strong>FLOP</strong> (no slash). Confuse the two and every number in AI becomes nonsense; keep them straight and you can read a GPU spec, a training-cost headline, and a cloud price list like they are the same document, because they are. The sentence to remember: <strong>FLOP counts the work done, FLOP/s measures how fast it gets done.</strong></p>
+
+  <h2><span class="n">2.</span> How it works</h2>
+  <p>Six mechanisms, from the single operation up to the industry that fights over it. Tap each card for the plain-language version, one concrete example, and what changed recently.</p>
+  <div class="mech" id="mech"></div>
+
+  <div class="viz">
+    <h3>The powers-of-ten zoom</h3>
+    <p class="sub">One tap, one rung up the ladder. The counter sweeps through every order of magnitude on the way. Start at your phone and end at a frontier training run.</p>
+    <div class="stepper" id="zoom-stepper">
+      <button class="car-arrow prev" id="zoom-prev" aria-label="Previous zoom step">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div class="step-card" id="zoom-card"></div>
+      <button class="car-arrow next" id="zoom-next" aria-label="Next zoom step">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+      <div class="step-dots" id="zoom-dots"></div>
+      <div class="center" id="zoom-replay" style="display:none"><button class="btn ghost" id="zoom-restart" type="button">Back to 10<sup>12</sup></button></div>
+    </div>
+    <p class="cap">Rung figures are peak or representative rates, rounded; the cluster rung is illustrative. Phone figure: A17 Pro-class GPU, about 2.1 TFLOPS FP32. H100 figures: NVIDIA's official spec, with sparsity.</p>
+  </div>
+  <h2><span class="n">3.</span> The landmarks</h2>
+  <p>Six moments that made the FLOP famous, 2020 to 2026. One tap per step, or use the arrow keys.</p>
+  <div class="stepper" id="tl-stepper">
+    <button class="car-arrow prev" id="tl-prev" aria-label="Previous landmark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <div class="step-card" id="tl-card"></div>
+    <button class="car-arrow next" id="tl-next" aria-label="Next landmark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+    </button>
+    <div class="step-dots" id="tl-dots"></div>
+  </div>
+
+  <h2><span class="n">4.</span> Key voices</h2>
+  <p>Four people who are spending the compute, selling the compute story, tracking the compute, or betting the whole thesis is wrong. Each view is one or two sentences with the primary source linked. The collision is at the bottom.</p>
+  <div class="mech" id="voices"></div>
+  <div class="warn-card">
+    <b>The collision</b>
+    <p>Amodei and Altman say the path is more compute, bought in ever-larger piles, because intelligence is the thing you can scale with money. LeCun says the pile is aimed at the wrong target: scaling text prediction to human-level intelligence is "simply false" (his words to MIT Technology Review), and his $1.03B AMI Labs bet is that the future belongs to world models that learn how reality behaves instead of predicting the next word. Epoch AI sits in the middle with a spreadsheet: the trend is 5x per year whether anyone likes it or not, but the fastest-falling number in AI is not the training bill, it is the price of running last year's model.</p>
+  </div>
+
+  <h2><span class="n">5.</span> What comes next</h2>
+  <p>Every prediction below is attributed: who said it, where, when. The badge is my read of how solid it is: <strong>consensus</strong> means multiple independent sources agree, <strong>contested</strong> means smart people disagree, <strong>speculative</strong> means one person's leap. Predictions go stale; this section is frozen as of October 2026.</p>
+  <div id="preds"></div>
+
+  <h2><span class="n">6.</span> Check yourself</h2>
+  <p>Four cards. Tap to flip, then be honest: knew it, or still learning. The score is yours alone.</p>
+  <div class="scorebar"><span class="n" id="fc-score">0/4</span><span style="font-size:14px;color:rgba(43,43,43,0.6)">known</span></div>
+  <div class="fgrid" id="fgrid"></div>
+
+  <h2>Keep exploring</h2>
+  <div class="xlinks">
+    <a class="xlink" href="/blog/llm-progress/"><b>How AI Keeps Getting Smarter<svg class="xicon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4L10.5 13.5"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg></b><span>Six engines keep pushing models forward. The compute ladder, the thinking-budget dial, and where the leading voices think this lands.</span></a>
+    <a class="xlink" href="/blog/llm-training/"><b>How an LLM Learns, Step by Step<svg class="xicon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4L10.5 13.5"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg></b><span>Training a model is just next-token prediction at absurd scale. Tokens, attention, gradient descent, RLHF, every step with an interactive visualizer.</span></a>
+    <a class="xlink" href="/blog/agent-regression-evals/"><b>How Frontier Labs Change Agents Without Breaking Them<svg class="xicon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4L10.5 13.5"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg></b><span>Lauren Tan shrank her agent stack 10% with no loss in behavior. The claim is only as good as the machinery behind it: golden suites, deterministic checks, paired diffs, CI gates, and the statistics of proving nothing broke.</span></a>
+  </div>
+
+  <h2>Sources</h2>
+  <p>Every factual claim in sections 2 through 5 traces to one of these.</p>
+  <ul class="vsc-list">
+    <li><a href="https://arxiv.org/abs/2005.14165"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>arXiv paper</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Language Models are Few-Shot Learners (GPT-3)</span><span class="vsc-meta">Brown et al., OpenAI &middot; arXiv:2005.14165 &middot; May 28, 2020 &middot; Table D.1 reports 3.14e23 training FLOPs</span></a></li>
+    <li><a href="https://blog.heim.xyz/flop-for-quantity-flop-s-for-performance/"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Explainer</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">FLOP for Quantity, FLOP/s for Performance</span><span class="vsc-meta">Jaime Sevilla (Epoch AI) &middot; blog.heim.xyz &middot; the terminology clarification</span></a></li>
+    <li><a href="https://en.wikipedia.org/wiki/Floating_point_operations_per_second"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Reference</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Floating point operations per second</span><span class="vsc-meta">Wikipedia &middot; multiplier table (kilo to quetta)</span></a></li>
+    <li><a href="https://github.com/ahaanv05/ml-dl-textbook/blob/HEAD/06-neural-networks-and-backpropagation.md"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Explainer</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Where "backward is about 2x forward" and the 6ND rule come from</span><span class="vsc-meta">ahaanv05/ml-dl-textbook &middot; GitHub &middot; full derivation of C = 6ND</span></a></li>
+    <li><a href="https://binaryverseai.com/reflection-ai-beam/"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>News</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Reflection AI Beam: How 100 Million RL Rollouts Changed The Open-Model Race</span><span class="vsc-meta">binaryverseai.com &middot; Oct 5, 2026 &middot; uses FLOPs = 2 x active params x tokens</span></a></li>
+    <li><a href="https://github.com/robert54/zero-to-sglang/blob/HEAD/course-material/eng/part1/Chapter2_Introduction%20to%20Inference.md"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Course</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Introduction to Inference (zero-to-sglang course)</span><span class="vsc-meta">robert54/zero-to-sglang &middot; GitHub &middot; worked training-vs-inference cost example</span></a></li>
+    <li><a href="https://www.nvidia.com/en-us/data-center/h100/"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Specs</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">NVIDIA H100 Tensor Core GPU</span><span class="vsc-meta">NVIDIA &middot; official specs: BF16 1,979 TFLOPS, FP8 3,958 TFLOPS (with sparsity), 8 GPUs per DGX H100</span></a></li>
+    <li><a href="https://askgeek.io/en/gpus/vs/Apple_A17-Pro-vs-Apple_M2-Pro-16-core"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Specs</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Apple A17 Pro vs Apple M2 Pro: specs comparison</span><span class="vsc-meta">askgeek.io &middot; A17 Pro peak single-precision (FP32) performance: 2.147 TFLOPS</span></a></li>
+    <li><a href="https://hmc-tech.com/gpus/nvidia-geforce-rtx-5090-laptop-140w-vs-nvidia-geforce-rtx-2050"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Specs</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">NVIDIA GeForce RTX 5090 Laptop (140W) Full Specs</span><span class="vsc-meta">hmc-tech.com &middot; 861.5 TFLOPS FP8 Tensor sparse, 42.19 TFLOPS FP16</span></a></li>
+    <li><a href="https://www.dwarkesh.com/p/dario-amodei"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Interview</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Dario Amodei (Anthropic CEO): $10 Billion Models, OpenAI, Scaling, and AGI in 2 Years</span><span class="vsc-meta">Dwarkesh Podcast &middot; 2024 &middot; the Big Blob of Compute hypothesis</span></a></li>
+    <li><a href="https://www.darioamodei.com/essay/machines-of-loving-grace"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Essay</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Machines of Loving Grace: How AI Could Transform the World for the Better</span><span class="vsc-meta">Dario Amodei &middot; Oct 2024 &middot; a country of geniuses in a datacenter</span></a></li>
+    <li><a href="https://lexfridman.com/?p=5832"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Transcript</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Sam Altman: OpenAI, GPT-5, Sora, Board Saga, Elon Musk, Ilya, Power and AGI</span><span class="vsc-meta">Lex Fridman Podcast #419 &middot; Mar 2024 &middot; "compute is going to be the currency of the future"</span></a></li>
+    <li><a href="https://www.techtimes.com/articles/317928/20260606/yann-lecun-world-models-bet-ami-labs-stakes-103-billion-against-large-language-models.htm"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>News</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Yann LeCun World Models Bet: AMI Labs Stakes $1.03 Billion Against Large Language Models</span><span class="vsc-meta">TechTimes &middot; Jun 6, 2026 &middot; $1.03B AMI Labs raise; "simply false" MIT Technology Review quote</span></a></li>
+    <li><a href="https://epoch.ai/trends"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Data</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Trends in AI</span><span class="vsc-meta">Epoch AI &middot; frontier training compute 5x/yr since 2020, ~10,000x total, cost 3.5x/yr</span></a></li>
+    <li><a href="https://groundtruth.day/news/epoch-ai-chips-through-2027-could-run-tens-of-millions-of-frontier-agents.html"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>News</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Epoch AI: chips shipped through 2027 could run 30-170 million frontier agents at once</span><span class="vsc-meta">groundtruth.day &middot; covering Jason Li, Epoch AI &middot; Oct 3, 2026</span></a></li>
+    <li><a href="https://www.metirai.com/blog/ai-cost-decline-epoch-13x-per-year-2026"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>News</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">AI Is Getting 13x Cheaper Every Year: What Epoch AI's Numbers Mean</span><span class="vsc-meta">Metir AI &middot; Sep 2026 &middot; decomposing the 13x/yr decline</span></a></li>
+    <li><a href="https://www.edwardconard.com/macro-roundup/the-impending-inescapable-deluge-of-a-i/"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>News</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">The Impending, Inescapable Deluge of A.I.</span><span class="vsc-meta">Edward Conard &middot; Jul 30, 2026 &middot; Epoch AI: ~20M chips today, ~200M H100-equivalents by end 2028</span></a></li>
+    <li><a href="https://github.com/patrickwiloak/genai-research-papers-summarized/blob/HEAD/explainers/compute/cost-of-training.md"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Explainer</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Cost of training (compute explainer)</span><span class="vsc-meta">patrickwiloak/genai-research-papers-summarized &middot; GitHub &middot; GPT-3 to Grok 4 cost trend, Epoch figures</span></a></li>
+    <li><a href="https://deluair.com/consultancy/insights/frontier-ai-training-cost-2026"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>News</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Frontier AI training cost trajectory 2026</span><span class="vsc-meta">Deluair &middot; 2026 &middot; GPT-4 ~2e25 FLOPs (Epoch estimate) training-cost table</span></a></li>
+  </ul>
+
+  <p class="kicker-close">The FLOP is the atom of AI economics. Everything else, the chips, the data centers, the trillion-dollar buildout, is just a fight over who gets to do the most of them.</p>
+  <footer>Words, diagrams, and toy models are mine. Built to learn in public.</footer>
+</div>
+<script>
+(function(){
+  "use strict";
+  function $(id){ return document.getElementById(id); }
+
+  /* ---------- section 2: the six mechanisms ---------- */
+  var MECH = [
+    { name: "FLOP is work, FLOP/s is pace",
+      stat: "the distinction that runs everything",
+      body: "<p><strong>FLOP</strong> (no slash) is a count of operations completed: total work. <strong>FLOP/s</strong> is operations per second: speed. People also write FLOPS for the per-second kind, which keeps the terminology war alive. A FLOP is one floating-point operation, like adding or multiplying two numbers with decimal points.</p>" +
+      "<div class='ex'><strong>Example:</strong> a chip rated 2,000 TFLOP/s running flat out for one hour completes about 7.2e18 FLOP of work. Same number, different unit, like miles versus miles per hour.</div>" +
+      "<p class='chg'><b>What changed:</b> AI made the distinction load-bearing. 'Training compute' is always total FLOP; 'chip performance' is always FLOP/s. Mix them up and a training budget reads as a chip spec, which is how a lot of confused headlines get written.</p>" },
+    { name: "Training costs about 6 FLOPs per parameter per token",
+      stat: "the 6ND rule",
+      body: "<p>The forward pass costs about <strong>2 FLOPs per parameter per token</strong>: each parameter does one multiply and one add. The backward pass costs about <strong>4</strong>, because it has two jobs: compute gradients for the weights, and hand gradients back to the layer below. Add them up and a full training run costs about <strong>C = 6ND</strong> FLOPs, where N is parameters and D is training tokens. Each multiply-add counts as 2 FLOPs, which is where the 2s come from.</p>" +
+      "<div class='ex'><strong>Example:</strong> a 7B-parameter model trained on 2T tokens costs about 8.4e22 FLOPs. On one GPU sustaining 4e14 FLOP/s in practice, that is about 6.7 years; on 1,024 GPUs, about 2.4 days. This back-of-envelope math is how training runs get budgeted before anyone launches them.</div>" +
+      "<p class='chg'><b>What changed:</b> the estimate got standardized. Attention and embeddings add extra terms, but for big dense models 6ND lands within a factor of two, which is all anyone needs to size a cluster.</p>" },
+    { name: "Inference costs about 2 FLOPs per parameter per token",
+      stat: "one third of training",
+      body: "<p>Serving a model only runs the forward pass. No backward pass, no optimizer step. So each generated token costs roughly <strong>2 FLOPs per parameter</strong>, about a third of the per-token training cost. For mixture-of-experts models, count only the <strong>active</strong> parameters per token, not the total.</p>" +
+      "<div class='ex'><strong>Example:</strong> Reflection AI benchmarks its open model Beam with FLOPs = 2 x active parameters x generated tokens. A 70B dense model generating one token does about 140B FLOPs.</div>" +
+      "<p class='chg'><b>What changed:</b> inference arithmetic became the metric labs compete on. Excluding prefill, attention overhead, and the serving stack, this simple formula is now how efficiency claims get compared.</p>" },
+    { name: "Training is paid once. Inference is paid forever.",
+      stat: "the meter never stops",
+      body: "<p>A training run's FLOPs are a one-time bill. Inference FLOPs are a meter that runs every time anyone uses the model. At enough usage, the serving bill overtakes the training bill and never looks back. This is why 'training cost' headlines understate what a model really costs.</p>" +
+      "<div class='ex'><strong>Example:</strong> one training run of an 8B model is about 7.7e21 FLOPs. One inference request of 640 tokens is about 1e13 FLOPs. Serve a million such requests a day and the annual inference total can exceed the entire training cost.</div>" +
+      "<p class='chg'><b>What changed:</b> the industry noticed. Labs now deliberately overtrain smaller models, spending more training FLOPs than compute-optimal, because a cheaper-to-serve model pays back the extra training bill quickly. Training is the fixed cost; inference is the business.</p>" },
+    { name: "Precision is a dial on the FLOP/s number",
+      stat: "fewer bits, more ops",
+      body: "<p>Chips do more operations per second at lower precision, because each number takes fewer bits and the Tensor Cores process more of them per cycle. An H100 does 1,979 TFLOP/s in BF16 and 3,958 TFLOP/s in FP8, about double, using its Transformer Engine. The ops are the same kind; the numbers just get narrower.</p>" +
+      "<div class='ex'><strong>Example:</strong> a laptop RTX 5090 does about 861 TFLOPS at FP8 with sparsity but only about 42 TFLOPS at plain FP16. Same silicon, a 20x difference, purely from how many bits each number gets.</div>" +
+      "<p class='chg'><b>What changed:</b> FP8 went mainstream for training on Hopper, and FP4 is arriving on Blackwell. The price: lower precision can make training unstable, so mixed-precision recipes decide per layer which precision is safe.</p>" },
+    { name: "Compute is the strategic resource",
+      stat: "the currency of the future",
+      body: "<p>Model capability tracks training compute: Epoch AI measures frontier training compute up 5x per year since 2020, about 10,000x total. So whoever controls the most FLOPs per dollar controls the frontier. As Altman put it: 'I think compute is going to be the currency of the future. I think it will be maybe the most precious commodity in the world.'</p>" +
+      "<div class='ex'><strong>Example:</strong> Epoch AI estimates about 20 million AI chips in data centers today, doubling roughly every nine months, on pace for about 200 million H100-equivalents by the end of 2028.</div>" +
+      "<p class='chg'><b>What changed:</b> the constraint moved from chips to power. The largest AI data centers are approaching a gigawatt, enough for roughly a million US homes (Epoch AI). The new arms race is electrical.</p>" }
+  ];
+  var mechWrap = $("mech");
+  MECH.forEach(function(m, i){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "fcard";
+    b.setAttribute("aria-expanded", "false");
+    b.innerHTML = "<span class='fname'>" + (i+1) + ". " + m.name + "</span><br>" +
+      "<span class='fnum'>" + m.stat + "</span> <span class='hint'>tap to open</span>" +
+      "<span class='fbody'>" + m.body + "</span>";
+    b.addEventListener("click", function(){
+      var open = b.classList.toggle("open");
+      b.setAttribute("aria-expanded", open ? "true" : "false");
+      b.querySelector(".hint").textContent = open ? "tap to close" : "tap to open";
+    });
+    mechWrap.appendChild(b);
+  });
+
+  /* ---------- section 2b: powers-of-ten zoom stepper ---------- */
+  var ZSTEPS = [
+    { exp: 12, val: "about 2 trillion FLOP/s", name: "Your phone's GPU", zoom: "baseline",
+      comp: "A recent flagship phone GPU (A17 Pro class) sustains about 2 TFLOPS. Scrolling this page spends billions of FLOPs without the phone noticing." },
+    { exp: 14, val: "about 860 trillion FLOP/s", name: "A gaming laptop's GPU", zoom: "roughly 400x your phone",
+      comp: "A top laptop GPU (RTX 5090 mobile, FP8 with sparsity) peaks near 861 TFLOPS. That is about 400 phones of arithmetic in a machine that fits in a backpack." },
+    { exp: 15, val: "about 2 quadrillion FLOP/s", name: "One NVIDIA H100", zoom: "roughly 2x the laptop",
+      comp: "1,979 TFLOPS in BF16, 3,958 TFLOPS in FP8 (NVIDIA's official spec, with sparsity). About a million phones in one chip. This is the workhorse behind most frontier models." },
+    { exp: 16, val: "about 16 quadrillion FLOP/s", name: "A rack of eight", zoom: "x8",
+      comp: "A DGX H100 box packs 8 GPUs (NVIDIA). One server, eight million phones of arithmetic. About the smallest unit anyone trains a serious model on." },
+    { exp: 20, val: "about 200 quintillion FLOP/s", name: "A 100,000-GPU cluster", zoom: "roughly 10,000x the rack",
+      comp: "Illustrative: 100,000 H100s running as one. This is the scale labs now train frontier models at. One hundred million phones, running in lockstep." },
+    { exp: 23, val: "314 sextillion FLOPs total", name: "GPT-3's training bill", zoom: "the units change here",
+      comp: "Not per second anymore: total work. 3.14 x 10^23 FLOPs (GPT-3 paper, Table D.1). At one exaFLOP per second it would still take 3.6 days; on a single H100, about 5 years. It actually trained on a cluster of V100s in 2020.",
+      note: "<b>New unit.</b> Everything above is speed (FLOP/s). This rung is total work (FLOP): the full bill, paid once." }
+  ];
+  var ZMIN = 12, ZMAX = 23;
+  (function(){
+    var card = $("zoom-card"), dots = $("zoom-dots"), prev = $("zoom-prev"), next = $("zoom-next");
+    var stepEl = $("zoom-stepper"), replay = $("zoom-replay"), restart = $("zoom-restart");
+    var zi = 0, animTimers = [];
+    var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    ZSTEPS.forEach(function(s, j){
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "dot"; b.setAttribute("aria-label", "Go to step " + (j+1) + ": " + s.name);
+      b.addEventListener("click", function(){ if(zi !== j){ zi = j; render(); } });
+      dots.appendChild(b);
+    });
+    function clearAnim(){ animTimers.forEach(clearTimeout); animTimers = []; }
+    function animateExp(expEl, fromExp, toExp){
+      if(reduceMotion || fromExp === toExp){ expEl.innerHTML = "10<sup>" + toExp + "</sup>"; return; }
+      var step = fromExp < toExp ? 1 : -1;
+      var e = fromExp;
+      function tick(){
+        e += step;
+        expEl.innerHTML = "10<sup>" + e + "</sup>";
+        if(e !== toExp) animTimers.push(setTimeout(tick, 90));
+      }
+      tick();
+    }
+    var prevExp = ZSTEPS[0].exp;
+    function render(){
+      var s = ZSTEPS[zi];
+      var html = "<div class='zoom-exp' id='zoom-exp-live'>10<sup>" + prevExp + "</sup></div>" +
+        "<div class='zoom-val'>" + s.val + "</div>" +
+        "<div class='zoom-unit'>" + (zi === ZSTEPS.length - 1 ? "total floating-point operations" : "floating-point operations per second") + "</div>" +
+        "<div class='zoom-scale'><div class='zoom-fill' id='zoom-fill'></div></div>" +
+        "<div class='zoom-ends'><span>10^12</span><span>10^23</span></div>" +
+        "<div><span class='zoom-pill'>" + s.zoom + "</span></div>" +
+        "<div class='sname'>" + s.name + "</div>" +
+        "<p class='swhat'>" + s.comp + "</p>" +
+        (s.note ? "<div class='zoom-note'>" + s.note + "</div>" : "");
+      card.innerHTML = html;
+      var expEl = $("zoom-exp-live");
+      animateExp(expEl, prevExp, s.exp);
+      prevExp = s.exp;
+      var fill = $("zoom-fill");
+      if(fill) fill.style.width = ((s.exp - ZMIN) / (ZMAX - ZMIN) * 100).toFixed(1) + "%";
+      var ds = dots.querySelectorAll(".dot");
+      ds.forEach(function(d, j){ d.classList.toggle("on", j === zi); });
+      var count = dots.querySelector(".step-count");
+      if(!count){
+        count = document.createElement("span");
+        count.className = "step-count";
+        dots.insertBefore(count, dots.firstChild);
+      }
+      count.textContent = (zi+1) + " / " + ZSTEPS.length;
+      prev.style.display = zi === 0 ? "none" : "flex";
+      next.style.display = zi === ZSTEPS.length - 1 ? "none" : "flex";
+      replay.style.display = zi === ZSTEPS.length - 1 ? "block" : "none";
+    }
+    prev.addEventListener("click", function(){ clearAnim(); if(zi > 0){ zi--; render(); } });
+    next.addEventListener("click", function(){ clearAnim(); if(zi < ZSTEPS.length - 1){ zi++; render(); } });
+    restart.addEventListener("click", function(){ clearAnim(); zi = 0; render(); });
+    window.__zoomStepper = { el: stepEl, get: function(){ return zi; }, set: function(n){ zi = n; render(); }, max: ZSTEPS.length - 1 };
+    render();
+  })();
+
+  /* ---------- section 3: timeline stepper ---------- */
+  var TL = [
+    { d: "May 2020", n: "GPT-3 reports 3.14e23 training FLOPs", w: "The GPT-3 paper's Table D.1 puts a number on the whole endeavor: <b>3.14 x 10^23 floating-point operations</b> to train 175B parameters on 300B tokens. The first widely-cited training-compute figure. Every model since gets measured against it." },
+    { d: "2022", n: "The 6ND rule goes mainstream", w: "Chinchilla (Hoffmann et al., 2022) makes compute-optimality a discipline, and the back-of-envelope <b>C = 6ND</b> spreads everywhere. Suddenly anyone can price a training run on a napkin: parameters times tokens times six." },
+    { d: "2023", n: "GPT-4: about 2e25 FLOPs", w: "Epoch AI estimates roughly <b>2 x 10^25 FLOPs</b> for GPT-4, about 60x GPT-3 (OpenAI never published a figure, so this is an estimate, not a fact). The frontier bill crosses from millions of dollars into the tens of millions." },
+    { d: "2024", n: "Epoch AI: 5x per year", w: "Epoch AI's trends analysis: frontier training compute has grown <b>5x per year since 2020, about 10,000x total</b>, while training cost climbs 3.5x per year. The FLOP stops being a statistic and becomes the industry's unit of account." },
+    { d: "Sep 2025", n: "Grok 4 becomes the biggest tracked run", w: "Epoch AI's September 2025 analysis makes Grok 4 the largest run in its dataset: about <b>246 million H100-hours</b>, a median cost around $490M, and about 310 GWh of electricity. The frontier bill reaches half a billion dollars." },
+    { d: "Oct 2026", n: "The agent capacity report", w: "Epoch AI (Oct 2026): the AI chips shipping from 2025 through 2027 could keep <b>30 to 170 million frontier-model agents running at the same time</b>. The question flips from 'how much compute can we buy' to 'what will we spend it on'." }
+  ];
+  (function(){
+    var card = $("tl-card"), dots = $("tl-dots"), prev = $("tl-prev"), next = $("tl-next");
+    var stepEl = $("tl-stepper");
+    var ti = 0;
+    TL.forEach(function(s, j){
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "dot"; b.setAttribute("aria-label", "Go to landmark " + (j+1) + ": " + s.n);
+      b.addEventListener("click", function(){ if(ti !== j){ ti = j; render(); } });
+      dots.appendChild(b);
+    });
+    function render(){
+      card.innerHTML = "<div class='sdate'>" + TL[ti].d + "</div><div class='sname'>" + TL[ti].n + "</div><p class='swhat'>" + TL[ti].w + "</p>";
+      var ds = dots.querySelectorAll(".dot");
+      ds.forEach(function(d, j){ d.classList.toggle("on", j === ti); });
+      var count = dots.querySelector(".step-count");
+      if(!count){
+        count = document.createElement("span");
+        count.className = "step-count";
+        dots.insertBefore(count, dots.firstChild);
+      }
+      count.textContent = (ti+1) + " / " + TL.length;
+      prev.style.display = ti === 0 ? "none" : "flex";
+      next.style.display = ti === TL.length - 1 ? "none" : "flex";
+    }
+    prev.addEventListener("click", function(){ if(ti > 0){ ti--; render(); } });
+    next.addEventListener("click", function(){ if(ti < TL.length - 1){ ti++; render(); } });
+    window.__tlStepper = { el: stepEl, get: function(){ return ti; }, set: function(n){ ti = n; render(); }, max: TL.length - 1 };
+    render();
+  })();
+
+  /* arrow keys: control whichever stepper is on screen */
+  document.addEventListener("keydown", function(e){
+    if(e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if(e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    var t = e.target, tag = t && t.tagName;
+    if(tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT" || (t && t.isContentEditable)) return;
+    if(t && t.closest && t.closest(".step-code")) return;
+    var z = window.__zoomStepper, l = window.__tlStepper;
+    var zr = z.el.getBoundingClientRect(), lr = l.el.getBoundingClientRect();
+    var zOn = zr.bottom >= 0 && zr.top <= window.innerHeight;
+    var lOn = lr.bottom >= 0 && lr.top <= window.innerHeight;
+    var target = zOn ? z : (lOn ? l : null);
+    if(!target) return;
+    if(e.key === "ArrowLeft" && target.get() > 0){ target.set(target.get() - 1); e.preventDefault(); }
+    else if(e.key === "ArrowRight" && target.get() < target.max){ target.set(target.get() + 1); e.preventDefault(); }
+  });
+
+  /* ---------- section 4: voices ---------- */
+  var VOICES = [
+    { name: "Dario Amodei", role: "Anthropic CEO", view: "The Big Blob of Compute hypothesis still holds: raw compute, data, and scalable objectives are what matter, and the exponential keeps going as expected. He expects models costing $10B to train. <a href='https://www.dwarkesh.com/p/dario-amodei'>Dwarkesh Podcast</a>, 2024." },
+    { name: "Sam Altman", role: "OpenAI CEO", view: "'I think compute is going to be the currency of the future. I think it will be maybe the most precious commodity in the world.' Demand for compute behaves like demand for energy: at the right price, the world uses an unbounded amount. <a href='https://lexfridman.com/?p=5832'>Lex Fridman #419</a>, Mar 2024." },
+    { name: "Epoch AI", role: "compute tracking research group", view: "The story of AI progress is dominated by scale: frontier training compute up 5x per year since 2020, about 10,000x total; training cost up 3.5x per year; the largest data centers nearing a gigawatt. <a href='https://epoch.ai/trends'>Trends in AI</a>, Epoch AI." },
+    { name: "Yann LeCun", role: "AMI Labs founder, ex-Meta chief AI scientist", view: "The dissenter. 'People have had this illusion, or delusion, that it is a matter of time until we can scale [LLMs] up to having human-level intelligence, and that is simply false' (MIT Technology Review interview, 2026). His $1.03B bet at AMI Labs: world models that predict how reality behaves, not the next token. <a href='https://www.techtimes.com/articles/317928/20260606/yann-lecun-world-models-bet-ami-labs-stakes-103-billion-against-large-language-models.htm'>TechTimes</a>, Jun 2026." }
+  ];
+  var vWrap = $("voices");
+  VOICES.forEach(function(v){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "fcard";
+    b.setAttribute("aria-expanded", "false");
+    b.innerHTML = "<span class='fname'>" + v.name + "</span> <span class='hint'>" + v.role + " &middot; tap to open</span>" +
+      "<span class='fbody'><p class='chg' style='margin:0'>" + v.view + "</p></span>";
+    b.addEventListener("click", function(){
+      var open = b.classList.toggle("open");
+      b.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    vWrap.appendChild(b);
+  });
+
+  /* ---------- section 5: predictions ---------- */
+  var PREDS = [
+    { who: "Amodei expects $10B models<span class='conf contested'>contested</span>",
+      what: "The interview was literally titled '$10 Billion Models': he expects training runs at that price, with the exponential of compute progress continuing roughly as he predicted.",
+      said: "Said on the Dwarkesh Podcast, 2024." },
+    { who: "Epoch AI: ~20M AI chips today, ~200M H100-equivalents by end of 2028<span class='conf speculative'>speculative</span>",
+      what: "The working chip stock doubles roughly every nine months as data centers come online, a 10x jump with no equal in computing history. Behind each leap in AI, a corresponding jump in computing power.",
+      said: "Epoch AI analysis, reported Jul 30, 2026." },
+    { who: "Epoch AI: the 5x/yr compute trend continues through 2030<span class='conf contested'>contested</span>",
+      what: "Their trends page says the scale-up 'appears set to continue through 2030,' driven by more chips, longer runs, and cheaper processors. LeCun disagrees with the premise that more of the same gets us anywhere.",
+      said: "Epoch AI, Trends in AI, 2026." },
+    { who: "Altman: cheap compute means unbounded demand<span class='conf contested'>contested</span>",
+      what: "Compute is like energy: 'at price X, the world will use this much compute, and at price Y, the world will use this much compute.' If it gets cheap, everyone has it reading email all day and trying to cure cancer; the constraint is price, not desire.",
+      said: "Lex Fridman Podcast #419, Mar 2024." },
+    { who: "LeCun: robotics moves away from LLM-centric architectures by early 2027<span class='conf contested'>contested</span>",
+      what: "He predicts the robotics field will recognize the need to move away from LLM-centric architectures by early 2027, since LLMs 'are limited to the discrete world of text,' cannot truly reason or plan, and 'can't predict the consequences of their actions.' His own May 2026 world-model papers are preprints, not yet peer-reviewed.",
+      said: "TechTimes, Jun 6, 2026; AMI Labs world-model bet." },
+    { who: "The measured trend: AI gets ~13x cheaper per year<span class='conf consensus'>consensus</span>",
+      what: "Epoch AI's expanded dataset (222 models, 11 benchmarks) shows the price of a given benchmark result dropping about 47% each quarter since 2023, roughly 13x per year, faster than DNA sequencing, general compute, or batteries at their steepest. Drivers: algorithmic efficiency, distillation, MoE sparsity, better chips, and brutal price competition. That is measured history; the future rate is the contested part.",
+      said: "Epoch AI analysis, reported Sep 2026." }
+  ];
+  var pWrap = $("preds");
+  PREDS.forEach(function(p){
+    var d = document.createElement("div");
+    d.className = "pred";
+    d.innerHTML = "<div class='pwho'>" + p.who + "</div><div class='pwhat'>" + p.what + "</div><div class='psaid'>" + p.said + "</div>";
+    pWrap.appendChild(d);
+  });
+
+  /* ---------- section 6: flashcards ---------- */
+  var CARDS = [
+    { q: "FLOP vs FLOP/s: one sentence each.",
+      a: "A FLOP is one floating-point operation, a count of work done. FLOP/s is operations per second, a measure of speed. Training compute is quoted in FLOP; chip specs are quoted in FLOP/s." },
+    { q: "Training costs about 6 FLOPs per parameter per token. Where does the 6 come from?",
+      a: "About 2 forward (one multiply and one add per parameter per token) plus about 4 backward. The backward pass has two jobs: compute gradients for the weights, and hand gradients back to the layer below. Total: C = 6ND." },
+    { q: "Roughly how much training compute went into GPT-3, GPT-4, and Grok 4?",
+      a: "GPT-3: 3.14 x 10^23 FLOPs (the paper's Table D.1, 2020). GPT-4: about 2 x 10^25 FLOPs (Epoch AI estimate, 2023; OpenAI never published a figure). Grok 4: the largest run in Epoch's September 2025 dataset, about 246 million H100-hours, median cost around $490M." },
+    { q: "Amodei and Altman say buy more compute. What is LeCun's counter?",
+      a: "That scaling LLMs to human-level intelligence is 'simply false' (MIT Technology Review, 2026): LLMs are stuck in the discrete world of text and cannot plan or predict consequences. His $1.03B bet is world models at AMI Labs; he expects robotics to move away from LLM-centric architectures by early 2027." }
+  ];
+  (function(){
+    var grid = $("fgrid"), scoreEl = $("fc-score");
+    var known = 0, scored = {};
+    function setScore(){
+      scoreEl.textContent = known + "/" + CARDS.length;
+    }
+    CARDS.forEach(function(c, idx){
+      var el = document.createElement("div");
+      el.className = "flash";
+      el.innerHTML = "<div class='inner'>" +
+        "<div class='face front'><div class='q'>" + c.q + "</div><div class='tap'>tap to flip</div></div>" +
+        "<div class='face back'><div class='a'>" + c.a + "</div>" +
+        "<div class='score-row'><button type='button' class='knew'>Knew it</button><button type='button' class='learning'>Still learning</button></div></div></div>";
+      el.addEventListener("click", function(){
+        el.classList.toggle("flipped");
+      });
+      var knew = el.querySelector(".knew"), learning = el.querySelector(".learning");
+      function mark(k){
+        if(scored[idx] === k) return;
+        if(scored[idx] === true) known--;
+        scored[idx] = k;
+        if(k === true) known++;
+        el.classList.add("done");
+        setScore();
+      }
+      knew.addEventListener("click", function(e){ e.stopPropagation(); mark(true); });
+      learning.addEventListener("click", function(e){ e.stopPropagation(); mark(false); });
+      grid.appendChild(el);
+    });
+    setScore();
+  })();
+})();
+</script>
+</body>
+</html>
+

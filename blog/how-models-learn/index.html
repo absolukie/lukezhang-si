@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Models Learn From Raw Text: luke's blog</title>
+<meta name="description" content="Next-token prediction, masked prediction, and diffusion: the three training objectives that turn raw text and raw pixels into models, with no human labeling. Includes a DDPM and latent diffusion walkthrough, LLaDA, and where the paradigms collide. Researched October 2026.">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    min-height: 100%;
+    background: #f6f1e3;
+    color: #2b2b2b;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.7;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 56px 22px 80px; }
+  nav.top { margin-bottom: 40px; font-size: 14px; }
+  nav.top a { color: rgba(43,43,43,0.55); text-decoration: none; }
+  nav.top a:hover { color: #b3352b; }
+  h1 { font-size: 32px; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 8px; }
+  .meta { color: rgba(43,43,43,0.5); font-size: 14px; margin-bottom: 24px; }
+  .meta .tag { display: inline-block; border: 1px solid rgba(43,43,43,0.25); border-radius: 999px;
+    padding: 2px 10px; font-size: 12.5px; margin-right: 6px; color: rgba(43,43,43,0.65); }
+  .meta .researched { display: inline-block; margin-left: 6px; font-size: 12.5px;
+    color: #b3352b; font-weight: 700; }
+  .verdict { font-size: 17px; color: #2b2b2b; border-left: 3px solid #b3352b;
+    padding: 4px 0 4px 18px; margin: 0 0 28px; line-height: 1.65; }
+  p { margin-bottom: 16px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  p strong, li strong { color: #2b2b2b; }
+  h2 { font-size: 23px; color: #2b2b2b; margin: 44px 0 10px; letter-spacing: -0.01em; }
+  h2 .n { color: #b3352b; }
+  ul { margin: 0 0 16px 20px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  li { margin-bottom: 8px; }
+  a { color: #b3352b; }
+  footer { margin-top: 60px; font-size: 13px; color: rgba(43,43,43,0.35); }
+  footer a { color: rgba(43,43,43,0.6); }
+  .kicker-close { font-size: 19px; font-weight: 700; color: #2b2b2b;
+    border-top: 1px solid rgba(43,43,43,0.15); padding-top: 28px; margin-top: 48px; }
+
+  /* visualizer cards */
+  .viz { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 16px; padding: 20px; margin: 24px 0; }
+  .viz h3 { font-size: 17px; margin-bottom: 4px; color: #2b2b2b; }
+  .viz .sub { font-size: 14px; color: rgba(43,43,43,0.62); margin-bottom: 12px; line-height: 1.55; }
+  .cap { font-size: 13.5px; color: rgba(43,43,43,0.6); margin-top: 10px; line-height: 1.55; }
+
+  /* tappable mechanism cards */
+  .mech { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin: 16px 0; }
+  .fcard { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 18px; touch-action: manipulation; cursor: pointer; font-family: inherit;
+    text-align: left; width: 100%; max-width: 100%; min-width: 0; overflow: hidden; color: #2b2b2b; }
+  .fcard:active { transform: scale(0.99); }
+  .fcard .fname { font-size: 17px; font-weight: 800; }
+  .fcard .fnum { display: inline-block; font-size: 12.5px; font-weight: 700; margin: 6px 8px 2px 0;
+    padding: 3px 10px; border-radius: 999px; background: rgba(179,53,43,0.1); color: #b3352b; }
+  .fcard .fbody { display: none; margin-top: 8px; font-size: 15.5px; line-height: 1.65;
+    color: rgba(43,43,43,0.88); }
+  .fcard.open .fbody { display: block; }
+  .fcard .hint { font-size: 13px; color: rgba(43,43,43,0.5); }
+  .fcard .fbody .ex { background: rgba(179,53,43,0.06); border-left: 3px solid #b3352b;
+    padding: 8px 12px; margin: 10px 0; font-size: 14.5px; }
+  .fcard .fbody .chg { font-size: 14.5px; color: rgba(43,43,43,0.75); }
+  .fcard .fbody .chg b { color: #2b2b2b; }
+
+  /* stepper: edge-straddling circle arrows */
+  .stepper { position: relative; margin: 20px 0; }
+  .step-card { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 16px;
+    padding: 24px 28px 18px; margin: 0 32px; }
+  .step-card .sdate { font-size: 13px; font-weight: 800; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #b3352b; margin-bottom: 6px; }
+  .step-card .sname { font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+  .step-card .swhat { font-size: 15.5px; color: rgba(43,43,43,0.88); line-height: 1.6; margin-bottom: 0; }
+  .step-card .swhat b { color: #2b2b2b; }
+  .car-arrow { position: absolute; top: 34px; width: 46px; height: 46px; border-radius: 50%;
+    background: rgba(43,43,43,0.85); border: 1px solid rgba(43,43,43,0.9); color: #f6f1e3;
+    cursor: pointer; touch-action: manipulation; display: flex; align-items: center;
+    justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.25); z-index: 2; }
+  .car-arrow:active { transform: scale(0.94); }
+  .car-arrow svg { width: 22px; height: 22px; }
+  .car-arrow.prev { left: 9px; }
+  .car-arrow.next { right: 9px; }
+  .step-dots { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; }
+  .step-count { font-size: 14px; font-weight: 700; color: rgba(43,43,43,0.55);
+    font-variant-numeric: tabular-nums; margin-right: 4px; }
+  .step-dots .dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(43,43,43,0.2); }
+  .step-dots .dot.on { background: #b3352b; }
+
+  /* predict-the-blank widget */
+  .ptb-sent { font-size: 19px; line-height: 1.9; color: #2b2b2b; margin: 4px 0 6px; }
+  .blank { display: inline-block; font-family: inherit; font-size: 17px; font-weight: 800;
+    color: #b3352b; background: rgba(179,53,43,0.08); border: 2px dashed rgba(179,53,43,0.55);
+    border-radius: 10px; padding: 2px 18px; margin: 0 2px; cursor: pointer;
+    touch-action: manipulation; vertical-align: baseline; }
+  .blank:active { transform: scale(0.96); }
+  .blank.hidden { display: none; }
+  .cand { display: none; margin: 10px 0 2px; }
+  .cand.show { display: block; }
+  .crow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .ctok { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; font-weight: 700;
+    min-width: 70px; color: #2b2b2b; }
+  .cbar { flex: 1; min-width: 0; height: 16px; background: rgba(43,43,43,0.08);
+    border-radius: 8px; overflow: hidden; }
+  .cfill { display: block; height: 100%; width: 0; background: #b3352b; border-radius: 8px;
+    transition: width 0.7s cubic-bezier(.2,.7,.2,1); }
+  .crow.top1 .cfill { background: #b3352b; }
+  .crow.topn .cfill { background: rgba(43,43,43,0.45); }
+  .cp { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px;
+    width: 46px; text-align: right; color: rgba(43,43,43,0.65); font-variant-numeric: tabular-nums; }
+  .ptb-note { font-size: 13.5px; color: rgba(43,43,43,0.6); margin: 8px 0 0; line-height: 1.55; }
+  .ptb-note b { color: #2b2b2b; }
+
+  /* denoise scrubber */
+  .dz-wrap { margin: 6px 0 2px; }
+  canvas.dz { width: 100%; height: auto; display: block; border-radius: 10px;
+    image-rendering: pixelated; border: 1px solid rgba(43,43,43,0.15); background: #888; }
+  .dz-read { display: flex; justify-content: space-between; align-items: baseline; margin: 10px 0 0; }
+  .dz-read .big { font-size: 26px; font-weight: 800; color: #b3352b; font-variant-numeric: tabular-nums; }
+  .dz-read .lab { font-size: 13.5px; color: rgba(43,43,43,0.6); }
+  .dz-cap { font-size: 14.5px; color: rgba(43,43,43,0.88); margin: 8px 0 0; line-height: 1.6; min-height: 3.2em; }
+
+  /* A/B toggle */
+  .abt { display: block; width: 100%; max-width: 420px; margin: 18px auto 0; padding: 6px;
+    border-radius: 999px; background: rgba(43,43,43,0.08); border: 1px solid rgba(43,43,43,0.15);
+    cursor: pointer; touch-action: manipulation; font-family: inherit; position: relative; }
+  .abt .thumb { position: absolute; top: 5px; bottom: 5px; left: 5px; width: calc(50% - 5px);
+    border-radius: 999px; background: #2b2b2b;
+    transition: left 280ms cubic-bezier(.5,0,.2,1.15); }
+  .abt[data-side="b"] .thumb { left: 50%; }
+  .abt .labs { position: relative; display: flex; z-index: 1; }
+  .abt .labs span { flex: 1; text-align: center; font-size: 14px; font-weight: 700; padding: 12px 0;
+    color: rgba(43,43,43,0.5); }
+  .abt[data-side="a"] .labs .la { color: #f6f1e3; }
+  .abt[data-side="b"] .labs .lb { color: #f6f1e3; }
+  .abt-stage { position: relative; margin-top: 14px; }
+  .abt-layer { transition: opacity 450ms ease; }
+  .abt-layer.hidden { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+  .voice { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 18px; }
+  .voice .vname { font-size: 17px; font-weight: 800; }
+  .voice .vrole { font-size: 13px; color: rgba(43,43,43,0.55); margin-bottom: 8px; }
+  .voice .vview { font-size: 15.5px; line-height: 1.65; color: rgba(43,43,43,0.88); }
+  .voice .vview a { font-size: 13.5px; }
+
+  /* confidence markers */
+  .conf { display: inline-block; font-size: 11.5px; font-weight: 800; letter-spacing: 0.06em;
+    text-transform: uppercase; padding: 2px 9px; border-radius: 999px; margin-left: 8px;
+    vertical-align: 2px; white-space: nowrap; }
+  .conf.consensus { background: rgba(46,125,50,0.12); color: #2e7d32; }
+  .conf.contested { background: rgba(179,53,43,0.1); color: #b3352b; }
+  .conf.speculative { background: rgba(43,43,43,0.08); color: rgba(43,43,43,0.65); }
+  .pred { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 16px 18px; margin: 12px 0; }
+  .pred .pwho { font-size: 15px; font-weight: 800; }
+  .pred .pwhat { font-size: 15px; color: rgba(43,43,43,0.88); margin-top: 4px; line-height: 1.6; }
+  .pred .psaid { font-size: 13px; color: rgba(43,43,43,0.55); margin-top: 6px; }
+
+  /* flashcards */
+  .fgrid { display: grid; gap: 12px; margin: 16px 0; }
+  .flash { perspective: 900px; touch-action: manipulation; cursor: pointer; }
+  .flash .inner { position: relative; min-height: 150px; transform-style: preserve-3d;
+    transition: transform 0.45s cubic-bezier(.2,.7,.2,1); display: grid; }
+  .flash.flipped .inner { transform: rotateY(180deg); }
+  .flash .face { backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 20px; grid-area: 1 / 1; display: flex; flex-direction: column;
+    justify-content: center; min-width: 0; }
+  .flash .back { transform: rotateY(180deg); border-color: rgba(179,53,43,0.4); }
+  .flash .q { font-size: 16px; font-weight: 700; }
+  .flash .a { font-size: 15.5px; line-height: 1.6; color: rgba(43,43,43,0.88); }
+  .flash .tap { font-size: 12.5px; color: rgba(43,43,43,0.45); margin-top: 6px; }
+  .flash .score-row { display: flex; gap: 8px; margin-top: 10px; }
+  .flash .score-row button { touch-action: manipulation; flex: 1; border-radius: 10px;
+    padding: 10px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .flash .knew { border: 2px solid #2e7d32; background: rgba(46,125,50,0.08); color: #2e7d32; }
+  .flash .learning { border: 2px solid rgba(43,43,43,0.25); background: transparent; color: #2b2b2b; }
+  .flash.done .front { border-color: rgba(46,125,50,0.5); }
+  .scorebar { display: flex; align-items: center; gap: 10px; margin: 6px 0 2px; }
+  .scorebar .n { font-size: 22px; font-weight: 800; color: #b3352b; font-variant-numeric: tabular-nums; }
+
+  /* keep-exploring link cards */
+  .xlinks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0 8px; }
+  @media (max-width: 520px) { .xlinks { grid-template-columns: 1fr; } }
+  .xlink { display: block; background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 14px; padding: 16px; text-decoration: none; color: #2b2b2b;
+    touch-action: manipulation; }
+  .xlink:active { transform: scale(0.98); }
+  .xlink b { display: block; font-size: 15px; margin-bottom: 4px; color: #b3352b; }
+  .xlink span { font-size: 13.5px; color: rgba(43,43,43,0.62); line-height: 1.5; }
+  .xicon { width: 14px; height: 14px; vertical-align: -2px; margin-left: 7px; flex: none; }
+
+  /* source link-out cards */
+  .vsc-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+  .vsc-list a { display: block; background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 14px; padding: 16px; color: #2b2b2b; text-decoration: none;
+    touch-action: manipulation; }
+  .vsc-list a:active { transform: scale(0.99); }
+  .vsc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .vsc-kind { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase; color: #b3352b; }
+  .vsc-kind svg { width: 15px; height: 15px; }
+  .vsc-head > svg { flex: none; width: 15px; height: 15px; color: rgba(43,43,43,0.4); }
+  .vsc-title { display: block; font-size: 16px; font-weight: 600; line-height: 1.35; }
+  .vsc-meta { display: block; margin-top: 8px; font-size: 13px; color: rgba(43,43,43,0.55); }
+
+  .warn-card { background: rgba(179,53,43,0.05); border: 1px solid rgba(179,53,43,0.3);
+    border-radius: 14px; padding: 18px; margin: 20px 0; }
+  .warn-card b { color: #b3352b; font-size: 15.5px; }
+  .warn-card p { font-size: 14.5px; margin: 8px 0 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flash .inner { transition: none; }
+    .abt .thumb, .abt-layer { transition: none; }
+    .cfill { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="top"><a href="/blog/">&larr; blog</a></nav>
+  <h1>How Models Learn From Raw Text</h1>
+  <div class="meta"><span class="tag">llms</span><span class="tag">ai</span><span class="researched">Researched October 2026</span></div>
+  <p class="verdict">Every chatbot and every image generator was trained with almost no human labeling. The trick is self-supervision: the data is its own answer key. Text models learn by predicting the next token; image models learn by predicting noise. This primer covers both objectives, the papers that defined them, the voices behind them, and where the two paradigms are colliding.</p>
+
+  <h2><span class="n">1.</span> The brief</h2>
+  <p>Training a frontier model looks impossible on paper. Nobody labeled trillions of words with correct answers, and nobody drew boxes around billions of images. The field's central insight is that <strong>the labels were hiding in the data all along</strong>. Take any sentence, cover up a word, and the sentence itself is the answer key. Take any image, add noise, and the original pixels are the target. That is self-supervised learning: objectives where the supervision signal is manufactured from the raw data, for free, at any scale. Two families grew from it. Autoregressive models like GPT predict the next token, one step at a time. Diffusion models like the ones behind text-to-image generators predict the noise that was added to an image, one denoising step at a time. And in 2025, the two met: LLaDA trained a language model with a diffusion objective. The sentence to remember: <strong>models learn because the data grades its own homework.</strong></p>
+
+  <h2><span class="n">2.</span> How it works</h2>
+  <p>Five mechanisms, each a different flavor of self-grading. Tap each card for the plain-language version, one concrete example, and what changed recently.</p>
+  <div class="mech" id="mech"></div>
+
+  <div class="viz">
+    <h3>The model only ever answers one question</h3>
+    <p class="sub">Given the tokens so far, what comes next? A language model never writes a sentence in one go; it bets on one token, appends it, and bets again. Four sentences, one blank each. Tap the blank to see what a toy model guesses, then step through with the arrows. Every tap is one step.</p>
+    <div class="stepper" id="ptb-stepper">
+      <button class="car-arrow prev" id="ptb-prev" aria-label="Previous example">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div class="step-card" id="ptb-card"></div>
+      <button class="car-arrow next" id="ptb-next" aria-label="Next example">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+      <div class="step-dots" id="ptb-dots"></div>
+    </div>
+    <p class="cap">The probabilities are illustrative, not measured from a real model. A real model outputs a full probability distribution over its entire vocabulary at every position, tens of thousands of tokens, and the probabilities always sum to one. The sharpness of the guess is the training working: more training makes confident contexts spikier and uncertain contexts flatter.</p>
+  </div>
+
+  <div class="viz">
+    <h3>Watch noise become a picture</h3>
+    <p class="sub">Diffusion generation, click by click. Start with pure static, the way every image begins. Each tap removes one slice of noise, the way the trained model does. Nothing is drawn; the picture was always under the noise. Every tap is one step.</p>
+    <div class="stepper" id="dz-stepper">
+      <button class="car-arrow prev" id="dz-prev" aria-label="Previous denoising step">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div class="step-card" style="padding:18px 18px 14px">
+        <div class="dz-wrap"><canvas class="dz" id="dz-canvas" width="96" height="96"></canvas></div>
+        <div class="dz-read"><span class="big" id="dz-pct">100%</span><span class="lab">noise remaining</span></div>
+        <p class="dz-cap" id="dz-cap"></p>
+      </div>
+      <button class="car-arrow next" id="dz-next" aria-label="Next denoising step">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+      <div class="step-dots" id="dz-dots"></div>
+    </div>
+    <p class="cap">Toy model, not a trained network: the noise here is a fixed random field blended out in equal slices, and the "picture" is a hard-coded smiley. A real diffusion model predicts a fresh noise field at every step, conditioned on the text prompt, and the denoising schedule is tuned, not even. The shape of the idea is exact; only the numbers are play-pretend.</p>
+  </div>
+
+  <h2><span class="n">3.</span> The landmarks</h2>
+  <p>Six moments that defined how models train, June 2018 to February 2025. One tap per step, or use the arrow keys.</p>
+  <div class="stepper" id="tl-stepper">
+    <button class="car-arrow prev" id="tl-prev" aria-label="Previous landmark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <div class="step-card" id="tl-card"></div>
+    <button class="car-arrow next" id="tl-next" aria-label="Next landmark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+    </button>
+    <div class="step-dots" id="tl-dots"></div>
+  </div>
+
+  <h2><span class="n">4.</span> Key voices</h2>
+  <p>Five people who built the objectives this primer runs on. Each view is one or two sentences with the primary source linked. The real action is at the bottom, where the token predictors collide with the representation predictors.</p>
+  <div class="mech" id="voices"></div>
+
+  <div class="viz">
+    <h3>The big disagreement</h3>
+    <p class="sub">Same goal, opposite bets. One switch, every tap flips. No picking sides, just the collision.</p>
+    <button class="abt" id="dispute" data-side="a" role="switch" aria-checked="false" aria-label="Flip between predicting tokens and predicting representations">
+      <span class="thumb"></span>
+      <span class="labs"><span class="la">Predict tokens</span><span class="lb">Predict representations</span></span>
+    </button>
+    <div class="abt-stage">
+      <div class="abt-layer" id="abt-a">
+        <div class="voice" style="margin-top:14px">
+          <div class="vname">The generative camp <span style="font-weight:400;font-size:13px;color:rgba(43,43,43,0.55)">GPT, BERT, diffusion lineage</span></div>
+          <div class="vrole">predict the raw stuff</div>
+          <p class="vview"><strong>The next token is enough.</strong> Radford et al. showed in 2018 that predicting what comes next on raw text transfers to a dozen tasks with barely any fine-tuning, and GPT-3 proved at 175B parameters that in-context learning emerges from the same objective with zero architecture change. The diffusion side bets the same way on pixels: predict the noise at every step, and images fall out. <a href="https://arxiv.org/abs/2005.14165">Language Models are Few-Shot Learners</a>, May 2020.</p>
+        </div>
+      </div>
+      <div class="abt-layer hidden" id="abt-b">
+        <div class="voice" style="margin-top:14px">
+          <div class="vname">Yann LeCun <span style="font-weight:400;font-size:13px;color:rgba(43,43,43,0.55)">Turing laureate, AMI Labs founder</span></div>
+          <div class="vrole">the dissenter</div>
+          <p class="vview"><strong>Predicting raw tokens is predicting the wrong thing.</strong> His cake: if intelligence is a cake, the bulk of it is self-supervised learning, with supervised learning as the icing and reinforcement learning as the cherry. But the self-supervision should predict <strong>abstract representations of the world</strong>, not the next word or the next pixel: generative models waste effort filling in details that are inherently unpredictable. That is the JEPA program, his "path towards autonomous machine intelligence." <a href="https://blog.pebblous.ai/blog/yann-lecun-jepa-world-models/en/">JEPA and world models</a>, 2026.</p>
+        </div>
+      </div>
+    </div>
+    <p class="cap">The irony the middle ground points out: LeCun called the recipe right (pre-train self-supervised, then fine-tune, then RL) while calling the objective wrong. The industry's frontier models follow his cake and ignore his warning.</p>
+  </div>
+
+  <h2><span class="n">5.</span> What comes next</h2>
+  <p>Every prediction below is attributed: who said it, where, when. The badge is my read of how solid it is: <strong>consensus</strong> means multiple independent sources agree, <strong>contested</strong> means smart people disagree, <strong>speculative</strong> means one person's leap. Predictions go stale; this section is frozen as of October 2026.</p>
+  <div id="preds">
+    <div class="pred">
+      <div class="pwho">Self-supervised pre-training stays the foundation of every frontier model<span class="conf consensus">consensus</span></div>
+      <div class="pwhat">GPT-1 (2018), BERT (2018), GPT-3 (2020), and LLaDA (2025) all pre-train on raw data with labels manufactured from the data itself. Nobody in the field is proposing a return to hand-labeled training at scale; the disagreement is only about which self-supervised objective.</div>
+      <div class="psaid">The through-line across all five arXiv papers in the Sources section, 2018 to 2025.</div>
+    </div>
+    <div class="pred">
+      <div class="pwho">LLaDA's authors expect diffusion to rival autoregressive models at frontier scale<span class="conf contested">contested</span></div>
+      <div class="pwhat">Their finding: diffusion models are "a viable and promising alternative" to autoregressive models, challenging the assumption that in-context learning and instruction following are inherently tied to next-token prediction. LLaDA 8B already matches LLaMA 3 8B on in-context learning.</div>
+      <div class="psaid">Nie et al., "Large Language Diffusion Models," arXiv:2502.09992, Feb 2025.</div>
+    </div>
+    <div class="pred">
+      <div class="pwho">LeCun expects predictive world models to displace generative token prediction<span class="conf contested">contested</span></div>
+      <div class="pwhat">His bet: models that predict abstract representations of how the world changes (JEPA) will win over models that generate raw tokens or pixels, because the latter waste capacity on unpredictable detail. The counter-bet from the generative camp is that scale keeps making the "wrong" objective work.</div>
+      <div class="psaid">LeCun's "A Path Towards Autonomous Machine Intelligence" program, described in the JEPA piece linked below; the generative counter-position is the GPT-3 result.</div>
+    </div>
+    <div class="pred">
+      <div class="pwho">One denoising objective could eventually train both text and image models<span class="conf speculative">speculative</span></div>
+      <div class="pwhat">LLaDA put a diffusion objective on text; latent diffusion put one on images. If masked denoising keeps scaling on both sides, future multimodal models may train on a single unified objective: corrupt the data, predict what was removed, repeat. Nobody has built that model yet; it is the shape the field is drifting toward.</div>
+      <div class="psaid">My read of the LLaDA plus latent-diffusion trajectory, Oct 2026; no lab has announced such a model.</div>
+    </div>
+  </div>
+
+  <h2><span class="n">6.</span> Check yourself</h2>
+  <p>Four cards. Tap to flip, then be honest: knew it, or still learning. The score is yours alone.</p>
+  <div class="scorebar"><span class="n" id="fc-score">0/4</span><span style="font-size:14px;color:rgba(43,43,43,0.6)">known</span></div>
+  <div class="fgrid" id="fgrid"></div>
+
+  <h2>Keep exploring</h2>
+  <div class="xlinks">
+    <a class="xlink" href="/blog/llm-progress/"><b>How AI Keeps Getting Smarter<svg class="xicon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4L10.5 13.5"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg></b><span>The six engines pushing AI forward now, the biggest one no longer size. Where this primer's training story goes next.</span></a>
+    <a class="xlink" href="/blog/llm-training/"><b>How an LLM Learns, Step by Step<svg class="xicon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4L10.5 13.5"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg></b><span>Training a model is just next-token prediction at absurd scale. Tokens, attention, gradient descent, RLHF, every step with an interactive visualizer.</span></a>
+    <a class="xlink" href="/blog/agent-regression-evals/"><b>How Frontier Labs Change Agents Without Breaking Them<svg class="xicon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4L10.5 13.5"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg></b><span>The eval machinery that keeps training changes honest. Six mechanisms, seven voices, and where the labs disagree.</span></a>
+  </div>
+
+  <h2>Sources</h2>
+  <p>Every factual claim in sections 2 through 5 traces to one of these. Quote lengths are kept short; the papers are the primary record.</p>
+  <ul class="vsc-list">
+    <li><a href="https://arxiv.org/abs/2006.11239"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>arXiv paper</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Denoising Diffusion Probabilistic Models</span><span class="vsc-meta">Ho, Jain, Abbeel &middot; arXiv:2006.11239 &middot; Jun 2020</span></a></li>
+    <li><a href="https://arxiv.org/abs/2112.10752v2"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>arXiv paper</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">High-Resolution Image Synthesis with Latent Diffusion Models</span><span class="vsc-meta">Rombach, Blattmann, Lorenz, Esser, Ommer &middot; arXiv:2112.10752 &middot; Dec 2021</span></a></li>
+    <li><a href="https://arxiv.org/abs/2502.09992v2"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>arXiv paper</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Large Language Diffusion Models</span><span class="vsc-meta">Nie et al. &middot; arXiv:2502.09992 &middot; Feb 2025</span></a></li>
+    <li><a href="https://arxiv.org/abs/1810.04805"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>arXiv paper</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding</span><span class="vsc-meta">Devlin, Chang, Lee, Toutanova &middot; arXiv:1810.04805 &middot; Oct 2018</span></a></li>
+    <li><a href="https://arxiv.org/abs/2005.14165"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>arXiv paper</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Language Models are Few-Shot Learners</span><span class="vsc-meta">Brown et al. &middot; arXiv:2005.14165 &middot; May 2020</span></a></li>
+    <li><a href="https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Paper</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Improving Language Understanding by Generative Pre-Training</span><span class="vsc-meta">Radford, Narasimhan, Salimans, Sutskever, OpenAI &middot; Jun 2018</span></a></li>
+    <li><a href="https://huggingface.co/docs/transformers/v4.39.3/tasks/language_modeling"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Docs</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Causal language modeling</span><span class="vsc-meta">Hugging Face Transformers docs &middot; labels shifted by one element</span></a></li>
+    <li><a href="https://blog.pebblous.ai/blog/yann-lecun-jepa-world-models/en/"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Essay</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">JEPA and World Models: Yann LeCun's Bet Against GenAI</span><span class="vsc-meta">Pebblous &middot; the self-supervised cake, JEPA, world models &middot; 2026</span></a></li>
+  </ul>
+
+  <p class="kicker-close">The labels were never labeled. The data graded its own homework, and everything since is commentary.</p>
+  <footer>Words, diagrams, and toy models are mine. Built to learn in public.</footer>
+</div>
+<script>
+(function(){
+  "use strict";
+  function $(id){ return document.getElementById(id); }
+
+  /* ---------- generic click-per-step stepper factory ---------- */
+  function makeStepper(cfg){
+    var card = $(cfg.card), dots = $(cfg.dots), prev = $(cfg.prev), next = $(cfg.next);
+    if(!card || !dots || !prev || !next) return null;
+    var i = 0, n = cfg.count;
+    for(var k = 0; k < n; k++){
+      var d = document.createElement("span");
+      d.className = "dot";
+      dots.appendChild(d);
+    }
+    function render(){
+      cfg.render(card, i);
+      var ds = dots.querySelectorAll(".dot");
+      ds.forEach(function(dd, j){ dd.classList.toggle("on", j === i); });
+      var count = dots.querySelector(".step-count");
+      if(!count){
+        count = document.createElement("span");
+        count.className = "step-count";
+        dots.insertBefore(count, dots.firstChild);
+      }
+      count.textContent = (i + 1) + " / " + n;
+      prev.style.display = i === 0 ? "none" : "flex";
+      next.style.display = i === n - 1 ? "none" : "flex";
+    }
+    prev.addEventListener("click", function(){ if(i > 0){ i--; cfg.onstep && cfg.onstep(i); render(); } });
+    next.addEventListener("click", function(){ if(i < n - 1){ i++; cfg.onstep && cfg.onstep(i); render(); } });
+    render();
+    return {
+      el: card,
+      back: function(){ if(i > 0){ i--; cfg.onstep && cfg.onstep(i); render(); } },
+      fwd: function(){ if(i < n - 1){ i++; cfg.onstep && cfg.onstep(i); render(); } }
+    };
+  }
+  var steppers = [];
+
+  /* ---------- section 2: the five mechanisms ---------- */
+  var MECH = [
+    { name: "Self-supervision, the free lunch",
+      stat: "labels manufactured from the data",
+      body: "<p>Supervised learning needs labels, and labels need humans. Self-supervision manufactures the labels from the data itself. For text, the label for each position is just the text shifted by one: position 3 predicts the token at position 4. No annotators, no crowdsourcing, no budget line. That is the whole economic trick behind training on trillions of words.</p>" +
+      "<div class='ex'><strong>Example:</strong> Hugging Face's causal language modeling guide puts it plainly: the data collator \"uses the inputs as labels shifted to the right by one element.\" The dataset is the answer key.</div>" +
+      "<p class='chg'><b>What changed:</b> GPT-1's 2018 recipe (generative pre-training, then fine-tune) became the default for everything. Even the 2025 diffusion language models are self-supervised: the masks make the labels.</p>" },
+    { name: "Next-token prediction",
+      stat: "predict token k from tokens 1 to k-1",
+      body: "<p>Given everything so far, predict what comes next. A causal mask stops the model from peeking ahead, and cross-entropy loss grades every position. Every sequence of T tokens produces T training signals, because every position is both an input and a target. Efficiency like this is why the objective survived a thousand-fold scale-up.</p>" +
+      "<div class='ex'><strong>Example:</strong> feed in \"the cat sat on the\". The model outputs a probability distribution over its whole vocabulary: mat 0.62, floor 0.21, rug 0.09, and thousands of also-rans. Try the widget below.</div>" +
+      "<p class='chg'><b>What changed:</b> nothing about the objective, everything about the scale. The same loss that trained GPT-1's 117M parameters produced in-context learning at GPT-3's 175B.</p>" },
+    { name: "Masked prediction, the BERT sibling",
+      stat: "mask 15%, predict from both sides",
+      body: "<p>Cover 15 percent of the tokens with a mask and predict them using context from both sides. No causal mask, so each token sees the full sentence. The cost: the model cannot generate text one token at a time, because it never learned to. The payoff: a deeper read of each token's role in context.</p>" +
+      "<div class='ex'><strong>Example:</strong> \"The [MASK] sat on the mat.\" With \"The\" on the left and \"sat on the mat\" on the right, the answer is nearly forced: \"cat\".</div>" +
+      "<p class='chg'><b>What changed:</b> BERT won 2018, then generation won the decade. But masked prediction came back in 2025 as the training objective of diffusion language models like LLaDA.</p>" },
+    { name: "Noise prediction, the diffusion trick",
+      stat: "the model guesses the noise, not the image",
+      body: "<p>The forward process is fixed, not learned: add a little Gaussian noise, many times, until the image is pure static. The model's only job is the reverse: given the noisy image and the step number, predict the noise that was added. Training is plain mean-squared error between the true noise and the guess. Labels, once again, manufactured for free: the noise schedule makes them.</p>" +
+      "<div class='ex'><strong>Example:</strong> DDPM's key simplification was predicting the noise epsilon instead of the clean image. That one change made training stable and made diffusion the first generative family to match GAN image quality.</div>" +
+      "<p class='chg'><b>What changed:</b> the same objective now trains text-to-image models, video models, and (via LLaDA) language models. One loss, three media.</p>" },
+    { name: "Text steers the denoiser",
+      stat: "cross-attention at every step",
+      body: "<p>A text-to-image model does not paint pixels from the prompt in one shot. At every denoising step, the text prompt is encoded and fed into the denoiser through cross-attention layers, so the prompt whispers guidance at each step. Latent diffusion goes one further: it runs the whole process in the compressed latent space of a pretrained autoencoder, then decodes once at the end.</p>" +
+      "<div class='ex'><strong>Example:</strong> \"a red balloon over Paris\". The words enter the denoising network at every step; the noise gradually resolves into a balloon-shaped region of red above a Paris-shaped region of rooftops.</div>" +
+      "<p class='chg'><b>What changed:</b> this is the architecture behind the mainstream image generators. The autoencoder trick cut compute so far that diffusion became the default, not the curiosity.</p>" }
+  ];
+  var mechWrap = $("mech");
+  MECH.forEach(function(m, i){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "fcard";
+    b.setAttribute("aria-expanded", "false");
+    b.innerHTML = "<span class='fname'>" + (i+1) + ". " + m.name + "</span><br>" +
+      "<span class='fnum'>" + m.stat + "</span> <span class='hint'>tap to open</span>" +
+      "<span class='fbody'>" + m.body + "</span>";
+    b.addEventListener("click", function(){
+      var open = b.classList.toggle("open");
+      b.setAttribute("aria-expanded", open ? "true" : "false");
+      b.querySelector(".hint").textContent = open ? "tap to close" : "tap to open";
+    });
+    mechWrap.appendChild(b);
+  });
+
+  /* ---------- section 2b: predict-the-blank stepper ---------- */
+  var PTB = [
+    { pre: "The cat sat on the",
+      cands: [["mat", 0.62], ["floor", 0.21], ["rug", 0.09]],
+      note: "A confident context: years of cat literature make <b>mat</b> the runaway guess." },
+    { pre: "The capital of France is",
+      cands: [["Paris", 0.91], ["Lyon", 0.03], ["France", 0.02]],
+      note: "Factual recall looks like a spike: the distribution collapses onto one token." },
+    { pre: "Once upon a time, in a galaxy far, far",
+      cands: [["away", 0.78], ["off", 0.06], ["beyond", 0.05]],
+      note: "Memorized phrasing: the model is finishing a quote it has seen a million times." },
+    { pre: "She opened the door and saw a",
+      cands: [["dog", 0.31], ["man", 0.22], ["room", 0.14]],
+      note: "Genuinely open context: the distribution stays flat, and sampling could go anywhere." }
+  ];
+  var ptbRevealed = {};
+  steppers.push(makeStepper({
+    card: "ptb-card", dots: "ptb-dots", prev: "ptb-prev", next: "ptb-next",
+    count: PTB.length,
+    onstep: function(){},
+    render: function(card, i){
+      var ex = PTB[i];
+      var revealed = !!ptbRevealed[i];
+      var rows = ex.cands.map(function(c, j){
+        return "<div class='crow " + (j === 0 ? "top1" : "topn") + "'>" +
+          "<span class='ctok'>" + c[0] + "</span>" +
+          "<span class='cbar'><span class='cfill' data-w='" + Math.round(c[1] * 100) + "'></span></span>" +
+          "<span class='cp'>" + c[1].toFixed(2) + "</span></div>";
+      }).join("");
+      card.innerHTML =
+        "<div class='sdate'>Example " + (i + 1) + " of " + PTB.length + "</div>" +
+        "<p class='ptb-sent'>" + ex.pre + " " +
+        "<button type='button' class='blank" + (revealed ? " hidden" : "") + "' id='ptb-blank'>?</button></p>" +
+        "<div class='cand" + (revealed ? " show" : "") + "' id='ptb-cand'>" + rows + "</div>" +
+        (revealed ? "<p class='ptb-note'>" + ex.note + "</p>" : "<p class='ptb-note'>Tap the blank to reveal the guesses.</p>");
+      var blank = $("ptb-blank");
+      if(blank){
+        blank.addEventListener("click", function(){
+          ptbRevealed[i] = true;
+          blank.classList.add("hidden");
+          var cand = $("ptb-cand");
+          cand.classList.add("show");
+          var fills = cand.querySelectorAll(".cfill");
+          setTimeout(function(){
+            fills.forEach(function(f){ f.style.width = f.getAttribute("data-w") + "%"; });
+          }, 30);
+          var note = card.querySelector(".ptb-note");
+          if(note) note.innerHTML = ex.note;
+        });
+      } else {
+        var fills = card.querySelectorAll(".cfill");
+        fills.forEach(function(f){ f.style.width = f.getAttribute("data-w") + "%"; });
+      }
+    }
+  }));
+
+  /* ---------- section 2c: denoise scrubber ---------- */
+  var DZ_STEPS = 9;
+  var DZ_CAP = [
+    "Step 0: pure static. Every image a diffusion model makes starts exactly here.",
+    "Step 1: a first slice of noise lifts. Something round is hiding in the middle.",
+    "Step 2: the circle firms up. The model has decided: this is a face.",
+    "Step 3: two darker patches. Eyes, probably. The noise schedule is doing its work.",
+    "Step 4: the smile arc appears. Coarse structure resolves before fine detail.",
+    "Step 5: edges sharpen. Most of the noise is gone; the picture is legible.",
+    "Step 6: colors settle into their regions: red face, dark features.",
+    "Step 7: nearly clean. Only a faint grain of noise remains.",
+    "Step 8: the noise is gone. The picture was always underneath; the model just removed what hid it."
+  ];
+  var dzImg = null;
+  (function(){
+    var N = 96;
+    function mulberry32(a){
+      return function(){
+        a |= 0; a = (a + 0x6D2B79F5) | 0;
+        var t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+    var rnd = mulberry32(20261010);
+    var noise = new Uint8Array(N * N);
+    for(var k = 0; k < N * N; k++) noise[k] = Math.floor(rnd() * 256);
+    /* target: smiley on paper */
+    var off = document.createElement("canvas");
+    off.width = N; off.height = N;
+    var c = off.getContext("2d");
+    c.fillStyle = "#fffdf6"; c.fillRect(0, 0, N, N);
+    c.fillStyle = "#b3352b";
+    c.beginPath(); c.arc(48, 48, 30, 0, Math.PI * 2); c.fill();
+    c.fillStyle = "#2b2b2b";
+    c.beginPath(); c.arc(38, 40, 5, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.arc(58, 40, 5, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = "#2b2b2b"; c.lineWidth = 4; c.lineCap = "round";
+    c.beginPath(); c.arc(48, 55, 13, Math.PI * 0.25, Math.PI * 0.75); c.stroke();
+    var tgt = c.getImageData(0, 0, N, N).data;
+    var cv = $("dz-canvas");
+    var ctx = cv.getContext("2d");
+    var out = ctx.createImageData(N, N);
+    function renderStep(s){
+      var amt = 1 - s / (DZ_STEPS - 1);
+      for(var p = 0; p < N * N; p++){
+        var nz = noise[p];
+        out.data[p * 4]     = Math.round(tgt[p * 4] * (1 - amt) + nz * amt);
+        out.data[p * 4 + 1] = Math.round(tgt[p * 4 + 1] * (1 - amt) + nz * amt);
+        out.data[p * 4 + 2] = Math.round(tgt[p * 4 + 2] * (1 - amt) + nz * amt);
+        out.data[p * 4 + 3] = 255;
+      }
+      ctx.putImageData(out, 0, 0);
+      $("dz-pct").textContent = Math.round(amt * 100) + "%";
+      $("dz-cap").textContent = DZ_CAP[s];
+    }
+    dzImg = renderStep;
+    renderStep(0);
+  })();
+  steppers.push(makeStepper({
+    card: "dz-stepper", dots: "dz-dots", prev: "dz-prev", next: "dz-next",
+    count: DZ_STEPS,
+    onstep: function(i){ if(dzImg) dzImg(i); },
+    render: function(card, i){
+      /* card body is static HTML; just make sure canvas matches the step */
+      if(dzImg) dzImg(i);
+    }
+  }));
+  /* fix: makeStepper expects card element; dz card id is the stepper root, guard it */
+  (function(){
+    var dzStepper = steppers[1];
+    if(dzStepper && dzImg){ /* canvas already rendered at step 0 */ }
+  })();
+
+  /* ---------- shared arrow-key support for all steppers ---------- */
+  document.addEventListener("keydown", function(e){
+    if(e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if(e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    var t = e.target, tag = t && t.tagName;
+    if(tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT" || (t && t.isContentEditable)) return;
+    if(t && t.closest && t.closest(".step-code")) return;
+    for(var s = 0; s < steppers.length; s++){
+      var st = steppers[s];
+      if(!st) continue;
+      var r = st.el.getBoundingClientRect();
+      if(r.bottom < 0 || r.top > window.innerHeight) continue;
+      if(e.key === "ArrowLeft"){ st.back(); e.preventDefault(); }
+      else { st.fwd(); e.preventDefault(); }
+      break;
+    }
+  });
+
+  /* ---------- section 3: timeline stepper ---------- */
+  var TL = [
+    { d: "Jun 2018", n: "GPT-1", w: "<b>Generative pre-training works.</b> Radford et al. train a 117M-parameter decoder on 7,000 books with a single objective, predict the next token, then fine-tune lightly. Nine of twelve benchmarks beaten. The recipe the whole industry still uses." },
+    { d: "Oct 2018", n: "BERT", w: "<b>Mask instead of predict.</b> Devlin et al. mask 15 percent of tokens and predict them from both directions. New state of the art on eleven NLP tasks at once. The sibling paradigm that generation would later borrow back." },
+    { d: "May 2020", n: "GPT-3", w: "<b>Same objective, new abilities.</b> Brown et al. scale next-token prediction to 175B parameters. In-context learning appears: the model handles new tasks from examples in the prompt, with zero weight updates." },
+    { d: "Jun 2020", n: "DDPM", w: "<b>Predict the noise, not the image.</b> Ho, Jain, and Abbeel show a model trained with plain mean-squared error to predict added Gaussian noise can generate high-quality images, matching the GANs of the day. The objective behind every major image generator." },
+    { d: "Dec 2021", n: "Latent diffusion", w: "<b>Compress, then diffuse.</b> Rombach et al. run diffusion in the latent space of a pretrained autoencoder and steer it with text through cross-attention layers. The template for the text-to-image wave." },
+    { d: "Feb 2025", n: "LLaDA", w: "<b>The paradigms merge.</b> Nie et al. train an 8B language model with a masked-diffusion objective: corrupt text with masks, predict what was removed. Competitive with LLaMA 3 8B at in-context learning, and it fixes the reversal curse. Text learned the image trick." }
+  ];
+  var tlStepper = makeStepper({
+    card: "tl-card", dots: "tl-dots", prev: "tl-prev", next: "tl-next",
+    count: TL.length,
+    render: function(card, i){
+      card.innerHTML = "<div class='sdate'>" + TL[i].d + "</div><div class='sname'>" + TL[i].n + "</div><p class='swhat'>" + TL[i].w + "</p>";
+    }
+  });
+  if(tlStepper) steppers.push(tlStepper);
+
+  /* ---------- section 4: voices ---------- */
+  var VOICES = [
+    { name: "Alec Radford", role: "GPT-1 lead author",
+      view: "\"Large gains on these tasks can be realized by generative pre-training of a language model on a diverse corpus of unlabeled text, followed by discriminative fine-tuning on each specific task.\" The 2018 claim that launched the GPT era. <a href='https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf'>Improving Language Understanding by Generative Pre-Training</a>, Jun 2018." },
+    { name: "Jacob Devlin", role: "BERT co-author",
+      view: "Mask 15 percent of tokens, predict them from both directions, and bidirectionality beats every left-to-right model on eleven tasks at once. His lesson: what the model is allowed to see shapes what it can learn. <a href='https://arxiv.org/abs/1810.04805'>BERT</a>, Oct 2018." },
+    { name: "Jonathan Ho", role: "DDPM lead author",
+      view: "The model's job is not to draw the image but to predict the noise, and the loss is plain mean-squared error. That simplification is what made diffusion trainable at quality. <a href='https://arxiv.org/abs/2006.11239'>Denoising Diffusion Probabilistic Models</a>, Jun 2020." },
+    { name: "Robin Rombach", role: "Latent diffusion lead author",
+      view: "Run diffusion in the compressed latent space of a pretrained autoencoder, and inject the text prompt through cross-attention at every denoising step. Compression plus conditioning is why text-to-image got cheap and good. <a href='https://arxiv.org/abs/2112.10752v2'>High-Resolution Image Synthesis with Latent Diffusion Models</a>, Dec 2021." },
+    { name: "Yann LeCun", role: "Turing laureate, AMI Labs founder",
+      view: "Self-supervised learning is the bulk of intelligence, the cake itself. But the objective should predict <strong>abstract representations of the world</strong>, not raw tokens or pixels: generative models waste effort filling in details that are inherently unpredictable. <a href='https://blog.pebblous.ai/blog/yann-lecun-jepa-world-models/en/'>JEPA and world models</a>, 2026." }
+  ];
+  var vWrap = $("voices");
+  VOICES.forEach(function(v){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "fcard";
+    b.setAttribute("aria-expanded", "false");
+    b.innerHTML = "<span class='fname'>" + v.name + "</span> <span class='hint'>" + v.role + " &middot; tap to open</span>" +
+      "<span class='fbody'><p class='chg' style='margin:0'>" + v.view + "</p></span>";
+    b.addEventListener("click", function(){
+      var open = b.classList.toggle("open");
+      b.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    vWrap.appendChild(b);
+  });
+
+  /* ---------- section 4b: A/B toggle ---------- */
+  (function(){
+    var t = $("dispute");
+    if(!t) return;
+    t.addEventListener("click", function(){
+      var side = t.getAttribute("data-side") === "a" ? "b" : "a";
+      t.setAttribute("data-side", side);
+      t.setAttribute("aria-checked", side === "b" ? "true" : "false");
+      $("abt-a").classList.toggle("hidden", side !== "a");
+      $("abt-b").classList.toggle("hidden", side !== "b");
+    });
+  })();
+
+  /* ---------- section 6: flashcards ---------- */
+  var CARDS = [
+    { q: "Why does next-token prediction need zero human labels?",
+      a: "The labels are the text itself, shifted by one position. Every token is both input and target, so T tokens give T training signals. Hugging Face's causal-LM docs: the collator \"uses the inputs as labels shifted to the right by one element.\"" },
+    { q: "What does a diffusion model predict during training: the image, or the noise?",
+      a: "The noise. The forward process adds known Gaussian noise; the model predicts exactly that noise with mean-squared error. Predicting the noise instead of the clean image is DDPM's key simplification (Ho et al., 2020)." },
+    { q: "How does a text prompt steer an image diffusion model?",
+      a: "The prompt is encoded and fed into the denoiser through cross-attention layers at every denoising step, nudging the noise toward the described content. Latent diffusion runs this in a compressed latent space (Rombach et al., 2021)." },
+    { q: "LeCun agrees self-supervision is the future. What does he disagree about?",
+      a: "The objective. He argues models should predict abstract representations of the world (JEPA), not generate raw tokens or pixels, because generative models waste effort filling in inherently unpredictable detail." }
+  ];
+  (function(){
+    var grid = $("fgrid"), scoreEl = $("fc-score");
+    var known = 0, scored = {};
+    function setScore(){
+      scoreEl.textContent = known + "/" + CARDS.length;
+    }
+    CARDS.forEach(function(c, idx){
+      var el = document.createElement("div");
+      el.className = "flash";
+      el.innerHTML = "<div class='inner'>" +
+        "<div class='face front'><div class='q'>" + c.q + "</div><div class='tap'>tap to flip</div></div>" +
+        "<div class='face back'><div class='a'>" + c.a + "</div>" +
+        "<div class='score-row'><button type='button' class='knew'>Knew it</button><button type='button' class='learning'>Still learning</button></div></div></div>";
+      el.addEventListener("click", function(){
+        el.classList.toggle("flipped");
+      });
+      var knew = el.querySelector(".knew"), learning = el.querySelector(".learning");
+      function mark(k){
+        if(scored[idx] === k) return;
+        if(scored[idx] === true) known--;
+        scored[idx] = k;
+        if(k === true) known++;
+        el.classList.add("done");
+        setScore();
+      }
+      knew.addEventListener("click", function(e){ e.stopPropagation(); mark(true); });
+      learning.addEventListener("click", function(e){ e.stopPropagation(); mark(false); });
+      grid.appendChild(el);
+    });
+    setScore();
+  })();
+})();
+</script>
+<script>!function(){try{var d={host:location.hostname,path:location.pathname+location.search,ref:document.referrer};if(navigator.sendBeacon){navigator.sendBeacon("https://sync-proto.lukezhang.si/v1/a/hit",JSON.stringify(d))}}catch(e){}}();</script>
+</body>
+</html>

@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How AI Remembers: Context and Compacting: luke's blog</title>
+<meta name="description" content="The context window is an AI's working memory: one shared token budget for prompt, history, and answer. The KV cache is why long context costs real money, and compaction is what happens when the bucket fills. Researched October 2026.">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    min-height: 100%;
+    background: #f6f1e3;
+    color: #2b2b2b;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.7;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 56px 22px 80px; }
+  nav.top { margin-bottom: 40px; font-size: 14px; }
+  nav.top a { color: rgba(43,43,43,0.55); text-decoration: none; }
+  nav.top a:hover { color: #b3352b; }
+  h1 { font-size: 32px; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 8px; }
+  .meta { color: rgba(43,43,43,0.5); font-size: 14px; margin-bottom: 24px; }
+  .meta .tag { display: inline-block; border: 1px solid rgba(43,43,43,0.25); border-radius: 999px;
+    padding: 2px 10px; font-size: 12.5px; margin-right: 6px; color: rgba(43,43,43,0.65); }
+  .meta .researched { display: inline-block; margin-left: 6px; font-size: 12.5px;
+    color: #b3352b; font-weight: 700; }
+  .verdict { font-size: 17px; color: #2b2b2b; border-left: 3px solid #b3352b;
+    padding: 4px 0 4px 18px; margin: 0 0 28px; line-height: 1.65; }
+  p { margin-bottom: 16px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  p strong, li strong { color: #2b2b2b; }
+  h2 { font-size: 23px; color: #2b2b2b; margin: 44px 0 10px; letter-spacing: -0.01em; }
+  h2 .n { color: #b3352b; }
+  ul { margin: 0 0 16px 20px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  li { margin-bottom: 8px; }
+  a { color: #b3352b; }
+  footer { margin-top: 60px; font-size: 13px; color: rgba(43,43,43,0.35); }
+  footer a { color: rgba(43,43,43,0.6); }
+  .kicker-close { font-size: 19px; font-weight: 700; color: #2b2b2b;
+    border-top: 1px solid rgba(43,43,43,0.15); padding-top: 28px; margin-top: 48px; }
+
+  /* visualizer cards */
+  .viz { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 16px; padding: 20px; margin: 24px 0; }
+  .viz h3 { font-size: 17px; margin-bottom: 4px; color: #2b2b2b; }
+  .viz .sub { font-size: 14px; color: rgba(43,43,43,0.62); margin-bottom: 12px; line-height: 1.55; }
+  .cap { font-size: 13.5px; color: rgba(43,43,43,0.6); margin-top: 10px; line-height: 1.55; }
+
+  /* tappable mechanism cards */
+  .mech { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin: 16px 0; }
+  .fcard { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 18px; touch-action: manipulation; cursor: pointer; font-family: inherit;
+    text-align: left; width: 100%; max-width: 100%; min-width: 0; overflow: hidden; color: #2b2b2b; }
+  .fcard:active { transform: scale(0.99); }
+  .fcard .fname { font-size: 17px; font-weight: 800; }
+  .fcard .fnum { display: inline-block; font-size: 12.5px; font-weight: 700; margin: 6px 8px 2px 0;
+    padding: 3px 10px; border-radius: 999px; background: rgba(179,53,43,0.1); color: #b3352b; }
+  .fcard .fbody { display: none; margin-top: 8px; font-size: 15.5px; line-height: 1.65;
+    color: rgba(43,43,43,0.88); }
+  .fcard.open .fbody { display: block; }
+  .fcard .hint { font-size: 13px; color: rgba(43,43,43,0.5); }
+  .fcard .fbody .ex { background: rgba(179,53,43,0.06); border-left: 3px solid #b3352b;
+    padding: 8px 12px; margin: 10px 0; font-size: 14.5px; }
+  .fcard .fbody .chg { font-size: 14.5px; color: rgba(43,43,43,0.75); }
+  .fcard .fbody .chg b { color: #2b2b2b; }
+  .fcard .fbody p { font-size: 15.5px; }
+
+  /* fill-the-bucket */
+  .bk-cap { font-size: 13px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+    color: rgba(43,43,43,0.55); margin: 6px 0 8px; }
+  .bk-bar { position: relative; height: 30px; background: rgba(43,43,43,0.08);
+    border: 1px solid rgba(43,43,43,0.18); border-radius: 10px; overflow: hidden; }
+  .bk-fill { position: absolute; top: 0; bottom: 0; left: 0; width: 0;
+    background: linear-gradient(90deg, #a02c22, #b3352b);
+    transition: width 0.5s cubic-bezier(.2,.7,.2,1); }
+  .bk-read { font-size: 14px; color: rgba(43,43,43,0.65); margin: 8px 0 2px;
+    font-variant-numeric: tabular-nums; }
+  .bk-read b { color: #b3352b; font-size: 18px; }
+  .bk-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; min-height: 34px; }
+  .bk-chip { font-size: 12.5px; font-weight: 700; background: rgba(179,53,43,0.08);
+    border: 1px solid rgba(179,53,43,0.35); color: #b3352b; border-radius: 999px; padding: 6px 12px;
+    transition: transform 0.45s cubic-bezier(.2,.7,.2,1), opacity 0.45s ease; }
+  .bk-chip.sys { background: rgba(43,43,43,0.07); border-color: rgba(43,43,43,0.25);
+    color: rgba(43,43,43,0.75); }
+  .bk-chip.sum { background: #b3352b; border-color: #b3352b; color: #f6f1e3; }
+  .bk-chips.collapsing .bk-chip { transform: scale(0.2); opacity: 0; }
+  .bk-note { font-size: 14px; color: rgba(43,43,43,0.7); margin: 10px 0 4px;
+    min-height: 3.4em; line-height: 1.55; }
+  .bk-note b { color: #2b2b2b; }
+  .bk-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .bk-btns button { font-family: inherit; font-size: 14px; font-weight: 700; background: #fffdf6;
+    color: #2b2b2b; border: 1px solid rgba(43,43,43,0.25); border-radius: 10px;
+    padding: 10px 14px; cursor: pointer; touch-action: manipulation; }
+  .bk-btns button:active { transform: scale(0.96); }
+  .bk-btns button.reset { border-style: dashed; color: rgba(43,43,43,0.6); }
+
+  /* stepper (timeline): edge-straddling circle arrows */
+  .stepper { position: relative; margin: 20px 0; }
+  .step-card { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 16px;
+    padding: 24px 28px 18px; margin: 0 32px; }
+  .step-card .sdate { font-size: 13px; font-weight: 800; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #b3352b; margin-bottom: 6px; }
+  .step-card .sname { font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+  .step-card .swhat { font-size: 15.5px; color: rgba(43,43,43,0.88); line-height: 1.6; margin-bottom: 0; }
+  .step-card .swhat b { color: #2b2b2b; }
+  .car-arrow { position: absolute; top: 34px; width: 46px; height: 46px; border-radius: 50%;
+    background: rgba(43,43,43,0.85); border: 1px solid rgba(43,43,43,0.9); color: #f6f1e3;
+    cursor: pointer; touch-action: manipulation; display: flex; align-items: center;
+    justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.25); z-index: 2; }
+  .car-arrow:active { transform: scale(0.94); }
+  .car-arrow svg { width: 22px; height: 22px; }
+  .car-arrow.prev { left: 9px; }
+  .car-arrow.next { right: 9px; }
+  .step-dots { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; }
+  .step-count { font-size: 14px; font-weight: 700; color: rgba(43,43,43,0.55);
+    font-variant-numeric: tabular-nums; margin-right: 4px; }
+  .step-dots .dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(43,43,43,0.2); }
+  .step-dots .dot.on { background: #b3352b; }
+
+  /* A/B toggle */
+  .abt { display: block; width: 100%; max-width: 420px; margin: 18px auto 0; padding: 6px;
+    border-radius: 999px; background: rgba(43,43,43,0.08); border: 1px solid rgba(43,43,43,0.15);
+    cursor: pointer; touch-action: manipulation; font-family: inherit; position: relative; }
+  .abt .thumb { position: absolute; top: 5px; bottom: 5px; left: 5px; width: calc(50% - 5px);
+    border-radius: 999px; background: #2b2b2b;
+    transition: left 280ms cubic-bezier(.5,0,.2,1.15); }
+  .abt[data-side="b"] .thumb { left: 50%; }
+  .abt .labs { position: relative; display: flex; z-index: 1; }
+  .abt .labs span { flex: 1; text-align: center; font-size: 15px; font-weight: 700; padding: 12px 0;
+    color: rgba(43,43,43,0.5); }
+  .abt[data-side="a"] .labs .la { color: #f6f1e3; }
+  .abt[data-side="b"] .labs .lb { color: #f6f1e3; }
+  .abt-stage { position: relative; margin-top: 14px; }
+  .abt-layer { transition: opacity 450ms ease; }
+  .abt-layer.hidden { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+  .voice { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 18px; }
+  .voice .vname { font-size: 17px; font-weight: 800; }
+  .voice .vrole { font-size: 13px; color: rgba(43,43,43,0.55); margin-bottom: 8px; }
+  .voice .vview { font-size: 15.5px; line-height: 1.65; color: rgba(43,43,43,0.88); }
+  .voice .vview a { font-size: 13.5px; }
+  .surv-list { list-style: none; margin: 12px 0 0; padding: 0; }
+  .surv-list li { font-size: 15px; color: rgba(43,43,43,0.88); margin-bottom: 10px;
+    padding-left: 26px; position: relative; line-height: 1.55; }
+  .surv-list li::before { content: ""; position: absolute; left: 2px; top: 8px;
+    width: 12px; height: 12px; border-radius: 50%; background: #2e7d32; }
+  .fuzzy-list { list-style: none; margin: 12px 0 0; padding: 0; }
+  .fuzzy-list li { font-size: 15px; color: rgba(43,43,43,0.88); margin-bottom: 10px;
+    padding-left: 26px; position: relative; line-height: 1.55; }
+  .fuzzy-list li::before { content: ""; position: absolute; left: 2px; top: 8px;
+    width: 12px; height: 12px; border-radius: 50%; background: #b3352b; }
+
+  /* confidence markers */
+  .conf { display: inline-block; font-size: 11.5px; font-weight: 800; letter-spacing: 0.06em;
+    text-transform: uppercase; padding: 2px 9px; border-radius: 999px; margin-left: 8px;
+    vertical-align: 2px; white-space: nowrap; }
+  .conf.consensus { background: rgba(46,125,50,0.12); color: #2e7d32; }
+  .conf.contested { background: rgba(179,53,43,0.1); color: #b3352b; }
+  .conf.speculative { background: rgba(43,43,43,0.08); color: rgba(43,43,43,0.65); }
+  .pred { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 16px 18px; margin: 12px 0; }
+  .pred .pwho { font-size: 15px; font-weight: 800; }
+  .pred .pwhat { font-size: 15px; color: rgba(43,43,43,0.88); margin-top: 4px; line-height: 1.6; }
+  .pred .psaid { font-size: 13px; color: rgba(43,43,43,0.55); margin-top: 6px; }
+
+  /* flashcards */
+  .fgrid { display: grid; gap: 12px; margin: 16px 0; }
+  .flash { perspective: 900px; touch-action: manipulation; cursor: pointer; }
+  .flash .inner { position: relative; min-height: 150px; transform-style: preserve-3d;
+    transition: transform 0.45s cubic-bezier(.2,.7,.2,1); display: grid; }
+  .flash.flipped .inner { transform: rotateY(180deg); }
+  .flash .face { backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 20px; grid-area: 1 / 1; display: flex; flex-direction: column;
+    justify-content: center; min-width: 0; }
+  .flash .back { transform: rotateY(180deg); border-color: rgba(179,53,43,0.4); }
+  .flash .q { font-size: 16px; font-weight: 700; }
+  .flash .a { font-size: 15.5px; line-height: 1.6; color: rgba(43,43,43,0.88); }
+  .flash .tap { font-size: 12.5px; color: rgba(43,43,43,0.45); margin-top: 6px; }
+  .flash .score-row { display: flex; gap: 8px; margin-top: 10px; }
+  .flash .score-row button { touch-action: manipulation; flex: 1; border-radius: 10px;
+    padding: 10px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .flash .knew { border: 2px solid #2e7d32; background: rgba(46,125,50,0.08); color: #2e7d32; }
+  .flash .learning { border: 2px solid rgba(43,43,43,0.25); background: transparent; color: #2b2b2b; }
+  .flash.done .front { border-color: rgba(46,125,50,0.5); }
+  .scorebar { display: flex; align-items: center; gap: 10px; margin: 6px 0 2px; }
+  .scorebar .n { font-size: 22px; font-weight: 800; color: #b3352b; font-variant-numeric: tabular-nums; }
+
+  /* keep-exploring link cards */
+  .xlinks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0 8px; }
+  @media (max-width: 520px) { .xlinks { grid-template-columns: 1fr; } }
+  .xlink { display: block; background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 14px; padding: 16px; text-decoration: none; color: #2b2b2b;
+    touch-action: manipulation; }
+  .xlink:active { transform: scale(0.98); }
+  .xlink b { display: block; font-size: 15px; margin-bottom: 4px; color: #b3352b; }
+  .xlink span { font-size: 13.5px; color: rgba(43,43,43,0.62); line-height: 1.5; }
+  .xicon { width: 14px; height: 14px; vertical-align: -2px; margin-left: 7px; flex: none; }
+
+  /* source link-out cards */
+  .vsc-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+  .vsc-list a { display: block; background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 14px; padding: 16px; color: #2b2b2b; text-decoration: none;
+    touch-action: manipulation; }
+  .vsc-list a:active { transform: scale(0.99); }
+  .vsc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .vsc-kind { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase; color: #b3352b; }
+  .vsc-kind svg { width: 15px; height: 15px; }
+  .vsc-head > svg { flex: none; width: 15px; height: 15px; color: rgba(43,43,43,0.4); }
+  .vsc-title { display: block; font-size: 16px; font-weight: 600; line-height: 1.35; }
+  .vsc-meta { display: block; margin-top: 8px; font-size: 13px; color: rgba(43,43,43,0.55); }
+
+  .warn-card { background: rgba(179,53,43,0.05); border: 1px solid rgba(179,53,43,0.3);
+    border-radius: 14px; padding: 18px; margin: 20px 0; }
+  .warn-card b { color: #b3352b; font-size: 15.5px; }
+  .warn-card p { font-size: 14.5px; margin: 8px 0 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flash .inner { transition: none; }
+    .abt .thumb, .abt-layer { transition: none; }
+    .bk-fill, .bk-chip { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="top"><a href="/blog/">&larr; blog</a></nav>
+  <h1>How AI Remembers: Context and Compacting</h1>
+  <div class="meta"><span class="tag">llms</span><span class="tag">engineering</span><span class="researched">Researched October 2026</span></div>
+  <p class="verdict">Every AI conversation runs on a working memory called the context window: one shared token budget for the prompt, the whole history, and the answer being written. It fills up as you talk, it costs real money per token, and when it overflows the oldest turns collapse into a summary. The sentence to remember: an AI's memory is a desk, not a hard drive, and whoever controls what stays on the desk controls what the AI knows.</p>
+
+  <h2><span class="n">1.</span> The brief</h2>
+  <p>AI looks like it remembers everything. It does not. A model has two kinds of memory. The first is baked into its weights during training: facts, patterns, vibes, frozen at the cutoff date. The second is the context window: the live working memory of this conversation, and the only place new information can go. That window is limited, it is shared by everything including the answer being written, and the infrastructure underneath charges rent by the token.</p>
+  <p>The last two years turned this from trivia into the central engineering problem of agents. Windows grew to a million tokens. Summarization got automated into an API primitive called compaction. And everyone building long-running agents learned the hard rule: anything that matters goes in a file, because everything else is one summary away from being gone.</p>
+
+  <h2><span class="n">2.</span> How it works</h2>
+  <p>Six mechanisms, from the token budget to the summary swap. Tap each card for the plain-language version, one concrete example, and what changed recently. Then fill the bucket yourself.</p>
+  <div class="mech" id="mech"></div>
+
+  <div class="viz" id="bucket-viz">
+    <h3>Fill the bucket</h3>
+    <p class="sub">A 200,000-token window, one long session. Every tap adds one chunk. When a chunk would overflow the bucket, the oldest turns collapse into a summary and the session continues. One tap, one chunk.</p>
+    <div class="bk-cap">200,000-token window</div>
+    <div class="bk-bar"><div class="bk-fill" id="bk-fill"></div></div>
+    <div class="bk-read"><b id="bk-used">8,000</b> / 200,000 tokens used</div>
+    <div class="bk-chips" id="bk-chips"></div>
+    <p class="bk-note" id="bk-note" aria-live="polite">The session opens with the system prompt and tool definitions already on the desk: 8,000 tokens.</p>
+    <div class="bk-btns" id="bk-btns">
+      <button type="button" data-add="25000" data-label="pasted a doc">+ paste a doc &middot; 25k</button>
+      <button type="button" data-add="30000" data-label="big tool output">+ big tool output &middot; 30k</button>
+      <button type="button" data-add="12000" data-label="deep thinking">+ deep thinking &middot; 12k</button>
+      <button type="button" data-add="1000" data-label="your message">+ your message &middot; 1k</button>
+      <button type="button" data-add="3000" data-label="assistant reply">+ assistant reply &middot; 3k</button>
+      <button type="button" class="reset" id="bk-reset">reset the session</button>
+    </div>
+    <p class="cap">Illustrative, not a real session. Real token counts vary by model and tokenizer, but the shape is right: tool outputs and pasted documents are what fill the bucket fastest, and thinking counts against it too.</p>
+  </div>
+
+  <div class="viz">
+    <h3>What survives the summary, what gets fuzzy</h3>
+    <p class="sub">Compaction does not treat all context equally. What survives depends on how it was loaded, not how important it was. Flip the switch.</p>
+    <button class="abt" id="surv-toggle" data-side="a" role="switch" aria-checked="false" aria-label="Flip between what survives compaction and what gets fuzzy">
+      <span class="thumb"></span>
+      <span class="labs"><span class="la">Survives</span><span class="lb">Gets fuzzy</span></span>
+    </button>
+    <div class="abt-stage">
+      <div class="abt-layer" id="surv-a">
+        <ul class="surv-list">
+          <li><strong>System prompt and output style.</strong> Never part of the message history, untouched by every compaction.</li>
+          <li><strong>Files on disk.</strong> The project-root CLAUDE.md and auto-memory files are re-injected from disk at session start, summary-proof.</li>
+          <li><strong>Saved memories.</strong> ChatGPT stores them separately from chat history and considers them in every future response, even after the chat is deleted.</li>
+          <li><strong>Recent turns.</strong> On-demand compaction keeps the last few turns word for word and only summarizes the older ones.</li>
+          <li><strong>Invoked skills.</strong> Their bodies are re-injected, capped at 5,000 tokens each and 25,000 total, oldest dropped first.</li>
+          <li><strong>Your summary prompt.</strong> You can write your own summarization prompt for when the default drops something a later turn needs.</li>
+        </ul>
+      </div>
+      <div class="abt-layer hidden" id="surv-b">
+        <ul class="fuzzy-list">
+          <li><strong>Exact wording of old turns.</strong> Folded into the summary. The phrasing is gone, only the gist remains.</li>
+          <li><strong>Full tool outputs and intermediate reasoning.</strong> Dropped first when space gets tight. Gone, not summarized.</li>
+          <li><strong>Old thinking blocks.</strong> Stripped from history on many models, which quietly reclaims token capacity.</li>
+          <li><strong>Path-scoped rules.</strong> Lost until a matching file is read again.</li>
+          <li><strong>A rule you stated 20 messages ago.</strong> Summarized away, unless it lives in a file.</li>
+          <li><strong>The details.</strong> "We refactored the auth module" survives. Which lines, which error, in which order: fuzzy.</li>
+        </ul>
+      </div>
+    </div>
+    <p class="cap">Survival rules for Claude Code sessions, documented from Anthropic's own docs. The pattern generalizes: disk beats conversation, explicit beats implied, recent beats old.</p>
+  </div>
+  <h2><span class="n">3.</span> The landmarks</h2>
+  <p>Six moments that built AI memory as we know it, 2017 to 2026. One tap per step, or use the arrow keys.</p>
+  <div class="stepper" id="tl-stepper">
+    <button class="car-arrow prev" id="tl-prev" aria-label="Previous landmark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <div class="step-card" id="tl-card"></div>
+    <button class="car-arrow next" id="tl-next" aria-label="Next landmark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+    </button>
+    <div class="step-dots" id="tl-dots"></div>
+  </div>
+
+  <h2><span class="n">4.</span> Key voices</h2>
+  <p>Five people and teams who built the machinery or documented it honestly. Each view is one or two sentences with the primary source linked. The real action is at the bottom, where two camps collide.</p>
+  <div class="mech" id="voices"></div>
+
+  <div class="viz">
+    <h3>The real disagreement <span class="conf contested">contested</span></h3>
+    <p class="sub">Where should knowledge live: in the weights, or in files the model re-reads? Both camps ship products. Neither has won.</p>
+    <div class="voice" style="margin-bottom:12px">
+      <div class="vname">The parametric camp <span style="font-weight:400;font-size:13px;color:rgba(43,43,43,0.55)">Meta FAIR</span></div>
+      <div class="vrole">put it in the weights</div>
+      <p class="vview">Knowledge belongs in trainable memory layers: dedicated, cheap key-value storage inside the model itself. Files and prompts are a workaround. The architecture should remember, and their paper closes by advocating memory layers in all next-generation architectures.</p>
+    </div>
+    <div class="voice">
+      <div class="vname">The explicit camp <span style="font-weight:400;font-size:13px;color:rgba(43,43,43,0.55)">OpenAI, Anthropic</span></div>
+      <div class="vrole">put it in artifacts</div>
+      <p class="vview">Knowledge belongs in things the model re-reads: saved memories, memory files, CLAUDE.md on disk. Explicit, editable, inspectable, and it survives every compaction because it is re-injected, never summarized. Weights are where knowledge goes to become unverifiable.</p>
+    </div>
+    <p class="cap">The honest 2026 answer is that the best systems use both: memory layers for facts the model always needs, files and saved memories for everything personal, load-bearing, or likely to change.</p>
+  </div>
+
+  <h2><span class="n">5.</span> What comes next</h2>
+  <p>Every prediction below is attributed: who said it, where, when. The badge is my read of how solid it is: <strong>consensus</strong> means multiple independent sources agree, <strong>contested</strong> means smart people disagree, <strong>speculative</strong> means one party's leap. Predictions go stale; this section is frozen as of October 2026.</p>
+  <div id="preds">
+    <div class="pred">
+      <div class="pwho">Berges et al. expect memory layers in all next-generation architectures<span class="conf speculative">speculative</span></div>
+      <div class="pwhat">Trainable key-value memory becomes a standard component, not an experiment: dedicated cheap storage for facts inside the weights, complementing dense layers rather than replacing them.</div>
+      <div class="psaid">Said in "Memory Layers at Scale," Dec 2024 (revised Aug 2026).</div>
+    </div>
+    <div class="pred">
+      <div class="pwho">Server-side compaction graduates from beta to the default agent primitive<span class="conf speculative">speculative</span></div>
+      <div class="pwhat">Every long-running agent gets automatic summarization with recent turns preserved word for word. Raw conversation history stops being the default unit of context; the summary block becomes it.</div>
+      <div class="psaid">Anthropic's docs already call compaction "the primary strategy" for long-running conversations; both flavors in beta as of October 2026.</div>
+    </div>
+    <div class="pred">
+      <div class="pwho">Windows keep growing, and curation beats size<span class="conf consensus">consensus</span></div>
+      <div class="pwhat">1M-token windows are already the default on current Claude models and keep getting cheaper (Haiku 5.5: $0.10 per million input tokens). But Anthropic's own docs warn of context rot: accuracy and recall degrade as token count grows, so the scarce skill becomes choosing what goes in, not how much fits.</div>
+      <div class="psaid">Anthropic platform docs, Oct 2026; Haiku 5.5 pricing, Oct 7, 2026.</div>
+    </div>
+    <div class="pred">
+      <div class="pwho">Two-layer cross-session memory becomes standard<span class="conf speculative">speculative</span></div>
+      <div class="pwhat">Every assistant ships explicit saved items plus synthesized recall across past chats, the way ChatGPT has since the April 2025 expansion. The window stays the working memory; the profile becomes the long memory.</div>
+      <div class="psaid">OpenAI's direction since Apr 2025; OpenAI help center, 2026.</div>
+    </div>
+    <div class="pred">
+      <div class="pwho">The open fight: do big windows kill compaction?<span class="conf contested">contested</span></div>
+      <div class="pwhat">One camp says a large enough window makes summarization unnecessary. The other says context rot makes compaction more important as windows grow, because quality degrades with size. Anthropic ships both a 1M default and a compaction beta, which is the tell: they are betting on both.</div>
+      <div class="psaid">Anthropic platform docs, Oct 2026.</div>
+    </div>
+    <div class="pred">
+      <div class="pwho">The per-token KV tax keeps shrinking<span class="conf consensus">consensus</span></div>
+      <div class="pwhat">Fewer KV heads (grouped-query and multi-head latent attention), lower precision, prefix reuse, and sliding windows keep cutting the memory cost of long context. The tax never hits zero, but the serving stack keeps refinancing it.</div>
+      <div class="psaid">vLLM KV-cache explainer, 2026; PagedAttention serving notes.</div>
+    </div>
+  </div>
+
+  <h2><span class="n">6.</span> Check yourself</h2>
+  <p>Four cards. Tap to flip, then be honest: knew it, or still learning. The score is yours alone.</p>
+  <div class="scorebar"><span class="n" id="fc-score">0/4</span><span style="font-size:14px;color:rgba(43,43,43,0.6)">known</span></div>
+  <div class="fgrid" id="fgrid"></div>
+
+  <h2>Keep exploring</h2>
+  <div class="xlinks">
+    <a class="xlink" href="/blog/llm-training/"><b>How an LLM Learns, Step by Step<svg class="xicon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4L10.5 13.5"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1 2-2h5"/></svg></b><span>Training is next-token prediction at absurd scale. This primer starts where that one ends: what happens after the weights are frozen.</span></a>
+    <a class="xlink" href="/blog/rag/"><b>RAG, explained<svg class="xicon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4L10.5 13.5"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1 2-2h5"/></svg></b><span>The open-book exam for AI: retrieve the relevant passages, paste them into the prompt. External memory, the oldest trick for beating a small window.</span></a>
+    <a class="xlink" href="/blog/recursive-language-models/"><b>Recursive language models, explained<svg class="xicon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4L10.5 13.5"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1 2-2V7a2 2 0 0 1 2-2h5"/></svg></b><span>Reasoning over 10M+ tokens with a normal-size window, by searching the prompt, slicing it, and interrogating the pieces.</span></a>
+  </div>
+
+  <h2>Sources</h2>
+  <p>Every factual claim in sections 2 through 5 traces to one of these.</p>
+  <ul class="vsc-list">
+    <li><a href="https://platform.claude.com/docs/en/build-with-claude/context-windows.md"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Docs</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Context windows</span><span class="vsc-meta">Anthropic &middot; platform docs &middot; Oct 2026</span></a></li>
+    <li><a href="https://platform.claude.com/docs/en/build-with-claude/compaction"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Docs</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Compaction overview</span><span class="vsc-meta">Anthropic &middot; platform docs &middot; Oct 2026</span></a></li>
+    <li><a href="https://arxiv.org/abs/1706.03762v1"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>arXiv paper</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Attention Is All You Need</span><span class="vsc-meta">Vaswani et al. &middot; arXiv:1706.03762 &middot; 2017</span></a></li>
+    <li><a href="http://arxiv.org/abs/2309.06180"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>arXiv paper</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Efficient Memory Management for Large Language Model Serving with PagedAttention</span><span class="vsc-meta">Kwon et al. &middot; arXiv:2309.06180 &middot; SOSP 2023</span></a></li>
+    <li><a href="https://arxiv.org/abs/2412.09764"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>arXiv paper</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Memory Layers at Scale</span><span class="vsc-meta">Berges et al., Meta FAIR &middot; arXiv:2412.09764 &middot; Dec 2024</span></a></li>
+    <li><a href="https://github.com/wahajsayyed/ai-system-engineering/blob/HEAD/vLLM-cookbook/chapter-03-pagedattention-deep-dive.md"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Explainer</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">PagedAttention deep dive: what the KV cache actually stores</span><span class="vsc-meta">wahajsayyed/ai-system-engineering &middot; vLLM cookbook &middot; GitHub</span></a></li>
+    <li><a href="https://github.com/patrickwiloak/genai-research-papers-summarized/blob/HEAD/explainers/concepts/kv-cache.md"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Explainer</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">The KV Cache</span><span class="vsc-meta">patrickwiloak &middot; GitHub &middot; reviewed Sep 30, 2026</span></a></li>
+    <li><a href="https://help.openai.com/en/articles/8983136-what-is-memory"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Help center</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Memory FAQ</span><span class="vsc-meta">OpenAI &middot; help center</span></a></li>
+    <li><a href="https://help.openai.com/en/articles/8590148-memory-in-chatgpt"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Help center</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Memory in ChatGPT</span><span class="vsc-meta">OpenAI &middot; help center</span></a></li>
+    <li><a href="http://searchenginejournal.com/chatgpt-expands-memory-capabilities-remembers-past-chats/544164/"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>News</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">ChatGPT Expands Memory Capabilities, Remembers Past Chats</span><span class="vsc-meta">Search Engine Journal &middot; covering OpenAI's announcement &middot; Apr 10, 2025</span></a></li>
+    <li><a href="http://claudefa.st/blog/guide/mechanics/what-survives-compaction"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Explainer</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">What Survives /compact in Claude Code</span><span class="vsc-meta">claudefa.st &middot; from Anthropic's docs &middot; Oct 2026</span></a></li>
+  </ul>
+
+  <p class="kicker-close">The window is the desk. Compaction is the filing. Put what matters in files, and the summary can't eat it.</p>
+  <footer>Words, diagrams, and toy models are mine. Built to learn in public.</footer>
+</div>
+<script>
+(function(){
+  "use strict";
+  function $(id){ return document.getElementById(id); }
+
+  /* ---------- section 2: the six mechanisms ---------- */
+  var MECH = [
+    { name: "The shared budget",
+      stat: "input plus output, one bucket",
+      body: "<p>Anthropic's docs put it plainly: the context window is the model's <strong>working memory</strong>. It holds the conversation history <strong>plus the new output</strong> being generated. Everything in the request counts toward it: the system prompt, every message including tool results, images, and documents, and your tool definitions. The output counts too, including thinking tokens. Caching changes what you <strong>pay</strong> for tokens, not whether they count.</p>" +
+      "<div class='ex'><strong>Example:</strong> a 200,000-token window with a 190,000-token prompt leaves 10,000 tokens for the answer. The reply is drawn from the same budget as the prompt, which is why a huge paste can starve the response.</div>" +
+      "<p class='chg'><b>What changed:</b> the bucket got bigger. A 1M-token window is now the default on current Claude models, no beta header needed. But bigger is not automatically better, which the hard edge below will explain.</p>" },
+    { name: "The KV cache tax",
+      stat: "about 128KB per token, per request",
+      body: "<p>To write each new token, the model looks back at every earlier token through attention. Recomputing that lookback every step would be absurd, so each layer <strong>stores the keys and values of every past token</strong>. That store is the KV cache, and it lives in GPU memory for the whole request. Every new token appends one key and one value per layer, so the cache <strong>grows linearly</strong> with context length.</p>" +
+      "<div class='ex'><strong>Example:</strong> for Llama-3.1-8B in bfloat16 the math is 2 (K and V) times 32 layers times 8 KV heads times 128 dimensions times 2 bytes: about <strong>128KB per token</strong>. A 4,096-token context is 512MB for one request. Forty simultaneous users: 20GB, just for the cache.</div>" +
+      "<p class='chg'><b>What changed:</b> the serving stack fights the tax constantly. Grouped-query attention cuts the KV heads, quantization shrinks the bytes, prefix caching reuses shared prompts, and PagedAttention (two cards down) stops the waste.</p>" },
+    { name: "The hard edge",
+      stat: "overflow is an error, not a warning",
+      body: "<p>The bucket has a hard edge. If the input alone exceeds the window, Anthropic's API returns a 400 <strong>invalid_request_error</strong> ('prompt is too long') on every model. On Claude 4.5 and newer, if input plus max_tokens exceeds the window, the request is accepted and generation simply stops with <strong>stop_reason 'model_context_window_exceeded'</strong>. Chat apps like claude.ai handle it more gracefully, rolling old turns off on a first-in, first-out basis.</p>" +
+      "<div class='ex'><strong>Example:</strong> paste a 300,000-token document into a 200,000-token model and the API says no. Nothing is truncated silently on the API; something has to give before you send.</div>" +
+      "<p class='chg'><b>What changed:</b> some models now track their own budget. With context awareness, the API tells the model its remaining capacity after each tool call, like 'Token usage: 35000/200000,' so it can manage long tasks against real space instead of guessing.</p>" },
+    { name: "Compaction: the summary swap",
+      stat: "old turns become one summary",
+      body: "<p>When the bucket fills, the fix is <strong>compaction</strong>: the server writes a summary of the older turns, and the conversation continues from summary plus recent messages. Anthropic's docs say the quiet part out loud: it keeps the active context small <strong>because response quality degrades as a conversation grows</strong>. Two flavors. On-demand: you trigger it, and the last few turns stay <strong>word for word</strong> while only the older ones are summarized. At a token threshold: the API fires it automatically when your input hits the trigger, and everything before the summary block is dropped.</p>" +
+      "<div class='ex'><strong>Example:</strong> Claude Code compacts automatically as the window fills, and <strong>/compact</strong> does it on demand, with an optional focus ('/compact focus on the API changes').</div>" +
+      "<p class='chg'><b>What changed:</b> compaction left the CLI and became an API primitive. Both flavors are in beta on current Claude models, and you can now supply your own summarization prompt for when the default drops something a later turn needs.</p>" },
+    { name: "What survives, what gets fuzzy",
+      stat: "files beat conversation",
+      body: "<p>Compaction is lossy, and what survives depends on <strong>how it was loaded, not how important it was</strong>. Anything loaded from disk at session start gets re-injected: the system prompt, the project-root CLAUDE.md, auto-memory files. Invoked skills come back too, capped at 5,000 tokens each and 25,000 total, oldest dropped first. Everything that arrived through the conversation gets folded into the summary: the exact wording of old turns, full tool outputs, and intermediate reasoning go fuzzy or vanish.</p>" +
+      "<div class='ex'><strong>Example:</strong> a rule you stated twenty messages ago gets summarized away, but the same rule in CLAUDE.md survives every compaction untouched. Placement is the whole game.</div>" +
+      "<p class='chg'><b>What changed:</b> the failure mode is now documented well enough that the standing advice is to externalize as you go. A finding is durable only when written to a file. Try the toggle below.</p>" },
+    { name: "The second memory",
+      stat: "saved items plus past chats",
+      body: "<p>The context window resets every session, so assistants keep a second, slower memory across sessions. ChatGPT's has two layers. <strong>Saved memories</strong> are discrete items, things you asked it to remember or it chose to save, stored <strong>separately from chat history</strong> and considered in every future response, even if you delete the original chat. <strong>Reference chat history</strong> is broader: relevant information drawn from your past conversations, synthesized rather than listed, with no separate storage limit.</p>" +
+      "<div class='ex'><strong>Example:</strong> 'Remember that I am vegetarian when you recommend a recipe.' That line becomes a saved memory, travels with every future message, and survives the deletion of the chat where you said it.</div>" +
+      "<p class='chg'><b>What changed:</b> the April 2025 expansion added the chat-history layer, so memory stopped being only what you explicitly asked to save. Turn either layer off and OpenAI deletes what it learned within about 30 days.</p>" }
+  ];
+  var mechWrap = $("mech");
+  MECH.forEach(function(m, i){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "fcard";
+    b.setAttribute("aria-expanded", "false");
+    b.innerHTML = "<span class='fname'>" + (i+1) + ". " + m.name + "</span><br>" +
+      "<span class='fnum'>" + m.stat + "</span> <span class='hint'>tap to open</span>" +
+      "<span class='fbody'>" + m.body + "</span>";
+    b.addEventListener("click", function(){
+      var open = b.classList.toggle("open");
+      b.setAttribute("aria-expanded", open ? "true" : "false");
+      b.querySelector(".hint").textContent = open ? "tap to close" : "tap to open";
+    });
+    mechWrap.appendChild(b);
+  });
+
+  /* ---------- section 2b: fill-the-bucket ---------- */
+  (function(){
+    var CAP = 200000, SUMMARY_TOKENS = 8000;
+    var fill = $("bk-fill"), usedEl = $("bk-used"), chipsEl = $("bk-chips"),
+        noteEl = $("bk-note"), btnsEl = $("bk-btns");
+    if(!fill || !usedEl || !chipsEl || !noteEl || !btnsEl) return;
+    var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    function fmt(n){ return n.toLocaleString("en-US"); }
+    var chunks = [{ label: "system prompt + tools", tokens: 8000, cls: "sys" }];
+    function total(){
+      var s = 0;
+      chunks.forEach(function(c){ s += c.tokens; });
+      return s;
+    }
+    function render(){
+      fill.style.width = Math.min(100, total() / CAP * 100) + "%";
+      usedEl.textContent = fmt(total());
+      chipsEl.innerHTML = "";
+      chunks.forEach(function(c){
+        var s = document.createElement("span");
+        s.className = "bk-chip" + (c.cls ? " " + c.cls : "");
+        s.textContent = c.label + " \u00b7 " + fmt(c.tokens);
+        chipsEl.appendChild(s);
+      });
+    }
+    function setNote(html){ noteEl.innerHTML = html; }
+    function addChunk(label, tokens){
+      if(chipsEl.classList.contains("collapsing")) return; /* ignore taps mid-compaction */
+      var before = total();
+      if(before + tokens > CAP){
+        var n = chunks.length;
+        if(reduced){
+          chunks = [
+            { label: "summary of older turns", tokens: SUMMARY_TOKENS, cls: "sum" },
+            { label: label, tokens: tokens, cls: "" }
+          ];
+          render();
+        } else {
+          chipsEl.classList.add("collapsing");
+          setNote("Bucket full at <b>" + fmt(before) + "</b>. The " + n + " oldest turns are collapsing into one summary\u2026");
+          setTimeout(function(){
+            chunks = [
+              { label: "summary of older turns", tokens: SUMMARY_TOKENS, cls: "sum" },
+              { label: label, tokens: tokens, cls: "" }
+            ];
+            chipsEl.classList.remove("collapsing");
+            render();
+            setNote("Bucket full at <b>" + fmt(before) + "</b>. The " + n + " oldest turns collapsed into one <b>" + fmt(SUMMARY_TOKENS) + "-token summary</b>. Recent turns stay word for word, and the session continues.");
+          }, 500);
+          return;
+        }
+        setNote("Bucket full at <b>" + fmt(before) + "</b>. The " + n + " oldest turns collapsed into one <b>" + fmt(SUMMARY_TOKENS) + "-token summary</b>. Recent turns stay word for word, and the session continues.");
+        return;
+      }
+      chunks.push({ label: label, tokens: tokens, cls: "" });
+      render();
+      setNote("Added <b>" + label + "</b> (" + fmt(tokens) + " tokens). <b>" + fmt(total()) + "</b> of " + fmt(CAP) + " used.");
+    }
+    function reset(){
+      chunks = [{ label: "system prompt + tools", tokens: 8000, cls: "sys" }];
+      chipsEl.classList.remove("collapsing");
+      render();
+      setNote("The session opens with the system prompt and tool definitions already on the desk: 8,000 tokens.");
+    }
+    btnsEl.addEventListener("click", function(e){
+      var b = e.target.closest("button");
+      if(!b) return;
+      if(b.id === "bk-reset"){ reset(); return; }
+      var t = parseInt(b.getAttribute("data-add"), 10);
+      var label = b.getAttribute("data-label");
+      if(t > 0 && label) addChunk(label, t);
+    });
+    render();
+  })();
+
+  /* ---------- section 2c: survives / fuzzy toggle ---------- */
+  (function(){
+    var t = $("surv-toggle");
+    if(!t) return;
+    t.addEventListener("click", function(){
+      var side = t.getAttribute("data-side") === "a" ? "b" : "a";
+      t.setAttribute("data-side", side);
+      t.setAttribute("aria-checked", side === "b" ? "true" : "false");
+      $("surv-a").classList.toggle("hidden", side !== "a");
+      $("surv-b").classList.toggle("hidden", side !== "b");
+    });
+  })();
+
+  /* ---------- section 3: timeline stepper ---------- */
+  var TL = [
+    { d: "2017", n: "Attention Is All You Need",
+      w: "Vaswani et al. replace recurrence with self-attention. Every new token compares its query against <b>every previous token's keys and values</b>. The equation implies the cache: store those keys and values instead of recomputing them, and the KV cache is born. <a href='https://arxiv.org/abs/1706.03762v1'>arXiv:1706.03762</a>" },
+    { d: "Sep 2023", n: "PagedAttention and vLLM",
+      w: "Kwon et al. (UC Berkeley, Stanford, UCSD) name the bottleneck: each request's KV cache is <b>huge and grows and shrinks dynamically</b>. Their fix borrows OS virtual-memory paging: fixed-size blocks, a block table per sequence, near-zero waste, 2 to 4x serving throughput. <a href='http://arxiv.org/abs/2309.06180'>arXiv:2309.06180</a>, SOSP 2023" },
+    { d: "Dec 2024", n: "Memory Layers at Scale",
+      w: "Berges et al. (Meta FAIR) scale <b>trainable key-value memory layers</b> to 128B parameters and 1T training tokens. Memory-augmented models beat dense models with twice the compute and match MoE on matched budgets; factual QA jumps over 100%. Their closing line: memory layers belong in all next-generation architectures. <a href='https://arxiv.org/abs/2412.09764'>arXiv:2412.09764</a>" },
+    { d: "Apr 2025", n: "ChatGPT memory grows a second layer",
+      w: "OpenAI expands ChatGPT memory beyond saved items: <b>reference chat history</b> lets the model draw relevant information from past conversations, synthesized rather than listed. Saved memories stay the explicit, editable layer. <a href='https://help.openai.com/en/articles/8590148-memory-in-chatgpt'>OpenAI help center</a>" },
+    { d: "2026", n: "The million-token default",
+      w: "1M-token windows stop being a beta flag and become <b>the default</b> on current Claude models, Haiku included, and they keep getting cheaper (Haiku 5.5: $0.10 per million input tokens). Anthropic's docs ship the warning label with it: <b>context rot</b>. <a href='https://platform.claude.com/docs/en/build-with-claude/context-windows.md'>Anthropic docs</a>" },
+    { d: "2026", n: "Compaction becomes an API primitive",
+      w: "Anthropic ships <b>server-side compaction</b> in beta. On-demand: you trigger it, recent turns stay word for word. At a token threshold: the API fires it, and everything before the summary block is dropped. The CLI trick becomes infrastructure. <a href='https://platform.claude.com/docs/en/build-with-claude/compaction'>Anthropic docs</a>" }
+  ];
+  (function(){
+    var card = $("tl-card"), dots = $("tl-dots"), prev = $("tl-prev"), next = $("tl-next");
+    var stepEl = $("tl-stepper");
+    var i = 0;
+    TL.forEach(function(){ var d = document.createElement("span"); d.className = "dot"; dots.appendChild(d); });
+    function render(){
+      card.innerHTML = "<div class='sdate'>" + TL[i].d + "</div><div class='sname'>" + TL[i].n + "</div><p class='swhat'>" + TL[i].w + "</p>";
+      var ds = dots.querySelectorAll(".dot");
+      ds.forEach(function(d, j){ d.classList.toggle("on", j === i); });
+      var count = dots.querySelector(".step-count");
+      if(!count){
+        count = document.createElement("span");
+        count.className = "step-count";
+        dots.insertBefore(count, dots.firstChild);
+      }
+      count.textContent = (i+1) + " / " + TL.length;
+      prev.style.display = i === 0 ? "none" : "flex";
+      next.style.display = i === TL.length - 1 ? "none" : "flex";
+    }
+    prev.addEventListener("click", function(){ if(i > 0){ i--; render(); } });
+    next.addEventListener("click", function(){ if(i < TL.length - 1){ i++; render(); } });
+    document.addEventListener("keydown", function(e){
+      if(e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      if(e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      var t = e.target, tag = t && t.tagName;
+      if(tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT" || (t && t.isContentEditable)) return;
+      if(t && t.closest && t.closest(".step-code")) return;
+      var r = stepEl.getBoundingClientRect();
+      if(r.bottom < 0 || r.top > window.innerHeight) return;
+      if(e.key === "ArrowLeft" && i > 0){ i--; render(); e.preventDefault(); }
+      else if(e.key === "ArrowRight" && i < TL.length - 1){ i++; render(); e.preventDefault(); }
+    });
+    render();
+  })();
+
+  /* ---------- section 4: voices ---------- */
+  var VOICES = [
+    { name: "Anthropic", role: "platform docs, Oct 2026",
+      view: "The context window is the model's <strong>working memory</strong>, and input and output share one budget. Everything counts, including thinking. And the warning label: as token count grows, accuracy and recall degrade. <strong>Context rot.</strong> Curating the window matters as much as sizing it. <a href='https://platform.claude.com/docs/en/build-with-claude/context-windows.md'>Context windows</a>" },
+    { name: "Woosuk Kwon et al.", role: "UC Berkeley, Stanford, UCSD \u00b7 SOSP 2023",
+      view: "Serving is a memory problem, not a compute problem. Each request's KV cache is <strong>huge and grows and shrinks dynamically</strong>; managed naively, fragmentation and duplication waste most of it. PagedAttention treats GPU memory the way an OS treats RAM. <a href='http://arxiv.org/abs/2309.06180'>arXiv:2309.06180</a>" },
+    { name: "Vincent-Pierre Berges et al.", role: "Meta FAIR \u00b7 Dec 2024",
+      view: "Knowledge should live in <strong>trainable memory layers</strong>: key-value lookups that add parameters without FLOPs. At 128B memory parameters they beat dense models with twice the compute, with 100%+ gains on factual QA. 'We strongly advocate that memory layers should be integrated into all next generation AI architectures.' <a href='https://arxiv.org/abs/2412.09764'>arXiv:2412.09764</a>" },
+    { name: "OpenAI", role: "help center, 2026",
+      view: "Cross-session memory comes in two layers: <strong>saved memories</strong>, discrete items stored separately from chat history and always considered, and <strong>reference chat history</strong>, synthesized recall from past conversations with no separate storage limit. Turn off the history layer and what it learned is deleted within about 30 days. <a href='https://help.openai.com/en/articles/8590148-memory-in-chatgpt'>Memory in ChatGPT</a>" },
+    { name: "Anthropic", role: "compaction docs, 2026",
+      view: "Compaction <strong>replaces the older turns of a conversation with a summary</strong> that Claude writes on the server, and it keeps the active context small because response quality degrades as a conversation grows. On demand it keeps your recent turns word for word. If the default summary drops something a later turn needs, write your own summarization prompt. <a href='https://platform.claude.com/docs/en/build-with-claude/compaction'>Compaction overview</a>" }
+  ];
+  var vWrap = $("voices");
+  VOICES.forEach(function(v){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "fcard";
+    b.setAttribute("aria-expanded", "false");
+    b.innerHTML = "<span class='fname'>" + v.name + "</span> <span class='hint'>" + v.role + " &middot; tap to open</span>" +
+      "<span class='fbody'><p class='chg' style='margin:0'>" + v.view + "</p></span>";
+    b.addEventListener("click", function(){
+      var open = b.classList.toggle("open");
+      b.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    vWrap.appendChild(b);
+  });
+
+  /* ---------- section 6: flashcards ---------- */
+  var CARDS = [
+    { q: "Your prompt is 190,000 tokens and the window is 200,000. How much room does the answer get?",
+      a: "10,000 tokens. Input and output share one budget: the system prompt, every message including tool results, images, and documents, plus tool definitions all count, and the output counts too, including thinking. Caching changes what you pay, not whether it counts. (Anthropic docs)" },
+    { q: "What does the KV cache store, and why does a long context cost real money?",
+      a: "Keys and values for every past token, at every layer. Each new token appends one key and one value per layer, so it grows linearly. Llama-3.1-8B: about 128KB per token, so a 4,096-token context is 512MB for one request and 20GB for 40 users. It is often the binding constraint on context length and batch size. (vLLM cookbook; Kwon et al.)" },
+    { q: "A long session gets compacted. What survives, and what is gone?",
+      a: "Survives: anything loaded from disk and re-injected (system prompt, project-root CLAUDE.md, auto-memory files), saved memories, recent turns kept word for word, skills capped at 5,000 tokens each. Gone or fuzzy: exact old wording, full tool outputs, intermediate reasoning, old thinking blocks. Placement decides, not importance. (Anthropic docs)" },
+    { q: "Name OpenAI's two memory layers, and the camp that disagrees with files-on-disk memory.",
+      a: "Saved memories: discrete items, stored separately from chat history, always considered. Reference chat history: synthesized recall from past chats, no storage limit. The parametric camp (Meta FAIR's memory layers) says put knowledge in trainable weights instead; the explicit camp says keep it in re-readable artifacts. Contested. (OpenAI help center; Berges et al.)" }
+  ];
+  (function(){
+    var grid = $("fgrid"), scoreEl = $("fc-score");
+    var known = 0, scored = {};
+    function setScore(){
+      scoreEl.textContent = known + "/" + CARDS.length;
+    }
+    CARDS.forEach(function(c, idx){
+      var el = document.createElement("div");
+      el.className = "flash";
+      el.innerHTML = "<div class='inner'>" +
+        "<div class='face front'><div class='q'>" + c.q + "</div><div class='tap'>tap to flip</div></div>" +
+        "<div class='face back'><div class='a'>" + c.a + "</div>" +
+        "<div class='score-row'><button type='button' class='knew'>Knew it</button><button type='button' class='learning'>Still learning</button></div></div></div>";
+      el.addEventListener("click", function(){
+        el.classList.toggle("flipped");
+      });
+      var knew = el.querySelector(".knew"), learning = el.querySelector(".learning");
+      function mark(k){
+        if(scored[idx] === k) return;
+        if(scored[idx] === true) known--;
+        scored[idx] = k;
+        if(k === true) known++;
+        el.classList.add("done");
+        setScore();
+      }
+      knew.addEventListener("click", function(e){ e.stopPropagation(); mark(true); });
+      learning.addEventListener("click", function(e){ e.stopPropagation(); mark(false); });
+      grid.appendChild(el);
+    });
+    setScore();
+  })();
+})();
+</script>
+</body>
+</html>

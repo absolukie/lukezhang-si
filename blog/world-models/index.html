@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>World Models vs Next-Token Prediction: luke's blog</title>
+<meta name="description" content="The sharpest argument in AI: should machines predict the next token, or learn a model of the world and predict what happens next? LeCun's JEPA bet, the Othello surprise, and where the two sides genuinely disagree. Researched October 2026.">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    min-height: 100%;
+    background: #f6f1e3;
+    color: #2b2b2b;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.7;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 56px 22px 80px; }
+  nav.top { margin-bottom: 40px; font-size: 14px; }
+  nav.top a { color: rgba(43,43,43,0.55); text-decoration: none; }
+  nav.top a:hover { color: #b3352b; }
+  h1 { font-size: 32px; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 8px; }
+  .meta { color: rgba(43,43,43,0.5); font-size: 14px; margin-bottom: 24px; }
+  .meta .tag { display: inline-block; border: 1px solid rgba(43,43,43,0.25); border-radius: 999px;
+    padding: 2px 10px; font-size: 12.5px; margin-right: 6px; color: rgba(43,43,43,0.65); }
+  .meta .researched { display: inline-block; margin-left: 6px; font-size: 12.5px;
+    color: #b3352b; font-weight: 700; }
+  .verdict { font-size: 17px; color: #2b2b2b; border-left: 3px solid #b3352b;
+    padding: 4px 0 4px 18px; margin: 0 0 28px; line-height: 1.65; }
+  p { margin-bottom: 16px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  p strong, li strong { color: #2b2b2b; }
+  h2 { font-size: 23px; color: #2b2b2b; margin: 44px 0 10px; letter-spacing: -0.01em; }
+  h2 .n { color: #b3352b; }
+  ul { margin: 0 0 16px 20px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  li { margin-bottom: 8px; }
+  a { color: #b3352b; }
+  footer { margin-top: 60px; font-size: 13px; color: rgba(43,43,43,0.35); }
+  footer a { color: rgba(43,43,43,0.6); }
+  .kicker-close { font-size: 19px; font-weight: 700; color: #2b2b2b;
+    border-top: 1px solid rgba(43,43,43,0.15); padding-top: 28px; margin-top: 48px; }
+
+  /* visualizer cards */
+  .viz { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 16px; padding: 20px; margin: 24px 0; }
+  .viz h3 { font-size: 17px; margin-bottom: 4px; color: #2b2b2b; }
+  .viz .sub { font-size: 14px; color: rgba(43,43,43,0.62); margin-bottom: 12px; line-height: 1.55; }
+  .cap { font-size: 13.5px; color: rgba(43,43,43,0.6); margin-top: 10px; line-height: 1.55; }
+
+  /* tappable mechanism cards */
+  .mech { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin: 16px 0; }
+  .fcard { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 18px; touch-action: manipulation; cursor: pointer; font-family: inherit;
+    text-align: left; width: 100%; max-width: 100%; min-width: 0; overflow: hidden; color: #2b2b2b; }
+  .fcard:active { transform: scale(0.99); }
+  .fcard .fname { font-size: 17px; font-weight: 800; }
+  .fcard .fnum { display: inline-block; font-size: 12.5px; font-weight: 700; margin: 6px 8px 2px 0;
+    padding: 3px 10px; border-radius: 999px; background: rgba(179,53,43,0.1); color: #b3352b; }
+  .fcard .fbody { display: none; margin-top: 8px; font-size: 15.5px; line-height: 1.65;
+    color: rgba(43,43,43,0.88); }
+  .fcard.open .fbody { display: block; }
+  .fcard .hint { font-size: 13px; color: rgba(43,43,43,0.5); }
+  .fcard .fbody .ex { background: rgba(179,53,43,0.06); border-left: 3px solid #b3352b;
+    padding: 8px 12px; margin: 10px 0; font-size: 14.5px; }
+  .fcard .fbody .chg { font-size: 14.5px; color: rgba(43,43,43,0.75); }
+  .fcard .fbody .chg b { color: #2b2b2b; }
+
+  /* debate stepper: paired argument/counter cards */
+  .stepper { position: relative; margin: 20px 0; }
+  .step-card { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 16px;
+    padding: 24px 28px 18px; margin: 0 32px; }
+  .step-card .sdate { font-size: 13px; font-weight: 800; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #b3352b; margin-bottom: 6px; }
+  .step-card .sname { font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+  .step-card .swhat { font-size: 15.5px; color: rgba(43,43,43,0.88); line-height: 1.6; margin-bottom: 0; }
+  .step-card .swhat b { color: #2b2b2b; }
+  .step-card .ssrc { font-size: 13px; color: rgba(43,43,43,0.55); margin-top: 12px; line-height: 1.5; }
+  .step-card.verdict-card { border: 2px solid rgba(179,53,43,0.55); background: #fffdf6; }
+  .side-badge { display: inline-block; font-size: 11.5px; font-weight: 800; letter-spacing: 0.1em;
+    text-transform: uppercase; padding: 3px 10px; border-radius: 999px; margin-bottom: 10px; }
+  .side-badge.lecun { background: rgba(179,53,43,0.12); color: #b3352b; }
+  .side-badge.field { background: rgba(43,43,43,0.08); color: rgba(43,43,43,0.75); }
+  .side-badge.verdictb { background: #b3352b; color: #f6f1e3; }
+  .car-arrow { position: absolute; top: 52px; width: 46px; height: 46px; border-radius: 50%;
+    background: rgba(43,43,43,0.85); border: 1px solid rgba(43,43,43,0.9); color: #f6f1e3;
+    cursor: pointer; touch-action: manipulation; display: flex; align-items: center;
+    justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.25); z-index: 2; }
+  .car-arrow:active { transform: scale(0.94); }
+  .car-arrow svg { width: 22px; height: 22px; }
+  .car-arrow.prev { left: 9px; }
+  .car-arrow.next { right: 9px; }
+  .step-dots { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; }
+  .step-count { font-size: 14px; font-weight: 700; color: rgba(43,43,43,0.55);
+    font-variant-numeric: tabular-nums; margin-right: 4px; }
+  .step-dots .dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(43,43,43,0.2); }
+  .step-dots .dot.on { background: #b3352b; }
+
+  /* landmark list */
+  .lm { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 16px 18px; margin: 10px 0; }
+  .lm .ld { font-size: 12.5px; font-weight: 800; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #b3352b; margin-bottom: 4px; }
+  .lm .ln { font-size: 16.5px; font-weight: 800; margin-bottom: 4px; }
+  .lm .lw { font-size: 15px; color: rgba(43,43,43,0.88); line-height: 1.6; margin-bottom: 0; }
+  .lm .lw b { color: #2b2b2b; }
+
+  /* voices */
+  .voice { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 18px; }
+  .voice .vname { font-size: 17px; font-weight: 800; }
+  .voice .vrole { font-size: 13px; color: rgba(43,43,43,0.55); margin-bottom: 8px; }
+  .voice .vview { font-size: 15.5px; line-height: 1.65; color: rgba(43,43,43,0.88); }
+  .voice .vview a { font-size: 13.5px; }
+
+  /* confidence markers */
+  .conf { display: inline-block; font-size: 11.5px; font-weight: 800; letter-spacing: 0.06em;
+    text-transform: uppercase; padding: 2px 9px; border-radius: 999px; margin-left: 8px;
+    vertical-align: 2px; white-space: nowrap; }
+  .conf.consensus { background: rgba(46,125,50,0.12); color: #2e7d32; }
+  .conf.contested { background: rgba(179,53,43,0.1); color: #b3352b; }
+  .conf.speculative { background: rgba(43,43,43,0.08); color: rgba(43,43,43,0.65); }
+  .pred { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 16px 18px; margin: 12px 0; }
+  .pred .pwho { font-size: 15px; font-weight: 800; }
+  .pred .pwhat { font-size: 15px; color: rgba(43,43,43,0.88); margin-top: 4px; line-height: 1.6; }
+  .pred .psaid { font-size: 13px; color: rgba(43,43,43,0.55); margin-top: 6px; }
+
+  /* flashcards */
+  .fgrid { display: grid; gap: 12px; margin: 16px 0; }
+  .flash { perspective: 900px; touch-action: manipulation; cursor: pointer; }
+  .flash .inner { position: relative; min-height: 150px; transform-style: preserve-3d;
+    transition: transform 0.45s cubic-bezier(.2,.7,.2,1); display: grid; }
+  .flash.flipped .inner { transform: rotateY(180deg); }
+  .flash .face { backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 20px; grid-area: 1 / 1; display: flex; flex-direction: column;
+    justify-content: center; min-width: 0; }
+  .flash .back { transform: rotateY(180deg); border-color: rgba(179,53,43,0.4); }
+  .flash .q { font-size: 16px; font-weight: 700; }
+  .flash .a { font-size: 15.5px; line-height: 1.6; color: rgba(43,43,43,0.88); }
+  .flash .tap { font-size: 12.5px; color: rgba(43,43,43,0.45); margin-top: 6px; }
+  .flash .score-row { display: flex; gap: 8px; margin-top: 10px; }
+  .flash .score-row button { touch-action: manipulation; flex: 1; border-radius: 10px;
+    padding: 10px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .flash .knew { border: 2px solid #2e7d32; background: rgba(46,125,50,0.08); color: #2e7d32; }
+  .flash .learning { border: 2px solid rgba(43,43,43,0.25); background: transparent; color: #2b2b2b; }
+  .flash.done .front { border-color: rgba(46,125,50,0.5); }
+  .scorebar { display: flex; align-items: center; gap: 10px; margin: 6px 0 2px; }
+  .scorebar .n { font-size: 22px; font-weight: 800; color: #b3352b; font-variant-numeric: tabular-nums; }
+
+  /* keep-exploring link cards */
+  .xlinks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0 8px; }
+  @media (max-width: 520px) { .xlinks { grid-template-columns: 1fr; } }
+  .xlink { display: block; background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 14px; padding: 16px; text-decoration: none; color: #2b2b2b;
+    touch-action: manipulation; }
+  .xlink:active { transform: scale(0.98); }
+  .xlink b { display: block; font-size: 15px; margin-bottom: 4px; color: #b3352b; }
+  .xlink span { font-size: 13.5px; color: rgba(43,43,43,0.62); line-height: 1.5; }
+  .xicon { width: 14px; height: 14px; vertical-align: -2px; margin-left: 7px; flex: none; }
+
+  /* source link-out cards */
+  .vsc-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+  .vsc-list a { display: block; background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 14px; padding: 16px; color: #2b2b2b; text-decoration: none;
+    touch-action: manipulation; }
+  .vsc-list a:active { transform: scale(0.99); }
+  .vsc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .vsc-kind { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase; color: #b3352b; }
+  .vsc-kind svg { width: 15px; height: 15px; }
+  .vsc-head > svg { flex: none; width: 15px; height: 15px; color: rgba(43,43,43,0.4); }
+  .vsc-title { display: block; font-size: 16px; font-weight: 600; line-height: 1.35; }
+  .vsc-meta { display: block; margin-top: 8px; font-size: 13px; color: rgba(43,43,43,0.55); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flash .inner { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="top"><a href="/primers/">&larr; primers</a></nav>
+  <h1>World Models vs Next-Token Prediction</h1>
+  <div class="meta"><span class="tag">llms</span><span class="tag">ai</span><span class="researched">Researched October 2026</span></div>
+  <p class="verdict">There are two stories about how machines get smart. The first says: teach a model to predict the next word at the scale of the whole internet, and understanding falls out. The second says: that is a detour. Language is a thin slice of the world, and a model trained to guess the next token mimics language about the world without learning how the world works. This is the sharpest architecture argument in AI, with a Turing Award winner's $1.03 billion startup on one side and the entire scaling industry on the other. The sentence to remember: <strong>both sides agree prediction is how models learn; they disagree about what the prediction should be of.</strong></p>
+
+  <h2><span class="n">1.</span> The brief</h2>
+  <p>Yann LeCun, one of deep learning's three Turing laureates, spent years arguing that large language models are the wrong substrate for intelligence. In June 2022 he wrote the position paper that made the case formally: build <strong>world models</strong>, systems that learn how the world evolves and predict future states in an abstract internal representation, instead of predicting the next token. Then the industry kept scaling tokens, and kept winning benchmarks. Then LeCun left Meta in late 2025, raised $1.03 billion for AMI Labs in March 2026, and started saying the quiet part out loud: LLMs are "a detour" and will be "largely obsolete" within five years.</p>
+  <p>The other side has receipts of its own. A tiny model trained only to predict Othello moves quietly built an internal 8x8 board, which nobody taught it. That finding, hardened by a 2025 replication across seven model families, is the best evidence that next-token-style training induces world models on its own. So this primer covers both machines: what next-token prediction actually learns, what a world model is, the one architecture move (JEPA) that separates them, the Othello surprise, and where the disagreement is real and where it is theater.</p>
+
+  <h2><span class="n">2.</span> How it works</h2>
+  <p>Five ideas, then the fight itself. Tap each card for the plain-language version, one concrete example, and what changed recently.</p>
+  <div class="mech" id="mech"></div>
+
+  <div class="viz">
+    <h3>The debate, one tap at a time</h3>
+    <p class="sub">LeCun's claim, the field's best counter, his reply, the counter to that, then where they genuinely disagree. One tap per step, or use the arrow keys. No autoplay, you drive.</p>
+    <div class="stepper" id="db-stepper">
+      <button class="car-arrow prev" id="db-prev" aria-label="Previous argument">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div class="step-card" id="db-card"></div>
+      <button class="car-arrow next" id="db-next" aria-label="Next argument">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+      <div class="step-dots" id="db-dots"></div>
+    </div>
+    <p class="cap">Every card in this stepper is sourced: the quote lines link out in section 7, the sources section.</p>
+  </div>
+
+  <h2><span class="n">3.</span> The landmarks</h2>
+  <p>Thirteen moments that built the argument, June 2022 to September 2026. No stepper this time, just the record.</p>
+  <div id="landmarks">
+    <div class="lm"><div class="ld">Jun 2022</div><div class="ln">The blueprint</div><p class="lw">LeCun publishes <b>"A Path Towards Autonomous Machine Intelligence"</b> (OpenReview, v0.9.2): configurable predictive world models, behavior driven by intrinsic motivation, and hierarchical JEPA trained with self-supervised learning, predicting in representation space instead of reconstructing inputs.</p></div>
+    <div class="lm"><div class="ld">Oct 2022</div><div class="ln">The Othello shock</div><p class="lw">Li et al., <b>"Emergent World Representations"</b> (arXiv:2210.13382): a GPT-style model trained only on Othello move transcripts develops a nonlinear internal representation of the board state, and intervention experiments show the representation controls the model's outputs.</p></div>
+    <div class="lm"><div class="ld">Jan 2023</div><div class="ln">JEPA's first proof</div><p class="lw"><b>"Self-Supervised Learning from Images with a Joint-Embedding Predictive Architecture"</b> (arXiv:2301.08243): predicting the embeddings of masked image regions learns more semantic representations than pixel reconstruction, at matched compute.</p></div>
+    <div class="lm"><div class="ld">Feb 2024</div><div class="ln">Video gets a JEPA</div><p class="lw">V-JEPA (Bardes et al.): the same idea extended across time, masking spatio-temporal regions of video and predicting their embeddings, forcing the model to learn motion and interaction rather than static appearance.</p></div>
+    <div class="lm"><div class="ld">Mar 2025</div><div class="ln">The Othello result hardens</div><p class="lw">Yuan and Sogaard <b>"Revisiting the Othello World Model Hypothesis"</b> (arXiv:2503.04421): across seven model families, from GPT-2 to Qwen2.5, every model induces the Othello board layout, up to 99% accuracy in unsupervised grounding.</p></div>
+    <div class="lm"><div class="ld">Sep 2025</div><div class="ln">"Doomed"</div><p class="lw">At an NYU Center for Data Science seminar, LeCun declares <b>auto-regressive LLMs "doomed"</b>: with per-token error e, the chance of a fully correct answer falls as (1 minus e) to the n, and he argues this exponential compounding is "not fixable (without a major redesign)."</p></div>
+    <div class="lm"><div class="ld">Dec 2025</div><div class="ln">JEPA learns to talk</div><p class="lw">VL-JEPA (arXiv:2512.10942): instead of generating tokens one by one, predict continuous embeddings of target text. In a controlled comparison with identical vision encoders and training data, it beats standard token-space VLM training with 50% fewer trainable parameters.</p></div>
+    <div class="lm"><div class="ld">Late 2025</div><div class="ln">LeCun leaves Meta</div><p class="lw">After about 12 years as chief AI scientist, he departs to co-found <b>AMI Labs</b> (Advanced Machine Intelligence Labs) in Paris, betting the company on world models built with JEPA.</p></div>
+    <div class="lm"><div class="ld">Jan 2026</div><div class="ln">"Simply false"</div><p class="lw">In an MIT Technology Review profile, LeCun says the idea that scaling LLMs reaches human-level intelligence is <b>"simply false."</b> At an MIT symposium he adds that world models will be the dominant AI architecture within three to five years, and "nobody in their right mind" would use today's LLMs.</p></div>
+    <div class="lm"><div class="ld">Mar 2026</div><div class="ln">The billion-dollar bet</div><p class="lw">AMI Labs announces a <b>$1.03B seed</b> at a $3.5B pre-money valuation, co-led by Cathay Innovation, Greycroft, Hiro Capital, HV Capital, and Bezos Expeditions, with Nvidia, Toyota, Samsung, and Temasek backing: Europe's largest seed round, funding fundamental world-model research and open-sourcing the results.</p></div>
+    <div class="lm"><div class="ld">May 2026</div><div class="ln">"A detour"</div><p class="lw">On Bloomberg's "The Close," LeCun says <b>"Large language models are not the path to real intelligence. They're a detour,"</b> and predicts LLMs will be "largely obsolete" within five years. He advises doctoral students not to make LLMs their focus.</p></div>
+    <div class="lm"><div class="ld">Jun 2026</div><div class="ln">V-JEPA 2</div><p class="lw">Meta's JEPA scales to <b>over one million hours of video</b>; V-JEPA 2 hits 77.3 top-1 accuracy on Something-Something v2 and state of the art on human action anticipation. V-JEPA 2-AC, post-trained on less than 62 hours of robot video, plans zero-shot pick-and-place on real Franka arms in two labs, with no data from those environments and no task-specific training or reward.</p></div>
+    <div class="lm"><div class="ld">Sep 2026</div><div class="ln">World models get a big exit</div><p class="lw">AMD agrees to acquire Fei-Fei Li's <b>World Labs for $8.2B</b>, betting that spatial intelligence, models that generate, reconstruct, and simulate interactive 3D environments, is the next step after text.</p></div>
+  </div>
+
+  <h2><span class="n">4.</span> Key voices</h2>
+  <p>Six people who are building this, betting on it, or betting against it. Each view is one or two sentences with the primary source linked. The disagreement is real, and it runs in more than one direction.</p>
+  <div class="mech" id="voices"></div>
+
+  <h2><span class="n">5.</span> What comes next</h2>
+  <p>Every prediction below is attributed: who said it, where, when. The badge is my read of how solid it is: <strong>consensus</strong> means multiple independent sources agree, <strong>contested</strong> means smart people disagree, <strong>speculative</strong> means one person's leap. Predictions go stale; this section is frozen as of October 2026.</p>
+  <div id="preds">
+    <div class="pred">
+      <div class="pwho">LeCun expects LLMs "largely obsolete" within five years, by about 2031<span class="conf speculative">speculative</span></div>
+      <div class="pwhat">Today's token predictors get replaced by world models across most applications. The prediction is architectural, not economic: he thinks the substrate itself is wrong.</div>
+      <div class="psaid">Said on Bloomberg's "The Close," May 21, 2026.</div>
+    </div>
+    <div class="pred">
+      <div class="pwho">LeCun expects world models to be "the dominant model for AI architectures" within three to five years<span class="conf contested">contested</span></div>
+      <div class="pwhat">"Nobody in their right mind would use LLMs of the type that we have today," he told an MIT symposium. The industry's capital spending disagrees with him so far.</div>
+      <div class="psaid">Said at an MIT symposium, late 2025; reported Dec 2025.</div>
+    </div>
+    <div class="pred">
+      <div class="pwho">Altman expects an internal OpenAI system meeting OpenAI's AGI definition before the end of 2026<span class="conf contested">contested</span></div>
+      <div class="pwhat">Highly autonomous systems outperforming humans at most economically valuable work, built on the token substrate LeCun calls a detour. The purest counter-prediction on this page.</div>
+      <div class="psaid">Said in a TIME interview, Aug 28, 2026.</div>
+    </div>
+    <div class="pred">
+      <div class="pwho">Karpathy expects reliable AI agents to take about a decade<span class="conf contested">contested</span></div>
+      <div class="pwhat">Persistent edge-case failures and missing continual learning keep agents unreliable; progress will be iterative, not a sudden leap. Slower than both Altman and LeCun's five-year obsolescence clock.</div>
+      <div class="psaid">Said on the Dwarkesh Podcast, late 2025.</div>
+    </div>
+    <div class="pred">
+      <div class="pwho">LeCun expects machine intelligence on a 2040s to 50s timeline, with extinction risk near 1%<span class="conf speculative">speculative</span></div>
+      <div class="pwhat">The slow timeline is the flip side of his critique: real intelligence needs new architectures first, so it arrives later, and his safety worries are far milder than the industry's.</div>
+      <div class="psaid">Reported across 2026 profiles; consistent with his AMI Labs thesis.</div>
+    </div>
+    <div class="pred">
+      <div class="pwho">Fei-Fei Li expects spatial intelligence to be the next frontier, with robotics as the economic anchor<span class="conf speculative">speculative</span></div>
+      <div class="pwhat">World Labs' Atlas unified 3D generation and reconstruction in September 2026. AMD's $8.2B acquisition of World Labs is the market's biggest vote so far for the physical-world direction.</div>
+      <div class="psaid">Said in 2026; Atlas launched Sept 2026; acquisition announced Sept 28, 2026.</div>
+    </div>
+  </div>
+
+  <h2><span class="n">6.</span> Check yourself</h2>
+  <p>Four cards. Tap to flip, then be honest: knew it, or still learning. The score is yours alone.</p>
+  <div class="scorebar"><span class="n" id="fc-score">0/4</span><span style="font-size:14px;color:rgba(43,43,43,0.6)">known</span></div>
+  <div class="fgrid" id="fgrid"></div>
+
+  <h2>Keep exploring</h2>
+  <div class="xlinks">
+    <a class="xlink" href="/blog/llm-progress/"><b>How AI Keeps Getting Smarter<svg class="xicon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4L10.5 13.5"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg></b><span>Six engines keep pushing AI forward, and the biggest one is no longer size. The scaling camp's engine room, and its own timeline fight.</span></a>
+    <a class="xlink" href="/blog/llm-training/"><b>How an LLM Learns, Step by Step<svg class="xicon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4L10.5 13.5"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg></b><span>Training a model is just next-token prediction at absurd scale. Tokens, attention, gradient descent, RLHF, every step with an interactive visualizer.</span></a>
+    <a class="xlink" href="/blog/agent-regression-evals/"><b>How Frontier Labs Change Agents Without Breaking Them<svg class="xicon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4L10.5 13.5"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg></b><span>Lauren Tan shrank her agent stack 10% with no loss in behavior. The claim is only as good as the machinery behind it: golden suites, deterministic checks, paired diffs, CI gates, and the statistics of proving nothing broke.</span></a>
+  </div>
+
+  <h2>Sources</h2>
+  <p>Every factual claim in sections 2 through 5 traces to one of these. Quotes are shortened with their meaning preserved.</p>
+  <ul class="vsc-list" id="sources"></ul>
+
+  <p class="kicker-close">Next-token prediction taught machines to talk. World models are the bet that talking was never the point. The winner gets to define what intelligence is made of.</p>
+  <footer>Words, diagrams, and toy models are mine. Built to learn in public.</footer>
+</div>
+<script>
+(function(){
+  "use strict";
+  function $(id){ return document.getElementById(id); }
+
+  /* ---------- section 2: the five ideas ---------- */
+  var MECH = [
+    { name: "Next-token prediction",
+      stat: "the incumbent engine",
+      body: "<p>A language model trains on exactly one job: <strong>guess the most likely next chunk of text</strong>, billions of times, over internet scale. It never gets a lesson on physics or grammar. It only learns which strings follow which strings.</p>" +
+      "<div class='ex'><strong>Example:</strong> feed it \"The glass tipped off the table and...\" and it predicts \"shattered,\" because those tokens follow each other in text, not because it has ever seen a glass fall.</div>" +
+      "<p class='chg'><b>What changed:</b> post-training and reinforcement learning made the guesses smarter (reasoning traces, tool use, agents), but the substrate is still the same: one token, then the next.</p>" },
+    { name: "LeCun's charge: it mimics, it doesn't learn",
+      stat: "the exponential argument",
+      body: "<p>LeCun's claim is that statistics of text are not the world. A model can write about gravity perfectly and have no idea what happens when you push a cup. Worse, he argues the machinery is structurally broken: every generated token has some chance of stepping \"outside the set of correct answers,\" so the chance of a fully correct answer falls as <strong>(1 minus e) to the n</strong>, exponentially with length.</p>" +
+      "<div class='ex'><strong>Example:</strong> at a September 2025 NYU seminar he called auto-regressive LLMs <strong>\"doomed,\"</strong> arguing this is \"not fixable (without a major redesign).\" He keeps comparing today's best models to a cat, and judges the cat smarter.</div>" +
+      "<p class='chg'><b>What changed:</b> he stopped arguing from inside Meta and put money on it, leaving in late 2025 to build world models at AMI Labs.</p>" },
+    { name: "JEPA's key move",
+      stat: "predict the future, not the pixels",
+      body: "<p>JEPA, the <strong>Joint Embedding Predictive Architecture</strong>, is LeCun's alternative objective. Instead of reconstructing every pixel of a video or predicting the next token of a sentence, the model <strong>predicts a representation of the future</strong>: an abstract embedding that captures what is happening and throws away what cannot be predicted anyway, like exact lighting or background motion. The world model becomes a configurable simulator: given the current situation plus an action, predict the future state, all in abstract space, then plan by simulating.</p>" +
+      "<div class='ex'><strong>Example:</strong> the first proof was I-JEPA (2023): predicting the embeddings of masked image regions instead of pixels learned more semantic representations than pixel-reconstruction methods at matched compute.</div>" +
+      "<p class='chg'><b>What changed:</b> the idea scaled from images to video to video plus language: V-JEPA, V-JEPA 2, and VL-JEPA.</p>" },
+    { name: "V-JEPA 2",
+      stat: "one million hours of video",
+      body: "<p>Meta's June 2026 flagship: an action-free JEPA <strong>pre-trained on over one million hours of internet video</strong> and images. It hit 77.3 top-1 accuracy on Something-Something v2 action understanding and the state of the art on human action anticipation, then matched frontier video QA scores at the 8-billion-parameter scale after alignment with a language model.</p>" +
+      "<div class='ex'><strong>Example:</strong> the real demo: V-JEPA 2-AC, post-trained on <strong>less than 62 hours of robot video</strong>, planned zero-shot pick-and-place on Franka arms in two different labs, with no data from those environments and no task-specific training or reward.</div>" +
+      "<p class='chg'><b>What changed:</b> video-scale JEPA went from representation learning to actual robot control.</p>" },
+    { name: "The Othello surprise",
+      stat: "the board nobody taught it",
+      body: "<p>In 2022, Kenneth Li and colleagues trained a GPT-style model on one job: <strong>predict the next legal move in Othello</strong>, from raw move transcripts. Nobody taught it the rules, the 8x8 board, or that discs flip. Inside the trained model they found an emergent board: nonlinear probes recovered every square's state at <strong>98.3% accuracy</strong>, and intervention experiments showed the representation causally drives the model's moves.</p>" +
+      "<div class='ex'><strong>Example:</strong> the counterargument in a nutshell: modeling the board was the cheapest way to predict the next move, so next-token training built a world model on its own. A 2025 revisit across seven model families found the same board layout induced in all of them, up to 99% accuracy in unsupervised grounding.</div>" +
+      "<p class='chg'><b>What changed:</b> the \"stochastic parrot\" story got its strongest counterexample. The open question is whether the trick scales from a board game to physics.</p>" }
+  ];
+  var mechWrap = $("mech");
+  MECH.forEach(function(m, i){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "fcard";
+    b.setAttribute("aria-expanded", "false");
+    b.innerHTML = "<span class='fname'>" + (i+1) + ". " + m.name + "</span><br>" +
+      "<span class='fnum'>" + m.stat + "</span> <span class='hint'>tap to open</span>" +
+      "<span class='fbody'>" + m.body + "</span>";
+    b.addEventListener("click", function(){
+      var open = b.classList.toggle("open");
+      b.setAttribute("aria-expanded", open ? "true" : "false");
+      b.querySelector(".hint").textContent = open ? "tap to close" : "tap to open";
+    });
+    mechWrap.appendChild(b);
+  });
+
+  /* ---------- section 2b: the debate stepper ---------- */
+  var DBT = [
+    { badge: "lecun", label: "LeCun's claim", title: "The next token is the wrong thing to predict",
+      body: "<b>\"Large language models are not the path to real intelligence. They're a detour,\"</b> LeCun said on Bloomberg's \"The Close\" in May 2026, predicting LLMs will be <b>\"largely obsolete\"</b> within five years. His technical case: language is one thin slice of how humans understand the world, and token-by-token generation compounds errors exponentially, (1 minus e) to the n, which he argues is not fixable without a major redesign. His yardstick is a cat: today's best models, he keeps saying, are not as smart as one.",
+      src: "Bloomberg \"The Close,\" May 21, 2026; NYU Center for Data Science seminar, Sept 10, 2025" },
+    { badge: "field", label: "The field's counter", title: "Prediction at scale builds the model for free",
+      body: "The cheapest way to predict the next move is to understand the game. Othello-GPT was never taught the rules, the board, or that discs flip, yet it built an internal 8x8 board that probes could read at <b>98.3% accuracy</b>, and causal interventions showed it actually uses that board to choose moves. Scale the argument up: to predict the words of a species that built bridges, wrote code, and argued about physics, a model is forced to build an internal model of the world those words describe. Geoffrey Hinton's version: to reliably predict the next word you have to understand the question, so next-word prediction at scale builds understanding of the world.",
+      src: "Li et al., arXiv:2210.13382 (Oct 2022); Yuan and Sogaard, arXiv:2503.04421 (Mar 2025)" },
+    { badge: "lecun", label: "LeCun's reply", title: "A toy board is not the world",
+      body: "An 8x8 board with perfect rules is the easiest possible case, and text is still the wrong teacher. Humans learn physics from vision, touch, and action, a continuous flood of sensor data, not from reading about it. Language about the world is <b>\"one thin slice\"</b> of understanding: you cannot learn to swim from reading about water. And he points at results: JEPA systems trained on video are already learning motion, interaction, and physical intuition that no text-only model has.",
+      src: "MIT Technology Review profile, Jan 2026; livemint, Dec 2025" },
+    { badge: "field", label: "The counter", title: "Text is a compressed trace of the world, and the camps are merging",
+      body: "The \"text-only\" caricature is aging: frontier systems read images and video, run code, call tools, and learn from reinforcement learning, not just next-token pre-training. Agents add the planning loop LeCun says is missing, through rollouts and verification. And the paradigms are <b>converging, not replacing</b>: V-JEPA 2 aligned with a language model for video QA, and VL-JEPA couples JEPA prediction with a generative decoder for text. Sam Altman keeps betting the scaling path reaches his AGI definition by the end of 2026; Richard Sutton, no fan of the status quo, agrees LLMs are a dead end, but on different grounds: they cannot learn on the job.",
+      src: "Meta AI, V-JEPA 2 (Jun 2026); VL-JEPA, arXiv:2512.10942 (Dec 2025)" },
+    { badge: "verdictb", label: "The verdict", title: "Where they genuinely disagree",
+      body: "It is not about whether prediction builds internal representations. Both sides now accept that; Othello-GPT settled it. The disagreement is threefold. <b>First, the substrate:</b> is the next token the right objective, or structurally the wrong one? <b>Second, the data:</b> is text a sufficient window onto the world, or one thin slice? <b>Third, the timeline:</b> five years to obsolete, or the 2040s to 50s for real physical intelligence? The stakes are real money: a $1.03B seed for AMI Labs against an industry spending tens of billions on scaling, plus AMD's $8.2B bet on World Labs' spatial models. <b>What to watch:</b> whether video-trained world models cross from bounded robot demos to general physical competence.",
+      src: "Synthesis of the sources above; verdict frozen as of October 2026",
+      verdict: true }
+  ];
+  (function(){
+    var card = $("db-card"), dots = $("db-dots"), prev = $("db-prev"), next = $("db-next");
+    var stepEl = $("db-stepper");
+    var i = 0;
+    DBT.forEach(function(){ var d = document.createElement("span"); d.className = "dot"; dots.appendChild(d); });
+    function render(){
+      var s = DBT[i];
+      card.className = "step-card" + (s.verdict ? " verdict-card" : "");
+      card.innerHTML = "<span class='side-badge " + s.badge + "'>" + s.label + "</span>" +
+        "<div class='sname'>" + s.title + "</div><p class='swhat'>" + s.body + "</p>" +
+        "<p class='ssrc'>" + s.src + "</p>";
+      var ds = dots.querySelectorAll(".dot");
+      ds.forEach(function(d, j){ d.classList.toggle("on", j === i); });
+      var count = dots.querySelector(".step-count");
+      if(!count){
+        count = document.createElement("span");
+        count.className = "step-count";
+        dots.insertBefore(count, dots.firstChild);
+      }
+      count.textContent = (i+1) + " / " + DBT.length;
+      prev.style.display = i === 0 ? "none" : "flex";
+      next.style.display = i === DBT.length - 1 ? "none" : "flex";
+    }
+    prev.addEventListener("click", function(){ if(i > 0){ i--; render(); } });
+    next.addEventListener("click", function(){ if(i < DBT.length - 1){ i++; render(); } });
+    document.addEventListener("keydown", function(e){
+      if(e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      if(e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      var t = e.target, tag = t && t.tagName;
+      if(tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT" || (t && t.isContentEditable)) return;
+      if(t && t.closest && t.closest(".step-code")) return;
+      var r = stepEl.getBoundingClientRect();
+      if(r.bottom < 0 || r.top > window.innerHeight) return;
+      if(e.key === "ArrowLeft" && i > 0){ i--; render(); e.preventDefault(); }
+      else if(e.key === "ArrowRight" && i < DBT.length - 1){ i++; render(); e.preventDefault(); }
+    });
+    render();
+  })();
+
+  /* ---------- section 4: voices ---------- */
+  var VOICES = [
+    { name: "Yann LeCun", role: "AMI Labs founder, ex-Meta chief AI scientist",
+      view: "LLMs are <b>\"a detour\"</b> and will be <b>\"largely obsolete\"</b> within five years; scaling them to human-level intelligence is <b>\"simply false.\"</b> His bet: JEPA world models that predict the future in representation space. Timeline: the 2040s to 50s for real machine intelligence; extinction risk near 1%. <a href='https://cryptobriefing.com/yann-lecun-llm-limitations-bloomberg/'>Bloomberg \"The Close,\"</a> May 21, 2026; MIT Technology Review profile, Jan 2026." },
+    { name: "Sam Altman", role: "OpenAI CEO",
+      view: "The scaling optimist: an internal OpenAI system meeting OpenAI's AGI definition before the end of 2026, with the longer \"gentle singularity\" arc running agents (2025), novel insights (2026), robots (2027), AGI around 2035. His implicit counter to LeCun: the token substrate plus post-training and tools keeps working. <a href='https://theunum.io/en/news/read/sem-altman-dopustil-sozdanie-sistemy-urovnya-agi-v-openai-do-kontsa-2026-goda'>TIME interview,</a> Aug 2026." },
+    { name: "Geoffrey Hinton", role: "deep learning pioneer",
+      view: "The direct counter to LeCun on understanding: to reliably predict the next word you have to understand the question, so predicting the next word at scale forces the model to understand the world. LeCun's reply in the same thread: LLM understanding is <b>\"very limited and superficial,\"</b> and real intelligence needs internal world models that predict consequences, reason, and plan. <a href='https://interestingengineering.com/culture/ai-godfathers-clash-on-whether-llms-can-understand-what-they-say'>The godfathers clash on X,</a> Nov 2023." },
+    { name: "Andrej Karpathy", role: "ex-OpenAI, ex-Tesla AI",
+      view: "The skeptical middle: today's agents are \"slop,\" and reliable autonomous agents are about a decade away, with his timelines <b>\"five to ten times\"</b> more pessimistic than the boosters'. Current models falter at edge cases and lack continual learning. <a href='https://cxotoday.com/daily-news/openai-co-founder-andrej-karpathy-calls-agentic-ai-a-slop-says-it-is-nowhere-close-to-fruition/'>Dwarkesh Podcast,</a> late 2025." },
+    { name: "Richard Sutton", role: "reinforcement learning pioneer",
+      view: "Agrees with LeCun's conclusion from a different direction: LLMs are at a <b>\"dead end\"</b> because they cannot learn on the job, and no amount of scaling fixes continual learning. The next architecture must learn continually; after that, he argues, there may be no need for training LLMs at all. <a href='https://cxotoday.com/daily-news/openai-co-founder-andrej-karpathy-calls-agentic-ai-a-slop-says-it-is-nowhere-close-to-fruition/'>Dwarkesh Podcast,</a> late 2025." },
+    { name: "Fei-Fei Li", role: "World Labs founder",
+      view: "A third bet that rhymes with LeCun's: <b>spatial intelligence</b> is the next frontier, models that generate, reconstruct, and simulate interactive 3D environments, with robotics as the economic anchor. AMD's <b>$8.2B acquisition</b> of World Labs (Sept 2026) is the market's biggest vote for the physical-world direction. <a href='https://betterthanrandom.substack.com/p/industry-roundup-15'>a16z podcast, Sept 2026; AMD acquisition,</a> Sept 28, 2026." }
+  ];
+  var vWrap = $("voices");
+  VOICES.forEach(function(v){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "fcard";
+    b.setAttribute("aria-expanded", "false");
+    b.innerHTML = "<span class='fname'>" + v.name + "</span> <span class='hint'>" + v.role + " &middot; tap to open</span>" +
+      "<span class='fbody'><p class='chg' style='margin:0'>" + v.view + "</p></span>";
+    b.addEventListener("click", function(){
+      var open = b.classList.toggle("open");
+      b.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    vWrap.appendChild(b);
+  });
+
+  /* ---------- section 6: flashcards ---------- */
+  var CARDS = [
+    { q: "JEPA's key move, in one sentence?",
+      a: "Predict representations of the future (embeddings), not raw pixels or tokens. The model learns what is happening and ignores what cannot be predicted anyway, like exact lighting." },
+    { q: "What did Othello-GPT prove, and who cites it?",
+      a: "Trained only to predict legal Othello moves, it built an internal 8x8 board: probes read it at 98.3% accuracy, and interventions proved the model uses the board. The field's best evidence that next-token-style training induces world models on its own." },
+    { q: "LeCun's math for why auto-regressive LLMs are \"doomed\"?",
+      a: "The chance of a fully correct answer falls as (1 minus e) to the n, exponential in answer length. He argues this is not fixable without a major redesign. NYU seminar, Sept 2025." },
+    { q: "Where do the two sides genuinely disagree?",
+      a: "Not whether prediction builds representations (Othello settled that). They disagree on the substrate (is the next token the right objective?), the data (is text a sufficient window on the world?), and the timeline (five years vs the 2040s to 50s)." }
+  ];
+  (function(){
+    var grid = $("fgrid"), scoreEl = $("fc-score");
+    var known = 0, scored = {};
+    function setScore(){
+      scoreEl.textContent = known + "/" + CARDS.length;
+    }
+    CARDS.forEach(function(c, idx){
+      var el = document.createElement("div");
+      el.className = "flash";
+      el.innerHTML = "<div class='inner'>" +
+        "<div class='face front'><div class='q'>" + c.q + "</div><div class='tap'>tap to flip</div></div>" +
+        "<div class='face back'><div class='a'>" + c.a + "</div>" +
+        "<div class='score-row'><button type='button' class='knew'>Knew it</button><button type='button' class='learning'>Still learning</button></div></div></div>";
+      el.addEventListener("click", function(){
+        el.classList.toggle("flipped");
+      });
+      var knew = el.querySelector(".knew"), learning = el.querySelector(".learning");
+      function mark(k){
+        if(scored[idx] === k) return;
+        if(scored[idx] === true) known--;
+        scored[idx] = k;
+        if(k === true) known++;
+        el.classList.add("done");
+        setScore();
+      }
+      knew.addEventListener("click", function(e){ e.stopPropagation(); mark(true); });
+      learning.addEventListener("click", function(e){ e.stopPropagation(); mark(false); });
+      grid.appendChild(el);
+    });
+    setScore();
+  })();
+
+  /* ---------- section 7: sources ---------- */
+  var DOC = "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M6 3h8l4 4v14H6z\"/><path d=\"M14 3v4h4\"/></svg>";
+  var ARR = "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M7 17L17 7\"/><path d=\"M8 7h9v9\"/></svg>";
+  var XIC = "<svg viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.451-6.231zm-1.161 17.52h1.833L7.084 4.126H5.117l11.966 15.644z\"/></svg>";
+  var SRC = [
+    { kind: "Position paper", url: "https://openreview.net/forum?id=BZ5a1r-kVsf", title: "A Path Towards Autonomous Machine Intelligence", meta: "Yann LeCun &middot; OpenReview &middot; v0.9.2 &middot; Jun 27, 2022" },
+    { kind: "arXiv paper", url: "https://arxiv.org/abs/2210.13382", title: "Emergent World Representations: Exploring a Sequence Model Trained on a Synthetic Task", meta: "Li et al. &middot; arXiv:2210.13382 &middot; Oct 24, 2022" },
+    { kind: "arXiv paper", url: "https://arxiv.org/abs/2301.08243", title: "Self-Supervised Learning from Images with a Joint-Embedding Predictive Architecture", meta: "Assran et al. &middot; arXiv:2301.08243 &middot; Jan 2023" },
+    { kind: "arXiv paper", url: "https://arxiv.org/abs/2503.04421", title: "Revisiting the Othello World Model Hypothesis", meta: "Yuan and Sogaard &middot; arXiv:2503.04421 &middot; Mar 6, 2025" },
+    { kind: "arXiv paper", url: "https://arxiv.org/abs/2506.09985", title: "V-JEPA 2: Self-Supervised Video Models Enable Understanding, Prediction and Planning", meta: "Meta FAIR / Mila &middot; arXiv:2506.09985 &middot; Jun 2026" },
+    { kind: "arXiv paper", url: "https://arxiv.org/abs/2512.10942", title: "VL-JEPA: Joint Embedding Predictive Architecture for Vision-language", meta: "Chen et al. &middot; arXiv:2512.10942 &middot; Dec 11, 2025" },
+    { kind: "Publication", url: "https://ai.meta.com/research/publications/v-jepa-2-self-supervised-video-models-enable-understanding-prediction-and-planning/", title: "V-JEPA 2: Self-Supervised Video Models Enable Understanding, Prediction and Planning", meta: "AI at Meta &middot; Jun 2026" },
+    { kind: "Blog post", url: "https://ai.meta.com/blog/v-jepa-yann-lecun-ai-model-video-joint-embedding-predictive-architecture/", title: "V-JEPA: the first AI model based on Yann LeCun's vision for more human-like AI", meta: "AI at Meta &middot; Feb 2024" },
+    { kind: "News", url: "https://cryptobriefing.com/yann-lecun-llm-limitations-bloomberg/", title: "Yann LeCun says large language models are a dead end, gives them five years", meta: "Crypto Briefing &middot; on Bloomberg \"The Close\" &middot; May 21, 2026" },
+    { kind: "News", url: "https://www.livemint.com/ai/artificial-intelligence/hes-been-right-about-ai-for-40-years-now-he-thinks-everyone-is-wrong-11763189287334.html", title: "He's been right about AI for 40 years. Now he thinks everyone is wrong.", meta: "Mint &middot; MIT symposium quotes &middot; Dec 2025" },
+    { kind: "News", url: "https://ppc.land/lecun-calls-auto-regressive-llms-doomed-at-nyu-seminar/", title: "LeCun calls auto-regressive LLMs \"doomed\" at NYU seminar", meta: "PPC Land &middot; Sept 10, 2025" },
+    { kind: "News", url: "https://techbriefly.com/2026/09/01/yann-lecun-time-ai-100-103-billion-ami-labs-seed-round/", title: "Yann LeCun makes TIME AI 100 after $1.03 billion AMI Labs seed round", meta: "TechBriefly &middot; Sept 1, 2026" },
+    { kind: "News", url: "https://interestingengineering.com/culture/ai-godfathers-clash-on-whether-llms-can-understand-what-they-say", title: "AI godfathers clash on whether LLMs can understand what they say", meta: "Interesting Engineering &middot; Hinton vs LeCun on X &middot; Nov 2023" },
+    { kind: "News", url: "https://cxotoday.com/daily-news/openai-co-founder-andrej-karpathy-calls-agentic-ai-a-slop-says-it-is-nowhere-close-to-fruition/", title: "OpenAI Co-founder Andrej Karpathy Calls Agentic AI a Slop", meta: "CXO Today &middot; Sutton and Karpathy on Dwarkesh &middot; late 2025" },
+    { kind: "Essay", url: "https://betterthanrandom.substack.com/p/industry-roundup-15", title: "Industry roundup #15: AMD acquires World Labs for $8.2B", meta: "Better than Random &middot; Substack &middot; Sept 2026" }
+  ];
+  (function(){
+    var list = $("sources");
+    SRC.forEach(function(s){
+      var li = document.createElement("li");
+      li.innerHTML = "<a href=\"" + s.url + "\"><span class=\"vsc-head\"><span class=\"vsc-kind\">" +
+        (s.kind === "Essay" ? XIC : DOC) + s.kind + "</span>" + ARR + "</span>" +
+        "<span class=\"vsc-title\">" + s.title + "</span>" +
+        "<span class=\"vsc-meta\">" + s.meta + "</span></a>";
+      list.appendChild(li);
+    });
+  })();
+})();
+</script>
+</body>
+</html>

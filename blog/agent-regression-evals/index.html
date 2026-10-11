@@ -344,6 +344,16 @@
     <li><a href="https://arcprize.org"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Benchmark</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">ARC Prize</span><span class="vsc-meta">ARC-AGI-3 (Mar 2026): first interactive agentic reasoning benchmark</span></a></li>
   </ul>
 
+  <h2>Takeaways</h2>
+  <p>No test suite can prove a negative, but the labs have turned "no regressions" from a vibe into a checkable claim. Small golden suites catch big breaks fast and cheap. Paired statistics catch the slow leaks the suites cannot see. CI gates and gradual rollouts catch everything else. Lauren Tan's 10% claim is credible exactly to the extent that machinery sits behind it, and now you know what that machinery looks like.</p>
+  <ul>
+    <li><strong>Build the suite from real failures.</strong> 10 to 20 cases per skill, 20 to 50 per agent, with negative controls for what must not trigger. Every production incident becomes a permanent case.</li>
+    <li><strong>Split the two jobs.</strong> Capability evals are a hill to climb; regression evals must sit near 100% pass, and any decline means something broke.</li>
+    <li><strong>Deterministic checks first.</strong> Parse the trace and assert what actually happened. LLM judges only where deterministic checks cannot reach, calibrated against human labels.</li>
+    <li><strong>Diff paired items, not averages.</strong> Same frozen set, per-item deltas. A 15-case suite cannot see a 3-point slip; know your minimum detectable effect before claiming nothing broke.</li>
+    <li><strong>Gate and roll out gradually.</strong> A pass-rate drop gets reviewed before it merges, and intelligence-trading changes soak before they ship to everyone.</li>
+  </ul>
+
   <p class="kicker-close">Small suites catch fires. Statistics catch slow leaks. Run both.</p>
   <footer>Words, diagrams, and toy models are mine. Built to learn in public.</footer>
 </div>
@@ -454,8 +464,11 @@
     var stepEl = $("tl-stepper");
     var i = 0;
     TL.forEach(function(){ var d = document.createElement("span"); d.className = "dot"; dots.appendChild(d); });
-    function render(){
+    function paintCard(){
       card.innerHTML = "<div class='sdate'>" + TL[i].d + "</div><div class='sname'>" + TL[i].n + "</div><p class='swhat'>" + TL[i].w + "</p>";
+    }
+    function render(){
+      paintCard();
       var ds = dots.querySelectorAll(".dot");
       ds.forEach(function(d, j){ d.classList.toggle("on", j === i); });
       var count = dots.querySelector(".step-count");
@@ -467,6 +480,23 @@
       count.textContent = (i+1) + " / " + TL.length;
       prev.style.display = i === 0 ? "none" : "flex";
       next.style.display = i === TL.length - 1 ? "none" : "flex";
+    }
+    /* Arrow anchoring: arrows sit at the vertical midway of the anchor card and
+       never move between steps. Anchor = first card, unless the first card is
+       significantly taller than the smallest card (1.5x), in which case the
+       smallest card is the anchor. Every card gets the anchor height as
+       min-height so shorter cards grow to meet it. */
+    function anchorArrows(){
+      var saved = i, hs = [], k;
+      card.style.minHeight = "";
+      for(k = 0; k < TL.length; k++){ i = k; paintCard(); hs.push(card.offsetHeight); }
+      i = saved; paintCard();
+      var minH = Math.min.apply(null, hs);
+      var anchorH = (hs[0] > 1.5 * minH) ? minH : hs[0];
+      card.style.minHeight = anchorH + "px";
+      var top = Math.round(card.offsetTop + anchorH / 2 - 23);
+      prev.style.top = top + "px";
+      next.style.top = top + "px";
     }
     prev.addEventListener("click", function(){ if(i > 0){ i--; render(); } });
     next.addEventListener("click", function(){ if(i < TL.length - 1){ i++; render(); } });
@@ -482,6 +512,10 @@
       else if(e.key === "ArrowRight" && i < TL.length - 1){ i++; render(); e.preventDefault(); }
     });
     render();
+    anchorArrows();
+    var art;
+    window.addEventListener("resize", function(){ clearTimeout(art); art = setTimeout(anchorArrows, 150); });
+    if(document.fonts && document.fonts.ready){ document.fonts.ready.then(anchorArrows); }
   })();
 
   /* ---------- section 4: voices ---------- */

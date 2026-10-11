@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Yuru Lab: originals in the same spirit</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{background:#090909;color:#8a8a8a;
+    font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    overscroll-behavior:none;}
+  body{display:flex;flex-direction:column;align-items:center;
+    min-height:100dvh;padding:24px 20px 60px;}
+  .hint{margin:4px 0 20px;font-size:12px;color:#4d4d4d;letter-spacing:.04em;
+    transition:opacity .8s;}
+  .hint.gone{opacity:0;}
+  .piece{width:min(92vmin,560px,52dvh);margin:0 0 34px;}
+  .piece .tag{font-size:12px;letter-spacing:.14em;color:#e8a33d;margin:0 0 10px;
+    text-transform:uppercase;}
+  .piece canvas{display:block;width:100%;height:auto;border-radius:6px;background:#090909;
+    touch-action:none;user-select:none;-webkit-user-select:none;}
+  .cap{margin-top:12px;text-align:center;font-size:12.5px;line-height:1.7;color:#6f6f6f;}
+  .cap a{color:#b5b5b5;text-decoration:none;border-bottom:1px solid #3a3a3a;
+    touch-action:manipulation;}
+  details{margin:10px auto 0;font-size:11.5px;color:#555;max-width:560px;width:min(92vmin,560px,52dvh);}
+  details summary{cursor:pointer;touch-action:manipulation;list-style:none;color:#777;text-align:center;}
+  details summary::-webkit-details-marker{display:none;}
+  details summary:hover{color:#aaa;}
+  details pre{margin-top:10px;padding:14px;background:#101010;border:1px solid #222;
+    border-radius:8px;overflow:auto;max-height:38vh;text-align:left;font-size:11px;line-height:1.7;color:#999;
+    white-space:pre-wrap;word-break:break-all;}
+  .foot{margin-top:8px;font-size:12px;color:#4d4d4d;text-align:center;line-height:1.8;}
+  .foot a{color:#777;text-decoration:none;border-bottom:1px solid #333;}
+</style>
+</head>
+<body>
+<div class="hint" id="hint">touch and drag to stir</div>
+
+<div class="piece">
+  <p class="tag">bloom</p>
+  <canvas id="cv-bloom" width="400" height="400"></canvas>
+  <div class="cap">a rose that breathes, unsure how many petals it wants</div>
+</div>
+
+<div class="piece">
+  <p class="tag">galaxy</p>
+  <canvas id="cv-galaxy" width="400" height="400"></canvas>
+  <div class="cap">two arms, a dense core, differential rotation</div>
+</div>
+
+<div class="piece">
+  <p class="tag">drift</p>
+  <canvas id="cv-drift" width="400" height="400"></canvas>
+  <div class="cap">nine hundred particles riding a sine field, your finger is a vortex</div>
+</div>
+
+<details>
+  <summary>show the code</summary>
+  <pre>bloom: 6,000 dots on a rose that morphs
+for(i=6e3;i--;){
+  th=i/6e3*TAU;                  // sweep the full circle
+  k=5+3*sin(t*.5);               // petal count breathes 2..8
+  q=150*cos(k*th)*(.75+.25*sin(t+th*2));
+  a=th+t*.15;                    // slow rotation
+  point(q*cos(a)+200,q*sin(a)+200)
+}
+
+galaxy: 14,000 dots, dense core, sparse rim
+for(i=14e3;i--;){
+  r=175*sqrt(i/14e3);            // sqrt packs dots near the core
+  a=r*.055-t*1.2+(i%2)*PI+.35*sin(r*.09+t*.8);
+  r+=7*sin(a*3-t*1.7);           // arm wobble
+  point(r*cos(a)+200,r*sin(a)*.9+200)
+}
+
+drift: particles advected through a sine field
+ang=sin(x*.02+t)*1.4+cos(y*.03-t*.8)*1.4+sin((x+y)*.013+t*.5)*.9;
+x+=cos(ang)*1.8; y+=sin(ang)*1.8; // wrap edges, respawn on death
+// canvas fades 9% per frame: motion becomes trails</pre>
+</details>
+
+<p class="foot">originals in the same spirit as <a href="https://projects.lukezhang.si/yuru-ink/">yuru-ink</a><br>
+the recreations that started it</p>
+
+<script>
+/* bottom-sheet-drag-lock, scoped: the page scrolls normally, but each canvas
+   claims its own gestures so a downward drag on the artwork never reaches
+   the native sheet. */
+document.addEventListener("gesturestart", function(e){ e.preventDefault(); });
+</script>
+<script>
+var R = 55, PUSH = 45;
+
+function hideHint(){
+  var h = document.getElementById('hint');
+  if (h) h.classList.add('gone');
+}
+
+function wellify(canvas, onWells){
+  /* returns {getWells, setWells} wired to touch + mouse, canvas-scoped */
+  var wells = [];
+  var setWells = function(list){
+    wells = [];
+    var r = canvas.getBoundingClientRect();
+    for (var n = 0; n < list.length && n < 4; n++){
+      wells.push({x:(list[n].clientX-r.left)*400/r.width,
+                  y:(list[n].clientY-r.top)*400/r.height});
+    }
+    if (wells.length){ hideHint(); if (onWells) onWells(); }
+  };
+  canvas.addEventListener('touchstart', function(e){ setWells(e.touches); }, {passive:true});
+  canvas.addEventListener('touchmove', function(e){ e.preventDefault(); setWells(e.touches); }, {passive:false});
+  canvas.addEventListener('touchend', function(){ wells = []; });
+  canvas.addEventListener('touchcancel', function(){ wells = []; });
+  var mouseDown = false;
+  canvas.addEventListener('mousedown', function(e){ mouseDown = true; setWells([e]); });
+  canvas.addEventListener('mousemove', function(e){ if (mouseDown) setWells([e]); });
+  window.addEventListener('mouseup', function(){ mouseDown = false; wells = []; });
+  return {get: function(){ return wells; }};
+}
+
+function part(x, y, wells){
+  var R2 = R*R;
+  for (var n = 0; n < wells.length; n++){
+    var dx = x-wells[n].x, dy = y-wells[n].y, d2 = dx*dx+dy*dy;
+    if (d2 < R2 && d2 > 0.01){
+      var dist = Math.sqrt(d2), push = (1-dist/R)*PUSH;
+      x += dx/dist*push; y += dy/dist*push;
+    }
+  }
+  return [x, y];
+}
+
+/* ---- bloom: morphing rose ---- */
+(function(){
+  var cv = document.getElementById('cv-bloom');
+  var ctx = cv.getContext('2d');
+  var wells = wellify(cv).get;
+  var COUNT = 6000, t = 1.0;
+  (function tick(){
+    t += 0.03;
+    ctx.fillStyle = '#090909'; ctx.fillRect(0,0,400,400);
+    ctx.fillStyle = 'rgba(255,255,255,0.78)';
+    var k = 5 + 3*Math.sin(t*0.5), w = wells(), pt;
+    for (var i = COUNT; i-- > 0;){
+      var th = i/COUNT*Math.PI*2;
+      var q = 150*Math.cos(k*th)*(0.75 + 0.25*Math.sin(t + th*2));
+      var a = th + t*0.15;
+      pt = part(q*Math.cos(a)+200, q*Math.sin(a)+200, w);
+      ctx.fillRect(pt[0], pt[1], 1.6, 1.6);
+    }
+    requestAnimationFrame(tick);
+  })();
+})();
+
+/* ---- galaxy: two-arm spiral ---- */
+(function(){
+  var cv = document.getElementById('cv-galaxy');
+  var ctx = cv.getContext('2d');
+  var wells = wellify(cv).get;
+  var COUNT = 14000, t = 1.0;
+  (function tick(){
+    t += 0.03;
+    ctx.fillStyle = '#090909'; ctx.fillRect(0,0,400,400);
+    ctx.fillStyle = 'rgba(255,255,255,0.59)';
+    var w = wells(), pt;
+    for (var i = COUNT; i-- > 0;){
+      var r = 175*Math.sqrt(i/COUNT);
+      var arm = (i % 2)*Math.PI;
+      var a = r*0.055 - t*1.2 + arm + 0.35*Math.sin(r*0.09 + t*0.8);
+      r += 7*Math.sin(a*3 - t*1.7);
+      pt = part(r*Math.cos(a)+200, r*Math.sin(a)*0.9+200, w);
+      ctx.fillRect(pt[0], pt[1], 1.6, 1.6);
+    }
+    requestAnimationFrame(tick);
+  })();
+})();
+
+/* ---- drift: flow field with trails, finger becomes a vortex ---- */
+(function(){
+  var cv = document.getElementById('cv-drift');
+  var ctx = cv.getContext('2d');
+  var wells = wellify(cv).get;
+  var DP = 900, parts = [], t = 0;
+  function seed(){ return {x:Math.random()*400, y:Math.random()*400, life:120+Math.random()*260}; }
+  for (var n = 0; n < DP; n++) parts.push(seed());
+  ctx.fillStyle = '#090909'; ctx.fillRect(0,0,400,400);
+  (function tick(){
+    t += 0.03;
+    ctx.fillStyle = 'rgba(9,9,9,0.09)'; ctx.fillRect(0,0,400,400);
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    var w = wells(), VR = 70;
+    for (var m = 0; m < DP; m++){
+      var p = parts[m];
+      if (--p.life <= 0) parts[m] = p = seed();
+      var ang = Math.sin(p.x*0.02 + t)*1.4 + Math.cos(p.y*0.03 - t*0.8)*1.4
+              + Math.sin((p.x+p.y)*0.013 + t*0.5)*0.9;
+      for (var k = 0; k < w.length; k++){
+        var dx = p.x-w[k].x, dy = p.y-w[k].y, d2 = dx*dx+dy*dy;
+        if (d2 < VR*VR && d2 > 1){
+          var va = Math.atan2(dy,dx) + Math.PI/2;
+          var f = 1 - Math.sqrt(d2)/VR;
+          p.x += Math.cos(va)*f*6; p.y += Math.sin(va)*f*6;
+        }
+      }
+      p.x += Math.cos(ang)*1.8; p.y += Math.sin(ang)*1.8;
+      if (p.x < 0) p.x += 400; if (p.x > 400) p.x -= 400;
+      if (p.y < 0) p.y += 400; if (p.y > 400) p.y -= 400;
+      ctx.fillRect(p.x, p.y, 1.8, 1.8);
+    }
+    requestAnimationFrame(tick);
+  })();
+})();
+</script>
+</body>
+</html>

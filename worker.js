@@ -125,6 +125,7 @@ const SITES = ["america-gov-render", "leetcode-games", "ergosphere", "illusion-b
   "peggie-preview", "shazam-lab", "wasm-craft", "vibe-check", "model-atlas", "llm-training-draft", "intelligent-ui", "ml-functions-draft", "math-curiosity-draft", "waves-draft", "taylor-mastery-draft", "high-agency-draft", "poteto-tracker", "agent-training-draft", "landing-lab", "motion-empire", "pomodoro", "star-salvage", "icon-match", "dungeon-dash", "starlink-mobile", "bihua",
   "blog-split-dr",
   "yuru-ink",
+  "yuru-lab",
 ];
 // Trade Compass: proxies Yahoo Finance quotes via v8 chart API.
 async function handleTradeCompassQuotes(request) {

@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Frontier Labs Change Agents Without Breaking Them: luke's blog</title>
+<meta name="description" content="Lauren Tan shrank her agent stack 10% with 'no loss in behavior.' The claim is only as good as the machinery behind it. How Anthropic, OpenAI, DeepMind, and Meta regression-test agent changes, and the statistics of proving nothing broke. Researched October 2026.">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    min-height: 100%;
+    background: #f6f1e3;
+    color: #2b2b2b;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.7;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 56px 22px 80px; }
+  nav.top { margin-bottom: 40px; font-size: 14px; }
+  nav.top a { color: rgba(43,43,43,0.55); text-decoration: none; }
+  nav.top a:hover { color: #b3352b; }
+  h1 { font-size: 32px; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 8px; }
+  .meta { color: rgba(43,43,43,0.5); font-size: 14px; margin-bottom: 24px; }
+  .meta .tag { display: inline-block; border: 1px solid rgba(43,43,43,0.25); border-radius: 999px;
+    padding: 2px 10px; font-size: 12.5px; margin-right: 6px; color: rgba(43,43,43,0.65); }
+  .meta .researched { display: inline-block; margin-left: 6px; font-size: 12.5px;
+    color: #b3352b; font-weight: 700; }
+  .verdict { font-size: 17px; color: #2b2b2b; border-left: 3px solid #b3352b;
+    padding: 4px 0 4px 18px; margin: 0 0 28px; line-height: 1.65; }
+  p { margin-bottom: 16px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  p strong, li strong { color: #2b2b2b; }
+  h2 { font-size: 23px; color: #2b2b2b; margin: 44px 0 10px; letter-spacing: -0.01em; }
+  h2 .n { color: #b3352b; }
+  ul { margin: 0 0 16px 20px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  li { margin-bottom: 8px; }
+  a { color: #b3352b; }
+  footer { margin-top: 60px; font-size: 13px; color: rgba(43,43,43,0.35); }
+  footer a { color: rgba(43,43,43,0.6); }
+  .kicker-close { font-size: 19px; font-weight: 700; color: #2b2b2b;
+    border-top: 1px solid rgba(43,43,43,0.15); padding-top: 28px; margin-top: 48px; }
+
+  /* visualizer cards */
+  .viz { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 16px; padding: 20px; margin: 24px 0; }
+  .viz h3 { font-size: 17px; margin-bottom: 4px; color: #2b2b2b; }
+  .viz .sub { font-size: 14px; color: rgba(43,43,43,0.62); margin-bottom: 12px; line-height: 1.55; }
+  .viz label { font-size: 15px; font-weight: 600; display: block; margin: 14px 0 2px; color: #2b2b2b; }
+
+  /* slim slider: 16px visible knob, 50px hit box */
+  .viz input[type=range] { width: 100%; height: 34px; background: transparent;
+    cursor: pointer; touch-action: pan-y; margin: 4px 0 2px;
+    -webkit-appearance: none; appearance: none; }
+  .viz input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px;
+    background: rgba(43,43,43,0.18); }
+  .viz input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none;
+    width: 50px; height: 50px; border-radius: 50%; border: none;
+    background: radial-gradient(circle, #b3352b 0 6px, #2b2b2b 6px 8px, rgba(0,0,0,0) 9px);
+    margin-top: -23px; box-shadow: none; filter: drop-shadow(0 1px 4px rgba(0,0,0,0.35)); }
+  .viz input[type=range]::-moz-range-track { height: 4px; border-radius: 2px;
+    background: rgba(43,43,43,0.18); }
+  .viz input[type=range]::-moz-range-thumb { width: 50px; height: 50px; border-radius: 50%;
+    border: none;
+    background: radial-gradient(circle, #b3352b 0 6px, #2b2b2b 6px 8px, rgba(0,0,0,0) 9px);
+    box-shadow: none; filter: drop-shadow(0 1px 4px rgba(0,0,0,0.35)); }
+
+  .readout { display: flex; justify-content: space-between; align-items: baseline;
+    margin: 8px 0; gap: 10px; }
+  .big { font-size: 30px; font-weight: 800; color: #b3352b; font-variant-numeric: tabular-nums; }
+  .cap { font-size: 13.5px; color: rgba(43,43,43,0.6); margin-top: 10px; line-height: 1.55; }
+  .yn { font-size: 15px; font-weight: 800; padding: 3px 12px; border-radius: 999px; white-space: nowrap; }
+  .yn.no { background: rgba(179,53,43,0.1); color: #b3352b; }
+  .yn.yes { background: rgba(46,125,50,0.12); color: #2e7d32; }
+
+  /* tappable mechanism cards */
+  .mech { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin: 16px 0; }
+  .fcard { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 18px; touch-action: manipulation; cursor: pointer; font-family: inherit;
+    text-align: left; width: 100%; max-width: 100%; min-width: 0; overflow: hidden; color: #2b2b2b; }
+  .fcard:active { transform: scale(0.99); }
+  .fcard .fname { font-size: 17px; font-weight: 800; }
+  .fcard .fnum { display: inline-block; font-size: 12.5px; font-weight: 700; margin: 6px 8px 2px 0;
+    padding: 3px 10px; border-radius: 999px; background: rgba(179,53,43,0.1); color: #b3352b; }
+  .fcard .fbody { display: none; margin-top: 8px; font-size: 15.5px; line-height: 1.65;
+    color: rgba(43,43,43,0.88); }
+  .fcard.open .fbody { display: block; }
+  .fcard .hint { font-size: 13px; color: rgba(43,43,43,0.5); }
+  .fcard .fbody .ex { background: rgba(179,53,43,0.06); border-left: 3px solid #b3352b;
+    padding: 8px 12px; margin: 10px 0; font-size: 14.5px; }
+  .fcard .fbody .chg { font-size: 14.5px; color: rgba(43,43,43,0.75); }
+  .fcard .fbody .chg b { color: #2b2b2b; }
+
+  /* stepper (timeline): edge-straddling circle arrows */
+  .stepper { position: relative; margin: 20px 0; }
+  .step-card { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 16px;
+    padding: 24px 28px 18px; margin: 0 32px; }
+  .step-card .sdate { font-size: 13px; font-weight: 800; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #b3352b; margin-bottom: 6px; }
+  .step-card .sname { font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+  .step-card .swhat { font-size: 15.5px; color: rgba(43,43,43,0.88); line-height: 1.6; margin-bottom: 0; }
+  .step-card .swhat b { color: #2b2b2b; }
+  .car-arrow { position: absolute; top: 34px; width: 46px; height: 46px; border-radius: 50%;
+    background: rgba(43,43,43,0.85); border: 1px solid rgba(43,43,43,0.9); color: #f6f1e3;
+    cursor: pointer; touch-action: manipulation; display: flex; align-items: center;
+    justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.25); z-index: 2; }
+  .car-arrow:active { transform: scale(0.94); }
+  .car-arrow svg { width: 22px; height: 22px; }
+  .car-arrow.prev { left: 9px; }
+  .car-arrow.next { right: 9px; }
+  .step-dots { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; }
+  .step-count { font-size: 14px; font-weight: 700; color: rgba(43,43,43,0.55);
+    font-variant-numeric: tabular-nums; margin-right: 4px; }
+  .step-dots .dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(43,43,43,0.2); }
+  .step-dots .dot.on { background: #b3352b; }
+
+  /* A/B toggle */
+  .abt { display: block; width: 100%; max-width: 420px; margin: 18px auto 0; padding: 6px;
+    border-radius: 999px; background: rgba(43,43,43,0.08); border: 1px solid rgba(43,43,43,0.15);
+    cursor: pointer; touch-action: manipulation; font-family: inherit; position: relative; }
+  .abt .thumb { position: absolute; top: 5px; bottom: 5px; left: 5px; width: calc(50% - 5px);
+    border-radius: 999px; background: #2b2b2b;
+    transition: left 280ms cubic-bezier(.5,0,.2,1.15); }
+  .abt[data-side="b"] .thumb { left: 50%; }
+  .abt .labs { position: relative; display: flex; z-index: 1; }
+  .abt .labs span { flex: 1; text-align: center; font-size: 15px; font-weight: 700; padding: 12px 0;
+    color: rgba(43,43,43,0.5); }
+  .abt[data-side="a"] .labs .la { color: #f6f1e3; }
+  .abt[data-side="b"] .labs .lb { color: #f6f1e3; }
+  .abt-stage { position: relative; margin-top: 14px; }
+  .abt-layer { transition: opacity 450ms ease; }
+  .abt-layer.hidden { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+  .voice { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 18px; }
+  .voice .vname { font-size: 17px; font-weight: 800; }
+  .voice .vrole { font-size: 13px; color: rgba(43,43,43,0.55); margin-bottom: 8px; }
+  .voice .vview { font-size: 15.5px; line-height: 1.65; color: rgba(43,43,43,0.88); }
+  .voice .vview a { font-size: 13.5px; }
+
+  /* confidence markers */
+  .conf { display: inline-block; font-size: 11.5px; font-weight: 800; letter-spacing: 0.06em;
+    text-transform: uppercase; padding: 2px 9px; border-radius: 999px; margin-left: 8px;
+    vertical-align: 2px; white-space: nowrap; }
+  .conf.consensus { background: rgba(46,125,50,0.12); color: #2e7d32; }
+  .conf.contested { background: rgba(179,53,43,0.1); color: #b3352b; }
+  .conf.speculative { background: rgba(43,43,43,0.08); color: rgba(43,43,43,0.65); }
+  .pred { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 16px 18px; margin: 12px 0; }
+  .pred .pwho { font-size: 15px; font-weight: 800; }
+  .pred .pwhat { font-size: 15px; color: rgba(43,43,43,0.88); margin-top: 4px; line-height: 1.6; }
+  .pred .psaid { font-size: 13px; color: rgba(43,43,43,0.55); margin-top: 6px; }
+
+  /* flashcards */
+  .fgrid { display: grid; gap: 12px; margin: 16px 0; }
+  .flash { perspective: 900px; touch-action: manipulation; cursor: pointer; }
+  .flash .inner { position: relative; min-height: 150px; transform-style: preserve-3d;
+    transition: transform 0.45s cubic-bezier(.2,.7,.2,1); display: grid; }
+  .flash.flipped .inner { transform: rotateY(180deg); }
+  .flash .face { backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 20px; grid-area: 1 / 1; display: flex; flex-direction: column;
+    justify-content: center; min-width: 0; }
+  .flash .back { transform: rotateY(180deg); border-color: rgba(179,53,43,0.4); }
+  .flash .q { font-size: 16px; font-weight: 700; }
+  .flash .a { font-size: 15.5px; line-height: 1.6; color: rgba(43,43,43,0.88); }
+  .flash .tap { font-size: 12.5px; color: rgba(43,43,43,0.45); margin-top: 6px; }
+  .flash .score-row { display: flex; gap: 8px; margin-top: 10px; }
+  .flash .score-row button { touch-action: manipulation; flex: 1; border-radius: 10px;
+    padding: 10px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .flash .knew { border: 2px solid #2e7d32; background: rgba(46,125,50,0.08); color: #2e7d32; }
+  .flash .learning { border: 2px solid rgba(43,43,43,0.25); background: transparent; color: #2b2b2b; }
+  .flash.done .front { border-color: rgba(46,125,50,0.5); }
+  .scorebar { display: flex; align-items: center; gap: 10px; margin: 6px 0 2px; }
+  .scorebar .n { font-size: 22px; font-weight: 800; color: #b3352b; font-variant-numeric: tabular-nums; }
+
+  /* keep-exploring link cards */
+  .xlinks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0 8px; }
+  @media (max-width: 520px) { .xlinks { grid-template-columns: 1fr; } }
+  .xlink { display: block; background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 14px; padding: 16px; text-decoration: none; color: #2b2b2b;
+    touch-action: manipulation; }
+  .xlink:active { transform: scale(0.98); }
+  .xlink b { display: block; font-size: 15px; margin-bottom: 4px; color: #b3352b; }
+  .xlink span { font-size: 13.5px; color: rgba(43,43,43,0.62); line-height: 1.5; }
+  .xicon { width: 14px; height: 14px; vertical-align: -2px; margin-left: 7px; flex: none; }
+
+  /* source link-out cards */
+  .vsc-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+  .vsc-list a { display: block; background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 14px; padding: 16px; color: #2b2b2b; text-decoration: none;
+    touch-action: manipulation; }
+  .vsc-list a:active { transform: scale(0.99); }
+  .vsc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .vsc-kind { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase; color: #b3352b; }
+  .vsc-kind svg { width: 15px; height: 15px; }
+  .vsc-head > svg { flex: none; width: 15px; height: 15px; color: rgba(43,43,43,0.4); }
+  .vsc-title { display: block; font-size: 16px; font-weight: 600; line-height: 1.35; }
+  .vsc-meta { display: block; margin-top: 8px; font-size: 13px; color: rgba(43,43,43,0.55); }
+
+  .warn-card { background: rgba(179,53,43,0.05); border: 1px solid rgba(179,53,43,0.3);
+    border-radius: 14px; padding: 18px; margin: 20px 0; }
+  .warn-card b { color: #b3352b; font-size: 15.5px; }
+  .warn-card p { font-size: 14.5px; margin: 8px 0 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flash .inner { transition: none; }
+    .abt .thumb, .abt-layer { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="top"><a href="/blog/">&larr; blog</a></nav>
+  <h1>How Frontier Labs Change Agents Without Breaking Them</h1>
+  <div class="meta"><span class="tag">ai</span><span class="tag">engineering</span><span class="researched">Researched October 2026</span></div>
+  <p class="verdict">On October 10, 2026, Lauren Tan posted that pstack, her agent skill stack, is now 10% smaller with no loss in behavior. A great claim, and an uncheckable one, unless you know the machinery behind it. The frontier labs all converged on the same answer: small golden task suites run on every change, deterministic checks before LLM judges, paired before/after diffs on frozen task sets, and the statistics to know when a suite is too small to prove anything.</p>
+
+  <h2><span class="n">1.</span> The brief</h2>
+  <p>Every change to an agent is a regression risk: a trimmed prompt, a rewritten skill, a swapped model, a new tool. The labs treat agent configuration the way good teams treat code, with a test suite that must stay green. Anthropic runs evals on every CLAUDE.md, skill, or hook change. OpenAI's skill recipe starts at 10 to 20 prompts. DeepMind pins the harness before comparing anything. Meta grades what the agent changed in the world, not what it said.</p>
+  <p>And the honest part: even the labs ship regressions. In April 2026 Anthropic published a postmortem about three config-layer regressions that reached users over six weeks, including two innocent-looking prompt lines that sailed through weeks of testing and later showed a 3% eval drop under per-line ablation. The machinery does not make you infallible. It makes failures findable. The sentence to remember: <strong>a regression suite should sit near 100% pass, and any decline means something broke.</strong></p>
+
+  <h2><span class="n">2.</span> How it works</h2>
+  <p>Six mechanisms, and every lab uses all six. Tap each card for the plain-language version, one concrete example, and what changed recently.</p>
+  <div class="mech" id="mech"></div>
+
+  <div class="viz">
+    <h3>The suite-size dial: what can your evals actually see?</h3>
+    <p class="sub">Small suites are the industry standard, and they are nearly blind to small regressions. Drag the dial to set your golden-suite size and see the smallest pass-rate drop it can reliably detect.</p>
+    <label for="mde-n">golden suite size: <span id="mde-nv">15 cases</span></label>
+    <input type="range" id="mde-n" min="10" max="2000" step="5" value="15" aria-label="golden suite size in cases">
+    <div class="readout"><span>smallest reliably detectable drop</span><span class="big" id="mde-out">~31 pts</span></div>
+    <div class="readout"><span>would catch Anthropic's 3% verbosity slip?</span><span class="yn no" id="mde-yn">no</span></div>
+    <p class="cap" id="mde-insight"></p>
+    <p class="cap">Illustrative model anchored on Evan Miller's figures: detecting a 3-point true delta needs about 969 cases at standard power. The takeaway is the shape, not the decimals. Small suites are smoke alarms: they catch fires, not slow leaks. That is why the labs pair tiny suites with per-item diffs and repeated trials.</p>
+  </div>
+
+  <h2><span class="n">3.</span> The landmarks</h2>
+  <p>Ten moments that built the discipline, January 2023 to October 2026. One tap per step, or use the arrow keys.</p>
+  <div class="stepper" id="tl-stepper">
+    <button class="car-arrow prev" id="tl-prev" aria-label="Previous landmark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <div class="step-card" id="tl-card"></div>
+    <button class="car-arrow next" id="tl-next" aria-label="Next landmark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+    </button>
+    <div class="step-dots" id="tl-dots"></div>
+  </div>
+
+  <h2><span class="n">4.</span> Key voices</h2>
+  <p>Seven sources that define how this is done, each in one or two sentences with the primary source linked. The real action is at the bottom, where two of them collide.</p>
+  <div class="mech" id="voices"></div>
+
+  <div class="viz">
+    <h3>The big disagreement</h3>
+    <p class="sub">Same field, opposite conclusions about small suites. One switch, every tap flips. No picking sides, just the collision.</p>
+    <button class="abt" id="dispute" data-side="a" role="switch" aria-checked="false" aria-label="Flip between OpenAI and Miller">
+      <span class="thumb"></span>
+      <span class="labs"><span class="la">OpenAI: 15 is enough</span><span class="lb">Miller: 15 is blind</span></span>
+    </button>
+    <div class="abt-stage">
+      <div class="abt-layer" id="abt-a">
+        <div class="voice" style="margin-top:14px">
+          <div class="vname">OpenAI Developer Blog <span style="font-weight:400;font-size:13px;color:rgba(43,43,43,0.55)">"Testing Agent Skills Systematically with Evals"</span></div>
+          <div class="vrole">the pragmatist</div>
+          <p class="vview"><strong>"You don't need a large benchmark to get value from evals.</strong> For a single skill, a small set of 10 to 20 prompts is enough to surface regressions and confirm improvements early." The suite is a living record of scenarios the skill must keep getting right, grown from every manual fix during development.</p>
+        </div>
+      </div>
+      <div class="abt-layer hidden" id="abt-b">
+        <div class="voice" style="margin-top:14px">
+          <div class="vname">Evan Miller <span style="font-weight:400;font-size:13px;color:rgba(43,43,43,0.55)">Anthropic Research</span></div>
+          <div class="vrole">the statistician</div>
+          <p class="vview"><strong>A 3-point true delta needs about 969 questions</strong> at standard power. A 15-case suite has a minimum detectable effect near 30 points: it literally cannot see the 3% verbosity slip that Anthropic's per-line ablation caught. Small suites do not prove "no regression." <a href="https://www.anthropic.com/research/statistical-approach-to-model-evals">Adding Error Bars to Evals</a>, Nov 2024.</p>
+        </div>
+      </div>
+    </div>
+    <p class="cap">The synthesis both sides would accept: a 15-case suite is a smoke alarm, not a proof. It catches big breaks fast and cheap. For the small stuff, run paired per-item diffs on frozen sets, repeat trials per case, and read Miller before claiming "no loss in behavior."</p>
+  </div>
+
+  <h2><span class="n">5.</span> What comes next</h2>
+  <p>Every item below is attributed: who said it, where, when. The badge is my read of how solid it is: <strong>consensus</strong> means it is stated policy or an announced fact, <strong>contested</strong> means smart people disagree, <strong>speculative</strong> means the direction is real but the outcome is not. Frozen as of October 2026.</p>
+  <div id="preds">
+    <div class="pred">
+      <div class="pwho">Anthropic: broad per-model eval suites, per-line ablations, and gradual rollouts for every system prompt change<span class="conf consensus">consensus</span></div>
+      <div class="pwhat">Committed in writing after the April 2026 postmortem: "tighter controls on system prompt changes," ablations "to understand the impact of each line," plus soak periods and gradual rollouts for anything that could trade off against intelligence.</div>
+      <div class="psaid">Committed in "An update on recent Claude Code quality reports," Apr 23, 2026.</div>
+    </div>
+    <div class="pred">
+      <div class="pwho">Every production incident becomes a permanent regression eval<span class="conf consensus">consensus</span></div>
+      <div class="pwhat">The AI-native SDLC playbook's prescription: the owning team writes an eval for each incident and it stays in the suite forever. Suites grow from failures, not from imagination.</div>
+      <div class="psaid">Prescribed in "The AI-native SDLC playbook," claude.com, Aug 21, 2026.</div>
+    </div>
+    <div class="pred">
+      <div class="pwho">OpenAI's hosted Evals platform goes read-only Oct 31, 2026 and shuts down Nov 30, 2026<span class="conf consensus">consensus</span></div>
+      <div class="pwhat">The platform dies; the open-source evals repo remains the citable artifact. Teams building on the hosted product need a new home for their suites.</div>
+      <div class="psaid">Announced via banner on OpenAI's official evals docs, 2026.</div>
+    </div>
+    <div class="pred">
+      <div class="pwho">METR's move to UK AISI Inspect becomes the shared eval substrate<span class="conf speculative">speculative</span></div>
+      <div class="pwhat">METR is transitioning internal tooling from Vivaria to Inspect, the UK AI Safety Institute's framework. If labs and government evaluators converge on one harness, "did it get worse" becomes comparable across organizations for the first time.</div>
+      <div class="psaid">Noted in the METR Vivaria README transition note, 2026; the convergence is my read, not their claim.</div>
+    </div>
+    <div class="pred">
+      <div class="pwho">Paired-diff statistics move from papers into CI tooling<span class="conf speculative">speculative</span></div>
+      <div class="pwhat">Miller's paired per-question diffs and power analysis are published and cited, but no mainstream agent framework runs them by default yet. The next step is obvious: the eval runner computes the paired delta and its error bars, not the human.</div>
+      <div class="psaid">My read, Oct 2026. The math is consensus; the tooling is missing.</div>
+    </div>
+    <div class="pred">
+      <div class="pwho">A lab publishes real canary numbers<span class="conf speculative">speculative</span></div>
+      <div class="pwhat">Percentages, traffic splits, rollback thresholds, soak durations. Today no lab publishes its internal canary procedure for model or agent rollouts; it is the least documented layer in the whole stack. The first lab to open this up sets the template.</div>
+      <div class="psaid">My read, Oct 2026. Verified absent across primary sources in this primer's research.</div>
+    </div>
+  </div>
+
+  <h2><span class="n">6.</span> Check yourself</h2>
+  <p>Four cards. Tap to flip, then be honest: knew it, or still learning. The score is yours alone.</p>
+  <div class="scorebar"><span class="n" id="fc-score">0/4</span><span style="font-size:14px;color:rgba(43,43,43,0.6)">known</span></div>
+  <div class="fgrid" id="fgrid"></div>
+
+  <h2>Keep exploring</h2>
+  <div class="xlinks">
+    <a class="xlink" href="/blog/what-is-an-eval/"><b>Evals, explained<svg class="xicon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4L10.5 13.5"/><path d="M20 14v5a2 2 0 0 1-2 2V7a2 2 0 0 1 2-2h5"/></svg></b><span>How the benchmarks get made, and how they get gamed.</span></a>
+    <a class="xlink" href="/blog/llm-progress/"><b>How AI Keeps Getting Smarter<svg class="xicon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4L10.5 13.5"/><path d="M20 14v5a2 2 0 0 1-2 2V7a2 2 0 0 1 2-2h5"/></svg></b><span>Six engines of AI progress, the landmark timeline, and where eight leading voices think this lands.</span></a>
+    <a class="xlink" href="/blog/llm-training/"><b>How an LLM Learns, Step by Step<svg class="xicon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4L10.5 13.5"/><path d="M20 14v5a2 2 0 0 1-2 2V7a2 2 0 0 1 2-2h5"/></svg></b><span>Training a model is just next-token prediction at absurd scale, every step with an interactive visualizer.</span></a>
+  </div>
+
+  <h2>Sources</h2>
+  <p>Every factual claim in sections 2 through 5 traces to one of these. Figures are vendor-reported unless noted.</p>
+  <ul class="vsc-list">
+    <li><a href="https://x.com/poteto/status/2109116030761230571"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.451-6.231zm-1.161 17.52h1.833L7.084 4.126H5.117l11.966 15.644z"/></svg>X post</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">"pstack is now 10% smaller with no loss in behavior!"</span><span class="vsc-meta">@poteto (Lauren Tan) &middot; Oct 10, 2026</span></a></li>
+    <li><a href="https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Engineering blog</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Demystifying evals for AI agents</span><span class="vsc-meta">Anthropic &middot; Mikaela Grace, Jeremy Hadfield, Rodrigo Olivares, Jiri De Jonghe &middot; Jan 9, 2026</span></a></li>
+    <li><a href="https://claude.com/blog/the-ai-native-sdlc-playbook"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Blog</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">The AI-native SDLC playbook</span><span class="vsc-meta">Anthropic &middot; Louis Claxton &middot; Aug 21, 2026</span></a></li>
+    <li><a href="https://www.anthropic.com/engineering/april-23-postmortem"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Postmortem</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">An update on recent Claude Code quality reports</span><span class="vsc-meta">Anthropic Engineering &middot; Apr 23, 2026</span></a></li>
+    <li><a href="https://www.anthropic.com/research/statistical-approach-to-model-evals"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Research</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Adding Error Bars to Evals</span><span class="vsc-meta">Evan Miller, Anthropic Research &middot; Nov 2024 &middot; arXiv:2411.00640</span></a></li>
+    <li><a href="https://developers.openai.com/blog/eval-skills"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Developer blog</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Testing Agent Skills Systematically with Evals</span><span class="vsc-meta">OpenAI Developers</span></a></li>
+    <li><a href="https://developers.openai.com/api/docs/guides/evaluation-best-practices"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Docs</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Evaluation best practices</span><span class="vsc-meta">OpenAI API docs</span></a></li>
+    <li><a href="https://github.com/openai/evals"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Repo</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">openai/evals</span><span class="vsc-meta">GitHub &middot; open source eval framework and registry</span></a></li>
+    <li><a href="https://deepmind.google/models/evals-methodology/gemini-3-6-flash"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Docs</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Gemini 3.6 Flash eval methodology</span><span class="vsc-meta">Google DeepMind &middot; pinned harnesses, pass@1, multi-run averaging</span></a></li>
+    <li><a href="https://ai.meta.com/research/publications/are-scaling-up-agent-environments-and-evaluations/"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Publication</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">ARE: Scaling Up Agent Environments and Evaluations</span><span class="vsc-meta">Meta Research &middot; Gaia2: 800 scenarios, 10 universes, 11 apps</span></a></li>
+    <li><a href="https://github.com/METR/vivaria"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Repo</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">METR Vivaria</span><span class="vsc-meta">GitHub &middot; open source agent eval harness; transitioning to UK AISI Inspect</span></a></li>
+    <li><a href="https://metr.org/blog/2026-1-29-time-horizon-1-1/"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Blog</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Measuring AI ability to complete long tasks</span><span class="vsc-meta">METR &middot; Jan 29, 2026 &middot; the 50%-reliability time horizon</span></a></li>
+    <li><a href="https://www.swebench.com"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Benchmark</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">SWE-bench</span><span class="vsc-meta">Princeton &middot; 500 Verified instances, the coding-agent regression standard</span></a></li>
+    <li><a href="https://www.tbench.ai"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Benchmark</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Terminal-Bench</span><span class="vsc-meta">TB 2.1: 89 container tasks, fully programmatic grading via Harbor</span></a></li>
+    <li><a href="https://hamel.dev/blog/posts/evals/"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Essay</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Your AI Product Needs Evals</span><span class="vsc-meta">Hamel Husain &middot; 2024 &middot; the L1/L2/L3 eval tiering</span></a></li>
+    <li><a href="https://arcprize.org"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Benchmark</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">ARC Prize</span><span class="vsc-meta">ARC-AGI-3 (Mar 2026): first interactive agentic reasoning benchmark</span></a></li>
+  </ul>
+
+  <p class="kicker-close">Small suites catch fires. Statistics catch slow leaks. Run both.</p>
+  <footer>Words, diagrams, and toy models are mine. Built to learn in public.</footer>
+</div>
+<script>
+(function(){
+  "use strict";
+  function $(id){ return document.getElementById(id); }
+
+  /* ---------- section 2: the six mechanisms ---------- */
+  var MECH = [
+    { name: "Golden task suites",
+      stat: "10-20 per skill, 20-50 per agent",
+      body: "<p>Start small and start from reality. OpenAI's recipe: <strong>10 to 20 prompts per skill</strong>, stored as a CSV with a <strong>should_trigger flag</strong>. Anthropic's playbook: <strong>20 to 50 real tasks per agent</strong>, each a prompt plus checks. Build from real failures and production traces, not synthetic edge cases.</p>" +
+      "<div class='ex'><strong>Example:</strong> the negative control. OpenAI wants at least one near-adjacent request the skill must NOT trigger on, which catches over-eager skill descriptions that fire on everything.</div>" +
+      "<p class='chg'><b>What changed:</b> the suite is now CI-gated. Anthropic runs it on <strong>every CLAUDE.md, skill, or hook change</strong>, because that configuration steers the agent and deserves the regression testing that code gets.</p>" },
+    { name: "Capability vs regression evals",
+      stat: "Anthropic's key split",
+      body: "<p>Two different jobs. <strong>Capability evals</strong> start at a low pass rate and give the team a hill to climb. <strong>Regression evals</strong> ask 'does it still handle what it used to?' and should sit near <strong>100% pass</strong>. Any decline means something broke. Saturated capability evals graduate into the regression suite to catch drift.</p>" +
+      "<div class='ex'><strong>Example:</strong> Descript runs two separate suites: one for quality benchmarking, one for regression testing. Different jobs, different suites.</div>" +
+      "<p class='chg'><b>What changed:</b> the vocabulary stuck. Task, trial, grader, transcript, outcome: this is now the industry's shared language for talking about evals.</p>" },
+    { name: "Deterministic checks first",
+      stat: "parse the trace, then judge",
+      body: "<p>Before any LLM judge, assert what the agent <strong>actually did</strong>. OpenAI's recipe: capture the run as a JSONL trace, then check it programmatically. Did it run the right commands, in the right order? Were the files created? Everything deterministic and debuggable. Rubric grading layers on <strong>only</strong> where deterministic checks cannot reach, and judges must be calibrated against human labels.</p>" +
+      "<div class='ex'><strong>Example:</strong> Philipp Schmid's skill evals are mostly regex: right SDK, right methods, old patterns absent. The LLM judge only appears for complex multi-step traces that regex cannot read.</div>" +
+      "<p class='chg'><b>What changed:</b> DeepMind and Meta grade <strong>environment state mutations</strong>, not agent claims. The database row exists or it does not; what the agent said about it is irrelevant.</p>" },
+    { name: "Paired before/after diffs",
+      stat: "same set, per-item deltas",
+      body: "<p>Run the <strong>identical frozen task set</strong> against the old and new version, then compare <strong>per-item deltas</strong>, never eyeball two averages. Evan Miller's statistics: paired question-level differences, clustered standard errors, power analysis before trusting an eval. Overlapping confidence intervals prove nothing.</p>" +
+      "<div class='ex'><strong>Example:</strong> Anthropic's two verbosity lines showed no regression in weeks of testing. A broader per-line ablation, removing each system-prompt line, found a <strong>3% drop on one eval</strong>. The paired diff saw what the averages hid.</div>" +
+      "<p class='chg'><b>What changed:</b> Miller's rule of thumb is now the reality check: a 3-point true delta needs about <strong>1,000 items</strong> at standard power. Try the dial above.</p>" },
+    { name: "Eval CI gates",
+      stat: "green suite or no merge",
+      body: "<p>The suite runs on a <strong>schedule and on every change</strong>. Anthropic's rule: a skill change that drops the pass rate gets reviewed before it merges. OpenAI's docs: run evals on every change, mine your logs for new cases, grow the set over time. Evals are the AI-native equivalent of stage-gate QA.</p>" +
+      "<div class='ex'><strong>Example:</strong> Hamel Husain's three tiers. L1: assertions on every change. L2: model or human evals on cadence. L3: A/B tests only after big changes. Most days you live in L1.</div>" +
+      "<p class='chg'><b>What changed:</b> every production incident now becomes a <strong>permanent regression eval</strong>, written by the owning team. The suite grows from failures, not from imagination.</p>" },
+    { name: "Gradual rollouts",
+      stat: "the least documented layer",
+      body: "<p>For changes that could trade off against intelligence: <strong>soak periods, a broader eval suite, then gradual rollout</strong> so issues surface early. The industry pattern is shadow first (mirror live traffic, zero user exposure), then canary with pre-defined rollback thresholds, then full cutover.</p>" +
+      "<div class='ex'><strong>Example:</strong> Anthropic committed to this after the April 2026 postmortem: soak plus gradual rollout for any change that trades off against intelligence.</div>" +
+      "<p class='chg'><b>What changed:</b> nothing published. No lab documents its internal canary procedure, percentages, or rollback triggers. This layer is reconstructed from industry practice, and this primer says so.</p>" }
+  ];
+  var mechWrap = $("mech");
+  MECH.forEach(function(m, i){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "fcard";
+    b.setAttribute("aria-expanded", "false");
+    b.innerHTML = "<span class='fname'>" + (i+1) + ". " + m.name + "</span><br>" +
+      "<span class='fnum'>" + m.stat + "</span> <span class='hint'>tap to open</span>" +
+      "<span class='fbody'>" + m.body + "</span>";
+    b.addEventListener("click", function(){
+      var open = b.classList.toggle("open");
+      b.setAttribute("aria-expanded", open ? "true" : "false");
+      b.querySelector(".hint").textContent = open ? "tap to close" : "tap to open";
+    });
+    mechWrap.appendChild(b);
+  });
+
+  /* ---------- section 2b: suite-size dial (MDE explorer) ---------- */
+  (function(){
+    var slider = $("mde-n");
+    if(!slider) return;
+    /* Illustrative MDE model anchored on Miller: 3-pt delta needs ~969 cases.
+       MDE(n) = 2.8 * sqrt(2*p*(1-p)/n), p = 0.9 (regression suites sit near 100%). */
+    function mde(n){
+      return 2.8 * Math.sqrt(2 * 0.9 * 0.1 / n) * 100;
+    }
+    function render(){
+      var n = parseInt(slider.value, 10);
+      $("mde-nv").textContent = n.toLocaleString() + " cases";
+      var v = mde(n);
+      $("mde-out").textContent = "~" + Math.round(v) + " pts";
+      var yn = $("mde-yn");
+      var catches = v <= 3;
+      yn.textContent = catches ? "yes" : "no";
+      yn.className = "yn " + (catches ? "yes" : "no");
+      var insight;
+      if(n < 30){
+        insight = "At " + n + " cases, the smallest reliably detectable drop is about " + Math.round(v) + " points. Your 'no loss in behavior' claim is blind to anything smaller than a catastrophe. This is the standard lab suite size, and it is a smoke alarm, not a proof.";
+      } else if(n < 200){
+        insight = "At " + n + " cases you catch medium breaks (about " + Math.round(v) + " points), but Anthropic's 3% verbosity slip still sails through. To see the small stuff, add trials per case and read the paired diffs, not the averages.";
+      } else if(!catches){
+        insight = "At " + n + " cases you are getting somewhere (about " + Math.round(v) + " points), but the 3% slip is still below the noise floor. Keep going.";
+      } else {
+        insight = "At " + n + " cases you are in Miller territory: a 3-point slip becomes detectable. This is what 'no loss in behavior' actually costs to prove. Almost nobody pays it on every change, which is why the labs lean on paired diffs and canaries instead.";
+      }
+      $("mde-insight").textContent = insight;
+    }
+    slider.addEventListener("input", render);
+    render();
+  })();
+
+  /* ---------- section 3: timeline stepper ---------- */
+  var TL = [
+    { d: "Jan 2023", n: "openai/evals goes open source", w: "An eval is <b>datasets generating prompts, measuring completion quality, comparing across models</b>. The registry feeds OpenAI's model iterations, and the Completion Function Protocol extends it to tool-using agents." },
+    { d: "Nov 2024", n: "Miller: Adding Error Bars to Evals", w: "The statistical backbone lands. <b>Paired question-level diffs, clustered standard errors, power analysis.</b> A 3-point true delta needs about 969 questions. Small-suite claims of 'no regression' become checkable, and most fail the check." },
+    { d: "Dec 2024", n: "Anthropic: Building effective agents", w: "<b>Measure before adding complexity.</b> The workflows-vs-agents taxonomy: start with the simplest thing that works, add agentic behavior only when the evals say you must." },
+    { d: "Jan 2026", n: "Anthropic: Demystifying evals for AI agents", w: "The doctrine. <b>Capability evals</b> start low and give you a hill to climb; <b>regression evals</b> sit near 100% and any decline means breakage. Three grader types: code, model, human. The shared vocabulary the whole industry now uses." },
+    { d: "Mar-Apr 2026", n: "The Claude Code postmortem", w: "<b>Three config-layer regressions ship for six weeks.</b> An effort default flips, a caching change clears thinking every turn, two verbosity lines cap text between tool calls. Weeks of testing show nothing; per-line ablation finds the <b>3% drop</b>. Anthropic commits to per-model eval suites, per-line ablations, soak periods, and gradual rollouts." },
+    { d: "2026", n: "OpenAI: Testing Agent Skills Systematically", w: "The practitioner recipe. <b>10 to 20 prompts per skill</b>, a should_trigger flag with negative controls, <b>deterministic JSONL-trace graders first</b>, rubric grading only where they cannot reach. Every manual fix becomes a future eval." },
+    { d: "Aug 2026", n: "Anthropic: AI-native SDLC playbook", w: "<b>20 to 50 real tasks in CI on every config change.</b> 'A skill change that drops the pass rate gets reviewed before it merges.' Every production incident becomes a permanent regression eval, written by the owning team." },
+    { d: "2026", n: "DeepMind pins the harness", w: "The attribution fix. <b>Terminal-Bench 2.1 reported only for the Terminus 2 default harness</b>; SWE-Bench Pro averaged over 5 runs. You evaluate harness plus model together, so the harness never moves under you." },
+    { d: "2025-26", n: "Meta: ARE, Gaia2, JiTTests", w: "800 async scenarios with <b>read/write-verified actions</b>: grade what the agent changed in the world, not what it said. And JiTTests: disposable LLM-generated regression tests that caught <b>4x more bugs</b> than traditional hardening tests, then deleted themselves." },
+    { d: "Oct 2026", n: "poteto: 10% smaller, no loss in behavior", w: "The claim that started this primer. pstack shrinks 10%, updates ship automatically in the Grok bot and Cursor. Now you know exactly what it would take to check it: the suite, the diffs, the gates, and the statistics." }
+  ];
+  (function(){
+    var card = $("tl-card"), dots = $("tl-dots"), prev = $("tl-prev"), next = $("tl-next");
+    var stepEl = $("tl-stepper");
+    var i = 0;
+    TL.forEach(function(){ var d = document.createElement("span"); d.className = "dot"; dots.appendChild(d); });
+    function render(){
+      card.innerHTML = "<div class='sdate'>" + TL[i].d + "</div><div class='sname'>" + TL[i].n + "</div><p class='swhat'>" + TL[i].w + "</p>";
+      var ds = dots.querySelectorAll(".dot");
+      ds.forEach(function(d, j){ d.classList.toggle("on", j === i); });
+      var count = dots.querySelector(".step-count");
+      if(!count){
+        count = document.createElement("span");
+        count.className = "step-count";
+        dots.insertBefore(count, dots.firstChild);
+      }
+      count.textContent = (i+1) + " / " + TL.length;
+      prev.style.display = i === 0 ? "none" : "flex";
+      next.style.display = i === TL.length - 1 ? "none" : "flex";
+    }
+    prev.addEventListener("click", function(){ if(i > 0){ i--; render(); } });
+    next.addEventListener("click", function(){ if(i < TL.length - 1){ i++; render(); } });
+    document.addEventListener("keydown", function(e){
+      if(e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      if(e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      var t = e.target, tag = t && t.tagName;
+      if(tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT" || (t && t.isContentEditable)) return;
+      if(t && t.closest && t.closest(".step-code")) return;
+      var r = stepEl.getBoundingClientRect();
+      if(r.bottom < 0 || r.top > window.innerHeight) return;
+      if(e.key === "ArrowLeft" && i > 0){ i--; render(); e.preventDefault(); }
+      else if(e.key === "ArrowRight" && i < TL.length - 1){ i++; render(); e.preventDefault(); }
+    });
+    render();
+  })();
+
+  /* ---------- section 4: voices ---------- */
+  var VOICES = [
+    { name: "Anthropic evals team", role: "Demystifying evals, Jan 2026", view: "Regression evals should sit near <strong>100% pass; a decline means something broke</strong>. Saturated capability evals graduate into the regression suite to catch drift. Graders come in three kinds: code (fast, cheap, reproducible), model (flexible, needs calibration), human (gold standard, expensive). <a href='https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents'>Demystifying evals for AI agents</a>." },
+    { name: "Louis Claxton", role: "Anthropic, SDLC playbook", view: "<strong>'Evals are the AI-native equivalent of stage-gate QA.'</strong> Collect 20 to 50 real tasks, run them in CI on every CLAUDE.md, skill, or hook change, and <strong>'a skill change that drops the pass rate gets reviewed before it merges.'</strong> <a href='https://claude.com/blog/the-ai-native-sdlc-playbook'>The AI-native SDLC playbook</a>, Aug 2026." },
+    { name: "OpenAI Developer Blog", role: "eval-skills recipe", view: "<strong>'You don't need a large benchmark to get value from evals.'</strong> 10 to 20 prompts per skill, should_trigger flags including negative controls, deterministic JSONL-trace graders first. 'Every manual fix during development is a candidate for a future eval.' <a href='https://developers.openai.com/blog/eval-skills'>Testing Agent Skills Systematically with Evals</a>." },
+    { name: "DeepMind evals team", role: "eval methodology pages", view: "<strong>Pin the harness, then compare.</strong> Terminal-Bench 2.1 reported only for the Terminus 2 default harness; SWE-Bench Pro averaged over 5 runs; all scores pass@1. The harness is part of the measurement, so it never moves under you. <a href='https://deepmind.google/models/evals-methodology/gemini-3-6-flash'>Gemini eval methodology</a>." },
+    { name: "Meta ARE team", role: "agent environments publication", view: "<strong>Grade state mutations, not claims.</strong> Tools typed read vs write enable precise verification of actions that change the world; Gaia2's 800 async scenarios test correctness under timing, noise, and ambiguity. <a href='https://ai.meta.com/research/publications/are-scaling-up-agent-environments-and-evaluations/'>ARE</a>." },
+    { name: "Evan Miller", role: "Anthropic Research", view: "Compare versions with <strong>question-level paired differences, not separate CIs</strong>. Report clustered standard errors. Run the power analysis first: a 3-point delta needs about 969 items, and pairing cuts variance by roughly a third. <a href='https://www.anthropic.com/research/statistical-approach-to-model-evals'>Adding Error Bars to Evals</a>, Nov 2024." },
+    { name: "Philipp Schmid", role: "Hugging Face", view: "Test early: <strong>10 to 20 prompts, 5 happy-path, 5 negative, plus production traces</strong>. Keep the harness intentionally simple, a JSON file plus a script. Most skill evals can be regex; the LLM judge appears only where the skill is complex. <strong>117 test cases</strong> lifted one skill to ~90% valid-code rate." }
+  ];
+  var vWrap = $("voices");
+  VOICES.forEach(function(v){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "fcard";
+    b.setAttribute("aria-expanded", "false");
+    b.innerHTML = "<span class='fname'>" + v.name + "</span> <span class='hint'>" + v.role + " &middot; tap to open</span>" +
+      "<span class='fbody'><p class='chg' style='margin:0'>" + v.view + "</p></span>";
+    b.addEventListener("click", function(){
+      var open = b.classList.toggle("open");
+      b.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    vWrap.appendChild(b);
+  });
+
+  /* ---------- section 4b: A/B toggle ---------- */
+  (function(){
+    var t = $("dispute");
+    if(!t) return;
+    t.addEventListener("click", function(){
+      var side = t.getAttribute("data-side") === "a" ? "b" : "a";
+      t.setAttribute("data-side", side);
+      t.setAttribute("aria-checked", side === "b" ? "true" : "false");
+      $("abt-a").classList.toggle("hidden", side !== "a");
+      $("abt-b").classList.toggle("hidden", side !== "b");
+    });
+  })();
+
+  /* ---------- section 6: flashcards ---------- */
+  var CARDS = [
+    { q: "What is the difference between a capability eval and a regression eval?",
+      a: "Capability evals start at a low pass rate and give the team a hill to climb. Regression evals ask 'does it still handle what it used to?' and should sit near 100% pass. Any decline means something broke. Anthropic, 'Demystifying evals for AI agents,' Jan 2026." },
+    { q: "Two prompt lines showed no regression in weeks of testing. What found the 3% drop?",
+      a: "Per-line ablation: removing each system-prompt line one at a time. The averages hid it; the paired diff found it. Anthropic reverted the lines on Apr 20, 2026 and committed to ablating every system-prompt change going forward." },
+    { q: "Your golden suite has 15 cases and all pass. Can you claim 'no loss in behavior'?",
+      a: "Not for small regressions. At 15 cases the minimum detectable drop is around 30 points (Miller's power analysis). The suite is a smoke alarm: it catches fires, not slow leaks. Drag the dial in section 2." },
+    { q: "Deterministic grader or LLM judge: which comes first, and why?",
+      a: "Deterministic first. Parse the trace and assert what actually happened: commands, files, order. Judges layer on only where deterministic checks cannot reach, and must be calibrated against human labels. OpenAI's eval-skills recipe; Anthropic's three grader types." }
+  ];
+  (function(){
+    var grid = $("fgrid"), scoreEl = $("fc-score");
+    var known = 0, scored = {};
+    function setScore(){
+      scoreEl.textContent = known + "/" + CARDS.length;
+    }
+    CARDS.forEach(function(c, idx){
+      var el = document.createElement("div");
+      el.className = "flash";
+      el.innerHTML = "<div class='inner'>" +
+        "<div class='face front'><div class='q'>" + c.q + "</div><div class='tap'>tap to flip</div></div>" +
+        "<div class='face back'><div class='a'>" + c.a + "</div>" +
+        "<div class='score-row'><button type='button' class='knew'>Knew it</button><button type='button' class='learning'>Still learning</button></div></div></div>";
+      el.addEventListener("click", function(){
+        el.classList.toggle("flipped");
+      });
+      var knew = el.querySelector(".knew"), learning = el.querySelector(".learning");
+      function mark(k){
+        if(scored[idx] === k) return;
+        if(scored[idx] === true) known--;
+        scored[idx] = k;
+        if(k === true) known++;
+        el.classList.add("done");
+        setScore();
+      }
+      knew.addEventListener("click", function(e){ e.stopPropagation(); mark(true); });
+      learning.addEventListener("click", function(e){ e.stopPropagation(); mark(false); });
+      grid.appendChild(el);
+    });
+    setScore();
+  })();
+})();
+</script>
+</body>
+</html>

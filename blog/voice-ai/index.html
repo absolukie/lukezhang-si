@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Voice AI Hears You: luke's blog</title>
+<meta name="description" content="Your voice is a pressure wave. Whisper turns it into tokens, an LLM answers, and a vocoder speaks back. The full voice AI loop, from waveform to words and back, with the papers that built it and the argument over where it breaks. Researched October 2026.">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    min-height: 100%;
+    background: #f6f1e3;
+    color: #2b2b2b;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.7;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 56px 22px 80px; }
+  nav.top { margin-bottom: 40px; font-size: 14px; }
+  nav.top a { color: rgba(43,43,43,0.55); text-decoration: none; }
+  nav.top a:hover { color: #b3352b; }
+  h1 { font-size: 32px; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 8px; }
+  .meta { color: rgba(43,43,43,0.5); font-size: 14px; margin-bottom: 24px; }
+  .meta .tag { display: inline-block; border: 1px solid rgba(43,43,43,0.25); border-radius: 999px;
+    padding: 2px 10px; font-size: 12.5px; margin-right: 6px; color: rgba(43,43,43,0.65); }
+  .meta .researched { display: inline-block; margin-left: 6px; font-size: 12.5px;
+    color: #b3352b; font-weight: 700; }
+  .verdict { font-size: 17px; color: #2b2b2b; border-left: 3px solid #b3352b;
+    padding: 4px 0 4px 18px; margin: 0 0 28px; line-height: 1.65; }
+  p { margin-bottom: 16px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  p strong, li strong { color: #2b2b2b; }
+  h2 { font-size: 23px; color: #2b2b2b; margin: 44px 0 10px; letter-spacing: -0.01em; }
+  h2 .n { color: #b3352b; }
+  ul { margin: 0 0 16px 20px; font-size: 16px; color: rgba(43,43,43,0.88); }
+  li { margin-bottom: 8px; }
+  a { color: #b3352b; }
+  footer { margin-top: 60px; font-size: 13px; color: rgba(43,43,43,0.35); }
+  footer a { color: rgba(43,43,43,0.6); }
+  .kicker-close { font-size: 19px; font-weight: 700; color: #2b2b2b;
+    border-top: 1px solid rgba(43,43,43,0.15); padding-top: 28px; margin-top: 48px; }
+
+  /* visualizer cards */
+  .viz { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 16px; padding: 20px; margin: 24px 0; }
+  .viz h3 { font-size: 17px; margin-bottom: 4px; color: #2b2b2b; }
+  .viz .sub { font-size: 14px; color: rgba(43,43,43,0.62); margin-bottom: 12px; line-height: 1.55; }
+  .cap { font-size: 13.5px; color: rgba(43,43,43,0.6); margin-top: 10px; line-height: 1.55; }
+
+  /* tappable mechanism cards */
+  .mech { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin: 16px 0; }
+  .fcard { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 18px; touch-action: manipulation; cursor: pointer; font-family: inherit;
+    text-align: left; width: 100%; max-width: 100%; min-width: 0; overflow: hidden; color: #2b2b2b;
+    font-size: 16px; }
+  .fcard:active { transform: scale(0.99); }
+  .fcard .fname { font-size: 17px; font-weight: 800; }
+  .fcard .fnum { display: inline-block; font-size: 12.5px; font-weight: 700; margin: 6px 8px 2px 0;
+    padding: 3px 10px; border-radius: 999px; background: rgba(179,53,43,0.1); color: #b3352b; }
+  .fcard .fbody { display: none; margin-top: 8px; font-size: 15.5px; line-height: 1.65;
+    color: rgba(43,43,43,0.88); }
+  .fcard.open .fbody { display: block; }
+  .fcard .hint { font-size: 13px; color: rgba(43,43,43,0.5); }
+  .fcard .fbody .ex { background: rgba(179,53,43,0.06); border-left: 3px solid #b3352b;
+    padding: 8px 12px; margin: 10px 0; font-size: 14.5px; }
+  .fcard .fbody .chg { font-size: 14.5px; color: rgba(43,43,43,0.75); }
+  .fcard .fbody .chg b { color: #2b2b2b; }
+
+  /* signal pipeline stepper: edge-straddling circle arrows */
+  .stepper { position: relative; margin: 20px 0; }
+  .step-card { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 16px;
+    padding: 24px 28px 18px; margin: 0 32px; }
+  .step-card .skick { font-size: 12.5px; font-weight: 800; letter-spacing: 0.1em;
+    text-transform: uppercase; color: #b3352b; margin-bottom: 6px; }
+  .step-card .sname { font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+  .step-card .swhat { font-size: 15.5px; color: rgba(43,43,43,0.88); line-height: 1.6; margin-bottom: 0; }
+  .step-card .swhat b { color: #2b2b2b; }
+  canvas.pipe { width: 100%; height: auto; display: block; margin: 12px 0 10px;
+    background: rgba(43,43,43,0.03); border: 1px solid rgba(43,43,43,0.1); border-radius: 10px; }
+  .car-arrow { position: absolute; top: 34px; width: 46px; height: 46px; border-radius: 50%;
+    background: rgba(43,43,43,0.85); border: 1px solid rgba(43,43,43,0.9); color: #f6f1e3;
+    cursor: pointer; touch-action: manipulation; display: flex; align-items: center;
+    justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.25); z-index: 2; }
+  .car-arrow:active { transform: scale(0.94); }
+  .car-arrow svg { width: 22px; height: 22px; }
+  .car-arrow.prev { left: 9px; }
+  .car-arrow.next { right: 9px; }
+  .step-dots { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; }
+  .step-count { font-size: 14px; font-weight: 700; color: rgba(43,43,43,0.55);
+    font-variant-numeric: tabular-nums; margin-right: 4px; }
+  .step-dots .dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(43,43,43,0.2); }
+  .step-dots .dot.on { background: #b3352b; }
+
+  /* horizontal snap timeline */
+  .tl-scroll { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch; margin: 16px -22px 0; padding: 4px 22px 14px; }
+  .tl-card { flex: 0 0 82%; scroll-snap-align: center; background: #fffdf6;
+    border: 1px solid rgba(43,43,43,0.14); border-radius: 16px; padding: 20px; }
+  .tl-card .sdate { font-size: 13px; font-weight: 800; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #b3352b; margin-bottom: 6px; }
+  .tl-card .sname { font-size: 19px; font-weight: 800; margin-bottom: 8px; }
+  .tl-card .swhat { font-size: 15px; color: rgba(43,43,43,0.88); line-height: 1.6; margin-bottom: 0; }
+  .tl-card .swhat b { color: #2b2b2b; }
+  .tl-hint { font-size: 13px; color: rgba(43,43,43,0.5); margin-top: 2px; }
+
+  /* A/B toggle */
+  .abt { display: block; width: 100%; max-width: 420px; margin: 18px auto 0; padding: 6px;
+    border-radius: 999px; background: rgba(43,43,43,0.08); border: 1px solid rgba(43,43,43,0.15);
+    cursor: pointer; touch-action: manipulation; font-family: inherit; position: relative; }
+  .abt .thumb { position: absolute; top: 5px; bottom: 5px; left: 5px; width: calc(50% - 5px);
+    border-radius: 999px; background: #2b2b2b;
+    transition: left 280ms cubic-bezier(.5,0,.2,1.15); }
+  .abt[data-side="b"] .thumb { left: 50%; }
+  .abt .labs { position: relative; display: flex; z-index: 1; }
+  .abt .labs span { flex: 1; text-align: center; font-size: 15px; font-weight: 700; padding: 12px 0;
+    color: rgba(43,43,43,0.5); }
+  .abt[data-side="a"] .labs .la { color: #f6f1e3; }
+  .abt[data-side="b"] .labs .lb { color: #f6f1e3; }
+  .abt-stage { position: relative; margin-top: 14px; }
+  .abt-layer { transition: opacity 450ms ease; }
+  .abt-layer.hidden { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+  .voice { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 18px; }
+  .voice .vname { font-size: 17px; font-weight: 800; }
+  .voice .vrole { font-size: 13px; color: rgba(43,43,43,0.55); margin-bottom: 8px; }
+  .voice .vview { font-size: 15.5px; line-height: 1.65; color: rgba(43,43,43,0.88); }
+  .voice .vview a { font-size: 13.5px; }
+
+  /* confidence markers */
+  .conf { display: inline-block; font-size: 11.5px; font-weight: 800; letter-spacing: 0.06em;
+    text-transform: uppercase; padding: 2px 9px; border-radius: 999px; margin-left: 8px;
+    vertical-align: 2px; white-space: nowrap; }
+  .conf.consensus { background: rgba(46,125,50,0.12); color: #2e7d32; }
+  .conf.contested { background: rgba(179,53,43,0.1); color: #b3352b; }
+  .conf.speculative { background: rgba(43,43,43,0.08); color: rgba(43,43,43,0.65); }
+  .pred { background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 16px 18px; margin: 12px 0; }
+  .pred .pwho { font-size: 15px; font-weight: 800; }
+  .pred .pwhat { font-size: 15px; color: rgba(43,43,43,0.88); margin-top: 4px; line-height: 1.6; }
+  .pred .psaid { font-size: 13px; color: rgba(43,43,43,0.55); margin-top: 6px; }
+
+  /* flashcards */
+  .fgrid { display: grid; gap: 12px; margin: 16px 0; }
+  .flash { perspective: 900px; touch-action: manipulation; cursor: pointer; }
+  .flash .inner { position: relative; min-height: 150px; transform-style: preserve-3d;
+    transition: transform 0.45s cubic-bezier(.2,.7,.2,1); display: grid; }
+  .flash.flipped .inner { transform: rotateY(180deg); }
+  .flash .face { backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    background: #fffdf6; border: 1px solid rgba(43,43,43,0.14); border-radius: 14px;
+    padding: 20px; grid-area: 1 / 1; display: flex; flex-direction: column;
+    justify-content: center; min-width: 0; }
+  .flash .back { transform: rotateY(180deg); border-color: rgba(179,53,43,0.4); }
+  .flash .q { font-size: 16px; font-weight: 700; }
+  .flash .a { font-size: 15.5px; line-height: 1.6; color: rgba(43,43,43,0.88); }
+  .flash .tap { font-size: 12.5px; color: rgba(43,43,43,0.45); margin-top: 6px; }
+  .flash .score-row { display: flex; gap: 8px; margin-top: 10px; }
+  .flash .score-row button { touch-action: manipulation; flex: 1; border-radius: 10px;
+    padding: 10px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .flash .knew { border: 2px solid #2e7d32; background: rgba(46,125,50,0.08); color: #2e7d32; }
+  .flash .learning { border: 2px solid rgba(43,43,43,0.25); background: transparent; color: #2b2b2b; }
+  .flash.done .front { border-color: rgba(46,125,50,0.5); }
+  .scorebar { display: flex; align-items: center; gap: 10px; margin: 6px 0 2px; }
+  .scorebar .n { font-size: 22px; font-weight: 800; color: #b3352b; font-variant-numeric: tabular-nums; }
+
+  /* keep-exploring link cards */
+  .xlinks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0 8px; }
+  @media (max-width: 520px) { .xlinks { grid-template-columns: 1fr; } }
+  .xlink { display: block; background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 14px; padding: 16px; text-decoration: none; color: #2b2b2b;
+    touch-action: manipulation; }
+  .xlink:active { transform: scale(0.98); }
+  .xlink b { display: block; font-size: 15px; margin-bottom: 4px; color: #b3352b; }
+  .xlink span { font-size: 13.5px; color: rgba(43,43,43,0.62); line-height: 1.5; }
+  .xicon { width: 14px; height: 14px; vertical-align: -2px; margin-left: 7px; flex: none; }
+
+  /* source link-out cards */
+  .vsc-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+  .vsc-list a { display: block; background: #fffdf6; border: 1px solid rgba(43,43,43,0.14);
+    border-radius: 14px; padding: 16px; color: #2b2b2b; text-decoration: none;
+    touch-action: manipulation; }
+  .vsc-list a:active { transform: scale(0.99); }
+  .vsc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .vsc-kind { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase; color: #b3352b; }
+  .vsc-kind svg { width: 15px; height: 15px; }
+  .vsc-head > svg { flex: none; width: 15px; height: 15px; color: rgba(43,43,43,0.4); }
+  .vsc-title { display: block; font-size: 16px; font-weight: 600; line-height: 1.35; }
+  .vsc-meta { display: block; margin-top: 8px; font-size: 13px; color: rgba(43,43,43,0.55); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flash .inner { transition: none; }
+    .abt .thumb, .abt-layer { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="top"><a href="/blog/">&larr; blog</a></nav>
+  <h1>How Voice AI Hears You</h1>
+  <div class="meta"><span class="tag">ai</span><span class="tag">engineering</span><span class="researched">Researched October 2026</span></div>
+  <p class="verdict">Every voice assistant runs the same relay: an ear turns sound into text, a brain turns text into an answer, and a mouth turns the answer back into sound. The ear is the hard part, because sound arrives as a messy pressure wave and meaning hides inside it. This primer walks the whole loop, from waveform to words and back, with the papers that built it and the researchers arguing about where it breaks.</p>
+
+  <h2><span class="n">1.</span> The brief</h2>
+  <p>Talk to any voice assistant and you are running a three-stage relay. First, speech recognition turns your voice into text. Whisper, the open model that reset the field in 2022, does it by chopping audio into 30-second chunks, converting each chunk into a picture of its frequencies, and having a Transformer write out the words one token at a time. Second, a language model reads the transcript and thinks, in pure text. Third, a speech synthesizer turns the reply back into a pressure wave your ears accept as a voice. The relay works surprisingly well now: Whisper makes about half the errors of the previous generation on messy real-world audio, and newer systems like Moshi skip the relay entirely, listening and talking at the same time with about 200 milliseconds of delay. But the ear still invents words when it hears silence, and the whole loop still strains on accents, noise, and interruptions. The sentence to remember: <strong>voice AI is translation twice over, sound into words and words back into sound, and every failure is a translation failure.</strong></p>
+
+  <h2><span class="n">2.</span> How it works</h2>
+  <p>Six stops on the assembly line, from your mouth to the machine's and back. Step through the pipeline one tap at a time. Each canvas shows what the data actually looks like at that stage.</p>
+  <div class="stepper" id="pipe-stepper">
+    <button class="car-arrow prev" id="pipe-prev" aria-label="Previous pipeline stage">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <div class="step-card" id="pipe-card"></div>
+    <button class="car-arrow next" id="pipe-next" aria-label="Next pipeline stage">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+    </button>
+    <div class="step-dots" id="pipe-dots"></div>
+  </div>
+
+  <p>Three questions the pipeline raises, answered. Tap each card.</p>
+  <div class="mech" id="why"></div>
+
+  <h2><span class="n">3.</span> The landmarks</h2>
+  <p>Seven moments that built the voice loop, 2016 to 2026. Swipe sideways through them.</p>
+  <div class="tl-scroll" id="tl-scroll" aria-label="Timeline of voice AI landmarks"></div>
+  <p class="tl-hint">Swipe or scroll sideways. No autoplay, your thumb sets the pace.</p>
+
+  <h2><span class="n">4.</span> Key voices</h2>
+  <p>Four people who built the loop or are stress-testing it. Each view is one or two sentences with the primary source linked. The real action is at the bottom, where the first two collide.</p>
+  <div class="mech" id="voices"></div>
+
+  <div class="viz">
+    <h3>The big disagreement</h3>
+    <p class="sub">Same decoder, opposite verdicts. One switch, every tap flips. No picking sides, just the collision.</p>
+    <button class="abt" id="dispute" data-side="a" role="switch" aria-checked="false" aria-label="Flip between Radford and Koenecke">
+      <span class="thumb"></span>
+      <span class="labs"><span class="la">Radford: engine</span><span class="lb">Koenecke: failure mode</span></span>
+    </button>
+    <div class="abt-stage">
+      <div class="abt-layer" id="abt-a">
+        <div class="voice" style="margin-top:14px">
+          <div class="vname">Alec Radford <span style="font-weight:400;font-size:13px;color:rgba(43,43,43,0.55)">OpenAI, Whisper team</span></div>
+          <div class="vrole">the prior is the engine</div>
+          <p class="vview">Whisper's decoder is half language model, and that is the point. Trained on 680,000 hours of messy web audio, the model's sense of what words come next cleans up bad acoustics: accents, noise, mumbling. Zero-shot, it makes 50% fewer errors than models fine-tuned on clean benchmarks. Robustness comes from breadth, not from cleaner labels.</p>
+        </div>
+      </div>
+      <div class="abt-layer hidden" id="abt-b">
+        <div class="voice" style="margin-top:14px">
+          <div class="vname">Allison Koenecke <span style="font-weight:400;font-size:13px;color:rgba(43,43,43,0.55)">Cornell</span></div>
+          <div class="vrole">the prior is the failure mode</div>
+          <p class="vview">The same language sense that fixes acoustics invents words when the acoustics go quiet. About 1% of Whisper segments contain hallucinated phrases, 38% of those with explicit harms, and the burden falls hardest on people with aphasia, whose pauses trigger it. A model that writes what it expects to hear is a liability in hospitals and courtrooms. Audit first, deploy second.</p>
+        </div>
+      </div>
+    </div>
+    <p class="cap">Both cite the same architecture. Radford reads the decoder as a denoiser; Koenecke reads it as a confabulator. The field's open question is whether you can keep the cleanup without the invention.</p>
+  </div>
+
+  <h2><span class="n">5.</span> What comes next</h2>
+  <p>Every prediction below is attributed: who said it, where, when. The badge is my read of how solid it is: <strong>consensus</strong> means multiple independent sources agree, <strong>contested</strong> means smart people disagree, <strong>speculative</strong> means one analysis's leap. Predictions go stale; this section is frozen as of October 2026.</p>
+  <div id="preds">
+    <div class="pred">
+      <div class="pwho">Full-duplex becomes the default voice interface<span class="conf consensus">consensus</span></div>
+      <div class="pwhat">Half-duplex turn-taking (speak, wait, listen) gives way to always-listening systems that handle overlap and interruption: Moshi at about 200ms of practical latency (Kyutai, Sep 2024), sub-300ms native systems shipping in 2026, and open-weights turn-taking at about 450ms (NVIDIA VoiceChat-11B, Sep 2026).</div>
+      <div class="psaid">Direction stated in "Revolutionizing Voice AI: Enter the Era of Real-Time, Full-Duplex Conversations," Brief, May 6, 2026: "The half-duplex era of voice AI is ending, and the next generation will rely on native, real-time, full-duplex conversation."</div>
+    </div>
+    <div class="pred">
+      <div class="pwho">"GPT-Live-1 kills the cascaded pipeline"<span class="conf contested">contested</span></div>
+      <div class="pwhat">Native speech-to-speech reaching developer APIs ends the STT to LLM to TTS relay, per TechTimes (Sep 12, 2026). The counter: cascaded platforms (ElevenLabs, Vapi, Retell) keep the architecture because every stage is swappable and inspectable, at the cost of irreducible handoff latency and fragility under real-world noise and hesitation. Architecture is now the argument, not accuracy.</div>
+      <div class="psaid">Claim and counter both reported in TechTimes, "Full-Duplex Voice AI Hits Developer APIs," Sep 12, 2026.</div>
+    </div>
+    <div class="pred">
+      <div class="pwho">Voice assistants start hearing how you said it<span class="conf speculative">speculative</span></div>
+      <div class="pwhat">End-to-end models keep what transcription throws away: prosody, emotion, speaker identity, background sounds. The leap is responses tuned to tone, not just words. The blocker is measurement: benchmarks still score transcription accuracy, while "conversational feel" has no standard test yet.</div>
+      <div class="psaid">Motivation stated in the Moshi paper (Défossez et al., Kyutai, Sep 2024): text as the intermediate modality loses "non-linguistic information that modifies meaning, such as emotion or non-speech sounds." Benchmark gap noted in the Brief full-duplex analysis, May 2026.</div>
+    </div>
+    <div class="pred">
+      <div class="pwho">Impersonation becomes the binding constraint<span class="conf speculative">speculative</span></div>
+      <div class="pwhat">Fluent, emotionally faithful voice synthesis makes speaker identity unverifiable by ear. Expect voice-based authentication to erode before voice interfaces peak, and expect the first serious regulation to target voice cloning rather than transcription.</div>
+      <div class="psaid">Concern flagged in the Brief full-duplex analysis, May 2026 ("safety concerns around impersonation and manipulation in fluent, emotionally driven voice systems"); Whisper's own model card warned about surveillance dual-use in 2022.</div>
+    </div>
+  </div>
+
+  <h2><span class="n">6.</span> Check yourself</h2>
+  <p>Four cards. Tap to flip, then be honest: knew it, or still learning. The score is yours alone.</p>
+  <div class="scorebar"><span class="n" id="fc-score">0/4</span><span style="font-size:14px;color:rgba(43,43,43,0.6)">known</span></div>
+  <div class="fgrid" id="fgrid"></div>
+
+  <h2>Keep exploring</h2>
+  <div class="xlinks">
+    <a class="xlink" href="/blog/ai-calls-to-china/"><b>How My AI Calls Restaurants in China<svg class="xicon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4L10.5 13.5"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg></b><span>The voice loop in the wild: AI voice agents booking tables in Mandarin, with full transcripts and redacted call audio.</span></a>
+    <a class="xlink" href="/blog/llm-progress/"><b>How AI Keeps Getting Smarter<svg class="xicon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4L10.5 13.5"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg></b><span>The brain in the middle of the loop: six engines pushing models forward, and where eight leading voices think this lands by 2029.</span></a>
+    <a class="xlink" href="/blog/agent-regression-evals/"><b>How Frontier Labs Change Agents Without Breaking Them<svg class="xicon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4L10.5 13.5"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg></b><span>How you prove a voice agent update changed nothing: golden suites, paired diffs, and the statistics of proving nothing broke.</span></a>
+    <a class="xlink" href="/blog/my-ai-has-its-own-computer/"><b>My AI Has Its Own Computer<svg class="xicon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4L10.5 13.5"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg></b><span>The pocket test: a two-lane race between an AI with its own computer and a terminal agent, across three real scenarios.</span></a>
+  </div>
+
+  <h2>Sources</h2>
+  <p>Every factual claim in sections 2 through 5 traces to one of these. Figures are author-reported unless noted.</p>
+  <ul class="vsc-list">
+    <li><a href="https://arxiv.org/abs/2212.04356"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>arXiv paper</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Robust Speech Recognition via Large-Scale Weak Supervision</span><span class="vsc-meta">Radford, Kim, Xu, Brockman, McLeavey, Sutskever &middot; arXiv:2212.04356 &middot; Dec 6, 2022</span></a></li>
+    <li><a href="https://openai.com/index/whisper/"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Announcement</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Introducing Whisper</span><span class="vsc-meta">OpenAI &middot; Sep 2022</span></a></li>
+    <li><a href="https://arxiv.org/abs/2402.08021"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>arXiv paper</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Careless Whisper: Speech-to-Text Hallucination Harms</span><span class="vsc-meta">Koenecke, Choi, Mei, Schellmann, Sloane &middot; arXiv:2402.08021 &middot; presented at FAccT '24, Rio de Janeiro, Jun 2024</span></a></li>
+    <li><a href="https://arxiv.org/abs/2410.00037"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>arXiv paper</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Moshi: a speech-text foundation model for real-time dialogue</span><span class="vsc-meta">D&eacute;fossez, Mazar&eacute;, Orsini, Royer, P&eacute;rez, J&eacute;gou, Grave, Zeghidour, Kyutai &middot; arXiv:2410.00037 &middot; Sep 2024</span></a></li>
+    <li><a href="https://arxiv.org/abs/1609.03499"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>arXiv paper</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">WaveNet: A Generative Model for Raw Audio</span><span class="vsc-meta">van den Oord et al. &middot; arXiv:1609.03499 &middot; Sep 12, 2016</span></a></li>
+    <li><a href="https://arxiv.org/abs/1712.05884"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>arXiv paper</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Natural TTS Synthesis by Conditioning WaveNet on Mel Spectrogram Predictions</span><span class="vsc-meta">Shen et al. &middot; arXiv:1712.05884 &middot; Dec 2017 &middot; ICASSP 2018</span></a></li>
+    <li><a href="https://arxiv.org/abs/2502.09401"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>arXiv paper</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">A Preliminary Exploration with GPT-4o Voice Mode</span><span class="vsc-meta">arXiv:2502.09401 &middot; Feb 14, 2025</span></a></li>
+    <li><a href="https://github.com/openai/whisper"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Code</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">openai/whisper</span><span class="vsc-meta">OpenAI &middot; GitHub &middot; models and inference code</span></a></li>
+    <li><a href="https://www.deeplearning.ai/the-batch/moshi-an-open-alternative-to-openais-realtime-api-for-speech/"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Essay</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Moshi, An Open Alternative to OpenAI's Realtime API for Speech</span><span class="vsc-meta">DeepLearning.AI, The Batch &middot; on Kyutai's Moshi</span></a></li>
+    <li><a href="https://dev.brief.news/ai/2026/05/06/real-time-full-duplex-voice-ai?briefFormat=TopStories&categories=US&categories=Science&categories=Tech&categories=AI&categories=Esports&source=%2Ftech&utm_source=category-page&utm_medium=web"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Analysis</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Revolutionizing Voice AI: Enter the Era of Real-Time, Full-Duplex Conversations</span><span class="vsc-meta">Brief &middot; May 6, 2026</span></a></li>
+    <li><a href="https://www.techtimes.com/articles/327310/20260912/full-duplex-voice-ai-hits-developer-apis-gpt-live-1-kills-cascaded-pipeline.htm"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>News</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Full-Duplex Voice AI Hits Developer APIs: GPT-Live-1 Kills Cascaded Pipeline</span><span class="vsc-meta">TechTimes &middot; Sep 12, 2026</span></a></li>
+    <li><a href="https://techxplore.com/news/2024-06-ai-speech-text-hallucinate-violent.html"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>News</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">AI speech-to-text can hallucinate violent language</span><span class="vsc-meta">TechXplore &middot; on Koenecke et al., Careless Whisper &middot; Jun 2024</span></a></li>
+    <li><a href="https://fastercapital.com/content/Pipeline-speech-recognition--How-to-process-and-understand-speech-and-audio-data-using-your-pipeline.html"><span class="vsc-head"><span class="vsc-kind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Explainer</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg></span><span class="vsc-title">Pipeline speech recognition: how to process and understand speech and audio data</span><span class="vsc-meta">FasterCapital &middot; acoustic vs language modeling walkthrough</span></a></li>
+  </ul>
+
+  <p class="kicker-close">Sound in, meaning out, sound again. The loop keeps getting tighter, and the pause between you and the machine keeps shrinking.</p>
+  <footer>Words, diagrams, and toy models are mine. Built to learn in public.</footer>
+</div>
+<script>
+(function(){
+  "use strict";
+  function $(id){ return document.getElementById(id); }
+  var INK = "#2b2b2b", ACC = "#b3352b", PAPER = "#fffdf6";
+
+  /* ---------- section 2: the three why-cards ---------- */
+  var WHY = [
+    { name: "Why a spectrogram, not the raw wave",
+      stat: "ears beat oscilloscopes",
+      body: "<p>The raw waveform packs everything into one wiggly line: pitch, loudness, and noise all superimposed. A spectrogram spreads the same information across two dimensions, frequency and time, so a vowel and a consonant stop looking identical. Neural nets, like ears, find patterns faster in the spread-out version.</p>" +
+      "<div class='ex'><strong>Example:</strong> say 'eee' then 'sss' into a spectrogram app: 'eee' glows in tight low bands, 'sss' sprays across the top. On the raw waveform they are both just scribbles.</div>" +
+      "<p class='chg'><b>What changed:</b> the log-mel spectrogram became the default front end for modern speech models. Whisper's announcement describes the whole input pipeline in one line: 30-second chunks in, log-mel spectrogram, encoder. Nothing fancier survived contact with 680,000 hours of data.</p>" },
+    { name: "Why 30-second chunks",
+      stat: "fixed windows, stitched audio",
+      body: "<p>Whisper trains on fixed 30-second windows, so in production long audio gets transcribed window by window. A decoding strategy stitches the windows together reliably: beam search keeps several candidate transcripts alive at once, and temperature scheduling retries shaky windows with more randomness until they settle.</p>" +
+      "<div class='ex'><strong>Example:</strong> a ten-minute voice memo becomes twenty 30-second windows, each transcribed on its own, then joined. The seams are where words get cut in half, which is why long-form audio needed its own decoding tricks.</div>" +
+      "<p class='chg'><b>What changed:</b> waiting for a full 30 seconds is a non-starter for live conversation, so streaming variants transcribe incrementally, and full-duplex models like Moshi generate speech token by token at about 200 milliseconds of delay instead.</p>" },
+    { name: "Where errors creep in",
+      stat: "accents, homophones, silence",
+      body: "<p>Three failure modes, in order of how much they matter. <strong>Accents and noise</strong> move the acoustics away from what the model trained on; Whisper's whole pitch is that 680,000 hours of internet audio shrinks this gap, cutting errors roughly in half on messy datasets. <strong>Homophones</strong> are where the decoder's language sense earns its keep: given similar sounds, it favors the word sequence that makes sense, like 'I scream for ice cream' over 'eye screen for eyes cream', because the words around it vote. <strong>Silence</strong> is where the same language sense turns on you: with nothing to transcribe, the decoder invents words, and about 1% of Whisper segments contain whole hallucinated phrases.</p>" +
+      "<div class='ex'><strong>Example:</strong> in the Careless Whisper audit, the model transcribed one sentence correctly, then hallucinated five more containing 'terror,' 'knife,' and 'killed.' None of it was in the audio. Long pauses between words were the trigger.</div>" +
+      "<p class='chg'><b>What changed:</b> trimming silences out of the audio before transcription cuts hallucinations, and the hallucination rate has fallen in newer versions. The audit's authors still want outside testing on diverse speakers before these models sit in hospitals and courtrooms.</p>" }
+  ];
+  var whyWrap = $("why");
+  WHY.forEach(function(m, i){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "fcard";
+    b.setAttribute("aria-expanded", "false");
+    b.innerHTML = "<span class='fname'>" + (i+1) + ". " + m.name + "</span><br>" +
+      "<span class='fnum'>" + m.stat + "</span> <span class='hint'>tap to open</span>" +
+      "<span class='fbody'>" + m.body + "</span>";
+    b.addEventListener("click", function(){
+      var open = b.classList.toggle("open");
+      b.setAttribute("aria-expanded", open ? "true" : "false");
+      b.querySelector(".hint").textContent = open ? "tap to close" : "tap to open";
+    });
+    whyWrap.appendChild(b);
+  });
+
+  /* ---------- section 2: signal pipeline stepper ---------- */
+  function fitCanvas(cv, h){
+    var dpr = window.devicePixelRatio || 1;
+    var W = cv.clientWidth || 300;
+    cv.width = Math.round(W * dpr);
+    cv.height = Math.round(h * dpr);
+    cv.style.height = h + "px";
+    var ctx = cv.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx: ctx, W: W, H: h };
+  }
+  function waveY(x, W, mid, amp, noisy){
+    var v = Math.sin(x * 0.09) * 0.55 + Math.sin(x * 0.23 + 1.3) * 0.3 + Math.sin(x * 0.51 + 4.1) * 0.15;
+    if(noisy) v += (Math.sin(x * 2.7) * 0.5 + Math.sin(x * 5.9 + 2.0) * 0.5) * 0.12;
+    return mid - v * amp;
+  }
+  function drawWave(cv){
+    var f = fitCanvas(cv, 150), ctx = f.ctx, W = f.W, H = f.H, mid = H / 2;
+    ctx.strokeStyle = "rgba(43,43,43,0.25)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(W, mid); ctx.stroke();
+    ctx.strokeStyle = ACC; ctx.lineWidth = 2; ctx.beginPath();
+    for(var x = 0; x <= W; x += 2){ var y = waveY(x, W, mid, H * 0.38, true); if(x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+    ctx.stroke();
+    ctx.fillStyle = "rgba(43,43,43,0.55)"; ctx.font = "12px -apple-system, sans-serif";
+    ctx.fillText("air pressure", 10, 18); ctx.fillText("time", W - 44, H - 10);
+  }
+  function drawFrames(cv){
+    var f = fitCanvas(cv, 150), ctx = f.ctx, W = f.W, H = f.H, mid = H / 2;
+    ctx.strokeStyle = "rgba(43,43,43,0.5)"; ctx.lineWidth = 1.5; ctx.beginPath();
+    for(var x = 0; x <= W; x += 2){ var y = waveY(x, W, mid, H * 0.38, true); if(x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+    ctx.stroke();
+    var step = Math.max(26, Math.round(W / 11));
+    ctx.strokeStyle = "rgba(179,53,43,0.4)"; ctx.lineWidth = 1;
+    for(var sx = step; sx < W; sx += step){ ctx.beginPath(); ctx.moveTo(sx, 8); ctx.lineTo(sx, H - 8); ctx.stroke(); }
+    var hx = step * 4;
+    ctx.fillStyle = "rgba(179,53,43,0.12)"; ctx.fillRect(hx, 8, step, H - 16);
+    ctx.strokeStyle = ACC; ctx.lineWidth = 1.5; ctx.strokeRect(hx, 8, step, H - 16);
+    ctx.fillStyle = ACC; ctx.font = "700 12px -apple-system, sans-serif";
+    ctx.fillText("one frame", hx - 8, H - 12);
+  }
+  function drawSpectro(cv){
+    var f = fitCanvas(cv, 150), ctx = f.ctx, W = f.W, H = f.H;
+    var cols = Math.floor(W / 4), rows = 22, cw = W / cols, ch = (H - 26) / rows;
+    for(var cx = 0; cx < cols; cx++){
+      for(var ry = 0; ry < rows; ry++){
+        var band = Math.exp(-Math.pow((ry - (6 + 3 * Math.sin(cx * 0.12))) / 3.2, 2));
+        var band2 = Math.exp(-Math.pow((ry - (14 + 2.5 * Math.cos(cx * 0.07 + 1))) / 2.4, 2));
+        var v = Math.min(1, band * 0.9 + band2 * 0.55 + 0.08 * Math.abs(Math.sin(cx * 0.9 + ry * 1.7)));
+        ctx.fillStyle = "rgba(179,53,43," + v.toFixed(2) + ")";
+        ctx.fillRect(cx * cw, 12 + ry * ch, cw + 0.5, ch + 0.5);
+      }
+    }
+    ctx.fillStyle = "rgba(43,43,43,0.55)"; ctx.font = "12px -apple-system, sans-serif";
+    ctx.fillText("frequency", 10, H - 8);
+  }
+  function chipRow(ctx, words, x0, y0, maxW){
+    ctx.font = "600 13px -apple-system, sans-serif";
+    var x = x0, y = y0;
+    words.forEach(function(w){
+      var tw = ctx.measureText(w).width + 20;
+      if(x + tw > maxW - 8){ x = x0; y += 34; }
+      ctx.fillStyle = "rgba(179,53,43,0.1)";
+      ctx.strokeStyle = "rgba(179,53,43,0.5)"; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      if(ctx.roundRect) ctx.roundRect(x, y, tw, 26, 8); else ctx.rect(x, y, tw, 26);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = INK; ctx.fillText(w, x + 10, y + 17);
+      x += tw + 8;
+    });
+    return y + 26;
+  }
+  function drawTokens(cv){
+    var f = fitCanvas(cv, 150), ctx = f.ctx, W = f.W, H = f.H;
+    ctx.fillStyle = "rgba(43,43,43,0.55)"; ctx.font = "12px -apple-system, sans-serif";
+    ctx.fillText("decoder writes, one token at a time", 10, 20);
+    chipRow(ctx, ["what", "did", "you", "say", "▸"], 10, 40, W);
+    ctx.fillStyle = "rgba(43,43,43,0.55)"; ctx.font = "11px -apple-system, sans-serif";
+    ctx.fillText("task tokens steer it:", 10, H - 28);
+    ctx.fillText("transcribe · translate · language id", 10, H - 12);
+  }
+  function drawReply(cv){
+    var f = fitCanvas(cv, 150), ctx = f.ctx, W = f.W, H = f.H;
+    ctx.fillStyle = "rgba(43,43,43,0.55)"; ctx.font = "12px -apple-system, sans-serif";
+    ctx.fillText("the LLM thinks in pure text", 10, 20);
+    chipRow(ctx, ["the", "cat", "sat", "▸"], 10, 40, W);
+    ctx.fillStyle = "rgba(43,43,43,0.55)"; ctx.font = "11px -apple-system, sans-serif";
+    ctx.fillText("tone of voice dies at this handoff", 10, H - 12);
+  }
+  function drawSpeech(cv){
+    var f = fitCanvas(cv, 150), ctx = f.ctx, W = f.W, H = f.H, mid = H / 2;
+    ctx.strokeStyle = "rgba(43,43,43,0.25)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(W, mid); ctx.stroke();
+    ctx.strokeStyle = ACC; ctx.lineWidth = 2; ctx.beginPath();
+    for(var x = 0; x <= W; x += 2){
+      var env = 0.55 + 0.45 * Math.sin(x * 0.03 + 1);
+      var y = mid - Math.sin(x * 0.12) * env * H * 0.38;
+      if(x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = "rgba(43,43,43,0.55)"; ctx.font = "12px -apple-system, sans-serif";
+    ctx.fillText("synthesized waveform", 10, 18); ctx.fillText("speaker pushes air", W - 128, H - 10);
+  }
+  var PIPE = [
+    { kick: "the ear · 1 of 6", name: "Raw waveform: air pressure over time",
+      w: "<b>The microphone records one thing:</b> how hard air pushes on it, tens of thousands of times per second. The WaveNet paper puts the floor at 16,000 samples per second. It looks like a scribble because it is one: every frequency piled on top of every other, plus room echo, plus the fridge humming.",
+      draw: drawWave },
+    { kick: "the ear · 2 of 6", name: "Sliced frames: chop time into pieces",
+      w: "<b>Nobody feeds the scribble straight to a model.</b> The signal is cut into tiny overlapping frames, each a few tens of milliseconds long. Each frame becomes one column of the next picture. Time stays in order; detail gets summarized.",
+      draw: drawFrames },
+    { kick: "the ear · 3 of 6", name: "Spectrogram: frequencies over time",
+      w: "<b>Each frame becomes a frequency snapshot</b> on the log-mel scale: which pitches are loud right now. The result is a picture of sound, with vowels glowing in low bands and consonants flickering high. Whisper reads 30 seconds of this picture at a time.",
+      draw: drawSpectro },
+    { kick: "the ear · 4 of 6", name: "Text tokens: the decoder writes",
+      w: "<b>An encoder-decoder Transformer reads the picture.</b> The encoder builds a map of the sounds; the decoder writes text tokens one at a time, glancing back at the map with cross-attention. Special tokens steer one model to many jobs: transcribe, translate to English, identify the language, stamp timestamps.",
+      draw: drawTokens },
+    { kick: "the brain · 5 of 6", name: "The LLM thinks: pure text",
+      w: "<b>The transcript hands off to the language model,</b> and from here on everything is text. The model reasons, recalls, and drafts a reply in tokens. Nothing about your tone of voice survives this handoff in a classic pipeline, which is exactly what the end-to-end crowd complains about.",
+      draw: drawReply },
+    { kick: "the mouth · 6 of 6", name: "Speech: words become a wave again",
+      w: "<b>The reply runs the ear in reverse:</b> text to a mel spectrogram, then a vocoder renders the waveform sample by sample. WaveNet showed in 2016 that generating raw audio this way sounds more natural than any concatenative system humans had built. Your speaker pushes air. The loop closes.",
+      draw: drawSpeech }
+  ];
+  (function(){
+    var card = $("pipe-card"), dots = $("pipe-dots"), prev = $("pipe-prev"), next = $("pipe-next");
+    var stepEl = $("pipe-stepper");
+    var i = 0;
+    PIPE.forEach(function(){ var d = document.createElement("span"); d.className = "dot"; dots.appendChild(d); });
+    function render(){
+      card.innerHTML = "<div class='skick'>" + PIPE[i].kick + "</div><div class='sname'>" + PIPE[i].name + "</div>" +
+        "<canvas class='pipe' aria-label='Diagram of pipeline stage: " + PIPE[i].name + "'></canvas>" +
+        "<p class='swhat'>" + PIPE[i].w + "</p>";
+      var cv = card.querySelector("canvas.pipe");
+      PIPE[i].draw(cv);
+      var ds = dots.querySelectorAll(".dot");
+      ds.forEach(function(d, j){ d.classList.toggle("on", j === i); });
+      var count = dots.querySelector(".step-count");
+      if(!count){
+        count = document.createElement("span");
+        count.className = "step-count";
+        dots.insertBefore(count, dots.firstChild);
+      }
+      count.textContent = (i+1) + " / " + PIPE.length;
+      prev.style.display = i === 0 ? "none" : "flex";
+      next.style.display = i === PIPE.length - 1 ? "none" : "flex";
+    }
+    prev.addEventListener("click", function(){ if(i > 0){ i--; render(); } });
+    next.addEventListener("click", function(){ if(i < PIPE.length - 1){ i++; render(); } });
+    document.addEventListener("keydown", function(e){
+      if(e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      if(e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      var t = e.target, tag = t && t.tagName;
+      if(tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT" || (t && t.isContentEditable)) return;
+      if(t && t.closest && t.closest(".step-code")) return;
+      var r = stepEl.getBoundingClientRect();
+      if(r.bottom < 0 || r.top > window.innerHeight) return;
+      if(e.key === "ArrowLeft" && i > 0){ i--; render(); e.preventDefault(); }
+      else if(e.key === "ArrowRight" && i < PIPE.length - 1){ i++; render(); e.preventDefault(); }
+    });
+    var rzT = null;
+    window.addEventListener("resize", function(){
+      if(rzT) clearTimeout(rzT);
+      rzT = setTimeout(render, 180);
+    });
+    render();
+  })();
+
+  /* ---------- section 3: landmarks (horizontal snap scroll) ---------- */
+  var TL = [
+    { d: "Sep 2016", n: "WaveNet", w: "<b>Generate the waveform directly.</b> Aaron van den Oord and colleagues showed a neural net could synthesize raw audio sample by sample, and human raters called it significantly more natural than the best concatenative and parametric systems. Text-to-speech stopped sounding like a robot reading." },
+    { d: "Dec 2017", n: "Tacotron 2", w: "<b>Split synthesis into two learnable halves:</b> text to mel spectrogram, then a WaveNet vocoder to waveform (Shen et al., ICASSP 2018). The two-stage shape every cascade TTS still uses." },
+    { d: "Dec 2022", n: "Whisper", w: "<b>One model, 680,000 hours of web audio, zero fine-tuning.</b> Radford et al. trained an encoder-decoder Transformer with task tokens for transcription, translation, and language ID. It made 50% fewer errors than LibriSpeech-specialized models across diverse datasets." },
+    { d: "2024", n: "GPT-4o voice mode", w: "<b>End-to-end audio went flagship.</b> A single model hearing tone and answering in voice, no separate transcription step. Benchmarking it showed what the cascade loses: prosody, emotion, speaker identity, plus error compounding between stages." },
+    { d: "Jun 2024", n: "Careless Whisper", w: "<b>The robustness engine has a failure mode.</b> Koenecke et al. audited Whisper on 13,140 clips: about 1% contained hallucinated phrases, 38% of those with explicit harms, hitting speakers with aphasia hardest. Presented at FAccT '24." },
+    { d: "Sep 2024", n: "Moshi", w: "<b>The first real-time full-duplex spoken language model.</b> Kyutai's D&eacute;fossez, Mazar&eacute; and colleagues modeled the user's speech and the model's own in parallel streams: 160ms theoretical, 200ms practical latency, interruptions and overlap handled, open weights." },
+    { d: "Sep 2026", n: "Full-duplex hits developer APIs", w: "<b>Native speech-to-speech reached product APIs</b> (GPT-Live-1) and open weights (NVIDIA VoiceChat-11B, about 450ms turn-taking). The trade press declared the cascaded pipeline dead; the cascade's defenders pointed at modularity. The argument is now about architecture, not accuracy." }
+  ];
+  (function(){
+    var sc = $("tl-scroll");
+    TL.forEach(function(t){
+      var c = document.createElement("div");
+      c.className = "tl-card";
+      c.innerHTML = "<div class='sdate'>" + t.d + "</div><div class='sname'>" + t.n + "</div><p class='swhat'>" + t.w + "</p>";
+      sc.appendChild(c);
+    });
+  })();
+
+  /* ---------- section 4: voices ---------- */
+  var VOICES = [
+    { name: "Alec Radford", role: "OpenAI, Whisper team", view: "Scale of weak supervision beats fine-tuning for robustness: 680,000 hours of noisy web transcripts, one encoder-decoder Transformer, zero-shot everywhere. Result: 50% fewer errors than LibriSpeech-specialized models across diverse datasets, approaching human accuracy. The decoder's language sense is the feature. <a href='https://arxiv.org/abs/2212.04356'>Robust Speech Recognition via Large-Scale Weak Supervision</a>, arXiv, Dec 2022." },
+    { name: "Allison Koenecke", role: "Cornell", view: "Audited Whisper on AphasiaBank audio: about 1% of segments contained hallucinated phrases, 38% with explicit harms (violence, false associations, false authority), disproportionately affecting speakers with longer non-vocal durations. The decoder's language sense is the bug. Calls for outside auditing on diverse speakers. <a href='https://arxiv.org/abs/2402.08021'>Careless Whisper</a>, FAccT '24." },
+    { name: "Alexandre D&eacute;fossez", role: "Kyutai, Moshi team", view: "Pipelines cannot emulate real conversation: several seconds of latency, non-linguistic information lost in the text bottleneck, no handling of overlap and interruptions. Moshi casts dialogue as speech-to-speech generation with parallel streams, 200ms practical latency, open weights. <a href='https://arxiv.org/abs/2410.00037'>Moshi</a>, Sep 2024." },
+    { name: "Aaron van den Oord", role: "DeepMind, WaveNet team", view: "Generate the waveform directly: fully probabilistic and autoregressive, each sample conditioned on all previous ones. Human raters found it significantly more natural than parametric and concatenative systems for English and Mandarin; one model could switch speakers by conditioning on identity. The vocoder lineage starts here. <a href='https://arxiv.org/abs/1609.03499'>WaveNet</a>, Sep 2016." }
+  ];
+  var vWrap = $("voices");
+  VOICES.forEach(function(v){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "fcard";
+    b.setAttribute("aria-expanded", "false");
+    b.innerHTML = "<span class='fname'>" + v.name + "</span> <span class='hint'>" + v.role + " &middot; tap to open</span>" +
+      "<span class='fbody'><p class='chg' style='margin:0'>" + v.view + "</p></span>";
+    b.addEventListener("click", function(){
+      var open = b.classList.toggle("open");
+      b.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    vWrap.appendChild(b);
+  });
+
+  /* ---------- section 4b: A/B toggle ---------- */
+  (function(){
+    var t = $("dispute");
+    if(!t) return;
+    t.addEventListener("click", function(){
+      var side = t.getAttribute("data-side") === "a" ? "b" : "a";
+      t.setAttribute("data-side", side);
+      t.setAttribute("aria-checked", side === "b" ? "true" : "false");
+      $("abt-a").classList.toggle("hidden", side !== "a");
+      $("abt-b").classList.toggle("hidden", side !== "b");
+    });
+  })();
+
+  /* ---------- section 6: flashcards ---------- */
+  var CARDS = [
+    { q: "What are Whisper's three input steps, in order?",
+      a: "Split audio into 30-second chunks, convert each chunk to a log-mel spectrogram, feed it to the encoder. The decoder then writes text tokens, steered by task tokens: transcribe, translate, language ID, timestamps. arXiv:2212.04356." },
+    { q: "Why does a spectrogram beat the raw waveform?",
+      a: "The waveform piles every frequency into one wiggly line; the spectrogram spreads sound across frequency and time, so patterns (vowels low, consonants high) become visible to the model. Ears do frequency analysis, not oscilloscope reading." },
+    { q: "Radford vs Koenecke: what do they disagree about?",
+      a: "The decoder's language sense. Radford: it cleans up bad acoustics, the engine of Whisper's robustness. Koenecke: it invents words in silence, about 1% of segments, worst for speakers with aphasia. Same architecture, opposite verdicts." },
+    { q: "Why can't a classic pipeline handle interruptions?",
+      a: "It waits for voice activity detection to declare your turn over, then runs speech-to-text, LLM, text-to-speech in sequence: seconds of latency, and the text bottleneck drops tone and emotion. Full-duplex models like Moshi listen and speak in parallel streams at about 200ms, so overlap just works." }
+  ];
+  (function(){
+    var grid = $("fgrid"), scoreEl = $("fc-score");
+    var known = 0, scored = {};
+    function setScore(){
+      scoreEl.textContent = known + "/" + CARDS.length;
+    }
+    CARDS.forEach(function(c, idx){
+      var el = document.createElement("div");
+      el.className = "flash";
+      el.innerHTML = "<div class='inner'>" +
+        "<div class='face front'><div class='q'>" + c.q + "</div><div class='tap'>tap to flip</div></div>" +
+        "<div class='face back'><div class='a'>" + c.a + "</div>" +
+        "<div class='score-row'><button type='button' class='knew'>Knew it</button><button type='button' class='learning'>Still learning</button></div></div></div>";
+      el.addEventListener("click", function(){
+        el.classList.toggle("flipped");
+      });
+      var knew = el.querySelector(".knew"), learning = el.querySelector(".learning");
+      function mark(k){
+        if(scored[idx] === k) return;
+        if(scored[idx] === true) known--;
+        scored[idx] = k;
+        if(k === true) known++;
+        el.classList.add("done");
+        setScore();
+      }
+      knew.addEventListener("click", function(e){ e.stopPropagation(); mark(true); });
+      learning.addEventListener("click", function(e){ e.stopPropagation(); mark(false); });
+      grid.appendChild(el);
+    });
+    setScore();
+  })();
+})();
+</script>
+</body>
+</html>
